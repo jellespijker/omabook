@@ -1,0 +1,13 @@
+#!/bin/bash
+set -euo pipefail
+
+# The tests again, under AddressSanitizer and UndefinedBehaviorSanitizer, in
+# their own build folder. Slower than bin/test; run it before a release and
+# after touching anything that holds a pointer.
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cmake -S "$root" -B "$root/build-sanitize" -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-omit-frame-pointer -fno-sanitize-recover=undefined" >/dev/null
+cmake --build "$root/build-sanitize" -j"$("$root/bin/jobs")"
+# Qt and the font libraries keep some memory for the life of the process.
+ASAN_OPTIONS=detect_leaks=0 QT_QPA_PLATFORM=offscreen \
+  ctest --test-dir "$root/build-sanitize" --output-on-failure --no-tests=error "$@"

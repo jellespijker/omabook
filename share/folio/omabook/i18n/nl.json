@@ -1,0 +1,17 @@
+{
+  "Libraries": "Bibliotheken",
+  "Add to Library": "Toevoegen aan bibliotheek",
+  "Adding to %1…": "Toevoegen aan %1…",
+  "%1 books": "%1 boeken",
+  "Folder": "Map",
+  "Books": "Boeken",
+  "Being read": "Wordt gelezen",
+  "Read": "Gelezen",
+  "Rating": "Waardering",
+  "Omabook": "Omabook",
+  "No books were found.": "Er zijn geen boeken gevonden.",
+  "Already in %1.": "Staat al in %1.",
+  "Added %1 to %2.": "%1 toegevoegd aan %2.",
+  "Added %1 to %2; %3 were already there.": "%1 toegevoegd aan %2; %3 stonden er al.",
+  "Omabook couldn't be started.": "Omabook kon niet worden gestart."
+}

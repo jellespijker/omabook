@@ -1,0 +1,17 @@
+{
+  "Libraries": "Bibliotheken",
+  "Add to Library": "Zur Bibliothek hinzufügen",
+  "Adding to %1…": "Wird zu %1 hinzugefügt…",
+  "%1 books": "%1 Bücher",
+  "Folder": "Ordner",
+  "Books": "Bücher",
+  "Being read": "Wird gelesen",
+  "Read": "Gelesen",
+  "Rating": "Bewertung",
+  "Omabook": "Omabook",
+  "No books were found.": "Es wurden keine Bücher gefunden.",
+  "Already in %1.": "Bereits in %1.",
+  "Added %1 to %2.": "%1 zu %2 hinzugefügt.",
+  "Added %1 to %2; %3 were already there.": "%1 zu %2 hinzugefügt; %3 waren schon da.",
+  "Omabook couldn't be started.": "Omabook konnte nicht gestartet werden."
+}

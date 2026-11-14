@@ -1,0 +1,17 @@
+{
+  "Libraries": "Libraries",
+  "Add to Library": "Add to Library",
+  "Adding to %1…": "Adding to %1…",
+  "%1 books": "%1 books",
+  "Folder": "Folder",
+  "Books": "Books",
+  "Being read": "Being read",
+  "Read": "Read",
+  "Rating": "Rating",
+  "Omabook": "Omabook",
+  "No books were found.": "No books were found.",
+  "Already in %1.": "Already in %1.",
+  "Added %1 to %2.": "Added %1 to %2.",
+  "Added %1 to %2; %3 were already there.": "Added %1 to %2; %3 were already there.",
+  "Omabook couldn't be started.": "Omabook couldn't be started."
+}

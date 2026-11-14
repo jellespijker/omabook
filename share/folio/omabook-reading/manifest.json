@@ -1,0 +1,17 @@
+{
+  "folio": 1,
+  "requires": [
+    "omabook"
+  ],
+  "poll": {
+    "command": [
+      "omabook",
+      "folio",
+      "reading"
+    ],
+    "every": 60
+  },
+  "section": {
+    "title": "Reading"
+  }
+}

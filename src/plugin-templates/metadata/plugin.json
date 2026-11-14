@@ -1,0 +1,8 @@
+{
+    "name": "{{name}}",
+    "version": "1.0",
+    "author": "",
+    "description": "Looks book details up in Gutendex, the catalog of Project Gutenberg.",
+    "script": "main.js",
+    "permissions": ["http"]
+}

@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""Rewrite src/i18n/en.json from the sources: every text handed to qsTr() or
+tr(), as itself, and as its one and other forms when it is counted. The tests
+fail when en.json and the sources disagree; this is how to make them agree.
+English plurals it can't guess (it only drops a trailing "s") are kept from
+the existing file, so fix those by hand once."""
+import json, pathlib, re, sys
+
+root = pathlib.Path(__file__).resolve().parent.parent
+catalog = root / "src" / "i18n" / "en.json"
+existing = json.loads(catalog.read_text()) if catalog.exists() else {}
+
+def literal(code, i):
+    quote, text = code[i], []
+    i += 1
+    while i < len(code) and code[i] != quote:
+        if code[i] == "\\" and i + 1 < len(code):
+            i += 1
+            c = code[i]
+            if c == "u":
+                text.append(chr(int(code[i + 1:i + 5], 16))); i += 4
+            else:
+                text.append({"n": "\n", "t": "\t"}.get(c, c))
+        else:
+            text.append(code[i])
+        i += 1
+    return "".join(text), i + 1
+
+found = {}
+for path in sorted((root / "src").iterdir()):
+    if path.suffix not in (".qml", ".js", ".cpp", ".h"):
+        continue
+    code, i = path.read_text(), 0
+    while i < len(code):
+        if code.startswith("//", i):
+            i = code.find("\n", i)
+            if i < 0: break
+        elif code.startswith("/*", i):
+            i = code.find("*/", i + 2)
+            if i < 0: break
+            i += 2
+        elif code[i] in "\"'":
+            _, i = literal(code, i)
+        elif code[i].isalpha() or code[i] == "_":
+            start = i
+            while i < len(code) and (code[i].isalnum() or code[i] == "_"):
+                i += 1
+            word = code[start:i]
+            while i < len(code) and code[i].isspace(): i += 1
+            if word not in ("qsTr", "tr") or i >= len(code) or code[i] != "(":
+                continue
+            i += 1
+            while i < len(code) and code[i].isspace(): i += 1
+            if i >= len(code) or code[i] not in "\"'":
+                sys.exit(f"{path.name}: not a literal: {code[start:start + 40]!r}")
+            text = ""
+            while True:
+                part, i = literal(code, i)
+                text += part
+                while i < len(code) and code[i].isspace(): i += 1
+                if i >= len(code) or code[i] != '"': break
+            depth = commas = 0
+            while i < len(code):
+                c = code[i]
+                if c in "\"'":
+                    _, i = literal(code, i); continue
+                if c in "([{": depth += 1
+                elif c in ")]}":
+                    if depth == 0: break
+                    depth -= 1
+                elif c == "," and depth == 0: commas += 1
+                i += 1
+            found[text] = found.get(text, False) or commas >= 2
+        else:
+            i += 1
+
+result = {}
+for text, counted in sorted(found.items()):
+    if not counted:
+        result[text] = text
+    elif isinstance(existing.get(text), dict):
+        result[text] = {"one": existing[text].get("one", text), "other": text}
+    else:
+        result[text] = {"one": re.sub(r"s\b", "", text, count=1), "other": text}
+catalog.parent.mkdir(parents=True, exist_ok=True)
+catalog.write_text(json.dumps(result, ensure_ascii=False, indent=2) + "\n")
+print(f"{len(result)} strings in {catalog.relative_to(root)}")

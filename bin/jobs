@@ -1,0 +1,15 @@
+#!/bin/bash
+set -euo pipefail
+
+# How many compile jobs this machine can take: one per 3 GB of RAM, capped at
+# the core count. A Qt translation unit can need over a gigabyte, so -j$(nproc)
+# on a many-core, low-memory laptop thrashes until systemd-oomd kills the
+# session. Override with CMAKE_BUILD_PARALLEL_LEVEL.
+if [[ -n "${CMAKE_BUILD_PARALLEL_LEVEL:-}" ]]; then
+  echo "$CMAKE_BUILD_PARALLEL_LEVEL"
+  exit
+fi
+cores=$(nproc)
+by_mem=$(awk '/^MemTotal:/ { print int($2 / (3 * 1024 * 1024)) }' /proc/meminfo)
+jobs=$(( by_mem < cores ? by_mem : cores ))
+echo $(( jobs < 1 ? 1 : jobs ))

@@ -1,0 +1,240 @@
+#pragma once
+
+#include <QFileSystemWatcher>
+#include <QHash>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QObject>
+#include <QPointer>
+#include <QTimer>
+#include <QVariantList>
+#include <QVariantMap>
+#include <map>
+#include <memory>
+
+#include "library.h"
+#include "metadatasource.h"
+#include "scriptplugin.h"
+
+// The script plugins in ~/.config/omabook/plugins: each folder there whose
+// plugin.json names a script, loaded into an engine of its own and followed
+// while the app runs, the way Customization follows the interface's files.
+// A plugin that doesn't load, or throws later, says why in <name>.error
+// beside its folder and the last version that loaded keeps running.
+//
+// This is where the rest of Omabook meets the scripts: it is told what
+// happens (emitEvent, libraryChanged) and asked for what the scripts added
+// (sources of details, catalog formats, commands, panels). It knows nothing
+// of the window; Backend and Reader feed it, and the command line uses it
+// with no window at all.
+class ScriptPlugins : public QObject {
+    Q_OBJECT
+    // What the window needs of the plugins: their commands as
+    // [{id, title, place, key, plugin}], their panels as mods (see
+    // Customization::mods), and what each script set with omabook.ui.set,
+    // by plugin.
+    Q_PROPERTY(QVariantList commands READ commands NOTIFY changed)
+    Q_PROPERTY(QVariantList panels READ panels NOTIFY changed)
+    Q_PROPERTY(QVariantMap data READ data NOTIFY dataChanged)
+    // What a script is asking the reader for words about (omabook.ui.ask):
+    // {id, plugin, title, placeholder, text}, or empty when nothing is asked.
+    Q_PROPERTY(QVariantMap question READ question NOTIFY questionChanged)
+    // The book selected on the shelf, which the window says. With the book
+    // open in the reader (which the events say) it is "the book in front of
+    // the reader": what a command or panel that is only for a plugin's own
+    // books goes by.
+    Q_PROPERTY(qint64 selectedBook READ selectedBook WRITE setSelectedBook NOTIFY selectedBookChanged)
+
+public:
+    struct Info {
+        ScriptManifest manifest;
+        bool enabled = true;
+        bool loaded = false;
+        QString problem; // why it isn't running, or what last went wrong in it
+        QStringList sources, catalogs, importers, commands, events, panels;
+        // The book formats it reads, each as "Name (.ext, .ext)".
+        QStringList formats;
+        QJsonObject toJson() const;
+    };
+
+    // `folder` is the plugin folder (tests pass a temp one). With `follow`
+    // off the folder is read once and not watched, as a command wants it.
+    explicit ScriptPlugins(const ScriptServices &services, const QString &folder = {}, QObject *parent = nullptr,
+                           bool follow = true);
+    ~ScriptPlugins() override;
+
+    QString folder() const { return m_folder; }
+    static QString defaultFolder();
+    // Every script plugin in the folder, running or not.
+    QList<Info> list() const;
+    // A running plugin by its folder's name, or null.
+    ScriptPlugin *plugin(const QString &id) const;
+    // Reads the folder now, without waiting to be told it changed.
+    void reload();
+    // Loads one plugin again though nothing of it changed: what "try again"
+    // does for one that went wrong for a reason outside its files.
+    void retry(const QString &id);
+    // Has the book formats the scripts register join the ones Omabook
+    // reads (Formats::addProvider), and leave when their plugin is switched
+    // off, changed or removed. For the one set of plugins a program runs
+    // with: the window's, or a command's (ScriptFormats below); a set made
+    // for the length of one look-up keeps its formats to itself.
+    void provideFormats();
+    // How long any call into a script may run; for tests.
+    void setTimeLimit(std::chrono::milliseconds limit);
+
+    // Tells every script that listens. See ScriptApi::events().
+    void emitEvent(const QString &event, const QJsonObject &payload = {});
+    // The books as they are now: what was added, removed or changed since
+    // the last time is told to the scripts, and their importers have their
+    // say in the new ones. A book is announced once, whenever it came in.
+    void libraryChanged(const QList<Book> &books, const QString &libraryPath);
+
+    // A source for each one the scripts registered, owned by `parent`.
+    QList<MetadataSource *> metadataSources(QObject *parent) const;
+    // The catalog formats the scripts add, with what each says of itself.
+    QStringList catalogFormats() const;
+    QString describeCatalog(const QString &format) const;
+    // The catalog of these books; waits for the script. Null, with
+    // `problem`, when no script writes that format or it failed.
+    QByteArray makeCatalog(const QString &format, const QList<Book> &books, QString *problem);
+
+    // Every command, each with whether it applies now ("applies": it is
+    // enabled, and not one for the plugin's own books while another book
+    // is in front of the reader); and the panels that apply.
+    QVariantList commands() const;
+    QVariantList panels() const;
+    qint64 selectedBook() const { return m_selectedBook; }
+    void setSelectedBook(qint64 id);
+    QVariantMap data() const;
+    // Runs a command for the book that is selected or open. The command is
+    // named whole ("library.finished:mark") or by plugin and id
+    // ("finished:mark"); the id alone ("mark") only when one plugin has it.
+    Q_INVOKABLE void run(const QString &command, qint64 book = 0);
+    // Calls a top-level function of a plugin's script and answers later, a
+    // promise it returns included: the number given back comes again in
+    // `answered`, with what the function answered or why it failed.
+    Q_INVOKABLE int request(const QString &plugin, const QString &function, const QVariantList &arguments = {});
+    // Calls a top-level function of a plugin's script and answers what it
+    // returned at once; for panels.
+    Q_INVOKABLE QVariant call(const QString &plugin, const QString &function, const QVariantList &arguments = {});
+
+    QVariantMap question() const;
+    // The window says it is there to put questions to the reader, or no
+    // longer is. With nobody attending, a script that asks is answered null.
+    Q_INVOKABLE void attend(bool attending);
+    // The reader's words for the question with this id, or their leaving it.
+    Q_INVOKABLE void answer(int id, const QString &text);
+    Q_INVOKABLE void dismiss(int id);
+
+    // Lets everything the scripts started finish (promises, requests,
+    // programs), for a caller with no event loop of its own. False when the
+    // time ran out first.
+    bool wait(int milliseconds = 30000);
+    // The same for anything: turns the event loop until `idle` has held for
+    // a few turns, or the time runs out.
+    static bool waitFor(const std::function<bool()> &idle, int milliseconds);
+
+signals:
+    // A plugin was loaded, reloaded, switched or removed, or registered something.
+    void changed();
+    void dataChanged();
+    void said(const QString &text);
+    void touchedLibrary();
+    void openBookRequested(qint64 id, int section, double fraction);
+    // The window should show the knowledge graph of a book, else of a scope.
+    void graphRequested(const QString &scope, qint64 book);
+    // What a `request` came to.
+    void answered(int id, const QVariant &result, const QString &error);
+    void selectedBookChanged();
+    // The reader should read this book's file anew, keeping its place (0:
+    // whichever book is open).
+    void reloadBookRequested(qint64 id);
+    void questionChanged();
+
+private:
+    void watch();
+    void adopt(std::unique_ptr<ScriptPlugin> plugin);
+    void report(const QString &id, const QString &problem, bool stillRunning);
+    QByteArray stamp(const QString &folder, bool enabled) const;
+    void follow(const QString &event, const QJsonObject &payload);
+    void syncFormats();
+    void lookAtTheBook();
+    bool applies(const QString &plugin, const QString &when, bool on) const;
+    void settle(int id, const QJsonValue &text);
+
+    struct Question {
+        int id = 0;
+        QPointer<ScriptPlugin> plugin;
+        int token = 0;
+        QString title, placeholder, text;
+    };
+    QList<Question> m_questions;
+    int m_nextQuestion = 1;
+    int m_attending = 0;
+
+    ScriptServices m_services;
+    QString m_folder;
+    bool m_follow;
+    QNetworkAccessManager m_network;
+    QFileSystemWatcher m_watcher;
+    QTimer m_debounce, m_announce;
+    std::chrono::milliseconds m_limit{5000};
+    std::map<QString, std::unique_ptr<ScriptPlugin>> m_plugins;
+    QHash<QString, QByteArray> m_stamps;
+    QHash<QString, QString> m_problems;
+    bool m_providesFormats = false;
+    QStringList m_formatIds; // the providers this set has in Formats
+    QJsonObject m_reading;
+    qint64 m_selectedBook = 0;
+    QString m_maker; // the plugin that made the book in front of the reader, if one did
+    int m_nextRequest = 1;
+    // The library as the scripts last heard of it.
+    QString m_libraryPath;
+    QHash<qint64, QJsonObject> m_books;
+};
+
+// The script plugins for a command, which has no window: read once and not
+// followed, working on the library in a folder through a connection of
+// their own.
+class CommandScripts {
+public:
+    CommandScripts(Settings *settings, const QString &libraryRoot, const QString &folder = {});
+
+    ScriptPlugins &plugins() { return *m_plugins; }
+
+private:
+    Library m_library;
+    bool m_opened;
+    std::unique_ptr<ScriptPlugins> m_plugins;
+};
+
+// Script formats where there is no window. A command opens books through
+// Formats like the window does, but loads no plugins of its own accord; with
+// this, the script plugins are loaded the first time a format Omabook doesn't
+// read itself is asked about, and looked at again when their files change,
+// so every command, the MCP server and the file manager's helper read the
+// formats plugins add without any of them asking.
+namespace ScriptFormats {
+void loadOnDemand();
+// Forgets the plugins loaded that way, and stops loading them.
+void unload();
+} // namespace ScriptFormats
+
+// A source of details that is a script's `search` function.
+class ScriptMetadataSource : public MetadataSource {
+    Q_OBJECT
+
+public:
+    ScriptMetadataSource(ScriptPlugin *plugin, const QString &name, const QStringList &fields, QObject *parent = nullptr);
+
+    QString name() const override { return m_name; }
+    QStringList fields() const override { return m_fields; }
+    void search(const BookMeta &book) override;
+
+private:
+    // The plugin may be loaded anew, or switched off, while a look-up runs.
+    QPointer<ScriptPlugin> m_plugin;
+    QString m_name;
+    QStringList m_fields;
+};

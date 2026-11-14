@@ -1,0 +1,8 @@
+{
+    "name": "{{name}}",
+    "version": "1.0",
+    "author": "",
+    "description": "Reads text books: a folder or zip of plain text chapters with an index.txt.",
+    "script": "main.js",
+    "permissions": []
+}

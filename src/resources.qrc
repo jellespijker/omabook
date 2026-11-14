@@ -1,0 +1,81 @@
+<RCC>
+    <qresource prefix="/">
+        <file alias="Main.qml">Main.qml</file>
+        <file alias="AppButton.qml">AppButton.qml</file>
+        <file alias="AppPopup.qml">AppPopup.qml</file>
+        <file alias="DialogActions.qml">DialogActions.qml</file>
+        <file alias="DialogBody.qml">DialogBody.qml</file>
+        <file alias="HeaderChoice.qml">HeaderChoice.qml</file>
+        <file alias="SidePane.qml">SidePane.qml</file>
+        <file alias="AskDialog.qml">AskDialog.qml</file>
+        <file alias="AssistantPane.qml">AssistantPane.qml</file>
+        <file alias="BookCover.qml">BookCover.qml</file>
+        <file alias="CalibreOffer.qml">CalibreOffer.qml</file>
+        <file alias="ContentsPane.qml">ContentsPane.qml</file>
+        <file alias="DetailsPane.qml">DetailsPane.qml</file>
+        <file alias="EditDialog.qml">EditDialog.qml</file>
+        <file alias="FindPopup.qml">FindPopup.qml</file>
+        <file alias="FlowReader.qml">FlowReader.qml</file>
+        <file alias="HelpOverlay.qml">HelpOverlay.qml</file>
+        <file alias="Key.qml">Key.qml</file>
+        <file alias="LibrariesPopup.qml">LibrariesPopup.qml</file>
+        <file alias="ModSlot.qml">ModSlot.qml</file>
+        <file alias="LibraryView.qml">LibraryView.qml</file>
+        <file alias="BookTaps.qml">BookTaps.qml</file>
+        <file alias="Glyph.qml">Glyph.qml</file>
+        <file alias="GraphDetails.qml">GraphDetails.qml</file>
+        <file alias="GraphEdit.qml">GraphEdit.qml</file>
+        <file alias="GraphKind.qml">GraphKind.qml</file>
+        <file alias="GraphPalette.qml">GraphPalette.qml</file>
+        <file alias="GraphPane.qml">GraphPane.qml</file>
+        <file alias="GraphWords.qml">GraphWords.qml</file>
+        <file alias="ShelfCarousel.qml">ShelfCarousel.qml</file>
+        <file alias="ShelfCovers.qml">ShelfCovers.qml</file>
+        <file alias="ShelfList.qml">ShelfList.qml</file>
+        <file alias="ShelfPalette.qml">ShelfPalette.qml</file>
+        <file alias="ShelfSpines.qml">ShelfSpines.qml</file>
+        <file alias="ShelfStacks.qml">ShelfStacks.qml</file>
+        <file alias="Stars.qml">Stars.qml</file>
+        <file alias="ViewSwitcher.qml">ViewSwitcher.qml</file>
+        <file alias="Words.qml">Words.qml</file>
+        <file alias="LookupDialog.qml">LookupDialog.qml</file>
+        <file alias="PageReader.qml">PageReader.qml</file>
+        <file alias="PluginAsk.qml">PluginAsk.qml</file>
+        <file alias="PluginsDialog.qml">PluginsDialog.qml</file>
+        <file alias="PluginDetail.qml">PluginDetail.qml</file>
+        <file alias="PluginMark.qml">PluginMark.qml</file>
+        <file alias="PluginNewSheet.qml">PluginNewSheet.qml</file>
+        <file alias="PluginInstallSheet.qml">PluginInstallSheet.qml</file>
+        <file alias="ReaderView.qml">ReaderView.qml</file>
+        <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
+        <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
+        <file alias="Thinking.qml">Thinking.qml</file>
+        <file alias="SettingsDialog.qml">SettingsDialog.qml</file>
+        <file alias="ModelPicker.qml">ModelPicker.qml</file>
+        <file alias="SpreadReader.qml">SpreadReader.qml</file>
+        <file alias="TidyDialog.qml">TidyDialog.qml</file>
+        <file alias="TourNote.qml">TourNote.qml</file>
+        <file alias="TourOverlay.qml">TourOverlay.qml</file>
+        <file alias="skill.md">skill.md</file>
+        <file alias="scriptprelude.js">scriptprelude.js</file>
+        <file>plugin-templates/metadata/plugin.json</file>
+        <file>plugin-templates/metadata/main.js</file>
+        <file>plugin-templates/command/plugin.json</file>
+        <file>plugin-templates/command/main.js</file>
+        <file>plugin-templates/hook/plugin.json</file>
+        <file>plugin-templates/hook/main.js</file>
+        <file>plugin-templates/catalog/plugin.json</file>
+        <file>plugin-templates/catalog/main.js</file>
+        <file>plugin-templates/panel/plugin.json</file>
+        <file>plugin-templates/panel/main.js</file>
+        <file>plugin-templates/panel/Panel.qml</file>
+        <file>plugin-templates/format/plugin.json</file>
+        <file>plugin-templates/format/main.js</file>
+        <file alias="omabook.svg">../share/omabook.svg</file>
+        <file alias="i18n/en.json">i18n/en.json</file>
+        <file alias="i18n/de.json">i18n/de.json</file>
+        <file alias="i18n/es-MX.json">i18n/es-MX.json</file>
+        <file alias="i18n/fr.json">i18n/fr.json</file>
+        <file alias="i18n/nl.json">i18n/nl.json</file>
+    </qresource>
+</RCC>

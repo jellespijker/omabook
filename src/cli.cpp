@@ -1,0 +1,1808 @@
+#include "cli.h"
+
+#include <QCommandLineParser>
+#include <QDir>
+#include <QDirIterator>
+#include <QEventLoop>
+#include <QFile>
+#include <QFileInfo>
+#include <QImageReader>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QStandardPaths>
+#include <QJsonObject>
+#include <QNetworkAccessManager>
+#include <QSaveFile>
+#include <QTemporaryDir>
+#include <cstdio>
+#include <memory>
+#include <termios.h>
+#include <unistd.h>
+
+#include "ai.h"
+#include "bookops.h"
+#include "calibreplugin.h"
+#include "catalog.h"
+#include "converter.h"
+#include "curation.h"
+#include "customization.h"
+#include "folio.h"
+#include "libraries.h"
+#include "formats.h"
+#include "goodreads.h"
+#include "graph.h"
+#include "graphcontext.h"
+#include "graphtools.h"
+#include "importer.h"
+#include "interfacechange.h"
+#include "library.h"
+#include "manual.h"
+#include "mcp.h"
+#include "metadatasource.h"
+#include "openlibrarylog.h"
+#include "plugins.h"
+#include "prompts.h"
+#include "readingsite.h"
+#include "scriptapi.h"
+#include "scriptplugins.h"
+#include "scripttools.h"
+#include "secretstore.h"
+#include "settings.h"
+#include "sitedesk.h"
+#include "sync.h"
+#include "theme.h"
+
+namespace {
+
+void print(FILE *stream, const QString &text) {
+    fprintf(stream, "%s\n", qPrintable(text));
+    fflush(stream);
+}
+
+int fail(const QString &why) {
+    print(stderr, why);
+    return 1;
+}
+
+void printJson(const QJsonValue &value) {
+    const QJsonDocument document = value.isArray() ? QJsonDocument(value.toArray()) : QJsonDocument(value.toObject());
+    print(stdout, QString::fromUtf8(document.toJson(QJsonDocument::Indented)).trimmed());
+}
+
+// One command's options, with the two every command takes.
+struct Command {
+    Command(const QString &name, const QString &description) {
+        parser.setApplicationDescription(description);
+        parser.addHelpOption();
+        parser.addOption({"json", "Print the result as JSON."});
+        parser.addOption({"library", "Use the library in this folder instead of the current one.", "folder"});
+        this->name = name;
+    }
+
+    // False when the arguments were wrong, with the reason already printed.
+    bool parse(const QStringList &arguments, int atLeast, int atMost = -1) {
+        QStringList rest = arguments;
+        rest.removeAt(1);
+        rest[0] = "omabook " + name;
+        parser.process(rest);
+        const int given = parser.positionalArguments().size();
+        if (given < atLeast || (atMost >= 0 && given > atMost)) {
+            print(stderr, parser.helpText().trimmed());
+            return false;
+        }
+        return true;
+    }
+
+    bool json() const { return parser.isSet("json"); }
+    QString argument(int index) const { return parser.positionalArguments().value(index); }
+
+    std::unique_ptr<Library> library(QString *error) const {
+        auto library = std::make_unique<Library>(parser.isSet("library") ? parser.value("library") : Settings().libraryPath());
+        if (!library->open(error))
+            return nullptr;
+        return library;
+    }
+
+    QString name;
+    QCommandLineParser parser;
+};
+
+// A book named on the command line: its number in the library, or any file.
+struct Target {
+    qint64 id = 0;
+    QString file;
+    QString error;
+};
+
+Target resolve(Library *library, const QString &word) {
+    Target target;
+    bool number = false;
+    target.id = word.toLongLong(&number);
+    if (!number) {
+        target.id = 0;
+        target.file = QFileInfo(word).absoluteFilePath();
+        if (!QFileInfo::exists(target.file)) // a file, or a folder that is one book
+            target.error = "There is no book or file called " + word + ".";
+        return target;
+    }
+    if (!library || !library->book(target.id)) {
+        target.error = QString("There is no book %1 in the library.").arg(target.id);
+        return target;
+    }
+    const QStringList formats = library->book(target.id)->formats;
+    for (const QString &format : formats)
+        if (target.file.isEmpty() && Formats::readable(format))
+            target.file = library->formatPath(target.id, format);
+    if (target.file.isEmpty())
+        target.error = QString("Book %1 has no format Omabook reads itself; run: omabook convert %1").arg(target.id);
+    return target;
+}
+
+std::unique_ptr<Document> openTarget(const Command &command, const QString &word, QString *error) {
+    QString libraryError;
+    const auto library = command.library(&libraryError);
+    const Target target = resolve(library.get(), word);
+    if (!target.error.isEmpty()) {
+        *error = target.error;
+        return nullptr;
+    }
+    return Formats::open(target.file, error);
+}
+
+int list(const QStringList &arguments) {
+    Command command("list", "List the library's books, or those matching a search.");
+    command.parser.addPositionalArgument("search", "Words to look for; author:, title:, series:, tag:, format: and lang: look in one field.", "[search...]");
+    if (!command.parse(arguments, 0))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QList<Book> books = library->books(command.parser.positionalArguments().join(' '));
+    if (command.json()) {
+        QJsonArray array;
+        for (const Book &book : books)
+            array << book.toJson();
+        printJson(array);
+    } else {
+        for (const Book &book : books)
+            print(stdout, QString("%1\t%2\t%3\t%4").arg(book.id).arg(book.meta.title, book.meta.authorText(), book.formats.join(',')));
+    }
+    return 0;
+}
+
+int show(const QStringList &arguments) {
+    Command command("show", "Show everything the library knows about one book.");
+    command.parser.addPositionalArgument("id", "The book's number, from omabook list.");
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const auto book = library->book(command.argument(0).toLongLong());
+    if (!book)
+        return fail("There is no book " + command.argument(0) + " in the library.");
+    QJsonObject object = book->toJson();
+    QJsonObject files;
+    for (const QString &format : book->formats)
+        files.insert(format, library->formatPath(book->id, format));
+    object.insert("files", files);
+    object.insert("cover", library->coverPath(book->id));
+    if (command.json()) {
+        printJson(object);
+    } else {
+        for (auto it = object.begin(); it != object.end(); ++it) {
+            const QJsonValue value = it.value();
+            QString text = value.isArray() ? QString() : value.toVariant().toString();
+            for (const QJsonValue &item : value.toArray())
+                text += (text.isEmpty() ? "" : ", ") + item.toString();
+            const QJsonObject paths = value.toObject();
+            for (auto file = paths.begin(); file != paths.end(); ++file)
+                text += (text.isEmpty() ? "" : "\n\t") + file.value().toString();
+            if (!text.isEmpty())
+                print(stdout, it.key() + ":\t" + text);
+        }
+    }
+    return 0;
+}
+
+int add(const QStringList &arguments) {
+    Command command("add", "Copy books into the library. The files you name are left as they are. A folder is searched for "
+                           "books; a Calibre library is taken with Calibre's own details, covers and every format.");
+    command.parser.addPositionalArgument("files", "Book files, folders, or a Calibre library.", "<file|folder>...");
+    command.parser.addOption({"to", "Add the file to this book as another format, instead of as a new book.", "id"});
+    command.parser.addOption({"meta", "Take the book's details from this JSON file (as omabook show --json prints them).", "file"});
+    command.parser.addOption({"cover", "Use this picture as the cover.", "file"});
+    command.parser.addOption({"paper", "Add a book that is on a real shelf and has no file. Describe it with --title and "
+                                       "--authors, or with --meta."});
+    command.parser.addOption({"wish", "Add a book you don't have, to read some day. Described like --paper."});
+    command.parser.addOption({"title", "The title of a --paper or --wish book.", "text"});
+    command.parser.addOption({"authors", "Its authors; separate several with \" & \".", "text"});
+    command.parser.addOption({"isbn", "Its ISBN.", "text"});
+    const bool fileless = arguments.contains("--paper") || arguments.contains("--wish");
+    if (!command.parse(arguments, fileless ? 0 : 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QStringList paths = command.parser.positionalArguments();
+
+    if (fileless) {
+        if (!paths.isEmpty())
+            return fail("--paper and --wish add a book with no file: name none.");
+        BookMeta meta;
+        if (command.parser.isSet("meta")) {
+            QFile details(command.parser.value("meta"));
+            if (!details.open(QIODevice::ReadOnly))
+                return fail("The details can't be read: " + command.parser.value("meta"));
+            meta = BookMeta::fromJson(QJsonDocument::fromJson(details.readAll()).object());
+        }
+        if (command.parser.isSet("title")) meta.title = command.parser.value("title").simplified();
+        if (command.parser.isSet("authors")) meta.authors = BookMeta::splitAuthors(command.parser.value("authors"));
+        if (command.parser.isSet("isbn")) meta.isbn = command.parser.value("isbn").simplified();
+        if (command.parser.isSet("cover")) {
+            QImageReader cover(command.parser.value("cover"));
+            cover.setAutoTransform(true);
+            meta.cover = cover.read();
+        }
+        const Library::Added added = library->addEntry(meta, command.parser.isSet("paper"));
+        if (!added.error.isEmpty())
+            return fail(added.error);
+        if (command.parser.isSet("wish"))
+            library->setReading(added.id, "to-read", 0, {});
+        if (command.json())
+            printJson(library->book(added.id)->toJson());
+        else
+            print(stdout, QString("Added book %1: %2").arg(added.id).arg(meta.title));
+        return 0;
+    }
+
+    if (command.parser.isSet("to")) {
+        const qint64 id = command.parser.value("to").toLongLong();
+        for (const QString &file : paths)
+            if (!library->addFormat(id, file, &error))
+                return fail(error);
+        if (command.json())
+            printJson(library->book(id)->toJson());
+        return 0;
+    }
+
+    ImportSummary summary;
+    if (command.parser.isSet("meta") || command.parser.isSet("cover")) {
+        // One book, described by whoever is adding it.
+        if (paths.size() != 1)
+            return fail("--meta and --cover describe one book: name one file.");
+        std::optional<BookMeta> meta;
+        if (command.parser.isSet("meta")) {
+            QFile details(command.parser.value("meta"));
+            if (!details.open(QIODevice::ReadOnly))
+                return fail("The details can't be read: " + command.parser.value("meta"));
+            meta = BookMeta::fromJson(QJsonDocument::fromJson(details.readAll()).object());
+        } else {
+            meta = Formats::readMeta(paths.first());
+        }
+        if (command.parser.isSet("cover")) {
+            QImageReader cover(command.parser.value("cover"));
+            cover.setAutoTransform(true);
+            meta->cover = cover.read();
+        }
+        const Library::Added added = library->add(paths.first(), meta);
+        summary.items.append({paths.first(), added.id, added.duplicate, added.error});
+        if (!added.error.isEmpty())
+            summary.problems << added.error;
+    } else {
+        // Whether a Calibre library is read as one is the Calibre plugin's to say.
+        Settings settings;
+        const CalibrePlugin calibre(&settings);
+        summary = importBooks(*library, paths, {}, calibre.importOptions());
+        for (const QString &path : paths)
+            if (calibre.switchedOff() && QFileInfo(path + "/metadata.db").isFile())
+                print(stderr, "The Calibre plugin is switched off, so " + path + " was added as a plain folder of books. "
+                              "Switch it on with: omabook plugins enable calibre");
+        for (const QString &folder : std::as_const(summary.calibreLibraries))
+            settings.setCalibreLibrary(QDir(folder).absolutePath(), "imported");
+    }
+
+    QJsonArray results;
+    for (const ImportSummary::Item &item : std::as_const(summary.items)) {
+        if (command.json())
+            results << QJsonObject{{"file", item.file}, {"id", item.id}, {"duplicate", item.duplicate}, {"error", item.error}};
+        else if (item.error.isEmpty())
+            print(stdout, QString("%1\t%2%3").arg(item.id).arg(library->book(item.id)->meta.title,
+                                                               item.duplicate ? "\t(already in the library)" : ""));
+    }
+    if (command.json())
+        printJson(results);
+    for (const QString &problem : std::as_const(summary.problems))
+        print(stderr, problem);
+    if (summary.items.isEmpty() && summary.problems.isEmpty())
+        return fail("No books were found there.");
+    return summary.problems.isEmpty() ? 0 : 1;
+}
+
+int manifest(const QStringList &arguments) {
+    Command command("manifest", "Print everything the library holds as JSON: each book's details, files with their "
+                                "hashes, cover and reading place. This is what omabook sync reads from the other computer.");
+    if (!command.parse(arguments, 0, 0))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    printJson(libraryManifest(*library));
+    return 0;
+}
+
+int progress(const QStringList &arguments) {
+    Command command("progress", "Show how far a book has been read, or set it.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    command.parser.addOption({"section", "The section being read, counted from 0.", "number"});
+    command.parser.addOption({"fraction", "How far into that section, from 0 to 1.", "number"});
+    command.parser.addOption({"percent", "How far into the book, from 0 to 100.", "number"});
+    command.parser.addOption({"updated", "When it was read to here, in seconds since 1970; now when not given.", "seconds"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const qint64 id = command.argument(0).toLongLong();
+    if (!library->book(id))
+        return fail("There is no book " + command.argument(0) + " in the library.");
+    if (command.parser.isSet("section") || command.parser.isSet("fraction") || command.parser.isSet("percent")) {
+        Progress place = library->progress(id);
+        place.updated = command.parser.value("updated").toLongLong();
+        if (command.parser.isSet("section")) place.section = qMax(0, command.parser.value("section").toInt());
+        if (command.parser.isSet("fraction")) place.fraction = qBound(0.0, command.parser.value("fraction").toDouble(), 1.0);
+        if (command.parser.isSet("percent")) place.percent = qBound(0.0, command.parser.value("percent").toDouble(), 100.0);
+        const double before = library->progress(id).percent;
+        library->setProgress(id, place);
+        // Reading set by hand counts as reading: it goes in the log too.
+        if (place.percent > before)
+            Graph(*library).logReading(id, before, place.percent);
+        Graph(*library).bookNode(id);
+    }
+    const Progress place = library->progress(id);
+    if (command.json())
+        printJson(QJsonObject{{"section", place.section}, {"fraction", place.fraction}, {"percent", place.percent}, {"updated", place.updated}});
+    else
+        print(stdout, QString("section %1, %2% of the book").arg(place.section).arg(qRound(place.percent)));
+    return 0;
+}
+
+int sync(const QStringList &arguments) {
+    Command command("sync", "Bring this library and another computer's in step over ssh: each gets the books it lacks, "
+                            "and the newer reading place wins. Omabook must be installed on both.");
+    command.parser.addPositionalArgument("computer", "The other computer as ssh knows it (a Tailscale name works), optionally "
+                                                     "with its library folder: laptop or laptop:Books.", "<computer[:folder]>");
+    command.parser.addOption({"status", "Only say whether syncing is set up, and with which computer."});
+    if (!command.parse(arguments, 0, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QString computer = command.argument(0).isEmpty() ? Settings().syncTarget() : command.argument(0);
+    if (command.parser.isSet("status")) {
+        const bool ssh = !QStandardPaths::findExecutable("ssh").isEmpty();
+        if (command.json())
+            printJson(QJsonObject{{"computer", computer}, {"configured", !computer.isEmpty()}, {"ssh_installed", ssh},
+                                  {"library", library->root()}, {"books", library->books().size()}});
+        else
+            print(stdout, computer.isEmpty() ? QString("No computer to sync with is named in the settings.")
+                                             : QString("Syncs with %1%2").arg(computer, ssh ? "" : " (ssh is not installed)"));
+        return 0;
+    }
+    if (computer.isEmpty())
+        return fail("Name the computer to sync with, or set one in the settings.");
+    const SyncSummary summary = syncLibrary(*library, Remote(computer), [&](const QString &title) {
+        if (!command.json())
+            print(stderr, title);
+    });
+    if (!summary.error.isEmpty())
+        return fail(summary.error);
+    if (command.json())
+        printJson(QJsonObject{{"received", summary.received}, {"sent", summary.sent}, {"places_taken", summary.placesTaken},
+                              {"places_sent", summary.placesSent}, {"problems", QJsonArray::fromStringList(summary.problems)}});
+    else
+        print(stdout, QString("%1 received, %2 sent, %3 reading places updated")
+                          .arg(summary.received).arg(summary.sent).arg(summary.placesTaken + summary.placesSent));
+    for (const QString &problem : summary.problems)
+        print(stderr, problem);
+    return summary.problems.isEmpty() ? 0 : 1;
+}
+
+int remove(const QStringList &arguments) {
+    Command command("remove", "Move a book's folder to the trash and take it out of the library.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library || !library->remove(command.argument(0).toLongLong(), &error))
+        return fail(error);
+    if (command.json())
+        printJson(QJsonObject{{"removed", command.argument(0).toLongLong()}});
+    return 0;
+}
+
+int set(const QStringList &arguments) {
+    Command command("set", "Change a book's details. Only the options given are changed.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    const QStringList fields{"title", "authors", "series", "series-index", "publisher", "language", "isbn", "published",
+                             "description", "tags"};
+    for (const QString &field : fields)
+        command.parser.addOption({field, field == "authors" ? "Separate several with \" & \"."
+                                         : field == "tags"  ? "Separate several with commas."
+                                                            : "Set the " + field + ".", "text"});
+    command.parser.addOption({"cover", "Use this picture as the cover.", "file"});
+    command.parser.addOption({"status", "Where the book stands: to-read, reading, read, or none to go by how far it was "
+                                        "read here.", "status"});
+    command.parser.addOption({"rating", "Your stars for it, 1 to 5, or 0 for none.", "stars"});
+    command.parser.addOption({"finished", "The day you finished it, as 2026-03-01.", "date"});
+    command.parser.addOption({"paper", "Whether there is a copy on a real shelf: yes or no.", "yes|no"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const qint64 id = command.argument(0).toLongLong();
+    const auto book = library->book(id);
+    if (!book)
+        return fail("There is no book " + command.argument(0) + " in the library.");
+    BookMeta meta = book->meta;
+    const QCommandLineParser &options = command.parser;
+    if (options.isSet("title")) meta.title = options.value("title").simplified();
+    if (options.isSet("authors")) meta.authors = BookMeta::splitAuthors(options.value("authors"));
+    if (options.isSet("series")) meta.series = options.value("series").simplified();
+    if (options.isSet("series-index")) meta.seriesIndex = options.value("series-index").toDouble();
+    if (options.isSet("publisher")) meta.publisher = options.value("publisher").simplified();
+    if (options.isSet("language")) meta.language = options.value("language").simplified();
+    if (options.isSet("isbn")) meta.isbn = options.value("isbn").simplified();
+    if (options.isSet("published")) meta.published = options.value("published").simplified();
+    if (options.isSet("description")) meta.description = options.value("description").trimmed();
+    if (options.isSet("tags")) meta.tags = BookMeta::splitTags(options.value("tags"));
+    if (options.isSet("cover")) {
+        QImageReader reader(options.value("cover"));
+        reader.setAutoTransform(true);
+        meta.cover = reader.read();
+        if (meta.cover.isNull())
+            return fail("That picture can't be read: " + options.value("cover"));
+    }
+    if (meta.title.isEmpty())
+        return fail("A book needs a title.");
+    if (!library->setMeta(id, meta, &error))
+        return fail(error);
+    if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {
+        const QString status = options.isSet("status") ? options.value("status").toLower() : book->shelf;
+        if (!library->setReading(id, status == "none" ? QString() : status,
+                                 options.isSet("rating") ? options.value("rating").toInt() : book->rating,
+                                 options.isSet("finished") ? options.value("finished").simplified() : book->finished))
+            return fail("A status is one of to-read, reading, read or none.");
+    }
+    if (options.isSet("paper"))
+        library->setPaper(id, options.value("paper").toLower() == "yes");
+    // The book's node in the knowledge graph says the same as the library.
+    Graph(*library).bookNode(id);
+    if (command.json())
+        printJson(library->book(id)->toJson());
+    return 0;
+}
+
+int info(const QStringList &arguments) {
+    Command command("info", "Show what a book file says about itself, without adding it to the library. Without a "
+                            "file: Omabook's version, the library in use, and which AI answers and why.");
+    command.parser.addPositionalArgument("file", "A book file.", "[file]");
+    if (!command.parse(arguments, 0, 1))
+        return 1;
+    if (command.argument(0).isEmpty()) {
+        const Settings settings;
+        const AiChoice ai = Ai::choose(settings);
+        const QJsonObject described = Ai::describe(settings);
+        const QString library = command.parser.isSet("library") ? QDir(command.parser.value("library")).absolutePath()
+                                                                : settings.libraryPath();
+        if (command.json()) {
+            printJson(QJsonObject{{"version", OMABOOK_VERSION}, {"library", library},
+                                  {"config_folder", Customization().folder()}, {"ai", described}});
+        } else {
+            print(stdout, "version:\t" OMABOOK_VERSION);
+            print(stdout, "library:\t" + library);
+            print(stdout, "ai:\t" + (ai.available() ? ai.name : QString("none")));
+            // An empty name is the provider's own default.
+            auto named = [](const QString &model) { return model.isEmpty() ? QString("the default") : model; };
+            if (ai.available()) {
+                print(stdout, "\tfor answers and writing: " + named(described.value("main_model").toString()));
+                print(stdout, "\tfor reading and parsing: " + named(described.value("quick_model").toString()));
+            }
+            if (ai.source == AiChoice::OmarchyDefault) print(stdout, "\tOmarchy's default agent");
+            if (!ai.problem.isEmpty()) print(stdout, "\t" + ai.problem);
+        }
+        return 0;
+    }
+    const QString file = command.argument(0);
+    if (!QFileInfo(file).isFile())
+        return fail("There is no such file: " + file);
+    if (!Formats::isBook(file))
+        return fail(QFileInfo(file).fileName() + " is not a book format Omabook knows.");
+    const BookMeta meta = Formats::readMeta(file);
+    QJsonObject object = meta.toJson();
+    object.insert("format", Formats::name(Formats::extension(file)));
+    object.insert("readable", Formats::readable(Formats::extension(file)));
+    object.insert("has_cover", !meta.cover.isNull());
+    if (command.json()) {
+        printJson(object);
+    } else {
+        print(stdout, "title:\t" + meta.title);
+        print(stdout, "authors:\t" + meta.authorText());
+        print(stdout, "format:\t" + object.value("format").toString());
+    }
+    return 0;
+}
+
+int toc(const QStringList &arguments) {
+    Command command("toc", "List a book's contents: the section each entry starts in, and its title.");
+    command.parser.addPositionalArgument("book", "A book's number in the library, or a book file.");
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto document = openTarget(command, command.argument(0), &error);
+    if (!document)
+        return fail(error);
+    QJsonArray entries;
+    for (const TocEntry &entry : document->toc()) {
+        entries << QJsonObject{{"section", entry.section}, {"title", entry.title}, {"level", entry.level}};
+        if (!command.json())
+            print(stdout, QString("%1\t%2%3").arg(entry.section).arg(QString(entry.level * 2, ' '), entry.title));
+    }
+    if (command.json())
+        printJson(QJsonObject{{"sections", document->count()}, {"contents", entries}});
+    return 0;
+}
+
+int text(const QStringList &arguments) {
+    Command command("text", "Print a book as plain text: all of it, or one section (a chapter, or a page of a PDF).");
+    command.parser.addPositionalArgument("book", "A book's number in the library, or a book file.");
+    command.parser.addOption({"section", "Only this section, counted from 0 as omabook toc does.", "number"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto document = openTarget(command, command.argument(0), &error);
+    if (!document)
+        return fail(error);
+    int from = 0, to = document->count() - 1;
+    if (command.parser.isSet("section")) {
+        from = to = command.parser.value("section").toInt();
+        if (from < 0 || from >= document->count())
+            return fail(QString("This book has sections 0 to %1.").arg(document->count() - 1));
+    }
+    QJsonArray sections;
+    for (int section = from; section <= to; ++section) {
+        const QString words = document->text(section);
+        if (command.json())
+            sections << QJsonObject{{"section", section}, {"text", words}};
+        else if (!words.isEmpty())
+            print(stdout, words + "\n");
+    }
+    if (command.json())
+        printJson(sections);
+    return 0;
+}
+
+int find(const QStringList &arguments) {
+    Command command("find", "Find words in a book's text.");
+    command.parser.addPositionalArgument("book", "A book's number in the library, or a book file.");
+    command.parser.addPositionalArgument("words", "The words to find, as they appear.", "<words...>");
+    if (!command.parse(arguments, 2))
+        return 1;
+    QString error;
+    const auto document = openTarget(command, command.argument(0), &error);
+    if (!document)
+        return fail(error);
+    const QJsonArray matches = BookOps::find(*document, command.parser.positionalArguments().mid(1).join(' '));
+    if (command.json())
+        printJson(matches);
+    else
+        for (const QJsonValue &match : matches)
+            print(stdout, QString("%1\t%2").arg(match["section"].toInt()).arg(match["snippet"].toString()));
+    return matches.isEmpty() ? 1 : 0;
+}
+
+int exportBook(const QStringList &arguments) {
+    Command command("export", "Copy a book's file out of the library into a folder.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    command.parser.addPositionalArgument("folder", "Where to put the copy.");
+    command.parser.addOption({"format", "Which of the book's formats; the one the reader prefers when not given.", "format"});
+    if (!command.parse(arguments, 2, 2))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QString source = library->formatPath(command.argument(0).toLongLong(), command.parser.value("format"));
+    if (source.isEmpty())
+        return fail("There is no such book or format in the library.");
+    const QString target = QDir(command.argument(1)).absoluteFilePath(QFileInfo(source).fileName());
+    if (QFileInfo::exists(target))
+        return fail("There is already a file at " + target);
+    if (!QDir().mkpath(command.argument(1)) || !QFile::copy(source, target))
+        return fail("The copy can't be written to " + target);
+    if (command.json())
+        printJson(QJsonObject{{"file", target}});
+    else
+        print(stdout, target);
+    return 0;
+}
+
+int convert(const QStringList &arguments) {
+    Command command("convert", "Convert a book to another format with Calibre's ebook-convert and add the result to the book.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    command.parser.addOption({"to", "The format to make; epub when not given.", "format", "epub"});
+    command.parser.addOption({"from", "Which of the book's formats to convert; the one the reader prefers when not given.", "format"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const qint64 id = command.argument(0).toLongLong();
+    const QString file = BookOps::convert(*library, id, command.parser.value("to"), command.parser.value("from"), &error);
+    if (file.isEmpty())
+        return fail(error);
+    if (command.json())
+        printJson(QJsonObject{{"id", id}, {"file", file}});
+    else
+        print(stdout, file);
+    return 0;
+}
+
+int lookup(const QStringList &arguments) {
+    Command command("lookup", "Look a book's details up with every metadata plugin that is on (see omabook plugins), and "
+                              "optionally have the AI judge what they found. Each candidate says what it would add and change.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    command.parser.addOption({"ai", "Also ask the AI, which reads the book's opening pages and weighs the other results."});
+    command.parser.addOption({"apply", "Take the details (and cover) of this candidate, counted from 1.", "number"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const qint64 id = command.argument(0).toLongLong();
+    const auto book = library->book(id);
+    if (!book)
+        return fail("There is no book " + command.argument(0) + " in the library.");
+
+    // The look-up itself is shared with the MCP server; see bookops.h.
+    const BookOps::LookUp found = BookOps::lookUp(*library, *book, command.parser.isSet("ai"));
+    for (const QString &problem : found.problems)
+        print(stderr, problem);
+    if (!found.error.isEmpty())
+        return fail(found.error);
+    const QList<MetaCandidate> &candidates = found.candidates;
+
+    if (command.parser.isSet("apply")) {
+        const int index = command.parser.value("apply").toInt() - 1;
+        if (index < 0 || index >= candidates.size())
+            return fail(QString("There are %1 candidates.").arg(candidates.size()));
+        if (!BookOps::applyCandidate(*library, id, candidates.at(index), &error))
+            return fail(error);
+        if (command.json())
+            printJson(library->book(id)->toJson());
+        return 0;
+    }
+    QJsonArray array;
+    for (int i = 0; i < candidates.size(); ++i) {
+        const MetaCandidate &candidate = candidates.at(i);
+        QJsonObject object = BookOps::candidateJson(*book, candidate);
+        object.insert("candidate", i + 1);
+        array << object;
+        if (!command.json()) {
+            QStringList changed;
+            for (const QJsonValue &change : object.value("changes").toArray())
+                changed << change["field"].toString();
+            const QStringList adds = object.value("adds").toVariant().toStringList();
+            print(stdout, QString("%1\t%2\t%3\t%4\t%5").arg(i + 1).arg(candidate.source, candidate.meta.title,
+                                                                    candidate.meta.authorText(), candidate.meta.published));
+            if (!adds.isEmpty()) print(stdout, "\tadds: " + adds.join(", "));
+            if (!changed.isEmpty()) print(stdout, "\tchanges: " + changed.join(", "));
+            if (!candidate.why.isEmpty()) print(stdout, "\twhy: " + candidate.why);
+        }
+    }
+    if (command.json())
+        printJson(array);
+    return candidates.isEmpty() ? 1 : 0;
+}
+
+int plugins(const QStringList &arguments) {
+    Command command("plugins", "List what Omabook is made of and what has been added to it: built in, Calibre's own "
+                               "metadata plugins (run inside Calibre), and programs in the plugin folder. Or turn a "
+                               "metadata plugin on or off.");
+    command.parser.addPositionalArgument("action", "Nothing to list, or enable or disable.", "[enable|disable]");
+    command.parser.addPositionalArgument("id", "The plugin's id, as the list prints it.", "[id]");
+    if (!command.parse(arguments, 0, 2))
+        return 1;
+    Settings settings;
+    Plugins registry(&settings);
+    const QString action = command.argument(0);
+    if (action == "enable" || action == "disable") {
+        registry.list();
+        if (!registry.setEnabled(command.argument(1), action == "enable"))
+            return fail("There is no plugin " + command.argument(1) + " that can be turned on or off.");
+    } else if (!action.isEmpty()) {
+        return fail("Use omabook plugins, omabook plugins enable <id> or omabook plugins disable <id>.");
+    }
+    QJsonArray array;
+    for (const PluginInfo &plugin : registry.list()) {
+        array << QJsonObject{{"id", plugin.id}, {"name", plugin.name}, {"kind", plugin.kind}, {"origin", plugin.origin},
+                             {"version", plugin.version}, {"author", plugin.author}, {"description", plugin.description},
+                             {"fields", QJsonArray::fromStringList(plugin.fields)}, {"enabled", plugin.enabled},
+                             {"switchable", plugin.switchable}, {"problem", plugin.problem}};
+        if (!command.json())
+            print(stdout, QString("%1\t%2\t%3\t%4%5").arg(plugin.enabled && plugin.problem.isEmpty() ? "on" : "off", plugin.kind,
+                                                          plugin.id, plugin.fields.join(","),
+                                                          plugin.problem.isEmpty() ? QString() : "\t(" + plugin.problem + ")"));
+    }
+    if (command.json())
+        printJson(QJsonObject{{"folder", registry.folder()}, {"plugins", array}});
+    return 0;
+}
+
+// Asks the model one thing and waits for the whole answer.
+// What the Calibre plugin found on this computer, and importing from it.
+int calibre(const QStringList &arguments) {
+    Command command("calibre", "What the Calibre plugin found on this computer. `libraries` lists Calibre's libraries with "
+                               "their book counts and whether each was imported; `plugins` lists Calibre's own plugins, "
+                               "of every kind, saying which Omabook can use; `import` brings a library in (again, to "
+                               "bring the reading up to date): the one at <path>, every one not imported yet, or with "
+                               "--all every one found. Switch the whole plugin with omabook plugins enable|disable calibre.");
+    command.parser.addPositionalArgument("what", "libraries, plugins or import.", "<libraries|plugins|import>");
+    command.parser.addPositionalArgument("path", "import: the Calibre library to import.", "[path]");
+    command.parser.addOption({"all", "import: every Calibre library found, also those imported or set aside before."});
+    command.parser.addOption({"refresh", "plugins: ask Calibre again instead of using what was found last time."});
+    if (!command.parse(arguments, 1, 2))
+        return 1;
+    Settings settings;
+    const CalibrePlugin plugin(&settings);
+    const QString what = command.argument(0);
+    if (what != "libraries" && what != "plugins" && what != "import")
+        return fail("Use omabook calibre libraries, omabook calibre plugins or omabook calibre import [<path>|--all].");
+    // Off, nothing of Calibre's is looked at. Merely not found, the lists are empty.
+    if (plugin.switchedOff())
+        return fail("The Calibre plugin is switched off. Switch it on with: omabook plugins enable calibre");
+
+    if (what == "libraries") {
+        QJsonArray array;
+        for (const CalibreLibrary &library : plugin.libraries()) {
+            array << library.toJson();
+            if (!command.json())
+                print(stdout, QString("%1\t%2\t%3").arg(library.books < 0 ? "?" : QString::number(library.books),
+                                                         library.answer.isEmpty() ? "new" : library.answer, library.path));
+        }
+        if (command.json())
+            printJson(array);
+        return 0;
+    }
+    if (what == "plugins") {
+        QJsonArray array;
+        for (const CalibreAddOn &addOn : plugin.addOns(command.parser.isSet("refresh"))) {
+            array << addOn.toJson();
+            if (!command.json())
+                print(stdout, QString("%1\t%2\t%3\t%4").arg(addOn.usable ? "usable" : "listed",
+                                                             addOn.type.isEmpty() ? "Unknown" : addOn.type, addOn.name, addOn.note));
+        }
+        if (command.json())
+            printJson(array);
+        return 0;
+    }
+
+    QStringList folders;
+    if (!command.argument(1).isEmpty()) {
+        folders << QDir(command.argument(1)).absolutePath();
+        if (!plugin.reads(folders.first()))
+            return fail("There is no Calibre library at " + folders.first() + ".");
+    } else {
+        for (const CalibreLibrary &library : command.parser.isSet("all") ? plugin.libraries() : plugin.librariesToOffer(true))
+            folders << library.path;
+        if (folders.isEmpty())
+            return fail(plugin.libraries().isEmpty() ? "No Calibre library was found on this computer."
+                                                     : "Every Calibre library found was already imported or set aside; "
+                                                       "name one, or use --all.");
+    }
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const ImportSummary summary = importBooks(*library, folders, {}, plugin.importOptions());
+    for (const QString &folder : std::as_const(summary.calibreLibraries))
+        settings.setCalibreLibrary(folder, "imported");
+    if (command.json())
+        printJson(QJsonObject{{"libraries", QJsonArray::fromStringList(summary.calibreLibraries)}, {"added", summary.added},
+                              {"already_here", summary.duplicates}, {"updated", summary.updated}, {"read", summary.read},
+                              {"reading", summary.reading}, {"problems", QJsonArray::fromStringList(summary.problems)}});
+    else
+        print(stdout, QString("%1 added, %2 already here (%3 brought up to date); %4 read, %5 being read")
+                          .arg(summary.added).arg(summary.duplicates).arg(summary.updated).arg(summary.read).arg(summary.reading));
+    for (const QString &problem : std::as_const(summary.problems))
+        print(stderr, problem);
+    return summary.problems.isEmpty() ? 0 : 1;
+}
+
+bool askAi(const AiRequest &request, QString *answer, QString *error, bool show = false) {
+    QString note;
+    const bool ok = BookOps::ask(request, answer, error, [show](const QString &piece) {
+        if (show) {
+            fputs(qPrintable(piece), stdout);
+            fflush(stdout);
+        }
+    }, &note);
+    // A model that was refused, and which one answered instead.
+    if (!note.isEmpty())
+        print(stderr, note);
+    return ok;
+}
+
+int bookmarks(const QStringList &arguments) {
+    Command command("bookmarks", "List a book's bookmarks, add one, or remove one.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    command.parser.addOption({"add", "Bookmark a place, with these words to know it by.", "text"});
+    command.parser.addOption({"section", "The section of the new bookmark, counted from 0; where the book was read to when not given.", "number"});
+    command.parser.addOption({"fraction", "How far into that section, from 0 to 1.", "number"});
+    command.parser.addOption({"remove", "Remove the bookmark with this number.", "bookmark"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const qint64 id = command.argument(0).toLongLong();
+    if (!library->book(id))
+        return fail("There is no book " + command.argument(0) + " in the library.");
+    if (command.parser.isSet("remove")) {
+        const qint64 bookmark = command.parser.value("remove").toLongLong();
+        const QList<Annotation> before = library->annotations(id);
+        if (std::none_of(before.begin(), before.end(), [&](const Annotation &note) { return note.id == bookmark; }))
+            return fail("That book has no bookmark " + command.parser.value("remove") + ".");
+        library->removeAnnotation(bookmark);
+    }
+    if (command.parser.isSet("add")) {
+        const Progress place = library->progress(id);
+        Annotation bookmark;
+        bookmark.kind = "bookmark";
+        bookmark.section = command.parser.isSet("section") ? qMax(0, command.parser.value("section").toInt()) : place.section;
+        bookmark.fraction = command.parser.isSet("fraction") ? qBound(0.0, command.parser.value("fraction").toDouble(), 1.0)
+                                                             : command.parser.isSet("section") ? 0.0 : place.fraction;
+        bookmark.text = command.parser.value("add").simplified();
+        library->addAnnotation(id, bookmark);
+    }
+    QJsonArray array;
+    for (const Annotation &note : library->annotations(id)) {
+        array << QJsonObject{{"id", note.id}, {"kind", note.kind}, {"section", note.section}, {"fraction", note.fraction},
+                             {"text", note.text}};
+        if (!command.json())
+            print(stdout, QString("%1\tsection %2, %3%\t%4").arg(note.id).arg(note.section).arg(qRound(note.fraction * 100)).arg(note.text));
+    }
+    if (command.json())
+        printJson(array);
+    return 0;
+}
+
+int notes(const QStringList &arguments) {
+    Command command("notes", "Show the notes the AI companion keeps on a book: its catch-up (recap) and who is who (cast), "
+                             "each as far as the book was read when it was written.");
+    command.parser.addPositionalArgument("id", "The book's number.");
+    command.parser.addOption({"kind", "Only this kind: recap or cast.", "kind"});
+    if (!command.parse(arguments, 1, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const qint64 id = command.argument(0).toLongLong();
+    if (!library->book(id))
+        return fail("There is no book " + command.argument(0) + " in the library.");
+    QJsonObject object;
+    for (const QString &kind : command.parser.isSet("kind") ? QStringList{command.parser.value("kind")} : QStringList{"recap", "cast"}) {
+        const Recap kept = library->notes(id, kind);
+        if (kept.text.isEmpty())
+            continue;
+        object.insert(kind, QJsonObject{{"text", kept.text}, {"section", kept.section}, {"fraction", kept.fraction},
+                                        {"updated", QDateTime::fromSecsSinceEpoch(kept.updated).toString(Qt::ISODate)}});
+        if (!command.json())
+            print(stdout, kind + ":\n" + kept.text + "\n");
+    }
+    if (command.json())
+        printJson(object);
+    else if (object.isEmpty())
+        print(stdout, "No notes are kept on this book yet.");
+    return 0;
+}
+
+int libraries(const QStringList &arguments) {
+    Command command("libraries", "List the libraries Omabook knows, or make another the one in use.");
+    command.parser.addOption({"use", "Make the library in this folder the one in use.", "folder"});
+    command.parser.addOption({"create", "With --use: start a new library in a folder that isn't one yet."});
+    command.parser.addOption({"forget", "Take the library in this folder off the list; the folder stays.", "folder"});
+    command.parser.addOption({"trash", "Take it off the list and move its folder, books and all, to the trash.", "folder"});
+    if (!command.parse(arguments, 0, 0))
+        return 1;
+    Settings settings;
+    QString problem;
+    if (command.parser.isSet("forget") && !Libraries::forget(settings, command.parser.value("forget"), &problem))
+        return fail(problem);
+    if (command.parser.isSet("trash") && !Libraries::trash(settings, command.parser.value("trash"), &problem))
+        return fail(problem);
+    if (command.parser.isSet("use")) {
+        const QString folder = QDir(command.parser.value("use")).absolutePath();
+        if (!QFileInfo::exists(folder + "/omabook.db") && !command.parser.isSet("create"))
+            return fail("There is no library in " + folder + ". Add --create to start one there.");
+        Library opened(folder);
+        QString error;
+        if (!opened.open(&error))
+            return fail(error);
+        settings.setLibraryPath(folder);
+    }
+    QJsonArray array;
+    for (const QString &folder : settings.libraries()) {
+        const bool current = folder == settings.libraryPath(), exists = QFileInfo::exists(folder + "/omabook.db");
+        array << QJsonObject{{"folder", folder}, {"current", current}, {"exists", exists}};
+        if (!command.json())
+            print(stdout, QString("%1 %2%3").arg(current ? "*" : " ", folder, exists ? "" : "  (not there)"));
+    }
+    if (command.json())
+        printJson(QJsonObject{{"current", settings.libraryPath()}, {"libraries", array}});
+    return 0;
+}
+
+int tidy(const QStringList &arguments) {
+    Command command("tidy", "Look the whole library over and list what would tidy it: the same book twice, an author "
+                            "spelled several ways and, with --ai, books that belong to a series. Nothing changes without --apply.");
+    command.parser.addOption({"ai", "Also ask the AI which books belong to a series."});
+    command.parser.addOption({"apply", "Make every change listed."});
+    command.parser.addOption({"pick", "Make only these changes, by their numbers in the list: 1,3,4.", "numbers"});
+    if (!command.parse(arguments, 0, 0))
+        return 1;
+    QList<int> picked;
+    for (const QString &number : command.parser.value("pick").split(',', Qt::SkipEmptyParts))
+        picked << number.trimmed().toInt();
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QList<Book> books = library->books();
+    QList<Proposal> series;
+    if (command.parser.isSet("ai")) {
+        QString answer;
+        if (!askAi(Curation::seriesRequest(books), &answer, &error))
+            return fail(error);
+        series = Curation::seriesFrom(answer, books);
+    }
+    QJsonArray array;
+    int applied = 0;
+    // In the order they can be applied in: merges last (see bookops.h).
+    const QList<Proposal> proposals = BookOps::tidy(books, series);
+    int number = 0;
+    for (const Proposal &proposal : proposals) {
+        const auto book = library->book(proposal.bookId);
+        if (!book)
+            continue;
+        ++number;
+        QString line = QString("%1\t%2\t%3\t%4\t").arg(number).arg(proposal.kind).arg(proposal.bookId).arg(book->meta.title);
+        if (proposal.kind == "duplicate")
+            line += QString("book %1 folds into it").arg(proposal.otherId);
+        else if (proposal.kind == "author")
+            line += book->meta.authorText() + " -> " + proposal.meta.authorText();
+        else
+            line += QString("%1 #%2").arg(proposal.meta.series).arg(proposal.meta.seriesIndex);
+        QJsonObject described = BookOps::proposalJson(*book, proposal);
+        described.insert("number", number);
+        array << described;
+        if (!command.json())
+            print(stdout, line);
+        if (command.parser.isSet("pick") ? picked.contains(number) : command.parser.isSet("apply")) {
+            if (Curation::apply(*library, proposal, &error))
+                ++applied;
+            else
+                print(stderr, error);
+        }
+    }
+    if (command.json())
+        printJson(QJsonObject{{"proposals", array}, {"applied", applied}});
+    else if (command.parser.isSet("apply") || command.parser.isSet("pick"))
+        print(stdout, QString("%1 changes made").arg(applied));
+    return 0;
+}
+
+// Waits for a reading site's shelves.
+bool fetchShelves(ReadingSite *site, QList<SiteEntry> *entries, QString *error) {
+    QEventLoop loop;
+    bool ok = false;
+    QObject::connect(site, &ReadingSite::fetched, &loop, [&](const QList<SiteEntry> &fetched) {
+        *entries = fetched;
+        ok = true;
+        loop.quit();
+    });
+    QObject::connect(site, &ReadingSite::failed, &loop, [&](const QString &problem) {
+        *error = problem;
+        loop.quit();
+    });
+    site->fetchShelves();
+    loop.exec();
+    return ok;
+}
+
+// `omabook goodreads ...` and `omabook openlibrary ...`: one command per
+// reading site, all with the same actions.
+int readingSite(const QStringList &arguments) {
+    const QString scheme = arguments.value(1);
+    const bool goodreads = scheme == "goodreads";
+    Command command(scheme, goodreads
+        ? "Keep the library in step with your Goodreads shelves. Goodreads has no API and nothing can write to it, so: "
+          "import reads the file Goodreads lets you download (My Books, Import and export), sync reads the shelves of "
+          "a public profile, and export writes Omabook's reading as a file for Goodreads' own import page. Books that "
+          "are not in the library are added as paper books, or as books only known of. Nothing is ever removed."
+        : "Bring the reading log of a public Open Library account into the library: what you want to read, are reading "
+          "and have read. Open Library takes nothing back.");
+    command.parser.addPositionalArgument("action", goodreads ? "import <file>, sync, export <file> or shelves (list them, change nothing)."
+                                                             : "sync, or shelves (list them, change nothing).",
+                                         goodreads ? "<import|sync|export|shelves>" : "<sync|shelves>");
+    command.parser.addPositionalArgument("file", "The file to import, or to write.", "[file]");
+    command.parser.addOption({"user", goodreads ? "The Goodreads user id, profile address or shelf feed address, instead of the one in the settings."
+                                                : "The Open Library user name, instead of the one in the settings.", "user"});
+    command.parser.addOption({"no-new", "Only update books that are already in the library; add none."});
+    command.parser.addOption({"no-covers", "Don't fetch covers for the books that have none."});
+    if (!command.parse(arguments, 1, 2))
+        return 1;
+    const QString action = command.argument(0), file = command.argument(1);
+    const bool needsFile = action == "import" || action == "export";
+    if (!QStringList{"import", "sync", "export", "shelves"}.contains(action) || needsFile == file.isEmpty())
+        return fail(QString("Use omabook %1 %2.").arg(scheme, goodreads ? "import <file>, sync, export <file> or shelves" : "sync or shelves"));
+
+    Settings settings;
+    QNetworkAccessManager network;
+    const bool online = action == "sync" || action == "shelves";
+    if (goodreads && online && !settings.pluginEnabled("builtin:Goodreads", true))
+        return fail("The Goodreads plugin is off, so nothing is asked of goodreads.com. Turn it on with: omabook plugins enable builtin:Goodreads");
+    // Whoever the settings name, with the key that was kept for them when
+    // they connected (omabook sites connect); somebody named here is asked
+    // for as anybody would be.
+    const bool other = command.parser.isSet("user");
+    const std::unique_ptr<ReadingSite> site(ReadingSites::make(
+        scheme, other ? command.parser.value("user") : settings.siteIdentity(scheme),
+        !other && settings.site(scheme).value("secret").toBool() ? Secrets::shared().get(scheme) : QString(), &network, nullptr));
+
+    QString error;
+    if (action == "shelves") {
+        QList<SiteEntry> entries;
+        if (!fetchShelves(site.get(), &entries, &error))
+            return fail(error);
+        QJsonArray array;
+        for (const SiteEntry &entry : std::as_const(entries)) {
+            array << entry.toJson();
+            if (!command.json())
+                print(stdout, QString("%1\t%2\t%3\t%4").arg(entry.shelf, entry.rating > 0 ? QString::number(entry.rating) : QString("-"),
+                                                            entry.title, entry.authors.join(" & ")));
+        }
+        if (command.json())
+            printJson(array);
+        return 0;
+    }
+
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+
+    if (action == "export") {
+        const QList<Book> books = library->books();
+        const QByteArray made = site->writeExport(books);
+        if (made.isNull())
+            return fail(site->name() + " takes no file back.");
+        QSaveFile target(file);
+        target.setDirectWriteFallback(false);
+        if (!target.open(QIODevice::WriteOnly) || target.write(made) != made.size() || !target.commit())
+            return fail("The file can't be written to " + file);
+        // Goodreads finds a book by its ISBN first; without one it guesses from the title.
+        int written = 0, guessed = 0;
+        for (const Book &book : books) {
+            if (book.status().isEmpty())
+                continue;
+            ++written;
+            if (ReadingSites::isbn13(book.meta.isbn).isEmpty())
+                ++guessed;
+        }
+        if (command.json())
+            printJson(QJsonObject{{"file", QFileInfo(file).absoluteFilePath()}, {"books", written}, {"without_isbn", guessed}});
+        else
+            print(stdout, QString("%1 books written to %2 (%3 without an ISBN, which Goodreads matches by title). Upload it at "
+                                  "https://www.goodreads.com/review/import").arg(written).arg(file).arg(guessed));
+        return 0;
+    }
+
+    QList<SiteEntry> entries;
+    if (action == "import") {
+        QFile source(file);
+        if (!source.open(QIODevice::ReadOnly))
+            return fail("The file can't be read: " + file);
+        const ReadingSite::Export read = site->readExport(source.readAll());
+        if (!read.error.isEmpty())
+            return fail(read.error);
+        entries = read.entries;
+    } else if (!fetchShelves(site.get(), &entries, &error)) {
+        return fail(error);
+    }
+
+    ReadingSites::Options options;
+    options.addNew = !command.parser.isSet("no-new");
+    const ReadingSites::Summary summary = ReadingSites::merge(*library, entries, site->scheme(), options);
+
+    int covers = 0, coversLeft = 0;
+    if (!command.parser.isSet("no-covers") && !summary.covers.isEmpty()) {
+        if (!command.json())
+            print(stderr, QString("Fetching %1 covers...").arg(summary.covers.size()));
+        CoverFetcher fetcher(&network);
+        QEventLoop loop;
+        QObject::connect(&fetcher, &CoverFetcher::cover, &loop, [&](qint64 id, const QImage &picture) { library->setCover(id, picture); });
+        QObject::connect(&fetcher, &CoverFetcher::done, &loop, [&](int fetched, int left) {
+            covers = fetched;
+            coversLeft = left;
+            loop.quit();
+        });
+        fetcher.fetch(summary.covers);
+        loop.exec();
+    }
+
+    if (command.json()) {
+        QJsonObject object = summary.toJson();
+        object.insert("entries", entries.size());
+        object.insert("covers", covers);
+        object.insert("covers_left", coversLeft);
+        printJson(object);
+    } else {
+        for (const ReadingSites::Change &change : summary.changes)
+            if (change.what != "unchanged" || !change.note.isEmpty())
+                print(stdout, QString("%1\t%2\t%3\t%4").arg(change.what, change.bookId > 0 ? QString::number(change.bookId) : QString("-"),
+                                                            change.title, change.note));
+        print(stdout, QString("%1 new, %2 updated, %3 unchanged, %4 kept as they are here, %5 unmatched; %6 covers fetched%7")
+                          .arg(summary.added).arg(summary.updated).arg(summary.unchanged).arg(summary.kept).arg(summary.unmatched)
+                          .arg(covers).arg(coversLeft > 0 ? QString(", %1 left for the next sync").arg(coversLeft) : QString()));
+    }
+    for (const QString &problem : summary.problems)
+        print(stderr, problem);
+    return summary.problems.isEmpty() ? 0 : 1;
+}
+
+// Reads a line nobody should see typed: the terminal stops echoing for it.
+QString readSecretLine() {
+    termios before{};
+    const bool terminal = isatty(STDIN_FILENO) && tcgetattr(STDIN_FILENO, &before) == 0;
+    if (terminal) {
+        termios quiet = before;
+        quiet.c_lflag &= ~tcflag_t(ECHO);
+        tcsetattr(STDIN_FILENO, TCSANOW, &quiet);
+    }
+    QFile input;
+    QString line;
+    if (input.open(stdin, QIODevice::ReadOnly))
+        line = QString::fromUtf8(input.readAll()).trimmed();
+    if (terminal) {
+        tcsetattr(STDIN_FILENO, TCSANOW, &before);
+        fputs("\n", stderr);
+    }
+    return line;
+}
+
+// `omabook sites`: the reading sites as one is connected to them.
+int sites(const QStringList &arguments) {
+    Command command("sites", "The reading sites (Goodreads, Open Library, Hardcover) and how you are connected to each. "
+                             "With no action, lists them. connect takes whatever you have of yourself there (a link to "
+                             "your profile, a name, a number) and looks at once; disconnect forgets it and the token, and "
+                             "leaves the books; sync brings the shelves in and, where you turned that on, sends what you "
+                             "changed here. A token is never an argument: it is read from standard input or from a file, "
+                             "and kept in the desktop's keyring, never in config.json.");
+    command.parser.addPositionalArgument("action", "Nothing to list, or connect, check, disconnect or sync.", "[connect|check|disconnect|sync]");
+    command.parser.addPositionalArgument("site", "goodreads, openlibrary or hardcover; sync takes every connected site when none is given.", "[site]");
+    command.parser.addPositionalArgument("identity", "connect: a link to your profile, your user name or id. Hardcover finds it from the token.", "[identity]");
+    command.parser.addOption({"token-stdin", "connect: read the token from standard input (Hardcover's token; Open Library's two keys as access:secret)."});
+    command.parser.addOption({"token-file", "connect: read the token from this file.", "file"});
+    command.parser.addOption({"write", "connect: whether changes made in Omabook also go to the site (yes or no). Off until turned on.", "yes|no"});
+    command.parser.addOption({"dry-run", "sync: say what would change here and what would be sent; change nothing."});
+    command.parser.addOption({"send", "sync: send the changes to the site the first time, after a dry run showed them."});
+    command.parser.addOption({"no-new", "sync: only update books that are already in the library; add none."});
+    command.parser.addOption({"no-covers", "sync: don't fetch covers for the books that have none."});
+    if (!command.parse(arguments, 0, 3))
+        return 1;
+    const QString action = command.argument(0), scheme = command.argument(1);
+    if (!QStringList{"", "connect", "check", "disconnect", "sync"}.contains(action))
+        return fail("Use omabook sites, or sites connect <site> [identity], sites check <site>, sites disconnect <site>, sites sync [site].");
+    if (!scheme.isEmpty() && !ReadingSites::schemes().contains(scheme))
+        return fail("There is no reading site called " + scheme + "; there are " + ReadingSites::schemes().join(", ") + ".");
+    if (scheme.isEmpty() && action != "" && action != "sync")
+        return fail("Say which site: " + ReadingSites::schemes().join(", ") + ".");
+
+    Settings settings;
+    QNetworkAccessManager network;
+    const QString root = command.parser.isSet("library") ? command.parser.value("library") : settings.libraryPath();
+    SiteDesk desk(&settings, &network, [root] { return root; });
+
+    auto listed = [&] {
+        if (command.json()) {
+            printJson(desk.list());
+            return;
+        }
+        for (const QJsonValue &value : desk.list()) {
+            const QJsonObject site = value.toObject();
+            const QString who = site.value("connected_as").toString().isEmpty() ? site.value("identity").toString()
+                                                                                : site.value("connected_as").toString();
+            print(stdout, QString("%1\t%2\t%3\t%4").arg(site.value("site").toString(), site.value("state").toString(), who,
+                                                        site.contains("why") ? site.value("why").toString()
+                                                        : site.contains("last_sync") ? "last sync " + site.value("last_sync").toString().left(10)
+                                                        : QString()));
+        }
+    };
+    if (action.isEmpty()) {
+        listed();
+        return 0;
+    }
+
+    // Runs one thing on the desk and waits for it.
+    auto wait = [&](const QString &site, const std::function<void()> &run) {
+        QJsonObject result;
+        QEventLoop loop;
+        const auto link = QObject::connect(&desk, &SiteDesk::done, &loop, [&](const QString &about, const QJsonObject &answer) {
+            if (about == site) {
+                result = answer;
+                loop.quit();
+            }
+        }, Qt::QueuedConnection);
+        run();
+        loop.exec();
+        QObject::disconnect(link);
+        return result;
+    };
+
+    if (action == "disconnect") {
+        desk.disconnectSite(scheme);
+        if (command.json())
+            printJson(desk.lastResult(scheme));
+        else
+            print(stdout, "Forgot who you are on " + scheme + ", and its token. Your books are as they were.");
+        return 0;
+    }
+
+    if (action == "connect") {
+        QString secret;
+        if (command.parser.isSet("token-file")) {
+            QFile file(command.parser.value("token-file"));
+            if (!file.open(QIODevice::ReadOnly))
+                return fail("The token can't be read from " + command.parser.value("token-file"));
+            secret = QString::fromUtf8(file.readAll()).trimmed();
+        } else if (command.parser.isSet("token-stdin")) {
+            if (isatty(STDIN_FILENO))
+                print(stderr, "Paste the token and press Enter, then Ctrl+D (it is not shown):");
+            secret = readSecretLine();
+        }
+        if (!secret.isEmpty()) {
+            // Said before anything is kept: a token that would be gone when
+            // this command ends is no use to the next one.
+            QString why;
+            if (!Secrets::shared().lasting(&why))
+                return fail(why + " Nothing was kept.");
+        }
+        if (command.parser.isSet("write"))
+            desk.setWrite(scheme, command.parser.value("write").toLower() == "yes");
+        const QJsonObject result = wait(scheme, [&] { desk.connectSite(scheme, command.argument(2), secret); });
+        if (command.json())
+            printJson(result);
+        else if (result.value("ok").toBool())
+            listed();
+        return result.value("ok").toBool() ? 0 : fail(result.value("error").toString());
+    }
+
+    if (action == "check") {
+        const QJsonObject result = wait(scheme, [&] { desk.checkSite(scheme); });
+        if (command.json())
+            printJson(result);
+        else if (result.value("ok").toBool())
+            listed();
+        return result.value("ok").toBool() ? 0 : fail(result.value("error").toString());
+    }
+
+    // sync: one site, or every one that is connected.
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    QStringList schemes;
+    for (const QJsonValue &value : desk.list())
+        if (scheme.isEmpty() ? value.toObject().value("state").toString() == "connected" : value.toObject().value("site").toString() == scheme)
+            schemes << value.toObject().value("site").toString();
+    if (schemes.isEmpty())
+        return fail("No reading site is connected. Connect one with: omabook sites connect <site> [identity]");
+    QList<QPair<qint64, QUrl>> covers;
+    QObject::connect(&desk, &SiteDesk::coversWanted, &network, [&](const QList<QPair<qint64, QUrl>> &wanted) { covers += wanted; });
+    SiteDesk::SyncOptions options;
+    options.addNew = !command.parser.isSet("no-new");
+    options.dryRun = command.parser.isSet("dry-run");
+    options.send = command.parser.isSet("send");
+    QJsonArray results;
+    bool allWell = true;
+    for (const QString &site : std::as_const(schemes)) {
+        const QJsonObject result = wait(site, [&] { desk.sync(site, options); });
+        results << result;
+        allWell = allWell && result.value("ok").toBool() && result.value("send_failed").toArray().isEmpty();
+        if (command.json())
+            continue;
+        if (!result.value("ok").toBool()) {
+            print(stderr, site + ": " + result.value("error").toString());
+            continue;
+        }
+        for (const QJsonValue &value : result.value("changes").toArray())
+            print(stdout, QString("%1\t%2\t%3\t%4").arg(value.toObject().value("change").toString(),
+                                                        value.toObject().contains("id") ? QString::number(value.toObject().value("id").toInteger()) : QString("-"),
+                                                        value.toObject().value("title").toString(), value.toObject().value("note").toString()));
+        // What goes, or would go, to the site.
+        const bool held = result.value("held").toInt() > 0 || options.dryRun;
+        for (const QJsonValue &value : result.value("to_send").toArray()) {
+            const QJsonObject change = value.toObject();
+            QStringList what;
+            if (change.contains("status")) what << "status " + change.value("status").toString();
+            if (change.contains("rating")) what << QString("%1 stars").arg(change.value("rating").toInt());
+            if (change.contains("finished")) what << "finished " + change.value("finished").toString();
+            print(stdout, QString("%1\t%2\t%3\t%4").arg(held ? "would send" : "sent", QString::number(change.value("id").toInteger()),
+                                                        change.value("title").toString(), what.join(", ")));
+        }
+        for (const QJsonValue &value : result.value("send_failed").toArray())
+            print(stderr, QString("not taken\t%1\t%2").arg(value.toObject().value("title").toString(), value.toObject().value("error").toString()));
+        print(stdout, QString("%1: %2%3 new, %4 updated, %5 unchanged, %6 kept as they are here, %7 unmatched")
+                          .arg(site, options.dryRun ? "(nothing changed) " : "").arg(result.value("new").toInt()).arg(result.value("updated").toInt())
+                          .arg(result.value("unchanged").toInt()).arg(result.value("kept").toInt()).arg(result.value("unmatched").toInt()));
+        if (result.value("held").toInt() > 0)
+            print(stdout, QString("Nothing was sent to %1 yet: this is the first time. Look the lines marked \"would send\" over, "
+                                  "then run: omabook sites sync %1 --send").arg(site));
+        for (const QJsonValue &problem : result.value("problems").toArray())
+            print(stderr, problem.toString());
+    }
+    if (!command.parser.isSet("no-covers") && !covers.isEmpty() && !options.dryRun) {
+        if (!command.json())
+            print(stderr, QString("Fetching %1 covers...").arg(covers.size()));
+        CoverFetcher fetcher(&network);
+        QEventLoop loop;
+        QObject::connect(&fetcher, &CoverFetcher::cover, &loop, [&](qint64 id, const QImage &picture) { library->setCover(id, picture); });
+        QObject::connect(&fetcher, &CoverFetcher::done, &loop, &QEventLoop::quit);
+        fetcher.fetch(covers);
+        loop.exec();
+    }
+    if (command.json())
+        printJson(scheme.isEmpty() ? QJsonValue(results) : results.first());
+    return allWell ? 0 : 1;
+}
+
+int suggest(const QStringList &arguments) {
+    Command command("suggest", "Have the AI suggest what to read next that you don't have, going by what you read (with "
+                               "your stars), are reading and want to read: files, paper books and books only known of "
+                               "from a reading site alike. Each suggestion is then looked up on Goodreads and Open "
+                               "Library: that it exists, what readers rate it, and whether it is already yours.");
+    command.parser.addOption({"no-check", "Don't look the suggestions up."});
+    if (!command.parse(arguments, 0, 0))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QList<Book> held = library->books();
+    QList<Curation::BookNotes> books;
+    for (const Book &book : held)
+        books.append({book, library->notes(book.id, "recap").text});
+    QString answer;
+    // What the knowledge graph holds across the books goes along, unless it is off.
+    if (!askAi(Curation::suggestionRequest(books, Settings().graph() != "off" ? GraphContext::picture(*library) : QString()),
+               &answer, &error))
+        return fail(error);
+    const Curation::Suggestions suggested = Curation::suggestionsFrom(answer);
+    if (suggested.books.isEmpty()) {
+        // The model answered in its own words; they are the answer.
+        if (command.json())
+            printJson(QJsonObject{{"suggestions", QJsonArray()}, {"answer", answer.trimmed()}});
+        else
+            print(stdout, answer.trimmed());
+        return 0;
+    }
+
+    Settings settings;
+    QNetworkAccessManager network;
+    const QList<ReadingSite *> sites = command.parser.isSet("no-check") ? QList<ReadingSite *>()
+                                                                        : ReadingSites::all(settings, &network, &network);
+    SuggestionCheck check(sites);
+    QEventLoop loop;
+    QObject::connect(&check, &SuggestionCheck::done, &loop, &QEventLoop::quit, Qt::QueuedConnection);
+    check.check(suggested.books, held);
+    loop.exec();
+
+    QJsonArray array;
+    for (const ReadingSites::Checked &checked : check.results()) {
+        array << checked.toJson();
+        if (command.json())
+            continue;
+        QStringList notes;
+        if (checked.state == "found" && checked.book.averageRating > 0)
+            notes << QString("%1 on %2").arg(QString::number(checked.book.averageRating, 'f', 2), checked.book.site);
+        else if (checked.state == "found")
+            notes << "on " + checked.book.site;
+        else if (checked.state == "missing")
+            notes << "not found on any reading site";
+        if (checked.bookId > 0)
+            notes << (checked.shelf == "to-read" ? QString("already on your to-read list")
+                      : checked.shelf.isEmpty() ? QString("already in the library") : "already yours: " + checked.shelf);
+        const QJsonObject shown = checked.toJson();
+        print(stdout, QString("%1 — %2%3").arg(shown.value("title").toString(), shown.value("author").toString(),
+                                               notes.isEmpty() ? QString() : " (" + notes.join("; ") + ")"));
+        if (!checked.suggestion.why.isEmpty())
+            print(stdout, "    " + checked.suggestion.why);
+    }
+    if (command.json())
+        printJson(QJsonObject{{"suggestions", array}, {"first", suggested.first}});
+    else if (!suggested.first.isEmpty())
+        print(stdout, "\n" + suggested.first);
+    return 0;
+}
+
+int change(const QStringList &arguments) {
+    Command command("change", "Ask the AI to change how Omabook looks or works (\"make it warmer\", \"bigger covers\", "
+                              "\"Space for the next chapter\"). It rewrites keys.json, style.json and the look settings; "
+                              "--undo puts back what the last change replaced.");
+    command.parser.addPositionalArgument("wish", "What to change, in your own words.", "[wish...]");
+    command.parser.addOption({"undo", "Put back what the last change replaced."});
+    if (!command.parse(arguments, 0))
+        return 1;
+    Customization custom;
+    Settings settings;
+    if (command.parser.isSet("undo")) {
+        if (!InterfaceChanges::undo(custom, settings))
+            return fail("There is no change to undo.");
+        print(stdout, "Put back as it was.");
+        return 0;
+    }
+    const QString wish = command.parser.positionalArguments().join(' ');
+    if (wish.trimmed().isEmpty())
+        return fail("Say what to change, or use --undo.");
+    // The colors in force are the desktop theme's with style.json over them.
+    Theme theme;
+    const Look look(&theme, &custom);
+    QString answer, error;
+    if (!askAi(Prompts::change(InterfaceChanges::state(custom, settings, look.colors()), wish), &answer, &error))
+        return fail(error);
+    const Prompts::InterfaceChange asked = Prompts::parseChange(answer);
+    const QString problem = InterfaceChanges::apply(custom, settings, asked);
+    if (!problem.isEmpty())
+        return fail("Nothing was changed: " + problem);
+    if (command.json())
+        printJson(QJsonObject{{"say", asked.say}, {"keys", asked.hasKeys}, {"style", asked.hasStyle}, {"settings", asked.settings}});
+    else
+        print(stdout, asked.say.isEmpty() ? "Changed." : asked.say);
+    return 0;
+}
+
+int customize(const QStringList &arguments) {
+    Command command("customize", "Show the folder that holds Omabook's interface as files (keys, look, views, panels) and "
+                                 "write its guide, AGENTS.md. With a view's name, also write the built-in view there to start from.");
+    command.parser.addPositionalArgument("view", "A built-in view to copy into ui/, such as ReaderView.", "[view]");
+    if (!command.parse(arguments, 0, 1))
+        return 1;
+    const Customization custom;
+    const QString guide = custom.writeGuide();
+    if (guide.isEmpty())
+        return fail("The guide can't be written to " + custom.folder());
+    QString view, problem;
+    if (!command.argument(0).isEmpty()) {
+        view = custom.exportView(command.argument(0), &problem);
+        if (view.isEmpty())
+            return fail(problem);
+    }
+    if (command.json()) {
+        printJson(QJsonObject{{"folder", custom.folder()}, {"guide", guide}, {"view", view},
+                              {"views", QJsonArray::fromStringList(Customization::builtInViews())}});
+    } else {
+        print(stdout, "Omabook's interface lives in " + custom.folder());
+        print(stdout, "How to change it: " + guide);
+        if (!view.isEmpty())
+            print(stdout, "A view to edit: " + view);
+    }
+    return 0;
+}
+
+int catalog(const QStringList &arguments) {
+    Command command("catalog", "Write the library, or the books matching a search, as one file: csv for a spreadsheet, "
+                               "bibtex for references.");
+    command.parser.addPositionalArgument("search", "Words to look for, as omabook list takes them.", "[search...]");
+    command.parser.addOption({"format", "csv or bibtex; csv when not given.", "format", "csv"});
+    command.parser.addOption({"output", "Write to this file instead of standard output.", "file"});
+    if (!command.parse(arguments, 0))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    const QList<Book> books = library->books(command.parser.positionalArguments().join(' '));
+    const QString format = command.parser.value("format").toLower();
+    QByteArray made = Catalog::make(books, format);
+    if (made.isNull()) {
+        // Not one of Omabook's own: a format a script plugin writes.
+        Settings settings;
+        CommandScripts scripts(&settings, library->root());
+        const QStringList added = scripts.plugins().catalogFormats();
+        if (!added.contains(format))
+            return fail("There is no catalog format " + format + "; use csv or bibtex"
+                        + (added.isEmpty() ? QString() : ", or one a plugin adds: " + added.join(", ")) + ".");
+        made = scripts.plugins().makeCatalog(format, books, &error);
+        if (made.isNull())
+            return fail(error);
+    }
+    if (!command.parser.isSet("output")) {
+        fwrite(made.constData(), 1, made.size(), stdout);
+        return 0;
+    }
+    QSaveFile file(command.parser.value("output"));
+    file.setDirectWriteFallback(false);
+    if (!file.open(QIODevice::WriteOnly) || file.write(made) != made.size() || !file.commit())
+        return fail("The catalog can't be written to " + command.parser.value("output"));
+    return 0;
+}
+
+int ask(const QStringList &arguments) {
+    Command command("ask", "Ask the AI a question about a book, with the book's text to go on.");
+    command.parser.addPositionalArgument("book", "A book's number in the library, a book file, or \"all\" to ask about the library as a whole.");
+    command.parser.addPositionalArgument("question", "What to ask.", "<question...>");
+    command.parser.addOption({"upto", "Send the text only up to and including this section, so later ones stay unread.", "number"});
+    if (!command.parse(arguments, 2))
+        return 1;
+    QString error;
+    if (command.argument(0) == "all") {
+        // The whole library: what it holds and the notes on what was read.
+        const auto library = command.library(&error);
+        if (!library)
+            return fail(error);
+        QList<Curation::BookNotes> books;
+        for (const Book &book : library->books())
+            books.append({book, library->notes(book.id, "recap").text});
+        // The knowledge graph's picture of what was read goes along, and the
+        // question joins the graph once it is answered; neither with it off.
+        const QString question = command.parser.positionalArguments().mid(1).join(' ');
+        const bool graph = Settings().graph() != "off";
+        QString answer;
+        if (!askAi(Curation::libraryQuestion(books, question, graph ? GraphContext::picture(*library, question) : QString()),
+                   &answer, &error, !command.json()))
+            return fail(error);
+        if (graph)
+            GraphContext::noteQuestion(*library, 0, std::nullopt, question, answer);
+        if (command.json())
+            printJson(QJsonObject{{"answer", answer.trimmed()}});
+        else
+            print(stdout, "");
+        return 0;
+    }
+    const auto document = openTarget(command, command.argument(0), &error);
+    if (!document)
+        return fail(error);
+    // A book of the library has a knowledge graph: what it holds on the
+    // things the question names goes along, up to the same section as the
+    // text, and the question joins it once it is answered.
+    QString libraryError;
+    const auto library = command.library(&libraryError);
+    bool inLibrary = false;
+    const qint64 id = command.argument(0).toLongLong(&inLibrary);
+    const bool graph = inLibrary && library && library->book(id) && Settings().graph() != "off";
+    const QString question = command.parser.positionalArguments().mid(1).join(' ');
+    const int upTo = command.parser.isSet("upto") ? qMax(0, command.parser.value("upto").toInt()) : -1;
+    const GraphPlace asked{id, upTo < 0 ? document->count() - 1 : upTo, 1.0};
+    bool trimmed = false;
+    const AiRequest request = BookOps::bookQuestion(*document, question, upTo, &trimmed,
+                                                    graph ? GraphContext::forQuestion(*library, id, asked, question) : QString());
+    if (trimmed)
+        print(stderr, "The text is longer than fits in one question, so only its last part was sent.");
+    QString answer;
+    if (!askAi(request, &answer, &error, !command.json()))
+        return fail(error);
+    if (graph)
+        GraphContext::noteQuestion(*library, id, asked, question, answer);
+    if (command.json())
+        printJson(QJsonObject{{"answer", answer.trimmed()}});
+    else
+        print(stdout, "");
+    return 0;
+}
+
+int skill(const QStringList &arguments) {
+    Command command("skill", "Print the agent skill, or install it for your coding agents with: skill install.");
+    command.parser.addPositionalArgument("install", "Copy to ~/.agents/skills/omabook and link into ~/.claude/skills.", "[install]");
+    if (!command.parse(arguments, 0, 1))
+        return 1;
+    QFile bundled(":/skill.md");
+    if (!bundled.open(QIODevice::ReadOnly))
+        return fail("The skill is missing from this build.");
+    // The part on writing plugins is made from the table the scripts' own
+    // `omabook` object is described by, so it says what this build offers.
+    const QByteArray contents = bundled.readAll() + ScriptApi::guide().toUtf8();
+    if (command.argument(0).isEmpty()) {
+        print(stdout, QString::fromUtf8(contents).trimmed());
+        return 0;
+    }
+    if (command.argument(0) != "install")
+        return fail("Use omabook skill to print the skill, or omabook skill install.");
+    const QDir home = QDir::home();
+    const QString directory = home.filePath(".agents/skills/omabook");
+    QFile target(directory + "/SKILL.md");
+    if (!QDir().mkpath(directory) || !target.open(QIODevice::WriteOnly) || target.write(contents) != contents.size())
+        return fail("The skill can't be written to " + directory);
+    target.close();
+    // Claude Code looks in its own folder; a link keeps one copy.
+    const QString link = home.filePath(".claude/skills/omabook");
+    if (!QFileInfo::exists(link) && !QFileInfo(link).isSymLink()
+        && (!home.mkpath(".claude/skills") || !QFile::link("../../.agents/skills/omabook", link)))
+        return fail("Installed in " + directory + ", but it can't be linked into ~/.claude/skills.");
+    print(stdout, "Installed the Omabook skill in " + directory);
+    return 0;
+}
+
+// The help the window shows under ?, for a terminal and for agents: the
+// same pages from the same text, and the keys as keys.json has them now.
+int help(const QStringList &arguments) {
+    Command command("help", "Print a page of Omabook's help, the same the window shows under ?. Without a topic, "
+                            "list the commands and the topics. The topic `keys` lists every key as it is bound now, "
+                            "and `new` what this version brought.");
+    command.parser.addPositionalArgument("topic", "A topic, such as reading, ai, library or keys.", "[topic]");
+    if (!command.parse(arguments, 0, 1))
+        return 1;
+    Customization custom;
+    const Manual manual(nullptr, &custom);
+    const QString topic = command.argument(0).toLower();
+    if (topic.isEmpty()) {
+        if (command.json())
+            printJson(manual.overviewJson());
+        else
+            print(stdout, "Omabook " OMABOOK_VERSION ": an ebook library and reader.\n\nUsage: omabook <command> [options]\n\n"
+                              + cliSummary() + "\n\n" + manual.overviewText());
+        return 0;
+    }
+    if (topic == "keys") {
+        if (command.json())
+            printJson(manual.keysJson());
+        else
+            print(stdout, manual.keysText());
+        return 0;
+    }
+    if (topic == "new") {
+        QJsonArray features;
+        QString text = "New in Omabook " + manual.version() + "\n";
+        for (const QVariant &value : manual.news(true)) {
+            const QVariantMap feature = value.toMap();
+            const QString words = feature.value("text").toString();
+            features << QJsonObject{{"id", feature.value("id").toString()}, {"title", feature.value("title").toString()},
+                                    {"text", words}, {"command", feature.value("command").toString()},
+                                    {"key", feature.value("key").toString()}};
+            text += "\n" + feature.value("title").toString() + "\n  " + words + "\n";
+        }
+        if (command.json())
+            printJson(QJsonObject{{"version", manual.version()}, {"features", features}});
+        else
+            print(stdout, text.trimmed());
+        return 0;
+    }
+    if (manual.topicText(topic).isEmpty())
+        return fail("There is no help on \"" + topic + "\". " + manual.overviewText());
+    if (command.json())
+        printJson(manual.topicJson(topic));
+    else
+        print(stdout, manual.topicText(topic));
+    return 0;
+}
+
+} // namespace
+
+QString cliSummary() {
+    return "Commands:\n"
+           "  open [book]                     Open the window, and a book file or library number in it\n"
+           "  list [search]                   List the library's books\n"
+           "  show <id>                       Show one book's details and files\n"
+           "  add <file|folder>...            Copy books into the library; a Calibre library comes with its details\n"
+           "  remove <id>                     Move a book to the trash\n"
+           "  set <id> [--title ...]          Change a book's details or cover\n"
+           "  info [file]                     Show what a file says about itself, or what Omabook is set up with\n"
+           "  toc <book>                      List a book's contents\n"
+           "  text <book> [--section N]       Print a book as plain text\n"
+           "  find <book> <words>             Find words in a book\n"
+           "  lookup <id> [--ai] [--apply N]  Look a book's details up with every metadata plugin\n"
+           "  plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one\n"
+           "  plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help\n"
+           "  plugin install|remove           Install a plugin from a folder or a .zip (checked first), or remove one\n"
+           "  calibre libraries|plugins|import  What was found of Calibre here; import its libraries\n"
+           "  catalog [search] [--format f]   Write the library as csv or bibtex\n"
+           "  customize [view]                Show where the interface's files live; copy a view there to edit\n"
+           "  convert <id> [--to format]      Convert a book and add the result to it\n"
+           "  export <id> <folder>            Copy a book's file out of the library\n"
+           "  ask <book|all> <question>       Ask the AI about a book, or about the whole library\n"
+           "  graph show|find|node|build|...  The knowledge graph of what is read; see omabook graph --help\n"
+           "  tidy [--ai] [--apply]           List duplicates, author spellings and series to tidy; make the changes\n"
+           "  suggest [--no-check]            Have the AI suggest what to read next, checked against the reading sites\n"
+           "  goodreads import|sync|export|shelves  Keep your Goodreads shelves and the library in step\n"
+           "  openlibrary sync|shelves        Bring an Open Library reading log into the library\n"
+           "  sites [connect|check|disconnect|sync]  The reading sites, and how you are connected to each\n"
+           "  change <wish> | --undo          Ask the AI to change how Omabook looks or works\n"
+           "  progress <id> [--section N]     Show or set how far a book has been read\n"
+           "  sync <computer[:folder]>        Bring this library and another computer's in step over ssh\n"
+           "  manifest                        Print the whole library as JSON, as sync reads it\n"
+           "  help [topic]                    Print the help the window shows: getting started, reading, keys, ...\n"
+           "  skill [install]                 Print the skill for coding agents, or install it\n"
+           "  mcp [install [agent]]           Run as an MCP server for agents, or register it with one\n\n"
+           "<book> is a number from omabook list, or a book file. Every command takes --json and\n"
+           "--library <folder>, and omabook <command> --help says more. A command that asks the AI\n"
+           "takes --model <name>: main, quick, or a model's own name, for that run.";
+}
+
+bool isCliCommand(const QString &word) {
+    return QStringList{"list", "show", "add", "folio", "bookmarks", "notes", "libraries", "remove", "set", "info", "toc", "text", "find", "lookup", "convert",
+                       "export", "ask", "graph", "progress", "sync", "manifest", "plugins", "plugin", "calibre", "catalog", "customize", "tidy", "suggest", "goodreads", "openlibrary", "sites", "change", "skill", "mcp", "help"}
+        .contains(word);
+}
+
+int runCli(const QStringList &given) {
+    // --model <name> is taken by every command: the model for whatever the
+    // command asks the AI, this once. "main" and "quick" name the two the
+    // settings hold; anything else is a model's own name.
+    QStringList arguments = given;
+    QString model;
+    for (qsizetype i = 2; i < arguments.size();) {
+        if (arguments.at(i) == "--model" && i + 1 < arguments.size()) {
+            model = arguments.at(i + 1);
+            arguments.remove(i, 2);
+        } else if (arguments.at(i).startsWith("--model=")) {
+            model = arguments.at(i).mid(8);
+            arguments.removeAt(i);
+        } else {
+            ++i;
+        }
+    }
+    const Ai::ModelOverride forThisRun(model);
+    // Book formats that script plugins add are read by every command, the
+    // MCP server and the file manager's helper; the plugins are loaded only
+    // when a format Omabook doesn't read itself is asked about.
+    ScriptFormats::loadOnDemand();
+    const QString command = arguments.value(1);
+    if (command == "list") return list(arguments);
+    if (command == "show") return show(arguments);
+    if (command == "add") return add(arguments);
+    if (command == "folio") return Folio::run(arguments);
+    if (command == "bookmarks") return bookmarks(arguments);
+    if (command == "notes") return notes(arguments);
+    if (command == "libraries") return libraries(arguments);
+    if (command == "remove") return remove(arguments);
+    if (command == "set") return set(arguments);
+    if (command == "info") return info(arguments);
+    if (command == "toc") return toc(arguments);
+    if (command == "text") return text(arguments);
+    if (command == "find") return find(arguments);
+    if (command == "lookup") return lookup(arguments);
+    if (command == "convert") return convert(arguments);
+    if (command == "export") return exportBook(arguments);
+    if (command == "ask") return ask(arguments);
+    if (command == "graph") return runGraphCli(arguments);
+    if (command == "progress") return progress(arguments);
+    if (command == "sync") return sync(arguments);
+    if (command == "manifest") return manifest(arguments);
+    if (command == "plugins") return plugins(arguments);
+    if (command == "plugin") return runPluginCli(arguments);
+    if (command == "calibre") return calibre(arguments);
+    if (command == "catalog") return catalog(arguments);
+    if (command == "customize") return customize(arguments);
+    if (command == "tidy") return tidy(arguments);
+    if (command == "suggest") return suggest(arguments);
+    if (command == "goodreads" || command == "openlibrary") return readingSite(arguments);
+    if (command == "sites") return sites(arguments);
+    if (command == "change") return change(arguments);
+    if (command == "skill") return skill(arguments);
+    if (command == "help") return help(arguments);
+    if (command == "mcp") return Mcp::run(arguments);
+    print(stdout, "Omabook " OMABOOK_VERSION ": an ebook library and reader.\n\nUsage: omabook <command> [options]\n\n" + cliSummary());
+    return 0;
+}

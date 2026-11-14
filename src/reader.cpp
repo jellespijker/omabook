@@ -1,0 +1,578 @@
+#include "reader.h"
+
+#include <QDir>
+#include <QFileInfo>
+#include <QMutexLocker>
+#include <QAbstractTextDocumentLayout>
+#include <QStandardPaths>
+#include <QTextLayout>
+#include <QTextBlock>
+#include <QTextDocument>
+#include <QtConcurrent>
+
+#include "backend.h"
+#include "formatreaders.h"
+#include "formats.h"
+
+void BookImageProvider::setDocument(std::shared_ptr<const Document> document) {
+    QMutexLocker locker(&m_lock);
+    m_document = std::move(document);
+}
+
+QImage BookImageProvider::requestImage(const QString &id, QSize *size, const QSize &) {
+    std::shared_ptr<const Document> document;
+    {
+        QMutexLocker locker(&m_lock);
+        document = m_document;
+    }
+    QImage image;
+    const QStringList parts = id.split('/');
+    if (document && parts.size() == 4 && parts.at(1) == "page")
+        image = document->image(parts.at(2).toInt(), parts.at(3).toInt());
+    else if (document && parts.size() == 2)
+        image = QImage::fromData(document->resource(bookImageName(parts.at(1))));
+    if (size)
+        *size = image.size();
+    return image;
+}
+
+Reader::Reader(Backend *backend, const QString &converter, QObject *parent)
+    : QObject(parent), m_backend(backend), m_converter(converter) {
+    // Where the reader is gets written a moment after they stop moving, not
+    // on every pixel scrolled.
+    m_saveSoon.setSingleShot(true);
+    m_saveSoon.setInterval(1500);
+    connect(&m_saveSoon, &QTimer::timeout, this, &Reader::saveProgress);
+    // The script plugins hear where the reader is as often as it is written
+    // down, and may ask for a book to be opened.
+    connect(&m_saveSoon, &QTimer::timeout, this, [this] {
+        if (m_document)
+            m_backend->scripts()->emitEvent("page.turned", whereabouts());
+    });
+    connect(m_backend->scripts(), &ScriptPlugins::openBookRequested, this, [this](qint64 id, int section, double fraction) {
+        if (section < 0)
+            openBook(id);
+        else
+            openBookAt(id, section, fraction);
+    });
+    // A plugin that grew the open book has the reader follow it.
+    connect(m_backend->scripts(), &ScriptPlugins::reloadBookRequested, this, [this](qint64 id) {
+        if (id == 0 || id == m_bookId)
+            reload();
+    });
+    connect(&m_opening, &QFutureWatcher<Opened>::finished, this, &Reader::loaded);
+    connect(&m_converter, &Converter::finished, this, [this](const QString &output, const QString &error) {
+        if (m_pendingId == 0)
+            return;
+        // The EPUB joins the book's formats, so the next opening is instant
+        // and the original stays as it was.
+        QString problem = error;
+        if (problem.isEmpty() && m_backend->library())
+            m_backend->library()->addFormat(m_pendingId, output, &problem);
+        QFile::remove(output);
+        if (!problem.isEmpty())
+            fail(problem);
+        else
+            load(m_backend->library()->formatPath(m_pendingId, "epub"));
+    });
+}
+
+Reader::~Reader() {
+    saveProgress();
+    m_opening.waitForFinished();
+    // The engine may already have deleted the provider it owns.
+    if (m_providerGuard && m_provider)
+        m_provider->setDocument(nullptr);
+}
+
+BookImageProvider *Reader::imageProvider() {
+    if (!m_provider) {
+        m_provider = new BookImageProvider;
+        m_providerGuard = m_provider;
+        m_provider->setDocument(m_document);
+    }
+    return m_provider;
+}
+
+QString Reader::kind() const {
+    return !m_document ? QString() : m_document->kind() == Document::Flow ? "flow" : "pages";
+}
+
+// Opens a book at a place rather than where it was last read to.
+void Reader::openBookAt(qint64 id, int section, double fraction) {
+    openBook(id);
+    if (m_pendingId == id) {
+        m_wantedSection = section;
+        m_wantedFraction = fraction;
+    }
+}
+
+void Reader::openBook(qint64 id) {
+    close();
+    m_wantedSection = -1;
+    Library *library = m_backend->library();
+    const auto book = library ? library->book(id) : std::nullopt;
+    if (!book)
+        return;
+    // A paper book, or one only on a list, has nothing to open.
+    if (book->formats.isEmpty()) {
+        m_backend->say(book->paper ? tr("%1 is on your shelf, not in a file. Add a file to it to read it here.").arg(book->meta.title)
+                                   : tr("%1 is on your list, but you have no file of it yet.").arg(book->meta.title));
+        return;
+    }
+    m_pendingId = id;
+    m_title = book->meta.title;
+    m_authors = book->meta.authorText();
+    m_error.clear();
+    m_loading = true;
+    emit loadingChanged();
+
+    for (const QString &format : book->formats) {
+        if (Formats::readable(format)) {
+            load(library->formatPath(id, format));
+            return;
+        }
+    }
+    const QString source = library->formatPath(id);
+    if (source.isEmpty()) {
+        fail(tr("This book has no file to read."));
+        return;
+    }
+    if (!m_converter.available() && m_calibreOff) {
+        fail(tr("%1 books are read by converting them to EPUB with Calibre, and the Calibre plugin is switched off. "
+                "Switch it on under Plugins and open the book again.")
+                 .arg(Formats::name(book->formats.value(0))));
+        return;
+    }
+    if (!m_converter.available()) {
+        fail(tr("%1 books are read by converting them to EPUB, which needs Calibre's ebook-convert. Install the "
+                "calibre package and open the book again.")
+                 .arg(Formats::name(book->formats.value(0))));
+        return;
+    }
+    const QString cache = QStandardPaths::writableLocation(QStandardPaths::CacheLocation);
+    QDir().mkpath(cache);
+    m_converter.convert(source, cache + QString("/converting-%1.epub").arg(id));
+}
+
+// Opening reads the whole table of contents and, for some archives, every
+// header, so it happens off the GUI thread.
+void Reader::load(const QString &file) {
+    m_opening.setFuture(QtConcurrent::run([file]() -> Opened {
+        QString error;
+        std::shared_ptr<Document> document = Formats::open(file, &error);
+        return {document, error};
+    }));
+}
+
+// Where the reader is, as script plugins are told of it.
+QJsonObject Reader::whereabouts() const {
+    const auto book = m_backend->library() ? m_backend->library()->book(m_bookId) : std::nullopt;
+    const QJsonObject identifiers = book ? book->identifiers : QJsonObject();
+    return {{"id", m_bookId}, {"generated", identifiers.value("generated").toString()}, {"identifiers", identifiers},
+            {"section", m_section}, {"sections", count()}, {"fraction", m_fraction}, {"percent", percent()}};
+}
+
+// The open book's file changed under the reader: a plugin that writes a
+// book as it is read added to it. The file is read anew, beside the window
+// like any opening, and the reader stays where it is.
+void Reader::reload() {
+    Library *library = m_backend->library();
+    const auto book = m_document && library ? library->book(m_bookId) : std::nullopt;
+    if (m_reloading)
+        m_reloadWanted = true;
+    if (!book || m_reloading || m_pendingId != 0)
+        return;
+    for (const QString &format : book->formats) {
+        if (Formats::readable(format)) {
+            saveProgress();
+            m_reloading = true;
+            load(library->formatPath(m_bookId, format));
+            return;
+        }
+    }
+}
+
+void Reader::loaded() {
+    const auto [document, error] = m_opening.result();
+    const bool again = m_reloading;
+    m_reloading = false;
+    if (again && m_reloadWanted)
+        QTimer::singleShot(0, this, &Reader::reload);
+    m_reloadWanted = false;
+    if (again) {
+        // What was open stays open when the new version can't be read.
+        if (!m_document)
+            return;
+        if (!document) {
+            m_backend->say(tr("The book changed, and can't be read as it is now: %1").arg(error));
+            return;
+        }
+    } else {
+        if (m_pendingId == 0)
+            return; // closed while it was opening
+        if (!document) {
+            fail(error);
+            return;
+        }
+        m_bookId = m_pendingId;
+        m_pendingId = 0;
+    }
+    m_document = document;
+    ++m_generation;
+    if (m_providerGuard && m_provider)
+        m_provider->setDocument(m_document);
+
+    m_toc.clear();
+    for (const TocEntry &entry : m_document->toc())
+        m_toc << QVariantMap{{"title", entry.title}, {"section", entry.section}, {"anchor", entry.anchor}, {"level", entry.level}};
+
+    if (again) {
+        // The same place; only a book that got shorter moves the reader.
+        m_section = qBound(0, m_section, m_document->count() - 1);
+        if (const auto book = m_backend->library()->book(m_bookId)) {
+            m_title = book->meta.title;
+            m_authors = book->meta.authorText();
+        }
+        refreshHtml();
+        // The book is the one it was, so what goes with a book (the
+        // conversation about it) stays; see growing().
+        m_growing = true;
+        emit bookChanged();
+        m_growing = false;
+        emit sectionChanged();
+        emit fractionChanged();
+        m_backend->scripts()->emitEvent("page.turned", whereabouts());
+        return;
+    }
+    Progress progress = m_backend->library()->progress(m_bookId);
+    if (m_wantedSection >= 0) {
+        progress.section = m_wantedSection;
+        progress.fraction = m_wantedFraction;
+        m_wantedSection = -1;
+    }
+    m_section = qBound(0, progress.section, m_document->count() - 1);
+    m_fraction = qBound(0.0, progress.fraction, 1.0);
+    m_loggedPercent = percent();
+    m_loading = false;
+    refreshHtml();
+    emit bookChanged();
+    emit loadingChanged();
+    emit sectionChanged();
+    emit fractionChanged();
+    emit bookmarksChanged();
+    if (const auto book = m_backend->library()->book(m_bookId)) {
+        QJsonObject opened = book->toJson();
+        opened.insert("has_cover", book->hasCover);
+        opened.insert("identifiers", book->identifiers);
+        opened.insert("generated", book->identifiers.value("generated").toString());
+        QJsonObject where = whereabouts();
+        where.insert("book", opened);
+        m_backend->scripts()->emitEvent("book.opened", where);
+    }
+}
+
+void Reader::setConverter(const QString &program, bool calibreOff) {
+    m_converter.setProgram(program);
+    m_calibreOff = calibreOff;
+}
+
+void Reader::fail(const QString &error) {
+    m_pendingId = 0;
+    m_loading = false;
+    m_error = error;
+    emit loadingChanged();
+}
+
+void Reader::close() {
+    m_converter.cancel();
+    m_pendingId = 0;
+    m_reloading = false;
+    if (m_loading || !m_error.isEmpty()) {
+        m_loading = false;
+        m_error.clear();
+        emit loadingChanged();
+    }
+    if (!m_document)
+        return;
+    saveProgress();
+    // The book's node in the knowledge graph says how far it has been read.
+    if (const Library *library = m_backend->library())
+        Graph(*library).bookNode(m_bookId);
+    m_backend->reload();
+    m_backend->scripts()->emitEvent("book.closed", whereabouts());
+    m_document.reset();
+    if (m_providerGuard && m_provider)
+        m_provider->setDocument(nullptr);
+    m_bookId = 0;
+    m_html.clear();
+    m_toc.clear();
+    emit bookChanged();
+    emit htmlChanged();
+}
+
+void Reader::refreshHtml() {
+    const QString html = m_document && m_document->kind() == Document::Flow
+                             ? m_document->html(m_section, m_pageWidth).replace("image://book/", imagePrefix())
+                             : QString();
+    if (html != m_html) {
+        m_html = html;
+        emit htmlChanged();
+    }
+}
+
+void Reader::setPageWidth(int width) {
+    if (width == m_pageWidth || width <= 0)
+        return;
+    m_pageWidth = width;
+    refreshHtml();
+}
+
+void Reader::setSection(int section) {
+    if (!m_document || section == m_section || section < 0 || section >= m_document->count())
+        return;
+    m_section = section;
+    m_fraction = 0;
+    refreshHtml();
+    emit sectionChanged();
+    emit fractionChanged();
+    m_saveSoon.start();
+}
+
+void Reader::goTo(int section, const QString &anchor, bool atEnd) {
+    if (!m_document || section < 0 || section >= m_document->count())
+        return;
+    setSection(section);
+    setFraction(atEnd ? 1 : 0);
+    emit moved(anchor, atEnd ? 1 : 0);
+}
+
+void Reader::goToPlace(int section, double fraction) {
+    if (!m_document || section < 0 || section >= m_document->count())
+        return;
+    setSection(section);
+    setFraction(fraction);
+    emit moved({}, qBound(0.0, fraction, 1.0));
+}
+
+QVariantList Reader::pageBreaks(QQuickTextDocument *chapter, double height) const {
+    QVariantList breaks{0.0};
+    if (!chapter || !chapter->textDocument() || height <= 0)
+        return breaks << 0.0;
+    QTextDocument *document = chapter->textDocument();
+    QAbstractTextDocumentLayout *layout = document->documentLayout();
+    double pageTop = 0;
+    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+        const QRectF bounds = layout->blockBoundingRect(block);
+        const QTextLayout *lines = block.layout();
+        for (int index = 0; index < lines->lineCount(); ++index) {
+            const QTextLine line = lines->lineAt(index);
+            const double top = bounds.top() + line.y();
+            // A line that would cross the foot of the page starts the next
+            // one. One taller than a page (a picture) gets a page to itself
+            // and is cut, which beats never showing its lower half.
+            if (top + line.height() - pageTop > height && top > pageTop) {
+                breaks << top;
+                pageTop = top;
+            }
+            while (top + line.height() - pageTop > height) {
+                pageTop += height;
+                breaks << pageTop;
+            }
+        }
+    }
+    return breaks << qMax(pageTop + 1, layout->documentSize().height());
+}
+
+int Reader::anchorPosition(QQuickTextDocument *chapter, const QString &anchor) const {
+    if (!chapter || !chapter->textDocument() || anchor.isEmpty())
+        return -1;
+    for (QTextBlock block = chapter->textDocument()->begin(); block.isValid(); block = block.next())
+        for (auto it = block.begin(); !it.atEnd(); ++it)
+            if (it.fragment().charFormat().anchorNames().contains(anchor))
+                return it.fragment().position();
+    return -1;
+}
+
+bool Reader::follow(const QString &link) {
+    if (!link.startsWith("omabook:"))
+        return false;
+    const QString target = link.mid(8);
+    goTo(target.section('#', 0, 0).toInt(), target.section('#', 1));
+    return true;
+}
+
+void Reader::setFraction(double fraction) {
+    fraction = qBound(0.0, fraction, 1.0);
+    if (qFuzzyCompare(fraction + 1, m_fraction + 1))
+        return;
+    m_fraction = fraction;
+    emit fractionChanged();
+    m_saveSoon.start();
+}
+
+double Reader::percent() const {
+    if (!m_document || m_document->count() == 0)
+        return 0;
+    // The last page of a paged book is the whole book read.
+    if (m_document->kind() == Document::Pages)
+        return m_document->count() == 1 ? 100 : 100.0 * m_section / (m_document->count() - 1);
+    return 100.0 * (m_section + m_fraction) / m_document->count();
+}
+
+QString Reader::sectionTitle() const {
+    // The first entry of the nearest chapter at or before this one: a file
+    // holding several entries is named by the one it opens with.
+    QString title;
+    int best = -1;
+    for (const TocEntry &entry : m_document ? m_document->toc() : QList<TocEntry>()) {
+        if (entry.section <= m_section && entry.section > best) {
+            best = entry.section;
+            title = entry.title;
+        }
+    }
+    return title;
+}
+
+double Reader::pageAspect(int page) const {
+    const QSizeF size = m_document ? m_document->pageSize(page) : QSizeF();
+    return size.width() > 0 ? size.height() / size.width() : 0;
+}
+
+void Reader::saveProgress() {
+    m_saveSoon.stop();
+    if (!m_document || !m_backend->library())
+        return;
+    m_backend->library()->setProgress(m_bookId, {m_section, m_fraction, percent()});
+    // The reading log: that the book went from there to here today. Paging
+    // back is no reading, and opening a book without moving is none either.
+    const double now = percent();
+    if (!qFuzzyCompare(now + 1, m_loggedPercent + 1)) {
+        if (now > m_loggedPercent)
+            Graph(*m_backend->library()).logReading(m_bookId, m_loggedPercent, now);
+        m_loggedPercent = now;
+    }
+}
+
+QVariantList Reader::bookmarks() const {
+    QVariantList list;
+    if (!m_document || !m_backend->library())
+        return list;
+    for (const Annotation &annotation : m_backend->library()->annotations(m_bookId))
+        list << QVariantMap{{"id", annotation.id}, {"section", annotation.section}, {"fraction", annotation.fraction},
+                            {"text", annotation.text}};
+    return list;
+}
+
+void Reader::addBookmark(const QString &text) {
+    if (!m_document || !m_backend->library())
+        return;
+    Annotation bookmark;
+    bookmark.kind = "bookmark";
+    bookmark.section = m_section;
+    bookmark.fraction = m_fraction;
+    bookmark.text = text.simplified().left(200);
+    m_backend->library()->addAnnotation(m_bookId, bookmark);
+    emit bookmarksChanged();
+}
+
+void Reader::removeBookmark(qint64 id) {
+    if (m_backend->library())
+        m_backend->library()->removeAnnotation(id);
+    emit bookmarksChanged();
+}
+
+QVariantList Reader::find(const QString &words) const {
+    QVariantList results;
+    const QString needle = words.simplified();
+    if (!m_document || needle.size() < 2)
+        return results;
+    const QList<TocEntry> toc = m_document->toc();
+    for (int section = 0; section < m_document->count() && results.size() < 200; ++section) {
+        const QString text = m_document->text(section).simplified();
+        QString title;
+        for (const TocEntry &entry : toc)
+            if (entry.section <= section)
+                title = entry.title;
+        for (qsizetype at = text.indexOf(needle, 0, Qt::CaseInsensitive); at >= 0 && results.size() < 200;
+             at = text.indexOf(needle, at + needle.size(), Qt::CaseInsensitive)) {
+            const qsizetype from = qMax<qsizetype>(0, at - 40);
+            results << QVariantMap{{"section", section},
+                                   {"title", title},
+                                   {"fraction", text.isEmpty() ? 0.0 : double(at) / text.size()},
+                                   {"snippet", (from > 0 ? "…" : "") + text.mid(from, needle.size() + 100) + "…"}};
+        }
+    }
+    return results;
+}
+
+BookMeta Reader::meta() const {
+    BookMeta meta;
+    meta.title = m_title;
+    meta.authors = BookMeta::splitAuthors(m_authors);
+    return meta;
+}
+
+QString Reader::sectionText() const { return m_document ? m_document->text(m_section) : QString(); }
+
+QString Reader::textSoFar() const { return textFrom(0, 0, true); }
+
+QString Reader::textSince(int section, double fraction) const { return textFrom(section, fraction, false); }
+
+// A flowing book's place is partway down a chapter; a paged one's is its
+// page, which has been read once the reader is on it.
+QString Reader::textFrom(int fromSection, double fromFraction, bool withFirstPage) const {
+    if (!m_document || fromSection > m_section)
+        return {};
+    const bool flows = m_document->kind() == Document::Flow;
+    QString text;
+    for (int section = fromSection; section <= m_section; ++section) {
+        if (!flows && section == fromSection && !withFirstPage)
+            continue;
+        const QString whole = m_document->text(section);
+        const qsizetype from = flows && section == fromSection ? qRound(whole.size() * qBound(0.0, fromFraction, 1.0)) : 0;
+        const qsizetype to = flows && section == m_section ? qMin(whole.size(), qRound(whole.size() * m_fraction) + 1) : whole.size();
+        if (to > from)
+            text += whole.mid(from, to - from) + "\n\n";
+    }
+    return text.trimmed();
+}
+
+QList<GraphBuild::Passage> Reader::passagesSince(const std::optional<GraphPlace> &after) const {
+    return m_document ? GraphBuild::passages(*m_document, after, place()) : QList<GraphBuild::Passage>();
+}
+
+Library *Reader::library() const { return m_backend->library(); }
+
+Recap Reader::notes(const QString &kind) const {
+    return m_document && m_backend->library() ? m_backend->library()->notes(m_bookId, kind) : Recap();
+}
+
+QList<Book> Reader::unknownEarlierBooks() const {
+    QList<Book> unknown;
+    Library *library = m_document ? m_backend->library() : nullptr;
+    for (const Book &book : library ? library->earlierInSeries(m_bookId) : QList<Book>()) {
+        bool known = !book.meta.description.trimmed().isEmpty();
+        for (const QString &kind : {QString("recap"), QString("cast"), QString("blurb")})
+            known = known || !library->notes(book.id, kind).text.isEmpty();
+        if (!known)
+            unknown.append(book);
+    }
+    return unknown;
+}
+
+void Reader::setBlurb(qint64 bookId, const QString &text) {
+    if (m_backend->library())
+        m_backend->library()->setNotes(bookId, "blurb", {0, 0, text, 0});
+}
+
+QList<MetadataSource *> Reader::newSources(QObject *parent) const { return m_backend->newSources(parent); }
+
+QList<SeriesNotes> Reader::seriesNotes(const QString &kind) const {
+    return m_document && m_backend->library() ? m_backend->library()->seriesNotes(m_bookId, kind) : QList<SeriesNotes>();
+}
+
+void Reader::setNotes(const QString &kind, const QString &text) {
+    if (m_document && m_backend->library())
+        m_backend->library()->setNotes(m_bookId, kind, {m_section, m_fraction, text, 0});
+}

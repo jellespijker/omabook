@@ -1,0 +1,717 @@
+#include "backend.h"
+
+#include "graph.h"
+
+#include "libraries.h"
+
+#include <QDir>
+#include <QDirIterator>
+#include <QEventLoopLocker>
+#include <QFileInfo>
+#include <QImageReader>
+#include <QJsonArray>
+#include <QPointer>
+#include <QtConcurrent>
+
+#include "formats.h"
+#include "graphmodel.h"
+#include "importer.h"
+#include "sync.h"
+
+Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFactory ai, Catalogs catalogs,
+                 const QString &pluginFolder, const QString &calibreDebug)
+    : QObject(parent), m_settings(settings), m_picker(picker), m_aiFactory(std::move(ai)), m_catalogs(std::move(catalogs)),
+      m_plugins(settings, pluginFolder, calibreDebug) {
+    // The graph views are QML types of the app's own, known before any window loads.
+    registerGraphTypes();
+    if (!m_aiFactory)
+        m_aiFactory = [this](QString *why) { return makeAiProvider(*m_settings, why); };
+    if (!m_catalogs)
+        m_catalogs = [this](QObject *parent) {
+            return m_plugins.sources(m_plugins.known(), &m_network, parent)
+                   + (m_scripts ? m_scripts->metadataSources(parent) : QList<MetadataSource *>());
+        };
+    // Asking Calibre which plugins it has takes a moment, so it happens
+    // beside the window; the list fills in when it answers.
+    loadPlugins(false);
+    // So does looking for Calibre's libraries; one that was never offered
+    // is offered once the window is up.
+    lookForCalibre(false);
+    m_model.setSort(m_settings->sort());
+    m_model.setReversed(m_settings->sortReversed());
+    connect(&m_model, &BookListModel::sortChanged, this, [this] {
+        if (m_shelfMoving)
+            return;
+        m_shelfMoving = true;
+        m_settings->setSort(m_model.sort());
+        m_settings->setSortReversed(m_model.reversed());
+        m_shelfMoving = false;
+    });
+    connect(&m_model, &BookListModel::filtersChanged, this, &Backend::keepShelf);
+    // config.json is followed while the app runs, the shelf's part of it too.
+    connect(m_settings, &Settings::changed, this, [this] {
+        if (m_shelfMoving)
+            return;
+        m_shelfMoving = true;
+        m_model.setSort(m_settings->sort());
+        m_model.setReversed(m_settings->sortReversed());
+        m_shelfMoving = false;
+        takeShelf();
+    });
+
+    // A book added from the command line, or by an agent, shows up without a
+    // restart: the database's files change, and the shelf follows.
+    m_reloadSoon.setSingleShot(true);
+    m_reloadSoon.setInterval(250);
+    connect(&m_reloadSoon, &QTimer::timeout, this, &Backend::reload);
+    connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_reloadSoon.start(); });
+    connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_reloadSoon.start(); });
+
+    connect(m_picker, &FilePicker::picked, this, &Backend::picked);
+    connect(m_picker, &FilePicker::failed, this, &Backend::say);
+    openLibrary(m_settings->libraryPath());
+
+    // The script plugins start once there is a library for them to read.
+    // What they say is said in the window, and a book they change shows.
+    ScriptServices services;
+    services.settings = m_settings;
+    services.library = [this] { return m_library.get(); };
+    services.ai = [this](QString *why) { return m_aiFactory(why); };
+    services.network = &m_network;
+    m_scripts = std::make_unique<ScriptPlugins>(services, pluginFolder);
+    // The book formats scripts add are read like Omabook's own.
+    m_scripts->provideFormats();
+    connect(m_scripts.get(), &ScriptPlugins::said, this, &Backend::say);
+    connect(m_scripts.get(), &ScriptPlugins::touchedLibrary, &m_reloadSoon, qOverload<>(&QTimer::start));
+    connect(m_scripts.get(), &ScriptPlugins::changed, this, &Backend::pluginsChanged);
+    // The plugin manager looks again whenever the plugins change, and says
+    // so when it changed them itself.
+    m_pluginManager = std::make_unique<PluginManager>(m_settings, &m_plugins, m_scripts.get(), m_picker, &m_network);
+    connect(this, &Backend::pluginsChanged, m_pluginManager.get(), &PluginManager::refresh);
+    m_graphJobs = new GraphJobs(this);
+    connect(m_pluginManager.get(), &PluginManager::touched, this, &Backend::pluginsChanged);
+    if (m_library)
+        m_scripts->libraryChanged(m_library->books(), libraryPath());
+    QTimer::singleShot(0, m_scripts.get(), [this] { m_scripts->emitEvent("app.started"); });
+}
+
+Backend::~Backend() {
+    m_pluginsLoading.waitForFinished();
+    m_calibreLooking.waitForFinished();
+}
+
+void Backend::loadPlugins(bool refresh) {
+    m_pluginsLoading.waitForFinished();
+    m_pluginsLoading = QtConcurrent::run([this, refresh] {
+        m_plugins.list(refresh);
+        QMetaObject::invokeMethod(this, &Backend::pluginsChanged, Qt::QueuedConnection);
+    });
+}
+
+void Backend::refreshPlugins() { loadPlugins(true); }
+
+// Calibre's libraries are found beside the window: each one's database is
+// opened to count its books. Nothing is looked for while the plugin is off.
+void Backend::lookForCalibre(bool asked) {
+    m_calibreLooking.waitForFinished();
+    m_calibreLooking = QtConcurrent::run([this, asked] {
+        const CalibrePlugin &calibre = m_plugins.calibre();
+        const bool switchedOff = calibre.switchedOff();
+        QVariantList libraries, offers;
+        for (const CalibreLibrary &library : calibre.libraries())
+            libraries << library.toJson().toVariantMap();
+        for (const CalibreLibrary &library : calibre.librariesToOffer(asked))
+            offers << library.toJson().toVariantMap();
+        QMetaObject::invokeMethod(
+            this,
+            [=] {
+                m_calibreSwitchedOff = switchedOff;
+                m_calibreLibraries = libraries;
+                m_calibreOffers = offers;
+                emit calibreChanged();
+                if (asked && switchedOff)
+                    say(tr("The Calibre plugin is switched off, so Calibre libraries aren't looked for. Switch it on under Plugins."));
+                else if (asked && offers.isEmpty())
+                    say(libraries.isEmpty() ? tr("No Calibre library was found on this computer.")
+                                            : tr("Every Calibre library found here was already imported or set aside."));
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void Backend::findCalibreLibraries() { lookForCalibre(true); }
+
+void Backend::answerCalibreOffer(const QString &answer) {
+    if (m_calibreOffers.isEmpty())
+        return;
+    const QString path = m_calibreOffers.takeFirst().toMap().value("path").toString();
+    emit calibreChanged();
+    if (answer == "import") {
+        importCalibreLibrary(path);
+    } else if (answer == "later" || answer == "never") {
+        m_plugins.calibre().answer(path, answer);
+        lookForCalibre(false);
+    }
+}
+
+void Backend::importCalibreLibrary(const QString &path) { addUrls({QUrl::fromLocalFile(path)}); }
+
+QString Backend::libraryName() const { return QFileInfo(libraryPath()).fileName(); }
+
+void Backend::openLibrary(const QString &path) {
+    auto library = std::make_unique<Library>(path);
+    QString error;
+    if (library->open(&error)) {
+        m_library = std::move(library);
+        m_libraryError.clear();
+    } else {
+        m_library.reset();
+        m_libraryError = error;
+    }
+    emit libraryChanged();
+    takeShelf();
+    reload();
+}
+
+void Backend::takeShelf() {
+    if (m_shelfMoving)
+        return;
+    const QJsonObject shelf = m_settings->shelf(m_settings->libraryPath());
+    const QString view = views().contains(shelf.value("view").toString()) ? shelf.value("view").toString() : "covers";
+    const QString group = groupings().contains(shelf.value("group").toString()) ? shelf.value("group").toString() : "series";
+    m_shelfMoving = true;
+    m_model.setFilters(shelf.value("filters").toObject().toVariantMap());
+    m_shelfMoving = false;
+    if (view == m_view && group == m_group)
+        return;
+    m_view = view;
+    m_group = group;
+    emit shelfChanged();
+}
+
+void Backend::keepShelf() {
+    if (m_shelfMoving)
+        return;
+    m_shelfMoving = true;
+    m_settings->setShelf(m_settings->libraryPath(), {{"view", m_view}, {"group", m_group},
+                                                     {"filters", QJsonObject::fromVariantMap(m_model.filters())}});
+    m_shelfMoving = false;
+}
+
+void Backend::setView(const QString &view) {
+    if (view == m_view || !views().contains(view))
+        return;
+    m_view = view;
+    emit shelfChanged();
+    keepShelf();
+}
+
+void Backend::setGroup(const QString &group) {
+    if (group == m_group || !groupings().contains(group))
+        return;
+    m_group = group;
+    emit shelfChanged();
+    keepShelf();
+}
+
+// The database is replaced or rewritten through its journal, which drops a
+// file from the watch, so the watch is set again after every change.
+void Backend::watchLibrary() {
+    const QStringList watched = m_watcher.files() + m_watcher.directories();
+    if (!watched.isEmpty())
+        m_watcher.removePaths(watched);
+    if (!m_library)
+        return;
+    for (const QString &path : {m_library->root(), m_library->databasePath(), m_library->databasePath() + "-wal"})
+        if (QFileInfo::exists(path))
+            m_watcher.addPath(path);
+}
+
+void Backend::reload() {
+    m_model.setBooks(m_library ? m_library->books() : QList<Book>(), libraryPath());
+    watchLibrary();
+    ++m_revision;
+    emit revisionChanged();
+    // The scripts hear of every book that came, went or changed, whoever did it.
+    if (m_scripts && m_library)
+        m_scripts->libraryChanged(m_library->books(), libraryPath());
+}
+
+QVariantMap Backend::book(qint64 id) const {
+    const auto book = m_library ? m_library->book(id) : std::nullopt;
+    return book ? bookToMap(*book, m_library->root()) : QVariantMap();
+}
+
+void Backend::say(const QString &message) {
+    m_message = message;
+    emit messageChanged();
+}
+
+void Backend::dismissMessage() { say({}); }
+
+void Backend::addBooks() { m_picker->pick(FilePicker::AddBooks); }
+void Backend::addFolder() { m_picker->pick(FilePicker::AddFolder); }
+void Backend::chooseLibrary() { m_picker->pick(FilePicker::ChooseLibrary); }
+
+void Backend::chooseCover(qint64 id) {
+    m_pickingFor = id;
+    m_picker->pick(FilePicker::ChooseCover);
+}
+
+void Backend::exportBook(qint64 id) {
+    const QString file = m_library ? m_library->formatPath(id) : QString();
+    if (file.isEmpty())
+        return;
+    m_pickingFor = id;
+    m_picker->pick(FilePicker::ExportBook,
+                   QStandardPaths::writableLocation(QStandardPaths::DownloadLocation) + "/" + QFileInfo(file).fileName());
+}
+
+void Backend::pickReadingFile(bool save, const QString &suggested) {
+    m_picker->pick(save ? FilePicker::ExportReading : FilePicker::ImportReading, suggested);
+}
+
+void Backend::picked(FilePicker::Purpose purpose, const QList<QUrl> &urls) {
+    switch (purpose) {
+    case FilePicker::AddBooks:
+    case FilePicker::AddFolder:
+        addUrls(urls);
+        break;
+    case FilePicker::ChooseLibrary:
+        useLibrary(urls.first().toLocalFile());
+        break;
+    case FilePicker::ChooseCover: {
+        QImageReader reader(urls.first().toLocalFile());
+        reader.setAutoTransform(true);
+        const QImage cover = reader.read();
+        if (cover.isNull() || !m_library || !m_library->setCover(m_pickingFor, cover))
+            say(tr("That picture can't be used as a cover."));
+        reload();
+        break;
+    }
+    case FilePicker::ExportBook: {
+        const QString source = m_library ? m_library->formatPath(m_pickingFor) : QString();
+        const QString target = urls.first().toLocalFile();
+        // The save dialog has already asked about replacing an existing file.
+        if (QFileInfo(target) != QFileInfo(source))
+            QFile::remove(target);
+        if (source.isEmpty() || !QFile::copy(source, target))
+            say(tr("The copy can't be saved to %1.").arg(target));
+        else
+            say(tr("Saved a copy to %1.").arg(target));
+        break;
+    }
+    case FilePicker::ImportReading:
+    case FilePicker::ExportReading:
+        emit readingFilePicked(purpose == FilePicker::ExportReading, urls.first().toLocalFile());
+        break;
+    case FilePicker::InstallPlugin:
+    case FilePicker::InstallPluginFolder:
+        // The plugin manager's, which listens to the picker itself.
+        break;
+    }
+}
+
+void Backend::forgetLibrary(const QString &path, bool trash) {
+    const QString before = libraryPath();
+    QString error;
+    if (!(trash ? Libraries::trash(*m_settings, path, &error) : Libraries::forget(*m_settings, path, &error))) {
+        say(error);
+        return;
+    }
+    // Forgetting the library in use moved on to another, which is opened.
+    if (libraryPath() != before) {
+        m_model.setQuery({});
+        openLibrary(libraryPath());
+        m_scripts->emitEvent("library.switched", {{"path", libraryPath()}, {"name", libraryName()}});
+    }
+}
+
+void Backend::useLibrary(const QString &path) {
+    if (path.isEmpty() || QDir(path).absolutePath() == libraryPath())
+        return;
+    // A Calibre library is Calibre's to keep; its books are brought into the
+    // library in use rather than Omabook moving in beside Calibre.
+    if (m_library && Libraries::isCalibreOnly(path) && m_plugins.calibre().enabled()) {
+        say(tr("%1 is a Calibre library, so its books are being imported into %2 rather than opened there.")
+                .arg(QFileInfo(path).fileName(), libraryName()));
+        importCalibreLibrary(path);
+        return;
+    }
+    m_settings->setLibraryPath(path);
+    m_model.setQuery({});
+    openLibrary(path);
+    if (!m_libraryError.isEmpty())
+        say(m_libraryError);
+    m_scripts->emitEvent("library.switched", {{"path", libraryPath()}, {"name", libraryName()}});
+}
+
+void Backend::addUrls(const QList<QUrl> &urls) {
+    if (!m_library || urls.isEmpty())
+        return;
+    QStringList paths;
+    for (const QUrl &url : urls)
+        paths << (url.isLocalFile() ? url.toLocalFile() : url.toString());
+    ++m_jobs;
+    setStatus(tr("Adding books…"));
+
+    // Hashing and copying a shelf of books takes a while, so it happens on a
+    // worker with its own connection to the library. Closing the window
+    // meanwhile leaves the app running until the last book is in.
+    const QString root = m_library->root();
+    // Whether a Calibre library is read as one is the Calibre plugin's to
+    // say; off, it is a folder of books, and the summary says so.
+    const CalibrePlugin &calibre = m_plugins.calibre();
+    const ImportOptions options = calibre.importOptions();
+    const bool calibreLeftOut = !options.calibre && std::any_of(paths.cbegin(), paths.cend(), [](const QString &path) {
+        return QFileInfo(path + "/metadata.db").isFile();
+    });
+    QPointer<Backend> self(this);
+    (void)QtConcurrent::run([self, root, paths, options, calibreLeftOut] {
+        QEventLoopLocker locker;
+        ImportSummary summary;
+        Library library(root);
+        QString error;
+        if (!library.open(&error)) {
+            summary.problems << error;
+        } else {
+            summary = importBooks(library, paths, [self](int done, int total) {
+                QMetaObject::invokeMethod(
+                    qApp, [=] { if (self) self->setStatus(Backend::tr("Adding %1 of %2…").arg(done).arg(total)); },
+                    Qt::QueuedConnection);
+            }, options);
+        }
+        QMetaObject::invokeMethod(
+            qApp, [=] { if (self) self->importFinished(summary, calibreLeftOut); }, Qt::QueuedConnection);
+    });
+}
+
+void Backend::setStatus(const QString &status) {
+    m_status = status;
+    emit busyChanged();
+}
+
+// Syncing talks to another computer for as long as its books take to cross,
+// so it runs on a worker with its own connection to the library.
+void Backend::sync() {
+    const QString target = m_settings->syncTarget();
+    if (!m_library || busy())
+        return;
+    if (target.isEmpty()) {
+        say(tr("Name the computer to sync with in the settings first."));
+        return;
+    }
+    ++m_jobs;
+    setStatus(tr("Syncing with %1…").arg(target.section(':', 0, 0)));
+    const QString root = m_library->root();
+    const QStringList ssh = m_ssh;
+    QPointer<Backend> self(this);
+    (void)QtConcurrent::run([self, root, target, ssh] {
+        QEventLoopLocker locker;
+        SyncSummary summary;
+        Library library(root);
+        if (!library.open(&summary.error))
+            summary.problems.clear();
+        else
+            summary = syncLibrary(library, Remote(target, ssh), [self](const QString &title) {
+                QMetaObject::invokeMethod(qApp, [=] { if (self) self->setStatus(title); }, Qt::QueuedConnection);
+            });
+        QMetaObject::invokeMethod(
+            qApp,
+            [=] {
+                if (!self)
+                    return;
+                --self->m_jobs;
+                self->setStatus({});
+                self->reload();
+                QStringList lines;
+                if (!summary.error.isEmpty())
+                    lines << summary.error;
+                if (summary.received > 0)
+                    lines << Backend::tr("%Ln books received", "", summary.received);
+                if (summary.sent > 0)
+                    lines << Backend::tr("%Ln books sent", "", summary.sent);
+                if (summary.placesTaken + summary.placesSent > 0)
+                    lines << Backend::tr("%Ln reading places updated", "", summary.placesTaken + summary.placesSent);
+                if (lines.isEmpty() && summary.problems.isEmpty())
+                    lines << Backend::tr("Both libraries were already in step.");
+                lines << summary.problems.mid(0, 3);
+                self->say(lines.join("\n"));
+            },
+            Qt::QueuedConnection);
+    });
+}
+
+void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) {
+    const int added = summary.added, duplicates = summary.duplicates;
+    const QStringList &problems = summary.problems;
+    const qint64 lastId = summary.lastId;
+    --m_jobs;
+    setStatus({});
+    reload();
+    QStringList lines;
+    if (added > 0)
+        lines << tr("%Ln books added", "", added);
+    if (duplicates > 0)
+        lines << tr("%Ln were already in the library", "", duplicates);
+    // What Calibre knew of the reading, which came along.
+    if (summary.read > 0)
+        lines << tr("%Ln are read, by Calibre's account", "", summary.read);
+    if (summary.reading > 0)
+        lines << tr("%Ln are being read", "", summary.reading);
+    if (summary.updated > 0)
+        lines << tr("%Ln already here were brought up to date", "", summary.updated);
+    if (calibreLeftOut)
+        lines << tr("The Calibre plugin is switched off, so the Calibre library was added as a plain folder of books.");
+    if (added == 0 && duplicates == 0 && problems.isEmpty())
+        lines << tr("No books were found there.");
+    // The first few reasons say enough; a folder of odd files could give hundreds.
+    lines << problems.mid(0, 3);
+    if (problems.size() > 3)
+        lines << tr("%Ln more could not be added", "", int(problems.size()) - 3);
+    say(lines.join("\n"));
+    if (lastId && added + duplicates == 1)
+        emit bookAdded(lastId);
+    // A Calibre library that came in needs no offering any more.
+    if (!summary.calibreLibraries.isEmpty()) {
+        for (const QString &library : summary.calibreLibraries)
+            m_plugins.calibre().answer(library, "imported");
+        lookForCalibre(false);
+    }
+}
+
+void Backend::remove(qint64 id) {
+    QString error;
+    if (m_library && !m_library->remove(id, &error))
+        say(error);
+    reload();
+}
+
+void Backend::saveDetails(qint64 id, const QVariantMap &details) {
+    const auto before = m_library ? m_library->book(id) : std::nullopt;
+    if (!before)
+        return;
+    BookMeta meta = before->meta;
+    meta.title = details.value("title", meta.title).toString().simplified();
+    meta.authors = BookMeta::splitAuthors(details.value("authors", meta.authorText()).toString());
+    meta.series = details.value("series", meta.series).toString().simplified();
+    meta.seriesIndex = details.value("seriesIndex", meta.seriesIndex).toDouble();
+    meta.publisher = details.value("publisher", meta.publisher).toString().simplified();
+    meta.language = details.value("language", meta.language).toString().simplified();
+    meta.isbn = details.value("isbn", meta.isbn).toString().simplified();
+    meta.published = details.value("published", meta.published).toString().simplified();
+    meta.description = details.value("description", meta.description).toString().trimmed();
+    meta.tags = BookMeta::splitTags(details.value("tags", meta.tags.join(", ")).toString());
+    QString error;
+    if (!m_library->setMeta(id, meta, &error))
+        say(error);
+    if (details.contains("shelf"))
+        m_library->setReading(id, details.value("shelf").toString(), details.value("rating", before->rating).toInt(),
+                              details.value("finished", before->finished).toString().simplified());
+    if (details.contains("paper"))
+        m_library->setPaper(id, details.value("paper").toBool());
+    // The book's node in the knowledge graph says the same: its status,
+    // stars, author, series and tags.
+    Graph(*m_library).bookNode(id);
+    reload();
+}
+
+QVariantMap Backend::reading(qint64 id) const {
+    const auto book = m_library ? m_library->book(id) : std::nullopt;
+    if (!book)
+        return {};
+    return {{"shelf", book->shelf}, {"rating", book->rating}, {"finished", book->finished}, {"paper", book->paper},
+            {"hasFile", !book->formats.isEmpty()}};
+}
+
+qint64 Backend::newEntry(const QVariantMap &details) {
+    BookMeta meta;
+    meta.title = details.value("title").toString().simplified();
+    if (!m_library || meta.title.isEmpty())
+        return 0;
+    const Library::Added added = m_library->addEntry(meta, details.value("paper").toBool());
+    if (!added.error.isEmpty()) {
+        say(added.error);
+        return 0;
+    }
+    // The rest goes in the way an edit does.
+    saveDetails(added.id, details);
+    return added.id;
+}
+
+QVariantList Backend::candidates() const {
+    QVariantList list;
+    const auto book = m_library ? m_library->book(m_lookUpId) : std::nullopt;
+    for (const MetaCandidate &candidate : m_candidates) {
+        const BookMeta &meta = candidate.meta;
+        // What taking it would do: the fields it fills in, and the ones it
+        // changes, so a result can be judged without comparing by eye.
+        const MetaDiff diff = book ? whatItBrings(book->meta, book->hasCover, candidate) : MetaDiff();
+        QVariantList changes;
+        for (const MetaDiff::Change &change : diff.changes)
+            changes << QVariantMap{{"field", change.field}, {"from", change.from}, {"to", change.to}};
+        list << QVariantMap{
+            {"source", candidate.source},      {"title", meta.title},         {"authors", meta.authorText()},
+            {"series", meta.series},           {"publisher", meta.publisher}, {"published", meta.published},
+            {"description", meta.description}, {"tags", meta.tags.join(", ")}, {"cover", candidate.coverUrl},
+            {"why", candidate.why},            {"adds", diff.adds},           {"changes", changes},
+        };
+    }
+    return list;
+}
+
+QVariantList Backend::lookUpSources() const {
+    QVariantList list;
+    for (const SourceState &state : m_sourceStates)
+        list << QVariantMap{{"name", state.name}, {"fields", state.fields}, {"asking", state.asking},
+                            {"found", state.found}, {"problem", state.problem}};
+    return list;
+}
+
+QVariantList Backend::plugins() const {
+    QVariantList list;
+    for (const PluginInfo &plugin : m_plugins.known())
+        list << QVariantMap{{"id", plugin.id}, {"name", plugin.name}, {"kind", plugin.kind}, {"origin", plugin.origin},
+                            {"version", plugin.version}, {"author", plugin.author}, {"description", plugin.description},
+                            {"fields", plugin.fields}, {"enabled", plugin.enabled}, {"problem", plugin.problem},
+                            {"switchable", plugin.switchable}, {"permissions", plugin.permissions}};
+    return list;
+}
+
+void Backend::setPluginEnabled(const QString &id, bool enabled) {
+    if (!m_plugins.setEnabled(id, enabled))
+        return;
+    emit pluginsChanged();
+    // Switching Calibre changes what is found: its plugins and libraries
+    // appear when it goes on, and are gone when it goes off.
+    if (id == CalibrePlugin::id) {
+        loadPlugins(false);
+        lookForCalibre(false);
+    }
+}
+
+// The first pages of a book, which is where it names itself.
+QString Backend::openingPages(qint64 id) const {
+    QString opening;
+    const auto book = m_library->book(id);
+    for (const QString &format : book ? book->formats : QStringList()) {
+        if (!Formats::readable(format))
+            continue;
+        if (const auto document = Formats::open(m_library->formatPath(id, format)))
+            for (int section = 0; section < document->count() && opening.size() < 6000; ++section)
+                opening += document->text(section) + "\n\n";
+        break;
+    }
+    return opening.left(6000);
+}
+
+void Backend::lookUp(qint64 id) {
+    stopLookUp();
+    const auto book = m_library ? m_library->book(id) : std::nullopt;
+    if (!book)
+        return;
+    m_lookUpId = id;
+    m_sources = m_catalogs(this);
+    // The AI goes last: it is handed what the catalogs found, to judge
+    // which of it is really this book.
+    m_lookUpAi = m_aiFactory(nullptr);
+    if (m_lookUpAi) {
+        m_aiSource = new AiMetadataSource(m_lookUpAi.get(), QFileInfo(m_library->formatPath(id)).fileName(),
+                                          openingPages(id), this);
+        m_sources << m_aiSource;
+    }
+    for (int index = 0; index < m_sources.size(); ++index) {
+        MetadataSource *source = m_sources.at(index);
+        m_sourceStates.append({source->name(), source->fields(), true, 0, {}});
+        connect(source, &MetadataSource::found, this,
+                [this, index](const QList<MetaCandidate> &candidates) { sourceAnswered(index, candidates, {}); });
+        connect(source, &MetadataSource::failed, this,
+                [this, index](const QString &problem) { sourceAnswered(index, {}, problem); });
+    }
+    m_pendingSources = m_sources.size();
+    emit candidatesChanged();
+    for (MetadataSource *source : std::as_const(m_sources))
+        if (source != m_aiSource)
+            source->search(book->meta);
+    askAiWhenCatalogsAreDone();
+}
+
+void Backend::askAiWhenCatalogsAreDone() {
+    if (!m_aiSource || m_aiAsked || m_pendingSources != 1)
+        return;
+    const auto book = m_library ? m_library->book(m_lookUpId) : std::nullopt;
+    if (!book)
+        return;
+    m_aiAsked = true;
+    m_aiSource->setFound(m_candidates);
+    m_aiSource->search(book->meta);
+}
+
+void Backend::sourceAnswered(int index, const QList<MetaCandidate> &candidates, const QString &problem) {
+    if (index < 0 || index >= m_sourceStates.size() || !m_sourceStates[index].asking)
+        return;
+    SourceState &state = m_sourceStates[index];
+    state.asking = false;
+    state.found = candidates.size();
+    state.problem = problem;
+    // The AI's judgement is the recommendation, so it leads the list.
+    if (m_sources.value(index) == m_aiSource)
+        m_candidates = candidates + m_candidates;
+    else
+        m_candidates << candidates;
+    if (!problem.isEmpty())
+        m_searchProblem += (m_searchProblem.isEmpty() ? "" : "\n") + problem;
+    m_pendingSources = qMax(0, m_pendingSources - 1);
+    emit candidatesChanged();
+    askAiWhenCatalogsAreDone();
+    if (m_pendingSources == 0) {
+        QJsonArray found;
+        for (const MetaCandidate &candidate : std::as_const(m_candidates))
+            found << candidate.toJson();
+        m_scripts->emitEvent("lookup.finished", {{"id", m_lookUpId}, {"candidates", found}});
+    }
+}
+
+void Backend::stopLookUp() {
+    // The sources go first: one of them listens to the AI.
+    for (MetadataSource *source : std::as_const(m_sources)) {
+        source->disconnect(this);
+        delete source;
+    }
+    m_sources.clear();
+    m_sourceStates.clear();
+    m_aiSource = nullptr;
+    m_aiAsked = false;
+    if (m_lookUpAi)
+        m_lookUpAi->cancel();
+    m_lookUpAi.reset();
+    m_candidates.clear();
+    m_pendingSources = 0;
+    m_searchProblem.clear();
+    emit candidatesChanged();
+}
+
+void Backend::applyCandidate(int index) {
+    const auto before = m_library ? m_library->book(m_lookUpId) : std::nullopt;
+    if (!before || index < 0 || index >= m_candidates.size())
+        return;
+    const MetaCandidate candidate = m_candidates.at(index);
+    const qint64 id = m_lookUpId;
+    BookMeta meta = before->meta;
+    meta.apply(candidate.meta);
+    QString error;
+    if (!m_library->setMeta(id, meta, &error))
+        say(error);
+    Graph(*m_library).bookNode(id);
+    reload();
+    if (candidate.coverUrl.isValid())
+        fetchCoverFor(id, candidate.coverUrl);
+}
+
+void Backend::fetchCoverFor(qint64 id, const QUrl &url) {
+    fetchCover(&m_network, url, this, [this, id](const QImage &cover) {
+        // Catalogs answer a missing cover with a one-pixel picture.
+        if (m_library && cover.width() > 50 && m_library->setCover(id, cover))
+            reload();
+    });
+}
