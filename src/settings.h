@@ -29,6 +29,7 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiCommand READ aiCommand WRITE setAiCommand NOTIFY changed)
     Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY changed)
     Q_PROPERTY(QString graph READ graph WRITE setGraph NOTIFY changed)
+    Q_PROPERTY(QString marks READ marks WRITE setMarks NOTIFY changed)
     Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
     Q_PROPERTY(QString goodreadsUser READ goodreadsUser WRITE setGoodreadsUser NOTIFY changed)
     Q_PROPERTY(QString openLibraryUser READ openLibraryUser WRITE setOpenLibraryUser NOTIFY changed)
@@ -148,6 +149,10 @@ public:
     // "off" (no graph is kept or used while reading).
     QString graph() const;
     void setGraph(const QString &mode);
+    // When the things of the graph are marked in the text: "map" (while the
+    // map of the book is beside the page), "always" or "never".
+    QString marks() const;
+    void setMarks(const QString &mode);
 
     // Whose shelves the reading sites are asked for: a Goodreads user id,
     // profile address or shelf feed address, and an Open Library user name.

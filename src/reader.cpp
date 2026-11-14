@@ -37,7 +37,7 @@ QImage BookImageProvider::requestImage(const QString &id, QSize *size, const QSi
 }
 
 Reader::Reader(Backend *backend, const QString &converter, QObject *parent)
-    : QObject(parent), m_backend(backend), m_converter(converter) {
+    : QObject(parent), m_backend(backend), m_converter(converter), m_marks(new ReadingMarks(this, this)) {
     // Where the reader is gets written a moment after they stop moving, not
     // on every pixel scrolled.
     m_saveSoon.setSingleShot(true);

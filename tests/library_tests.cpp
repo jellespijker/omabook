@@ -1196,6 +1196,7 @@ private slots:
         const QStringList presentation{"backend.h", "backend.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp",
+                                       "readingmarks.h", "readingmarks.cpp",
                                        "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h",
                                        "portalfilepicker.cpp"};

@@ -118,6 +118,14 @@ QString colorKey(const QString &kind) {
     return keys.value(kind, "muted");
 }
 
+QColor color(const QString &kind, const QVariantMap &colors, const QColor &foreground, const QColor &background) {
+    const QString key = colorKey(kind);
+    if (key == "foreground")
+        return foreground;
+    const QColor color = colors.value(key).value<QColor>();
+    return color.isValid() ? color : mixed(foreground, background, 0.45);
+}
+
 const QPainterPath &glyph(const QString &kind) {
     static const QHash<QString, QPainterPath> glyphs{
         {"character", drawn("O 12 8 3.6 M 5 20 C 5 15.5 8 13.5 12 13.5 C 16 13.5 19 15.5 19 20")},
@@ -266,13 +274,7 @@ double GraphCanvas::radiusOf(int row) const {
     return std::clamp(std::min(world, 20.0) * m_zoom * (shown.outer ? 0.72 : 1.0), 3.0, 30.0);
 }
 
-QColor GraphCanvas::colorOf(const QString &kind) const {
-    const QString key = GraphKinds::colorKey(kind);
-    if (key == "foreground")
-        return m_foreground;
-    const QColor color = m_colors.value(key).value<QColor>();
-    return color.isValid() ? color : mixed(m_foreground, m_background, 0.45);
-}
+QColor GraphCanvas::colorOf(const QString &kind) const { return GraphKinds::color(kind, m_colors, m_foreground, m_background); }
 
 void GraphCanvas::measure() {
     m_names.clear();
@@ -611,10 +613,7 @@ void GraphMark::setBackground(const QColor &color) {
 
 void GraphMark::paint(QPainter *painter) {
     painter->setRenderHint(QPainter::Antialiasing);
-    const QString key = GraphKinds::colorKey(m_kind);
-    QColor fill = key == "foreground" ? m_foreground : m_colors.value(key).value<QColor>();
-    if (!fill.isValid())
-        fill = mixed(m_foreground, m_background, 0.45);
+    const QColor fill = GraphKinds::color(m_kind, m_colors, m_foreground, m_background);
     const bool darkTheme = luminance(m_background) < luminance(m_foreground);
     GraphKinds::paint(painter, QPointF(width() / 2, height() / 2), std::min(width(), height()) / 2 - 0.5, m_kind, fill,
                       GraphKinds::inkOn(fill, darkTheme ? m_background : m_foreground, darkTheme ? m_foreground : m_background), true);

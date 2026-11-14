@@ -35,6 +35,15 @@ QString seriesSoFar(const QList<SeriesNotes> &earlier);
 // GraphContext::forQuestion), empty when there is none.
 QString question(const QString &excerpt, const QString &selection, const QString &question, const QString &known = {});
 
+// Asks who or what the reader selected is, from the paragraph it stands in
+// and nothing else of the book: for a name the knowledge graph doesn't know.
+QString identify(const QString &selection, const QString &paragraph);
+// Asks for three short questions a reader might ask about what they
+// selected, one to a line; `known` is what the graph holds of it, if anything.
+AiRequest moreQuestions(const BookMeta &book, const QString &selection, const QString &paragraph, const QString &known);
+// Those questions out of the answer: at most three, each a line ending in "?".
+QStringList questionsIn(const QString &answer);
+
 // Asks to bring the reader back up to speed. `notes` is what the model wrote
 // the last time it was asked (empty the first time) and `since` is only what
 // has been read after that, so a long book is never sent twice. The answer

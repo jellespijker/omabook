@@ -36,7 +36,7 @@ target_link_libraries(omabook PRIVATE omabook_core)
 # The tests load the real Main.qml, so they carry the resources too. One
 # binary per layer: a broken format reader fails without the window.
 enable_testing()
-foreach(test formats library services ui mcp calibre folio readingsites scripting pluginmanager graphview graph layout)
+foreach(test formats library services ui mcp calibre folio readingsites scripting pluginmanager graphview graph reading layout)
   add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc)
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)

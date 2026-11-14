@@ -27,6 +27,8 @@ class Assistant : public QObject {
     Q_PROPERTY(QString note READ note NOTIFY messagesChanged)
     // Whether the knowledge graph of the open book is being brought up to date.
     Q_PROPERTY(bool graphBusy READ graphBusy NOTIFY graphChanged)
+    // Whether the AI is thinking of questions to suggest about a selection.
+    Q_PROPERTY(bool suggesting READ suggesting NOTIFY suggestingChanged)
 
 public:
     using Factory = std::function<std::unique_ptr<AiProvider>(QString *why)>;
@@ -41,6 +43,7 @@ public:
     bool busy() const noexcept { return m_busy; }
     QString note() const noexcept { return m_note; }
     bool graphBusy() const { return m_graph.busy(); }
+    bool suggesting() const noexcept { return m_suggesting != nullptr; }
     // How the knowledge graph grows: "auto" (as chapters are finished and
     // with every catch-up), "ask" (only when asked to) or "off" (not at
     // all: nothing is read from it or written to it either). It is asked
@@ -58,6 +61,14 @@ public:
     // so far; after that it is sent its own notes from last time and only
     // what was read since, and with nothing new read it costs nothing.
     Q_INVOKABLE void catchUp();
+    // Who or what selected words are, for a name the knowledge graph doesn't
+    // know: one short question with only the words and their paragraph.
+    Q_INVOKABLE void identify(const QString &selection, const QString &paragraph);
+    // Three more questions worth asking about a selection, from the quick
+    // model, kept with the reader's marks under `key` (see
+    // ReadingMarks::suggestionKey) so the same thing at the same place is
+    // never asked about twice.
+    Q_INVOKABLE void suggestMore(const QString &key, qint64 thing, const QString &selection, const QString &paragraph);
     // Who is who, as far as the reader has got: kept and brought up to
     // date the same way, so it never knows more than they have read.
     Q_INVOKABLE void whoIsWho();
@@ -76,6 +87,7 @@ signals:
     void busyChanged();
     // The graph is being built, or took in what a request found.
     void graphChanged();
+    void suggestingChanged();
 
 private:
     void setBusy(bool busy);
@@ -110,4 +122,6 @@ private:
     // into the graph once the answer is whole.
     QString m_asked;
     GraphPlace m_askedAt;
+    // The request for suggestions under way, if any.
+    std::unique_ptr<AiCall> m_suggesting;
 };

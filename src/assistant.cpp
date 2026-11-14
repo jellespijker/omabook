@@ -102,6 +102,44 @@ void Assistant::ask(const QString &question, const QString &scope, const QString
     m_provider->ask(request);
 }
 
+void Assistant::identify(const QString &selection, const QString &paragraph) {
+    if (!m_provider || m_busy || selection.trimmed().isEmpty() || !m_reader->isOpen())
+        return;
+    m_note.clear();
+    AiRequest request;
+    request.system = Prompts::companion(m_reader->meta(), m_reader->seriesNotes("recap"));
+    request.messages.append({"user", Prompts::identify(selection, paragraph)});
+    m_messages.append({"user", tr("Who or what is “%1”?").arg(selection.simplified().left(80))});
+    emit messagesChanged();
+    setBusy(true);
+    m_provider->ask(request);
+}
+
+void Assistant::suggestMore(const QString &key, qint64 thing, const QString &selection, const QString &paragraph) {
+    ReadingMarks *marks = m_reader->marks();
+    if (m_suggesting || !m_reader->isOpen() || marks->suggested(key))
+        return;
+    QString why;
+    std::unique_ptr<AiProvider> provider = m_factory(&why);
+    if (!provider)
+        return;
+    const QVariantMap known = marks->thing(thing);
+    // Only the selection, its paragraph and the one line the graph holds of it.
+    const QString line = known.isEmpty() ? QString() : known.value("name").toString() + ": " + known.value("summary").toString();
+    m_suggesting = std::make_unique<AiCall>(std::move(provider));
+    // A failed call keeps nothing, so asking again tries again.
+    const auto done = [this, key](const std::optional<QStringList> &questions) {
+        if (questions)
+            m_reader->marks()->keepSuggestions(key, *questions);
+        m_suggesting.release()->deleteLater();
+        emit suggestingChanged();
+    };
+    connect(m_suggesting.get(), &AiCall::done, this, [done](const QString &answer) { done(Prompts::questionsIn(answer)); });
+    connect(m_suggesting.get(), &AiCall::failed, this, [done] { done(std::nullopt); });
+    emit suggestingChanged();
+    m_suggesting->ask(Prompts::moreQuestions(m_reader->meta(), selection, paragraph, line));
+}
+
 void Assistant::catchUp() { askFromNotes("recap", tr("Catch me up.")); }
 
 void Assistant::whoIsWho() { askFromNotes("cast", tr("Who is who?")); }

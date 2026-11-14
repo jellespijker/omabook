@@ -95,6 +95,7 @@ int main(int argc, char *argv[]) {
     const CalibrePlugin &calibre = backend.pluginRegistry()->calibre();
     Reader reader(&backend, calibre.converter());
     reader.setConverter(calibre.converter(), calibre.switchedOff());
+    reader.marks()->setGraphMode([&settings] { return settings.graph(); });
     QObject::connect(&backend, &Backend::pluginsChanged, &reader,
                      [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
     Assistant assistant(&reader, [&settings](QString *why) { return makeAiProvider(settings, why); });

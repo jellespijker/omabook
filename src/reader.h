@@ -15,6 +15,7 @@
 #include "graphbuilder.h"
 #include "library.h"
 #include "metadatasource.h"
+#include "readingmarks.h"
 
 class Backend;
 
@@ -57,6 +58,8 @@ class Reader : public QObject {
     Q_PROPERTY(double fraction READ fraction WRITE setFraction NOTIFY fractionChanged)
     Q_PROPERTY(double percent READ percent NOTIFY fractionChanged)
     Q_PROPERTY(QVariantList bookmarks READ bookmarks NOTIFY bookmarksChanged)
+    // The things of the book's knowledge graph, as they are marked on the page.
+    Q_PROPERTY(ReadingMarks *marks READ marks CONSTANT)
 
 public:
     // The reader reads from the backend's library. `converter` is the program
@@ -90,6 +93,7 @@ public:
     void setFraction(double fraction);
     double percent() const;
     QVariantList bookmarks() const;
+    ReadingMarks *marks() const noexcept { return m_marks; }
 
     Q_INVOKABLE void openBook(qint64 id);
     Q_INVOKABLE void openBookAt(qint64 id, int section, double fraction);
@@ -189,4 +193,5 @@ private:
     bool m_reloading = false;
     bool m_reloadWanted = false; // the file changed again while it was being read anew
     bool m_growing = false;
+    ReadingMarks *m_marks;
 };

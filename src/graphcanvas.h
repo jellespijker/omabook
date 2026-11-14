@@ -14,6 +14,10 @@
 namespace GraphKinds {
 // The key in the theme's palette: "blue", "green", ... or "foreground".
 QString colorKey(const QString &kind);
+// The color itself, in a theme: its palette by name and its two inks. The
+// one function every face of a thing is colored by (its disc in the graph,
+// its mark on the page, its name in an answer), so it is one color everywhere.
+QColor color(const QString &kind, const QVariantMap &colors, const QColor &foreground, const QColor &background);
 // The drawing, on a 24 by 24 grid like the app's other icons.
 const QPainterPath &glyph(const QString &kind);
 // A node: a disc of its kind's color with the drawing in it when it is
