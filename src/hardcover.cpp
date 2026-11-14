@@ -7,6 +7,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <QTimer>
+#include <algorithm>
 
 #include "htmlclean.h"
 #include "secretstore.h"
@@ -58,7 +59,7 @@ QNetworkRequest request(const QString &base, const QString &token) {
     return http;
 }
 
-const char *readsBack = "id error user_book { id user_book_reads(order_by: {id: desc}, limit: 1) { id finished_at } }";
+constexpr auto readsBack = "id error user_book { id user_book_reads(order_by: {id: desc}, limit: 1) { id finished_at } }";
 
 } // namespace
 
@@ -119,7 +120,7 @@ QList<SiteEntry> Hardcover::parseLibrary(const QByteArray &json, QHash<QString, 
             entry.otherShelf = true;
         }
         // Half stars are rounded: Omabook's are whole.
-        entry.rating = qBound(0, qRound(row.value("rating").toDouble()), 5);
+        entry.rating = std::clamp(qRound(row.value("rating").toDouble()), 0, 5);
         const QJsonObject read = row.value("user_book_reads").toArray().first().toObject();
         entry.finished = read.value("finished_at").toString().isEmpty() ? row.value("last_read_date").toString()
                                                                          : read.value("finished_at").toString();

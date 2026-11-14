@@ -115,13 +115,13 @@ GraphView GraphContext::story(const Library &library, qint64 bookId, const std::
 bool GraphContext::namedIn(const GraphNode &node, const QString &lower, bool loosely) {
     static const QRegularExpression apart("[^\\p{L}\\p{N}]+");
     const QStringList names = namesOf(node);
-    return std::any_of(names.begin(), names.end(), [&](const QString &name) {
+    return std::ranges::any_of(names, [&](const QString &name) {
         if (name.size() >= 3 && lower.contains(name.toLower()))
             return true;
         if (!loosely)
             return false;
         const QStringList words = name.toLower().split(apart, Qt::SkipEmptyParts);
-        return std::any_of(words.begin(), words.end(), [&](const QString &word) {
+        return std::ranges::any_of(words, [&](const QString &word) {
             return word.size() >= 4 && lower.contains(word);
         });
     });
@@ -190,9 +190,7 @@ QString GraphContext::digest(const Library &library, qint64 bookId, const GraphP
         ++ties[edge.source];
         ++ties[edge.target];
     }
-    std::stable_sort(view.nodes.begin(), view.nodes.end(), [&](const GraphNode &a, const GraphNode &b) {
-        return ties.value(a.id) > ties.value(b.id);
-    });
+    std::ranges::stable_sort(view.nodes, std::greater{}, [&](const GraphNode &node) { return ties.value(node.id); });
     return written(view.nodes.mid(0, mostNodes), view.edges, mostNodes * 2);
 }
 
@@ -221,7 +219,7 @@ QString GraphContext::picture(const Library &library, const QString &question, q
         ++read.days;
     }
     QList<Read> history = reads.values();
-    std::sort(history.begin(), history.end(), [](const Read &a, const Read &b) { return a.last > b.last; });
+    std::ranges::sort(history, std::greater{}, &Read::last);
     QStringList lines;
     for (const Read &read : history.mid(0, 30)) {
         const auto book = books.constFind(read.bookId);
@@ -257,7 +255,7 @@ QString GraphContext::picture(const Library &library, const QString &question, q
             if (count > 0)
                 met.append({node, count, in});
         }
-        std::stable_sort(met.begin(), met.end(), [](const Met &a, const Met &b) { return a.count > b.count; });
+        std::ranges::stable_sort(met, std::greater{}, &Met::count);
         QStringList entries;
         for (const Met &entry : met.mid(0, most))
             entries << entry.node.name + " (" + entry.in + ")";
@@ -305,7 +303,7 @@ QString GraphContext::picture(const Library &library, const QString &question, q
 
     // The latest of what was asked, with the gist of the answer.
     QList<GraphNode> asked = graph.find({}, "question", QString(), 500);
-    std::stable_sort(asked.begin(), asked.end(), [](const GraphNode &a, const GraphNode &b) { return a.updated > b.updated; });
+    std::ranges::stable_sort(asked, std::greater{}, &GraphNode::updated);
     lines.clear();
     for (const GraphNode &node : asked.mid(0, 12)) {
         const qint64 of = node.data.value("book").toInteger();

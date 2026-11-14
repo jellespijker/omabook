@@ -80,7 +80,7 @@ public:
     bool setOrder(const QStringList &ids);
     // Everything Calibre: what the rest of the app asks instead of Calibre's pieces.
     CalibrePlugin &calibre() { return m_calibre; }
-    const CalibrePlugin &calibre() const { return m_calibre; }
+    const CalibrePlugin &calibre() const noexcept { return m_calibre; }
 
     // A source for each plugin that is on and usable, owned by `parent`.
     QList<MetadataSource *> sources(const QList<PluginInfo> &plugins, QNetworkAccessManager *network, QObject *parent) const;

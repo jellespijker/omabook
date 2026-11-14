@@ -14,7 +14,10 @@
 #include <QNetworkAccessManager>
 #include <QSaveFile>
 #include <QTemporaryDir>
+#include <algorithm>
+#include <array>
 #include <cstdio>
+#include <expected>
 #include <memory>
 #include <termios.h>
 #include <unistd.h>
@@ -53,6 +56,8 @@
 #include "theme.h"
 
 namespace {
+
+using namespace Qt::StringLiterals;
 
 void print(FILE *stream, const QString &text) {
     fprintf(stream, "%s\n", qPrintable(text));
@@ -197,9 +202,8 @@ int show(const QStringList &arguments) {
             QString text = value.isArray() ? QString() : value.toVariant().toString();
             for (const QJsonValue &item : value.toArray())
                 text += (text.isEmpty() ? "" : ", ") + item.toString();
-            const QJsonObject paths = value.toObject();
-            for (auto file = paths.begin(); file != paths.end(); ++file)
-                text += (text.isEmpty() ? "" : "\n\t") + file.value().toString();
+            for (const QJsonValue &file : value.toObject())
+                text += (text.isEmpty() ? "" : "\n\t") + file.toString();
             if (!text.isEmpty())
                 print(stdout, it.key() + ":\t" + text);
         }
@@ -830,9 +834,10 @@ int calibre(const QStringList &arguments) {
     return summary.problems.isEmpty() ? 0 : 1;
 }
 
-bool askAi(const AiRequest &request, QString *answer, QString *error, bool show = false) {
-    QString note;
-    const bool ok = BookOps::ask(request, answer, error, [show](const QString &piece) {
+// The model's whole answer, or why there is none.
+[[nodiscard]] std::expected<QString, QString> askAi(const AiRequest &request, bool show = false) {
+    QString answer, error, note;
+    const bool ok = BookOps::ask(request, &answer, &error, [show](const QString &piece) {
         if (show) {
             fputs(qPrintable(piece), stdout);
             fflush(stdout);
@@ -841,7 +846,9 @@ bool askAi(const AiRequest &request, QString *answer, QString *error, bool show 
     // A model that was refused, and which one answered instead.
     if (!note.isEmpty())
         print(stderr, note);
-    return ok;
+    if (!ok)
+        return std::unexpected(error);
+    return answer;
 }
 
 int bookmarks(const QStringList &arguments) {
@@ -863,7 +870,7 @@ int bookmarks(const QStringList &arguments) {
     if (command.parser.isSet("remove")) {
         const qint64 bookmark = command.parser.value("remove").toLongLong();
         const QList<Annotation> before = library->annotations(id);
-        if (std::none_of(before.begin(), before.end(), [&](const Annotation &note) { return note.id == bookmark; }))
+        if (std::ranges::none_of(before, [&](const Annotation &note) { return note.id == bookmark; }))
             return fail("That book has no bookmark " + command.parser.value("remove") + ".");
         library->removeAnnotation(bookmark);
     }
@@ -974,10 +981,10 @@ int tidy(const QStringList &arguments) {
     const QList<Book> books = library->books();
     QList<Proposal> series;
     if (command.parser.isSet("ai")) {
-        QString answer;
-        if (!askAi(Curation::seriesRequest(books), &answer, &error))
-            return fail(error);
-        series = Curation::seriesFrom(answer, books);
+        const auto answer = askAi(Curation::seriesRequest(books));
+        if (!answer)
+            return fail(answer.error());
+        series = Curation::seriesFrom(*answer, books);
     }
     QJsonArray array;
     int applied = 0;
@@ -1015,22 +1022,21 @@ int tidy(const QStringList &arguments) {
     return 0;
 }
 
-// Waits for a reading site's shelves.
-bool fetchShelves(ReadingSite *site, QList<SiteEntry> *entries, QString *error) {
+// Waits for a reading site's shelves: what is on them, or why they couldn't be read.
+[[nodiscard]] std::expected<QList<SiteEntry>, QString> fetchShelves(ReadingSite &site) {
     QEventLoop loop;
-    bool ok = false;
-    QObject::connect(site, &ReadingSite::fetched, &loop, [&](const QList<SiteEntry> &fetched) {
-        *entries = fetched;
-        ok = true;
+    std::expected<QList<SiteEntry>, QString> shelves = std::unexpected(QString());
+    QObject::connect(&site, &ReadingSite::fetched, &loop, [&shelves, &loop](const QList<SiteEntry> &fetched) {
+        shelves = fetched;
         loop.quit();
     });
-    QObject::connect(site, &ReadingSite::failed, &loop, [&](const QString &problem) {
-        *error = problem;
+    QObject::connect(&site, &ReadingSite::failed, &loop, [&shelves, &loop](const QString &problem) {
+        shelves = std::unexpected(problem);
         loop.quit();
     });
-    site->fetchShelves();
+    site.fetchShelves();
     loop.exec();
-    return ok;
+    return shelves;
 }
 
 // `omabook goodreads ...` and `omabook openlibrary ...`: one command per
@@ -1075,11 +1081,11 @@ int readingSite(const QStringList &arguments) {
 
     QString error;
     if (action == "shelves") {
-        QList<SiteEntry> entries;
-        if (!fetchShelves(site.get(), &entries, &error))
-            return fail(error);
+        const auto entries = fetchShelves(*site);
+        if (!entries)
+            return fail(entries.error());
         QJsonArray array;
-        for (const SiteEntry &entry : std::as_const(entries)) {
+        for (const SiteEntry &entry : *entries) {
             array << entry.toJson();
             if (!command.json())
                 print(stdout, QString("%1\t%2\t%3\t%4").arg(entry.shelf, entry.rating > 0 ? QString::number(entry.rating) : QString("-"),
@@ -1129,8 +1135,10 @@ int readingSite(const QStringList &arguments) {
         if (!read.error.isEmpty())
             return fail(read.error);
         entries = read.entries;
-    } else if (!fetchShelves(site.get(), &entries, &error)) {
-        return fail(error);
+    } else if (auto fetched = fetchShelves(*site)) {
+        entries = std::move(*fetched);
+    } else {
+        return fail(fetched.error());
     }
 
     ReadingSites::Options options;
@@ -1143,8 +1151,8 @@ int readingSite(const QStringList &arguments) {
             print(stderr, QString("Fetching %1 covers...").arg(summary.covers.size()));
         CoverFetcher fetcher(&network);
         QEventLoop loop;
-        QObject::connect(&fetcher, &CoverFetcher::cover, &loop, [&](qint64 id, const QImage &picture) { library->setCover(id, picture); });
-        QObject::connect(&fetcher, &CoverFetcher::done, &loop, [&](int fetched, int left) {
+        QObject::connect(&fetcher, &CoverFetcher::cover, &loop, [&library](qint64 id, const QImage &picture) { library->setCover(id, picture); });
+        QObject::connect(&fetcher, &CoverFetcher::done, &loop, [&covers, &coversLeft, &loop](int fetched, int left) {
             covers = fetched;
             coversLeft = left;
             loop.quit();
@@ -1250,7 +1258,7 @@ int sites(const QStringList &arguments) {
     auto wait = [&](const QString &site, const std::function<void()> &run) {
         QJsonObject result;
         QEventLoop loop;
-        const auto link = QObject::connect(&desk, &SiteDesk::done, &loop, [&](const QString &about, const QJsonObject &answer) {
+        const auto link = QObject::connect(&desk, &SiteDesk::done, &loop, [&site, &result, &loop](const QString &about, const QJsonObject &answer) {
             if (about == site) {
                 result = answer;
                 loop.quit();
@@ -1321,7 +1329,7 @@ int sites(const QStringList &arguments) {
     if (schemes.isEmpty())
         return fail("No reading site is connected. Connect one with: omabook sites connect <site> [identity]");
     QList<QPair<qint64, QUrl>> covers;
-    QObject::connect(&desk, &SiteDesk::coversWanted, &network, [&](const QList<QPair<qint64, QUrl>> &wanted) { covers += wanted; });
+    QObject::connect(&desk, &SiteDesk::coversWanted, &network, [&covers](const QList<QPair<qint64, QUrl>> &wanted) { covers += wanted; });
     SiteDesk::SyncOptions options;
     options.addNew = !command.parser.isSet("no-new");
     options.dryRun = command.parser.isSet("dry-run");
@@ -1369,7 +1377,7 @@ int sites(const QStringList &arguments) {
             print(stderr, QString("Fetching %1 covers...").arg(covers.size()));
         CoverFetcher fetcher(&network);
         QEventLoop loop;
-        QObject::connect(&fetcher, &CoverFetcher::cover, &loop, [&](qint64 id, const QImage &picture) { library->setCover(id, picture); });
+        QObject::connect(&fetcher, &CoverFetcher::cover, &loop, [&library](qint64 id, const QImage &picture) { library->setCover(id, picture); });
         QObject::connect(&fetcher, &CoverFetcher::done, &loop, &QEventLoop::quit);
         fetcher.fetch(covers);
         loop.exec();
@@ -1395,18 +1403,17 @@ int suggest(const QStringList &arguments) {
     QList<Curation::BookNotes> books;
     for (const Book &book : held)
         books.append({book, library->notes(book.id, "recap").text});
-    QString answer;
     // What the knowledge graph holds across the books goes along, unless it is off.
-    if (!askAi(Curation::suggestionRequest(books, Settings().graph() != "off" ? GraphContext::picture(*library) : QString()),
-               &answer, &error))
-        return fail(error);
-    const Curation::Suggestions suggested = Curation::suggestionsFrom(answer);
+    const auto answer = askAi(Curation::suggestionRequest(books, Settings().graph() != "off" ? GraphContext::picture(*library) : QString()));
+    if (!answer)
+        return fail(answer.error());
+    const Curation::Suggestions suggested = Curation::suggestionsFrom(*answer);
     if (suggested.books.isEmpty()) {
         // The model answered in its own words; they are the answer.
         if (command.json())
-            printJson(QJsonObject{{"suggestions", QJsonArray()}, {"answer", answer.trimmed()}});
+            printJson(QJsonObject{{"suggestions", QJsonArray()}, {"answer", answer->trimmed()}});
         else
-            print(stdout, answer.trimmed());
+            print(stdout, answer->trimmed());
         return 0;
     }
 
@@ -1470,10 +1477,10 @@ int change(const QStringList &arguments) {
     // The colors in force are the desktop theme's with style.json over them.
     Theme theme;
     const Look look(&theme, &custom);
-    QString answer, error;
-    if (!askAi(Prompts::change(InterfaceChanges::state(custom, settings, look.colors()), wish), &answer, &error))
-        return fail(error);
-    const Prompts::InterfaceChange asked = Prompts::parseChange(answer);
+    const auto answer = askAi(Prompts::change(InterfaceChanges::state(custom, settings, look.colors()), wish));
+    if (!answer)
+        return fail(answer.error());
+    const Prompts::InterfaceChange asked = Prompts::parseChange(*answer);
     const QString problem = InterfaceChanges::apply(custom, settings, asked);
     if (!problem.isEmpty())
         return fail("Nothing was changed: " + problem);
@@ -1570,14 +1577,14 @@ int ask(const QStringList &arguments) {
         // question joins the graph once it is answered; neither with it off.
         const QString question = command.parser.positionalArguments().mid(1).join(' ');
         const bool graph = Settings().graph() != "off";
-        QString answer;
-        if (!askAi(Curation::libraryQuestion(books, question, graph ? GraphContext::picture(*library, question) : QString()),
-                   &answer, &error, !command.json()))
-            return fail(error);
+        const auto answer = askAi(Curation::libraryQuestion(books, question, graph ? GraphContext::picture(*library, question) : QString()),
+                                  !command.json());
+        if (!answer)
+            return fail(answer.error());
         if (graph)
-            GraphContext::noteQuestion(*library, 0, std::nullopt, question, answer);
+            GraphContext::noteQuestion(*library, 0, std::nullopt, question, *answer);
         if (command.json())
-            printJson(QJsonObject{{"answer", answer.trimmed()}});
+            printJson(QJsonObject{{"answer", answer->trimmed()}});
         else
             print(stdout, "");
         return 0;
@@ -1601,13 +1608,13 @@ int ask(const QStringList &arguments) {
                                                     graph ? GraphContext::forQuestion(*library, id, asked, question) : QString());
     if (trimmed)
         print(stderr, "The text is longer than fits in one question, so only its last part was sent.");
-    QString answer;
-    if (!askAi(request, &answer, &error, !command.json()))
-        return fail(error);
+    const auto answer = askAi(request, !command.json());
+    if (!answer)
+        return fail(answer.error());
     if (graph)
-        GraphContext::noteQuestion(*library, id, asked, question, answer);
+        GraphContext::noteQuestion(*library, id, asked, question, *answer);
     if (command.json())
-        printJson(QJsonObject{{"answer", answer.trimmed()}});
+        printJson(QJsonObject{{"answer", answer->trimmed()}});
     else
         print(stdout, "");
     return 0;
@@ -1698,6 +1705,56 @@ int help(const QStringList &arguments) {
     return 0;
 }
 
+// Every command by its name. What is run and what counts as a command are
+// both read from here, so the two can't come apart.
+struct CliCommand {
+    QLatin1StringView name;
+    int (*run)(const QStringList &arguments);
+};
+
+constexpr std::array cliCommands{
+    CliCommand{"list"_L1, list},
+    CliCommand{"show"_L1, show},
+    CliCommand{"add"_L1, add},
+    CliCommand{"folio"_L1, Folio::run},
+    CliCommand{"bookmarks"_L1, bookmarks},
+    CliCommand{"notes"_L1, notes},
+    CliCommand{"libraries"_L1, libraries},
+    CliCommand{"remove"_L1, remove},
+    CliCommand{"set"_L1, set},
+    CliCommand{"info"_L1, info},
+    CliCommand{"toc"_L1, toc},
+    CliCommand{"text"_L1, text},
+    CliCommand{"find"_L1, find},
+    CliCommand{"lookup"_L1, lookup},
+    CliCommand{"convert"_L1, convert},
+    CliCommand{"export"_L1, exportBook},
+    CliCommand{"ask"_L1, ask},
+    CliCommand{"graph"_L1, runGraphCli},
+    CliCommand{"progress"_L1, progress},
+    CliCommand{"sync"_L1, sync},
+    CliCommand{"manifest"_L1, manifest},
+    CliCommand{"plugins"_L1, plugins},
+    CliCommand{"plugin"_L1, runPluginCli},
+    CliCommand{"calibre"_L1, calibre},
+    CliCommand{"catalog"_L1, catalog},
+    CliCommand{"customize"_L1, customize},
+    CliCommand{"tidy"_L1, tidy},
+    CliCommand{"suggest"_L1, suggest},
+    CliCommand{"goodreads"_L1, readingSite},
+    CliCommand{"openlibrary"_L1, readingSite},
+    CliCommand{"sites"_L1, sites},
+    CliCommand{"change"_L1, change},
+    CliCommand{"skill"_L1, skill},
+    CliCommand{"help"_L1, help},
+    CliCommand{"mcp"_L1, Mcp::run},
+};
+
+// The command of that name, or the end of the table.
+[[nodiscard]] auto cliCommand(const QString &word) {
+    return std::ranges::find_if(cliCommands, [&word](const CliCommand &command) { return word == command.name; });
+}
+
 } // namespace
 
 QString cliSummary() {
@@ -1741,11 +1798,7 @@ QString cliSummary() {
            "takes --model <name>: main, quick, or a model's own name, for that run.";
 }
 
-bool isCliCommand(const QString &word) {
-    return QStringList{"list", "show", "add", "folio", "bookmarks", "notes", "libraries", "remove", "set", "info", "toc", "text", "find", "lookup", "convert",
-                       "export", "ask", "graph", "progress", "sync", "manifest", "plugins", "plugin", "calibre", "catalog", "customize", "tidy", "suggest", "goodreads", "openlibrary", "sites", "change", "skill", "mcp", "help"}
-        .contains(word);
-}
+bool isCliCommand(const QString &word) { return cliCommand(word) != cliCommands.end(); }
 
 int runCli(const QStringList &given) {
     // --model <name> is taken by every command: the model for whatever the
@@ -1769,41 +1822,8 @@ int runCli(const QStringList &given) {
     // MCP server and the file manager's helper; the plugins are loaded only
     // when a format Omabook doesn't read itself is asked about.
     ScriptFormats::loadOnDemand();
-    const QString command = arguments.value(1);
-    if (command == "list") return list(arguments);
-    if (command == "show") return show(arguments);
-    if (command == "add") return add(arguments);
-    if (command == "folio") return Folio::run(arguments);
-    if (command == "bookmarks") return bookmarks(arguments);
-    if (command == "notes") return notes(arguments);
-    if (command == "libraries") return libraries(arguments);
-    if (command == "remove") return remove(arguments);
-    if (command == "set") return set(arguments);
-    if (command == "info") return info(arguments);
-    if (command == "toc") return toc(arguments);
-    if (command == "text") return text(arguments);
-    if (command == "find") return find(arguments);
-    if (command == "lookup") return lookup(arguments);
-    if (command == "convert") return convert(arguments);
-    if (command == "export") return exportBook(arguments);
-    if (command == "ask") return ask(arguments);
-    if (command == "graph") return runGraphCli(arguments);
-    if (command == "progress") return progress(arguments);
-    if (command == "sync") return sync(arguments);
-    if (command == "manifest") return manifest(arguments);
-    if (command == "plugins") return plugins(arguments);
-    if (command == "plugin") return runPluginCli(arguments);
-    if (command == "calibre") return calibre(arguments);
-    if (command == "catalog") return catalog(arguments);
-    if (command == "customize") return customize(arguments);
-    if (command == "tidy") return tidy(arguments);
-    if (command == "suggest") return suggest(arguments);
-    if (command == "goodreads" || command == "openlibrary") return readingSite(arguments);
-    if (command == "sites") return sites(arguments);
-    if (command == "change") return change(arguments);
-    if (command == "skill") return skill(arguments);
-    if (command == "help") return help(arguments);
-    if (command == "mcp") return Mcp::run(arguments);
+    if (const auto command = cliCommand(arguments.value(1)); command != cliCommands.end())
+        return command->run(arguments);
     print(stdout, "Omabook " OMABOOK_VERSION ": an ebook library and reader.\n\nUsage: omabook <command> [options]\n\n" + cliSummary());
     return 0;
 }

@@ -55,7 +55,7 @@ QList<Proposal> Curation::duplicates(const QList<Book> &books) {
             continue;
         // Kept: the one being read, then the one with the most formats, a
         // cover, a description; the oldest when nothing tells them apart.
-        std::stable_sort(group.begin(), group.end(), [](const Book &a, const Book &b) {
+        std::ranges::stable_sort(group, [](const Book &a, const Book &b) {
             auto worth = [](const Book &book) {
                 return (book.percent > 0 ? 8 : 0) + book.formats.size() * 2 + (book.hasCover ? 1 : 0)
                        + (book.meta.description.isEmpty() ? 0 : 1);
@@ -77,9 +77,9 @@ QList<Proposal> Curation::authorSpellings(const QList<Book> &books) {
     auto preferred = [&](const QString &author) {
         const QHash<QString, int> seen = spellings.value(key(tidyAuthor(author)));
         QString best = tidyAuthor(author);
-        for (auto it = seen.begin(); it != seen.end(); ++it)
-            if (it.value() > seen.value(best) || (it.value() == seen.value(best) && it.key() < best))
-                best = it.key();
+        for (const auto &[spelling, count] : seen.asKeyValueRange())
+            if (count > seen.value(best) || (count == seen.value(best) && spelling < best))
+                best = spelling;
         return best;
     };
     QList<Proposal> proposals;
@@ -184,9 +184,9 @@ QString titleAndAuthor(const Book &book) {
 // The names met most, with how often: "Ursula K. Le Guin (7)".
 QJsonArray mostMet(const QHash<QString, int> &counts, int most) {
     QList<QPair<QString, int>> sorted;
-    for (auto it = counts.begin(); it != counts.end(); ++it)
-        sorted.append({it.key(), it.value()});
-    std::sort(sorted.begin(), sorted.end(), [](const auto &a, const auto &b) {
+    for (const auto &[name, count] : counts.asKeyValueRange())
+        sorted.append({name, count});
+    std::ranges::sort(sorted, [](const auto &a, const auto &b) {
         return a.second != b.second ? a.second > b.second : a.first < b.first;
     });
     QJsonArray list;
@@ -228,18 +228,14 @@ AiRequest Curation::suggestionRequest(const QList<BookNotes> &books, const QStri
 
     // The most telling of what was read: the latest, whatever was made of
     // them, and then the ones loved or disliked most.
-    std::stable_sort(read.begin(), read.end(), [](const BookNotes *a, const BookNotes *b) {
-        return readWhen(a->book) > readWhen(b->book);
-    });
+    std::ranges::stable_sort(read, std::greater{}, [](const BookNotes *notes) { return readWhen(notes->book); });
     QList<const BookNotes *> telling = read.mid(0, mostRecent), rest = read.mid(mostRecent);
-    std::stable_sort(rest.begin(), rest.end(), [](const BookNotes *a, const BookNotes *b) {
-        auto weight = [](int rating) { return rating == 0 ? 0 : rating == 3 ? 1 : rating == 4 ? 2 : 3; };
-        return weight(a->book.rating) > weight(b->book.rating);
+    std::ranges::stable_sort(rest, std::greater{}, [](const BookNotes *notes) {
+        const int rating = notes->book.rating;
+        return rating == 0 ? 0 : rating == 3 ? 1 : rating == 4 ? 2 : 3;
     });
     telling += rest.mid(0, mostRead - telling.size());
-    std::stable_sort(reading.begin(), reading.end(), [](const BookNotes *a, const BookNotes *b) {
-        return a->book.lastRead > b->book.lastRead;
-    });
+    std::ranges::stable_sort(reading, std::greater{}, [](const BookNotes *notes) { return notes->book.lastRead; });
 
     int notes = 0;
     auto detailed = [&](const BookNotes *entry) {

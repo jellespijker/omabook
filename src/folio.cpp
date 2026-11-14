@@ -45,7 +45,7 @@ QJsonObject Folio::libraries(const Settings &settings) {
         if (!library)
             continue;
         const QList<Book> books = library->books();
-        const auto reading = std::count_if(books.begin(), books.end(), [](const Book &book) { return book.status() == "reading"; });
+        const auto reading = std::ranges::count_if(books, [](const Book &book) { return book.status() == "reading"; });
         QJsonArray rows{row("Folder", path), row("Books", QString::number(books.size()))};
         if (reading > 0)
             rows.append(row("Being read", QString::number(reading)));
@@ -65,7 +65,7 @@ QJsonObject Folio::reading(const Settings &settings) {
     QJsonArray items;
     if (const auto library = openLibrary(settings.libraryPath())) {
         QList<Book> books = library->books("status:reading");
-        std::sort(books.begin(), books.end(), [](const Book &a, const Book &b) { return a.lastRead > b.lastRead; });
+        std::ranges::sort(books, std::greater{}, &Book::lastRead);
         for (const Book &book : books.mid(0, 30)) {
             QJsonArray rows;
             if (!book.meta.authors.isEmpty())

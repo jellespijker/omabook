@@ -23,7 +23,7 @@ public:
     // is the reason there is none, in English, for whoever asks to convert.
     void setProgram(const QString &program, const QString &why = {});
 
-    bool available() const { return !m_program.isEmpty(); }
+    bool available() const noexcept { return !m_program.isEmpty(); }
     bool running() const { return m_process.state() != QProcess::NotRunning; }
     // Writes `output` from `input`; the format is the output's extension.
     void convert(const QString &input, const QString &output);

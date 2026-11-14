@@ -104,7 +104,7 @@ public:
     // is in front of the reader); and the panels that apply.
     QVariantList commands() const;
     QVariantList panels() const;
-    qint64 selectedBook() const { return m_selectedBook; }
+    qint64 selectedBook() const noexcept { return m_selectedBook; }
     void setSelectedBook(qint64 id);
     QVariantMap data() const;
     // Runs a command for the book that is selected or open. The command is

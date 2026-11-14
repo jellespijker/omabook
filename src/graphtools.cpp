@@ -315,7 +315,7 @@ void print(FILE *stream, const QString &text) {
     fflush(stream);
 }
 
-const char *const usage =
+constexpr auto usage =
     "Usage: omabook graph <command> [options]\n\n"
     "The knowledge graph: the people, places, ideas, plot threads and themes of the books being read, the real-world\n"
     "topics they touch, the questions asked, and what was read when. It is never ahead of a book's reader.\n\n"
@@ -676,7 +676,7 @@ QStringList upToArguments(const QJsonObject &arguments) {
 
 const QJsonObject bookNumber = integer("The book's number in the library.", 1);
 const QJsonObject nodeNumber = integer("The node's number, as graph_find and graph_book give it.", 1);
-const char *const kinds = "character, place, group, concept, item, event, thread, theme, topic, question, book, author, series or tag";
+constexpr auto kinds = "character, place, group, concept, item, event, thread, theme, topic, question, book, author, series or tag";
 
 const bool registered = [] {
     registerTool({"graph_find", "Search the knowledge graph",

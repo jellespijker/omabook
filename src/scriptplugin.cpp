@@ -15,6 +15,7 @@
 #include <QTextDocument>
 #include <QTimer>
 #include <QUrl>
+#include <algorithm>
 
 #include "ai.h"
 #include "formats.h"
@@ -28,7 +29,7 @@ namespace {
 
 // The name the prelude is run under, so its own frames can be told from the
 // script's when an error says where it happened.
-const char *const preludeName = "omabook-api";
+constexpr auto preludeName = "omabook-api";
 
 QString compact(const QJsonValue &value) {
     // A document is an object or an array, so anything else rides in one.
@@ -210,7 +211,7 @@ public:
     }
     Q_INVOKABLE void after(double milliseconds, const QJSValue &function) {
         p->busy(1);
-        QTimer::singleShot(qBound(0, int(milliseconds), 24 * 60 * 60 * 1000), p, [this, function] {
+        QTimer::singleShot(std::clamp(int(milliseconds), 0, 24 * 60 * 60 * 1000), p, [this, function] {
             QString problem;
             p->call(function, {}, &problem);
             if (!problem.isEmpty())
@@ -299,7 +300,7 @@ public:
         for (qsizetype i = p->m_panels.size() - 1; i >= 0; --i)
             if (p->m_panels.at(i).source == path)
                 p->m_panels.removeAt(i);
-        p->m_panels.append({place, title, path, qBound(120, width, 900), when, true});
+        p->m_panels.append({place, title, path, std::clamp(width, 120, 900), when, true});
         emit p->registered();
     }
     Q_INVOKABLE void registerFormat(const QString &name, const QJSValue &extensions, const QJSValue &claims, const QJSValue &open) {
@@ -382,7 +383,7 @@ public:
             p->m_engine.throwError("A shelf is \"to-read\", \"reading\", \"read\" or \"\"; not \"" + shelf + "\".");
             return;
         }
-        library->setReading(book->id, shelf, qBound(0, given.value("rating").toInt(book->rating), 5),
+        library->setReading(book->id, shelf, std::clamp(given.value("rating").toInt(book->rating), 0, 5),
                             given.contains("finished") ? given.value("finished").toString().simplified() : book->finished);
         emit p->touchedLibrary();
     }
@@ -861,7 +862,7 @@ public:
         if (given.contains("input"))
             process->write(given.value("input").toString().toUtf8());
         process->closeWriteChannel();
-        timeout->start(qBound(1, given.value("timeout").toInt(30), 600) * 1000);
+        timeout->start(std::clamp(given.value("timeout").toInt(30), 1, 600) * 1000);
     }
 
 private:
@@ -1077,9 +1078,9 @@ bool ScriptPlugin::load(QString *problem) {
 
 QStringList ScriptPlugin::events() const {
     QStringList events;
-    for (auto it = m_handlers.begin(); it != m_handlers.end(); ++it)
-        if (!it.value().isEmpty())
-            events << it.key();
+    for (const auto &[event, handlers] : m_handlers.asKeyValueRange())
+        if (!handlers.isEmpty())
+            events << event;
     events.sort();
     return events;
 }
@@ -1320,7 +1321,7 @@ std::optional<BookDescription> ScriptPlugin::described(const QJsonObject &book, 
                              : chapter.value("markdown").isString() ? htmlFromMarkdown(chapter.value("markdown").toString())
                                                                     : htmlFromText(chapter.value("text").toString());
         description.chapters.append({chapter.value("title").toString().simplified(), html, chapter.value("file").toString(),
-                                     qBound(0, chapter.value("level").toInt(), 8)});
+                                     std::clamp(chapter.value("level").toInt(), 0, 8)});
     }
     if (description.chapters.isEmpty()) {
         *problem = "open answered a book with no chapters in it.";

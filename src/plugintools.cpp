@@ -10,8 +10,12 @@
 #include <QTemporaryDir>
 #include <archive.h>
 #include <archive_entry.h>
+#include <algorithm>
+#include <array>
 #include <climits>
+#include <expected>
 #include <memory>
+#include <optional>
 
 #include "calibreplugin.h"
 #include "mcp.h"
@@ -42,26 +46,28 @@ struct Where {
     }
 };
 
-const char *const calibreOff = "The Calibre plugin is switched off.";
+constexpr auto calibreOff = "The Calibre plugin is switched off.";
 
 // --- Unpacking ---
 
-// A name inside a package as a path under the plugin's folder, or false for
+// A name inside a package as a path under the plugin's folder, or nothing for
 // one that would land anywhere else: an absolute path, a step up, a
 // backslash (which another system reads as a separator).
-bool landsInside(const QString &name, QString *clean) {
+[[nodiscard]] std::optional<QString> landsInside(const QString &name) {
     if (name.isEmpty() || name.startsWith('/') || name.contains('\\') || name.contains(QChar(0)))
-        return false;
+        return std::nullopt;
     QStringList parts;
     for (const QString &part : name.split('/', Qt::SkipEmptyParts)) {
         if (part == "..")
-            return false;
+            return std::nullopt;
         if (part != ".")
             parts << part;
     }
-    *clean = parts.join('/');
-    return true;
+    return parts.join('/');
 }
+
+// Whether a step of unpacking went well, or why not.
+using Unpacked = std::expected<void, QString>;
 
 // What was unpacked so far, held to the limits.
 struct Tally {
@@ -69,31 +75,26 @@ struct Tally {
     int files = 0;
     qint64 bytes = 0;
 
-    bool another(QString *error) {
+    [[nodiscard]] Unpacked another() {
         if (++files <= limits.files)
-            return true;
-        *error = QString("It holds more than %1 files, which is more than a plugin is allowed.").arg(limits.files);
-        return false;
+            return {};
+        return std::unexpected(QString("It holds more than %1 files, which is more than a plugin is allowed.").arg(limits.files));
     }
     // Whether `count` more bytes of one file, `soFar` of which were taken, fit.
-    bool fits(const QString &name, qint64 soFar, qint64 count, QString *error) {
-        if (soFar + count > limits.fileBytes) {
-            *error = QString("\"%1\" is larger than %2 MB, which is more than a plugin's file is allowed.")
-                         .arg(name).arg(limits.fileBytes / (1024 * 1024));
-            return false;
-        }
-        if (bytes + count > limits.totalBytes) {
-            *error = QString("It unpacks to more than %1 MB, which is more than a plugin is allowed.")
-                         .arg(limits.totalBytes / (1024 * 1024));
-            return false;
-        }
+    [[nodiscard]] Unpacked fits(const QString &name, qint64 soFar, qint64 count) {
+        if (soFar + count > limits.fileBytes)
+            return std::unexpected(QString("\"%1\" is larger than %2 MB, which is more than a plugin's file is allowed.")
+                                       .arg(name).arg(limits.fileBytes / (1024 * 1024)));
+        if (bytes + count > limits.totalBytes)
+            return std::unexpected(QString("It unpacks to more than %1 MB, which is more than a plugin is allowed.")
+                                       .arg(limits.totalBytes / (1024 * 1024)));
         bytes += count;
-        return true;
+        return {};
     }
 };
 
 struct Closer {
-    void operator()(archive *a) const { archive_read_free(a); }
+    void operator()(archive *a) const noexcept { archive_read_free(a); }
 };
 
 QString entryName(archive_entry *entry) {
@@ -107,55 +108,43 @@ QString entryName(archive_entry *entry) {
 // Unpacks an archive into `into`, in one pass, refusing the whole of it for
 // one entry that isn't a plain file inside the folder. The sizes an archive
 // claims are not believed: the bytes are counted as they come out.
-bool unpack(const QString &path, const QString &into, Tally *tally, QString *error) {
-    std::unique_ptr<archive, Closer> reader(archive_read_new());
+[[nodiscard]] Unpacked unpack(const QString &path, const QString &into, Tally &tally) {
+    const std::unique_ptr<archive, Closer> reader(archive_read_new());
     archive_read_support_filter_all(reader.get());
     archive_read_support_format_all(reader.get());
-    if (archive_read_open_filename(reader.get(), QFile::encodeName(path).constData(), 1 << 16) != ARCHIVE_OK) {
-        *error = path + " isn't an archive that can be read.";
-        return false;
-    }
+    if (archive_read_open_filename(reader.get(), QFile::encodeName(path).constData(), 1 << 16) != ARCHIVE_OK)
+        return std::unexpected(path + " isn't an archive that can be read.");
     archive_entry *entry = nullptr;
-    int status;
+    int status = ARCHIVE_OK;
     while ((status = archive_read_next_header(reader.get(), &entry)) == ARCHIVE_OK) {
         const QString name = entryName(entry);
         const auto type = archive_entry_filetype(entry);
-        QString clean;
-        if (!landsInside(name, &clean)) {
-            *error = "\"" + name + "\" would land outside the plugin's folder, so nothing of this archive was installed.";
-            return false;
-        }
-        if (archive_entry_hardlink(entry) || (type != AE_IFREG && type != AE_IFDIR)) {
-            *error = "\"" + name + "\" is a link or a special file, which a plugin has no use for, so nothing of this "
-                     "archive was installed.";
-            return false;
-        }
-        if (type == AE_IFDIR || clean.isEmpty())
+        const auto clean = landsInside(name);
+        if (!clean)
+            return std::unexpected("\"" + name + "\" would land outside the plugin's folder, so nothing of this archive was installed.");
+        if (archive_entry_hardlink(entry) || (type != AE_IFREG && type != AE_IFDIR))
+            return std::unexpected("\"" + name + "\" is a link or a special file, which a plugin has no use for, so nothing of this "
+                                   "archive was installed.");
+        if (type == AE_IFDIR || clean->isEmpty())
             continue;
-        if (!tally->another(error))
-            return false;
-        const QString target = into + "/" + clean;
+        if (const auto counted = tally.another(); !counted)
+            return counted;
+        const QString target = into + "/" + *clean;
         QFile file(target);
-        if (!QDir().mkpath(QFileInfo(target).absolutePath()) || !file.open(QIODevice::WriteOnly | QIODevice::NewOnly)) {
-            *error = "\"" + name + "\" can't be unpacked.";
-            return false;
-        }
-        char buffer[1 << 16];
+        if (!QDir().mkpath(QFileInfo(target).absolutePath()) || !file.open(QIODevice::WriteOnly | QIODevice::NewOnly))
+            return std::unexpected("\"" + name + "\" can't be unpacked.");
+        std::array<char, 1 << 16> buffer;
         qint64 size = 0;
         for (;;) {
-            const la_ssize_t count = archive_read_data(reader.get(), buffer, sizeof buffer);
+            const la_ssize_t count = archive_read_data(reader.get(), buffer.data(), buffer.size());
             if (count == 0)
                 break;
-            if (count < 0) {
-                *error = "\"" + name + "\" can't be read from the archive.";
-                return false;
-            }
-            if (!tally->fits(name, size, count, error))
-                return false;
-            if (file.write(buffer, count) != count) {
-                *error = "\"" + name + "\" can't be unpacked.";
-                return false;
-            }
+            if (count < 0)
+                return std::unexpected("\"" + name + "\" can't be read from the archive.");
+            if (const auto room = tally.fits(name, size, count); !room)
+                return room;
+            if (file.write(buffer.data(), count) != count)
+                return std::unexpected("\"" + name + "\" can't be unpacked.");
             size += count;
         }
         file.close();
@@ -163,16 +152,14 @@ bool unpack(const QString &path, const QString &into, Tally *tally, QString *err
         const bool runs = archive_entry_perm(entry) & 0100;
         file.setPermissions(runs ? QFile::Permissions(0x7755) : QFile::Permissions(0x6644));
     }
-    if (status != ARCHIVE_EOF) {
-        *error = path + " isn't an archive that can be read.";
-        return false;
-    }
-    return true;
+    if (status != ARCHIVE_EOF)
+        return std::unexpected(path + " isn't an archive that can be read.");
+    return {};
 }
 
 // Copies a plugin's folder into `into`, by the same rules. What a
 // repository keeps of itself stays behind.
-bool copyFolder(const QString &from, const QString &into, Tally *tally, QString *error) {
+[[nodiscard]] Unpacked copyFolder(const QString &from, const QString &into, Tally &tally) {
     const QDir source(from);
     QDirIterator walk(from, QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot, QDirIterator::Subdirectories);
     while (walk.hasNext()) {
@@ -180,24 +167,20 @@ bool copyFolder(const QString &from, const QString &into, Tally *tally, QString 
         const QString name = source.relativeFilePath(entry.filePath());
         if (name == ".git" || name.startsWith(".git/"))
             continue;
-        if (entry.isSymLink() || (!entry.isFile() && !entry.isDir())) {
-            *error = "\"" + name + "\" is a link or a special file, which a plugin has no use for.";
-            return false;
-        }
+        if (entry.isSymLink() || (!entry.isFile() && !entry.isDir()))
+            return std::unexpected("\"" + name + "\" is a link or a special file, which a plugin has no use for.");
         if (entry.isDir()) {
             QDir().mkpath(into + "/" + name);
             continue;
         }
-        if (!tally->another(error) || !tally->fits(name, 0, entry.size(), error))
-            return false;
+        if (const auto room = tally.another().and_then([&] { return tally.fits(name, 0, entry.size()); }); !room)
+            return room;
         const QString target = into + "/" + name;
-        if (!QDir().mkpath(QFileInfo(target).absolutePath()) || !QFile::copy(entry.filePath(), target)) {
-            *error = "\"" + name + "\" can't be copied.";
-            return false;
-        }
+        if (!QDir().mkpath(QFileInfo(target).absolutePath()) || !QFile::copy(entry.filePath(), target))
+            return std::unexpected("\"" + name + "\" can't be copied.");
         QFile::setPermissions(target, entry.isExecutable() ? QFile::Permissions(0x7755) : QFile::Permissions(0x6644));
     }
-    return true;
+    return {};
 }
 
 // A package laid out in a folder of its own, where it can be looked at
@@ -222,10 +205,12 @@ struct Staged {
             error = "The plugin can't be unpacked in " + under + ".";
             return;
         }
-        const bool unpacked = given.isDir() ? copyFolder(given.absoluteFilePath(), dir->path(), &tally, &error)
-                                            : unpack(given.absoluteFilePath(), dir->path(), &tally, &error);
-        if (!unpacked)
+        const auto unpacked = given.isDir() ? copyFolder(given.absoluteFilePath(), dir->path(), tally)
+                                            : unpack(given.absoluteFilePath(), dir->path(), tally);
+        if (!unpacked) {
+            error = unpacked.error();
             return;
+        }
         // Archives are often one folder with the plugin inside it.
         const QDir top(dir->path());
         const QStringList folders = top.entryList(QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot);
@@ -233,14 +218,14 @@ struct Staged {
         if (!subfolder.isEmpty()) {
             // The plugin is a folder of the package: that folder, under the
             // one folder an archive of a repository is wrapped in.
-            QString clean;
             const QString base = folders.size() == 1 && files.isEmpty() ? top.filePath(folders.first()) : dir->path();
-            if (!landsInside(subfolder, &clean) || !QFileInfo(base + "/" + clean + "/plugin.json").isFile()) {
+            const auto clean = landsInside(subfolder);
+            if (!clean || !QFileInfo(base + "/" + *clean + "/plugin.json").isFile()) {
                 error = "There is no plugin.json in \"" + subfolder + "\" of " + source + ", so that folder isn't a plugin.";
                 return;
             }
-            root = base + "/" + clean;
-            suggested = clean.section('/', -1);
+            root = base + "/" + *clean;
+            suggested = clean->section('/', -1);
         } else if (files.contains("plugin.json")) {
             root = dir->path();
             suggested = given.isDir() ? given.fileName() : given.completeBaseName();
@@ -256,11 +241,12 @@ struct Staged {
 // What a script looks to add, from reading it: the calls that register
 // something, in the order the manager lists them. It is not run.
 QStringList looksToAdd(const QString &root) {
-    static const QList<QPair<QString, QString>> calls{
+    // What is added, and the call that adds it.
+    static constexpr std::array<std::pair<const char *, const char *>, 7> calls{{
         {"source", "omabook\\s*\\.\\s*metadata\\s*\\.\\s*register"}, {"catalog", "omabook\\s*\\.\\s*catalog\\s*\\.\\s*register"},
         {"format", "omabook\\s*\\.\\s*format\\s*\\.\\s*register"},   {"importer", "omabook\\s*\\.\\s*importer\\s*\\.\\s*register"},
         {"command", "omabook\\s*\\.\\s*commands\\s*\\.\\s*register"}, {"panel", "omabook\\s*\\.\\s*ui\\s*\\.\\s*panel"},
-        {"hook", "omabook\\s*\\.\\s*on\\s*\\("}};
+        {"hook", "omabook\\s*\\.\\s*on\\s*\\("}}};
     QString text;
     QDirIterator walk(root, {"*.js"}, QDir::Files, QDirIterator::Subdirectories);
     // The scripts of a plugin are small; a megabyte of them says enough.
@@ -270,9 +256,9 @@ QStringList looksToAdd(const QString &root) {
             text += QString::fromUtf8(file.read(1 << 20)) + "\n";
     }
     QStringList adds;
-    for (const auto &call : calls)
-        if (text.contains(QRegularExpression(call.second)))
-            adds << call.first;
+    for (const auto &[what, call] : calls)
+        if (text.contains(QRegularExpression(call)))
+            adds << what;
     return adds;
 }
 
@@ -305,8 +291,7 @@ QJsonObject describePackage(const Staged &staged) {
     QString kind;
     if (!script.isEmpty()) {
         kind = "script";
-        QString clean;
-        if (!landsInside(script, &clean) || !QFileInfo(staged.root + "/" + clean).isFile())
+        if (const auto clean = landsInside(script); !clean || !QFileInfo(staged.root + "/" + *clean).isFile())
             return problem("Its plugin.json names the script \"" + script + "\", which isn't in it.");
         for (const QString &permission : std::as_const(permissions))
             if (!ScriptApi::permissionNames().contains(permission))
@@ -320,8 +305,8 @@ QJsonObject describePackage(const Staged &staged) {
         // A program it brings itself has to be there; one it expects on the
         // computer is the manager's to report when it is missing.
         const QString program = command.first();
-        QString clean;
-        if (program.startsWith("./") && (!landsInside(program, &clean) || !QFileInfo(staged.root + "/" + clean).isFile()))
+        const auto inside = [&](const QString &clean) { return QFileInfo(staged.root + "/" + clean).isFile(); };
+        if (program.startsWith("./") && !landsInside(program).transform(inside).value_or(false))
             return problem("Its plugin.json runs \"" + program + "\", which isn't in it.");
         // A program is not held to permissions: it can do what the user can.
         permissions = QStringList{"program"};
@@ -362,16 +347,18 @@ QJsonObject inspected(const Staged &staged, const QString &source, const QString
 
 // To the trash, where a mistake can be undone; a filesystem with no trash
 // gets it deleted, since the user asked for it to go.
-bool discard(const QString &path, bool *trashed) {
-    *trashed = QFile::moveToTrash(path);
-    return *trashed || QDir(path).removeRecursively();
+enum class Discarded { No, Trashed, Deleted };
+
+[[nodiscard]] Discarded discard(const QString &path) {
+    if (QFile::moveToTrash(path))
+        return Discarded::Trashed;
+    return QDir(path).removeRecursively() ? Discarded::Deleted : Discarded::No;
 }
 
 bool copyTree(const QString &from, const QString &into) {
     Tally unlimited;
     unlimited.limits = {INT_MAX, Q_INT64_C(1) << 60, Q_INT64_C(1) << 60};
-    QString error;
-    return copyFolder(from, into, &unlimited, &error);
+    return copyFolder(from, into, unlimited).has_value();
 }
 
 } // namespace
@@ -440,9 +427,7 @@ bool PluginTools::dismissError(const QString &pluginFolder, const QString &name)
 }
 
 QJsonArray PluginTools::overview(const QList<PluginInfo> &plugins, const ScriptPlugins *scripts) {
-    int sources = 0;
-    for (const PluginInfo &plugin : plugins)
-        sources += plugin.kind == "metadata";
+    const auto sources = int(std::ranges::count(plugins, QString("metadata"), &PluginInfo::kind));
 
     QList<QPair<qsizetype, QJsonObject>> rows;
     int position = 0;
@@ -509,10 +494,10 @@ QJsonArray PluginTools::overview(const QList<PluginInfo> &plugins, const ScriptP
         }
         rows.append({groups().indexOf(inGroup), row});
     }
-    std::stable_sort(rows.begin(), rows.end(), [](const auto &a, const auto &b) { return a.first < b.first; });
+    std::ranges::stable_sort(rows, {}, &QPair<qsizetype, QJsonObject>::first);
     QJsonArray sorted;
-    for (const auto &row : std::as_const(rows))
-        sorted << row.second;
+    for (const auto &[group, row] : std::as_const(rows))
+        sorted << row;
     return sorted;
 }
 
@@ -581,14 +566,13 @@ QJsonObject PluginTools::install(const Context &context, const QString &source, 
         // What the plugin kept of its own (its data folder) stays with it.
         if (QFileInfo(target + "/data").isDir() && !QFileInfo::exists(staged.root + "/data"))
             copyTree(target + "/data", staged.root + "/data");
-        bool trashed = false;
         bool moved = false;
         if (!options.previous.isEmpty()) {
             // Kept for one step back; the one kept before it has had its turn.
             QDir(options.previous).removeRecursively();
             moved = QDir().mkpath(QFileInfo(options.previous).absolutePath()) && QDir().rename(target, options.previous);
         }
-        if (!moved && !discard(target, &trashed))
+        if (!moved && discard(target) == Discarded::No)
             return problem("The plugin that is there, " + target + ", can't be moved out of the way.");
     }
     QFile::remove(target + ".error");
@@ -612,23 +596,18 @@ QJsonObject PluginTools::remove(const Context &context, const QString &name) {
     if (!ScriptTools::validName(name) || (!folder.isDir() && !folder.isSymLink()))
         return problem("There is no plugin " + name + " in " + where.folder + ". Only your own plugins can be removed; the "
                        "ones built in and Calibre's can be switched off: omabook plugins disable <id>.");
-    bool trashed = false;
     // A link is taken away, and what it points at left alone.
-    const bool gone = folder.isSymLink() ? QFile::remove(target) : discard(target, &trashed);
-    if (!gone)
+    const Discarded gone = !folder.isSymLink() ? discard(target) : QFile::remove(target) ? Discarded::Deleted : Discarded::No;
+    if (gone == Discarded::No)
         return problem("The plugin can't be removed: " + target);
     QFile::remove(target + ".error");
     // Where it came from is of no use once it is gone.
     PluginSources({where.folder, where.settings, {}}).forget(name);
-    return {{"name", name}, {"id", "folder:" + name}, {"folder", target}, {"trashed", trashed}};
+    return {{"name", name}, {"id", "folder:" + name}, {"folder", target}, {"trashed", gone == Discarded::Trashed}};
 }
 
 // The same, as tools for an agent talking to `omabook mcp`.
 namespace {
-
-Mcp::Result answered(const QJsonObject &answer) {
-    return ScriptTools::failed(answer) ? Mcp::Result::fail(answer.value("error").toString()) : Mcp::Result::ok(answer);
-}
 
 const bool toolsRegistered = [] {
     bool ok = Mcp::registerTool({
@@ -648,7 +627,7 @@ const bool toolsRegistered = [] {
             options.name = arguments.value("name").toString();
             options.enable = arguments.value("enable").toBool();
             options.replace = arguments.value("replace").toBool();
-            return answered(PluginTools::install({}, arguments.value("source").toString(), options));
+            return Mcp::Result::of(PluginTools::install({}, arguments.value("source").toString(), options));
         },
     });
     ok = Mcp::registerTool({
@@ -659,7 +638,7 @@ const bool toolsRegistered = [] {
         Mcp::schema({{"name", Mcp::string("The plugin's name, which is its folder's: lower-case letters, digits, - and _.")}},
                     {"name"}),
         Mcp::Destructive,
-        [](const QJsonObject &arguments) { return answered(PluginTools::remove({}, arguments.value("name").toString())); },
+        [](const QJsonObject &arguments) { return Mcp::Result::of(PluginTools::remove({}, arguments.value("name").toString())); },
     }) && ok;
     return ok;
 }();

@@ -8,6 +8,9 @@
 #include <QMutexLocker>
 #include <QProcess>
 #include <QStandardPaths>
+#include <algorithm>
+#include <array>
+#include <concepts>
 
 #include "catalog.h"
 #include "goodreads.h"
@@ -17,12 +20,35 @@
 
 namespace {
 
+using namespace Qt::StringLiterals;
+
 QStringList stringList(const QJsonValue &value) {
     QStringList list;
     for (const QJsonValue &item : value.toArray())
         list << item.toString();
     return list;
 }
+
+// The catalogs Omabook brings, each by the id it is listed under and with
+// what makes it. To add one: its class, and a line here and in builtIn().
+template <std::derived_from<MetadataSource> Source>
+MetadataSource *makeSource(QNetworkAccessManager *network, QObject *parent) {
+    return new Source(network, parent); // the parent's from here on
+}
+
+struct BuiltInSource {
+    QLatin1StringView id;
+    MetadataSource *(*make)(QNetworkAccessManager *network, QObject *parent);
+};
+
+constexpr std::array builtInSources{
+    BuiltInSource{"builtin:Open Library"_L1, makeSource<OpenLibrarySource>},
+    BuiltInSource{"builtin:Google Books"_L1, makeSource<GoogleBooksSource>},
+    BuiltInSource{"builtin:Apple Books"_L1, makeSource<AppleBooksSource>},
+    BuiltInSource{"builtin:Crossref"_L1, makeSource<CrossrefSource>},
+    BuiltInSource{"builtin:Goodreads"_L1, makeSource<GoodreadsSource>},
+    BuiltInSource{"builtin:Hardcover"_L1, makeSource<HardcoverSource>},
+};
 
 } // namespace
 
@@ -185,7 +211,7 @@ QList<PluginInfo> Plugins::known() const {
         const qsizetype at = plugin.kind == "metadata" ? wanted.indexOf(plugin.id) : -1;
         return at < 0 ? wanted.size() : at;
     };
-    std::stable_sort(plugins.begin(), plugins.end(), [&](const PluginInfo &a, const PluginInfo &b) {
+    std::ranges::stable_sort(plugins, [&](const PluginInfo &a, const PluginInfo &b) {
         const qsizetype kindA = order.indexOf(a.kind), kindB = order.indexOf(b.kind);
         return kindA != kindB ? kindA < kindB : place(a) < place(b);
     });
@@ -234,18 +260,9 @@ QList<MetadataSource *> Plugins::sources(const QList<PluginInfo> &plugins, QNetw
     for (const PluginInfo &plugin : plugins) {
         if (!plugin.enabled || !plugin.problem.isEmpty() || plugin.kind != "metadata")
             continue;
-        if (plugin.id == "builtin:Open Library")
-            sources << new OpenLibrarySource(network, parent);
-        else if (plugin.id == "builtin:Google Books")
-            sources << new GoogleBooksSource(network, parent);
-        else if (plugin.id == "builtin:Apple Books")
-            sources << new AppleBooksSource(network, parent);
-        else if (plugin.id == "builtin:Crossref")
-            sources << new CrossrefSource(network, parent);
-        else if (plugin.id == "builtin:Goodreads")
-            sources << new GoodreadsSource(network, parent);
-        else if (plugin.id == "builtin:Hardcover")
-            sources << new HardcoverSource(network, parent);
+        if (const auto own = std::ranges::find_if(builtInSources, [&plugin](const BuiltInSource &source) { return plugin.id == source.id; });
+            own != builtInSources.end())
+            sources << own->make(network, parent);
         else if (plugin.origin == "calibre") {
             if (MetadataSource *source = m_calibre.source(plugin, parent))
                 sources << source;

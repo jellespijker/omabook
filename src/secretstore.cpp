@@ -14,9 +14,9 @@
 
 namespace {
 
-const char *service = "org.freedesktop.secrets";
-const char *servicePath = "/org/freedesktop/secrets";
-const char *defaultCollection = "/org/freedesktop/secrets/aliases/default";
+constexpr auto service = "org.freedesktop.secrets";
+constexpr auto servicePath = "/org/freedesktop/secrets";
+constexpr auto defaultCollection = "/org/freedesktop/secrets/aliases/default";
 
 // A secret as the Secret Service passes it: the session it is sent under,
 // the parameters of its encryption (none: the bus is local), the bytes, and

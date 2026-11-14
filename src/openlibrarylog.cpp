@@ -8,6 +8,7 @@
 #include <QNetworkReply>
 #include <QRegularExpression>
 #include <QTimer>
+#include <algorithm>
 
 namespace {
 
@@ -143,7 +144,7 @@ QHash<QString, OpenLibrary::State> OpenLibrary::parseStates(const QByteArray &js
     for (auto it = works.begin(); it != works.end(); ++it) {
         const QJsonObject work = it.value().toObject();
         State state;
-        state.rating = qBound(0, work.value("rating").toInt(), 5);
+        state.rating = std::clamp(work.value("rating").toInt(), 0, 5);
         state.finished = work.value("read_date").toString();
         state.event = work.value("event_id").toInteger();
         states.insert(it.key().section('/', -1), state);

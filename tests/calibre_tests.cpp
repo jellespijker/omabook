@@ -6,6 +6,7 @@
 #include <QNetworkAccessManager>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <algorithm>
 
 #include "backend.h"
 #include "calibre.h"
@@ -611,7 +612,7 @@ private slots:
         const QList<CalibreAddOn> afterwards = nextRun.addOns();
         QCOMPARE(afterwards.size(), 6);
         QCOMPARE(runs(world.dir), 3);
-        QVERIFY(std::any_of(afterwards.cbegin(), afterwards.cend(), [](const CalibreAddOn &addOn) {
+        QVERIFY(std::ranges::any_of(std::as_const(afterwards), [](const CalibreAddOn &addOn) {
             return addOn.name == "Corner Shop" && addOn.type == "Store" && !addOn.usable;
         }));
 

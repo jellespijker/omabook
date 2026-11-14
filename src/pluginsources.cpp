@@ -13,6 +13,8 @@
 #include <QSaveFile>
 #include <QTimer>
 #include <QUrl>
+#include <algorithm>
+#include <array>
 
 #include "mcp.h"
 #include "scriptplugins.h"
@@ -36,9 +38,10 @@ struct PluginSources::Target {
     QString kind, ref, commit;
     bool unchanged = false; // GitHub said nothing changed since the last look
 
-    QJsonObject json() const { return {{"kind", kind}, {"ref", ref}, {"commit", commit}}; }
-    static Target from(const QJsonObject &object) {
-        return {object.value("kind").toString(), object.value("ref").toString(), object.value("commit").toString(), false};
+    [[nodiscard]] QJsonObject json() const { return {{"kind", kind}, {"ref", ref}, {"commit", commit}}; }
+    [[nodiscard]] static Target from(const QJsonObject &object) {
+        return {.kind = object.value("kind").toString(), .ref = object.value("ref").toString(),
+                .commit = object.value("commit").toString()};
     }
 };
 
@@ -84,10 +87,29 @@ struct Manifest {
 
 QString clock(qint64 seconds) { return QDateTime::fromSecsSinceEpoch(seconds).toString("HH:mm"); }
 
+// What an update asks for that the plugin on disk doesn't have.
+QStringList asksMoreThan(const Manifest &current, const QJsonObject &offered) {
+    QStringList more;
+    for (const QJsonValue &permission : offered.value("permissions").toArray())
+        if (!current.permissions.contains(permission.toString()))
+            more << permission.toString();
+    return more;
+}
+
+// What arrives of an answer, counted as it comes.
+struct Incoming {
+    qint64 received = 0;
+    bool tooLarge = false;
+    QByteArray body;
+};
+
+// The answers that send a request on to another address.
+constexpr std::array redirects{301, 302, 303, 307, 308};
+
 } // namespace
 
 bool PluginSources::parse(const QString &text, Address *address, QString *error) {
-    static const char *const forms = "Give a GitHub repository: owner/repo, https://github.com/owner/repo, or a link to one of "
+    static constexpr auto forms = "Give a GitHub repository: owner/repo, https://github.com/owner/repo, or a link to one of "
                                      "its releases, tags, branches or folders.";
     QString rest = text.trimmed().section('?', 0, 0).section('#', 0, 0);
     static const QRegularExpression scheme("^(https?|git|ssh)://(git@)?", QRegularExpression::CaseInsensitiveOption);
@@ -141,11 +163,9 @@ bool PluginSources::parse(const QString &text, Address *address, QString *error)
                  + forms;
         return false;
     }
-    for (const QString &step : std::as_const(folder)) {
-        if (step == ".." || step == "." || step.contains('\\')) {
-            *error = "\"" + folder.join('/') + "\" isn't a folder inside the repository.";
-            return false;
-        }
+    if (std::ranges::any_of(folder, [](const QString &step) { return step == ".." || step == "." || step.contains('\\'); })) {
+        *error = "\"" + folder.join('/') + "\" isn't a folder inside the repository.";
+        return false;
     }
     found.subfolder = folder.join('/');
     *address = found;
@@ -363,8 +383,8 @@ void PluginSources::get(const QUrl &url, const QHash<QByteArray, QByteArray> &he
     request.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::ManualRedirectPolicy);
     request.setTransferTimeout(30000);
     request.setRawHeader("User-Agent", "Omabook/" OMABOOK_VERSION);
-    for (auto it = headers.begin(); it != headers.end(); ++it)
-        request.setRawHeader(it.key(), it.value());
+    for (const auto &[header, value] : headers.asKeyValueRange())
+        request.setRawHeader(header, value);
     const QString secret = token(url);
     if (!secret.isEmpty())
         request.setRawHeader("Authorization", "Bearer " + secret.toUtf8());
@@ -375,37 +395,39 @@ void PluginSources::get(const QUrl &url, const QHash<QByteArray, QByteArray> &he
     QNetworkReply *reply = m_network->get(request);
     reply->setParent(this);
     auto *file = intoFile.isEmpty() ? nullptr : new QFile(intoFile, reply);
-    auto received = std::make_shared<qint64>(0);
-    auto tooLarge = std::make_shared<bool>(false);
     const qint64 most = intoFile.isEmpty() ? 4 * 1024 * 1024 : m_limits.totalBytes;
-    auto body = std::make_shared<QByteArray>();
-    connect(reply, &QNetworkReply::readyRead, this, [=] {
+    const auto incoming = std::make_shared<Incoming>();
+    // Both are connected with this object as their context and the reply is its
+    // child, so neither runs once it is gone: `this` and `reply` are safe in them,
+    // and in every `done` that is only ever called from here.
+    connect(reply, &QNetworkReply::readyRead, this, [reply, file, incoming, most] {
         const QByteArray bytes = reply->readAll();
-        *received += bytes.size();
+        incoming->received += bytes.size();
         // Counted as it arrives: what a server says of its size isn't believed.
-        if (*received > most) {
-            *tooLarge = true;
+        if (incoming->received > most) {
+            incoming->tooLarge = true;
             reply->abort();
             return;
         }
         if (!file) {
-            body->append(bytes);
+            incoming->body.append(bytes);
         } else if (reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() == 200) {
             if (file->isOpen() || file->open(QIODevice::WriteOnly))
                 file->write(bytes);
         }
     });
-    connect(reply, &QNetworkReply::finished, this, [=] {
+    connect(reply, &QNetworkReply::finished, this,
+            [this, reply, file, incoming, most, url, headers, intoFile, hops, redirected, done] {
         Reply answer;
         answer.status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         answer.redirected = redirected;
-        for (const auto &header : reply->rawHeaderPairs())
-            answer.headers.insert(header.first.toLower(), header.second);
+        for (const auto &[header, value] : reply->rawHeaderPairs())
+            answer.headers.insert(header.toLower(), value);
         if (file)
             file->close();
         reply->deleteLater();
         const QByteArray location = answer.headers.value("location");
-        if (QList<int>{301, 302, 303, 307, 308}.contains(answer.status) && !location.isEmpty()) {
+        if (std::ranges::contains(redirects, answer.status) && !location.isEmpty()) {
             if (hops >= 5) {
                 answer.refused = true;
                 answer.error = "GitHub sent the request round in circles, so nothing was fetched.";
@@ -419,7 +441,7 @@ void PluginSources::get(const QUrl &url, const QHash<QByteArray, QByteArray> &he
             get(next, headers, intoFile, hops + 1, moved, done);
             return;
         }
-        if (*tooLarge) {
+        if (incoming->tooLarge) {
             answer.refused = true;
             answer.error = QString("It is larger than %1 MB, which is more than a plugin is allowed, so it wasn't fetched.")
                                .arg(most / (1024 * 1024));
@@ -427,7 +449,7 @@ void PluginSources::get(const QUrl &url, const QHash<QByteArray, QByteArray> &he
             answer.offline = true;
             answer.error = "GitHub couldn't be reached: " + reply->errorString();
         }
-        answer.body = *body;
+        answer.body = incoming->body;
         done(answer);
     });
 }
@@ -447,7 +469,7 @@ void PluginSources::api(const Entry &entry, const QString &path, const QByteArra
     const QString etag = entry->value("etags").toObject().value(path).toString();
     if (!etag.isEmpty())
         headers.insert("If-None-Match", etag.toUtf8());
-    get(QUrl(m_service.api + path), headers, {}, 0, false, [=](const Reply &reply) {
+    get(QUrl(m_service.api + path), headers, {}, 0, false, [this, entry, path, done](const Reply &reply) {
         Reply answer = reply;
         if (answer.status == 200 && answer.headers.contains("etag")) {
             QJsonObject etags = entry->value("etags").toObject();
@@ -481,7 +503,7 @@ void PluginSources::download(const QString &repository, const QString &ref, Answ
         m_downloads = std::make_unique<QTemporaryDir>();
     const QString file = m_downloads->filePath(QString("plugin-%1.tar.gz").arg(++m_downloadCount));
     get(QUrl(m_service.api + "/repos/" + repository + "/tarball/" + inPath(ref)),
-        {{"Accept", "application/vnd.github+json"}, {"X-GitHub-Api-Version", "2022-11-28"}}, file, 0, false, [=](const Reply &reply) {
+        {{"Accept", "application/vnd.github+json"}, {"X-GitHub-Api-Version", "2022-11-28"}}, file, 0, false, [file, done](const Reply &reply) {
             Reply answer = reply;
             // Where it was put, for the caller.
             answer.body = file.toUtf8();
@@ -515,8 +537,9 @@ QJsonObject PluginSources::failure(const Reply &reply, const QString &repository
 void PluginSources::commitOf(const Entry &entry, const QString &kind, const QString &ref, Resolved done) {
     const QString repository = entry->value("repository").toString();
     // Only the commit's id is asked for: forty letters, and an ETag with them.
-    api(entry, "/repos/" + repository + "/commits/" + inPath(ref), "application/vnd.github.sha", [=](const Reply &reply) {
-        Target target{kind, ref, {}, false};
+    api(entry, "/repos/" + repository + "/commits/" + inPath(ref), "application/vnd.github.sha",
+        [this, entry, kind, ref, repository, done](const Reply &reply) {
+        Target target{.kind = kind, .ref = ref, .commit = {}};
         const QJsonObject seen = entry->value("latest").toObject();
         if (reply.status == 304 && seen.value("ref").toString() == ref) {
             target.commit = seen.value("commit").toString();
@@ -541,7 +564,7 @@ void PluginSources::branchHead(const Entry &entry, bool again, Resolved done) {
     const QString repository = entry->value("repository").toString();
     const QString branch = entry->value("default_branch").toString();
     if (!branch.isEmpty()) {
-        commitOf(entry, "branch", branch, [=](const Target &target, const QJsonObject &failure) {
+        commitOf(entry, "branch", branch, [this, entry, again, done](const Target &target, const QJsonObject &failure) {
             // A default branch that is gone was renamed: asked for once more.
             if (failure.value("gone").toBool() && !again && failure.value("error").toString().startsWith("There is no branch")) {
                 entry->remove("default_branch");
@@ -552,7 +575,7 @@ void PluginSources::branchHead(const Entry &entry, bool again, Resolved done) {
         });
         return;
     }
-    api(entry, "/repos/" + repository, "application/vnd.github+json", [=](const Reply &reply) {
+    api(entry, "/repos/" + repository, "application/vnd.github+json", [this, entry, repository, done](const Reply &reply) {
         const QString named = QJsonDocument::fromJson(reply.body).object().value("default_branch").toString();
         if (reply.status != 200 || reply.redirected || named.isEmpty()) {
             done({}, failure(reply, repository));
@@ -571,7 +594,8 @@ void PluginSources::resolve(const Entry &entry, Resolved done) {
         commitOf(entry, kind, channel.value("name").toString(), done);
         return;
     }
-    api(entry, "/repos/" + repository + "/releases/latest", "application/vnd.github+json", [=](const Reply &reply) {
+    api(entry, "/repos/" + repository + "/releases/latest", "application/vnd.github+json",
+        [this, entry, repository, done](const Reply &reply) {
         const QJsonObject seen = entry->value("latest").toObject();
         if (reply.status == 304 && seen.value("kind").toString() == "release") {
             Target target = Target::from(seen);
@@ -596,7 +620,8 @@ void PluginSources::channelFor(const Entry &entry, const QString &ref, std::func
     const QString repository = entry->value("repository").toString();
     // Asked with nothing remembered: this is about what the ref is, not whether it changed.
     const Entry fresh = std::make_shared<QJsonObject>(QJsonObject{{"repository", repository}});
-    api(fresh, "/repos/" + repository + "/branches/" + inPath(ref), "application/vnd.github+json", [=](const Reply &reply) {
+    api(fresh, "/repos/" + repository + "/branches/" + inPath(ref), "application/vnd.github+json",
+        [this, entry, ref, repository, done](const Reply &reply) {
         if (reply.status == 200 && !reply.redirected) {
             entry->insert("channel", QJsonObject{{"kind", "branch"}, {"name", ref}});
         } else if (reply.status == 404) {
@@ -616,7 +641,7 @@ void PluginSources::fetch(const Entry &entry, const QString &name, const QString
     const QString repository = entry->value("repository").toString();
     // Nothing is installed from it yet, unless this is an update being looked at.
     const bool following = entry->contains("installed");
-    const auto resolved = [=](const Target &target, const QJsonObject &failure) {
+    const auto resolved = [this, entry, name, repository, following, done](const Target &target, const QJsonObject &failure) {
         if (failed(failure)) {
             QJsonObject said = failure;
             if (!following)
@@ -626,7 +651,8 @@ void PluginSources::fetch(const Entry &entry, const QString &name, const QString
             return;
         }
         // The commit rather than the name, which could move while it downloads.
-        download(repository, target.commit.isEmpty() ? target.ref : target.commit, [=](const Reply &reply) {
+        download(repository, target.commit.isEmpty() ? target.ref : target.commit,
+                 [this, entry, name, repository, following, target, done](const Reply &reply) {
             if (reply.status != 200 || reply.refused) {
                 done(this->failure(reply, repository, following));
                 return;
@@ -657,7 +683,7 @@ void PluginSources::fetch(const Entry &entry, const QString &name, const QString
         resolve(entry, resolved);
         return;
     }
-    channelFor(entry, pin, [=](const QJsonObject &failure) {
+    channelFor(entry, pin, [this, entry, resolved, done](const QJsonObject &failure) {
         if (failed(failure))
             done(failure);
         else
@@ -767,7 +793,7 @@ QJsonObject PluginSources::installLooked(bool enable, bool replace) {
 }
 
 void PluginSources::add(const QString &address, const AddOptions &options, Done done) {
-    look(address, options.pin, options.name, [=](const QJsonObject &offered) {
+    look(address, options.pin, options.name, [this, options, done](const QJsonObject &offered) {
         if (failed(offered)) {
             done(offered);
             return;
@@ -804,7 +830,7 @@ void PluginSources::check(const QString &name, Done done) {
         done(answer);
         return;
     }
-    resolve(entry, [=](const Target &target, const QJsonObject &failure) mutable {
+    resolve(entry, [this, entry, name, answer, done](const Target &target, const QJsonObject &failure) mutable {
         if (failed(failure)) {
             // What GitHub said of the source is remembered; that it couldn't
             // be asked is not the source's fault and is tried again.
@@ -836,7 +862,8 @@ void PluginSources::check(const QString &name, Done done) {
 
 void PluginSources::apply(const QString &name, const Entry &entry, const Target &target, bool approved, Done done) {
     const QString repository = entry->value("repository").toString();
-    download(repository, target.commit.isEmpty() ? target.ref : target.commit, [=](const Reply &reply) {
+    download(repository, target.commit.isEmpty() ? target.ref : target.commit,
+             [this, name, entry, target, approved, repository, done](const Reply &reply) {
         QJsonObject failedAnswer{{"name", name}, {"id", "folder:" + name}, {"updated", false}};
         if (reply.status != 200 || reply.refused) {
             const QJsonObject failure = this->failure(reply, repository);
@@ -879,10 +906,7 @@ void PluginSources::apply(const QString &name, const Entry &entry, const Target 
         }
         // Against what is on disk, which is what the person agreed to.
         const Manifest current(m_folder + "/" + name);
-        QStringList asksMore;
-        for (const QJsonValue &permission : offered.value("permissions").toArray())
-            if (!current.permissions.contains(permission.toString()))
-                asksMore << permission.toString();
+        const QStringList asksMore = asksMoreThan(current, offered);
         const bool renamed = offered.value("title").toString() != current.title;
         if ((!asksMore.isEmpty() || renamed) && !approved) {
             const QJsonObject pending{{"kind", target.kind}, {"ref", target.ref}, {"commit", target.commit},
@@ -916,7 +940,7 @@ void PluginSources::update(const QString &name, bool approved, Done done) {
         done(problem("The plugin " + name + " isn't installed any more. Forget its source: omabook plugin forget-source " + name));
         return;
     }
-    resolve(entry, [=](const Target &target, const QJsonObject &failure) {
+    resolve(entry, [this, entry, name, approved, done](const Target &target, const QJsonObject &failure) {
         if (failed(failure)) {
             if (failure.value("gone").toBool()) {
                 entry->insert("problem", failure.value("error"));
@@ -952,16 +976,13 @@ void PluginSources::review(const QString &name, Done done) {
     }
     const QString pin; // the channel is the source's own
     const QJsonObject installed = entry->value("installed").toObject();
-    fetch(entry, name, pin, [=](const QJsonObject &offered) {
+    fetch(entry, name, pin, [this, name, installed, done](const QJsonObject &offered) {
         if (failed(offered) || !m_looked) {
             done(offered);
             return;
         }
         const Manifest current(m_folder + "/" + name);
-        QStringList asksMore;
-        for (const QJsonValue &permission : offered.value("permissions").toArray())
-            if (!current.permissions.contains(permission.toString()))
-                asksMore << permission.toString();
+        const QStringList asksMore = asksMoreThan(current, offered);
         QJsonObject described = offered;
         described.insert("update", true);
         described.insert("fromVersion", installed.value("version"));
@@ -983,14 +1004,14 @@ void PluginSources::pin(const QString &name, const QString &ref, Done done) {
         done(problem("Name the tag or branch to stay at."));
         return;
     }
-    channelFor(entry, ref.trimmed(), [=](const QJsonObject &failure) {
+    channelFor(entry, ref.trimmed(), [this, entry, name, done](const QJsonObject &failure) {
         if (failed(failure)) {
             done(failure);
             return;
         }
         for (const char *key : {"etags", "latest", "pending", "skip"})
             entry->remove(key);
-        resolve(entry, [=](const Target &target, const QJsonObject &failure) {
+        resolve(entry, [this, entry, name, done](const Target &target, const QJsonObject &failure) {
             // A ref that isn't there changes nothing: the source follows what it did.
             if (failed(failure)) {
                 done(failure);
@@ -1004,7 +1025,7 @@ void PluginSources::pin(const QString &name, const QString &ref, Done done) {
                                  {"upToDate", true}});
                 return;
             }
-            apply(name, entry, target, false, [=](const QJsonObject &answer) {
+            apply(name, entry, target, false, [entry, done](const QJsonObject &answer) {
                 QJsonObject pinned = answer;
                 pinned.insert("channel", entry->value("channel"));
                 done(pinned);
@@ -1023,31 +1044,28 @@ void PluginSources::checkAll(bool apply, bool dueOnly, Done done) {
             continue;
         *names << entry.value("name").toString();
     }
-    auto results = std::make_shared<QJsonArray>();
-    auto next = std::make_shared<std::function<void()>>();
-    *next = [=] {
+    const auto results = std::make_shared<QJsonArray>();
+    const auto next = std::make_shared<std::function<void()>>();
+    // The step knows itself only weakly: it is kept by whatever still waits to
+    // call it, so it goes when the last answer is in, or with this object.
+    *next = [this, apply, names, results, done, self = std::weak_ptr(next)] {
         if (names->isEmpty()) {
             done(QJsonObject{{"results", *results}});
-            *next = nullptr;
             return;
         }
         const QString name = names->takeFirst();
-        const auto took = [=](const QJsonObject &answer) {
+        const auto took = [this, results, done, next = self.lock()](const QJsonObject &answer) {
             *results << answer;
             // Asked to wait, or not reached: the rest would fare no better.
             if (answer.value("limited").toBool() || answer.value("offline").toBool()) {
                 done(QJsonObject{{"results", *results}, {"limited", answer.value("limited").toBool()},
                                  {"offline", answer.value("offline").toBool()}});
-                *next = nullptr;
                 return;
             }
             // From the event loop, so a long list doesn't grow the stack.
-            QTimer::singleShot(0, this, [=] {
-                if (*next)
-                    (*next)();
-            });
+            QTimer::singleShot(0, this, [next] { (*next)(); });
         };
-        check(name, [=](const QJsonObject &checked) {
+        check(name, [this, apply, name, took](const QJsonObject &checked) {
             // Not what was gone back from, and not what already waits for
             // the person or for a newer Omabook: those aren't fetched again.
             const QJsonObject entry = source(name);
@@ -1085,10 +1103,6 @@ QJsonObject PluginSources::wait(const std::function<void(Done)> &start, int mill
 // The same, as tools for an agent talking to `omabook mcp`.
 namespace {
 
-Mcp::Result told(const QJsonObject &answer) {
-    return failed(answer) ? Mcp::Result::fail(answer.value("error").toString()) : Mcp::Result::ok(answer);
-}
-
 const bool toolsRegistered = [] {
     const QString nameIs = "The plugin's name, which is its folder's, from plugin_sources.";
     bool ok = Mcp::registerTool({
@@ -1122,8 +1136,8 @@ const bool toolsRegistered = [] {
             options.pin = arguments.value("pin").toString();
             options.enable = arguments.value("enable").toBool();
             options.replace = arguments.value("replace").toBool();
-            return told(PluginSources::wait(
-                [&](PluginSources::Done done) { sources.add(arguments.value("address").toString(), options, done); }));
+            return Mcp::Result::of(PluginSources::wait(
+                [&sources, &arguments, &options](PluginSources::Done done) { sources.add(arguments.value("address").toString(), options, done); }));
         },
     };
     add.openWorld = true;
@@ -1143,7 +1157,7 @@ const bool toolsRegistered = [] {
             PluginSources sources{PluginTools::Context{}};
             const QString name = arguments.value("name").toString();
             const bool only = arguments.value("check").toBool(), approved = arguments.value("approve").toBool();
-            return told(PluginSources::wait([&](PluginSources::Done done) {
+            return Mcp::Result::of(PluginSources::wait([&sources, &name, only, approved](PluginSources::Done done) {
                 if (name.isEmpty())
                     sources.checkAll(!only, false, done);
                 else if (only)
@@ -1160,7 +1174,7 @@ const bool toolsRegistered = [] {
         "Forgets where a plugin came from, so it is no longer checked or updated. The plugin stays installed as it is.",
         Mcp::schema({{"name", Mcp::string(nameIs)}}, {"name"}), Mcp::Changes,
         [](const QJsonObject &arguments) {
-            return told(PluginSources{PluginTools::Context{}}.forget(arguments.value("name").toString()));
+            return Mcp::Result::of(PluginSources{PluginTools::Context{}}.forget(arguments.value("name").toString()));
         },
     }) && ok;
     return ok;

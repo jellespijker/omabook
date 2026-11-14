@@ -37,11 +37,12 @@ class Library;
 namespace Mcp {
 
 // What a tool does to the world, as the protocol's annotations say it.
-enum Effect {
+enum class Effect {
     ReadOnly,    // changes nothing
     Changes,     // adds or changes something, and can be done again or undone
     Destructive, // takes something away, or overwrites what can't be put back
 };
+using enum Effect; // Mcp::ReadOnly, as every tool's registration reads
 
 // What a tool answers: an object of results, or why it could not.
 struct Result {
@@ -50,7 +51,13 @@ struct Result {
 
     static Result ok(const QJsonObject &data = {}) { return {data, {}}; }
     static Result fail(const QString &why) { return {{}, why}; }
-    bool failed() const { return !error.isEmpty(); }
+    // What a function answered that says {"error": why} when it could not:
+    // that reason, or the whole answer.
+    static Result of(const QJsonObject &answer) {
+        const QString why = answer.value("error").toString();
+        return why.isEmpty() ? ok(answer) : fail(why);
+    }
+    bool failed() const noexcept { return !error.isEmpty(); }
 };
 
 using Handler = std::function<Result(const QJsonObject &arguments)>;

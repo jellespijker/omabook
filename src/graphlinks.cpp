@@ -7,6 +7,8 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
+#include <optional>
+#include <utility>
 
 #include "graphcontext.h"
 #include "prompts.h"
@@ -33,7 +35,7 @@ QList<GraphNode> pick(const GraphView &view, const QHash<qint64, int> &ties, con
     for (const GraphNode &node : view.nodes)
         if (node.kind == kind)
             nodes << node;
-    std::stable_sort(nodes.begin(), nodes.end(), [&](const GraphNode &a, const GraphNode &b) { return ties.value(a.id) > ties.value(b.id); });
+    std::ranges::stable_sort(nodes, std::greater{}, [&](const GraphNode &node) { return ties.value(node.id); });
     return nodes.mid(0, most);
 }
 
@@ -133,7 +135,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
                 ++tags;
         near.append({other, score + qMin(3, tags)});
     }
-    std::stable_sort(near.begin(), near.end(), [](const Near &a, const Near &b) {
+    std::ranges::stable_sort(near, [](const Near &a, const Near &b) {
         return a.score != b.score ? a.score > b.score : a.book.lastRead > b.book.lastRead;
     });
 
@@ -164,7 +166,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
                                other.score + 2 * qMin(4, shared) + (node.kind == "theme" || node.kind == "concept" ? 2 : 0)});
         }
     }
-    std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) { return a.score > b.score; });
+    std::ranges::stable_sort(candidates, std::greater{}, &Candidate::score);
     QHash<qint64, int> fromBook;
     for (const Candidate &candidate : std::as_const(candidates)) {
         if (offer.others.size() >= mostOthers)
@@ -215,20 +217,24 @@ GraphLinks::Applied GraphLinks::apply(Library &library, qint64 bookId, const Gra
     const GraphPlace place{bookId, at.section, at.fraction};
     // The two ends as offered, whichever way round the model put them;
     // anything else it named was not on offer and is not linked.
-    auto ends = [&](const QJsonObject &entry, qint64 *from, qint64 *to) {
-        *from = numberOf(entry.value("from"));
-        *to = numberOf(entry.value("to"));
-        if (own.contains(*to) && others.contains(*from))
-            std::swap(*from, *to);
-        return own.contains(*from) && others.contains(*to);
+    const auto ends = [&own, &others](const QJsonObject &entry) -> std::optional<std::pair<qint64, qint64>> {
+        qint64 from = numberOf(entry.value("from")), to = numberOf(entry.value("to"));
+        if (own.contains(to) && others.contains(from))
+            std::swap(from, to);
+        if (!own.contains(from) || !others.contains(to))
+            return std::nullopt;
+        return std::pair{from, to};
     };
 
     const QJsonArray links = object.value("links").toArray();
-    for (qsizetype index = 0; index < links.size() && applied.links < mostLinks; ++index) {
-        const QJsonObject link = links.at(index).toObject();
-        qint64 from = 0, to = 0;
-        if (!ends(link, &from, &to) || pairs.contains(pairOf(from, to)))
+    for (const QJsonValue &offered : links) {
+        if (applied.links >= mostLinks)
+            break;
+        const QJsonObject link = offered.toObject();
+        const auto linked = ends(link);
+        if (!linked || pairs.contains(pairOf(linked->first, linked->second)))
             continue;
+        const auto [from, to] = *linked;
         QString relation = link.value("relation").toString().simplified().toLower();
         if (relation.startsWith(GraphEdge::acrossMark()))
             relation.remove(0, GraphEdge::acrossMark().size());
@@ -241,12 +247,15 @@ GraphLinks::Applied GraphLinks::apply(Library &library, qint64 bookId, const Gra
     }
 
     const QJsonArray topics = object.value("topics").toArray();
-    for (qsizetype index = 0; index < topics.size() && applied.topics < mostTopics; ++index) {
-        const QJsonObject topic = topics.at(index).toObject();
+    for (const QJsonValue &offered : topics) {
+        if (applied.topics >= mostTopics)
+            break;
+        const QJsonObject topic = offered.toObject();
         const QString name = topic.value("name").toString().simplified();
-        qint64 from = 0, to = 0;
-        if (name.isEmpty() || name.size() > 120 || !ends(topic, &from, &to))
+        const auto linked = ends(topic);
+        if (name.isEmpty() || name.size() > 120 || !linked)
             continue;
+        const auto [from, to] = *linked;
         // What the work is stays as it was first put, as for any topic.
         const qint64 before = graph.named({}, "topic", name);
         const bool keep = before > 0 && !graph.node(before)->summary.isEmpty();

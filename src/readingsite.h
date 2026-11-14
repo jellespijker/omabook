@@ -118,7 +118,8 @@ public:
     virtual QString secretIn(const QString &) const { return {}; }
     // Whether the site wants a token or key: not at all, to do more (read
     // what is private, write changes), or to do anything.
-    enum SecretUse { NoSecret, OptionalSecret, NeedsSecret };
+    enum class SecretUse { NoSecret, OptionalSecret, NeedsSecret };
+    using enum SecretUse; // ReadingSite::NeedsSecret, as it always read
     virtual SecretUse secretUse() const { return NoSecret; }
     virtual void setSecret(const QString &) {}
     // The page on which somebody finds who they are here, and the one that
@@ -129,7 +130,7 @@ public:
     // Looks at the account once and answers `checked` with what is there,
     // or `failed`, with problem() saying which kind of failure it was.
     virtual void check();
-    SiteProblem problem() const { return m_problem; }
+    SiteProblem problem() const noexcept { return m_problem; }
 
     // Whether changes can be written to the site with what it was given.
     virtual bool writes() const { return false; }
@@ -331,7 +332,7 @@ public:
     explicit SuggestionCheck(const QList<ReadingSite *> &sites, QObject *parent = nullptr);
 
     void check(const QList<Curation::Suggestion> &suggestions, const QList<Book> &books);
-    const QList<ReadingSites::Checked> &results() const { return m_results; }
+    const QList<ReadingSites::Checked> &results() const noexcept { return m_results; }
 
 signals:
     void changed();
