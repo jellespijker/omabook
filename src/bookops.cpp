@@ -83,20 +83,20 @@ bool BookOps::ask(const AiRequest &request, QString *answer, QString *error, con
     AiCall call(std::move(provider));
     QEventLoop loop;
     bool ok = false;
-    QObject::connect(&call, &AiCall::delta, &loop, [&](const QString &text) {
+    QObject::connect(&call, &AiCall::delta, &loop, [&piece](const QString &text) {
         if (piece)
             piece(text);
     });
-    QObject::connect(&call, &AiCall::done, &loop, [&](const QString &text) {
+    QObject::connect(&call, &AiCall::done, &loop, [answer, &ok, &loop](const QString &text) {
         *answer = text;
         ok = true;
         loop.quit();
     });
-    QObject::connect(&call, &AiCall::failed, &loop, [&](const QString &problem) {
+    QObject::connect(&call, &AiCall::failed, &loop, [error, &loop](const QString &problem) {
         *error = problem;
         loop.quit();
     });
-    QObject::connect(&call, &AiCall::noted, &loop, [&](const QString &said) {
+    QObject::connect(&call, &AiCall::noted, &loop, [note](const QString &said) {
         // Never lost: with nobody to hand it to, it goes to standard error.
         if (note)
             *note = said;
@@ -142,14 +142,14 @@ BookOps::LookUp BookOps::lookUp(const Library &library, const Book &book, bool a
         int waiting = sources.size();
         QEventLoop loop;
         for (MetadataSource *source : sources) {
-            QObject::connect(source, &MetadataSource::found, &loop, [&, source](const QList<MetaCandidate> &found) {
+            QObject::connect(source, &MetadataSource::found, &loop, [&result, &waiting, &loop, source](const QList<MetaCandidate> &found) {
                 // The AI's judgement is the recommendation, so it leads.
                 result.candidates = qobject_cast<AiMetadataSource *>(source) ? found + result.candidates
                                                                              : result.candidates + found;
                 if (--waiting == 0)
                     loop.quit();
             });
-            QObject::connect(source, &MetadataSource::failed, &loop, [&](const QString &problem) {
+            QObject::connect(source, &MetadataSource::failed, &loop, [&result, &waiting, &loop](const QString &problem) {
                 result.problems << problem;
                 if (--waiting == 0)
                     loop.quit();
@@ -235,11 +235,11 @@ QString BookOps::convert(Library &library, qint64 id, const QString &to, const Q
     Converter converter(calibre.converter());
     converter.setProgram(calibre.converter(), calibre.converterProblem());
     QEventLoop loop;
-    QObject::connect(&converter, &Converter::finished, &loop, [&](const QString &, const QString &problem) {
+    QObject::connect(&converter, &Converter::finished, &loop, [error, &loop](const QString &, const QString &problem) {
         *error = problem;
         loop.quit();
     });
-    QMetaObject::invokeMethod(&converter, [&] { converter.convert(source, output); }, Qt::QueuedConnection);
+    QMetaObject::invokeMethod(&converter, [&converter, &source, &output] { converter.convert(source, output); }, Qt::QueuedConnection);
     loop.exec();
     if (!error->isEmpty() || !library.addFormat(id, output, error))
         return {};
@@ -249,7 +249,7 @@ QString BookOps::convert(Library &library, qint64 id, const QString &to, const Q
 QList<Proposal> BookOps::tidy(const QList<Book> &books, const QList<Proposal> &series) {
     QList<Proposal> proposals = Curation::duplicates(books) + Curation::authorSpellings(books) + series;
     // Merges last: they take books away that other proposals may name.
-    std::stable_sort(proposals.begin(), proposals.end(),
+    std::ranges::stable_sort(proposals,
                      [](const Proposal &a, const Proposal &b) { return a.kind != "duplicate" && b.kind == "duplicate"; });
     return proposals;
 }
