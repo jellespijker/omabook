@@ -15,8 +15,10 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <exception>
+#include <expected>
 
 #include "ai.h"
 #include "bookops.h"
@@ -34,10 +36,11 @@ namespace {
 
 using Mcp::Result;
 using Mcp::Tool;
+using namespace Qt::StringLiterals;
 
 // The revision this server speaks natively: no handshake, every request
 // carries its version and the client's capabilities in `_meta`.
-const QString modernVersion = "2026-07-28";
+const QString modernVersion = QStringLiteral("2026-07-28");
 // The revisions before it, which open with `initialize`. Most agent harnesses
 // still speak one of these, so the server answers both ways.
 const QStringList legacyVersions{"2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"};
@@ -53,7 +56,7 @@ constexpr int methodNotFound = -32601;
 constexpr int invalidParams = -32602;
 constexpr int unsupportedVersion = -32022;
 
-const char *instructions =
+constexpr auto instructions =
     "Omabook is the user's ebook library and reader. Books have numbers (ids): find them with books_search, which "
     "takes the library's search language (bare words; author:, title:, series:, tag:, format:, lang:, status:to-read|"
     "reading|read|unread, is:digital|paper|wishlist, rating:). Read a book a section at a time with book_contents, "
@@ -93,7 +96,8 @@ QByteArray errorLine(const QJsonValue &id, int code, const QString &message, con
 // How long a client may keep a result, as the modern revision wants said of
 // every list and read. What is listed is fixed for the life of the process;
 // what is read is the user's library, which changes under it.
-enum Cache { NotCached, Fixed, Live };
+enum class Cache { NotCached, Fixed, Live };
+using enum Cache;
 
 // ---------------------------------------------------------------------------
 // Checking arguments against a tool's schema: the part of JSON Schema the
@@ -201,6 +205,17 @@ QJsonObject placeJson(const Progress &place) {
     return {{"section", place.section}, {"fraction", place.fraction}, {"percent", place.percent}, {"updated", place.updated}};
 }
 
+// A schema of `more`, with the properties several tools share laid over it.
+QJsonObject schemaWith(const QJsonObject &shared, std::initializer_list<std::pair<QString, QJsonValue>> more,
+                       const QStringList &required) {
+    QJsonObject schema = Mcp::schema(more, required);
+    QJsonObject properties = schema.value("properties").toObject();
+    for (auto property = shared.begin(); property != shared.end(); ++property)
+        properties.insert(property.key(), property.value());
+    schema.insert("properties", properties);
+    return schema;
+}
+
 // The details an agent may give for a book, laid over what is there.
 const QJsonObject &detailProperties() {
     static const QJsonObject properties{
@@ -219,12 +234,7 @@ const QJsonObject &detailProperties() {
 }
 
 QJsonObject detailSchema(std::initializer_list<std::pair<QString, QJsonValue>> more, const QStringList &required) {
-    QJsonObject schema = Mcp::schema(more, required);
-    QJsonObject properties = schema.value("properties").toObject();
-    for (auto property = detailProperties().begin(); property != detailProperties().end(); ++property)
-        properties.insert(property.key(), property.value());
-    schema.insert("properties", properties);
-    return schema;
+    return schemaWith(detailProperties(), more, required);
 }
 
 void applyDetails(BookMeta &meta, const QJsonObject &arguments) {
@@ -247,12 +257,7 @@ const QJsonObject idOrPath{
 };
 
 QJsonObject readingSchema(std::initializer_list<std::pair<QString, QJsonValue>> more, const QStringList &required = {}) {
-    QJsonObject schema = Mcp::schema(more, required);
-    QJsonObject properties = schema.value("properties").toObject();
-    for (auto property = idOrPath.begin(); property != idOrPath.end(); ++property)
-        properties.insert(property.key(), property.value());
-    schema.insert("properties", properties);
-    return schema;
+    return schemaWith(idOrPath, more, required);
 }
 
 std::unique_ptr<Document> openDocument(const QJsonObject &arguments, QString *error) {
@@ -285,7 +290,7 @@ Shelf shelf(const QJsonObject &arguments, bool withBook = true) {
 }
 
 // What the tools that ask Omabook's own AI take to choose its model for one call.
-const char *modelIs = "Which of Omabook's models answers, this once: \"main\" (the one for answers and writing), \"quick\" "
+constexpr auto modelIs = "Which of Omabook's models answers, this once: \"main\" (the one for answers and writing), \"quick\" "
                       "(the small, fast one for reading and parsing), or a model's own name as the AI in use knows it. "
                       "The settings decide when not given.";
 
@@ -742,7 +747,7 @@ QList<Tool> coreTools() {
                           return Result::fail(at.error);
                       const qint64 wanted = arguments.value("bookmark_id").toInteger();
                       const QList<Annotation> marks = at.library->annotations(at.id);
-                      if (std::none_of(marks.begin(), marks.end(), [&](const Annotation &mark) { return mark.id == wanted; }))
+                      if (std::ranges::none_of(marks, [&](const Annotation &mark) { return mark.id == wanted; }))
                           return Result::fail(QString("Book %1 has no bookmark %2; see bookmarks_list.").arg(at.id).arg(wanted));
                       at.library->removeAnnotation(wanted);
                       return Result::ok({{"removed", wanted}});
@@ -864,7 +869,7 @@ QList<Tool> coreTools() {
                           proposals << proposal;
                       }
                       // Merges last: they take books away that other proposals may name.
-                      std::stable_sort(proposals.begin(), proposals.end(), [](const Proposal &a, const Proposal &b) {
+                      std::ranges::stable_sort(proposals, [](const Proposal &a, const Proposal &b) {
                           return a.kind != "duplicate" && b.kind == "duplicate";
                       });
                       int applied = 0;
@@ -1180,11 +1185,13 @@ QJsonObject resourceTemplates() {
                                     {"mimeType", "application/json"}}}}};
 }
 
-// The contents at an address; empty, with `error`, when there is nothing there.
-QJsonObject readResource(const QString &uri, QString *error) {
-    const auto library = Mcp::library(error);
+// The contents at an address, or why there is nothing there.
+[[nodiscard]] std::expected<QJsonObject, QString> readResource(const QString &uri) {
+    static const auto notFound = std::unexpected(QStringLiteral("Resource not found"));
+    QString error;
+    const auto library = Mcp::library(&error);
     if (!library)
-        return {};
+        return error.isEmpty() ? notFound : std::unexpected(error);
     auto contents = [&](const QString &type, const QString &text) {
         return QJsonObject{{"contents", QJsonArray{QJsonObject{{"uri", uri}, {"mimeType", type}, {"text", text}}}}};
     };
@@ -1202,29 +1209,23 @@ QJsonObject readResource(const QString &uri, QString *error) {
     static const QRegularExpression graphAddress("^omabook://graph/book/(\\d+)$");
     if (const auto of = graphAddress.match(uri); of.hasMatch()) {
         const qint64 id = of.captured(1).toLongLong();
-        if (!library->book(id)) {
-            *error = "Resource not found";
-            return {};
-        }
+        if (!library->book(id))
+            return notFound;
         return json(Graph(*library).ofBook(id).toJson());
     }
     static const QRegularExpression address("^omabook://book/(\\d+)(?:/section/(\\d+))?$");
     const auto match = address.match(uri);
     const auto book = match.hasMatch() ? library->book(match.captured(1).toLongLong()) : std::nullopt;
-    if (!book) {
-        *error = "Resource not found";
-        return {};
-    }
+    if (!book)
+        return notFound;
     if (match.captured(2).isEmpty())
         return json(full(*library, *book));
-    const auto document = BookOps::open(library.get(), match.captured(1), error);
+    const auto document = BookOps::open(library.get(), match.captured(1), &error);
     if (!document)
-        return {};
+        return error.isEmpty() ? notFound : std::unexpected(error);
     const int section = match.captured(2).toInt();
-    if (section >= document->count()) {
-        *error = "Resource not found";
-        return {};
-    }
+    if (section >= document->count())
+        return notFound;
     return contents("text/plain", document->text(section));
 }
 
@@ -1270,13 +1271,26 @@ QJsonObject promptList() {
 // How each harness is told of a server that is a command, as its own
 // `mcp add --help` says. Empty for a harness with no such command.
 QStringList addCommand(const QString &agent, const QStringList &server) {
-    if (agent == "claude") return QStringList{"claude", "mcp", "add", "--scope", "user", "omabook", "--"} + server;
-    if (agent == "codex") return QStringList{"codex", "mcp", "add", "omabook", "--"} + server;
-    if (agent == "grok") return QStringList{"grok", "mcp", "add", "--scope", "user", "omabook"} + server;
-    if (agent == "pi") return QStringList{"pi", "mcp", "add", "omabook", "--"} + server;
-    if (agent == "opencode") return QStringList{"opencode", "mcp", "add", "--global", "omabook", "--"} + server;
-    if (agent == "agy") return QStringList{"agy", "mcp", "add", "omabook"} + server;
-    return {};
+    // What comes between the harness's name and the server's own command.
+    struct Harness {
+        QLatin1StringView agent;
+        std::initializer_list<const char *> words;
+    };
+    static constexpr std::array harnesses{
+        Harness{"claude"_L1, {"mcp", "add", "--scope", "user", "omabook", "--"}},
+        Harness{"codex"_L1, {"mcp", "add", "omabook", "--"}},
+        Harness{"grok"_L1, {"mcp", "add", "--scope", "user", "omabook"}},
+        Harness{"pi"_L1, {"mcp", "add", "omabook", "--"}},
+        Harness{"opencode"_L1, {"mcp", "add", "--global", "omabook", "--"}},
+        Harness{"agy"_L1, {"mcp", "add", "omabook"}},
+    };
+    const auto harness = std::ranges::find_if(harnesses, [&agent](const Harness &known) { return agent == known.agent; });
+    if (harness == harnesses.end())
+        return {};
+    QStringList command{agent};
+    for (const char *word : harness->words)
+        command << word;
+    return command + server;
 }
 
 QString shellQuoted(const QStringList &command) {
@@ -1436,7 +1450,7 @@ bool Mcp::registerTool(const Tool &tool) {
         problem = "it has no handler";
     else if (tool.inputSchema.value("type").toString() != "object")
         problem = "its input schema must be an object (see Mcp::schema)";
-    else if (std::any_of(registered().cbegin(), registered().cend(), [&](const Tool &other) { return other.name == tool.name; }))
+    else if (std::ranges::any_of(std::as_const(registered()), [&](const Tool &other) { return other.name == tool.name; }))
         problem = "there already is a tool of that name";
     if (!problem.isEmpty()) {
         fprintf(stderr, "omabook mcp: the tool \"%s\" was not registered: %s.\n", qPrintable(tool.name), qPrintable(problem));
@@ -1450,13 +1464,13 @@ QList<Mcp::Tool> Mcp::tools() {
     QList<Tool> tools = builtIn();
     for (const Tool &tool : std::as_const(registered())) {
         // Omabook's own tools were there first.
-        if (std::any_of(tools.cbegin(), tools.cend(), [&](const Tool &other) { return other.name == tool.name; }))
+        if (std::ranges::any_of(std::as_const(tools), [&](const Tool &other) { return other.name == tool.name; }))
             fprintf(stderr, "omabook mcp: a second tool called \"%s\" is left out.\n", qPrintable(tool.name));
         else
             tools.append(tool);
     }
     // In one order always, so a client can cache the list.
-    std::sort(tools.begin(), tools.end(), [](const Tool &a, const Tool &b) { return a.name < b.name; });
+    std::ranges::sort(tools, {}, &Tool::name);
     return tools;
 }
 
@@ -1607,7 +1621,7 @@ QByteArray Mcp::handle(const QByteArray &text) {
             return errorLine(id, invalidParams, "Invalid params: \"arguments\" must be an object.");
         const QString name = params.value("name").toString();
         const QList<Tool> all = tools();
-        const auto tool = std::find_if(all.cbegin(), all.cend(), [&](const Tool &candidate) { return candidate.name == name; });
+        const auto tool = std::ranges::find_if(all, [&](const Tool &candidate) { return candidate.name == name; });
         if (tool == all.cend())
             return errorLine(id, invalidParams, "Unknown tool: " + name);
         return reply(callTool(*tool, params.value("arguments").toObject()));
@@ -1618,11 +1632,10 @@ QByteArray Mcp::handle(const QByteArray &text) {
         return firstPage() ? reply(resourceTemplates(), Fixed) : errorLine(id, invalidParams, noSuchPage);
     if (method == "resources/read") {
         const QString uri = params.value("uri").toString();
-        QString error;
-        const QJsonObject contents = readResource(uri, &error);
-        if (contents.isEmpty())
-            return errorLine(id, invalidParams, error.isEmpty() ? QString("Resource not found") : error, QJsonObject{{"uri", uri}});
-        return reply(contents, Live);
+        const auto contents = readResource(uri);
+        if (!contents)
+            return errorLine(id, invalidParams, contents.error(), QJsonObject{{"uri", uri}});
+        return reply(*contents, Live);
     }
     if (method == "prompts/list")
         return firstPage() ? reply(promptList(), Fixed) : errorLine(id, invalidParams, noSuchPage);

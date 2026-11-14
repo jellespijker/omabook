@@ -30,7 +30,7 @@ namespace {
 
 QJsonObject problem(const QString &why) { return {{"error", why}}; }
 
-const char *const nameRule = "A plugin's name is its folder's: lower-case letters, digits, - and _, such as \"reading-log\".";
+constexpr auto nameRule = "A plugin's name is its folder's: lower-case letters, digits, - and _, such as \"reading-log\".";
 
 // What a call works with: the settings, the plugin folder and the library,
 // each the caller's when it brought one and the user's otherwise. The
@@ -753,10 +753,6 @@ int runPluginCli(const QStringList &arguments) {
 // The same, as tools for an agent talking to `omabook mcp`.
 namespace {
 
-Mcp::Result answered(const QJsonObject &answer) {
-    return ScriptTools::failed(answer) ? Mcp::Result::fail(answer.value("error").toString()) : Mcp::Result::ok(answer);
-}
-
 // The server's library, which follows the window's.
 ScriptTools::Context serverContext() {
     ScriptTools::Context context;
@@ -783,7 +779,7 @@ const bool toolsRegistered = [] {
         "details, catalogs, importers, commands, hooks, panels), its permissions, and what is wrong with it if "
         "anything is. (plugins_list lists everything else Omabook is made of.)",
         Mcp::schema(), Mcp::ReadOnly,
-        [](const QJsonObject &) { return answered(ScriptTools::list(serverContext())); },
+        [](const QJsonObject &) { return Mcp::Result::of(ScriptTools::list(serverContext())); },
     }) && ok;
     ok = Mcp::registerTool({
         "plugin_write", "Write a plugin's file",
@@ -800,8 +796,8 @@ const bool toolsRegistered = [] {
         [](const QJsonObject &arguments) {
             const QString name = arguments.value("name").toString();
             if (arguments.contains("template") && !arguments.contains("file"))
-                return answered(ScriptTools::create(serverContext(), name, arguments.value("template").toString()));
-            return answered(ScriptTools::write(serverContext(), name, arguments.value("file").toString(),
+                return Mcp::Result::of(ScriptTools::create(serverContext(), name, arguments.value("template").toString()));
+            return Mcp::Result::of(ScriptTools::write(serverContext(), name, arguments.value("file").toString(),
                                                arguments.value("contents").toString()));
         },
     }) && ok;
@@ -815,7 +811,7 @@ const bool toolsRegistered = [] {
             QJsonObject answer = ScriptTools::check(serverContext(), arguments.value("name").toString());
             if (answer.contains("errors"))
                 answer.remove("error");
-            return answered(answer);
+            return Mcp::Result::of(answer);
         },
     }) && ok;
     Mcp::Tool run{
@@ -831,7 +827,7 @@ const bool toolsRegistered = [] {
                     {"name", "what"}),
         Mcp::Changes,
         [](const QJsonObject &arguments) {
-            return answered(ScriptTools::run(serverContext(), arguments.value("name").toString(), arguments.value("what").toString(),
+            return Mcp::Result::of(ScriptTools::run(serverContext(), arguments.value("name").toString(), arguments.value("what").toString(),
                                              arguments.value("arguments")));
         },
     };
@@ -844,7 +840,7 @@ const bool toolsRegistered = [] {
                     {"name", "enabled"}),
         Mcp::Changes,
         [](const QJsonObject &arguments) {
-            return answered(ScriptTools::enable(serverContext(), arguments.value("name").toString(), arguments.value("enabled").toBool()));
+            return Mcp::Result::of(ScriptTools::enable(serverContext(), arguments.value("name").toString(), arguments.value("enabled").toBool()));
         },
     }) && ok;
     return ok;
