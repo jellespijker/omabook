@@ -115,34 +115,34 @@ public:
     void setLibrary(const Library *library);
 
     QString showing() const { return m_what == What::Book ? "book" : m_what == What::Series ? "series" : "scope"; }
-    QString scope() const { return m_scope; }
+    QString scope() const noexcept { return m_scope; }
     qint64 bookId() const { return m_what == What::Book ? m_bookId : 0; }
     QString series() const { return m_what == What::Series ? m_series : QString(); }
-    QString bookTitle() const { return m_bookTitle; }
+    QString bookTitle() const noexcept { return m_bookTitle; }
     bool bounded() const { return m_what == What::Book && m_upTo.has_value(); }
-    int nodeCount() const { return int(m_shown.size()); }
-    int edgeCount() const { return int(m_links.size()); }
-    int knownCount() const { return m_knownCount; }
-    bool storied() const { return m_storied; }
-    QVariantList kinds() const { return m_kinds; }
-    QVariantList rows() const { return m_rows; }
+    int nodeCount() const noexcept { return int(m_shown.size()); }
+    int edgeCount() const noexcept { return int(m_links.size()); }
+    int knownCount() const noexcept { return m_knownCount; }
+    bool storied() const noexcept { return m_storied; }
+    QVariantList kinds() const noexcept { return m_kinds; }
+    QVariantList rows() const noexcept { return m_rows; }
     QVariantList scopes() const;
     QVariantList books() const;
-    bool onlyAsked() const { return m_onlyAsked; }
+    bool onlyAsked() const noexcept { return m_onlyAsked; }
     void setOnlyAsked(bool only);
-    bool beyond() const { return m_beyond; }
+    bool beyond() const noexcept { return m_beyond; }
     void setBeyond(bool beyond);
-    int beyondCount() const { return m_beyondCount; }
-    bool onlyAcross() const { return m_onlyAcross; }
+    int beyondCount() const noexcept { return m_beyondCount; }
+    bool onlyAcross() const noexcept { return m_onlyAcross; }
     void setOnlyAcross(bool only);
-    int depth() const { return m_depth; }
+    int depth() const noexcept { return m_depth; }
     void setDepth(int depth);
-    qint64 centre() const { return m_centre; }
+    qint64 centre() const noexcept { return m_centre; }
     bool canGoBack() const { return !m_history.isEmpty(); }
-    qint64 selected() const { return m_selected; }
-    QVariantMap details() const { return m_details; }
+    qint64 selected() const noexcept { return m_selected; }
+    QVariantMap details() const noexcept { return m_details; }
     bool settling() const { return m_settle.isActive(); }
-    double aspect() const { return m_aspect; }
+    double aspect() const noexcept { return m_aspect; }
     void setAspect(double aspect);
 
     // A whole scope: "" for everything read, "world:…" for a world of its own.
@@ -185,8 +185,8 @@ public:
     Q_INVOKABLE qint64 add(const QString &kind, const QString &name, const QString &summary, const QString &relation);
 
     // For the picture: the nodes, the edges among them, and where each node is.
-    const QList<Shown> &shown() const { return m_shown; }
-    const QList<Link> &links() const { return m_links; }
+    const QList<Shown> &shown() const noexcept { return m_shown; }
+    const QList<Link> &links() const noexcept { return m_links; }
     const QList<QPointF> &positions() const { return m_layout.positions(); }
     int rowOf(qint64 node) const { return m_index.value(node, -1); }
     // The rows one edge away from a row.

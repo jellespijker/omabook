@@ -3,6 +3,8 @@
 #include <QElapsedTimer>
 #include <algorithm>
 #include <cmath>
+#include <numeric>
+#include <ranges>
 
 namespace {
 
@@ -14,10 +16,14 @@ constexpr double golden = 2.39996322972865332;
 constexpr double farEnough = 0.9;
 constexpr int deepest = 24;
 
-QPointF spiral(int rank, double step) {
+[[nodiscard]] QPointF spiral(int rank, double step) {
     const double radius = step * std::sqrt(rank + 0.5);
     return {radius * std::cos(rank * golden), radius * std::sin(rank * golden)};
 }
+
+// What a list says of a node; nothing of one it doesn't reach, as a list
+// left out says nothing of any.
+[[nodiscard]] bool said(const QList<bool> &list, int node) { return node < list.size() && list.at(node); }
 
 } // namespace
 
@@ -30,30 +36,32 @@ void GraphLayout::start(int count, const QList<QPair<int, int>> &edges, const QL
     m_ring = QList<bool>(count, false);
     m_fixed = QList<bool>(count, false);
     for (int i = 0; i < count; ++i) {
-        m_ring[i] = i < ring.size() && ring.at(i);
-        m_fixed[i] = i < fixed.size() && fixed.at(i) && i < placed.size() && placed.at(i);
+        m_ring[i] = said(ring, i);
+        m_fixed[i] = said(fixed, i) && said(placed, i);
     }
-    m_inside = int(std::count(m_ring.cbegin(), m_ring.cend(), false));
+    m_inside = int(std::ranges::count(m_ring, false));
+    const auto isNode = [count](int node) { return node >= 0 && node < count; };
     for (const auto &edge : edges) {
-        if (edge.first < 0 || edge.second < 0 || edge.first >= count || edge.second >= count || edge.first == edge.second)
+        const auto [from, to] = edge;
+        if (!isNode(from) || !isNode(to) || from == to)
             continue;
         // An edge to the ring holds the ring, and is nothing to the inside.
-        if (m_ring.at(edge.first) || m_ring.at(edge.second)) {
+        if (m_ring.at(from) || m_ring.at(to)) {
             m_ties << edge;
             continue;
         }
         m_edges << edge;
-        ++m_degree[edge.first];
-        ++m_degree[edge.second];
+        ++m_degree[from];
+        ++m_degree[to];
     }
     m_at = QList<QPointF>(count);
     seed(known, placed);
     m_steps = 0;
     // A graph that kept most of its places only has to make room for what
     // is new; a new one has to find its whole shape.
-    const qsizetype kept = std::count(placed.cbegin(), placed.cend(), true);
+    const auto kept = std::ranges::count(placed, true);
     const bool grown = count > 0 && kept * 2 >= count;
-    const bool still = std::count(m_fixed.cbegin(), m_fixed.cend(), true) == count;
+    const bool still = std::ranges::count(m_fixed, true) == count;
     // As hot as the inside needs, whatever stands around it: the inside is
     // to come out the same with a ring as without.
     m_heat = count < 2 || still ? 0 : grown ? spacing * 0.6 : spacing * std::clamp(std::sqrt(double(m_inside)) * 0.5, 1.5, 12.0);
@@ -63,11 +71,11 @@ void GraphLayout::start(int count, const QList<QPair<int, int>> &edges, const QL
 QRectF GraphLayout::inside() const {
     QRectF box;
     bool any = false;
-    for (int i = 0; i < m_at.size(); ++i) {
-        if (m_ring.at(i))
+    for (const auto &[at, ring] : std::views::zip(m_at, m_ring)) {
+        if (ring)
             continue;
-        const QRectF spot(m_at.at(i), QSizeF(0, 0));
-        box = any ? box.united(spot.adjusted(-0.5, -0.5, 0.5, 0.5)) : spot.adjusted(-0.5, -0.5, 0.5, 0.5);
+        const QRectF spot = QRectF(at, QSizeF(0, 0)).adjusted(-0.5, -0.5, 0.5, 0.5);
+        box = any ? box.united(spot) : spot;
         any = true;
     }
     return box;
@@ -76,22 +84,21 @@ QRectF GraphLayout::inside() const {
 void GraphLayout::seed(const QList<QPointF> &known, const QList<bool> &placed) {
     const int count = int(m_at.size());
     QList<QList<int>> near(count);
-    for (const auto &edge : std::as_const(m_edges)) {
-        near[edge.first] << edge.second;
-        near[edge.second] << edge.first;
+    for (const auto &[from, to] : std::as_const(m_edges)) {
+        near[from] << to;
+        near[to] << from;
     }
     QList<bool> has(count, false);
     for (int i = 0; i < count; ++i)
-        if (i < placed.size() && placed.at(i) && i < known.size()) {
+        if (said(placed, i) && i < known.size()) {
             m_at[i] = known.at(i);
             has[i] = true;
         }
     // The rest in the order a walk from the best connected node meets them,
     // so neighbours get neighbouring seats on the spiral.
     QList<int> hubs(count);
-    for (int i = 0; i < count; ++i)
-        hubs[i] = i;
-    std::stable_sort(hubs.begin(), hubs.end(), [&](int a, int b) { return m_degree.at(a) > m_degree.at(b); });
+    std::ranges::iota(hubs, 0);
+    std::ranges::stable_sort(hubs, std::ranges::greater{}, [this](int node) { return m_degree.at(node); });
     QList<bool> walked(count, false);
     QList<int> order;
     order.reserve(count);
@@ -115,7 +122,7 @@ void GraphLayout::seed(const QList<QPointF> &known, const QList<bool> &placed) {
         QPointF middle;
         int neighbours = 0;
         for (const int other : std::as_const(near[node]))
-            if (has.at(other) && other < placed.size() && placed.at(other)) {
+            if (has.at(other) && said(placed, other)) {
                 middle += m_at.at(other);
                 ++neighbours;
             }
@@ -133,8 +140,8 @@ void GraphLayout::seed(const QList<QPointF> &known, const QList<bool> &placed) {
     // tied to, so its edges start short and don't cross the picture.
     QList<QPointF> towards(count);
     QList<int> ties(count, 0);
-    for (const auto &tie : std::as_const(m_ties))
-        for (const auto &[node, other] : {std::pair(tie.first, tie.second), std::pair(tie.second, tie.first)})
+    for (const auto &[from, to] : std::as_const(m_ties))
+        for (const auto &[node, other] : {std::pair(from, to), std::pair(to, from)})
             if (m_ring.at(node) && !m_ring.at(other)) {
                 towards[node] += m_at.at(other);
                 ++ties[node];
@@ -170,11 +177,8 @@ void GraphLayout::insert(int cell, int body, int depth) {
             const int first = here.body;
             here.body = -1;
             const QPointF was = m_at.at(first);
-            const int quarter = (was.x() >= here.x ? 1 : 0) + (was.y() >= here.y ? 2 : 0);
-            Cell child;
-            child.half = here.half / 2;
-            child.x = here.x + (quarter & 1 ? child.half : -child.half);
-            child.y = here.y + (quarter & 2 ? child.half : -child.half);
+            const int quarter = here.quarterOf(was);
+            Cell child = here.quarter(quarter);
             child.massX = was.x();
             child.massY = was.y();
             child.mass = 1;
@@ -182,14 +186,10 @@ void GraphLayout::insert(int cell, int body, int depth) {
             m_cells << child;
             m_cells[cell].child[quarter] = int(m_cells.size()) - 1;
         }
-        Cell &parent = m_cells[cell];
-        const int quarter = (at.x() >= parent.x ? 1 : 0) + (at.y() >= parent.y ? 2 : 0);
+        const Cell &parent = m_cells.at(cell);
+        const int quarter = parent.quarterOf(at);
         if (parent.child[quarter] < 0) {
-            Cell child;
-            child.half = parent.half / 2;
-            child.x = parent.x + (quarter & 1 ? child.half : -child.half);
-            child.y = parent.y + (quarter & 2 ? child.half : -child.half);
-            m_cells << child;
+            m_cells << parent.quarter(quarter);
             m_cells[cell].child[quarter] = int(m_cells.size()) - 1;
         }
         cell = m_cells.at(cell).child[quarter];
@@ -201,11 +201,7 @@ void GraphLayout::buildTree() {
     const QRectF box = inside();
     m_cells.clear();
     m_cells.reserve(m_at.size() * 2 + 8);
-    Cell root;
-    root.x = box.center().x();
-    root.y = box.center().y();
-    root.half = std::max({box.width(), box.height(), 1.0}) / 2 + 1;
-    m_cells << root;
+    m_cells << Cell{.x = box.center().x(), .y = box.center().y(), .half = std::max({box.width(), box.height(), 1.0}) / 2 + 1};
     // Only the nodes inside push: the ring is pushed by them, not they by it.
     for (int body = 0; body < m_at.size(); ++body)
         if (!m_ring.at(body))
@@ -266,10 +262,8 @@ bool GraphLayout::step() {
     }
     // The ring: its nodes keep off each other, and each is drawn to what
     // it is tied to. There are few of them, so each is weighed against each.
-    QList<int> ring;
-    for (int i = 0; i < count; ++i)
-        if (m_ring.at(i))
-            ring << i;
+    const auto ring = std::views::iota(0, count) | std::views::filter([this](int node) { return m_ring.at(node); })
+                      | std::ranges::to<QList<int>>();
     for (qsizetype a = 0; a < ring.size(); ++a)
         for (qsizetype b = a + 1; b < ring.size(); ++b) {
             QPointF apart = m_at.at(ring.at(a)) - m_at.at(ring.at(b));
@@ -284,32 +278,32 @@ bool GraphLayout::step() {
             dx[ring.at(b)] -= apart.x() / distance * force;
             dy[ring.at(b)] -= apart.y() / distance * force;
         }
-    for (const auto &tie : std::as_const(m_ties)) {
-        const QPointF between = m_at.at(tie.second) - m_at.at(tie.first);
+    for (const auto &[from, to] : std::as_const(m_ties)) {
+        const QPointF between = m_at.at(to) - m_at.at(from);
         const double distance = std::max(0.01, std::hypot(between.x(), between.y()));
         const double force = distance * distance / spacing / 2;
         const double x = between.x() / distance * force, y = between.y() / distance * force;
-        if (m_ring.at(tie.first)) {
-            dx[tie.first] += x;
-            dy[tie.first] += y;
+        if (m_ring.at(from)) {
+            dx[from] += x;
+            dy[from] += y;
         }
-        if (m_ring.at(tie.second)) {
-            dx[tie.second] -= x;
-            dy[tie.second] -= y;
+        if (m_ring.at(to)) {
+            dx[to] -= x;
+            dy[to] -= y;
         }
     }
-    for (const auto &edge : std::as_const(m_edges)) {
-        const QPointF between = m_at.at(edge.second) - m_at.at(edge.first);
+    for (const auto &[from, to] : std::as_const(m_edges)) {
+        const QPointF between = m_at.at(to) - m_at.at(from);
         const double distance = std::max(0.01, std::hypot(between.x(), between.y()));
         // A node with many edges would be crushed by all of them pulling
         // at once, so each pulls less the more there are.
-        const double share = 1 + std::log2(1.0 + std::min(m_degree.at(edge.first), m_degree.at(edge.second)));
+        const double share = 1 + std::log2(1.0 + std::min(m_degree.at(from), m_degree.at(to)));
         const double force = distance * distance / spacing / share;
         const double x = between.x() / distance * force, y = between.y() / distance * force;
-        dx[edge.first] += x;
-        dy[edge.first] += y;
-        dx[edge.second] -= x;
-        dy[edge.second] -= y;
+        dx[from] += x;
+        dy[from] += y;
+        dx[to] -= x;
+        dy[to] -= y;
     }
     double furthest = 0;
     double furthestInside = 0;
@@ -320,7 +314,8 @@ bool GraphLayout::step() {
         // No node moves further in a step than the heat allows.
         const double moved = std::min(wanted, m_heat);
         m_at[i] += QPointF(dx.at(i) / wanted * moved, dy.at(i) / wanted * moved);
-        (m_ring.at(i) ? furthest : furthestInside) = std::max(m_ring.at(i) ? furthest : furthestInside, moved);
+        double &reach = m_ring.at(i) ? furthest : furthestInside;
+        reach = std::max(reach, moved);
     }
     keepRingOut();
     ++m_steps;
@@ -376,12 +371,8 @@ void GraphLayout::settle() {
 QRectF GraphLayout::bounds() const {
     if (m_at.isEmpty())
         return {};
-    double left = m_at.first().x(), right = left, top = m_at.first().y(), bottom = top;
-    for (const QPointF &at : m_at) {
-        left = std::min(left, at.x());
-        right = std::max(right, at.x());
-        top = std::min(top, at.y());
-        bottom = std::max(bottom, at.y());
-    }
-    return {left, top, right - left, bottom - top};
+    const auto across = m_at | std::views::transform(&QPointF::x);
+    const auto down = m_at | std::views::transform(&QPointF::y);
+    const double left = std::ranges::min(across), top = std::ranges::min(down);
+    return {left, top, std::ranges::max(across) - left, std::ranges::max(down) - top};
 }
