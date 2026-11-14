@@ -861,7 +861,6 @@
     "many": "hace %Ln semanas",
     "other": "hace %Ln semanas"
   },
-  "A link to your profile or a shelf, or your user id": "Un enlace a tu perfil o a un estante, o tu id de usuario",
   "A link to your profile, or your user name": "Un enlace a tu perfil, o tu nombre de usuario",
   "A sync with a reading site never removes a book, here or there, and what you changed in Omabook since the last one stays as you left it. Disconnecting forgets who you are on the site and its token, and leaves every book.": "Una sincronización con un sitio de lectura nunca elimina un libro, ni aquí ni allá, y lo que cambiaste en Omabook desde la última queda como lo dejaste. Desconectar olvida quién eres en el sitio y su token, y deja todos los libros.",
   "Access key (optional)": "Clave de acceso (opcional)",
@@ -877,7 +876,6 @@
   "Get Your Keys": "Obtener tus claves",
   "Get a Token": "Obtener un token",
   "Goodreads has no way in for apps and shows shelves to few who aren't signed in. The row opens to three steps instead: open its export page, download the file, drop it on the card. Omabook watches your Downloads folder meanwhile and offers the file when it arrives. The way back is a file too, which you upload there.": "Goodreads no tiene entrada para aplicaciones y muestra los estantes a pocos que no han iniciado sesión. Por eso la fila se abre con tres pasos: abrir su página de exportación, descargar el archivo, soltarlo en la tarjeta. Mientras tanto Omabook vigila tu carpeta de Descargas y ofrece el archivo cuando llega. El camino de vuelta también es un archivo, que subes allá.",
-  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of your shelves, which works for a private profile too.": "Goodreads no tiene entrada para aplicaciones ni acepta cambios de ellas. Lo que sí tiene es un archivo de tus estantes, que también sirve para un perfil privado.",
   "Hardcover is asked with a token you make in your own account there. It is kept in the keyring, never in a file.": "A Hardcover se le pregunta con un token que creas en tu propia cuenta allá. Se guarda en el llavero, nunca en un archivo.",
   "Its plugin is off, so nothing is asked of it.": "Su plugin está apagado, así que no se le pide nada.",
   "Kept in the keyring; paste another to replace it": "Guardado en el llavero; pega otro para reemplazarlo",
@@ -1011,5 +1009,7 @@
   "follows the branch %1": "sigue la rama %1",
   "hooks on what happens to books": "ganchos sobre lo que les pasa a los libros",
   "stays at %1": "se queda en %1",
-  "follows the latest release, or the main branch while there is none": "sigue la versión publicada más reciente, o la rama principal mientras no haya ninguna"
+  "follows the latest release, or the main branch while there is none": "sigue la versión publicada más reciente, o la rama principal mientras no haya ninguna",
+  "The link to your My Books page or your profile, or your user id": "El enlace a tu página Mis libros o a tu perfil, o tu id de usuario",
+  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads no tiene entrada para aplicaciones ni acepta cambios de ellas. Lo que sí tiene es un archivo con todo lo que está en Mis libros, con lo que leíste, estás leyendo y quieres leer, que también funciona con un perfil privado."
 }

@@ -828,7 +828,6 @@
     "one": "%Ln week geleden",
     "other": "%Ln weken geleden"
   },
-  "A link to your profile or a shelf, or your user id": "Een link naar je profiel of een plank, of je gebruikers-id",
   "A link to your profile, or your user name": "Een link naar je profiel, of je gebruikersnaam",
   "A sync with a reading site never removes a book, here or there, and what you changed in Omabook since the last one stays as you left it. Disconnecting forgets who you are on the site and its token, and leaves every book.": "Een synchronisatie met een leessite verwijdert nooit een boek, hier niet en daar niet, en wat je sinds de vorige in Omabook hebt veranderd, blijft zoals je het achterliet. Verbreken vergeet wie je op de site bent en het token, en laat elk boek staan.",
   "Access key (optional)": "Toegangssleutel (optioneel)",
@@ -844,7 +843,6 @@
   "Get Your Keys": "Je sleutels ophalen",
   "Get a Token": "Token ophalen",
   "Goodreads has no way in for apps and shows shelves to few who aren't signed in. The row opens to three steps instead: open its export page, download the file, drop it on the card. Omabook watches your Downloads folder meanwhile and offers the file when it arrives. The way back is a file too, which you upload there.": "Goodreads heeft geen ingang voor apps en toont planken aan weinigen die niet zijn ingelogd. De rij opent daarom met drie stappen: open de exportpagina, download het bestand, sleep het op de kaart. Omabook houdt intussen je map Downloads in de gaten en biedt het bestand aan zodra het er is. De weg terug is ook een bestand, dat je daar uploadt.",
-  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of your shelves, which works for a private profile too.": "Goodreads heeft geen ingang voor apps en neemt geen wijzigingen van ze aan. Wat het wel heeft, is een bestand van je planken, en dat werkt ook voor een privéprofiel.",
   "Hardcover is asked with a token you make in your own account there. It is kept in the keyring, never in a file.": "Hardcover wordt bevraagd met een token dat je daar in je eigen account maakt. Het wordt bewaard in de sleutelbos, nooit in een bestand.",
   "Its plugin is off, so nothing is asked of it.": "De plug-in staat uit, dus er wordt niets aan gevraagd.",
   "Kept in the keyring; paste another to replace it": "Bewaard in de sleutelbos; plak een ander om het te vervangen",
@@ -976,5 +974,7 @@
   "follows the branch %1": "volgt de branch %1",
   "hooks on what happens to books": "haken op wat er met boeken gebeurt",
   "stays at %1": "blijft op %1",
-  "follows the latest release, or the main branch while there is none": "volgt de nieuwste release, of de hoofdbranch zolang die er niet is"
+  "follows the latest release, or the main branch while there is none": "volgt de nieuwste release, of de hoofdbranch zolang die er niet is",
+  "The link to your My Books page or your profile, or your user id": "De link naar je pagina Mijn boeken of je profiel, of je gebruikers-id",
+  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads heeft geen ingang voor apps en neemt geen wijzigingen van ze aan. Wat het wel heeft is een bestand met alles onder Mijn boeken, met wat je hebt gelezen, aan het lezen bent en wilt lezen; dat werkt ook voor een privéprofiel."
 }

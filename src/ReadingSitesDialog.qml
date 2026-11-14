@@ -220,7 +220,7 @@ AppPopup {
                                 id: identity
                                 objectName: site.scheme + "Identity"
                                 Layout.fillWidth: true
-                                placeholderText: site.scheme === "goodreads" ? qsTr("A link to your profile or a shelf, or your user id")
+                                placeholderText: site.scheme === "goodreads" ? qsTr("The link to your My Books page or your profile, or your user id")
                                                : site.scheme === "hardcover" ? qsTr("Your user name (the token says it when this is empty)")
                                                : qsTr("A link to your profile, or your user name")
                                 text: site.info.identity
@@ -407,7 +407,7 @@ AppPopup {
                                     wrapMode: Text.Wrap
                                     color: theme.colors.muted
                                     font.pixelSize: 12
-                                    text: qsTr("Goodreads has no way in for apps and takes no changes from them. What it does have is a file of your shelves, which works for a private profile too.")
+                                    text: qsTr("Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.")
                                 }
                                 RowLayout {
                                     Layout.fillWidth: true
