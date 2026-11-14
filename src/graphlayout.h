@@ -4,6 +4,7 @@
 #include <QPair>
 #include <QPointF>
 #include <QRectF>
+#include <array>
 
 // Where the nodes of a graph go on the page: a small simulation in which
 // every node pushes every other away, an edge pulls its two ends together,
@@ -42,18 +43,29 @@ public:
     // Steps until it has settled.
     void settle();
 
-    bool settled() const { return m_heat <= 0; }
-    int steps() const { return m_steps; }
-    const QList<QPointF> &positions() const { return m_at; }
+    [[nodiscard]] bool settled() const noexcept { return m_heat <= 0; }
+    [[nodiscard]] int steps() const noexcept { return m_steps; }
+    [[nodiscard]] const QList<QPointF> &positions() const noexcept { return m_at; }
     // The box around every node.
-    QRectF bounds() const;
+    [[nodiscard]] QRectF bounds() const;
 
 private:
     struct Cell {
         double x = 0, y = 0, half = 0;      // the square it covers
         double massX = 0, massY = 0, mass = 0;
         int body = -1;                      // the one node in a leaf
-        int child[4] = {-1, -1, -1, -1};
+        std::array<int, 4> child{-1, -1, -1, -1};
+
+        // Which of its four quarters a point is in, and that quarter as an
+        // empty cell of its own.
+        [[nodiscard]] int quarterOf(const QPointF &at) const noexcept { return (at.x() >= x ? 1 : 0) + (at.y() >= y ? 2 : 0); }
+        [[nodiscard]] Cell quarter(int which) const noexcept {
+            Cell child;
+            child.half = half / 2;
+            child.x = x + (which & 1 ? child.half : -child.half);
+            child.y = y + (which & 2 ? child.half : -child.half);
+            return child;
+        }
     };
     void seed(const QList<QPointF> &known, const QList<bool> &placed);
     void buildTree();
@@ -67,7 +79,7 @@ private:
     int m_inside = 0;
     bool m_insideDone = false;
     // The box around the nodes inside, which the ring stays out of.
-    QRectF inside() const;
+    [[nodiscard]] QRectF inside() const;
     void keepRingOut();
     QList<int> m_degree;
     QList<Cell> m_cells;

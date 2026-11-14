@@ -75,32 +75,32 @@ public:
             const QString &pluginFolder = {}, const QString &calibreDebug = {});
     ~Backend() override;
 
-    BookListModel *books() { return &m_model; }
-    Library *library() { return m_library.get(); }
+    BookListModel *books() noexcept { return &m_model; }
+    Library *library() noexcept { return m_library.get(); }
     QString libraryPath() const { return m_library ? m_library->root() : QString(); }
     QString libraryName() const;
-    QString libraryError() const { return m_libraryError; }
-    int revision() const { return m_revision; }
-    QString view() const { return m_view; }
+    QString libraryError() const noexcept { return m_libraryError; }
+    int revision() const noexcept { return m_revision; }
+    QString view() const noexcept { return m_view; }
     void setView(const QString &view);
-    QString group() const { return m_group; }
+    QString group() const noexcept { return m_group; }
     void setGroup(const QString &group);
     static QStringList views() { return {"covers", "spines", "carousel", "list", "stacks"}; }
     static QStringList groupings() { return {"series", "author", "tag", "status"}; }
-    bool busy() const { return m_jobs > 0; }
-    QString status() const { return m_status; }
-    QString message() const { return m_message; }
-    bool searching() const { return m_pendingSources > 0; }
+    bool busy() const noexcept { return m_jobs > 0; }
+    QString status() const noexcept { return m_status; }
+    QString message() const noexcept { return m_message; }
+    bool searching() const noexcept { return m_pendingSources > 0; }
     QVariantList candidates() const;
-    QString searchProblem() const { return m_searchProblem; }
+    QString searchProblem() const noexcept { return m_searchProblem; }
     QVariantList lookUpSources() const;
     QVariantList plugins() const;
     Q_INVOKABLE void setPluginEnabled(const QString &id, bool enabled);
     // Asks Calibre again which plugins it has, beside the window.
     Q_INVOKABLE void refreshPlugins();
 
-    bool calibreSwitchedOff() const { return m_calibreSwitchedOff; }
-    QVariantList calibreLibraries() const { return m_calibreLibraries; }
+    bool calibreSwitchedOff() const noexcept { return m_calibreSwitchedOff; }
+    QVariantList calibreLibraries() const noexcept { return m_calibreLibraries; }
     QVariantMap calibreOffer() const { return m_calibreOffers.value(0).toMap(); }
     // Looks for Calibre libraries because the user asked: offers every one
     // not imported or refused for good, and says so when there is none.
@@ -109,16 +109,19 @@ public:
     Q_INVOKABLE void answerCalibreOffer(const QString &answer);
     // Imports a Calibre library, whatever was answered before.
     Q_INVOKABLE void importCalibreLibrary(const QString &path);
-    Plugins *pluginRegistry() { return &m_plugins; }
+    Plugins *pluginRegistry() noexcept { return &m_plugins; }
     // The script plugins. Backend tells them what happens to the library;
     // the reader tells them what happens to the open book.
-    ScriptPlugins *scripts() { return m_scripts.get(); }
-    PluginManager *pluginManager() { return m_pluginManager.get(); }
-    GraphJobs *graphJobs() { return m_graphJobs; }
+    ScriptPlugins *scripts() noexcept { return m_scripts.get(); }
+    PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
+    GraphJobs *graphJobs() noexcept { return m_graphJobs; }
 
     // For what works on the whole library (the librarian): a model, the
     // sources a look-up asks, a book's opening pages, and a cover fetched.
     std::unique_ptr<AiProvider> newAi(QString *why) const { return m_aiFactory(why); }
+    // The same, for work beside the window: a copy of it owes nothing to
+    // this object, so it can be called after this is gone.
+    const AiFactory &aiFactory() const noexcept { return m_aiFactory; }
     QList<MetadataSource *> newSources(QObject *parent) { return m_catalogs(parent); }
     QString openingPagesOf(qint64 id) const { return openingPages(id); }
     void fetchCoverFor(qint64 id, const QUrl &url);

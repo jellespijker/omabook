@@ -4,6 +4,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <algorithm>
 
 #include "metadatasource.h"
 #include "plugins.h"
@@ -58,9 +59,7 @@ void PluginManager::refresh() {
     for (const QJsonValue &issue : m_sources.issues())
         issues << issue;
     const QVariantList health = issues.toVariantList();
-    bool sourced = false;
-    for (const QJsonValue &row : overview)
-        sourced = sourced || row.toObject().contains("source");
+    const bool sourced = std::ranges::any_of(overview, [](const QJsonValue &row) { return row.toObject().contains("source"); });
     if (plugins == m_plugins && health == m_health && sourced == m_sourced)
         return;
     m_plugins = plugins;
@@ -72,12 +71,9 @@ void PluginManager::refresh() {
     // in the window (a panel, a command) is taken back out, as one that
     // doesn't load at all is.
     for (const QString &name : QStringList(m_updated)) {
-        const QJsonObject row = [&] {
-            for (const QJsonValue &value : overview)
-                if (value.toObject().value("id").toString() == "folder:" + name)
-                    return value.toObject();
-            return QJsonObject();
-        }();
+        const auto found = std::ranges::find(overview, "folder:" + name,
+                                             [](const QJsonValue &value) { return value.toObject().value("id").toString(); });
+        const QJsonObject row = found == overview.end() ? QJsonObject() : (*found).toObject();
         if (row.value("state").toString() != "broken" || !row.value("source").toObject().value("previous").toBool())
             continue;
         m_updated.removeAll(name);

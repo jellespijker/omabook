@@ -45,11 +45,11 @@ public:
     // Tests pass a temp folder.
     explicit Customization(const QString &folder = {}, QObject *parent = nullptr);
 
-    QString folder() const { return m_folder; }
-    QVariantMap plainKeys() const { return m_plain; }
-    QVariantMap chordKeys() const { return m_chord; }
-    QVariantMap keyText() const { return m_text; }
-    QVariantMap style() const { return m_style; }
+    QString folder() const noexcept { return m_folder; }
+    QVariantMap plainKeys() const noexcept { return m_plain; }
+    QVariantMap chordKeys() const noexcept { return m_chord; }
+    QVariantMap keyText() const noexcept { return m_text; }
+    QVariantMap style() const noexcept { return m_style; }
     QVariantList mods() const { return m_mods + m_pluginMods; }
     // Those that apply now: one a plugin switched off, or that is only for
     // the plugin's own books while another is in front of the reader, is
@@ -61,7 +61,7 @@ public:
     // join the mods.
     void setPlugins(const QVariantList &commands, const QVariantList &panels);
     // The views replaced by files in ui/, by name ("ReaderView.qml").
-    QStringList views() const { return m_views; }
+    QStringList views() const noexcept { return m_views; }
 
     // Where the window should be loaded from: the built-in views, or a folder
     // of them with the user's own laid over. Empty `problem` on success.
@@ -106,6 +106,10 @@ private:
     QByteArray m_viewsStamp;
     bool m_viewsSeen = false;
 };
+
+// How bright a color is to the eye, from 0 for black to 1 for white (WCAG's
+// relative luminance): above .179 dark ink reads on it, below it light ink.
+[[nodiscard]] double relativeLuminance(const QColor &color) noexcept;
 
 // The desktop's theme with style.json laid over it: the same face as Theme
 // (accent, background, colors, radius, ...), which is what the views see as

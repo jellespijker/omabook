@@ -7,6 +7,7 @@
 #include <QPainter>
 #include <algorithm>
 #include <cmath>
+#include <ranges>
 
 namespace {
 
@@ -14,7 +15,7 @@ constexpr double smallest = 0.04, largest = 6;
 
 // A path from a few letters: M, L, H, V, C and Z as in SVG, all absolute,
 // and O for a whole circle (its middle and its radius).
-QPainterPath drawn(const char *text) {
+[[nodiscard]] QPainterPath drawn(const char *text) {
     QPainterPath path;
     const QStringList words = QString::fromLatin1(text).split(' ', Qt::SkipEmptyParts);
     qsizetype at = 0;
@@ -44,19 +45,19 @@ QPainterPath drawn(const char *text) {
     return path;
 }
 
-QColor mixed(const QColor &a, const QColor &b, double share) {
+[[nodiscard]] QColor mixed(const QColor &a, const QColor &b, double share) {
     return QColor::fromRgbF(a.redF() + (b.redF() - a.redF()) * share, a.greenF() + (b.greenF() - a.greenF()) * share,
                             a.blueF() + (b.blueF() - a.blueF()) * share);
 }
 
-QColor faint(QColor color, double alpha) {
+[[nodiscard]] QColor faint(QColor color, double alpha) {
     color.setAlphaF(alpha);
     return color;
 }
 
-double luminance(const QColor &color) { return .2126 * color.redF() + .7152 * color.greenF() + .0722 * color.blueF(); }
+[[nodiscard]] double luminance(const QColor &color) noexcept { return .2126 * color.redF() + .7152 * color.greenF() + .0722 * color.blueF(); }
 
-QString shortened(const QString &text, int most) { return text.size() > most ? text.left(most - 1).trimmed() + QChar(0x2026) : text; }
+[[nodiscard]] QString shortened(const QString &text, int most) { return text.size() > most ? text.left(most - 1).trimmed() + QChar(0x2026) : text; }
 
 // What part of the view is taken, so that no name is written over a node
 // or over another name: boxes kept by the cells of a coarse grid they
@@ -66,19 +67,18 @@ public:
     Taken(double width, double height)
         : m_across(int(width / cell) + 1), m_down(int(height / cell) + 1), m_cells(m_across * m_down) {}
 
-    bool free(const QRectF &box) const {
+    [[nodiscard]] bool free(const QRectF &box) const {
         bool free = true;
-        each(box, [&](const QList<QRectF> &boxes) {
-            for (const QRectF &other : boxes)
-                free = free && !other.intersects(box);
+        each(box, [&free, &box](const QList<QRectF> &boxes) {
+            free = free && std::ranges::none_of(boxes, [&box](const QRectF &other) { return other.intersects(box); });
         });
         return free;
     }
     void take(const QRectF &box) {
-        each(box, [&](QList<QRectF> &boxes) { boxes << box; });
+        each(box, [&box](QList<QRectF> &boxes) { boxes << box; });
         ++m_count;
     }
-    int count() const { return m_count; }
+    [[nodiscard]] int count() const noexcept { return m_count; }
 
 private:
     static constexpr double cell = 72;
@@ -97,7 +97,7 @@ private:
     int m_count = 0;
 };
 
-QFont fontOf(int pixels) {
+[[nodiscard]] QFont fontOf(int pixels) {
     QFont font = QGuiApplication::font();
     font.setPixelSize(pixels);
     return font;
@@ -469,7 +469,7 @@ void GraphCanvas::paint(QPainter *painter) {
     // part of a frame), so then just those around the selection keep them.
     const QColor dark = luminance(m_background) < luminance(m_foreground) ? m_background : m_foreground;
     const QColor light = luminance(m_background) < luminance(m_foreground) ? m_foreground : m_background;
-    const bool crowded = std::count(inView.cbegin(), inView.cend(), true) > 220;
+    const bool crowded = std::ranges::count(inView, true) > 220;
     for (const bool pass : {false, true})
         for (int row = 0; row < count; ++row) {
             if (!inView.at(row) || lit.at(row) != pass)
@@ -498,16 +498,13 @@ void GraphCanvas::paint(QPainter *painter) {
     // The names: the selected node's and its neighbours' first, then the
     // best connected, each only where no name stands already. That alone
     // makes a far view name its hubs and a near view name everything.
-    QList<int> order;
-    order.reserve(count);
-    for (int row = 0; row < count; ++row)
-        if (inView.at(row))
-            order << row;
+    auto order = std::views::iota(0, count) | std::views::filter([&inView](int row) { return inView.at(row); })
+                 | std::ranges::to<QList<int>>();
     const auto weight = [&](int row) {
         return (row == selected ? 4000000 : 0) + (row == hovered ? 2000000 : 0) + (selected >= 0 && lit.at(row) ? 1000000 : 0)
                + shown.at(row).links;
     };
-    std::stable_sort(order.begin(), order.end(), [&](int a, int b) { return weight(a) > weight(b); });
+    std::ranges::stable_sort(order, std::ranges::greater{}, weight);
     Taken taken(width(), height());
     for (const int row : std::as_const(order))
         taken.take(QRectF(at.at(row).x() - radius.at(row), at.at(row).y() - radius.at(row), radius.at(row) * 2, radius.at(row) * 2));

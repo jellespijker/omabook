@@ -96,7 +96,7 @@ int main(int argc, char *argv[]) {
     Reader reader(&backend, calibre.converter());
     reader.setConverter(calibre.converter(), calibre.switchedOff());
     QObject::connect(&backend, &Backend::pluginsChanged, &reader,
-                     [&] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
+                     [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
     Assistant assistant(&reader, [&settings](QString *why) { return makeAiProvider(settings, why); });
     QObject::connect(&settings, &Settings::changed, &assistant, &Assistant::refresh);
     // Whether the knowledge graph grows while reading is the user's choice.
@@ -108,7 +108,7 @@ int main(int argc, char *argv[]) {
     Librarian librarian(&backend, &settings, &custom, [&theme] { return theme.colors(); });
     // What script plugins add to the keyboard and the window joins the
     // interface's own, and follows the plugins as they are edited.
-    const auto followPlugins = [&] { custom.setPlugins(backend.scripts()->commands(), backend.scripts()->panels()); };
+    const auto followPlugins = [&custom, &backend] { custom.setPlugins(backend.scripts()->commands(), backend.scripts()->panels()); };
     QObject::connect(backend.scripts(), &ScriptPlugins::changed, &custom, followPlugins);
     followPlugins();
 
@@ -143,9 +143,7 @@ int main(int argc, char *argv[]) {
     engine.rootContext()->setContextProperty("manual", &manual);
     // Where there is a touchscreen, what the keys do is also on screen.
     const auto devices = QInputDevice::devices();
-    const bool touchscreen = std::any_of(devices.begin(), devices.end(), [](const QInputDevice *device) {
-        return device->type() == QInputDevice::DeviceType::TouchScreen;
-    });
+    const bool touchscreen = std::ranges::contains(devices, QInputDevice::DeviceType::TouchScreen, &QInputDevice::type);
     engine.rootContext()->setContextProperty("touchscreen", touchscreen);
     // Pages are still being drawn on worker threads when the window closes;
     // let them finish while the application they draw with still exists.
@@ -157,7 +155,7 @@ int main(int argc, char *argv[]) {
         reader.openBook(opening);
     // For the README's picture and for looking at a change without a desktop.
     if (arguments.isSet(screenshot)) {
-        QTimer::singleShot(1500, &app, [&] {
+        QTimer::singleShot(1500, &app, [&app, &interface, &arguments, &screenshot] {
             app.exit(interface.window() && interface.window()->grabWindow().save(arguments.value(screenshot)) ? 0 : 1);
         });
     }

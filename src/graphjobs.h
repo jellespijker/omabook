@@ -28,11 +28,11 @@ public:
     explicit GraphJobs(Backend *backend);
     ~GraphJobs() override;
 
-    QVariantMap plan() const { return m_plan; }
-    bool planning() const { return m_planning; }
-    bool busy() const { return m_busy; }
-    QVariantMap progress() const { return m_progress; }
-    QVariantMap summary() const { return m_summary; }
+    QVariantMap plan() const noexcept { return m_plan; }
+    bool planning() const noexcept { return m_planning; }
+    bool busy() const noexcept { return m_busy; }
+    QVariantMap progress() const noexcept { return m_progress; }
+    QVariantMap summary() const noexcept { return m_summary; }
 
     // Works out what it would take to build the graph of: "selected" (the
     // book with this id), "shown" (what the shelf shows now, with its search

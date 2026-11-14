@@ -21,14 +21,14 @@ public:
 
     // False only when not even the built-in window loads.
     bool load();
-    QQuickWindow *window() const { return m_window; }
+    QQuickWindow *window() const noexcept { return m_window; }
 
 signals:
     // The window was loaded, for the first time or again.
     void loaded();
 
 private:
-    QObject *create(const QUrl &url, QString *problem);
+    [[nodiscard]] std::unique_ptr<QObject> create(const QUrl &url, QString *problem);
 
     QQmlEngine *m_engine;
     Customization *m_custom;

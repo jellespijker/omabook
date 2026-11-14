@@ -52,16 +52,16 @@ public:
 
     GraphBrowser *browser() const { return m_browser; }
     void setBrowser(GraphBrowser *browser);
-    QVariantMap colors() const { return m_colors; }
+    QVariantMap colors() const noexcept { return m_colors; }
     void setColors(const QVariantMap &colors);
-    QColor foreground() const { return m_foreground; }
+    QColor foreground() const noexcept { return m_foreground; }
     void setForeground(const QColor &color);
-    QColor background() const { return m_background; }
+    QColor background() const noexcept { return m_background; }
     void setBackground(const QColor &color);
-    QColor accent() const { return m_accent; }
+    QColor accent() const noexcept { return m_accent; }
     void setAccent(const QColor &color);
-    double zoom() const { return m_zoom; }
-    qint64 hovered() const { return m_hovered; }
+    double zoom() const noexcept { return m_zoom; }
+    qint64 hovered() const noexcept { return m_hovered; }
     void setHovered(qint64 node);
     // How long the last frame took to paint, in milliseconds.
     Q_INVOKABLE double paintTime() const { return m_paintTime; }
@@ -128,13 +128,13 @@ class GraphMark : public QQuickPaintedItem {
 public:
     explicit GraphMark(QQuickItem *parent = nullptr);
 
-    QString kind() const { return m_kind; }
+    QString kind() const noexcept { return m_kind; }
     void setKind(const QString &kind);
-    QVariantMap colors() const { return m_colors; }
+    QVariantMap colors() const noexcept { return m_colors; }
     void setColors(const QVariantMap &colors);
-    QColor foreground() const { return m_foreground; }
+    QColor foreground() const noexcept { return m_foreground; }
     void setForeground(const QColor &color);
-    QColor background() const { return m_background; }
+    QColor background() const noexcept { return m_background; }
     void setBackground(const QColor &color);
 
     void paint(QPainter *painter) override;

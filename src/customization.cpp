@@ -10,12 +10,46 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QStandardPaths>
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <ranges>
+#include <span>
+#include <string_view>
 
 #include "scriptapi.h"
 #include "theme.h"
 
 namespace {
+
+using namespace Qt::StringLiterals;
+
+// Where keys work: what a command's id begins with, and what keys.json is divided into.
+constexpr std::array<std::string_view, 4> places{"global", "library", "reader", "graph"};
+
+[[nodiscard]] constexpr std::string_view placeOf(std::string_view command) noexcept { return command.substr(0, command.find('.')); }
+
+[[nodiscard]] bool isPlace(QStringView name) {
+    return std::ranges::any_of(places, [name](std::string_view place) { return name == QLatin1StringView(place); });
+}
+
+// A built-in command as it is written down below, all of it known when the
+// program is built.
+struct BuiltIn {
+    std::string_view id;
+    // The keys it has by default: three at most, the room left over empty.
+    std::array<std::string_view, 3> keys;
+    const char *what;
+};
+
+[[nodiscard]] constexpr auto keysOf(const BuiltIn &command) {
+    return command.keys | std::views::filter([](std::string_view key) { return !key.empty(); });
+}
+
+// The descriptions stay in English here, for AGENTS.md; marking each
+// with tr() puts it in the catalogs, and the help translates it when
+// it is shown (see Manual::commands).
+constexpr auto tr = [](const char *text) noexcept { return text; };
 
 // A key with Ctrl, Alt or Meta, or a function key, can't be typed into a
 // text field, so it stays a shortcut while one has the keyboard.
@@ -31,28 +65,29 @@ bool isChord(const QString &key) {
 
 QString normal(const QString &key) { return QKeySequence(key).toString(QKeySequence::PortableText); }
 
-QJsonObject readObject(const QString &path, bool *exists, QString *problem) {
+// A file that should hold one JSON object: what it holds, whether it is
+// there at all, and what is wrong with it when it can't be used.
+struct ObjectFile {
+    QJsonObject object;
+    bool exists = false;
+    QString problem;
+};
+
+[[nodiscard]] ObjectFile readObject(const QString &path) {
     QFile file(path);
-    *exists = file.open(QIODevice::ReadOnly);
-    if (!*exists)
+    if (!file.open(QIODevice::ReadOnly))
         return {};
     QJsonParseError error;
     const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
+    QString problem;
     if (error.error != QJsonParseError::NoError)
-        *problem = QString("It isn't valid JSON: %1 (at character %2).").arg(error.errorString()).arg(error.offset);
+        problem = QString("It isn't valid JSON: %1 (at character %2).").arg(error.errorString()).arg(error.offset);
     else if (!document.isObject())
-        *problem = "It should be a JSON object.";
-    return document.object();
+        problem = "It should be a JSON object.";
+    return {document.object(), true, problem};
 }
 
-} // namespace
-
-const QList<Customization::Command> &Customization::commands() {
-    // The descriptions stay in English here, for AGENTS.md; marking each
-    // with tr() puts it in the catalogs, and the help translates it when
-    // it is shown (see Manual::commands).
-    const auto tr = [](const char *text) { return QString::fromUtf8(text); };
-    static const QList<Command> commands{
+constexpr BuiltIn builtIns[] = {
         {"global.help", {"?", "F1"}, tr("Show or hide the help: every key, and how things work")},
         {"global.quit", {"Q", "Ctrl+Q"}, tr("Quit")},
         {"global.settings", {","}, tr("Open the settings")},
@@ -142,8 +177,51 @@ const QList<Customization::Command> &Customization::commands() {
         {"graph.edit", {"E"}, tr("Rename the selected thing, or rewrite what is said of it")},
         {"graph.merge", {"Shift+M"}, tr("Fold another thing into the selected one: they are the same")},
         {"graph.remove", {"D", "Delete"}, tr("Remove the selected thing from the graph (asks first)")},
-    };
+};
+
+// A command is found by its id, which begins with the place it works in.
+[[nodiscard]] constexpr bool namedApart(std::span<const BuiltIn> commands) {
+    for (std::size_t one = 0; one < commands.size(); ++one) {
+        if (!std::ranges::contains(places, placeOf(commands[one].id)))
+            return false;
+        for (std::size_t other = one + 1; other < commands.size(); ++other)
+            if (commands[one].id == commands[other].id)
+                return false;
+    }
+    return true;
+}
+
+// A key does one thing where it is pressed: no two commands of one place
+// have the same key by default, and none has a key that works everywhere.
+// (The graph's keys are its own: it lies over the shelf or beside the page.)
+[[nodiscard]] constexpr bool keyedApart(std::span<const BuiltIn> commands) {
+    for (std::size_t one = 0; one < commands.size(); ++one)
+        for (std::size_t other = one + 1; other < commands.size(); ++other) {
+            const std::string_view here = placeOf(commands[one].id), there = placeOf(commands[other].id);
+            const bool together = here == there || here == "global" || there == "global";
+            const auto shared = [&](std::string_view key) { return std::ranges::contains(keysOf(commands[other]), key); };
+            if (together && std::ranges::any_of(keysOf(commands[one]), shared))
+                return false;
+        }
+    return true;
+}
+
+static_assert(namedApart(builtIns), "every command has an id of its own, beginning with a place keys work in");
+static_assert(keyedApart(builtIns), "two commands of one place have the same default key");
+
+} // namespace
+
+const QList<Customization::Command> &Customization::commands() {
+    static const QList<Command> commands = builtIns | std::views::transform([](const BuiltIn &command) {
+        const auto text = [](std::string_view utf8) { return QString::fromUtf8(utf8); };
+        return Command{text(command.id), keysOf(command) | std::views::transform(text) | std::ranges::to<QStringList>(), text(command.what)};
+    }) | std::ranges::to<QList<Command>>();
     return commands;
+}
+
+double relativeLuminance(const QColor &color) noexcept {
+    const auto linear = [](double v) { return v <= .04045 ? v / 12.92 : std::pow((v + .055) / 1.055, 2.4); };
+    return .2126 * linear(color.redF()) + .7152 * linear(color.greenF()) + .0722 * linear(color.blueF());
 }
 
 Customization::Customization(const QString &folder, QObject *parent)
@@ -185,7 +263,7 @@ void Customization::reload() {
 QString Customization::check() {
     reload();
     QString problems;
-    for (const QString &name : {QString("keys"), QString("style")}) {
+    for (const auto name : {"keys"_L1, "style"_L1}) {
         QFile error(m_folder + "/" + name + ".error");
         if (error.open(QIODevice::ReadOnly))
             problems += QString::fromUtf8(error.readAll()).section('\n', 0, 0) + " ";
@@ -210,19 +288,20 @@ void Customization::reportUi(const QString &problem) const { report("ui", proble
 // a key and the command it runs in that place, or "" to free the key. What
 // the file doesn't mention keeps its default.
 void Customization::loadKeys() {
-    QHash<QString, QStringList> bound;
-    QStringList order;
     const QList<Command> known = allCommands();
-    for (const Command &command : known) {
-        order << command.id;
-        for (const QString &key : command.keys)
-            bound[command.id] << normal(key);
-    }
-    bool exists = false;
-    QString problem;
-    const QJsonObject file = readObject(m_folder + "/keys.json", &exists, &problem);
+    const auto order = known | std::views::transform(&Command::id) | std::ranges::to<QStringList>();
+    // Every command with the keys it has when keys.json says nothing.
+    const auto defaults = [&known] {
+        QHash<QString, QStringList> bound;
+        for (const Command &command : known)
+            for (const QString &key : command.keys)
+                bound[command.id] << normal(key);
+        return bound;
+    };
+    QHash<QString, QStringList> bound = defaults();
+    auto [file, exists, problem] = readObject(m_folder + "/keys.json");
     for (auto place = file.begin(); place != file.end() && problem.isEmpty(); ++place) {
-        if (!QStringList{"global", "library", "reader", "graph"}.contains(place.key()) || !place.value().isObject()) {
+        if (!isPlace(place.key()) || !place.value().isObject()) {
             problem = "\"" + place.key() + "\" isn't a place keys work in: use \"global\", \"library\", \"reader\" or \"graph\".";
             break;
         }
@@ -251,12 +330,8 @@ void Customization::loadKeys() {
     // A broken file changes nothing; with nothing loaded yet, the defaults stand.
     if (!problem.isEmpty() && !m_text.isEmpty())
         return;
-    if (!problem.isEmpty()) {
-        bound.clear();
-        for (const Command &command : known)
-            for (const QString &key : command.keys)
-                bound[command.id] << normal(key);
-    }
+    if (!problem.isEmpty())
+        bound = defaults();
     QVariantMap plain, chord, text;
     for (const QString &command : std::as_const(order)) {
         QStringList plainKeys, chordKeys;
@@ -283,9 +358,9 @@ QList<Customization::Command> Customization::allCommands() const {
         const QString key = normal(plugin.value("key").toString());
         // A plugin asks for a key; it gets it when nothing in that place,
         // built in or added before it, has it by default.
-        const bool taken = std::any_of(all.cbegin(), all.cend(), [&](const Command &other) {
-            const bool samePlace = place == "global" || other.id.startsWith(place + ".") || other.id.startsWith("global.");
-            return samePlace && std::any_of(other.keys.cbegin(), other.keys.cend(), [&](const QString &theirs) { return normal(theirs) == key; });
+        const bool taken = std::ranges::any_of(all, [&place, &key](const Command &other) {
+            const bool samePlace = place == "global"_L1 || other.id.startsWith(place + ".") || other.id.startsWith("global."_L1);
+            return samePlace && std::ranges::contains(other.keys, key, normal);
         });
         if (!key.isEmpty() && !taken)
             keys << key;
@@ -295,11 +370,8 @@ QList<Customization::Command> Customization::allCommands() const {
 }
 
 QVariantList Customization::pluginCommands() const {
-    QVariantList offered;
-    for (const QVariant &command : m_pluginCommands)
-        if (command.toMap().value("applies", true).toBool())
-            offered << command;
-    return offered;
+    return m_pluginCommands | std::views::filter([](const QVariant &command) { return command.toMap().value("applies", true).toBool(); })
+           | std::ranges::to<QVariantList>();
 }
 
 void Customization::setPlugins(const QVariantList &commands, const QVariantList &panels) {
@@ -320,9 +392,7 @@ void Customization::setPlugins(const QVariantList &commands, const QVariantList 
 // style.json is {"colors": {"accent": "#c96", "background": ...}, "mode":
 // "light", "radius": 8, "font": "Inter", "font_size": 14}; every key is optional.
 void Customization::loadStyle() {
-    bool exists = false;
-    QString problem;
-    const QJsonObject file = readObject(m_folder + "/style.json", &exists, &problem);
+    auto [file, exists, problem] = readObject(m_folder + "/style.json");
     QVariantMap style;
     QVariantMap colors;
     const QJsonObject wanted = file.value("colors").toObject();
@@ -338,9 +408,9 @@ void Customization::loadStyle() {
         return;
     if (!colors.isEmpty()) style.insert("colors", colors);
     if (file.contains("mode")) style.insert("mode", file.value("mode").toString());
-    if (file.value("radius").isDouble()) style.insert("radius", qBound(0, file.value("radius").toInt(), 40));
+    if (file.value("radius").isDouble()) style.insert("radius", std::clamp(file.value("radius").toInt(), 0, 40));
     if (!file.value("font").toString().isEmpty()) style.insert("font", file.value("font").toString());
-    if (file.value("font_size").isDouble()) style.insert("font_size", qBound(8, file.value("font_size").toInt(), 32));
+    if (file.value("font_size").isDouble()) style.insert("font_size", std::clamp(file.value("font_size").toInt(), 8, 32));
     if (style == m_style)
         return;
     m_style = style;
@@ -352,9 +422,7 @@ void Customization::loadStyle() {
 void Customization::loadMods() {
     QVariantList mods;
     for (const QFileInfo &entry : QDir(m_folder + "/mods").entryInfoList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
-        bool exists = false;
-        QString problem;
-        const QJsonObject manifest = readObject(entry.filePath() + "/mod.json", &exists, &problem);
+        const auto [manifest, exists, problem] = readObject(entry.filePath() + "/mod.json");
         const QString place = manifest.value("place").toString();
         if (!exists || !problem.isEmpty() || !QFileInfo::exists(entry.filePath() + "/Main.qml")
             || !QStringList{"library.side", "reader.side"}.contains(place))
@@ -363,7 +431,7 @@ void Customization::loadMods() {
         QUrl url = QUrl::fromLocalFile(entry.filePath() + "/Main.qml");
         url.setQuery(QString::number(QFileInfo(entry.filePath() + "/Main.qml").lastModified().toMSecsSinceEpoch()));
         mods << QVariantMap{{"name", entry.fileName()}, {"place", place}, {"title", manifest.value("title").toString(entry.fileName())},
-                            {"width", qBound(120, manifest.value("width").toInt(280), 900)}, {"url", url}};
+                            {"width", std::clamp(manifest.value("width").toInt(280), 120, 900)}, {"url", url}};
     }
     if (mods == m_mods)
         return;
@@ -582,18 +650,13 @@ QColor Look::color(const QString &key) const {
 
 QVariantMap Look::colors() const {
     QVariantMap colors = m_theme->colors();
-    const QVariantMap own = m_custom->style().value("colors").toMap();
-    for (auto it = own.begin(); it != own.end(); ++it)
-        colors.insert(it.key(), it.value());
+    colors.insert(m_custom->style().value("colors").toMap());
     return colors;
 }
 
 // Black or white, whichever reads on the accent (WCAG relative luminance).
 QColor Look::accentForeground() const {
-    auto linear = [](double v) { return v <= .04045 ? v / 12.92 : std::pow((v + .055) / 1.055, 2.4); };
-    const QColor c = accent();
-    const double luminance = .2126 * linear(c.redF()) + .7152 * linear(c.greenF()) + .0722 * linear(c.blueF());
-    return luminance > .179 ? QColor("black") : QColor("white");
+    return relativeLuminance(accent()) > .179 ? QColor("black") : QColor("white");
 }
 
 bool Look::light() const {

@@ -81,14 +81,13 @@ Reader::~Reader() {
     saveProgress();
     m_opening.waitForFinished();
     // The engine may already have deleted the provider it owns.
-    if (m_providerGuard && m_provider)
+    if (m_provider)
         m_provider->setDocument(nullptr);
 }
 
 BookImageProvider *Reader::imageProvider() {
     if (!m_provider) {
         m_provider = new BookImageProvider;
-        m_providerGuard = m_provider;
         m_provider->setDocument(m_document);
     }
     return m_provider;
@@ -220,7 +219,7 @@ void Reader::loaded() {
     }
     m_document = document;
     ++m_generation;
-    if (m_providerGuard && m_provider)
+    if (m_provider)
         m_provider->setDocument(m_document);
 
     m_toc.clear();
@@ -302,7 +301,7 @@ void Reader::close() {
     m_backend->reload();
     m_backend->scripts()->emitEvent("book.closed", whereabouts());
     m_document.reset();
-    if (m_providerGuard && m_provider)
+    if (m_provider)
         m_provider->setDocument(nullptr);
     m_bookId = 0;
     m_html.clear();

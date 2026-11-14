@@ -76,7 +76,7 @@ public:
 
     QVariantList commands() const;
     QVariantList topics() const;
-    QString version() const { return m_version; }
+    QString version() const noexcept { return m_version; }
     bool tourOffered() const;
     bool readerTourOffered() const;
     bool newsOffered() const;

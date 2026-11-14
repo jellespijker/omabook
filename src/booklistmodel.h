@@ -44,17 +44,17 @@ public:
 
     void setBooks(const QList<Book> &books, const QString &libraryRoot);
 
-    QString query() const { return m_query; }
+    QString query() const noexcept { return m_query; }
     void setQuery(const QString &query);
-    QString sort() const { return m_sort; }
+    QString sort() const noexcept { return m_sort; }
     void setSort(const QString &sort);
-    bool reversed() const { return m_reversed; }
+    bool reversed() const noexcept { return m_reversed; }
     void setReversed(bool reversed);
     bool descending() const;
-    QVariantMap filters() const { return m_filters; }
+    QVariantMap filters() const noexcept { return m_filters; }
     void setFilters(const QVariantMap &filters);
-    int count() const { return m_rows.size(); }
-    int total() const { return m_books.size(); }
+    int count() const noexcept { return int(m_rows.size()); }
+    int total() const noexcept { return int(m_books.size()); }
 
     static QStringList sorts();
     static QStringList filterKinds();
@@ -101,10 +101,9 @@ private:
     void rebuild();
     // The books that pass the search and every filter but one of `except`'s
     // kind, as indexes into m_books, in the shelf's order.
-    QList<int> arranged(const QString &except = {}) const;
-    bool passes(const Book &book, const QString &kind, const QVariant &value) const;
-    QColor spineColor(int book) const;
-    double thickness(int book) const;
+    [[nodiscard]] QList<int> arranged(const QString &except = {}) const;
+    [[nodiscard]] QColor spineColor(int book) const;
+    [[nodiscard]] double thickness(int book) const;
     void loadColors() const;
 
     QList<Book> m_books;

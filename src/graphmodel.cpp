@@ -6,6 +6,9 @@
 #include <QThread>
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <ranges>
+#include <utility>
 
 #include "backend.h"
 #include "graphcanvas.h"
@@ -34,7 +37,7 @@ bool before(const GraphNode &a, const GraphNode &b) {
 // Whether a node goes by every one of the words.
 bool goesBy(const GraphNode &node, const QStringList &words) {
     const QString names = (node.name + " " + node.aliases().join(' ')).toLower();
-    return std::all_of(words.cbegin(), words.cend(), [&](const QString &word) { return names.contains(word); });
+    return std::ranges::all_of(words, [&names](const QString &word) { return names.contains(word); });
 }
 
 // The nodes within `depth` edges of one, and the edges among them.
@@ -167,7 +170,7 @@ GraphView GraphBrowser::allowed() const {
                 const auto book = bookNodes.constFind(place.bookId);
                 if (thing.kind == "book" || book == bookNodes.constEnd())
                     continue;
-                if (!added.contains(book->id) && std::none_of(things.cbegin(), things.cend(), [&](const GraphNode &one) { return one.id == book->id; })) {
+                if (!added.contains(book->id) && !std::ranges::contains(things, book->id, &GraphNode::id)) {
                     added << book->id;
                     view.nodes << *book;
                 }
@@ -280,7 +283,7 @@ void GraphBrowser::load(bool keepPlaces) {
 
     m_base = allowed();
     // A centre that is gone (removed, merged away) is no centre.
-    if (m_centre > 0 && std::none_of(m_base.nodes.cbegin(), m_base.nodes.cend(), [&](const GraphNode &node) { return node.id == m_centre; })) {
+    if (m_centre > 0 && !std::ranges::contains(m_base.nodes, m_centre, &GraphNode::id)) {
         m_centre = 0;
         m_base = allowed();
     }
@@ -291,7 +294,7 @@ void GraphBrowser::load(bool keepPlaces) {
     // What is known of the book past the place shown, so the view can say
     // so rather than look as if nothing were known.
     m_hiddenCount = bounded() && library() ? qMax(0, int(Graph(*library()).ofBook(m_bookId).nodes.size()) - m_knownCount) : 0;
-    m_storied = std::any_of(m_base.nodes.cbegin(), m_base.nodes.cend(), [](const GraphNode &node) { return !ofTheLibrary(node.kind); });
+    m_storied = std::ranges::any_of(m_base.nodes, std::not_fn(ofTheLibrary), &GraphNode::kind);
 
     GraphView view = m_base;
     // A scope is cut around its centre by the storage; a book or a series
@@ -319,9 +322,7 @@ void GraphBrowser::load(bool keepPlaces) {
     for (const GraphNode &node : std::as_const(view.nodes))
         ++counts[node.kind];
     QStringList kinds = counts.keys();
-    std::sort(kinds.begin(), kinds.end(), [](const QString &a, const QString &b) {
-        return rankOf(a) != rankOf(b) ? rankOf(a) < rankOf(b) : a < b;
-    });
+    std::ranges::sort(kinds, {}, [](const QString &kind) { return std::pair(rankOf(kind), kind); });
     m_kinds.clear();
     for (const QString &kind : std::as_const(kinds))
         m_kinds << QVariantMap{{"kind", kind}, {"count", counts.value(kind)}, {"shown", !m_hidden.contains(kind)}};
@@ -332,7 +333,7 @@ void GraphBrowser::load(bool keepPlaces) {
     for (const GraphNode &node : std::as_const(view.nodes))
         own << node.id;
     QList<qint64> ownNodes = own.values(), ownEdges;
-    std::sort(ownNodes.begin(), ownNodes.end());
+    std::ranges::sort(ownNodes);
     for (const GraphEdge &edge : std::as_const(view.edges))
         if (own.contains(edge.source) && own.contains(edge.target))
             ownEdges << edge.id;
@@ -355,7 +356,7 @@ void GraphBrowser::load(bool keepPlaces) {
         }
     }
 
-    std::sort(view.nodes.begin(), view.nodes.end(), [](const GraphNode &a, const GraphNode &b) { return a.id < b.id; });
+    std::ranges::sort(view.nodes, {}, &GraphNode::id);
     m_shown.clear();
     m_index.clear();
     for (const GraphNode &node : std::as_const(view.nodes)) {
@@ -389,7 +390,7 @@ void GraphBrowser::load(bool keepPlaces) {
 
     // The rows: the book's own by kind, then what is in other books.
     QList<GraphNode> ordered = view.nodes;
-    std::sort(ordered.begin(), ordered.end(), [&](const GraphNode &a, const GraphNode &b) {
+    std::ranges::sort(ordered, [&outer](const GraphNode &a, const GraphNode &b) {
         return outer.contains(a.id) != outer.contains(b.id) ? outer.contains(b.id) : before(a, b);
     });
     m_rows.clear();
@@ -530,8 +531,7 @@ void GraphBrowser::setDepth(int depth) {
     if (m_depth > 0 && m_centre == 0) {
         m_centre = m_selected;
         if (m_centre == 0 && !m_shown.isEmpty())
-            m_centre = std::max_element(m_shown.cbegin(), m_shown.cend(), [](const Shown &a, const Shown &b) { return a.links < b.links; })
-                           ->node.id;
+            m_centre = std::ranges::max_element(m_shown, {}, &Shown::links)->node.id;
     }
     load(true);
     emit reframed();
@@ -571,7 +571,7 @@ void GraphBrowser::jumpTo(qint64 node) {
         if (!found)
             return;
         // A book's graph never shows what its reader hasn't met.
-        const bool known = std::any_of(m_base.nodes.cbegin(), m_base.nodes.cend(), [&](const GraphNode &one) { return one.id == node; });
+        const bool known = std::ranges::contains(m_base.nodes, node, &GraphNode::id);
         if (m_what != What::Scope && !known)
             return;
         m_hidden.remove(found->kind);
@@ -593,12 +593,10 @@ void GraphBrowser::step(const QString &direction) {
         return;
     const int from = rowOf(m_selected);
     if (from < 0) {
-        // Nothing selected yet: the centre, or the best connected node.
-        int best = rowOf(m_centre);
-        for (int row = 0; best < 0 && row < m_shown.size(); ++row)
-            if (std::none_of(m_shown.cbegin(), m_shown.cend(), [&](const Shown &other) { return other.links > m_shown.at(row).links; }))
-                best = row;
-        select(m_shown.at(std::max(0, best)).node.id);
+        // Nothing selected yet: the centre, or the best connected node (the
+        // first of them, when several are).
+        const int centre = rowOf(m_centre);
+        select(centre >= 0 ? m_shown.at(centre).node.id : std::ranges::max_element(m_shown, {}, &Shown::links)->node.id);
         return;
     }
     const QPointF way = direction == "left" ? QPointF(-1, 0) : direction == "right" ? QPointF(1, 0)
@@ -711,7 +709,7 @@ QVariantList GraphBrowser::find(const QString &typed) const {
     const auto rank = [&](const GraphNode &node) {
         return node.name.toLower() == whole ? 0 : node.name.toLower().startsWith(whole) ? 1 : 2;
     };
-    std::stable_sort(nodes.begin(), nodes.end(), [&](const GraphNode &a, const GraphNode &b) {
+    std::ranges::stable_sort(nodes, [&rank](const GraphNode &a, const GraphNode &b) {
         return rank(a) != rank(b) ? rank(a) < rank(b) : QString::localeAwareCompare(a.name.toLower(), b.name.toLower()) < 0;
     });
     for (const GraphNode &node : nodes.mid(0, 40))
@@ -848,11 +846,12 @@ void GraphBrowser::describe() {
 }
 
 void registerGraphTypes() {
-    static bool done = false;
-    if (done)
-        return;
-    done = true;
-    qmlRegisterType<GraphBrowser>("Omabook", 1, 0, "GraphBrowser");
-    qmlRegisterType<GraphCanvas>("Omabook", 1, 0, "GraphCanvas");
-    qmlRegisterType<GraphMark>("Omabook", 1, 0, "GraphMark");
+    // Once, however many backends are made; a static's first use is the
+    // one that runs it, whichever thread gets there.
+    [[maybe_unused]] static const bool registered = [] {
+        qmlRegisterType<GraphBrowser>("Omabook", 1, 0, "GraphBrowser");
+        qmlRegisterType<GraphCanvas>("Omabook", 1, 0, "GraphCanvas");
+        qmlRegisterType<GraphMark>("Omabook", 1, 0, "GraphMark");
+        return true;
+    }();
 }
