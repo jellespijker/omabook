@@ -47,6 +47,8 @@
         <file alias="PluginNewSheet.qml">PluginNewSheet.qml</file>
         <file alias="PluginInstallSheet.qml">PluginInstallSheet.qml</file>
         <file alias="ReaderView.qml">ReaderView.qml</file>
+        <file alias="ReadingMenu.qml">ReadingMenu.qml</file>
+        <file alias="PageMarks.qml">PageMarks.qml</file>
         <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>

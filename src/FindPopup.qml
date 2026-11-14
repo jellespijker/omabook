@@ -12,14 +12,25 @@ AppPopup {
     property var results: []
     property bool searched: false
 
+    // Opens on these words, found at once: words selected on the page.
+    property string pending: ""
+    function findWords(text) {
+        pending = text.trim()
+        open()
+    }
     function go(result) {
         reader.goToPlace(result.section, result.fraction)
         close()
     }
 
     onOpened: {
+        if (pending !== "") {
+            words.text = pending
+            pending = ""
+            words.accepted()
+        }
         words.selectAll()
-        words.forceActiveFocus()
+        if (!list.activeFocus) words.forceActiveFocus()
     }
 
     ColumnLayout {

@@ -148,6 +148,8 @@ constexpr BuiltIn builtIns[] = {
         {"reader.cast", {"W"}, tr("Have the AI say who is who so far")},
         {"reader.expand", {"F", "F11"}, tr("The book and nothing else, on the whole screen")},
         {"reader.graph", {"M"}, tr("Show or hide the map of what the book has told so far, beside the page")},
+        {"reader.marks", {"Shift+M"}, tr("Mark the graph's people, places and things in the text: while the map is open, always, or never")},
+        {"reader.select", {"V"}, tr("Select words with the keyboard: the arrows or H J K L move, Shift widens, Enter shows what to do with them")},
         // The graph view, wherever it is open: over the shelf or beside the page.
         {"graph.left", {"H", "Left"}, tr("Select the nearest related thing to the left")},
         {"graph.right", {"L", "Right"}, tr("Select the nearest related thing to the right")},

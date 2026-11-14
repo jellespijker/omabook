@@ -51,7 +51,7 @@ echo '{"library": {"Space": "", "R": "read"}}' > "$XDG_CONFIG_HOME/omabook/keys.
 expect "the keys follow keys.json" 0 "  R                   Read the selected book" "$omabook" help keys
 expect "a help page follows keys.json" 0 "R opens the selected book" "$omabook" help start
 rm "$XDG_CONFIG_HOME/omabook/keys.json"
-expect "what is new" 0 "A graph for books already read" "$omabook" help new
+expect "what is new" 0 "The graph, in the text" "$omabook" help new
 expect "what is new as JSON" 0 '"features"' "$omabook" help new --json
 expect "an unknown help topic fails" 1 "no help on" "$omabook" help nonsense
 expect "an empty library lists nothing" 0 "" "$omabook" list --library "$library"

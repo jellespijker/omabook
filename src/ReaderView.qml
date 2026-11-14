@@ -18,7 +18,16 @@ Item {
     property bool immersive: false
     // The map of what the book has told so far, beside the page.
     property bool showGraph: false
-    readonly property bool popupOpen: finder.opened || knowledge.popupOpen
+    // The graph's things marked in the text: while the map is beside the
+    // page, always, or never (`marks` in config.json). Pages that are
+    // pictures (PDF, comics) have no words to mark.
+    readonly property bool marksOn: reader.kind === "flow"
+                                    && (settings.marks === "always" || (settings.marks === "map" && graphOpen))
+    // Selecting words with the keyboard (see startSelecting).
+    property bool selecting: false
+    // While the keyboard selects, or works the menu beside the words, its
+    // keys are theirs, not the book's.
+    readonly property bool popupOpen: finder.opened || knowledge.popupOpen || selecting || (menu.shown && menu.activeFocus)
     // While the map has the keyboard, the keys are its own (see GraphPane).
     readonly property bool mapping: knowledge.focused
     // Whether the keys that move through the book are the book's right now.
@@ -103,6 +112,104 @@ Item {
         showAssistant = true
         companion.takeFocus()
     }
+    // The menu, the card and what they lead to.
+    function fromContent(rect) {
+        const at = content.mapToItem(room, rect.x, rect.y)
+        return Qt.rect(at.x, at.y, rect.width, rect.height)
+    }
+    property var pointedThing: null
+    // The pointer came onto a marked thing, or left it: a card a moment
+    // later, gone a moment after the pointer leaves both.
+    function pointed(thing) {
+        pointedThing = thing
+        if (thing) {
+            hideSoon.stop()
+            if (!menu.shown || menu.passing) showSoon.restart()
+        } else {
+            showSoon.stop()
+            if (menu.shown && menu.passing) hideSoon.restart()
+        }
+    }
+    Timer {
+        id: showSoon
+        interval: 350
+        onTriggered: if (view.pointedThing && (!menu.shown || menu.passing)) menu.openCard(view.pointedThing, view.fromContent(view.pointedThing.rect), false, true)
+    }
+    Timer {
+        id: hideSoon
+        interval: 400
+        onTriggered: if (menu.passing && !menu.hovering && !view.pointedThing) menu.close()
+    }
+    // A press of the mouse ended: on selected words, their menu; on a
+    // marked thing, its card, which stays.
+    function released() {
+        const chosen = content && content.selection ? content.selection() : null
+        if (chosen && chosen.text.trim() !== "") {
+            showSoon.stop()
+            chosen.rect = fromContent(chosen.rect)
+            menu.openMenu(chosen)
+        } else if (pointedThing) {
+            showSoon.stop()
+            menu.openCard(pointedThing, fromContent(pointedThing.rect), false, false)
+        }
+    }
+    // A finger: a tap on a marked thing shows its card; a long press selects
+    // the word under it and shows the menu.
+    function tappedAt(x, y) {
+        if (!content || typeof content.thingAt !== "function") return false
+        const at = touchArea.mapToItem(content, x, y)
+        const found = content.thingAt(at.x, at.y)
+        if (!found) return false
+        menu.openCard(found, fromContent(found.rect), false, false)
+        return true
+    }
+    function pressedLongAt(x, y) {
+        if (!content || typeof content.selectAt !== "function") return
+        const at = touchArea.mapToItem(content, x, y)
+        if (content.selectAt(at.x, at.y)) released()
+    }
+    // V: the first word on the screen is selected, and the keys move it on
+    // or widen it (see selectKeys); Enter shows the menu.
+    function startSelecting() {
+        if (!content || typeof content.beginSelecting !== "function") {
+            backend.say(qsTr("These pages are pictures, so there are no words to select."))
+            return
+        }
+        menu.close()
+        selecting = true
+        content.beginSelecting()
+        selectKeys.forceActiveFocus()
+    }
+    function stopSelecting(keep) {
+        selecting = false
+        if (!content) return
+        content.endSelecting()
+        if (keep) released()
+        else {
+            content.clearSelection()
+            content.forceActiveFocus()
+        }
+    }
+    function showThing(id) {
+        if (!showGraph) toggleGraph()
+        knowledge.showThing(id)
+    }
+    function askAbout(text, isThing) {
+        showAssistant = true
+        companion.prepare(isThing ? qsTr("Tell me about %1.").arg(text) : "")
+    }
+    function openAssistant() {
+        showAssistant = true
+        companion.takeFocus()
+    }
+    // Shift+M: marks while the map is open, always, never, and round again.
+    function cycleMarks() {
+        const next = settings.marks === "map" ? "always" : settings.marks === "always" ? "never" : "map"
+        settings.marks = next
+        backend.say(next === "always" ? qsTr("The graph's things are marked in the text, always")
+                  : next === "never" ? qsTr("Nothing is marked in the text")
+                  : qsTr("The graph's things are marked in the text while the map is open"))
+    }
     function bookmark() {
         if (!content) return
         reader.addBookmark(content.placeText())
@@ -128,6 +235,32 @@ Item {
     Key { command: "reader.bookmark"; when: reader.open; onActivated: view.bookmark() }
     Key { command: "reader.expand"; when: win.inReader && !view.mapping; onActivated: view.expand(!view.immersive) }
     Key { command: "reader.graph"; when: reader.open; onActivated: view.toggleGraph() }
+    Key { command: "reader.marks"; when: reader.open; onActivated: view.cycleMarks() }
+    Key { command: "reader.select"; when: view.paging; onActivated: view.startSelecting() }
+
+    // The kinds' colors are the graph's, from the theme.
+    Binding { target: reader.marks; property: "colors"; value: theme.colors }
+    Binding { target: reader.marks; property: "foreground"; value: theme.foreground }
+    Binding { target: reader.marks; property: "background"; value: theme.background }
+    // What the AI noted while reading is marked as soon as it is in.
+    Connections {
+        target: assistant
+        function onGraphChanged() { reader.marks.refresh() }
+    }
+    Connections {
+        target: view.content
+        ignoreUnknownSignals: true
+        function onPointed(thing) { view.pointed(thing) }
+        function onSelected() { view.released() }
+        function onSelectedTextChanged() { if (menu.shown && menu.mode === "menu" && view.content.selectedText === "") menu.close() }
+    }
+    // A card or a menu is about what is on the page; the page moved on.
+    Connections {
+        target: reader
+        function onSectionChanged() { menu.close() }
+        function onFractionChanged() { if (!view.selecting) menu.close() }
+        function onBookChanged() { menu.close() }
+    }
 
     // The panes: the contents on the side the text starts at, the map and
     // the AI on the side it ends at. They stand beside the page for as long
@@ -154,6 +287,7 @@ Item {
     }
 
     Item {
+        id: room
         anchors.fill: parent
 
         Item {
@@ -208,9 +342,15 @@ Item {
 
                 TapHandler {
                     acceptedDevices: PointerDevice.TouchScreen
+                    onLongPressed: view.pressedLongAt(point.position.x, point.position.y)
                     onTapped: (point) => {
                         win.touchSeen = true
                         if (!view.content) return
+                        if (menu.shown) {
+                            menu.close()
+                            return
+                        }
+                        if (view.tappedAt(point.position.x, point.position.y)) return
                         const x = win.rightToLeft ? touchArea.width - point.position.x : point.position.x
                         if (x < touchArea.width * 0.25) view.turn(false)
                         else if (x > touchArea.width * 0.75) view.turn(true)
@@ -270,8 +410,8 @@ Item {
                 readonly property bool wide: settings.spread === "always"
                                              || (settings.spread !== "never" && width >= win.spreadFloor && width > height * 1.15)
                 sourceComponent: reader.kind === "flow" ? (wide ? spreadPages : flow) : reader.kind === "pages" ? pages : null
-                Component { id: flow; FlowReader {} }
-                Component { id: spreadPages; SpreadReader {} }
+                Component { id: flow; FlowReader { marking: view.marksOn } }
+                Component { id: spreadPages; SpreadReader { marking: view.marksOn } }
                 Component { id: pages; PageReader {} }
             }
 
@@ -466,11 +606,85 @@ Item {
                 objectName: "assistantPane"
                 anchors.fill: parent
                 selection: view.content ? view.content.selectedText : ""
+                onThingActivated: (id, at) => {
+                    const found = reader.marks.thing(id)
+                    if (!found.id) return
+                    const there = companion.mapToItem(room, at.x, at.y)
+                    menu.openCard(found, Qt.rect(there.x - 160, there.y, 1, 18), true, false)
+                }
                 onDone: {
                     view.showAssistant = false
                     if (view.content) view.content.forceActiveFocus()
                 }
             }
+        }
+
+        // The keys while words are selected with the keyboard.
+        Item {
+            id: selectKeys
+            objectName: "selectKeys"
+            focus: false
+            Keys.onPressed: (event) => {
+                const wide = (event.modifiers & Qt.ShiftModifier) !== 0
+                const back = win.rightToLeft ? Qt.Key_Right : Qt.Key_Left
+                const on = win.rightToLeft ? Qt.Key_Left : Qt.Key_Right
+                if (event.key === back || event.key === Qt.Key_H) view.content.stepSelecting(-1, 0, wide)
+                else if (event.key === on || event.key === Qt.Key_L) view.content.stepSelecting(1, 0, wide)
+                else if (event.key === Qt.Key_Down || event.key === Qt.Key_J) view.content.stepSelecting(0, 1, wide)
+                else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) view.content.stepSelecting(0, -1, wide)
+                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) view.stopSelecting(true)
+                else if (event.key === Qt.Key_Escape || event.key === Qt.Key_V) view.stopSelecting(false)
+                else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) view.content.copySelection()
+                else return
+                event.accepted = true
+            }
+            onActiveFocusChanged: if (!activeFocus && view.selecting) view.stopSelecting(false)
+        }
+        // Says how, while it lasts.
+        Rectangle {
+            objectName: "selectHint"
+            visible: view.selecting
+            z: 6
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 20
+            width: Math.min(hint.implicitWidth + 24, parent.width - 32)
+            height: hint.implicitHeight + 14
+            radius: theme.radius
+            color: theme.background
+            border.color: theme.colors.selection
+            Label {
+                id: hint
+                anchors.centerIn: parent
+                width: Math.min(implicitWidth, parent.width - 24)
+                text: qsTr("H L or the arrows move a word, J K a line; Shift widens. Enter shows what to do with it, Esc stops.")
+                color: theme.colors.muted
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+                horizontalAlignment: Text.AlignHCenter
+            }
+        }
+        ReadingMenu {
+            id: menu
+            z: 7
+            onShowInGraph: (id) => view.showThing(id)
+            onAddToGraph: (name) => {
+                if (!view.showGraph) view.toggleGraph()
+                knowledge.addNamed(name)
+            }
+            onAskAbout: (text, isThing) => view.askAbout(text, isThing)
+            onAsk: (question, words) => {
+                view.openAssistant()
+                assistant.ask(question, "chapter", words)
+            }
+            onIdentify: (words, paragraph) => {
+                view.openAssistant()
+                assistant.identify(words, paragraph)
+            }
+            onFind: (words) => finder.findWords(words)
+            onCopy: if (view.content) view.content.copySelection()
+            onGoTo: (met) => reader.goToPlace(met.section, met.fraction)
+            onDismissed: (hadFocus) => { if (hadFocus && view.content) view.content.forceActiveFocus() }
         }
     }
 

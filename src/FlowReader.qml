@@ -7,6 +7,12 @@ Flickable {
     id: flick
     objectName: "flowReader"
     readonly property string selectedText: page.selectedText
+    // Whether the graph's things are marked in the text.
+    property bool marking: false
+    // The thing under the pointer changed (null for none), and a selection
+    // was made with the mouse.
+    signal pointed(var thing)
+    signal selected()
     readonly property real range: Math.max(0, contentHeight - height)
     // The same, worked out when it is asked for. What runs because the
     // chapter's height changed may run before `range` has heard of it.
@@ -86,6 +92,43 @@ Flickable {
         else if (pinched < 0.92) { zoom(-1); pinched = 1 }
     }
     // The words at the top of the window, to name a bookmark by.
+    // The reading view's ways into the text; points and rectangles are in
+    // this item's coordinates.
+    function fromPage(rect) {
+        const at = page.mapToItem(flick, rect.x, rect.y)
+        return Qt.rect(at.x, at.y, rect.width, rect.height)
+    }
+    function thingAt(x, y) {
+        const at = page.mapFromItem(flick, x, y)
+        const found = marks.thingAt(at.x, at.y)
+        if (found) found.rect = fromPage(found.rect)
+        return found
+    }
+    function selection() {
+        const chosen = marks.selection()
+        if (chosen) chosen.rect = fromPage(chosen.rect)
+        return chosen
+    }
+    function selectAt(x, y) {
+        const at = page.mapFromItem(flick, x, y)
+        return marks.selectWordAt(at.x, at.y)
+    }
+    // The keyboard's selection starts at the first word on the screen.
+    function beginSelecting() {
+        marks.begin(page.positionAt(0, Math.max(0, contentY - page.y + page.font.pixelSize)))
+    }
+    function stepSelecting(words, lines, extend) {
+        marks.step(words, lines, extend)
+        const r = marks.activeRect()
+        if (page.y + r.y < contentY) scrollBy(page.y + r.y - contentY - page.font.pixelSize * 2)
+        else if (page.y + r.y + r.height > contentY + height) scrollBy(page.y + r.y + r.height - contentY - height + page.font.pixelSize * 2)
+    }
+    function endSelecting() { marks.finish() }
+    function clearSelection() {
+        marks.finish()
+        page.deselect()
+    }
+    function copySelection() { page.copy() }
     function placeText() {
         const start = page.positionAt(page.width / 2, Math.max(0, contentY - page.y + 8))
         return page.getText(start, start + 120)
@@ -161,6 +204,13 @@ Flickable {
         }
         onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
 
-        HoverHandler { cursorShape: page.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.IBeamCursor }
+        PageMarks {
+            id: marks
+            anchors.fill: parent
+            text: page
+            on: flick.marking
+            onHoveredChanged: flick.pointed(hovered ? Object.assign({}, hovered, { rect: flick.fromPage(hovered.rect) }) : null)
+            onReleased: flick.selected()
+        }
     }
 }

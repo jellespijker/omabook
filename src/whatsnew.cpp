@@ -80,5 +80,9 @@ QList<Manual::Step> Manual::features() {
         {"panes", "0.1.1", tr("Panes as wide as you like"),
          tr("Drag the inner edge of a pane beside the page or the shelf, or use {global.pane_narrower} and {global.pane_wider}. A double click puts it back."),
          "", "global.pane_wider", "", ""},
+        {"marks", "0.1.2", tr("The graph, in the text"),
+         tr("With the map open ({reader.graph}), the people, places and things it knows are marked on the page in their "
+            "colors; point at one for what is known of it. Select words, or press {reader.select}, to ask about them."),
+         "", "reader.select", "reader", ""},
     };
 }

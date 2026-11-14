@@ -10,8 +10,16 @@ Item {
     // The passage selected in the book, if any.
     property string selection: ""
     signal done()
+    // A thing of the graph named in an answer was clicked, at a point of this pane.
+    signal thingActivated(var id, point at)
 
     function takeFocus() { question.forceActiveFocus() }
+    // The question field, with words to start from (or none), ready to send.
+    function prepare(text) {
+        question.text = text
+        question.selectAll()
+        takeFocus()
+    }
     function send(text, scope) {
         if (text.trim() === "" || assistant.busy)
             return
@@ -86,13 +94,34 @@ Item {
 
                     Text {
                         id: words
+                        // The things of the graph an answer names (a who is
+                        // who, a catch-up) marked as on the page, and clickable.
+                        readonly property string linked: {
+                            reader.marks.known
+                            reader.marks.foreground
+                            return turn.mine ? "" : reader.marks.linked(turn.modelData.text)
+                        }
+                        property point pointer: Qt.point(0, 0)
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.leftMargin: turn.mine ? 10 : 0
                         anchors.rightMargin: turn.mine ? 10 : 0
-                        text: turn.modelData.text
-                        textFormat: turn.mine ? Text.PlainText : Text.MarkdownText
+                        text: linked !== "" ? linked : turn.modelData.text
+                        textFormat: turn.mine ? Text.PlainText : linked !== "" ? Text.RichText : Text.MarkdownText
+                        linkColor: theme.foreground
+                        onLinkActivated: (link) => {
+                            if (link.startsWith("omabook-thing:")) {
+                                const at = words.mapToItem(pane, words.pointer.x, words.pointer.y)
+                                pane.thingActivated(Number(link.slice(14)), Qt.point(at.x, at.y))
+                            } else {
+                                Qt.openUrlExternally(link)
+                            }
+                        }
+                        HoverHandler {
+                            cursorShape: words.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.ArrowCursor
+                            onPointChanged: words.pointer = point.position
+                        }
                         wrapMode: Text.Wrap
                         color: theme.foreground
                         font.pixelSize: 14

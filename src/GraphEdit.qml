@@ -24,12 +24,13 @@ AppPopup {
     readonly property var kinds: ["character", "group", "place", "item", "concept", "event", "thread", "theme", "topic", "question"]
     readonly property bool asking: what === "remove" || what === "unlink" || what === "merge"
 
-    function show(mode, node, other) {
+    // `named` is a name to start an added thing with: words selected on the page.
+    function show(mode, node, other, named) {
         what = mode
         sheet.node = node || ({})
         sheet.other = other || ({})
         problem = ""
-        name.text = mode === "edit" ? sheet.node.name || "" : ""
+        name.text = mode === "edit" ? sheet.node.name || "" : named || ""
         summary.text = mode === "edit" ? sheet.node.summary || "" : ""
         relation.text = ""
         open()

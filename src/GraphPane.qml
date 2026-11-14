@@ -77,6 +77,16 @@ FocusScope {
         if (ahead) furthest = { bookId: reader.bookId, section: reader.section, fraction: reader.fraction }
         graph.showBookUpTo(furthest.bookId, furthest.section, furthest.fraction)
     }
+    // A thing named on the page: the open book's graph, with it selected and in sight.
+    function showThing(id) {
+        if (reading) {
+            held = false
+            follow()
+        }
+        graph.jumpTo(id)
+    }
+    // Words on the page the graph doesn't know, added by hand.
+    function addNamed(name) { sheet.show("add", {}, null, name) }
     function move(way) {
         if (!listing) graph.step(way)
         else if (way === "up" || way === "down") graph.advance(way === "up" ? -1 : 1)

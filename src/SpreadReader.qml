@@ -9,6 +9,12 @@ Item {
     id: spread
     objectName: "spreadReader"
     readonly property string selectedText: leftText.selectedText !== "" ? leftText.selectedText : rightText.selectedText
+    // Whether the graph's things are marked in the text.
+    property bool marking: false
+    // The thing under the pointer changed (null for none), and a selection
+    // was made with the mouse.
+    signal pointed(var thing)
+    signal selected()
     // Nothing here scrolls sideways, which is what lets a swipe turn the page.
     readonly property real contentWidth: width
     readonly property real gutter: 56
@@ -79,6 +85,74 @@ Item {
         else if (pinched < 0.92) { zoom(-1); pinched = 1 }
     }
     // The words at the top of the left page, to name a bookmark by.
+    // The reading view's ways into the text; points and rectangles are in
+    // this item's coordinates. Both pages hold the whole chapter, each
+    // showing its own stretch of it, so a point is asked of the page it is on.
+    function pageAt(x, y) {
+        for (const sheet of [leftPage, rightPage]) {
+            if (!sheet.there) continue
+            const at = sheet.text.mapFromItem(spread, x, y)
+            if (at.x >= 0 && at.x <= sheet.width && at.y >= spread.breaks[sheet.index] && at.y <= spread.breaks[sheet.index + 1])
+                return sheet
+        }
+        return null
+    }
+    function fromText(sheet, rect) {
+        const at = sheet.text.mapToItem(spread, rect.x, rect.y)
+        return Qt.rect(at.x, at.y, rect.width, rect.height)
+    }
+    function thingAt(x, y) {
+        const sheet = pageAt(x, y)
+        if (!sheet) return null
+        const at = sheet.text.mapFromItem(spread, x, y)
+        const found = sheet.marks.thingAt(at.x, at.y)
+        if (found) found.rect = fromText(sheet, found.rect)
+        return found
+    }
+    function selection() {
+        for (const sheet of [leftPage, rightPage]) {
+            const chosen = sheet.marks.selection()
+            if (!chosen) continue
+            // On the page it shows on.
+            const onRight = sheet === leftPage && rightPage.there && chosen.rect.y >= spread.breaks[rightPage.index]
+            chosen.rect = fromText(onRight ? rightPage : sheet, chosen.rect)
+            return chosen
+        }
+        return null
+    }
+    function selectAt(x, y) {
+        const sheet = pageAt(x, y)
+        if (!sheet) return false
+        const at = sheet.text.mapFromItem(spread, x, y)
+        return sheet.marks.selectWordAt(at.x, at.y)
+    }
+    // The keyboard's selection starts at the first word of the left page,
+    // and is shown on both pages, each showing its part of it.
+    function beginSelecting() {
+        rightText.deselect()
+        leftPage.marks.begin(leftText.positionAt(0, breaks[page] + leftText.font.pixelSize))
+        mirror()
+    }
+    function mirror() { rightText.select(leftText.selectionStart, leftText.selectionEnd) }
+    function stepSelecting(words, lines, extend) {
+        leftPage.marks.step(words, lines, extend)
+        mirror()
+        // Kept in sight: on past the right page, back before the left.
+        const r = leftPage.marks.activeRect()
+        if (r.y >= breaks[Math.min(breaks.length - 1, page + 2)] && page < lastLeft) show(page + 2)
+        else if (r.y < breaks[page] && page > 0) show(page - 2)
+        reader.fraction = lastLeft > 0 ? page / lastLeft : 0
+    }
+    function endSelecting() { leftPage.marks.finish() }
+    function clearSelection() {
+        leftPage.marks.finish()
+        leftText.deselect()
+        rightText.deselect()
+    }
+    function copySelection() {
+        if (leftText.selectedText !== "") leftText.copy()
+        else rightText.copy()
+    }
     function placeText() {
         const start = leftText.positionAt(columnWidth / 2, breaks[page] + 8)
         return leftText.getText(start, start + 120)
@@ -99,6 +173,7 @@ Item {
         id: sheet
         property int index: 0
         property alias text: column
+        property alias marks: pageMarks
         readonly property bool there: index < spread.pages
         // Every page takes its place in the spread, written on or not; what
         // shows of the column is cut off after the page's last whole line.
@@ -132,7 +207,14 @@ Item {
               + (settings.justify ? " text-align: justify;" : "") + " } "
               + "h1, h2, h3 { margin-top: 24px; margin-bottom: 16px; }</style>" + reader.html
             onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
-            HoverHandler { cursorShape: column.hoveredLink !== "" ? Qt.PointingHandCursor : Qt.IBeamCursor }
+            PageMarks {
+                id: pageMarks
+                anchors.fill: parent
+                text: column
+                on: spread.marking && sheet.there
+                onHoveredChanged: spread.pointed(hovered ? Object.assign({}, hovered, { rect: spread.fromText(sheet, hovered.rect) }) : null)
+                onReleased: spread.selected()
+            }
         }
         }
     }

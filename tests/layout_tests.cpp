@@ -704,6 +704,23 @@ class LayoutTests : public QObject {
         for (const QSize &size : dialogSizes()) {
             QVERIFY(desk.resize(size));
             dialog(desk, "find", [&] { desk.run("reader.find"); });
+            // The menu beside selected words, under them and near the foot
+            // of the page, and the hint while the keyboard selects.
+            QObject *menu = desk.find("readingMenu");
+            QVERIFY(menu);
+            for (const double down : {0.1, 0.9}) {
+                const QVariantMap chosen{{"text", "a few words of the chapter, selected to ask about"},
+                                         {"paragraph", ""},
+                                         {"rect", QRectF(size.width() * 0.3, size.height() * down, 120, 20)}};
+                QMetaObject::invokeMethod(menu, "openMenu", Q_ARG(QVariant, chosen));
+                desk.settle();
+                look(desk, "reader-menu");
+                QMetaObject::invokeMethod(menu, "close");
+                desk.settle();
+            }
+            show("selecting", true);
+            look(desk, "reader-selecting");
+            show("selecting", false);
         }
         // Every pane dragged as narrow and as wide as it goes: the page
         // keeps its floor, and nothing in a pane is cut at its narrowest.

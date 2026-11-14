@@ -42,6 +42,9 @@
 #include "sitedesk.h"
 #include "secretstore.h"
 #include "theme.h"
+#include <QQuickTextDocument>
+#include <QTextCursor>
+#include <QTextDocument>
 #include "translator.h"
 
 namespace {
@@ -4846,6 +4849,303 @@ private slots:
         QTRY_COMPARE(qRound(desk.backend->library()->book(id)->percent), 50);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
+
+private:
+    // A row of the reading menu, clicked once it has settled where it stands.
+    static void clickItem(Desk &desk, const QString &name) {
+        QQuickItem *item = nullptr;
+        QTRY_VERIFY((item = qobject_cast<QQuickItem *>(desk.find(name))) && item->isVisible());
+        QTest::qWait(100);
+        QTest::mouseClick(desk.window, Qt::LeftButton, {}, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+    }
+    // The page has the keyboard again, not the map.
+    static void canvasFocusAway(Desk &desk) {
+        if (auto *flow = qobject_cast<QQuickItem *>(desk.find("flowReader")))
+            flow->forceActiveFocus();
+    }
+
+    // A made-up chapter that names the story graph's people, places and things.
+    static bool markedBook(const QString &file) {
+        Fixtures::Entries entries = Fixtures::epubEntries("Harbour of Glass");
+        for (auto &entry : entries) {
+            if (entry.first == "OEBPS/text/ch1.xhtml")
+                entry.second = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>The Night Ferry</h1>"
+                               "<p>Ilse Varga rowed the Grey Ferry out of Glass Harbour while Aldo Brenn watched from the wall. "
+                               "Tamsin Roe had warned her that the Tide Guild would be waiting, and that Captain Merrow never slept.</p>"
+                               "<p>“You will be careful,” said Pell. Ilse laughed, and thought of the Lantern Court and of "
+                               "Odalys Quill, who kept its records in Saint Brine's Tower.</p>"
+                               "<p>Above them the Upper City slept behind its veil, where the Glass Widow ruled. Brother Anselm "
+                               "rang the Tide Bell twice, and the harbour held its breath.</p></body></html>";
+            if (entry.first == "OEBPS/text/ch2.xhtml")
+                entry.second = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>Low Water</h1>"
+                               "<p>Wick lit the lamps of the Saltmarsh, and Ilse met Nerys Varga at last.</p></body></html>";
+        }
+        return Fixtures::zip(file, entries);
+    }
+    // The page's text, its document, and where a name is in it on the screen.
+    struct PageText {
+        QQuickItem *item = nullptr;
+        QTextDocument *document = nullptr;
+        QPoint at(const QString &words, int occurrence = 0) const {
+            int position = -1;
+            for (int i = 0; i <= occurrence; ++i)
+                position = int(document->toPlainText().indexOf(words, position + 1));
+            QRectF first, last;
+            QMetaObject::invokeMethod(item, "positionToRectangle", Q_RETURN_ARG(QRectF, first), Q_ARG(int, position + 1));
+            QMetaObject::invokeMethod(item, "positionToRectangle", Q_RETURN_ARG(QRectF, last), Q_ARG(int, position + int(words.size()) - 1));
+            return item->mapToScene(QPointF((first.left() + last.right()) / 2, first.center().y())).toPoint();
+        }
+        QTextCharFormat formatOf(const QString &words) const {
+            QTextCursor cursor(document);
+            cursor.setPosition(int(document->toPlainText().indexOf(words)) + 1);
+            return cursor.charFormat();
+        }
+    };
+    static PageText pageText(Desk &desk) {
+        PageText text;
+        text.item = qobject_cast<QQuickItem *>(desk.find("flowText"));
+        auto *quick = text.item ? text.item->property("textDocument").value<QQuickTextDocument *>() : nullptr;
+        text.document = quick ? quick->textDocument() : nullptr;
+        return text;
+    }
+
+private slots:
+    void theGraphsThingsAreMarkedInTheTextAndOpenACard() {
+        Desk desk;
+        const QString file = desk.dir.filePath("marked.epub");
+        QVERIFY(markedBook(file));
+        const qint64 book = desk.add(file);
+        const QHash<QString, qint64> ids = storyGraph(desk, book);
+        QVERIFY(desk.show());
+        desk.window->resize(1400, 860);
+        desk.settings->setOption("spread", "never");
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.reader->goTo(0, {}, true);
+        QTRY_COMPARE(desk.reader->fraction(), 1.0);
+        PageText page = pageText(desk);
+        QVERIFY(page.document);
+        // Nothing is marked while the map is closed (the setting is "map").
+        QTest::qWait(100);
+        QVERIFY(!page.formatOf("Ilse Varga").hasProperty(QTextFormat::TextUnderlineColor));
+
+        // With the map open, the names are marked in their kind's color, the
+        // same as the graph's discs.
+        const QString before = page.document->toPlainText();
+        desk.key(Qt::Key_M);
+        QTRY_VERIFY(desk.value("readerGraph", "visible").toBool());
+        const GraphParts graph = graphParts(desk, "readerGraph");
+        QTRY_VERIFY(page.formatOf("Ilse Varga").hasProperty(QTextFormat::TextUnderlineColor));
+        const auto inGraph = [&](const QString &kind) {
+            return GraphKinds::color(kind, graph.canvas->colors(), graph.canvas->foreground(), graph.canvas->background());
+        };
+        QCOMPARE(page.formatOf("Ilse Varga").underlineColor(), inGraph("character"));
+        QCOMPARE(page.formatOf("Glass Harbour").underlineColor(), inGraph("place"));
+        QCOMPARE(page.formatOf("Tide Guild").underlineColor(), inGraph("group"));
+        QCOMPARE(page.formatOf("Grey Ferry").underlineColor(), inGraph("item"));
+        QCOMPARE(inGraph("character"), QColor(desk.look->colors().value("blue").value<QColor>()));
+        // The text is the text it was, so the page didn't move; "will" is
+        // an everyday word and no name; Wick and Nerys are not met yet.
+        QCOMPARE(page.document->toPlainText(), before);
+        QCOMPARE(desk.reader->fraction(), 1.0);
+        QVERIFY(!page.formatOf("will be careful").hasProperty(QTextFormat::TextUnderlineColor));
+        desk.shot("reader-marks");
+
+        // Pointing at a name shows its card.
+        canvasFocusAway(desk);
+        QTest::mouseMove(desk.window, page.at("Aldo Brenn"));
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QCOMPARE(desk.value("readingMenu", "mode").toString(), QString("card"));
+        QCOMPARE(desk.value("readingMenuName", "text").toString(), QString("Aldo Brenn"));
+        QCOMPARE(desk.value("readingMenuKind", "text").toString(), QString("Character"));
+        QCOMPARE(desk.value("readingMenuSummary", "text").toString(), QString("The harbourmaster, who taught Ilse the tides."));
+        desk.shot("reader-marks-card");
+        // Moving away puts it away.
+        QTest::mouseMove(desk.window, page.item->mapToScene(QPointF(page.item->width() / 2, page.item->height() + 20)).toPoint());
+        QTRY_VERIFY(!desk.value("readingMenu", "visible").toBool());
+
+        // A click keeps it; "Show in graph" selects the thing there.
+        QTest::mouseMove(desk.window, page.at("Odalys Quill"));
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QTest::mouseClick(desk.window, Qt::LeftButton, {}, page.at("Odalys Quill"));
+        QTRY_VERIFY(!desk.value("readingMenu", "passing").toBool());
+        clickItem(desk, "readingAction_graph");
+        QTRY_COMPARE(graph.browser->selected(), ids.value("Odalys Quill"));
+        QVERIFY(!desk.value("readingMenu", "visible").toBool());
+        QVERIFY(desk.ai.requests.isEmpty());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void selectedWordsOpenAMenuByMouseKeyboardAndFinger() {
+        Desk desk;
+        const QString file = desk.dir.filePath("marked.epub");
+        QVERIFY(markedBook(file));
+        const qint64 book = desk.add(file);
+        const QHash<QString, qint64> ids = storyGraph(desk, book);
+        QVERIFY(desk.show());
+        desk.window->resize(1400, 860);
+        desk.settings->setOption("spread", "never");
+        desk.settings->setMarks("always");
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.reader->goTo(0, {}, true);
+        QTRY_COMPARE(desk.reader->fraction(), 1.0);
+        PageText page = pageText(desk);
+        // "always": marked with the map closed.
+        QTRY_VERIFY(page.formatOf("Tamsin Roe").hasProperty(QTextFormat::TextUnderlineColor));
+        QVERIFY(!desk.value("readerGraph", "visible").toBool());
+
+        // A double click on a word selects it, and its menu opens.
+        QTest::mouseDClick(desk.window, Qt::LeftButton, {}, page.at("Tamsin"));
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QCOMPARE(desk.value("readingMenu", "mode").toString(), QString("menu"));
+        QCOMPARE(desk.value("readingMenuName", "text").toString(), QString("Tamsin Roe"));
+        // Suggestions from the graph, with no AI call.
+        QVERIFY(desk.find("readingAction_question"));
+        QVERIFY(desk.find("readingAction_more"));
+        desk.shot("reader-menu");
+        // Who is it: from the graph, still no AI.
+        clickItem(desk, "readingAction_who");
+        QTRY_VERIFY(desk.value("readingMenuMet", "visible").toBool());
+        QVERIFY(desk.value("readingMenuMet", "text").toString().startsWith("First met in"));
+        QVERIFY(desk.ai.requests.isEmpty());
+        // Show in graph opens the map, and selects it there.
+        clickItem(desk, "readingAction_graph");
+        QTRY_VERIFY(desk.value("readerGraph", "visible").toBool());
+        const GraphParts graph = graphParts(desk, "readerGraph");
+        QTRY_COMPARE(graph.browser->selected(), ids.value("Tamsin Roe"));
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("readerGraph", "visible").toBool());
+
+        // The keyboard: V selects the first word on the screen, L moves it on,
+        // Shift+L widens it, Enter shows the menu.
+        desk.key(Qt::Key_V);
+        QTRY_VERIFY(desk.value("selectHint", "visible").toBool());
+        desk.key(Qt::Key_J);
+        desk.key(Qt::Key_L);
+        desk.key(Qt::Key_L, Qt::ShiftModifier);
+        const QString chosen = desk.value("flowReader", "selectedText").toString();
+        QVERIFY2(chosen.split(' ', Qt::SkipEmptyParts).size() == 2, qPrintable(chosen));
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QVERIFY(!desk.value("selectHint", "visible").toBool());
+        // Ask about this: the AI pane, with the selection to ask about.
+        QCOMPARE(desk.value("readingMenu", "current").toInt(), 0);
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("assistantPane", "visible").toBool());
+        QCOMPARE(desk.value("assistantPane", "selection").toString(), chosen);
+        QTRY_VERIFY(desk.value("explainSelection", "visible").toBool());
+        QVERIFY(desk.value("question", "activeFocus").toBool());
+        QVERIFY(desk.ai.requests.isEmpty());
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("assistantPane", "visible").toBool());
+
+        // A word the graph doesn't know: "Add to the graph", and who it is
+        // goes to the AI with only its paragraph.
+        QTest::mouseDClick(desk.window, Qt::LeftButton, {}, page.at("harbour held"));
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QVERIFY(desk.value("readingMenuWords", "visible").toBool());
+        QVERIFY(desk.find("readingAction_add"));
+        clickItem(desk, "readingAction_who");
+        QTRY_COMPARE(desk.ai.requests.size(), 1);
+        QVERIFY(desk.ai.requests.first().messages.last().text.contains("the harbour held its breath"));
+        QVERIFY(!desk.ai.requests.first().messages.last().text.contains("Grey Ferry"));
+        QTRY_VERIFY(!desk.assistant->busy());
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("assistantPane", "visible").toBool());
+
+        // A finger: a tap on a name shows its card, a long press selects a word.
+        QPointingDevice *finger = QTest::createTouchDevice();
+        const QPoint pell = page.at("Pell");
+        QTest::touchEvent(desk.window, finger).press(0, pell, desk.window);
+        QTest::touchEvent(desk.window, finger).release(0, pell, desk.window);
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QCOMPARE(desk.value("readingMenuName", "text").toString(), QString("Pell"));
+        QTest::touchEvent(desk.window, finger).press(0, pell, desk.window);
+        QTest::touchEvent(desk.window, finger).release(0, pell, desk.window);
+        QTRY_VERIFY(!desk.value("readingMenu", "visible").toBool());
+        const QPoint laughed = page.at("laughed");
+        QTest::touchEvent(desk.window, finger).press(0, laughed, desk.window);
+        QTest::qWait(1100);
+        QTest::touchEvent(desk.window, finger).release(0, laughed, desk.window);
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QCOMPARE(desk.value("readingMenu", "words").toString(), QString("laughed"));
+        desk.shot("reader-menu-touch");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void anAnswersNamesAreMarkedAndLeadBackToTheBook() {
+        Desk desk;
+        const QString file = desk.dir.filePath("marked.epub");
+        QVERIFY(markedBook(file));
+        const qint64 book = desk.add(file);
+        const QHash<QString, qint64> ids = storyGraph(desk, book);
+        QVERIFY(desk.show());
+        desk.window->resize(1400, 860);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.reader->goTo(1, {}, true);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        desk.ai.answer = "**Ilse Varga**: pilots the night ferry.\n\n**Nerys Varga**: her mother, back at last.";
+        desk.key(Qt::Key_W);
+        QTRY_VERIFY(desk.value("assistantPane", "visible").toBool());
+        QTRY_VERIFY(!desk.assistant->busy());
+        // The answer's names are links in their kinds' colors.
+        QQuickItem *answer = nullptr;
+        QTRY_VERIFY([&] {
+            QList<QQuickItem *> items{qobject_cast<QQuickItem *>(desk.find("conversation"))};
+            while (!items.isEmpty()) {
+                QQuickItem *item = items.takeFirst();
+                if (item->property("text").toString().contains("omabook-thing:"))
+                    answer = item;
+                items << item->childItems();
+            }
+            return answer != nullptr;
+        }());
+        QVERIFY(answer->property("text").toString().contains(QString("omabook-thing:%1").arg(ids.value("Nerys Varga"))));
+        desk.shot("reader-answer-marks");
+        // Clicked, it shows the card, which goes to where the thing was first met.
+        QMetaObject::invokeMethod(answer, "linkActivated", Q_ARG(QString, QString("omabook-thing:%1").arg(ids.value("Ilse Varga"))));
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QCOMPARE(desk.value("readingMenuName", "text").toString(), QString("Ilse Varga"));
+        clickItem(desk, "readingAction_met");
+        QTRY_COMPARE(desk.reader->section(), 0);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void theMarksAndTheMenuInALightThemeAndRightToLeft() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
+                                 "selection_background = \"#dcdcdc\"\ncolor1 = \"#c4314b\"\ncolor2 = \"#2f7d32\"\ncolor3 = \"#9a6700\"\n"
+                                 "color4 = \"#2459c4\"\ncolor5 = \"#8a3ab9\"\ncolor6 = \"#0f7c8c\"\ncolor8 = \"#6f6f6f\"\n";
+        for (const QByteArray &language : {QByteArray("en"), QByteArray("ar")}) {
+            Desk desk({}, language, light);
+            const QString file = desk.dir.filePath("marked.epub");
+            QVERIFY(markedBook(file));
+            const qint64 book = desk.add(file);
+            storyGraph(desk, book);
+            QVERIFY(desk.show());
+            desk.window->resize(1400, 860);
+            desk.settings->setOption("spread", "never");
+            desk.reader->openBook(book);
+            QTRY_VERIFY(desk.reader->isOpen());
+            desk.reader->goTo(0, {}, true);
+            QTRY_COMPARE(desk.reader->fraction(), 1.0);
+            desk.key(Qt::Key_M);
+            PageText page = pageText(desk);
+            QTRY_VERIFY(page.formatOf("Ilse Varga").hasProperty(QTextFormat::TextUnderlineColor));
+            QCOMPARE(page.formatOf("Ilse Varga").underlineColor(), QColor("#2459c4"));
+            canvasFocusAway(desk);
+            QTest::mouseDClick(desk.window, Qt::LeftButton, {}, page.at("Merrow"));
+            QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+            desk.shot(language == "en" ? "reader-marks-light" : "reader-marks-rtl");
+            desk.key(Qt::Key_Escape);
+            QTRY_VERIFY(!desk.value("readingMenu", "visible").toBool());
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+    }
+
+    // Themes: which one the colors come from (themechoice.h), and the picker.
+    // Omarchy, Aether and Omabook's own themes are folders of a temp tree.
 };
 
 QTEST_MAIN(UiTests)
