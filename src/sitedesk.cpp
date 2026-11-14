@@ -10,6 +10,7 @@
 #include <QPointer>
 #include <QStandardPaths>
 #include <QtConcurrent>
+#include <algorithm>
 
 #include "goodreads.h"
 #include "library.h"
@@ -448,17 +449,16 @@ void SiteDesk::write(const QString &scheme, const QList<ReadingSites::Outgoing> 
         QList<ReadingSites::Outgoing> taken;
         QJsonArray refused;
         for (const SiteWritten &written : results) {
-            for (ReadingSites::Outgoing change : changes) {
-                if (change.bookId != written.bookId)
-                    continue;
-                if (written.error.isEmpty()) {
-                    if (!written.siteId.isEmpty())
-                        change.siteId = written.siteId;
-                    taken << change;
-                } else {
-                    refused << QJsonObject{{"id", change.bookId}, {"title", change.title}, {"error", written.error}};
-                }
-                break;
+            const auto asked = std::ranges::find(std::as_const(changes), written.bookId, &ReadingSites::Outgoing::bookId);
+            if (asked == changes.cend())
+                continue;
+            if (written.error.isEmpty()) {
+                ReadingSites::Outgoing change = *asked;
+                if (!written.siteId.isEmpty())
+                    change.siteId = written.siteId;
+                taken << change;
+            } else {
+                refused << QJsonObject{{"id", asked->bookId}, {"title", asked->title}, {"error", written.error}};
             }
         }
         // What the site took is what it now says, as far as the next sync

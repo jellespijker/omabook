@@ -74,7 +74,7 @@ public:
     // "error", "problem", and for a sync the summary}.
     QJsonObject lastResult(const QString &scheme) const { return m_results.value(scheme); }
     bool busy(const QString &scheme) const { return m_busy.contains(scheme); }
-    bool working() const { return !m_busy.isEmpty(); }
+    bool working() const noexcept { return !m_busy.isEmpty(); }
 
     // Who `pasted` is on the site, as far as it can be told without asking
     // the site; empty when it names nobody there.

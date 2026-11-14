@@ -11,12 +11,13 @@
 #include <QTimeZone>
 #include <QTimer>
 #include <QXmlStreamReader>
+#include <algorithm>
 
 #include "htmlclean.h"
 
 namespace {
 
-const char *notUnderstood = "Goodreads answered in a way Omabook doesn't understand; its pages may have changed.";
+constexpr auto notUnderstood = "Goodreads answered in a way Omabook doesn't understand; its pages may have changed.";
 
 // Goodreads' three shelves every account has, and what Omabook calls them.
 struct Shelf {
@@ -301,7 +302,7 @@ ReadingSite::Export Goodreads::parseCsv(const QByteArray &file) {
                 entry.authors << author.simplified();
         const QString isbn13 = unwrapped(field("isbn13"));
         entry.isbn = isbn13.isEmpty() ? unwrapped(field("isbn")) : isbn13;
-        entry.rating = qBound(0, field("my rating").toInt(), 5);
+        entry.rating = std::clamp(field("my rating").toInt(), 0, 5);
         entry.averageRating = field("average rating").toDouble();
         entry.publisher = field("publisher");
         entry.binding = field("binding");
@@ -396,7 +397,7 @@ QList<SiteEntry> Goodreads::parseFeed(const QByteArray &xml, const QString &shel
             entry.authors << author;
         entry.isbn = fields.value("isbn");
         entry.shelf = shelf;
-        entry.rating = qBound(0, fields.value("user_rating").toInt(), 5);
+        entry.rating = std::clamp(fields.value("user_rating").toInt(), 0, 5);
         entry.finished = feedDate(fields.value("user_read_at"));
         entry.added = feedDate(fields.value("user_date_added"));
         entry.averageRating = fields.value("average_rating").toDouble();
@@ -700,7 +701,7 @@ void GoodreadsSource::searchByTitle(const BookMeta &book, bool withAuthor) {
                    + (ReadingSites::sameTitle(book.title, meta.title) ? 1 : 0);
         };
         answers.removeIf([&](const Goodreads::Found &answer) { return fits(answer) == 0; });
-        std::stable_sort(answers.begin(), answers.end(), [&](const Goodreads::Found &a, const Goodreads::Found &b) {
+        std::ranges::stable_sort(answers, [&](const Goodreads::Found &a, const Goodreads::Found &b) {
             return fits(a) != fits(b) ? fits(a) > fits(b) : a.ratings > b.ratings;
         });
         QList<MetaCandidate> candidates;

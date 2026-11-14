@@ -59,7 +59,7 @@ struct Kind {
     const char *type;
     const char *kind;
 };
-const Kind kinds[] = {
+constexpr Kind kinds[] = {
     {"Source", "Metadata source", "metadata"},
     {"InputFormatPlugin", "Conversion input", "conversion"},
     {"OutputFormatPlugin", "Conversion output", "conversion"},
@@ -125,8 +125,8 @@ CalibreAddOn readZip(const QString &file) {
         const Kind *known = nullptr;
         for (const QString &base : found.captured(1).split(',')) {
             const QString bare = base.trimmed().section('.', -1);
-            const auto match = std::find_if(std::begin(kinds), std::end(kinds), [&](const Kind &kind) { return bare == kind.base; });
-            if (match != std::end(kinds))
+            if (const auto match = std::ranges::find_if(kinds, [&](const Kind &kind) { return bare == kind.base; });
+                match != std::ranges::end(kinds))
                 known = &*match;
         }
         if (!known)
@@ -250,9 +250,7 @@ QStringList CalibrePlugin::libraryFolders() const {
         for (const char *file : {"/gui.json", "/gui.py.json"}) {
             const QJsonObject uses = readJson(m_where.configFolder + file).value("library_usage_stats").toObject();
             QStringList folders = uses.keys();
-            std::stable_sort(folders.begin(), folders.end(), [&](const QString &a, const QString &b) {
-                return uses.value(a).toInt() > uses.value(b).toInt();
-            });
+            std::ranges::stable_sort(folders, std::greater{}, [&](const QString &folder) { return uses.value(folder).toInt(); });
             named += folders;
         }
     }
@@ -409,7 +407,7 @@ QList<CalibreAddOn> CalibrePlugin::discover() const {
             CalibreAddOn addOn = readZip(zip.filePath());
             if (nameOfZip.contains(zip.fileName()))
                 addOn.name = nameOfZip.value(zip.fileName());
-            const auto listed = std::find_if(addOns.begin(), addOns.end(),
+            const auto listed = std::ranges::find_if(addOns,
                                              [&](const CalibreAddOn &other) { return other.name == addOn.name; });
             if (listed != addOns.end()) {
                 // Calibre already described it; this adds where it lives.

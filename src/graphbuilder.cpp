@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QSet>
 #include <algorithm>
+#include <ranges>
 
 #include "graphcontext.h"
 #include "graphlinks.h"
@@ -161,7 +162,7 @@ std::optional<GraphNode> sharedNode(const Graph &graph, const Scene &scene, cons
         if (id == 0)
             continue;
         const QList<GraphPlace> met = graph.seen(id);
-        if (std::any_of(met.begin(), met.end(), [&](const GraphPlace &at) { return !scene.books.contains(at.bookId); }))
+        if (std::ranges::any_of(met, [&](const GraphPlace &at) { return !scene.books.contains(at.bookId); }))
             return graph.node(id);
     }
     return std::nullopt;
@@ -302,15 +303,15 @@ QString GraphBuild::known(const Library &library, qint64 bookId, const QList<Pas
     // name rather than making the thing anew.
     QList<const GraphNode *> detailed, named;
     int threads = 0;
-    for (auto node = scene.nodes.crbegin(); node != scene.nodes.crend(); ++node) {
-        const bool touched = GraphContext::namedIn(*node, text, true);
-        const bool open = !touched && node->kind == "thread" && threads < mostThreads;
+    for (const GraphNode &node : std::as_const(scene.nodes) | std::views::reverse) {
+        const bool touched = GraphContext::namedIn(node, text, true);
+        const bool open = !touched && node.kind == "thread" && threads < mostThreads;
         if (open)
             ++threads;
         if ((touched || open) && detailed.size() < mostDetailed)
-            detailed << &*node;
+            detailed << &node;
         else if (named.size() < mostNamed)
-            named << &*node;
+            named << &node;
     }
     QStringList lines;
     for (const GraphNode *node : std::as_const(detailed))
@@ -350,7 +351,7 @@ QString GraphBuild::elsewhere(const Library &library, qint64 bookId, const QList
     const auto first = [](const Weighed &a, const Weighed &b) {
         return a.weight != b.weight ? a.weight > b.weight : a.node.updated > b.node.updated;
     };
-    std::stable_sort(ideas.begin(), ideas.end(), first);
+    std::ranges::stable_sort(ideas, first);
 
     // Only what was met in another book, as far as that book was read.
     QHash<qint64, GraphContext::Reach> reaches;
@@ -441,7 +442,7 @@ GraphBuild::Applied GraphBuild::apply(Library &library, qint64 bookId, const QLi
         } else if (storyBound(kind)) {
             const qint64 other = graph.named({}, kind, name);
             const QList<GraphPlace> met = other > 0 ? graph.seen(other) : QList<GraphPlace>();
-            const bool elsewhere = !met.isEmpty() && std::none_of(met.begin(), met.end(), [&](const GraphPlace &at) {
+            const bool elsewhere = !met.isEmpty() && std::ranges::none_of(met, [&](const GraphPlace &at) {
                 return scene.books.contains(at.bookId);
             });
             if (elsewhere)

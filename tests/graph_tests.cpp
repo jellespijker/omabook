@@ -7,6 +7,7 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest>
+#include <algorithm>
 
 #include "assistant.h"
 #include "backend.h"
@@ -122,7 +123,7 @@ GraphNode named(const Library &library, const QString &kind, const QString &name
 }
 
 bool has(const GraphView &view, const QString &name) {
-    return std::any_of(view.nodes.begin(), view.nodes.end(), [&](const GraphNode &node) { return node.name == name; });
+    return std::ranges::any_of(view.nodes, [&](const GraphNode &node) { return node.name == name; });
 }
 
 // The window's own model: answers every request with what the test set.
@@ -537,7 +538,7 @@ private slots:
         desk.ai.answer = "Mara Venn: keeper of the lighthouse.";
         desk.assistant->whoIsWho();
         QVERIFY(QTest::qWaitFor([&] { return !desk.assistant->busy() && !library.notes(desk.book, "cast").text.isEmpty(); }));
-        const auto cast = std::find_if(desk.ai.requests.begin(), desk.ai.requests.end(), [](const AiRequest &request) {
+        const auto cast = std::ranges::find_if(desk.ai.requests, [](const AiRequest &request) {
             return request.messages.last().text.contains("List who is who");
         });
         QVERIFY(cast != desk.ai.requests.end());
@@ -954,7 +955,7 @@ private slots:
         QVERIFY(has(beyond, "Tide-binding"));
         QVERIFY(has(beyond, "Inheritance"));
         QVERIFY(!has(beyond, "The last betrayal") && !has(beyond, "Never met") && !has(beyond, "Mara Venn"));
-        const auto link = std::find_if(beyond.edges.begin(), beyond.edges.end(), [&](const GraphEdge &edge) { return edge.target == tide; });
+        const auto link = std::ranges::find_if(beyond.edges, [&](const GraphEdge &edge) { return edge.target == tide; });
         QVERIFY(link != beyond.edges.end());
         QVERIFY(link->across());
         QCOMPARE(link->kind, QString("across: same idea as"));

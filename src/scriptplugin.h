@@ -51,7 +51,7 @@ struct ScriptManifest {
     bool needsNewer = false; // the problem is that it asks for a newer Omabook than this
 
     static ScriptManifest read(const QString &folder);
-    bool isScript() const { return !script.isEmpty(); }
+    bool isScript() const noexcept { return !script.isEmpty(); }
     QString dataFolder() const { return folder + "/data"; }
 };
 
@@ -159,16 +159,16 @@ public:
 
     // Runs the script's top level. False, with `problem`, when it throws.
     bool load(QString *problem);
-    const ScriptManifest &manifest() const { return m_manifest; }
+    const ScriptManifest &manifest() const noexcept { return m_manifest; }
     // How long a call may run before it is stopped; five seconds unless said.
     void setTimeLimit(std::chrono::milliseconds limit) { m_limit = limit; }
 
-    const QList<Source> &sources() const { return m_sources; }
-    const QList<Catalog> &catalogs() const { return m_catalogs; }
-    const QList<Importer> &importers() const { return m_importers; }
-    const QList<Command> &commands() const { return m_commands; }
-    const QList<Panel> &panels() const { return m_panels; }
-    const QList<Format> &formats() const { return m_formats; }
+    const QList<Source> &sources() const noexcept { return m_sources; }
+    const QList<Catalog> &catalogs() const noexcept { return m_catalogs; }
+    const QList<Importer> &importers() const noexcept { return m_importers; }
+    const QList<Command> &commands() const noexcept { return m_commands; }
+    const QList<Panel> &panels() const noexcept { return m_panels; }
+    const QList<Format> &formats() const noexcept { return m_formats; }
     // A format of the script's as the Formats layer takes it (see
     // formatprovider.h): safe to call from any thread, and after the plugin
     // is gone, when it answers that the plugin was switched off.

@@ -4,6 +4,7 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QVersionNumber>
+#include <ranges>
 
 namespace ScriptApi {
 
@@ -227,19 +228,9 @@ const QList<Permission> &permissions() {
     return permissions;
 }
 
-QStringList eventNames() {
-    QStringList names;
-    for (const Event &event : events())
-        names << event.name;
-    return names;
-}
+QStringList eventNames() { return events() | std::views::transform(&Event::name) | std::ranges::to<QStringList>(); }
 
-QStringList permissionNames() {
-    QStringList names;
-    for (const Permission &permission : permissions())
-        names << permission.name;
-    return names;
-}
+QStringList permissionNames() { return permissions() | std::views::transform(&Permission::name) | std::ranges::to<QStringList>(); }
 
 QStringList commandPlaces() { return {"library", "reader", "global"}; }
 QStringList panelPlaces() { return {"library.side", "reader.side"}; }

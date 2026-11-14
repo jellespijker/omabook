@@ -11,6 +11,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUrl>
+#include <algorithm>
 
 #include "ai.h"
 #include "formatprovider.h"
@@ -253,11 +254,9 @@ void ScriptPlugins::reload() {
     syncFormats();
     if (differs) {
         // A question of a plugin that is gone has nobody left to answer.
-        m_questions.erase(std::remove_if(m_questions.begin(), m_questions.end(),
-                                         [this](const Question &question) {
-                                             return !question.plugin || plugin(question.plugin->manifest().id) != question.plugin;
-                                         }),
-                          m_questions.end());
+        m_questions.removeIf([this](const Question &question) {
+            return !question.plugin || plugin(question.plugin->manifest().id) != question.plugin;
+        });
         emit changed();
         emit dataChanged();
         emit questionChanged();
@@ -383,20 +382,21 @@ void ScriptPlugins::libraryChanged(const QList<Book> &books, const QString &libr
     if (libraryPath != m_libraryPath) {
         // Another library, or the first look at this one: nothing changed,
         // but what came in since the plugins last looked is new to them.
-        for (auto it = now.begin(); known && it != now.end(); ++it)
-            if (it.key() > last)
-                added << it.value();
+        if (known)
+            for (const auto &[id, book] : std::as_const(now).asKeyValueRange())
+                if (id > last)
+                    added << book;
     } else {
-        for (auto it = now.begin(); it != now.end(); ++it) {
-            const auto before = m_books.constFind(it.key());
+        for (const auto &[id, book] : std::as_const(now).asKeyValueRange()) {
+            const auto before = m_books.constFind(id);
             if (before == m_books.constEnd())
-                added << it.value();
-            else if (withoutProgress(*before) != withoutProgress(it.value()))
-                emitEvent("book.changed", {{"book", it.value()}, {"before", *before}});
+                added << book;
+            else if (withoutProgress(*before) != withoutProgress(book))
+                emitEvent("book.changed", {{"book", book}, {"before", *before}});
         }
-        for (auto it = m_books.constBegin(); it != m_books.constEnd(); ++it)
-            if (!now.contains(it.key()))
-                emitEvent("book.removed", {{"id", it.key()}, {"book", it.value()}});
+        for (const auto &[id, book] : std::as_const(m_books).asKeyValueRange())
+            if (!now.contains(id))
+                emitEvent("book.removed", {{"id", id}, {"book", book}});
     }
     m_libraryPath = libraryPath;
     lookAtTheBook();
@@ -410,9 +410,7 @@ void ScriptPlugins::libraryChanged(const QList<Book> &books, const QString &libr
             file.commit();
     }
 
-    std::sort(added.begin(), added.end(), [](const QJsonObject &a, const QJsonObject &b) {
-        return a.value("id").toInteger() < b.value("id").toInteger();
-    });
+    std::ranges::sort(added, {}, [](const QJsonObject &book) { return book.value("id").toInteger(); });
     for (const QJsonObject &book : std::as_const(added)) {
         const qint64 id = book.value("id").toInteger();
         // Importers first, so a hook on book.added sees what they made of it.
@@ -614,7 +612,7 @@ QVariant ScriptPlugins::call(const QString &plugin, const QString &function, con
 
 bool ScriptPlugins::wait(int milliseconds) {
     return waitFor([this] {
-        return std::all_of(m_plugins.begin(), m_plugins.end(), [](const auto &entry) { return entry.second->idle(); });
+        return std::ranges::all_of(m_plugins, [](const auto &entry) { return entry.second->idle(); });
     }, milliseconds);
 }
 

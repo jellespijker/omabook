@@ -506,7 +506,8 @@ ReadingSites::Summary ReadingSites::merge(Library &library, const QList<SiteEntr
 
         // One field, three ways: `mine` here, `theirs` on the site, and
         // `before`, what the last sync brought. Empty never wins over a value.
-        enum Verdict { Same, Take, Send, Keep };
+        enum class Verdict { Same, Take, Send, Keep };
+        using enum Verdict;
         auto decide = [&](bool mineEmpty, bool theirsEmpty, bool same, bool mineUnchanged, bool theirsUnchanged) {
             if (same || (mineEmpty && theirsEmpty))
                 return Same;

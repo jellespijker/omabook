@@ -1,6 +1,7 @@
 #include "graphbatch.h"
 
 #include <QJsonArray>
+#include <ranges>
 
 #include "bookops.h"
 #include "formats.h"
@@ -93,12 +94,9 @@ GraphBatch::Done GraphBatch::run(Library &library, const Choice &choice, const G
                                  const std::function<void(int, int, const QString &, const Done &)> &said) {
     Done done;
     const Plan planned = plan(library, choice);
-    QList<Plan::Item> work;
-    for (const Plan::Item &item : planned.items)
-        if (item.skipped.isEmpty())
-            work << item;
-    for (int index = 0; index < work.size(); ++index) {
-        const Plan::Item &item = work.at(index);
+    const auto work = planned.items | std::views::filter([](const Plan::Item &item) { return item.skipped.isEmpty(); })
+                      | std::ranges::to<QList<Plan::Item>>();
+    for (const auto &[index, item] : std::views::enumerate(work)) {
         if (stop && stop()) {
             done.stopped = true;
             break;
@@ -123,7 +121,7 @@ GraphBatch::Done GraphBatch::run(Library &library, const Choice &choice, const G
                                                       done.nodes = before.nodes + now.nodes;
                                                       done.edges = before.edges + now.edges;
                                                       if (said)
-                                                          said(index, int(work.size()), item.title, done);
+                                                          said(int(index), int(work.size()), item.title, done);
                                                   });
         done.requests = before.requests + built.value("requests").toInt();
         done.nodes = before.nodes + built.value("nodes").toInt();
@@ -145,7 +143,7 @@ GraphBatch::Done GraphBatch::run(Library &library, const Choice &choice, const G
         if (built.contains("error"))
             done.problems << item.title + ": " + built.value("error").toString();
         if (said)
-            said(index, int(work.size()), item.title, done);
+            said(int(index), int(work.size()), item.title, done);
         if (done.stopped)
             break;
     }
