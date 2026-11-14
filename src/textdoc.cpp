@@ -11,12 +11,10 @@ namespace {
 // is turned into HTML chapters once and cleaned when the reader asks.
 class TextDocument : public Document {
 public:
-    bool load(const QString &path, QString *error) {
+    std::expected<void, QString> load(const QString &path) {
         QFile file(path);
-        if (!file.open(QIODevice::ReadOnly)) {
-            *error = "The file can't be read: " + file.errorString();
-            return false;
-        }
+        if (!file.open(QIODevice::ReadOnly))
+            return std::unexpected("The file can't be read: " + file.errorString());
         const QString text = decodeText(file.readAll());
         const QString lower = path.toLower();
         if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
@@ -31,11 +29,9 @@ public:
             m_meta.title = htmlToText(title.match(text).captured(1)).simplified();
             m_sections << text;
         }
-        if (m_sections.isEmpty()) {
-            *error = "The file has no text.";
-            return false;
-        }
-        return true;
+        if (m_sections.isEmpty())
+            return std::unexpected("The file has no text.");
+        return {};
     }
 
     Kind kind() const override { return Flow; }
@@ -63,7 +59,7 @@ private:
                                                 QRegularExpression::CaseInsensitiveOption);
         QString current;
         qsizetype length = 0;
-        auto finish = [&] {
+        const auto finish = [this, &current, &length] {
             if (!current.isEmpty())
                 m_sections << current;
             current.clear();
@@ -76,7 +72,7 @@ private:
             if (!paragraph.trimmed().contains('\n') && heading.match(line).hasMatch()) {
                 if (length > 2000)
                     finish();
-                m_toc.append({line, int(m_sections.size()), {}, 0});
+                m_toc.append({.title = line, .section = int(m_sections.size()), .anchor = {}, .level = 0});
                 current += "<h2>" + line.toHtmlEscaped() + "</h2>";
             } else {
                 if (length > 40000)
@@ -95,9 +91,4 @@ private:
 
 } // namespace
 
-std::unique_ptr<Document> openText(const QString &path, QString *error) {
-    auto document = std::make_unique<TextDocument>();
-    if (!document->load(path, error))
-        return nullptr;
-    return document;
-}
+OpenedDocument openText(const QString &path) { return loaded(std::make_unique<TextDocument>(), path); }

@@ -1,21 +1,26 @@
 #include <QBuffer>
-#include <QCollator>
 #include <QFileInfo>
 #include <QHash>
 #include <QImageReader>
 #include <QMutex>
 #include <QMutexLocker>
 #include <QXmlStreamReader>
+#include <algorithm>
+#include <array>
+#include <ranges>
 
 #include "bookarchive.h"
+#include "booksource.h"
 #include "formatreaders.h"
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
-bool isPicture(const QString &name) {
-    static const QStringList suffixes{"jpg", "jpeg", "png", "gif", "webp", "bmp", "avif"};
+[[nodiscard]] bool isPicture(const QString &name) {
+    static constexpr std::array suffixes{"jpg"_L1, "jpeg"_L1, "png"_L1, "gif"_L1, "webp"_L1, "bmp"_L1, "avif"_L1};
     // macOS leaves a thumbnail twin of every file in __MACOSX.
-    return suffixes.contains(QFileInfo(name).suffix().toLower()) && !name.startsWith("__MACOSX");
+    return std::ranges::contains(suffixes, QFileInfo(name).suffix().toLower()) && !name.startsWith("__MACOSX"_L1);
 }
 
 // A comic is an archive of pictures, read in the order of their names.
@@ -23,19 +28,12 @@ class ComicDocument : public Document {
 public:
     explicit ComicDocument(const QString &path) : m_archive(path) {}
 
-    bool load(const QString &path, QString *error) {
+    std::expected<void, QString> load(const QString &path) {
         const QStringList names = m_archive.entries();
-        for (const QString &name : names)
-            if (isPicture(name))
-                m_pages << name;
-        if (m_pages.isEmpty()) {
-            *error = "This archive holds no pictures to read as a comic.";
-            return false;
-        }
-        QCollator collator;
-        collator.setNumericMode(true);
-        collator.setCaseSensitivity(Qt::CaseInsensitive);
-        std::sort(m_pages.begin(), m_pages.end(), collator);
+        m_pages = names | std::views::filter(isPicture) | std::ranges::to<QStringList>();
+        if (m_pages.isEmpty())
+            return std::unexpected("This archive holds no pictures to read as a comic.");
+        BookSource::sortNaturally(m_pages);
 
         m_meta.title = QFileInfo(path).completeBaseName();
         // ComicRack's ComicInfo.xml, where the archive carries one.
@@ -61,7 +59,7 @@ public:
             }
         }
         m_meta.cover = image(0, 600);
-        return true;
+        return {};
     }
 
     Kind kind() const override { return Pages; }
@@ -77,7 +75,7 @@ public:
         reader.setAutoTransform(true);
         const QSize size = reader.size();
         {
-            QMutexLocker locker(&m_lock);
+            const QMutexLocker locker(&m_lock);
             m_sizes.insert(page, size);
         }
         // Decoders that can scale while they read (JPEG) do it far faster.
@@ -89,7 +87,7 @@ public:
     // Known once the page has been drawn; reading it sooner would mean
     // unpacking every page just to measure it.
     QSizeF pageSize(int page) const override {
-        QMutexLocker locker(&m_lock);
+        const QMutexLocker locker(&m_lock);
         return m_sizes.value(page);
     }
 
@@ -103,9 +101,4 @@ private:
 
 } // namespace
 
-std::unique_ptr<Document> openComic(const QString &path, QString *error) {
-    auto document = std::make_unique<ComicDocument>(path);
-    if (!document->load(path, error))
-        return nullptr;
-    return document;
-}
+OpenedDocument openComic(const QString &path) { return loaded(std::make_unique<ComicDocument>(path), path); }

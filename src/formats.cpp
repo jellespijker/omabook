@@ -6,61 +6,66 @@
 #include <QRegularExpression>
 
 #include <QReadWriteLock>
+#include <QScopedValueRollback>
+#include <algorithm>
+#include <array>
+#include <ranges>
 
 #include "formatprovider.h"
 #include "formatreaders.h"
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
-using Opener = std::unique_ptr<Document> (*)(const QString &, QString *);
+using Opener = OpenedDocument (*)(const QString &);
 
 struct Format {
-    const char *extension;
-    const char *name;
-    Opener open; // null for a format that is read after converting it
+    QLatin1StringView extension;
+    QLatin1StringView name;
+    Opener open = nullptr; // null for a format that is read after converting it
 };
 
 // In the order the reader prefers when a book has several: what Omabook
 // reads itself before what it converts, flowing text before fixed pages.
-const QList<Format> &formats() {
-    static const QList<Format> formats{
-        {"epub", "EPUB", openEpub},
-        {"fb2", "FictionBook", openFb2},
-        {"fb2.zip", "FictionBook", openFb2},
-        {"fbz", "FictionBook", openFb2},
-        {"md", "Markdown", openText},
-        {"markdown", "Markdown", openText},
-        {"html", "HTML", openText},
-        {"htm", "HTML", openText},
-        {"xhtml", "HTML", openText},
-        {"txt", "Plain text", openText},
-        {"pdf", "PDF", openPdf},
-        {"cbz", "Comic (CBZ)", openComic},
-        {"cbr", "Comic (CBR)", openComic},
-        {"cb7", "Comic (CB7)", openComic},
-        {"cbt", "Comic (CBT)", openComic},
-        {"azw3", "Kindle (AZW3)", nullptr},
-        {"azw", "Kindle (AZW)", nullptr},
-        {"mobi", "Kindle (MOBI)", nullptr},
-        {"prc", "Kindle (PRC)", nullptr},
-        {"kfx", "Kindle (KFX)", nullptr},
-        {"docx", "Word", nullptr},
-        {"odt", "OpenDocument", nullptr},
-        {"rtf", "Rich text", nullptr},
-        {"lit", "Microsoft Reader", nullptr},
-        {"pdb", "Palm", nullptr},
-        {"lrf", "Sony (LRF)", nullptr},
-        {"djvu", "DjVu", nullptr},
-        {"chm", "Help (CHM)", nullptr},
-    };
-    return formats;
-}
+constexpr auto formats = std::to_array<Format>({
+    {"epub"_L1, "EPUB"_L1, openEpub},
+    {"fb2"_L1, "FictionBook"_L1, openFb2},
+    {"fb2.zip"_L1, "FictionBook"_L1, openFb2},
+    {"fbz"_L1, "FictionBook"_L1, openFb2},
+    {"md"_L1, "Markdown"_L1, openText},
+    {"markdown"_L1, "Markdown"_L1, openText},
+    {"html"_L1, "HTML"_L1, openText},
+    {"htm"_L1, "HTML"_L1, openText},
+    {"xhtml"_L1, "HTML"_L1, openText},
+    {"txt"_L1, "Plain text"_L1, openText},
+    {"pdf"_L1, "PDF"_L1, openPdf},
+    {"cbz"_L1, "Comic (CBZ)"_L1, openComic},
+    {"cbr"_L1, "Comic (CBR)"_L1, openComic},
+    {"cb7"_L1, "Comic (CB7)"_L1, openComic},
+    {"cbt"_L1, "Comic (CBT)"_L1, openComic},
+    {"azw3"_L1, "Kindle (AZW3)"_L1},
+    {"azw"_L1, "Kindle (AZW)"_L1},
+    {"mobi"_L1, "Kindle (MOBI)"_L1},
+    {"prc"_L1, "Kindle (PRC)"_L1},
+    {"kfx"_L1, "Kindle (KFX)"_L1},
+    {"docx"_L1, "Word"_L1},
+    {"odt"_L1, "OpenDocument"_L1},
+    {"rtf"_L1, "Rich text"_L1},
+    {"lit"_L1, "Microsoft Reader"_L1},
+    {"pdb"_L1, "Palm"_L1},
+    {"lrf"_L1, "Sony (LRF)"_L1},
+    {"djvu"_L1, "DjVu"_L1},
+    {"chm"_L1, "Help (CHM)"_L1},
+});
 
-const Format *find(const QString &extension) {
-    for (const Format &format : formats())
-        if (extension == QLatin1String(format.extension))
-            return &format;
-    return nullptr;
+// The Kindle formats, which say who they are without being converted.
+constexpr std::array kindle{"mobi"_L1, "azw"_L1, "azw3"_L1, "prc"_L1};
+
+// One of Omabook's own formats, or null for an extension that isn't one.
+[[nodiscard]] const Format *find(const QString &extension) {
+    const auto found = std::ranges::find_if(formats, [&extension](const Format &format) { return extension == format.extension; });
+    return found != formats.end() ? &*found : nullptr;
 }
 
 // The formats added as providers: Omabook's own first, then plugins'.
@@ -74,11 +79,38 @@ Registry &registry() {
     return registry;
 }
 
-std::optional<FormatProvider> providerWith(const QString &extension) {
-    for (const FormatProvider &provider : Formats::providers())
-        if (provider.extensions.contains(extension))
-            return provider;
-    return std::nullopt;
+[[nodiscard]] std::optional<FormatProvider> providerWith(const QString &extension) {
+    const QList<FormatProvider> providers = Formats::providers();
+    const auto found = std::ranges::find_if(providers, [&extension](const FormatProvider &provider) {
+        return provider.extensions.contains(extension);
+    });
+    return found != providers.end() ? std::optional(*found) : std::nullopt;
+}
+
+[[nodiscard]] QString fileName(const QString &path) { return QFileInfo(path).fileName(); }
+
+// Opens a book, or says why it can't be.
+[[nodiscard]] OpenedDocument opened(const QString &path) {
+    if (!QFileInfo::exists(path))
+        return std::unexpected("There is no such file: " + path);
+    // A format added as a provider: by the file's extension, or for a folder
+    // or a plain archive by what is in it.
+    if (const auto provider = Formats::providerFor(path)) {
+        const BookSource source(path);
+        QString why;
+        const auto description = provider->describe ? provider->describe(source, &why) : std::nullopt;
+        if (!description || description->chapters.isEmpty())
+            return std::unexpected(why.isEmpty() ? provider->name + " found no chapters in " + fileName(path) + "." : why);
+        return Formats::fromDescription(*description, source);
+    }
+    if (!QFileInfo(path).isFile())
+        return std::unexpected("Omabook doesn't know what kind of book the folder " + fileName(path) + " is.");
+    const Format *format = find(Formats::extension(path));
+    if (!format)
+        return std::unexpected("Omabook doesn't know the format of " + fileName(path) + ".");
+    if (!format->open)
+        return std::unexpected(QString(format->name) + " files are read by converting them to EPUB first.");
+    return format->open(path);
 }
 
 } // namespace
@@ -91,9 +123,7 @@ void Formats::addProvider(const FormatProvider &provider) {
 
 void Formats::removeProvider(const QString &id) {
     const QWriteLocker locker(&registry().lock);
-    QList<FormatProvider> &providers = registry().providers;
-    providers.erase(std::remove_if(providers.begin(), providers.end(), [&](const FormatProvider &provider) { return provider.id == id; }),
-                    providers.end());
+    registry().providers.removeIf([&id](const FormatProvider &provider) { return provider.id == id; });
 }
 
 void Formats::setProviderLoader(std::function<void()> loader) {
@@ -111,9 +141,8 @@ QList<FormatProvider> Formats::providers() {
         loader = registry().loader;
     }
     if (loader && !loading) {
-        loading = true;
+        const QScopedValueRollback<bool> once(loading, true);
         loader();
-        loading = false;
     }
     const QReadLocker locker(&registry().lock);
     return registry().providers;
@@ -130,21 +159,20 @@ std::optional<FormatProvider> Formats::providerFor(const QString &path) {
     if (!info.exists())
         return std::nullopt;
     const BookSource source(path);
-    for (const FormatProvider &provider : providers())
-        if (provider.claims && provider.claims(source))
-            return provider;
-    return std::nullopt;
+    const QList<FormatProvider> known = providers();
+    const auto claimant = std::ranges::find_if(known, [&source](const FormatProvider &provider) {
+        return provider.claims && provider.claims(source);
+    });
+    return claimant != known.end() ? std::optional(*claimant) : std::nullopt;
 }
 
 QString Formats::extension(const QString &path) {
     const QString lower = QFileInfo(path).fileName().toLower();
-    return lower.endsWith(".fb2.zip") ? "fb2.zip" : QFileInfo(lower).suffix();
+    return lower.endsWith(".fb2.zip"_L1) ? u"fb2.zip"_s : QFileInfo(lower).suffix();
 }
 
 QStringList Formats::extensions() {
-    QStringList extensions;
-    for (const Format &format : formats())
-        extensions << format.extension;
+    QStringList extensions = formats | std::views::transform(&Format::extension) | std::ranges::to<QStringList>();
     for (const FormatProvider &provider : providers())
         for (const QString &extension : provider.extensions)
             if (!extensions.contains(extension))
@@ -160,54 +188,30 @@ bool Formats::readable(const QString &extension) {
 }
 
 QString Formats::name(const QString &extension) {
-    const Format *format = find(extension);
-    if (const auto provider = format ? std::nullopt : providerWith(extension))
-        return provider->name;
-    return format ? format->name : extension.toUpper();
+    if (const Format *format = find(extension))
+        return format->name;
+    return providerWith(extension)
+        .transform([](const FormatProvider &provider) { return provider.name; })
+        .value_or(extension.toUpper());
 }
 
 QStringList Formats::byPreference(QStringList extensions) {
     const QStringList order = Formats::extensions();
-    std::stable_sort(extensions.begin(), extensions.end(), [&](const QString &a, const QString &b) {
-        const int ia = order.indexOf(a), ib = order.indexOf(b);
-        return (ia < 0 ? order.size() : ia) < (ib < 0 ? order.size() : ib);
+    // An extension that isn't known comes after all that are.
+    std::ranges::stable_sort(extensions, {}, [&order](const QString &extension) {
+        const qsizetype place = order.indexOf(extension);
+        return place < 0 ? order.size() : place;
     });
     return extensions;
 }
 
 std::unique_ptr<Document> Formats::open(const QString &path, QString *error) {
-    QString ignored;
-    QString *why = error ? error : &ignored;
-    if (!QFileInfo::exists(path)) {
-        *why = "There is no such file: " + path;
-        return nullptr;
-    }
-    // A format added as a provider: by the file's extension, or for a folder
-    // or a plain archive by what is in it.
-    if (const auto provider = providerFor(path)) {
-        const BookSource source(path);
-        const auto description = provider->describe ? provider->describe(source, why) : std::nullopt;
-        if (!description || description->chapters.isEmpty()) {
-            if (why->isEmpty())
-                *why = provider->name + " found no chapters in " + QFileInfo(path).fileName() + ".";
-            return nullptr;
-        }
-        return fromDescription(*description, source);
-    }
-    if (!QFileInfo(path).isFile()) {
-        *why = "Omabook doesn't know what kind of book the folder " + QFileInfo(path).fileName() + " is.";
-        return nullptr;
-    }
-    const Format *format = find(extension(path));
-    if (!format) {
-        *why = "Omabook doesn't know the format of " + QFileInfo(path).fileName() + ".";
-        return nullptr;
-    }
-    if (!format->open) {
-        *why = QString(format->name) + " files are read by converting them to EPUB first.";
-        return nullptr;
-    }
-    return format->open(path, why);
+    auto document = opened(path);
+    if (document)
+        return std::move(*document);
+    if (error)
+        *error = document.error();
+    return nullptr;
 }
 
 // Calibre's convention, which most collections follow: "Title - Author".
@@ -236,7 +240,7 @@ BookMeta Formats::readMeta(const QString &path) {
     if (readable(extension)) {
         if (const auto document = open(path))
             meta = document->meta();
-    } else if (QStringList{"mobi", "azw", "azw3", "prc"}.contains(extension)) {
+    } else if (std::ranges::contains(kindle, extension)) {
         meta = readMobiMeta(path);
     }
     const BookMeta named = metaFromFileName(path);

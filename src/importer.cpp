@@ -9,12 +9,17 @@
 #include <QSaveFile>
 #include <QSet>
 #include <QTemporaryDir>
+#include <algorithm>
+#include <array>
+#include <ranges>
 
 #include "bookarchive.h"
 
 #include "calibre.h"
 #include "formatprovider.h"
 #include "formats.h"
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
@@ -26,6 +31,9 @@ struct Incoming {
     QString cover;
     // The book as Calibre has it, when it comes from a Calibre library.
     std::optional<Calibre::Book> calibre;
+
+    // A book that is one file, of which nothing more is known.
+    static Incoming file(const QString &path) { return {.files = {path}, .meta = std::nullopt, .cover = {}, .calibre = std::nullopt}; }
 };
 
 // What Calibre said of each book the last time it was imported, kept beside
@@ -39,7 +47,7 @@ public:
             m_books = QJsonDocument::fromJson(file.readAll()).object();
     }
 
-    QJsonObject of(qint64 id) const { return m_books.value(QString::number(id)).toObject(); }
+    [[nodiscard]] QJsonObject of(qint64 id) const { return m_books.value(QString::number(id)).toObject(); }
     void remember(qint64 id, const QJsonObject &said) {
         if (of(id) == said)
             return;
@@ -66,11 +74,11 @@ private:
 // replaced only while it still is what the last import put there (or nothing,
 // for a book never imported from Calibre), so a shelf or a star changed in
 // Omabook since stays as the user left it. True when something changed.
-bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, CalibreMemory *memory) {
+[[nodiscard]] bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, CalibreMemory &memory) {
     const auto now = library.book(id);
     if (!now)
         return false;
-    const QJsonObject before = memory->of(id);
+    const QJsonObject before = memory.of(id);
     const Calibre::Reading &said = calibre.reading;
     bool changed = false;
 
@@ -84,11 +92,11 @@ bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, Cali
     identifiers.insert("calibre", calibre.uuid.isEmpty() ? QString::number(calibre.id) : calibre.uuid);
     const QJsonObject identifiersBefore = before.value("identifiers").toObject();
     QJsonObject identifiersSaid;
-    for (auto it = identifiers.constBegin(); it != identifiers.constEnd(); ++it) {
-        identifiersSaid.insert(it.key(), it.value());
-        const QString here = now->identifiers.value(it.key()).toString();
-        if (here == identifiersBefore.value(it.key()).toString() && here != it.value())
-            changed = library.setIdentifier(id, it.key(), it.value()) || changed;
+    for (const auto &[scheme, value] : identifiers.asKeyValueRange()) {
+        identifiersSaid.insert(scheme, value);
+        const QString here = now->identifiers.value(scheme).toString();
+        if (here == identifiersBefore.value(scheme).toString() && here != value)
+            changed = library.setIdentifier(id, scheme, value) || changed;
     }
 
     // The place it was read to. Calibre's viewer stamps its places, and the
@@ -101,11 +109,7 @@ bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, Cali
     const bool byHand = said.readAt == 0 && said.percent > 0 && said.percent != before.value("percent").toDouble()
                         && (here.updated == 0 || here.updated == placedAt);
     if (newer || byHand) {
-        Progress place;
-        place.section = said.section;
-        place.percent = said.percent;
-        place.updated = said.readAt;
-        library.setProgress(id, place);
+        library.setProgress(id, {.section = said.section, .percent = said.percent, .updated = said.readAt});
         placedAt = library.progress(id).updated;
         changed = true;
     }
@@ -116,37 +120,33 @@ bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, Cali
     for (const Calibre::Note &note : said.notes) {
         if (notes.contains(note.id))
             continue;
-        Annotation annotation;
-        annotation.kind = note.kind;
-        annotation.section = note.section;
-        annotation.text = note.text;
-        annotation.note = note.note;
+        const Annotation annotation{.id = 0, .kind = note.kind, .section = note.section, .fraction = 0, .text = note.text, .note = note.note};
         if (library.addAnnotation(id, annotation) > 0) {
             notes << note.id;
             changed = true;
         }
     }
 
-    memory->remember(id, QJsonObject{{"shelf", said.shelf}, {"rating", said.rating}, {"finished", said.finished},
+    memory.remember(id, QJsonObject{{"shelf", said.shelf}, {"rating", said.rating}, {"finished", said.finished},
                                      {"identifiers", identifiersSaid}, {"percent", said.percent},
                                      {"progress_at", double(placedAt)}, {"notes", notes}});
     return changed;
 }
 
-bool isArchive(const QString &path) {
-    static const QStringList suffixes{"zip", "rar", "7z", "tar", "tgz"};
-    return suffixes.contains(QFileInfo(path).suffix().toLower()) && !Formats::isBook(path);
+[[nodiscard]] bool isArchive(const QString &path) {
+    static constexpr std::array suffixes{"zip"_L1, "rar"_L1, "7z"_L1, "tar"_L1, "tgz"_L1};
+    return std::ranges::contains(suffixes, QFileInfo(path).suffix().toLower()) && !Formats::isBook(path);
 }
 
 // Books are often passed around packed. The ones inside an archive are
 // unpacked beside each other in `scratch`, which lives as long as the import.
-QStringList unpack(const QString &archivePath, const QTemporaryDir &scratch, int *counter) {
+[[nodiscard]] QStringList unpack(const QString &archivePath, const QTemporaryDir &scratch, int &counter) {
     QStringList files;
     const Archive archive(archivePath);
     for (const QString &entry : archive.entries()) {
         if (!Formats::isBook(entry))
             continue;
-        const QString folder = scratch.filePath(QString::number(++*counter));
+        const QString folder = scratch.filePath(QString::number(++counter));
         const QString file = folder + "/" + QFileInfo(entry).fileName();
         QFile out(file);
         const QByteArray data = archive.read(entry);
@@ -159,36 +159,36 @@ QStringList unpack(const QString &archivePath, const QTemporaryDir &scratch, int
 // A folder, or a plain archive, that a format provider says is one book (a
 // folder of Markdown chapters, say) is packed into one file of that format,
 // since a library holds a book as a file. Empty when it couldn't be packed.
-QString packed(const QString &path, const FormatProvider &provider, const QTemporaryDir &scratch, int *counter) {
+[[nodiscard]] QString packed(const QString &path, const FormatProvider &provider, const QTemporaryDir &scratch, int &counter) {
     const BookSource source(path);
-    const QString folder = scratch.filePath(QString::number(++*counter));
+    const QString folder = scratch.filePath(QString::number(++counter));
     const QString file = folder + "/" + source.name() + "." + provider.extensions.value(0);
     return QDir().mkpath(folder) && source.pack(file) ? file : QString();
 }
 
 // The books in a folder: its book files, and its folders that are one book
 // each; any other folder is looked into the same way.
-void walk(const QString &folder, const QTemporaryDir &scratch, int *counter, QList<Incoming> *incoming, QStringList *problems) {
+void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QList<Incoming> &incoming, QStringList &problems) {
     const QDir dir(folder);
     for (const QFileInfo &entry : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
         if (entry.isFile()) {
             if (Formats::isBook(entry.filePath()))
-                incoming->append({{entry.filePath()}, std::nullopt, {}, std::nullopt});
+                incoming.append(Incoming::file(entry.filePath()));
         } else if (const auto provider = Formats::providerFor(entry.filePath())) {
             const QString file = packed(entry.filePath(), *provider, scratch, counter);
             if (file.isEmpty())
-                *problems << entry.fileName() + " couldn't be made into one book.";
+                problems << entry.fileName() + " couldn't be made into one book.";
             else
-                incoming->append({{file}, std::nullopt, {}, std::nullopt});
+                incoming.append(Incoming::file(file));
         } else {
             walk(entry.filePath(), scratch, counter, incoming, problems);
         }
     }
 }
 
-QList<Incoming> collect(const QStringList &paths, const QTemporaryDir &scratch, const ImportOptions &options,
-                        ImportSummary *summary) {
-    QStringList *problems = &summary->problems;
+[[nodiscard]] QList<Incoming> collect(const QStringList &paths, const QTemporaryDir &scratch, const ImportOptions &options,
+                                      ImportSummary &summary) {
+    QStringList &problems = summary.problems;
     QList<Incoming> incoming;
     int unpacked = 0;
     for (const QString &path : paths) {
@@ -196,34 +196,31 @@ QList<Incoming> collect(const QStringList &paths, const QTemporaryDir &scratch, 
         const auto provider = !calibre && (isArchive(path) || QFileInfo(path).isDir()) ? Formats::providerFor(path) : std::nullopt;
         if (provider) {
             // The whole folder or archive is one book of a provider's format.
-            const QString file = packed(path, *provider, scratch, &unpacked);
+            const QString file = packed(path, *provider, scratch, unpacked);
             if (file.isEmpty())
-                *problems << QFileInfo(path).fileName() + " couldn't be made into one book.";
+                problems << QFileInfo(path).fileName() + " couldn't be made into one book.";
             else
-                incoming.append({{file}, std::nullopt, {}, std::nullopt});
+                incoming.append(Incoming::file(file));
         } else if (isArchive(path)) {
-            const QStringList files = unpack(path, scratch, &unpacked);
+            const QStringList files = unpack(path, scratch, unpacked);
             if (files.isEmpty())
-                *problems << "There are no books inside " + QFileInfo(path).fileName() + ".";
+                problems << "There are no books inside " + QFileInfo(path).fileName() + ".";
             for (const QString &file : files)
-                incoming.append({{file}, std::nullopt, {}, std::nullopt});
+                incoming.append(Incoming::file(file));
         } else if (!QFileInfo(path).isDir()) {
-            incoming.append({{path}, std::nullopt, {}, std::nullopt});
+            incoming.append(Incoming::file(path));
         } else if (options.calibre && Calibre::isLibrary(path)) {
-            summary->calibreLibraries << path;
+            summary.calibreLibraries << path;
             const Calibre::Books calibre = Calibre::read(path);
             if (!calibre.error.isEmpty())
-                *problems << calibre.error;
+                problems << calibre.error;
             for (const Calibre::Book &book : calibre.books) {
-                QStringList files;
-                for (const QString &file : book.files)
-                    if (Formats::isBook(file))
-                        files << file;
+                const QStringList files = book.files | std::views::filter(Formats::isBook) | std::ranges::to<QStringList>();
                 if (!files.isEmpty())
-                    incoming.append({files, book.meta, book.cover, book});
+                    incoming.append({.files = files, .meta = book.meta, .cover = book.cover, .calibre = book});
             }
         } else {
-            walk(path, scratch, &unpacked, &incoming, problems);
+            walk(path, scratch, unpacked, incoming, problems);
         }
     }
     return incoming;
@@ -235,7 +232,7 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
                           const ImportOptions &options) {
     ImportSummary summary;
     const QTemporaryDir scratch;
-    const QList<Incoming> incoming = collect(paths, scratch, options, &summary);
+    const QList<Incoming> incoming = collect(paths, scratch, options, summary);
     CalibreMemory memory(library.root());
     // Calibre can hold the same file under two entries. The first one's
     // reading is taken; the second would only undo it, on every import.
@@ -250,7 +247,7 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
         }
         // The first file makes the book; the others join it as more formats.
         const Library::Added added = library.add(book.files.first(), meta);
-        summary.items.append({book.files.first(), added.id, added.duplicate, added.error});
+        summary.items.append({.file = book.files.first(), .id = added.id, .duplicate = added.duplicate, .error = added.error});
         if (!added.error.isEmpty()) {
             summary.problems << added.error;
         } else {
@@ -264,7 +261,7 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
             }
             if (book.calibre && !taken.contains(added.id)) {
                 taken.insert(added.id);
-                if (takeReading(library, added.id, *book.calibre, &memory) && added.duplicate)
+                if (takeReading(library, added.id, *book.calibre, memory) && added.duplicate)
                     ++summary.updated;
                 const QString status = library.book(added.id)->status();
                 if (status == "read")

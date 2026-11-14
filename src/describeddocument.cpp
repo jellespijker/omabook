@@ -1,5 +1,7 @@
 #include <QBuffer>
 #include <QImageReader>
+#include <algorithm>
+#include <ranges>
 
 #include "formatprovider.h"
 #include "formatreaders.h"
@@ -21,11 +23,9 @@ public:
             reader.setAutoTransform(true);
             m_description.meta.cover = reader.read();
         }
-        for (int section = 0; section < m_description.chapters.size(); ++section) {
-            const BookDescription::Chapter &chapter = m_description.chapters.at(section);
+        for (const auto &[section, chapter] : std::views::enumerate(std::as_const(m_description.chapters)))
             if (!chapter.title.isEmpty())
-                m_toc.append({chapter.title, section, {}, chapter.level});
-        }
+                m_toc.append({.title = chapter.title, .section = int(section), .anchor = {}, .level = chapter.level});
     }
 
     Kind kind() const override { return Flow; }
@@ -39,11 +39,11 @@ public:
             return {};
         const BookDescription::Chapter &chapter = m_description.chapters.at(section);
         CleanOptions options;
-        options.image = [&](const QString &address) {
+        options.image = [this, &chapter, width](const QString &address) {
             const QString name = BookSource::resolve(chapter.file, address);
             return m_files.contains(name) ? bookImageAttributes(name, m_source.read(name), width) : QString();
         };
-        options.link = [&](const QString &target) -> QString {
+        options.link = [this, &chapter, section](const QString &target) -> QString {
             if (target.startsWith("http://") || target.startsWith("https://") || target.startsWith("mailto:"))
                 return target;
             const QString anchor = target.contains('#') ? target.section('#', 1) : QString();
@@ -51,10 +51,10 @@ public:
             if (target.startsWith('#'))
                 return QString("omabook:%1#%2").arg(section).arg(anchor);
             const QString file = BookSource::resolve(chapter.file, target);
-            for (int other = 0; other < count(); ++other)
-                if (!file.isEmpty() && m_description.chapters.at(other).file == file)
-                    return QString("omabook:%1#%2").arg(other).arg(anchor);
-            return {};
+            const auto &chapters = m_description.chapters;
+            const auto other = std::ranges::find(chapters, file, &BookDescription::Chapter::file);
+            return file.isEmpty() || other == chapters.end() ? QString()
+                                                             : QString("omabook:%1#%2").arg(other - chapters.begin()).arg(anchor);
         };
         return cleanHtml(chapter.html, options);
     }

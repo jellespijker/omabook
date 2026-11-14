@@ -1,19 +1,23 @@
 #include <QFile>
 #include <QStringDecoder>
 #include <QtEndian>
+#include <concepts>
+#include <optional>
 
 #include "formatreaders.h"
 #include "htmlclean.h"
 
 namespace {
 
-quint32 u32(const QByteArray &data, qsizetype at) {
-    return at >= 0 && at + 4 <= data.size() ? qFromBigEndian<quint32>(data.constData() + at) : 0;
+// A big-endian number at a place in some bytes; 0 where the bytes end before it does.
+template <std::unsigned_integral Number>
+[[nodiscard]] Number bigEndian(const QByteArray &data, qsizetype at) noexcept {
+    const auto width = qsizetype(sizeof(Number));
+    return at >= 0 && at + width <= data.size() ? qFromBigEndian<Number>(data.constData() + at) : Number{0};
 }
 
-quint16 u16(const QByteArray &data, qsizetype at) {
-    return at >= 0 && at + 2 <= data.size() ? qFromBigEndian<quint16>(data.constData() + at) : 0;
-}
+[[nodiscard]] quint32 u32(const QByteArray &data, qsizetype at) noexcept { return bigEndian<quint32>(data, at); }
+[[nodiscard]] quint16 u16(const QByteArray &data, qsizetype at) noexcept { return bigEndian<quint16>(data, at); }
 
 } // namespace
 
@@ -30,7 +34,7 @@ BookMeta readMobiMeta(const QString &path) {
     if (head.mid(60, 8) != "BOOKMOBI" || records < 1)
         return meta;
     const QByteArray table = file.read(qint64(records) * 8);
-    auto record = [&](int index) -> QByteArray {
+    const auto record = [&file, &table, records](qint64 index) -> QByteArray {
         if (index < 0 || index >= records)
             return {};
         const qint64 start = u32(table, index * 8);
@@ -45,7 +49,7 @@ BookMeta readMobiMeta(const QString &path) {
         return meta;
     const quint32 headerLength = u32(first, 20);
     const bool utf8 = u32(first, 28) == 65001;
-    auto text = [&](const QByteArray &bytes) {
+    const auto text = [utf8](const QByteArray &bytes) {
         if (utf8)
             return QString::fromUtf8(bytes);
         QStringDecoder western("windows-1252");
@@ -59,7 +63,7 @@ BookMeta readMobiMeta(const QString &path) {
         return meta;
     const quint32 count = u32(first, at + 8);
     at += 12;
-    quint32 coverOffset = 0xffffffff;
+    std::optional<quint32> coverOffset;
     for (quint32 i = 0; i < count && at + 8 <= first.size(); ++i) {
         const quint32 type = u32(first, at), length = u32(first, at + 4);
         if (length < 8)
@@ -72,13 +76,14 @@ BookMeta readMobiMeta(const QString &path) {
         case 104: meta.isbn = text(value).simplified(); break;
         case 105: meta.tags << BookMeta::splitTags(text(value)); break;
         case 106: meta.published = text(value).left(10); break;
-        case 201: coverOffset = u32(value, 0); break;
+        // A cover that isn't there is written as all ones.
+        case 201: coverOffset = u32(value, 0) == 0xffffffff ? std::nullopt : std::optional(u32(value, 0)); break;
         case 503: meta.title = text(value).simplified(); break;
         case 524: meta.language = text(value).simplified(); break;
         }
         at += length;
     }
-    if (coverOffset != 0xffffffff)
-        meta.cover = QImage::fromData(record(firstImage + coverOffset));
+    if (coverOffset)
+        meta.cover = QImage::fromData(record(qint64(firstImage) + *coverOffset));
     return meta;
 }

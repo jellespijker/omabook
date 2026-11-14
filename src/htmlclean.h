@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QFlags>
 #include <QHash>
 #include <QList>
 #include <QString>
@@ -12,8 +13,8 @@
 // and write that structure back as the subset Qt's rich text lays out.
 
 struct HtmlToken {
-    enum Type { Text, Open, Close };
-    Type type = Text;
+    enum class Type { Text, Open, Close };
+    Type type = Type::Text;
     QString name;                    // lower case, without a namespace prefix
     QHash<QString, QString> attributes; // names lower case, without a prefix
     QString text;                    // for Text, as written, entities and all
@@ -23,16 +24,18 @@ struct HtmlToken {
 QList<HtmlToken> tokenizeHtml(const QString &html);
 
 // What a stylesheet says about a class, as far as rich text can show it.
-enum TextStyle { Italic = 1, Bold = 2, Center = 4, Right = 8 };
-// Class name to TextStyle flags, from a book's stylesheets.
-QHash<QString, int> classStyles(const QString &css);
+enum class TextStyle { Italic = 1, Bold = 2, Center = 4, Right = 8 };
+Q_DECLARE_FLAGS(TextStyles, TextStyle)
+Q_DECLARE_OPERATORS_FOR_FLAGS(TextStyles)
+// Class name to its styles, from a book's stylesheets.
+QHash<QString, TextStyles> classStyles(const QString &css);
 
 struct CleanOptions {
     // The attributes for a picture (`src="…" width="…"`), or empty to drop it.
     std::function<QString(const QString &source)> image;
     // Where a link goes in the reader, or empty to leave only its text.
     std::function<QString(const QString &target)> link;
-    QHash<QString, int> styles;
+    QHash<QString, TextStyles> styles;
 };
 
 QString cleanHtml(const QString &html, const CleanOptions &options = {});

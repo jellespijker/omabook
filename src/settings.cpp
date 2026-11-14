@@ -8,6 +8,20 @@
 #include <QJsonDocument>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <array>
+
+using namespace Qt::StringLiterals;
+
+namespace {
+
+// What a setting with a few words to choose from may be.
+constexpr std::array graphModes{"auto"_L1, "ask"_L1, "off"_L1};
+constexpr std::array spreads{"auto"_L1, "always"_L1, "never"_L1};
+constexpr std::array pluginUpdateModes{"auto"_L1, "tell"_L1, "never"_L1};
+constexpr std::array sorts{"recent"_L1, "title"_L1,  "author"_L1,    "series"_L1,  "added"_L1,
+                           "progress"_L1, "rating"_L1, "published"_L1, "finished"_L1};
+
+} // namespace
 
 Settings::Settings(const QString &file, QObject *parent)
     : QObject(parent),
@@ -75,11 +89,11 @@ void Settings::forgetLibrary(const QString &path) {
 
 QString Settings::graph() const {
     const QString mode = m_values.value("graph").toString();
-    return QStringList{"auto", "ask", "off"}.contains(mode) ? mode : QString("auto");
+    return std::ranges::contains(graphModes, mode) ? mode : QString("auto");
 }
 
 void Settings::setGraph(const QString &mode) {
-    if (QStringList{"auto", "ask", "off"}.contains(mode))
+    if (std::ranges::contains(graphModes, mode))
         set("graph", mode);
 }
 
@@ -88,7 +102,7 @@ void Settings::setPaneWidth(const QString &pane, int width) {
     if (width <= 0)
         widths.remove(pane);
     else
-        widths.insert(pane, qBound(120, width, 4000));
+        widths.insert(pane, std::clamp(width, 120, 4000));
     if (widths != m_values.value("pane_widths").toObject())
         set("pane_widths", widths);
 }
@@ -110,7 +124,8 @@ QJsonObject Settings::options() const {
 }
 
 bool Settings::setOption(const QString &key, const QJsonValue &value) {
-    auto within = [&](int low, int high) { return value.isDouble() && value.toInt() >= low && value.toInt() <= high; };
+    const auto within = [&value](int low, int high) { return value.isDouble() && value.toInt() >= low && value.toInt() <= high; };
+    const auto oneOf = [&value](const auto &words) { return std::ranges::contains(words, value.toString()); };
     const bool fits = key == "cover_size" ? within(96, 480)
                       : key == "font_size" ? within(10, 48)
                       : key == "line_width" ? within(320, 1600)
@@ -118,10 +133,9 @@ bool Settings::setOption(const QString &key, const QJsonValue &value) {
                       : key == "paragraph_spacing" ? within(0, 80)
                       : key == "justify" ? value.isBool()
                       : key == "font_family" ? value.isString()
-                      : key == "spread" ? QStringList{"auto", "always", "never"}.contains(value.toString())
-                      : key == "plugin_updates" ? QStringList{"auto", "tell", "never"}.contains(value.toString())
-                      : key == "sort" ? QStringList{"recent", "title", "author", "series", "added", "progress", "rating",
-                                                    "published", "finished"}.contains(value.toString())
+                      : key == "spread" ? oneOf(spreads)
+                      : key == "plugin_updates" ? oneOf(pluginUpdateModes)
+                      : key == "sort" ? oneOf(sorts)
                       : false;
     if (fits)
         set(key, value);
@@ -225,7 +239,7 @@ QJsonObject Settings::upgraded(QJsonObject values) {
     return values;
 }
 
-void Settings::save() const {
+void Settings::save() {
     QDir().mkpath(QFileInfo(m_file).absolutePath());
     QSaveFile file(m_file);
     // No rewriting in place: a folder that can't hold the temp file fails the
@@ -233,5 +247,5 @@ void Settings::save() const {
     file.setDirectWriteFallback(false);
     if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(upgraded(m_values)).toJson()) > 0)
         file.commit();
-    const_cast<Settings *>(this)->watch();
+    watch();
 }

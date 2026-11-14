@@ -4,34 +4,45 @@
 #include <QSet>
 #include <QStringDecoder>
 #include <QTextDocumentFragment>
+#include <algorithm>
+#include <array>
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
-bool nameStart(QChar c) { return c.isLetter() || c == '_'; }
-bool nameChar(QChar c) { return c.isLetterOrNumber() || c == '_' || c == '-' || c == ':' || c == '.'; }
+[[nodiscard]] bool nameStart(QChar c) noexcept { return c.isLetter() || c == '_'; }
+[[nodiscard]] bool nameChar(QChar c) noexcept { return c.isLetterOrNumber() || c == '_' || c == '-' || c == ':' || c == '.'; }
 
-QString localName(const QString &name) { return name.section(':', -1).toLower(); }
+[[nodiscard]] QString localName(QStringView name) { return name.toString().section(':', -1).toLower(); }
+
+[[nodiscard]] HtmlToken textToken(const QString &text) {
+    HtmlToken token; // a token is text unless it says otherwise
+    token.text = text;
+    return token;
+}
 
 // The few entities that matter inside an attribute; text keeps its entities,
 // since rich text reads them itself.
-QString decodeAttribute(QString value) {
+[[nodiscard]] QString decodeAttribute(QString value) {
     if (!value.contains('&'))
         return value;
     static const QRegularExpression numeric("&#(x?)([0-9a-fA-F]+);");
     for (auto match = numeric.match(value); match.hasMatch(); match = numeric.match(value)) {
-        const uint code = match.captured(2).toUInt(nullptr, match.captured(1).isEmpty() ? 10 : 16);
-        value.replace(match.capturedStart(), match.capturedLength(), QString::fromUcs4(reinterpret_cast<const char32_t *>(&code), 1));
+        const char32_t code = match.captured(2).toUInt(nullptr, match.captured(1).isEmpty() ? 10 : 16);
+        value.replace(match.capturedStart(), match.capturedLength(), QString::fromUcs4(&code, 1));
     }
     return value.replace("&quot;", "\"").replace("&apos;", "'").replace("&lt;", "<").replace("&gt;", ">")
         .replace("&amp;", "&");
 }
 
-int styleFlags(const QString &declarations) {
+[[nodiscard]] TextStyles styleFlags(const QString &declarations) {
+    using enum TextStyle;
     static const QRegularExpression italic("font-style\\s*:\\s*(italic|oblique)", QRegularExpression::CaseInsensitiveOption);
     static const QRegularExpression bold("font-weight\\s*:\\s*(bold|bolder|[6-9]00)", QRegularExpression::CaseInsensitiveOption);
     static const QRegularExpression center("text-align\\s*:\\s*center", QRegularExpression::CaseInsensitiveOption);
     static const QRegularExpression right("text-align\\s*:\\s*(right|end)", QRegularExpression::CaseInsensitiveOption);
-    int flags = 0;
+    TextStyles flags;
     if (italic.match(declarations).hasMatch()) flags |= Italic;
     if (bold.match(declarations).hasMatch()) flags |= Bold;
     if (center.match(declarations).hasMatch()) flags |= Center;
@@ -61,35 +72,39 @@ const QSet<QString> &skippedElements() {
     return skipped;
 }
 
-bool isBlock(const QString &tag) {
+[[nodiscard]] bool isBlock(const QString &tag) {
     static const QSet<QString> blocks{"p", "h1", "h2", "h3", "h4", "h5", "h6", "div", "blockquote", "ul", "ol",
                                       "li", "dl", "dt", "dd", "table", "tr", "td", "th", "pre", "center"};
     return blocks.contains(tag);
 }
 
-bool takesAlignment(const QString &tag) {
-    return tag == "p" || tag == "div" || (tag.size() == 2 && tag[0] == 'h' && tag[1].isDigit());
+[[nodiscard]] bool takesAlignment(const QString &tag) {
+    return tag == "p"_L1 || tag == "div"_L1 || (tag.size() == 2 && tag[0] == 'h' && tag[1].isDigit());
 }
 
 // Elements that hold other elements, not text, so an anchor goes before them.
-bool isContainer(const QString &tag) {
-    return tag == "table" || tag == "tr" || tag == "ul" || tag == "ol" || tag == "dl";
+[[nodiscard]] bool isContainer(const QString &tag) {
+    static constexpr std::array containers{"table"_L1, "tr"_L1, "ul"_L1, "ol"_L1, "dl"_L1};
+    return std::ranges::contains(containers, tag);
 }
 
 } // namespace
 
 QList<HtmlToken> tokenizeHtml(const QString &html) {
+    using enum HtmlToken::Type;
     QList<HtmlToken> tokens;
     const qsizetype size = html.size();
     qsizetype i = 0;
-    auto addText = [&](const QString &text) {
+    const auto addText = [&tokens](const QString &text) {
         if (text.isEmpty())
             return;
-        if (!tokens.isEmpty() && tokens.last().type == HtmlToken::Text)
+        if (!tokens.isEmpty() && tokens.last().type == Text)
             tokens.last().text += text;
         else
-            tokens.append({HtmlToken::Text, {}, {}, text, false});
+            tokens.append(textToken(text));
     };
+    // What is still to be read, from where the reading has got to.
+    const auto rest = [&html, &i] { return QStringView(html).sliced(i); };
     while (i < size) {
         const qsizetype open = html.indexOf('<', i);
         if (open < 0) {
@@ -98,10 +113,10 @@ QList<HtmlToken> tokenizeHtml(const QString &html) {
         }
         addText(html.mid(i, open - i));
         i = open;
-        if (html.mid(i, 4) == QLatin1String("<!--")) {
+        if (rest().startsWith("<!--"_L1)) {
             const qsizetype end = html.indexOf("-->", i + 4);
             i = end < 0 ? size : end + 3;
-        } else if (html.mid(i, 9) == QLatin1String("<![CDATA[")) {
+        } else if (rest().startsWith("<![CDATA["_L1)) {
             const qsizetype end = html.indexOf("]]>", i + 9);
             addText(html.mid(i + 9, (end < 0 ? size : end) - i - 9).toHtmlEscaped());
             i = end < 0 ? size : end + 3;
@@ -123,8 +138,8 @@ QList<HtmlToken> tokenizeHtml(const QString &html) {
             while (j < size && nameChar(html[j]))
                 ++j;
             HtmlToken token;
-            token.type = closing ? HtmlToken::Close : HtmlToken::Open;
-            token.name = localName(html.mid(nameAt, j - nameAt));
+            token.type = closing ? Close : Open;
+            token.name = localName(QStringView(html).mid(nameAt, j - nameAt));
             while (j < size && html[j] != '>') {
                 if (html[j].isSpace()) {
                     ++j;
@@ -135,7 +150,7 @@ QList<HtmlToken> tokenizeHtml(const QString &html) {
                     const qsizetype attributeAt = j;
                     while (j < size && !html[j].isSpace() && html[j] != '=' && html[j] != '>' && html[j] != '/')
                         ++j;
-                    const QString attribute = localName(html.mid(attributeAt, j - attributeAt));
+                    const QString attribute = localName(QStringView(html).mid(attributeAt, j - attributeAt));
                     while (j < size && html[j].isSpace())
                         ++j;
                     QString value;
@@ -162,11 +177,12 @@ QList<HtmlToken> tokenizeHtml(const QString &html) {
                 }
             }
             i = j < size ? j + 1 : size;
-            tokens.append(token);
             // A script's or stylesheet's content isn't markup: take it whole.
-            if (!closing && !token.selfClosing && (token.name == "script" || token.name == "style")) {
-                const qsizetype end = html.indexOf("</" + token.name, i, Qt::CaseInsensitive);
-                tokens.append({HtmlToken::Text, {}, {}, html.mid(i, (end < 0 ? size : end) - i), false});
+            const bool verbatim = !closing && !token.selfClosing && (token.name == "script"_L1 || token.name == "style"_L1);
+            const qsizetype end = verbatim ? html.indexOf("</" + token.name, i, Qt::CaseInsensitive) : -1;
+            tokens.append(std::move(token));
+            if (verbatim) {
+                tokens.append(textToken(html.mid(i, (end < 0 ? size : end) - i)));
                 i = end < 0 ? size : end;
             }
         }
@@ -174,15 +190,15 @@ QList<HtmlToken> tokenizeHtml(const QString &html) {
     return tokens;
 }
 
-QHash<QString, int> classStyles(const QString &css) {
-    QHash<QString, int> styles;
+QHash<QString, TextStyles> classStyles(const QString &css) {
+    QHash<QString, TextStyles> styles;
     static const QRegularExpression rule("([^{}]+)\\{([^{}]*)\\}");
     // A class on its own or on an element (".it", "p.it"); a class that styles
     // its descendants would need the cascade, which rich text doesn't have.
     static const QRegularExpression simple("^[A-Za-z0-9]*\\.([A-Za-z0-9_-]+)$");
     for (auto it = rule.globalMatch(css); it.hasNext();) {
         const auto match = it.next();
-        const int flags = styleFlags(match.captured(2));
+        const TextStyles flags = styleFlags(match.captured(2));
         if (!flags)
             continue;
         for (const QString &selector : match.captured(1).split(',')) {
@@ -195,41 +211,41 @@ QHash<QString, int> classStyles(const QString &css) {
 }
 
 QString cleanHtml(const QString &html, const CleanOptions &options) {
-    struct Open {
+    using enum TextStyle;
+    using Type = HtmlToken::Type;
+    struct Opened {
         QString name;
         QString closers;
     };
-    QList<Open> stack;
+    QList<Opened> stack;
     QString out;
     out.reserve(html.size());
     QString skipping;
     int skipDepth = 0;
 
-    auto closeTo = [&](qsizetype index) {
+    const auto closeTo = [&stack, &out](qsizetype index) {
         while (stack.size() > index)
             out += stack.takeLast().closers;
     };
 
     for (const HtmlToken &token : tokenizeHtml(html)) {
         if (skipDepth > 0) {
-            if (token.name == skipping && token.type == HtmlToken::Open && !token.selfClosing)
+            if (token.name == skipping && token.type == Type::Open && !token.selfClosing)
                 ++skipDepth;
-            else if (token.name == skipping && token.type == HtmlToken::Close)
+            else if (token.name == skipping && token.type == Type::Close)
                 --skipDepth;
             continue;
         }
-        if (token.type == HtmlToken::Text) {
+        if (token.type == Type::Text) {
             out += token.text;
             continue;
         }
         const QString &name = token.name;
-        if (token.type == HtmlToken::Close) {
-            for (qsizetype index = stack.size() - 1; index >= 0; --index) {
-                if (stack[index].name == name) {
-                    closeTo(index);
-                    break;
-                }
-            }
+        if (token.type == Type::Close) {
+            // The innermost element of that name closes, and what was opened in it.
+            const auto &opened = std::as_const(stack);
+            if (const auto innermost = std::ranges::find_last(opened, name, &Opened::name); !innermost.empty())
+                closeTo(innermost.begin() - opened.begin());
             continue;
         }
         if (skippedElements().contains(name)) {
@@ -261,7 +277,7 @@ QString cleanHtml(const QString &html, const CleanOptions &options) {
             continue;
         }
 
-        int flags = styleFlags(token.attributes.value("style"));
+        TextStyles flags = styleFlags(token.attributes.value("style"));
         for (const QString &className : token.attributes.value("class").split(' ', Qt::SkipEmptyParts))
             flags |= options.styles.value(className);
 
@@ -282,7 +298,7 @@ QString cleanHtml(const QString &html, const CleanOptions &options) {
         } else if (!tag.isEmpty()) {
             QString alignment;
             if (takesAlignment(tag) && (flags & (Center | Right)))
-                alignment = flags & Center ? " align=\"center\"" : " align=\"right\"";
+                alignment = flags.testFlag(Center) ? " align=\"center\"" : " align=\"right\"";
             const QString element = "<" + tag + alignment + ">";
             opening = isContainer(tag) ? anchor + element : element + anchor;
             closers = "</" + tag + ">";

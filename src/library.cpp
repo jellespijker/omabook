@@ -15,16 +15,21 @@
 #include <QUuid>
 #include <QVariant>
 #include <algorithm>
+#include <array>
+#include <ranges>
 
 #include "formats.h"
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
 // A name that is safe as one path component on any filesystem a library
 // might be synced to.
-QString fileName(QString text, const QString &fallback) {
+[[nodiscard]] QString fileName(QString text, const QString &fallback) {
+    static constexpr QStringView unsafe = u"/\\:*?\"<>|";
     for (QChar &c : text)
-        if (c.unicode() < 32 || QStringLiteral("/\\:*?\"<>|").contains(c))
+        if (c.unicode() < 32 || unsafe.contains(c))
             c = ' ';
     text = text.simplified();
     while (text.startsWith('.'))
@@ -35,12 +40,12 @@ QString fileName(QString text, const QString &fallback) {
     return text.isEmpty() ? fallback : text;
 }
 
-QString folderFor(const BookMeta &meta, qint64 id) {
+[[nodiscard]] QString folderFor(const BookMeta &meta, qint64 id) {
     return fileName(meta.authors.value(0), "Unknown") + "/" + fileName(meta.title, "Untitled")
            + QString(" (%1)").arg(id);
 }
 
-Book bookFrom(const QSqlQuery &query) {
+[[nodiscard]] Book bookFrom(const QSqlQuery &query) {
     Book book;
     book.id = query.value("id").toLongLong();
     book.meta.title = query.value("title").toString();
@@ -68,12 +73,50 @@ Book bookFrom(const QSqlQuery &query) {
 
 // A null QString binds as SQL NULL, which the NOT NULL columns refuse; a book
 // with no series has the empty string for one.
-QVariant bindable(const QVariant &value) {
+[[nodiscard]] QVariant bindable(const QVariant &value) {
     return value.typeId() == QMetaType::QString && value.toString().isNull() ? QVariant(QString("")) : value;
 }
 
-const char *selectBooks = "SELECT books.*, progress.percent, progress.updated FROM books "
-                          "LEFT JOIN progress ON progress.book_id = books.id";
+// A statement with its values in place, ready to run.
+[[nodiscard]] QSqlQuery statement(const QString &connection, const QString &sql, const QVariantList &values) {
+    QSqlQuery statement(QSqlDatabase::database(connection));
+    statement.prepare(sql);
+    for (const QVariant &value : values)
+        statement.addBindValue(bindable(value));
+    return statement;
+}
+
+constexpr auto selectBooks = "SELECT books.*, progress.percent, progress.updated FROM books "
+                             "LEFT JOIN progress ON progress.book_id = books.id"_L1;
+
+// Says why something didn't work, to a caller that asked, and is the "no" to return.
+bool failed(QString *error, const QString &why) {
+    if (error)
+        *error = why;
+    return false;
+}
+
+// A transaction that is rolled back unless it was committed, however the
+// function that began it ends.
+class Transaction {
+public:
+    explicit Transaction(QSqlDatabase &database) : m_database(database) { m_database.transaction(); }
+    ~Transaction() {
+        if (!m_committed)
+            m_database.rollback();
+    }
+    Transaction(const Transaction &) = delete;
+    Transaction &operator=(const Transaction &) = delete;
+
+    void commit() {
+        m_committed = true;
+        m_database.commit();
+    }
+
+private:
+    QSqlDatabase &m_database;
+    bool m_committed = false;
+};
 
 } // namespace
 
@@ -89,26 +132,25 @@ QString Book::held() const {
 
 bool Book::matches(const QString &query) const {
     const QString everything = meta.title + "\n" + meta.authorText() + "\n" + meta.series + "\n" + meta.tags.join("\n");
-    for (const QString &word : query.split(' ', Qt::SkipEmptyParts)) {
+    const auto found = [this, &everything](const QString &word) {
         const QString key = word.section(':', 0, 0).toLower(), value = word.section(':', 1);
-        bool found;
-        if (word.contains(':') && key == "author") found = meta.authorText().contains(value, Qt::CaseInsensitive);
-        else if (word.contains(':') && key == "title") found = meta.title.contains(value, Qt::CaseInsensitive);
-        else if (word.contains(':') && key == "series") found = meta.series.contains(value, Qt::CaseInsensitive);
-        else if (word.contains(':') && key == "tag") found = meta.tags.join("\n").contains(value, Qt::CaseInsensitive);
-        else if (word.contains(':') && key == "format") found = formats.contains(value.toLower());
-        else if (word.contains(':') && key == "lang") found = meta.language.startsWith(value, Qt::CaseInsensitive);
-        else if (word.contains(':') && key == "status")
-            found = value.toLower() == "unread" ? status() != "read" && status() != "reading" : status() == value.toLower();
-        else if (word.contains(':') && key == "is")
-            found = value.toLower() == "digital" ? !formats.isEmpty() : value.toLower() == "paper" ? paper
-                    : value.toLower() == "wishlist" && held() == "none";
-        else if (word.contains(':') && key == "rating") found = rating >= value.toInt() && rating > 0;
-        else found = everything.contains(word, Qt::CaseInsensitive);
-        if (!found)
-            return false;
-    }
-    return true;
+        if (word.contains(':')) {
+            if (key == "author") return meta.authorText().contains(value, Qt::CaseInsensitive);
+            if (key == "title") return meta.title.contains(value, Qt::CaseInsensitive);
+            if (key == "series") return meta.series.contains(value, Qt::CaseInsensitive);
+            if (key == "tag") return meta.tags.join("\n").contains(value, Qt::CaseInsensitive);
+            if (key == "format") return formats.contains(value.toLower());
+            if (key == "lang") return meta.language.startsWith(value, Qt::CaseInsensitive);
+            if (key == "status")
+                return value.toLower() == "unread" ? status() != "read" && status() != "reading" : status() == value.toLower();
+            if (key == "is")
+                return value.toLower() == "digital" ? !formats.isEmpty() : value.toLower() == "paper" ? paper
+                       : value.toLower() == "wishlist" && held() == "none";
+            if (key == "rating") return rating >= value.toInt() && rating > 0;
+        }
+        return everything.contains(word, Qt::CaseInsensitive);
+    };
+    return std::ranges::all_of(query.split(' ', Qt::SkipEmptyParts), found);
 }
 
 QJsonObject Book::toJson() const {
@@ -151,49 +193,50 @@ QString Library::databasePath() const { return m_root + "/omabook.db"; }
 QString Library::backupFolder() const { return m_root + "/.backups"; }
 
 int Library::formatVersion() const {
-    QSqlQuery version(QSqlDatabase::database(m_connection));
-    return version.exec("PRAGMA user_version") && version.next() ? version.value(0).toInt() : 0;
+    QSqlQuery version = query("PRAGMA user_version");
+    return version.next() ? version.value(0).toInt() : 0;
 }
 
-bool Library::backUp(int schema, QString *error) const {
+std::expected<void, QString> Library::backUp(int schema) const {
     const QString folder = backupFolder();
     const QString file = QString("%1/omabook-format-%2-%3.db")
                              .arg(folder).arg(schema).arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
-    if (!QDir().mkpath(folder)) {
-        if (error)
-            *error = folder + " can't be made.";
-        return false;
-    }
+    if (!QDir().mkpath(folder))
+        return std::unexpected(folder + " can't be made.");
     // SQLite writes the copy itself, whole and consistent, also while the
     // write-ahead log holds changes the main file doesn't have yet.
     QSqlQuery copy(QSqlDatabase::database(m_connection));
     QFile::remove(file);
-    if (!copy.exec(QString("VACUUM INTO '%1'").arg(QString(file).replace('\'', "''")))) {
-        if (error)
-            *error = copy.lastError().text();
-        return false;
-    }
+    if (!copy.exec(QString("VACUUM INTO '%1'").arg(QString(file).replace('\'', "''"))))
+        return std::unexpected(copy.lastError().text());
     // The last five are kept; older ones go.
     const QFileInfoList kept = QDir(folder).entryInfoList({"omabook-format-*.db"}, QDir::Files, QDir::Time);
-    for (const QFileInfo &old : kept.mid(5))
+    for (const QFileInfo &old : kept | std::views::drop(5))
         QFile::remove(old.filePath());
-    return true;
+    return {};
 }
 
-bool Library::exec(const QString &sql, const QVariantList &values) const {
+bool Library::exec(const QString &sql, const QVariantList &values) const { return statement(m_connection, sql, values).exec(); }
+
+QSqlQuery Library::query(const QString &sql, const QVariantList &values) const {
     QSqlQuery query(QSqlDatabase::database(m_connection));
     query.prepare(sql);
+    // As they are: a null string asks for NULL, which finds nothing.
     for (const QVariant &value : values)
-        query.addBindValue(bindable(value));
-    return query.exec();
+        query.addBindValue(value);
+    query.exec();
+    return query;
+}
+
+std::expected<qint64, QString> Library::insert(const QString &sql, const QVariantList &values) const {
+    QSqlQuery insert = statement(m_connection, sql, values);
+    if (!insert.exec())
+        return std::unexpected(insert.lastError().text());
+    return insert.lastInsertId().toLongLong();
 }
 
 bool Library::open(QString *error) {
-    auto fail = [&](const QString &why) {
-        if (error)
-            *error = why;
-        return false;
-    };
+    const auto fail = [error](const QString &why) { return failed(error, why); };
     if (!QDir().mkpath(m_root))
         return fail("The library folder can't be created: " + m_root);
     QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", m_connection);
@@ -205,8 +248,10 @@ bool Library::open(QString *error) {
     // The write-ahead log needs memory shared between processes, which a
     // folder on another machine (sshfs, NFS, SMB) can't give; there the
     // older rollback journal is the one that works.
-    static const QStringList remote{"fuse.sshfs", "sshfs", "nfs", "nfs4", "cifs", "smb3", "smbfs", "9p", "fuse.rclone"};
-    const bool local = !remote.contains(QString::fromLatin1(QStorageInfo(m_root).fileSystemType()));
+    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4", "cifs",
+                                                          "smb3", "smbfs", "9p", "fuse.rclone"};
+    const QByteArray fileSystem = QStorageInfo(m_root).fileSystemType();
+    const bool local = !std::ranges::contains(remote, QByteArrayView(fileSystem));
     exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
     exec("PRAGMA foreign_keys = ON");
 
@@ -265,11 +310,9 @@ bool Library::open(QString *error) {
          "from_percent REAL NOT NULL, to_percent REAL NOT NULL, PRIMARY KEY (book_id, day))"},
     };
 
-    QSqlQuery version(database);
-    version.exec("PRAGMA user_version");
-    const int schema = version.next() ? version.value(0).toInt() : 0;
-    // A statement left open would keep a migration from dropping a table.
-    version.finish();
+    // Asked and done with before anything changes: a statement left open
+    // would keep a migration from dropping a table.
+    const int schema = formatVersion();
     if (schema > migrations.size())
         return fail(QString("This library was last opened by a newer Omabook (its format is %1; this Omabook knows up to %2). "
                             "Update Omabook on this computer, or restore a copy from before that from %3.")
@@ -278,9 +321,9 @@ bool Library::open(QString *error) {
     // step that goes wrong, or a wish to go back to an older Omabook, never
     // costs the library. One that can't be copied is left as it is.
     if (schema > 0 && schema < migrations.size()) {
-        QString why;
-        if (!backUp(schema, &why))
-            return fail("The library needs bringing up to date, but a copy of it couldn't be kept first, so it was left alone: " + why);
+        if (const auto kept = backUp(schema); !kept)
+            return fail("The library needs bringing up to date, but a copy of it couldn't be kept first, so it was left alone: "
+                        + kept.error());
     }
     for (int step = schema; step < migrations.size(); ++step) {
         database.transaction();
@@ -296,73 +339,50 @@ bool Library::open(QString *error) {
 }
 
 QString Library::bookFolder(qint64 id) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT path FROM books WHERE id = ?");
-    query.addBindValue(id);
-    return query.exec() && query.next() ? m_root + "/" + query.value(0).toString() : QString();
+    QSqlQuery folder = query("SELECT path FROM books WHERE id = ?", {id});
+    return folder.next() ? m_root + "/" + folder.value(0).toString() : QString();
 }
 
 Library::Added Library::add(const QString &file, const std::optional<BookMeta> &known) {
-    Added added;
     const QFileInfo info(file);
-    if (!info.isFile() || !info.isReadable()) {
-        added.error = "There is no readable file at " + file;
-        return added;
-    }
-    if (!Formats::isBook(file)) {
-        added.error = info.fileName() + " is not a book format Omabook knows.";
-        return added;
-    }
+    if (!info.isFile() || !info.isReadable())
+        return {.error = "There is no readable file at " + file};
+    if (!Formats::isBook(file))
+        return {.error = info.fileName() + " is not a book format Omabook knows."};
     const QString hash = hashFile(file);
-    QSqlDatabase database = QSqlDatabase::database(m_connection);
-    if (const qint64 existing = bookWithHash(hash)) {
-        added.id = existing;
-        added.duplicate = true;
-        return added;
-    }
+    if (const qint64 existing = bookWithHash(hash))
+        return {.id = existing, .duplicate = true, .error = {}};
     // Added on purpose, so no longer something that was thrown away.
     exec("DELETE FROM removed WHERE hash = ?", {hash});
 
     BookMeta meta = known ? *known : Formats::readMeta(file);
     if (meta.title.isEmpty())
         meta.title = Formats::metaFromFileName(file).title;
-    database.transaction();
-    QSqlQuery insert(database);
-    insert.prepare("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
-                   "description, tags, added) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const QVariant &value : QVariantList{meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher,
-                                              meta.language, meta.isbn, meta.published, meta.description,
-                                              meta.tags.join(", "), QDateTime::currentSecsSinceEpoch()})
-        insert.addBindValue(bindable(value));
-    if (!insert.exec()) {
-        database.rollback();
-        added.error = "The library can't be written: " + insert.lastError().text();
-        return added;
-    }
-    const qint64 id = insert.lastInsertId().toLongLong();
-    const QString folder = folderFor(meta, id);
-    exec("UPDATE books SET path = ? WHERE id = ?", {folder, id});
-    database.commit();
+    QSqlDatabase database = QSqlDatabase::database(m_connection);
+    Transaction transaction(database);
+    const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
+                           "description, tags, added) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
+                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
+                            QDateTime::currentSecsSinceEpoch()});
+    if (!id)
+        return {.error = "The library can't be written: " + id.error()};
+    const QString folder = folderFor(meta, *id);
+    exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
+    transaction.commit();
 
-    QString error;
-    if (!addFormat(id, file, &error)) {
-        exec("DELETE FROM books WHERE id = ?", {id});
+    if (QString error; !addFormat(*id, file, &error)) {
+        exec("DELETE FROM books WHERE id = ?", {*id});
         QDir(m_root + "/" + folder).removeRecursively();
-        added.error = error;
-        return added;
+        return {.error = error};
     }
     if (!meta.cover.isNull())
-        setCover(id, meta.cover);
-    added.id = id;
-    return added;
+        setCover(*id, meta.cover);
+    return {.id = *id, .duplicate = false, .error = {}};
 }
 
 bool Library::addFormat(qint64 id, const QString &file, QString *error) {
-    auto fail = [&](const QString &why) {
-        if (error)
-            *error = why;
-        return false;
-    };
+    const auto fail = [error](const QString &why) { return failed(error, why); };
     const auto book = this->book(id);
     if (!book)
         return fail(QString("There is no book %1.").arg(id));
@@ -401,36 +421,27 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
 }
 
 Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
-    Added added;
-    if (meta.title.trimmed().isEmpty()) {
-        added.error = "A book needs a title.";
-        return added;
-    }
-    QSqlDatabase database = QSqlDatabase::database(m_connection);
-    QSqlQuery insert(database);
-    insert.prepare("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
-                   "description, tags, added, paper) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
-    for (const QVariant &value : QVariantList{meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher,
-                                              meta.language, meta.isbn, meta.published, meta.description,
-                                              meta.tags.join(", "), QDateTime::currentSecsSinceEpoch(), paper})
-        insert.addBindValue(bindable(value));
-    if (!insert.exec()) {
-        added.error = "The library can't be written: " + insert.lastError().text();
-        return added;
-    }
-    added.id = insert.lastInsertId().toLongLong();
+    if (meta.title.trimmed().isEmpty())
+        return {.error = "A book needs a title."};
+    const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
+                           "description, tags, added, paper) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
+                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
+                            QDateTime::currentSecsSinceEpoch(), paper});
+    if (!id)
+        return {.error = "The library can't be written: " + id.error()};
     // The folder is made when there is something to put in it: a cover, or
     // a file the book is given later.
-    exec("UPDATE books SET path = ? WHERE id = ?", {folderFor(meta, added.id), added.id});
+    exec("UPDATE books SET path = ? WHERE id = ?", {folderFor(meta, *id), *id});
     if (!meta.cover.isNull())
-        setCover(added.id, meta.cover);
-    return added;
+        setCover(*id, meta.cover);
+    return {.id = *id, .duplicate = false, .error = {}};
 }
 
 bool Library::setReading(qint64 id, const QString &shelf, int rating, const QString &finished) {
-    static const QStringList shelves{"", "to-read", "reading", "read"};
-    return shelves.contains(shelf)
-           && exec("UPDATE books SET shelf = ?, rating = ?, finished = ? WHERE id = ?", {shelf, qBound(0, rating, 5), finished, id});
+    static constexpr std::array shelves{""_L1, "to-read"_L1, "reading"_L1, "read"_L1};
+    return std::ranges::contains(shelves, shelf)
+           && exec("UPDATE books SET shelf = ?, rating = ?, finished = ? WHERE id = ?", {shelf, std::clamp(rating, 0, 5), finished, id});
 }
 
 bool Library::setPaper(qint64 id, bool paper) { return exec("UPDATE books SET paper = ? WHERE id = ?", {paper, id}); }
@@ -440,51 +451,44 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
     if (!found)
         return false;
     QJsonObject identifiers = found->identifiers;
-    value.isEmpty() ? identifiers.remove(scheme) : void(identifiers.insert(scheme, value));
+    if (value.isEmpty())
+        identifiers.remove(scheme);
+    else
+        identifiers.insert(scheme, value);
     return exec("UPDATE books SET identifiers = ? WHERE id = ?",
                 {QString::fromUtf8(QJsonDocument(identifiers).toJson(QJsonDocument::Compact)), id});
 }
 
 qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) const {
-    for (const Book &book : books())
-        if (!value.isEmpty() && book.identifiers.value(scheme).toString() == value)
-            return book.id;
-    return 0;
+    if (value.isEmpty())
+        return 0;
+    const QList<Book> all = books();
+    const auto called = std::ranges::find_if(all, [&scheme, &value](const Book &book) { return book.identifiers.value(scheme).toString() == value; });
+    return called != all.end() ? called->id : 0;
 }
 
 bool Library::remove(qint64 id, QString *error) {
     const QString folder = bookFolder(id);
-    if (folder.isEmpty()) {
-        if (error)
-            *error = QString("There is no book %1.").arg(id);
-        return false;
-    }
+    if (folder.isEmpty())
+        return failed(error, QString("There is no book %1.").arg(id));
     for (const FormatFile &format : formatFiles(id))
         exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, QDateTime::currentSecsSinceEpoch()});
     // To the trash, where a mistake can be undone; a filesystem with no
     // trash gets the folder removed, since the user asked for it to go.
-    if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively()) {
-        if (error)
-            *error = "The book's folder can't be removed: " + folder;
-        return false;
-    }
+    if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively())
+        return failed(error, "The book's folder can't be removed: " + folder);
     QDir().rmdir(QFileInfo(folder).absolutePath()); // the author's folder, when it is now empty
     return exec("DELETE FROM books WHERE id = ?", {id});
 }
 
 QList<Book> Library::books(const QString &query) const {
-    QSqlDatabase database = QSqlDatabase::database(m_connection);
     QHash<qint64, QStringList> formats;
-    QSqlQuery formatQuery(database);
-    formatQuery.exec("SELECT book_id, format FROM formats");
-    while (formatQuery.next())
-        formats[formatQuery.value(0).toLongLong()] << formatQuery.value(1).toString();
+    for (QSqlQuery format = this->query("SELECT book_id, format FROM formats"); format.next();)
+        formats[format.value(0).toLongLong()] << format.value(1).toString();
 
     QList<Book> books;
-    QSqlQuery bookQuery(database);
-    bookQuery.exec(QString(selectBooks) + " ORDER BY books.id");
-    while (bookQuery.next()) {
-        Book book = bookFrom(bookQuery);
+    for (QSqlQuery found = this->query(QString(selectBooks) + " ORDER BY books.id"); found.next();) {
+        Book book = bookFrom(found);
         book.formats = Formats::byPreference(formats.value(book.id));
         if (query.isEmpty() || book.matches(query))
             books << book;
@@ -493,38 +497,25 @@ QList<Book> Library::books(const QString &query) const {
 }
 
 std::optional<Book> Library::book(qint64 id) const {
-    QSqlDatabase database = QSqlDatabase::database(m_connection);
-    QSqlQuery query(database);
-    query.prepare(QString(selectBooks) + " WHERE books.id = ?");
-    query.addBindValue(id);
-    if (!query.exec() || !query.next())
+    QSqlQuery found = query(QString(selectBooks) + " WHERE books.id = ?", {id});
+    if (!found.next())
         return std::nullopt;
-    Book book = bookFrom(query);
-    QSqlQuery formatQuery(database);
-    formatQuery.prepare("SELECT format FROM formats WHERE book_id = ?");
-    formatQuery.addBindValue(id);
-    formatQuery.exec();
-    while (formatQuery.next())
-        book.formats << formatQuery.value(0).toString();
+    Book book = bookFrom(found);
+    for (QSqlQuery format = query("SELECT format FROM formats WHERE book_id = ?", {id}); format.next();)
+        book.formats << format.value(0).toString();
     book.formats = Formats::byPreference(book.formats);
     return book;
 }
 
 bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error) {
     const auto before = book(id);
-    if (!before) {
-        if (error)
-            *error = QString("There is no book %1.").arg(id);
-        return false;
-    }
+    if (!before)
+        return failed(error, QString("There is no book %1.").arg(id));
     if (!exec("UPDATE books SET title = ?, authors = ?, series = ?, series_index = ?, publisher = ?, language = ?, "
               "isbn = ?, published = ?, description = ?, tags = ? WHERE id = ?",
               {meta.title.isEmpty() ? before->meta.title : meta.title, meta.authorText(), meta.series, meta.seriesIndex,
-               meta.publisher, meta.language, meta.isbn, meta.published, meta.description, meta.tags.join(", "), id})) {
-        if (error)
-            *error = "The library can't be written.";
-        return false;
-    }
+               meta.publisher, meta.language, meta.isbn, meta.published, meta.description, meta.tags.join(", "), id}))
+        return failed(error, "The library can't be written.");
     // The folder is named after the author and title, so it follows them.
     // Where it can't be moved it keeps its old name, which still works.
     const QString folder = folderFor(meta.title.isEmpty() ? before->meta : meta, id);
@@ -557,38 +548,28 @@ QString Library::coverPath(qint64 id) const {
 }
 
 QString Library::formatPath(qint64 id, const QString &format) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT format, file FROM formats WHERE book_id = ?");
-    query.addBindValue(id);
-    query.exec();
     QHash<QString, QString> files;
-    while (query.next())
-        files.insert(query.value(0).toString(), query.value(1).toString());
+    for (QSqlQuery found = query("SELECT format, file FROM formats WHERE book_id = ?", {id}); found.next();)
+        files.insert(found.value(0).toString(), found.value(1).toString());
     const QString chosen = format.isEmpty() ? Formats::byPreference(files.keys()).value(0) : format.toLower();
     return files.contains(chosen) ? bookFolder(id) + "/" + files.value(chosen) : QString();
 }
 
 QStringList Library::removedHashes() const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.exec("SELECT hash FROM removed");
     QStringList hashes;
-    while (query.next())
-        hashes << query.value(0).toString();
+    for (QSqlQuery found = query("SELECT hash FROM removed"); found.next();)
+        hashes << found.value(0).toString();
     return hashes;
 }
 
 Progress Library::progress(qint64 id) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT section, fraction, percent, updated FROM progress WHERE book_id = ?");
-    query.addBindValue(id);
-    Progress progress;
-    if (query.exec() && query.next()) {
-        progress.section = query.value(0).toInt();
-        progress.fraction = query.value(1).toDouble();
-        progress.percent = query.value(2).toDouble();
-        progress.updated = query.value(3).toLongLong();
-    }
-    return progress;
+    QSqlQuery found = query("SELECT section, fraction, percent, updated FROM progress WHERE book_id = ?", {id});
+    if (!found.next())
+        return {};
+    return {.section = found.value(0).toInt(),
+            .fraction = found.value(1).toDouble(),
+            .percent = found.value(2).toDouble(),
+            .updated = found.value(3).toLongLong()};
 }
 
 void Library::setProgress(qint64 id, const Progress &progress) {
@@ -598,55 +579,45 @@ void Library::setProgress(qint64 id, const Progress &progress) {
 }
 
 QList<FormatFile> Library::formatFiles(qint64 id) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT format, file, hash, size FROM formats WHERE book_id = ?");
-    query.addBindValue(id);
-    query.exec();
     const QString folder = bookFolder(id);
     QList<FormatFile> files;
-    while (query.next())
-        files.append({query.value(0).toString(), folder + "/" + query.value(1).toString(), query.value(2).toString(),
-                      query.value(3).toLongLong()});
+    for (QSqlQuery found = query("SELECT format, file, hash, size FROM formats WHERE book_id = ?", {id}); found.next();)
+        files.append({.format = found.value(0).toString(),
+                      .path = folder + "/" + found.value(1).toString(),
+                      .hash = found.value(2).toString(),
+                      .size = found.value(3).toLongLong()});
     return files;
 }
 
 qint64 Library::bookWithHash(const QString &hash) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT book_id FROM formats WHERE hash = ?");
-    query.addBindValue(hash);
-    return query.exec() && query.next() ? query.value(0).toLongLong() : 0;
+    QSqlQuery found = query("SELECT book_id FROM formats WHERE hash = ?", {hash});
+    return found.next() ? found.value(0).toLongLong() : 0;
 }
 
-bool Library::wasRemoved(const QString &hash) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT 1 FROM removed WHERE hash = ?");
-    query.addBindValue(hash);
-    return query.exec() && query.next();
-}
+bool Library::wasRemoved(const QString &hash) const { return query("SELECT 1 FROM removed WHERE hash = ?", {hash}).next(); }
 
 Recap Library::notes(qint64 id, const QString &kind) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT section, fraction, text, updated FROM notes WHERE book_id = ? AND kind = ?");
-    query.addBindValue(id);
-    query.addBindValue(kind);
-    Recap notes;
-    if (query.exec() && query.next())
-        notes = {query.value(0).toInt(), query.value(1).toDouble(), query.value(2).toString(), query.value(3).toLongLong()};
-    return notes;
+    QSqlQuery found = query("SELECT section, fraction, text, updated FROM notes WHERE book_id = ? AND kind = ?", {id, kind});
+    if (!found.next())
+        return {};
+    return {.section = found.value(0).toInt(),
+            .fraction = found.value(1).toDouble(),
+            .text = found.value(2).toString(),
+            .updated = found.value(3).toLongLong()};
 }
 
 QList<Book> Library::earlierInSeries(qint64 id) const {
     const std::optional<Book> current = book(id);
     const QString series = current ? current->meta.series.trimmed() : QString();
-    QList<Book> earlier;
     if (series.isEmpty())
-        return earlier;
-    for (const Book &other : books())
-        if (other.id != id && other.meta.seriesIndex < current->meta.seriesIndex
-            && other.meta.series.trimmed().compare(series, Qt::CaseInsensitive) == 0)
-            earlier.append(other);
-    std::sort(earlier.begin(), earlier.end(),
-              [](const Book &a, const Book &b) { return a.meta.seriesIndex < b.meta.seriesIndex; });
+        return {};
+    const auto comesBefore = [id, &current, &series](const Book &other) {
+        return other.id != id && other.meta.seriesIndex < current->meta.seriesIndex
+               && other.meta.series.trimmed().compare(series, Qt::CaseInsensitive) == 0;
+    };
+    const QList<Book> all = books();
+    QList<Book> earlier = all | std::views::filter(comesBefore) | std::ranges::to<QList<Book>>();
+    std::ranges::sort(earlier, {}, [](const Book &book) { return book.meta.seriesIndex; });
     return earlier;
 }
 
@@ -663,7 +634,7 @@ QList<SeriesNotes> Library::seriesNotes(qint64 id, const QString &kind) const {
         if (text.isEmpty())
             text = other.meta.description;
         if (!text.trimmed().isEmpty())
-            found.append({other.meta.title, text, blurb});
+            found.append({.title = other.meta.title, .text = text, .blurb = blurb});
     }
     return found;
 }
@@ -675,11 +646,8 @@ void Library::setNotes(qint64 id, const QString &kind, const Recap &notes) {
 
 bool Library::merge(qint64 keep, qint64 other, QString *error) {
     const auto kept = book(keep), folded = book(other);
-    if (!kept || !folded || keep == other) {
-        if (error)
-            *error = "There are no two such books to merge.";
-        return false;
-    }
+    if (!kept || !folded || keep == other)
+        return failed(error, "There are no two such books to merge.");
     for (const FormatFile &file : formatFiles(other))
         if (!kept->formats.contains(file.format) && !addFormat(keep, file.path, error))
             return false;
@@ -692,26 +660,26 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
 }
 
 qint64 Library::addAnnotation(qint64 bookId, const Annotation &annotation) {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("INSERT INTO annotations (book_id, kind, section, fraction, text, note, created) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    for (const QVariant &value : QVariantList{bookId, annotation.kind, annotation.section, annotation.fraction,
-                                              annotation.text, annotation.note, QDateTime::currentSecsSinceEpoch()})
-        query.addBindValue(bindable(value));
-    return query.exec() ? query.lastInsertId().toLongLong() : 0;
+    return insert("INSERT INTO annotations (book_id, kind, section, fraction, text, note, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                  {bookId, annotation.kind, annotation.section, annotation.fraction, annotation.text, annotation.note,
+                   QDateTime::currentSecsSinceEpoch()})
+        .value_or(0);
 }
 
 void Library::removeAnnotation(qint64 annotationId) { exec("DELETE FROM annotations WHERE id = ?", {annotationId}); }
 
 QList<Annotation> Library::annotations(qint64 bookId) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT id, kind, section, fraction, text, note, created FROM annotations WHERE book_id = ? "
-                  "ORDER BY section, fraction");
-    query.addBindValue(bookId);
-    query.exec();
     QList<Annotation> annotations;
-    while (query.next())
-        annotations.append({query.value(0).toLongLong(), query.value(1).toString(), query.value(2).toInt(),
-                            query.value(3).toDouble(), query.value(4).toString(), query.value(5).toString(),
-                            query.value(6).toLongLong()});
+    for (QSqlQuery found = query("SELECT id, kind, section, fraction, text, note, created FROM annotations WHERE book_id = ? "
+                                 "ORDER BY section, fraction",
+                                 {bookId});
+         found.next();)
+        annotations.append({.id = found.value(0).toLongLong(),
+                            .kind = found.value(1).toString(),
+                            .section = found.value(2).toInt(),
+                            .fraction = found.value(3).toDouble(),
+                            .text = found.value(4).toString(),
+                            .note = found.value(5).toString(),
+                            .created = found.value(6).toLongLong()});
     return annotations;
 }

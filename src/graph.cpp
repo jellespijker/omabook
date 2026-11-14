@@ -6,16 +6,22 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
-#include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QVariant>
 #include <algorithm>
+#include <iterator>
+#include <ranges>
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
-QString compact(const QJsonObject &object) { return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact)); }
+[[nodiscard]] QString compact(const QJsonObject &object) { return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact)); }
 
-GraphNode nodeFrom(const QSqlQuery &query) {
+// A null string binds as SQL NULL, which a scope, a summary and a note may not be.
+[[nodiscard]] QString text(const QString &value) { return value.isNull() ? QString("") : value; }
+
+[[nodiscard]] GraphNode nodeFrom(const QSqlQuery &query) {
     GraphNode node;
     node.id = query.value(0).toLongLong();
     node.scope = query.value(1).toString();
@@ -27,20 +33,36 @@ GraphNode nodeFrom(const QSqlQuery &query) {
     node.updated = query.value(7).toLongLong();
     return node;
 }
-const char *nodeColumns = "id, scope, kind, name, summary, data, COALESCE(book_id, 0), updated";
+constexpr auto nodeColumns = "id, scope, kind, name, summary, data, COALESCE(book_id, 0), updated"_L1;
 
-GraphEdge edgeFrom(const QSqlQuery &query) {
-    return {query.value(0).toLongLong(), query.value(1).toLongLong(), query.value(2).toLongLong(), query.value(3).toString(),
-            query.value(4).toString(), {query.value(5).toLongLong(), query.value(6).toInt(), query.value(7).toDouble()}};
+// A place as three columns of a row hold it, the first of them at `column`.
+[[nodiscard]] GraphPlace placeFrom(const QSqlQuery &query, int column) {
+    return {.bookId = query.value(column).toLongLong(),
+            .section = query.value(column + 1).toInt(),
+            .fraction = query.value(column + 2).toDouble()};
 }
-const char *edgeColumns = "id, source, target, kind, note, book_id, section, fraction";
+
+[[nodiscard]] GraphEdge edgeFrom(const QSqlQuery &query) {
+    return {.id = query.value(0).toLongLong(),
+            .source = query.value(1).toLongLong(),
+            .target = query.value(2).toLongLong(),
+            .kind = query.value(3).toString(),
+            .note = query.value(4).toString(),
+            .learned = placeFrom(query, 5)};
+}
+constexpr auto edgeColumns = "id, source, target, kind, note, book_id, section, fraction"_L1;
 
 // "?, ?, ?" for as many values as there are.
-QString marks(qsizetype count) { return QStringList(count, "?").join(", "); }
+[[nodiscard]] QString marks(qsizetype count) { return QStringList(count, "?").join(", "); }
 
-QString xml(const QString &text) { return text.toHtmlEscaped(); }
+// Where a fact was learned, when a book taught it.
+[[nodiscard]] std::optional<GraphPlace> learnedIn(const GraphEdge &edge) {
+    return edge.learned.bookId > 0 ? std::optional(edge.learned) : std::nullopt;
+}
+
+[[nodiscard]] QString xml(const QString &text) { return text.toHtmlEscaped(); }
 // A string literal for Cypher and DOT, which escape alike.
-QString quoted(QString text) {
+[[nodiscard]] QString quoted(QString text) {
     return "\"" + text.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n") + "\"";
 }
 
@@ -120,15 +142,11 @@ QByteArray GraphView::exported(const QString &format) const {
     return out.toUtf8();
 }
 
-Graph::Graph(const Library &library) : m_connection(library.m_connection), m_library(&library) {}
+Graph::Graph(const Library &library) : m_library(&library) {}
 
 qint64 Graph::named(const QString &scope, const QString &kind, const QString &name) const {
     const QString wanted = name.simplified();
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT id, name, data FROM graph_nodes WHERE scope = ? AND kind = ?");
-    query.addBindValue(scope.isNull() ? QString("") : scope);
-    query.addBindValue(kind);
-    query.exec();
+    QSqlQuery query = m_library->query("SELECT id, name, data FROM graph_nodes WHERE scope = ? AND kind = ?", {text(scope), kind});
     qint64 byAlias = 0;
     while (query.next()) {
         if (query.value(1).toString().compare(wanted, Qt::CaseInsensitive) == 0)
@@ -148,14 +166,11 @@ qint64 Graph::upsert(const QString &scope, const QString &kind, const QString &n
     const qint64 now = QDateTime::currentSecsSinceEpoch();
     qint64 id = named(scope, kind, called);
     if (id == 0) {
-        QSqlQuery insert(QSqlDatabase::database(m_connection));
-        insert.prepare("INSERT INTO graph_nodes (scope, kind, name, summary, data, updated) VALUES (?, ?, ?, ?, ?, ?)");
-        for (const QVariant &value : QVariantList{scope.isNull() ? QString("") : scope, kind.simplified().toLower(), called,
-                                                  summary.isNull() ? QString("") : summary.trimmed(), compact(data), now})
-            insert.addBindValue(value);
-        if (!insert.exec())
+        const auto added = m_library->insert("INSERT INTO graph_nodes (scope, kind, name, summary, data, updated) VALUES (?, ?, ?, ?, ?, ?)",
+                                             {scope, kind.simplified().toLower(), called, summary.trimmed(), compact(data), now});
+        if (!added)
             return 0;
-        id = insert.lastInsertId().toLongLong();
+        id = *added;
     } else {
         const GraphNode known = *node(id);
         QJsonObject merged = known.data;
@@ -176,12 +191,9 @@ qint64 Graph::upsert(const QString &scope, const QString &kind, const QString &n
     }
     if (seen && seen->bookId > 0) {
         // The earliest place in each book stands.
-        QSqlQuery before(QSqlDatabase::database(m_connection));
-        before.prepare("SELECT section, fraction FROM graph_seen WHERE node_id = ? AND book_id = ?");
-        before.addBindValue(id);
-        before.addBindValue(seen->bookId);
-        const bool known = before.exec() && before.next();
-        if (!known || seen->notAfter({seen->bookId, before.value(0).toInt(), before.value(1).toDouble()}))
+        QSqlQuery before = m_library->query("SELECT book_id, section, fraction FROM graph_seen WHERE node_id = ? AND book_id = ?",
+                                            {id, seen->bookId});
+        if (!before.next() || seen->notAfter(placeFrom(before, 0)))
             m_library->exec("INSERT OR REPLACE INTO graph_seen (node_id, book_id, section, fraction) VALUES (?, ?, ?, ?)",
                             {id, seen->bookId, seen->section, seen->fraction});
     }
@@ -192,12 +204,9 @@ qint64 Graph::link(qint64 source, qint64 target, const QString &kind, const QStr
     const QString relation = kind.simplified().toLower();
     if (source == 0 || target == 0 || source == target || relation.isEmpty() || !node(source) || !node(target))
         return 0;
-    QSqlQuery existing(QSqlDatabase::database(m_connection));
-    existing.prepare(QString("SELECT %1 FROM graph_edges WHERE source = ? AND target = ? AND kind = ?").arg(edgeColumns));
-    existing.addBindValue(source);
-    existing.addBindValue(target);
-    existing.addBindValue(relation);
-    if (existing.exec() && existing.next()) {
+    QSqlQuery existing = m_library->query(QString("SELECT %1 FROM graph_edges WHERE source = ? AND target = ? AND kind = ?").arg(edgeColumns),
+                                          {source, target, relation});
+    if (existing.next()) {
         const GraphEdge edge = edgeFrom(existing);
         const bool earlier = learned && learned->bookId > 0
                              && (edge.learned.bookId != learned->bookId || learned->notAfter(edge.learned));
@@ -207,12 +216,10 @@ qint64 Graph::link(qint64 source, qint64 target, const QString &kind, const QStr
         return edge.id;
     }
     const GraphPlace place = learned.value_or(GraphPlace());
-    QSqlQuery insert(QSqlDatabase::database(m_connection));
-    insert.prepare("INSERT INTO graph_edges (source, target, kind, note, book_id, section, fraction) VALUES (?, ?, ?, ?, ?, ?, ?)");
-    for (const QVariant &value : QVariantList{source, target, relation, note.isNull() ? QString("") : note.trimmed(), place.bookId,
-                                              place.section, place.fraction})
-        insert.addBindValue(value);
-    return insert.exec() ? insert.lastInsertId().toLongLong() : 0;
+    return m_library
+        ->insert("INSERT INTO graph_edges (source, target, kind, note, book_id, section, fraction) VALUES (?, ?, ?, ?, ?, ?, ?)",
+                 {source, target, relation, note.trimmed(), place.bookId, place.section, place.fraction})
+        .value_or(0);
 }
 
 bool Graph::remove(qint64 id) { return node(id) && m_library->exec("DELETE FROM graph_nodes WHERE id = ?", {id}); }
@@ -222,27 +229,18 @@ bool Graph::merge(qint64 keep, qint64 other) {
     const auto kept = node(keep), folded = node(other);
     if (!kept || !folded || keep == other)
         return false;
-    QSqlQuery edges(QSqlDatabase::database(m_connection));
-    edges.prepare(QString("SELECT %1 FROM graph_edges WHERE source = ? OR target = ?").arg(edgeColumns));
-    edges.addBindValue(other);
-    edges.addBindValue(other);
-    edges.exec();
     QList<GraphEdge> moving;
-    while (edges.next())
+    for (QSqlQuery edges = m_library->query(QString("SELECT %1 FROM graph_edges WHERE source = ? OR target = ?").arg(edgeColumns),
+                                            {other, other});
+         edges.next();)
         moving << edgeFrom(edges);
     for (const GraphEdge &edge : std::as_const(moving))
         link(edge.source == other ? keep : edge.source, edge.target == other ? keep : edge.target, edge.kind, edge.note,
-             edge.learned.bookId > 0 ? std::optional(edge.learned) : std::nullopt);
-    QSqlQuery seen(QSqlDatabase::database(m_connection));
-    seen.prepare("SELECT book_id, section, fraction FROM graph_seen WHERE node_id = ?");
-    seen.addBindValue(other);
-    seen.exec();
-    QList<GraphPlace> places;
-    while (seen.next())
-        places.append({seen.value(0).toLongLong(), seen.value(1).toInt(), seen.value(2).toDouble()});
-    QJsonObject names{{"aliases", QJsonArray::fromStringList(QStringList{folded->name} + folded->aliases())}};
+             learnedIn(edge));
+    const QList<GraphPlace> places = seen(other);
+    const QJsonObject names{{"aliases", QJsonArray::fromStringList(QStringList{folded->name} + folded->aliases())}};
     upsert(kept->scope, kept->kind, kept->name, kept->summary.isEmpty() ? folded->summary : QString(), names);
-    for (const GraphPlace &place : std::as_const(places))
+    for (const GraphPlace &place : places)
         upsert(kept->scope, kept->kind, kept->name, {}, {}, place);
     return remove(other);
 }
@@ -269,20 +267,15 @@ bool Graph::edit(qint64 id, const QString &name, const QString &summary) {
 }
 
 std::optional<GraphNode> Graph::node(qint64 id) const {
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare(QString("SELECT %1 FROM graph_nodes WHERE id = ?").arg(nodeColumns));
-    query.addBindValue(id);
-    return query.exec() && query.next() ? std::optional(nodeFrom(query)) : std::nullopt;
+    QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_nodes WHERE id = ?").arg(nodeColumns), {id});
+    return query.next() ? std::optional(nodeFrom(query)) : std::nullopt;
 }
 
 QList<GraphPlace> Graph::seen(qint64 id) const {
     QList<GraphPlace> places;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT book_id, section, fraction FROM graph_seen WHERE node_id = ? ORDER BY book_id");
-    query.addBindValue(id);
-    query.exec();
-    while (query.next())
-        places.append({query.value(0).toLongLong(), query.value(1).toInt(), query.value(2).toDouble()});
+    for (QSqlQuery query = m_library->query("SELECT book_id, section, fraction FROM graph_seen WHERE node_id = ? ORDER BY book_id", {id});
+         query.next();)
+        places.append(placeFrom(query, 0));
     return places;
 }
 
@@ -295,7 +288,7 @@ QList<GraphNode> Graph::find(const QString &words, const QString &kind, const st
     }
     if (scope) {
         where += " AND scope = ?";
-        values << (scope->isNull() ? QString("") : *scope);
+        values << text(*scope);
     }
     for (const QString &word : words.split(' ', Qt::SkipEmptyParts)) {
         where += " AND (name LIKE ? OR summary LIKE ? OR data LIKE ?)";
@@ -307,31 +300,23 @@ QList<GraphNode> Graph::find(const QString &words, const QString &kind, const st
 
 GraphView Graph::collect(const QString &nodesWhere, const QVariantList &values, int limit) const {
     GraphView view;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare(QString("SELECT %1 FROM graph_nodes WHERE %2 LIMIT %3").arg(nodeColumns, nodesWhere).arg(qMax(1, limit)));
-    for (const QVariant &value : values)
-        query.addBindValue(value);
-    query.exec();
-    while (query.next())
+    for (QSqlQuery query = m_library->query(
+             QString("SELECT %1 FROM graph_nodes WHERE %2 LIMIT %3").arg(nodeColumns, nodesWhere).arg(std::max(1, limit)), values);
+         query.next();)
         view.nodes << nodeFrom(query);
     return view;
 }
 
 QList<GraphEdge> Graph::edgesAmong(const QList<GraphNode> &nodes) const {
     QList<GraphEdge> edges;
-    QSet<qint64> ids;
-    for (const GraphNode &node : nodes)
-        ids << node.id;
+    const auto ids = nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QSet<qint64>>();
     // By source in batches, kept when the target is among the nodes too.
     const QList<qint64> all = ids.values();
-    for (qsizetype start = 0; start < all.size(); start += 500) {
-        const QList<qint64> batch = all.mid(start, 500);
-        QSqlQuery query(QSqlDatabase::database(m_connection));
-        query.prepare(QString("SELECT %1 FROM graph_edges WHERE source IN (%2) ORDER BY id").arg(edgeColumns, marks(batch.size())));
-        for (const qint64 id : batch)
-            query.addBindValue(id);
-        query.exec();
-        while (query.next())
+    for (const auto batch : all | std::views::chunk(500)) {
+        for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_edges WHERE source IN (%2) ORDER BY id")
+                                                    .arg(edgeColumns, marks(std::ranges::ssize(batch))),
+                                                batch | std::ranges::to<QVariantList>());
+             query.next();)
             if (ids.contains(query.value(2).toLongLong()))
                 edges << edgeFrom(query);
     }
@@ -342,14 +327,10 @@ GraphView Graph::around(qint64 start, int depth, int limit) const {
     GraphView view;
     QSet<qint64> seen{start};
     QList<qint64> frontier{start};
-    for (int step = 0; step < qBound(0, depth, 6) && !frontier.isEmpty() && seen.size() < limit; ++step) {
+    for (int step = 0; step < std::clamp(depth, 0, 6) && !frontier.isEmpty() && seen.size() < limit; ++step) {
         QList<qint64> next;
         for (const qint64 id : std::as_const(frontier)) {
-            QSqlQuery query(QSqlDatabase::database(m_connection));
-            query.prepare("SELECT source, target FROM graph_edges WHERE source = ? OR target = ?");
-            query.addBindValue(id);
-            query.addBindValue(id);
-            query.exec();
+            QSqlQuery query = m_library->query("SELECT source, target FROM graph_edges WHERE source = ? OR target = ?", {id, id});
             while (query.next() && seen.size() < limit) {
                 const qint64 other = query.value(0).toLongLong() == id ? query.value(1).toLongLong() : query.value(0).toLongLong();
                 if (!seen.contains(other)) {
@@ -358,12 +339,13 @@ GraphView Graph::around(qint64 start, int depth, int limit) const {
                 }
             }
         }
-        frontier = next;
+        frontier = std::move(next);
     }
     for (const qint64 id : std::as_const(seen))
         if (const auto found = node(id))
             view.nodes << *found;
-    std::sort(view.nodes.begin(), view.nodes.end(), [&](const GraphNode &a, const GraphNode &b) {
+    // The node asked about first, the rest in the order they were made.
+    std::ranges::sort(view.nodes, [start](const GraphNode &a, const GraphNode &b) {
         return a.id == start || (b.id != start && a.id < b.id);
     });
     view.edges = edgesAmong(view.nodes);
@@ -372,41 +354,35 @@ GraphView Graph::around(qint64 start, int depth, int limit) const {
 
 GraphView Graph::ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo, const QString &scope) const {
     GraphView view;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare(QString("SELECT %1, graph_seen.section, graph_seen.fraction FROM graph_nodes "
-                          "JOIN graph_seen ON graph_seen.node_id = graph_nodes.id WHERE graph_seen.book_id = ? AND scope = ? "
-                          "ORDER BY graph_seen.section, graph_seen.fraction, graph_nodes.id")
-                      .arg("graph_nodes.id, scope, kind, name, summary, data, COALESCE(graph_nodes.book_id, 0), updated"));
-    query.addBindValue(bookId);
-    query.addBindValue(scope.isNull() ? QString("") : scope);
-    query.exec();
-    while (query.next())
-        if (!upTo || GraphPlace{bookId, query.value(8).toInt(), query.value(9).toDouble()}.notAfter(*upTo))
+    for (QSqlQuery query = m_library->query(
+             "SELECT graph_nodes.id, scope, kind, name, summary, data, COALESCE(graph_nodes.book_id, 0), updated, "
+             "graph_seen.book_id, graph_seen.section, graph_seen.fraction FROM graph_nodes "
+             "JOIN graph_seen ON graph_seen.node_id = graph_nodes.id WHERE graph_seen.book_id = ? AND scope = ? "
+             "ORDER BY graph_seen.section, graph_seen.fraction, graph_nodes.id",
+             {bookId, text(scope)});
+         query.next();)
+        if (!upTo || placeFrom(query, 8).notAfter(*upTo))
             view.nodes << nodeFrom(query);
-    for (const GraphEdge &edge : edgesAmong(view.nodes))
-        // What another book taught about the same things is part of the
-        // picture; what this book teaches later is not, yet.
-        if (edge.learned.bookId != bookId || !upTo || edge.learned.notAfter(*upTo))
-            view.edges << edge;
+    // What another book taught about the same things is part of the
+    // picture; what this book teaches later is not, yet.
+    std::ranges::copy_if(edgesAmong(view.nodes), std::back_inserter(view.edges), [bookId, &upTo](const GraphEdge &edge) {
+        return edge.learned.bookId != bookId || !upTo || edge.learned.notAfter(*upTo);
+    });
     return view;
 }
 
 GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) const {
     GraphView view;
-    QSet<qint64> own, taken;
-    for (const GraphNode &node : ofBook(bookId, upTo).nodes)
-        own << node.id;
+    QSet<qint64> taken;
+    const auto own = ofBook(bookId, upTo).nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QSet<qint64>>();
     const QList<qint64> all = own.values();
-    for (qsizetype start = 0; start < all.size(); start += 400) {
-        const QList<qint64> batch = all.mid(start, 400);
-        QSqlQuery query(QSqlDatabase::database(m_connection));
-        query.prepare(QString("SELECT %1 FROM graph_edges WHERE (source IN (%2) OR target IN (%2)) "
-                              "AND (kind LIKE 'across: %' OR kind IN ('appears in', 'referred to in')) ORDER BY id")
-                          .arg(edgeColumns, marks(batch.size())));
-        for (int twice = 0; twice < 2; ++twice)
-            for (const qint64 id : batch)
-                query.addBindValue(id);
-        query.exec();
+    for (const auto batch : all | std::views::chunk(400)) {
+        // Once for the sources and once for the targets.
+        const QVariantList ids = batch | std::ranges::to<QVariantList>();
+        QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_edges WHERE (source IN (%2) OR target IN (%2)) "
+                                                   "AND (kind LIKE 'across: %' OR kind IN ('appears in', 'referred to in')) ORDER BY id")
+                                               .arg(edgeColumns, marks(ids.size())),
+                                           ids + ids);
         while (query.next()) {
             const GraphEdge edge = edgeFrom(query);
             const bool fromHere = own.contains(edge.source);
@@ -435,9 +411,8 @@ GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) co
 GraphView Graph::acrossBooks(int limit) const {
     GraphView view;
     QSet<qint64> taken;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare(QString("SELECT %1 FROM graph_edges WHERE kind LIKE 'across: %' ORDER BY id DESC LIMIT %2").arg(edgeColumns).arg(qMax(1, limit)));
-    query.exec();
+    QSqlQuery query = m_library->query(
+        QString("SELECT %1 FROM graph_edges WHERE kind LIKE 'across: %' ORDER BY id DESC LIMIT %2").arg(edgeColumns).arg(std::max(1, limit)));
     while (query.next()) {
         const GraphEdge edge = edgeFrom(query);
         view.edges << edge;
@@ -453,7 +428,7 @@ GraphView Graph::acrossBooks(int limit) const {
 GraphView Graph::whole(const QString &scope, int limit) const {
     GraphView view = collect("scope = ? ORDER BY (SELECT COUNT(*) FROM graph_edges WHERE source = graph_nodes.id "
                              "OR target = graph_nodes.id) DESC, id",
-                             {scope.isNull() ? QString("") : scope}, limit);
+                             {text(scope)}, limit);
     view.edges = edgesAmong(view.nodes);
     return view;
 }
@@ -462,23 +437,20 @@ qint64 Graph::bookNode(qint64 bookId) {
     const auto book = m_library->book(bookId);
     if (!book)
         return 0;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare("SELECT id FROM graph_nodes WHERE kind = 'book' AND book_id = ?");
-    query.addBindValue(bookId);
-    qint64 id = query.exec() && query.next() ? query.value(0).toLongLong() : 0;
+    QSqlQuery query = m_library->query("SELECT id FROM graph_nodes WHERE kind = 'book' AND book_id = ?", {bookId});
+    qint64 id = query.next() ? query.value(0).toLongLong() : 0;
     QJsonObject data{{"status", book->status()}, {"held", book->held()}};
     if (book->rating > 0) data.insert("rating", book->rating);
     if (!book->finished.isEmpty()) data.insert("finished", book->finished);
     if (book->percent > 0) data.insert("percent_read", qRound(book->percent));
     const qint64 now = QDateTime::currentSecsSinceEpoch();
     if (id == 0) {
-        QSqlQuery insert(QSqlDatabase::database(m_connection));
-        insert.prepare("INSERT INTO graph_nodes (scope, kind, name, summary, data, book_id, updated) VALUES ('', 'book', ?, ?, ?, ?, ?)");
-        for (const QVariant &value : QVariantList{book->meta.title, QString(""), compact(data), bookId, now})
-            insert.addBindValue(value);
-        if (!insert.exec())
+        const auto added = m_library->insert(
+            "INSERT INTO graph_nodes (scope, kind, name, summary, data, book_id, updated) VALUES ('', 'book', ?, '', ?, ?, ?)",
+            {book->meta.title, compact(data), bookId, now});
+        if (!added)
             return 0;
-        id = insert.lastInsertId().toLongLong();
+        id = *added;
     } else {
         m_library->exec("UPDATE graph_nodes SET name = ?, data = ?, updated = ? WHERE id = ?", {book->meta.title, compact(data), now, id});
     }
@@ -505,9 +477,7 @@ void Graph::syncLibrary() {
 
 QStringList Graph::scopes() const {
     QStringList scopes;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.exec("SELECT DISTINCT scope FROM graph_nodes ORDER BY scope");
-    while (query.next())
+    for (QSqlQuery query = m_library->query("SELECT DISTINCT scope FROM graph_nodes ORDER BY scope"); query.next();)
         scopes << query.value(0).toString();
     return scopes;
 }
@@ -520,17 +490,12 @@ bool Graph::copyScope(const QString &from, const QString &to) {
     for (const GraphNode &node : source.nodes) {
         const qint64 copy = upsert(to, node.kind, node.name, node.summary, node.data);
         copies.insert(node.id, copy);
-        QSqlQuery seen(QSqlDatabase::database(m_connection));
-        seen.prepare("SELECT book_id, section, fraction FROM graph_seen WHERE node_id = ?");
-        seen.addBindValue(node.id);
-        seen.exec();
-        while (seen.next())
+        for (const GraphPlace &place : seen(node.id))
             m_library->exec("INSERT OR REPLACE INTO graph_seen (node_id, book_id, section, fraction) VALUES (?, ?, ?, ?)",
-                            {copy, seen.value(0), seen.value(1), seen.value(2)});
+                            {copy, place.bookId, place.section, place.fraction});
     }
     for (const GraphEdge &edge : source.edges)
-        link(copies.value(edge.source), copies.value(edge.target), edge.kind, edge.note,
-             edge.learned.bookId > 0 ? std::optional(edge.learned) : std::nullopt);
+        link(copies.value(edge.source), copies.value(edge.target), edge.kind, edge.note, learnedIn(edge));
     return !source.nodes.isEmpty();
 }
 
@@ -541,26 +506,24 @@ bool Graph::removeScope(const QString &scope) {
 
 void Graph::logReading(qint64 bookId, double from, double to, const QString &day) {
     const QString date = day.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : day;
-    QSqlQuery before(QSqlDatabase::database(m_connection));
-    before.prepare("SELECT from_percent, to_percent FROM reading_log WHERE book_id = ? AND day = ?");
-    before.addBindValue(bookId);
-    before.addBindValue(date);
+    QSqlQuery before = m_library->query("SELECT from_percent, to_percent FROM reading_log WHERE book_id = ? AND day = ?", {bookId, date});
     // One row a day: from where the day began to the furthest it got.
-    const bool known = before.exec() && before.next();
+    const bool known = before.next();
     m_library->exec("INSERT OR REPLACE INTO reading_log (book_id, day, from_percent, to_percent) VALUES (?, ?, ?, ?)",
-                    {bookId, date, known ? qMin(before.value(0).toDouble(), from) : from,
-                     known ? qMax(before.value(1).toDouble(), to) : to});
+                    {bookId, date, known ? std::min(before.value(0).toDouble(), from) : from,
+                     known ? std::max(before.value(1).toDouble(), to) : to});
 }
 
 QList<ReadingDay> Graph::readingLog(qint64 bookId) const {
     QList<ReadingDay> days;
-    QSqlQuery query(QSqlDatabase::database(m_connection));
-    query.prepare(bookId > 0 ? "SELECT book_id, day, from_percent, to_percent FROM reading_log WHERE book_id = ? ORDER BY day"
-                             : "SELECT book_id, day, from_percent, to_percent FROM reading_log ORDER BY day");
-    if (bookId > 0)
-        query.addBindValue(bookId);
-    query.exec();
-    while (query.next())
-        days.append({query.value(0).toLongLong(), query.value(1).toString(), query.value(2).toDouble(), query.value(3).toDouble()});
+    for (QSqlQuery query = bookId > 0 ? m_library->query("SELECT book_id, day, from_percent, to_percent FROM reading_log "
+                                                         "WHERE book_id = ? ORDER BY day",
+                                                         {bookId})
+                                      : m_library->query("SELECT book_id, day, from_percent, to_percent FROM reading_log ORDER BY day");
+         query.next();)
+        days.append({.bookId = query.value(0).toLongLong(),
+                     .day = query.value(1).toString(),
+                     .from = query.value(2).toDouble(),
+                     .to = query.value(3).toDouble()});
     return days;
 }

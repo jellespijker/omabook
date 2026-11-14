@@ -1,17 +1,18 @@
 #include <QMutex>
 #include <QMutexLocker>
+#include <algorithm>
 #include <poppler-qt6.h>
 
 #include "formatreaders.h"
 
 namespace {
 
-void addOutline(const QVector<Poppler::OutlineItem> &items, int level, int pages, QList<TocEntry> *toc) {
+void addOutline(const QVector<Poppler::OutlineItem> &items, int level, int pages, QList<TocEntry> &toc) {
     for (const Poppler::OutlineItem &item : items) {
         const auto destination = item.destination();
         const int page = destination ? destination->pageNumber() - 1 : -1;
         if (page >= 0 && page < pages && !item.name().simplified().isEmpty())
-            toc->append({item.name().simplified(), page, {}, level});
+            toc.append({.title = item.name().simplified(), .section = page, .anchor = {}, .level = level});
         if (level < 3)
             addOutline(item.children(), level + 1, pages, toc);
     }
@@ -21,30 +22,24 @@ void addOutline(const QVector<Poppler::OutlineItem> &items, int level, int pages
 // the GUI thread while it asks for text, so one lock guards the document.
 class PdfDocument : public Document {
 public:
-    bool load(const QString &path, QString *error) {
+    std::expected<void, QString> load(const QString &path) {
         m_document = Poppler::Document::load(path);
-        if (!m_document) {
-            *error = "Not a PDF, or one too damaged to read.";
-            return false;
-        }
-        if (m_document->isLocked()) {
-            *error = "This PDF needs a password to open.";
-            return false;
-        }
+        if (!m_document)
+            return std::unexpected("Not a PDF, or one too damaged to read.");
+        if (m_document->isLocked())
+            return std::unexpected("This PDF needs a password to open.");
         m_document->setRenderHint(Poppler::Document::Antialiasing);
         m_document->setRenderHint(Poppler::Document::TextAntialiasing);
         m_pages = m_document->numPages();
-        if (m_pages < 1) {
-            *error = "This PDF has no pages.";
-            return false;
-        }
+        if (m_pages < 1)
+            return std::unexpected("This PDF has no pages.");
         m_meta.title = m_document->info("Title").simplified();
         m_meta.authors = BookMeta::splitAuthors(m_document->info("Author"));
         m_meta.description = m_document->info("Subject").trimmed();
         m_meta.tags = BookMeta::splitTags(m_document->info("Keywords"));
         m_meta.cover = image(0, 600);
-        addOutline(m_document->outline(), 0, m_pages, &m_toc);
-        return true;
+        addOutline(m_document->outline(), 0, m_pages, m_toc);
+        return {};
     }
 
     Kind kind() const override { return Pages; }
@@ -53,22 +48,22 @@ public:
     QList<TocEntry> toc() const override { return m_toc; }
 
     QImage image(int page, int width) const override {
-        QMutexLocker locker(&m_lock);
+        const QMutexLocker locker(&m_lock);
         const auto pdfPage = m_document->page(page);
         if (!pdfPage || pdfPage->pageSizeF().width() <= 0)
             return {};
-        const double resolution = 72.0 * qBound(64, width, 6000) / pdfPage->pageSizeF().width();
+        const double resolution = 72.0 * std::clamp(width, 64, 6000) / pdfPage->pageSizeF().width();
         return pdfPage->renderToImage(resolution, resolution);
     }
 
     QSizeF pageSize(int page) const override {
-        QMutexLocker locker(&m_lock);
+        const QMutexLocker locker(&m_lock);
         const auto pdfPage = m_document->page(page);
         return pdfPage ? pdfPage->pageSizeF() : QSizeF();
     }
 
     QString text(int page) const override {
-        QMutexLocker locker(&m_lock);
+        const QMutexLocker locker(&m_lock);
         const auto pdfPage = m_document->page(page);
         return pdfPage ? pdfPage->text(QRectF()).trimmed() : QString();
     }
@@ -83,9 +78,4 @@ private:
 
 } // namespace
 
-std::unique_ptr<Document> openPdf(const QString &path, QString *error) {
-    auto document = std::make_unique<PdfDocument>();
-    if (!document->load(path, error))
-        return nullptr;
-    return document;
-}
+OpenedDocument openPdf(const QString &path) { return loaded(std::make_unique<PdfDocument>(), path); }

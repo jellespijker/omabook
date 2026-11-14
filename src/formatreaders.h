@@ -1,17 +1,34 @@
 #pragma once
 
 #include <QString>
+#include <concepts>
+#include <expected>
 #include <memory>
+#include <utility>
 
 #include "document.h"
 
-// One opener per format Omabook reads itself; formats.cpp maps extensions to
-// them. Each returns null and sets `error` (English) when the file can't be read.
-std::unique_ptr<Document> openEpub(const QString &path, QString *error);
-std::unique_ptr<Document> openFb2(const QString &path, QString *error);
-std::unique_ptr<Document> openText(const QString &path, QString *error);
-std::unique_ptr<Document> openPdf(const QString &path, QString *error);
-std::unique_ptr<Document> openComic(const QString &path, QString *error);
+// A book opened for reading, or why (in English) the file can't be read.
+using OpenedDocument = std::expected<std::unique_ptr<Document>, QString>;
+
+// One opener per format Omabook reads itself; formats.cpp maps extensions to them.
+OpenedDocument openEpub(const QString &path);
+OpenedDocument openFb2(const QString &path);
+OpenedDocument openText(const QString &path);
+OpenedDocument openPdf(const QString &path);
+OpenedDocument openComic(const QString &path);
+
+// What every opener does with its own kind of book: the book once it has
+// loaded, or what its loading said was wrong.
+template <std::derived_from<Document> Book, typename... Arguments>
+    requires requires(Book &book, Arguments &&...arguments) {
+        { book.load(std::forward<Arguments>(arguments)...) } -> std::same_as<std::expected<void, QString>>;
+    }
+OpenedDocument loaded(std::unique_ptr<Book> book, Arguments &&...arguments) {
+    return book->load(std::forward<Arguments>(arguments)...).transform([&book]() -> std::unique_ptr<Document> {
+        return std::move(book);
+    });
+}
 
 // Kindle files are read after conversion, but say who they are without it.
 BookMeta readMobiMeta(const QString &path);

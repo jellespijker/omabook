@@ -1,9 +1,13 @@
 #include <QFile>
 #include <QHash>
+#include <algorithm>
+#include <array>
 
 #include "bookarchive.h"
 #include "formatreaders.h"
 #include "htmlclean.h"
+
+using namespace Qt::StringLiterals;
 
 namespace {
 
@@ -12,7 +16,7 @@ namespace {
 // chapter when the reader asks for it.
 class Fb2Document : public Document {
 public:
-    bool load(const QString &path, QString *error) {
+    std::expected<void, QString> load(const QString &path) {
         QByteArray bytes;
         if (path.endsWith(".fb2", Qt::CaseInsensitive)) {
             QFile file(path);
@@ -24,16 +28,12 @@ public:
                 if (bytes.isEmpty() && name.endsWith(".fb2", Qt::CaseInsensitive))
                     bytes = archive.read(name);
         }
-        if (bytes.isEmpty()) {
-            *error = "The file is empty or holds no FictionBook.";
-            return false;
-        }
+        if (bytes.isEmpty())
+            return std::unexpected("The file is empty or holds no FictionBook.");
         convert(tokenizeHtml(decodeText(bytes)));
-        if (m_sections.isEmpty()) {
-            *error = "This FictionBook has no text.";
-            return false;
-        }
-        return true;
+        if (m_sections.isEmpty())
+            return std::unexpected("This FictionBook has no text.");
+        return {};
     }
 
     Kind kind() const override { return Flow; }
@@ -46,11 +46,11 @@ public:
         if (section < 0 || section >= m_sections.size())
             return {};
         CleanOptions options;
-        options.image = [&](const QString &source) {
+        options.image = [this, width](const QString &source) {
             const QString name = source.mid(1);
             return m_binaries.contains(name) ? bookImageAttributes(name, m_binaries.value(name), width) : QString();
         };
-        options.link = [&](const QString &target) {
+        options.link = [this](const QString &target) {
             if (!target.startsWith('#'))
                 return target.startsWith("http") ? target : QString();
             const int to = m_sectionOfId.value(target.mid(1), -1);
@@ -75,22 +75,22 @@ private:
         int bodies = 0, sectionDepth = 0, titleDepth = 0;
         bool inSectionTitle = false;
 
-        auto within = [&](const char *name) { return path.contains(QLatin1String(name)); };
-        auto finishSection = [&](const QString &fallbackTitle) {
+        const auto within = [&path](QLatin1StringView name) { return path.contains(name); };
+        const auto finishSection = [this, &current](const QString &fallbackTitle) {
             if (htmlToText(current).isEmpty() && !current.contains("<img")) {
                 current.clear();
                 return;
             }
             if (m_toc.isEmpty() || m_toc.last().section != m_sections.size())
-                m_toc.append({fallbackTitle, int(m_sections.size()), {}, 0});
+                m_toc.append({.title = fallbackTitle, .section = int(m_sections.size()), .anchor = {}, .level = 0});
             m_sections << current;
             current.clear();
         };
 
         for (const HtmlToken &token : tokens) {
             const QString &name = token.name;
-            if (token.type == HtmlToken::Text) {
-                if (within("binary")) field += token.text;
+            if (token.type == HtmlToken::Type::Text) {
+                if (within("binary"_L1)) field += token.text;
                 else if (bodies == 0) field += token.text;
                 else {
                     current += token.text;
@@ -98,7 +98,7 @@ private:
                 }
                 continue;
             }
-            const bool open = token.type == HtmlToken::Open;
+            const bool open = token.type == HtmlToken::Type::Open;
             if (open && !token.selfClosing) path << name;
 
             if (name == "binary") {
@@ -115,21 +115,21 @@ private:
             } else if (bodies == 0) {
                 // The description: only title-info speaks for the book itself.
                 // Emphasis inside a paragraph is part of its text.
-                static const QStringList inlines{"emphasis", "strong", "a", "strikethrough", "sub", "sup"};
-                if (inlines.contains(name))
+                static constexpr std::array inlines{"emphasis"_L1, "strong"_L1, "a"_L1, "strikethrough"_L1, "sub"_L1, "sup"_L1};
+                if (std::ranges::contains(inlines, name))
                     continue;
                 if (open) {
                     field.clear();
                     if (name == "author") first = middle = last = nick = QString();
-                    if (name == "sequence" && within("title-info")) {
+                    if (name == "sequence" && within("title-info"_L1)) {
                         m_meta.series = token.attributes.value("name");
                         m_meta.seriesIndex = token.attributes.value("number").toDouble();
                     }
-                    if (name == "image" && within("coverpage"))
+                    if (name == "image" && within("coverpage"_L1))
                         m_coverId = token.attributes.value("href").mid(1);
                 } else {
                     const QString value = htmlToText(field).simplified();
-                    const bool info = within("title-info");
+                    const bool info = within("title-info"_L1);
                     if (name == "first-name") first = value;
                     else if (name == "middle-name") middle = value;
                     else if (name == "last-name") last = value;
@@ -140,11 +140,11 @@ private:
                     } else if (name == "book-title" && info) m_meta.title = value;
                     else if (name == "genre" && info && !value.isEmpty()) m_meta.tags << QString(value).replace('_', ' ');
                     else if (name == "lang" && info) m_meta.language = value;
-                    else if (name == "p" && within("annotation") && info)
+                    else if (name == "p" && within("annotation"_L1) && info)
                         m_meta.description += (m_meta.description.isEmpty() ? "" : "\n\n") + value;
-                    else if (name == "publisher" && within("publish-info")) m_meta.publisher = value;
-                    else if (name == "isbn" && within("publish-info")) m_meta.isbn = value;
-                    else if (name == "year" && within("publish-info")) m_meta.published = value;
+                    else if (name == "publisher" && within("publish-info"_L1)) m_meta.publisher = value;
+                    else if (name == "isbn" && within("publish-info"_L1)) m_meta.isbn = value;
+                    else if (name == "year" && within("publish-info"_L1)) m_meta.published = value;
                     field.clear();
                 }
             } else if (name == "section") {
@@ -173,7 +173,10 @@ private:
                 } else {
                     current += "</" + heading + ">";
                     if (inSectionTitle && sectionDepth == 1 && !m_notes)
-                        m_toc.append({htmlToText(titleText).simplified(), int(m_sections.size()), {}, 0});
+                        m_toc.append({.title = htmlToText(titleText).simplified(),
+                                      .section = int(m_sections.size()),
+                                      .anchor = {},
+                                      .level = 0});
                 }
             } else if (titleDepth > 0 && name == "p") {
                 // A title's paragraphs are its lines.
@@ -222,9 +225,4 @@ private:
 
 } // namespace
 
-std::unique_ptr<Document> openFb2(const QString &path, QString *error) {
-    auto document = std::make_unique<Fb2Document>();
-    if (!document->load(path, error))
-        return nullptr;
-    return document;
-}
+OpenedDocument openFb2(const QString &path) { return loaded(std::make_unique<Fb2Document>(), path); }
