@@ -4,9 +4,12 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <expected>
 #include <optional>
 
 #include "bookmeta.h"
+
+class QSqlQuery;
 
 struct Book {
     qint64 id = 0;
@@ -100,7 +103,7 @@ public:
 
     // Creates the folder and the database when they don't exist yet.
     bool open(QString *error = nullptr);
-    QString root() const { return m_root; }
+    QString root() const noexcept { return m_root; }
     QString databasePath() const;
     // Where copies of the database are kept: one is made each time an
     // Omabook update changes the library's format, before anything changes.
@@ -181,8 +184,14 @@ private:
     // The knowledge graph is kept in the same database.
     friend class Graph;
     QString bookFolder(qint64 id) const;
-    bool backUp(int schema, QString *error) const;
+    // Keeps a copy of the database as it is, or says why it couldn't.
+    [[nodiscard]] std::expected<void, QString> backUp(int schema) const;
+    // Runs a statement that changes something; false when it couldn't.
     bool exec(const QString &sql, const QVariantList &values = {}) const;
+    // Runs a statement that asks something; what it found is read with next().
+    [[nodiscard]] QSqlQuery query(const QString &sql, const QVariantList &values = {}) const;
+    // Adds a row: its id, or what the database said was wrong.
+    [[nodiscard]] std::expected<qint64, QString> insert(const QString &sql, const QVariantList &values) const;
 
     QString m_root;
     QString m_connection;

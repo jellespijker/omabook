@@ -5,6 +5,7 @@
 #include <QString>
 #include <QStringList>
 #include <optional>
+#include <utility>
 
 #include "library.h"
 
@@ -29,8 +30,8 @@ struct GraphPlace {
     double fraction = 0;
 
     // Whether this place is at or before `other`, in the same book.
-    bool notAfter(const GraphPlace &other) const {
-        return section < other.section || (section == other.section && fraction <= other.fraction);
+    constexpr bool notAfter(const GraphPlace &other) const noexcept {
+        return std::pair{section, fraction} <= std::pair{other.section, other.fraction};
     }
 };
 
@@ -168,9 +169,8 @@ public:
     QList<ReadingDay> readingLog(qint64 bookId = 0) const;
 
 private:
-    GraphView collect(const QString &nodesWhere, const QVariantList &values, int limit) const;
-    QList<GraphEdge> edgesAmong(const QList<GraphNode> &nodes) const;
+    [[nodiscard]] GraphView collect(const QString &nodesWhere, const QVariantList &values, int limit) const;
+    [[nodiscard]] QList<GraphEdge> edgesAmong(const QList<GraphNode> &nodes) const;
 
-    QString m_connection;
     const Library *m_library;
 };
