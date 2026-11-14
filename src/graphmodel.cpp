@@ -131,10 +131,21 @@ void GraphBrowser::setLibrary(const Library *library) {
 const Library *GraphBrowser::library() const { return m_backend ? m_backend->library() : m_library; }
 
 std::optional<GraphPlace> GraphBrowser::placeIn(const Book &book) const {
-    if (book.status() == "read")
+    // A book read to its end, or never opened here (read elsewhere, or its
+    // graph built whole on request), has no page here to stop at: what is
+    // known of it is shown.
+    if (book.status() == "read" || book.percent <= 0)
         return std::nullopt;
     const Progress progress = library()->progress(book.id);
     return GraphPlace{book.id, progress.section, progress.fraction};
+}
+
+void GraphBrowser::showWhole() {
+    if (m_what != What::Book || !m_upTo)
+        return;
+    m_upTo.reset();
+    load(false);
+    emit reframed();
 }
 
 GraphView GraphBrowser::allowed() const {
@@ -277,6 +288,9 @@ void GraphBrowser::load(bool keepPlaces) {
     m_outer = m_what == What::Book && library() ? Graph(*library()).beyond(m_bookId, m_upTo) : GraphView();
     m_beyondCount = int(m_outer.nodes.size());
     m_knownCount = int(m_base.nodes.size());
+    // What is known of the book past the place shown, so the view can say
+    // so rather than look as if nothing were known.
+    m_hiddenCount = bounded() && library() ? qMax(0, int(Graph(*library()).ofBook(m_bookId).nodes.size()) - m_knownCount) : 0;
     m_storied = std::any_of(m_base.nodes.cbegin(), m_base.nodes.cend(), [](const GraphNode &node) { return !ofTheLibrary(node.kind); });
 
     GraphView view = m_base;

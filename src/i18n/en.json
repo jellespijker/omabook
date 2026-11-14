@@ -115,6 +115,10 @@
     "one": "%Ln more could not be added",
     "other": "%Ln more could not be added"
   },
+  "%Ln more past your page": {
+    "one": "%Ln more past your page",
+    "other": "%Ln more past your page"
+  },
   "%Ln places": {
     "one": "%Ln place",
     "other": "%Ln places"
@@ -146,6 +150,10 @@
   "%Ln things": {
     "one": "%Ln thing",
     "other": "%Ln things"
+  },
+  "%Ln things are known of this book past the place you left it. They may give away what happens.": {
+    "one": "%Ln thing is known of this book past the place you left it. It may give away what happens.",
+    "other": "%Ln things are known of this book past the place you left it. They may give away what happens."
   },
   "%Ln weeks ago": {
     "one": "%Ln week ago",
@@ -550,6 +558,7 @@
   "Nothing of your own yet. N starts a plugin from a template; I installs one someone else wrote.": "Nothing of your own yet. N starts a plugin from a template; I installs one someone else wrote.",
   "Nothing the book doesn't already have.": "Nothing the book doesn't already have.",
   "Nothing to tidy: no duplicates, and every author is spelled one way.": "Nothing to tidy: no duplicates, and every author is spelled one way.",
+  "Nothing up to your page": "Nothing up to your page",
   "Nothing was changed. A sync would bring: %1 new, %2 updated, %3 unchanged, %4 kept as they are here.": "Nothing was changed. A sync would bring: %1 new, %2 updated, %3 unchanged, %4 kept as they are here.",
   "Nothing was changed: %1": "Nothing was changed: %1",
   "Nothing was found for this book.": "Nothing was found for this book.",
@@ -682,6 +691,7 @@
   "Series": "Series",
   "Settings": "Settings",
   "Show": "Show",
+  "Show Everything Known": "Show Everything Known",
   "Show Me": "Show Me",
   "Show Next": "Show Next",
   "Show as": "Show as",

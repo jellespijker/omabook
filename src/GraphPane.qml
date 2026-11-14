@@ -330,6 +330,14 @@ FocusScope {
                 // and the kinds under it carry the same numbers.
                 opacity: width >= implicitWidth - 1 ? 1 : 0
             }
+            // Some of what is known lies past the place the book was left.
+            AppButton {
+                objectName: "graphShowWhole"
+                visible: !pane.reading && graph.knownCount > 0 && graph.hiddenCount > 0
+                focusPolicy: Qt.NoFocus
+                text: qsTr("%Ln more past your page", "", graph.hiddenCount)
+                onClicked: graph.showWhole()
+            }
             // The one sign that the graph is being worked on: the AI noting
             // what was read, or a large picture still finding its shape.
             Thinking {
@@ -840,7 +848,9 @@ FocusScope {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     font.pixelSize: pane.compact ? 18 : 22
-                    text: graph.knownCount > 0 ? qsTr("Nothing matches") : qsTr("Nothing noted yet")
+                    text: graph.knownCount > 0 ? qsTr("Nothing matches")
+                          : graph.hiddenCount > 0 ? qsTr("Nothing up to your page")
+                          : qsTr("Nothing noted yet")
                 }
                 Thinking {
                     objectName: "graphEmptyBusy"
@@ -848,10 +858,21 @@ FocusScope {
                     active: pane.growing && graph.knownCount === 0
                     text: qsTr("Noting what you have read…")
                 }
+                // Known, but all of it past where the book was left: said, and
+                // offered, rather than looking as if nothing were known.
+                Label {
+                    objectName: "graphEmptyHidden"
+                    Layout.fillWidth: true
+                    visible: graph.knownCount === 0 && graph.hiddenCount > 0
+                    horizontalAlignment: Text.AlignHCenter
+                    wrapMode: Text.Wrap
+                    color: theme.colors.muted
+                    text: qsTr("%Ln things are known of this book past the place you left it. They may give away what happens.", "", graph.hiddenCount)
+                }
                 Label {
                     objectName: "graphEmptyText"
                     Layout.fillWidth: true
-                    visible: graph.knownCount === 0
+                    visible: graph.knownCount === 0 && graph.hiddenCount === 0
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     color: theme.colors.muted
@@ -887,6 +908,14 @@ FocusScope {
                         focusPolicy: Qt.NoFocus
                         text: qsTr("Note what I have read")
                         onClicked: assistant.growGraph()
+                    }
+                    AppButton {
+                        objectName: "graphEmptyWhole"
+                        visible: graph.knownCount === 0 && graph.hiddenCount > 0 && !pane.reading
+                        primary: true
+                        focusPolicy: Qt.NoFocus
+                        text: qsTr("Show Everything Known")
+                        onClicked: graph.showWhole()
                     }
                     AppButton {
                         objectName: "graphEmptyAdd"

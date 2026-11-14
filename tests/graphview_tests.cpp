@@ -385,11 +385,30 @@ private slots:
         browser.settleNow();
         QVERIFY(QLineF(browser.positions().at(browser.rowOf(story.mara)), maraWas).length() < GraphLayout::spacing * 1.5);
 
-        // From the library, a book is shown as far as it was left ...
+        // From the library, a book never opened here (read elsewhere, or its
+        // graph built whole on request) shows all that is known of it ...
+        browser.showBook(story.first);
+        QVERIFY(!browser.bounded());
+        QCOMPARE(browser.nodeCount(), 5);
+        QCOMPARE(browser.hiddenCount(), 0);
+        // ... one being read is shown as far as it was left, and says how
+        // much more is known past that place, to be shown on request.
         story.library.setProgress(story.first, {1, 0.6, 20, 0});
         browser.showBook(story.first);
         QVERIFY(browser.bounded());
         QCOMPARE(names(browser), (QStringList{"Mara", "The Tide Guild"}));
+        QCOMPARE(browser.hiddenCount(), 3);
+        browser.showWhole();
+        QVERIFY(!browser.bounded());
+        QCOMPARE(browser.nodeCount(), 5);
+        QCOMPARE(browser.hiddenCount(), 0);
+        // Left at the very start, nothing is shown, but it is said what is known.
+        story.library.setProgress(story.first, {0, 0.01, 0.5, 0});
+        browser.showBook(story.first);
+        QCOMPARE(browser.knownCount(), 0);
+        QCOMPARE(browser.hiddenCount(), 5);
+        story.library.setProgress(story.first, {1, 0.6, 20, 0});
+        browser.showBook(story.first);
         // ... and all of it once it is finished.
         story.library.setReading(story.first, "read", 0, {});
         browser.showBook(story.first);

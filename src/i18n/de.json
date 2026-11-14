@@ -976,5 +976,15 @@
   "stays at %1": "bleibt bei %1",
   "follows the latest release, or the main branch while there is none": "folgt dem neuesten Release, oder dem Hauptbranch, solange es keines gibt",
   "The link to your My Books page or your profile, or your user id": "Der Link zu deiner Seite „Meine Bücher“ oder deinem Profil, oder deine Benutzer-ID",
-  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads hat keinen Zugang für Apps und nimmt keine Änderungen von ihnen an. Was es hat, ist eine Datei mit allem unter „Meine Bücher“: was du gelesen hast, gerade liest und lesen willst. Das funktioniert auch bei einem privaten Profil."
+  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads hat keinen Zugang für Apps und nimmt keine Änderungen von ihnen an. Was es hat, ist eine Datei mit allem unter „Meine Bücher“: was du gelesen hast, gerade liest und lesen willst. Das funktioniert auch bei einem privaten Profil.",
+  "Nothing up to your page": "Nichts bis zu deiner Seite",
+  "Show Everything Known": "Alles Bekannte zeigen",
+  "%Ln things are known of this book past the place you left it. They may give away what happens.": {
+    "one": "%Ln Ding ist von diesem Buch jenseits der Stelle bekannt, an der du aufgehört hast. Es kann verraten, was passiert.",
+    "other": "%Ln Dinge sind von diesem Buch jenseits der Stelle bekannt, an der du aufgehört hast. Sie können verraten, was passiert."
+  },
+  "%Ln more past your page": {
+    "one": "%Ln weiteres nach deiner Seite",
+    "other": "%Ln weitere nach deiner Seite"
+  }
 }

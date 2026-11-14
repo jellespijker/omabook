@@ -1011,5 +1011,17 @@
   "stays at %1": "reste à %1",
   "follows the latest release, or the main branch while there is none": "suit la dernière version publiée, ou la branche principale tant qu'il n'y en a pas",
   "The link to your My Books page or your profile, or your user id": "Le lien vers votre page Mes livres ou votre profil, ou votre identifiant",
-  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads n'offre aucun accès aux applications et n'accepte aucune modification de leur part. Il propose en revanche un fichier de tout ce qui se trouve sous Mes livres, avec ce que vous avez lu, lisez et voulez lire, qui fonctionne aussi pour un profil privé."
+  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads n'offre aucun accès aux applications et n'accepte aucune modification de leur part. Il propose en revanche un fichier de tout ce qui se trouve sous Mes livres, avec ce que vous avez lu, lisez et voulez lire, qui fonctionne aussi pour un profil privé.",
+  "Nothing up to your page": "Rien jusqu'à votre page",
+  "Show Everything Known": "Tout afficher",
+  "%Ln things are known of this book past the place you left it. They may give away what happens.": {
+    "many": "%Ln éléments de ce livre sont connus au-delà de l'endroit où vous vous êtes arrêté. Ils peuvent révéler la suite.",
+    "one": "%Ln élément de ce livre est connu au-delà de l'endroit où vous vous êtes arrêté. Il peut révéler la suite.",
+    "other": "%Ln éléments de ce livre sont connus au-delà de l'endroit où vous vous êtes arrêté. Ils peuvent révéler la suite."
+  },
+  "%Ln more past your page": {
+    "many": "%Ln de plus après votre page",
+    "one": "%Ln de plus après votre page",
+    "other": "%Ln de plus après votre page"
+  }
 }

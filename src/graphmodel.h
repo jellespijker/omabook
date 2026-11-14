@@ -58,6 +58,9 @@ class GraphBrowser : public QObject {
     // is something a book told rather than the library's own (a book, an
     // author, a series, a tag).
     Q_PROPERTY(int knownCount READ knownCount NOTIFY changed)
+    // In a book's graph cut off at the reader's place: how many things are
+    // known of it beyond that place.
+    Q_PROPERTY(int hiddenCount READ hiddenCount NOTIFY changed)
     Q_PROPERTY(bool storied READ storied NOTIFY changed)
     // The kinds there are, each {kind, count, shown}, in the order they are
     // always listed in.
@@ -123,6 +126,9 @@ public:
     int nodeCount() const { return int(m_shown.size()); }
     int edgeCount() const { return int(m_links.size()); }
     int knownCount() const { return m_knownCount; }
+    int hiddenCount() const { return m_hiddenCount; }
+    // Shows all that is known of the book, past the reader's place too.
+    Q_INVOKABLE void showWhole();
     bool storied() const { return m_storied; }
     QVariantList kinds() const { return m_kinds; }
     QVariantList rows() const { return m_rows; }
@@ -261,6 +267,7 @@ private:
     QList<qint64> m_order;
     QVariantMap m_details;
     int m_knownCount = 0;
+    int m_hiddenCount = 0;
     bool m_storied = false;
     GraphLayout m_layout;
     double m_aspect = 1;

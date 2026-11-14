@@ -976,5 +976,15 @@
   "stays at %1": "blijft op %1",
   "follows the latest release, or the main branch while there is none": "volgt de nieuwste release, of de hoofdbranch zolang die er niet is",
   "The link to your My Books page or your profile, or your user id": "De link naar je pagina Mijn boeken of je profiel, of je gebruikers-id",
-  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads heeft geen ingang voor apps en neemt geen wijzigingen van ze aan. Wat het wel heeft is een bestand met alles onder Mijn boeken, met wat je hebt gelezen, aan het lezen bent en wilt lezen; dat werkt ook voor een privéprofiel."
+  "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads heeft geen ingang voor apps en neemt geen wijzigingen van ze aan. Wat het wel heeft is een bestand met alles onder Mijn boeken, met wat je hebt gelezen, aan het lezen bent en wilt lezen; dat werkt ook voor een privéprofiel.",
+  "Nothing up to your page": "Niets tot aan je bladzijde",
+  "Show Everything Known": "Alles tonen wat bekend is",
+  "%Ln things are known of this book past the place you left it. They may give away what happens.": {
+    "one": "%Ln ding is bekend van dit boek voorbij de plek waar je bent gebleven. Het kan verklappen wat er gebeurt.",
+    "other": "%Ln dingen zijn bekend van dit boek voorbij de plek waar je bent gebleven. Ze kunnen verklappen wat er gebeurt."
+  },
+  "%Ln more past your page": {
+    "one": "nog %Ln voorbij je bladzijde",
+    "other": "nog %Ln voorbij je bladzijde"
+  }
 }
