@@ -11,17 +11,17 @@
 namespace {
 
 // "{library.add}", and what a plugin's command is called: "{library.shelver:shelve}".
-const QRegularExpression &braces() {
+[[nodiscard]] const QRegularExpression &braces() {
     static const QRegularExpression braces("\\{([a-z]+\\.[A-Za-z0-9_:.-]+)\\}");
     return braces;
 }
 
-QString placeOf(const QString &command) { return command.section('.', 0, 0); }
+[[nodiscard]] QString placeOf(const QString &command) { return command.section('.', 0, 0); }
 
-QVersionNumber number(const QString &version) { return QVersionNumber::fromString(version); }
+[[nodiscard]] QVersionNumber number(const QString &version) { return QVersionNumber::fromString(version); }
 
 // A terminal line no wider than most terminals are.
-QString wrapped(const QString &text, int width = 78) {
+[[nodiscard]] QString wrapped(const QString &text, int width = 78) {
     QStringList lines;
     QString line;
     for (const QString &word : text.split(' ', Qt::SkipEmptyParts)) {

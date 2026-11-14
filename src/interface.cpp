@@ -11,9 +11,9 @@ Interface::Interface(QQmlEngine *engine, Customization *custom, QObject *parent)
 
 Interface::~Interface() { delete m_window; }
 
-QObject *Interface::create(const QUrl &url, QString *problem) {
+std::unique_ptr<QObject> Interface::create(const QUrl &url, QString *problem) {
     QQmlComponent component(m_engine, url);
-    QObject *root = component.isError() ? nullptr : component.create();
+    std::unique_ptr<QObject> root(component.isError() ? nullptr : component.create());
     if (!root) {
         QStringList errors;
         for (const QQmlError &error : component.errors())
@@ -31,7 +31,7 @@ bool Interface::load() {
 
     QString problem;
     const QUrl url = m_custom->windowUrl(&problem);
-    QObject *root = problem.isEmpty() ? create(url, &problem) : nullptr;
+    std::unique_ptr<QObject> root = problem.isEmpty() ? create(url, &problem) : nullptr;
     const bool own = url.scheme() != "qrc";
     // With no views of the user's own there is nothing to be wrong.
     m_custom->reportUi(own ? problem : QString());
@@ -40,11 +40,10 @@ bool Interface::load() {
         QString builtInProblem;
         root = create(QUrl("qrc:/Main.qml"), &builtInProblem);
     }
-    m_window = qobject_cast<QQuickWindow *>(root);
-    if (!m_window) {
-        delete root;
+    // Anything but a window is no use, and goes.
+    if (!qobject_cast<QQuickWindow *>(root.get()))
         return false;
-    }
+    m_window = static_cast<QQuickWindow *>(root.release());
     if (geometry.isValid())
         m_window->setGeometry(geometry);
     emit loaded();

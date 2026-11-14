@@ -2,13 +2,12 @@
 
 #include "graphcontext.h"
 
-#include <QEventLoopLocker>
 #include <QFile>
 #include <QFileInfo>
 #include <QLocale>
 #include <QSaveFile>
 #include <QStandardPaths>
-#include <QtConcurrent>
+#include <algorithm>
 
 #include "backend.h"
 #include "goodreads.h"
@@ -82,7 +81,7 @@ QVariantList Librarian::proposals() const {
 }
 
 int Librarian::chosen() const {
-    return std::count_if(m_entries.begin(), m_entries.end(), [](const Entry &entry) { return entry.chosen; });
+    return int(std::ranges::count(m_entries, true, &Entry::chosen));
 }
 
 void Librarian::setBusy(bool busy, const QString &status) {
@@ -98,11 +97,8 @@ void Librarian::add(const QList<Proposal> &proposals) {
 }
 
 int Librarian::incomplete() const {
-    int count = 0;
-    for (const Book &book : m_backend->library() ? m_backend->library()->books() : QList<Book>())
-        if (book.meta.description.isEmpty() || !book.hasCover)
-            ++count;
-    return count;
+    const QList<Book> books = m_backend->library() ? m_backend->library()->books() : QList<Book>();
+    return int(std::ranges::count_if(books, [](const Book &book) { return book.meta.description.isEmpty() || !book.hasCover; }));
 }
 
 void Librarian::tidy(bool lookUps) {
@@ -167,8 +163,7 @@ void Librarian::finishTidy() {
 }
 
 void Librarian::lookUpNext() {
-    delete m_lookUp;
-    m_lookUp = nullptr;
+    m_lookUp.reset();
     Library *library = m_backend->library();
     if (m_toLookUp.isEmpty() || !library) {
         setBusy(false);
@@ -183,8 +178,8 @@ void Librarian::lookUpNext() {
     setBusy(true, tr("Looking up %1 of %2: %3").arg(m_lookUpTotal - m_toLookUp.size()).arg(m_lookUpTotal).arg(book->meta.title));
 
     // Everything of one look-up hangs off one object, deleted when it is done.
-    m_lookUp = new QObject(this);
-    const QList<MetadataSource *> sources = m_backend->newSources(m_lookUp);
+    m_lookUp = std::make_unique<QObject>();
+    const QList<MetadataSource *> sources = m_backend->newSources(m_lookUp.get());
     auto found = std::make_shared<QList<MetaCandidate>>();
     auto waiting = std::make_shared<int>(sources.size());
     auto judge = [this, id, found] {
@@ -195,7 +190,7 @@ void Librarian::lookUpNext() {
             return;
         }
         auto *source = new AiMetadataSource(m_judge.get(), QFileInfo(m_backend->library()->formatPath(id)).fileName(),
-                                            m_backend->openingPagesOf(id), m_lookUp);
+                                            m_backend->openingPagesOf(id), m_lookUp.get());
         source->setFound(*found);
         connect(source, &MetadataSource::found, this, [this, id](const QList<MetaCandidate> &judged) {
             const auto book = m_backend->library() ? m_backend->library()->book(id) : std::nullopt;
@@ -264,8 +259,7 @@ void Librarian::stop() {
         m_tidyCall->cancel();
     m_tidyCall.reset();
     m_toLookUp.clear();
-    delete m_lookUp;
-    m_lookUp = nullptr;
+    m_lookUp.reset();
     if (m_judge)
         m_judge->cancel();
     m_judge.reset();
@@ -444,7 +438,7 @@ void Librarian::readingFilePicked(bool save, const QString &file) {
         m_desk.note("goodreads", tr("The file can't be written to %1.").arg(file));
         return;
     }
-    const int written = std::count_if(books.begin(), books.end(), [](const Book &book) { return !book.status().isEmpty(); });
+    const int written = int(std::ranges::count_if(books, [](const Book &book) { return !book.status().isEmpty(); }));
     m_desk.note("goodreads", tr("%Ln books written to %1. Upload the file at goodreads.com/review/import to bring Goodreads in step.", "",
                                 written).arg(file));
 }

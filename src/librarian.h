@@ -49,19 +49,19 @@ public:
 
     QVariantList proposals() const;
     int chosen() const;
-    bool busy() const { return m_busy; }
-    QString status() const { return m_status; }
-    QString answer() const { return m_answer; }
-    bool answering() const { return m_answering; }
+    bool busy() const noexcept { return m_busy; }
+    QString status() const noexcept { return m_status; }
+    QString answer() const noexcept { return m_answer; }
+    bool answering() const noexcept { return m_answering; }
     QVariantList suggestions() const;
-    QObject *sites() { return &m_desk; }
-    SiteDesk *siteDesk() { return &m_desk; }
+    QObject *sites() noexcept { return &m_desk; }
+    SiteDesk *siteDesk() noexcept { return &m_desk; }
     // The reading sites to ask, each owned by the parent it is given. Tests
     // pass stand-ins; otherwise the settings decide.
     using Sites = std::function<QList<ReadingSite *>(QObject *parent)>;
     void setSites(Sites sites) { m_sites = std::move(sites); }
-    QString changeNote() const { return m_changeNote; }
-    bool changing() const { return m_changing; }
+    QString changeNote() const noexcept { return m_changeNote; }
+    bool changing() const noexcept { return m_changing; }
     bool canUndo() const;
     bool hasAi() const;
     QString aiProblem() const;
@@ -122,7 +122,7 @@ private:
     // Books still to look up, and the look-up in hand.
     QList<qint64> m_toLookUp;
     int m_lookUpTotal = 0;
-    QObject *m_lookUp = nullptr;
+    std::unique_ptr<QObject> m_lookUp;
     std::unique_ptr<AiProvider> m_judge;
 
     std::unique_ptr<AiCall> m_askCall;

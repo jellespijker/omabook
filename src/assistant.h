@@ -35,11 +35,11 @@ public:
 
     bool available() const { return m_provider != nullptr; }
     QString providerName() const { return m_provider ? m_provider->name() : QString(); }
-    QString problem() const { return m_problem; }
+    QString problem() const noexcept { return m_problem; }
     QVariantList messages() const;
-    QString streaming() const { return m_streaming; }
-    bool busy() const { return m_busy; }
-    QString note() const { return m_note; }
+    QString streaming() const noexcept { return m_streaming; }
+    bool busy() const noexcept { return m_busy; }
+    QString note() const noexcept { return m_note; }
     bool graphBusy() const { return m_graph.busy(); }
     // How the knowledge graph grows: "auto" (as chapters are finished and
     // with every catch-up), "ask" (only when asked to) or "off" (not at

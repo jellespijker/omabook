@@ -60,18 +60,18 @@ public:
 
     void setOpener(Opener opener) { m_opener = std::move(opener); }
 
-    QVariantList plugins() const { return m_plugins; }
-    QVariantList health() const { return m_health; }
+    QVariantList plugins() const noexcept { return m_plugins; }
+    QVariantList health() const noexcept { return m_health; }
     QString folder() const;
     QStringList templates() const;
-    QVariantMap offer() const { return m_offer; }
-    QVariantMap trial() const { return m_trial; }
+    QVariantMap offer() const noexcept { return m_offer; }
+    QVariantMap trial() const noexcept { return m_trial; }
     QString sampleTitle() const { return QStringLiteral("Pride and Prejudice"); }
-    bool fetching() const { return m_fetching; }
-    QString checking() const { return m_checking; }
-    bool sourced() const { return m_sourced; }
-    QVariantMap sourceNote() const { return m_sourceNote; }
-    PluginSources *sources() { return &m_sources; }
+    bool fetching() const noexcept { return m_fetching; }
+    QString checking() const noexcept { return m_checking; }
+    bool sourced() const noexcept { return m_sourced; }
+    QVariantMap sourceNote() const noexcept { return m_sourceNote; }
+    PluginSources *sources() noexcept { return &m_sources; }
 
     // Looks at the plugins again. The registry is asked what is known, so
     // this is cheap enough to do whenever something may have changed.
