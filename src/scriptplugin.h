@@ -48,6 +48,7 @@ struct ScriptManifest {
     QString folder;
     QStringList permissions;
     QString problem;     // why it can't be used as it is, if it can't
+    bool needsNewer = false; // the problem is that it asks for a newer Omabook than this
 
     static ScriptManifest read(const QString &folder);
     bool isScript() const { return !script.isEmpty(); }

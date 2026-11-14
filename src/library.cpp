@@ -148,6 +148,38 @@ Library::~Library() {
 
 QString Library::databasePath() const { return m_root + "/omabook.db"; }
 
+QString Library::backupFolder() const { return m_root + "/.backups"; }
+
+int Library::formatVersion() const {
+    QSqlQuery version(QSqlDatabase::database(m_connection));
+    return version.exec("PRAGMA user_version") && version.next() ? version.value(0).toInt() : 0;
+}
+
+bool Library::backUp(int schema, QString *error) const {
+    const QString folder = backupFolder();
+    const QString file = QString("%1/omabook-format-%2-%3.db")
+                             .arg(folder).arg(schema).arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
+    if (!QDir().mkpath(folder)) {
+        if (error)
+            *error = folder + " can't be made.";
+        return false;
+    }
+    // SQLite writes the copy itself, whole and consistent, also while the
+    // write-ahead log holds changes the main file doesn't have yet.
+    QSqlQuery copy(QSqlDatabase::database(m_connection));
+    QFile::remove(file);
+    if (!copy.exec(QString("VACUUM INTO '%1'").arg(QString(file).replace('\'', "''")))) {
+        if (error)
+            *error = copy.lastError().text();
+        return false;
+    }
+    // The last five are kept; older ones go.
+    const QFileInfoList kept = QDir(folder).entryInfoList({"omabook-format-*.db"}, QDir::Files, QDir::Time);
+    for (const QFileInfo &old : kept.mid(5))
+        QFile::remove(old.filePath());
+    return true;
+}
+
 bool Library::exec(const QString &sql, const QVariantList &values) const {
     QSqlQuery query(QSqlDatabase::database(m_connection));
     query.prepare(sql);
@@ -239,7 +271,17 @@ bool Library::open(QString *error) {
     // A statement left open would keep a migration from dropping a table.
     version.finish();
     if (schema > migrations.size())
-        return fail("This library was made by a newer Omabook.");
+        return fail(QString("This library was last opened by a newer Omabook (its format is %1; this Omabook knows up to %2). "
+                            "Update Omabook on this computer, or restore a copy from before that from %3.")
+                        .arg(schema).arg(migrations.size()).arg(backupFolder()));
+    // A library about to be changed to a newer format is copied first, so a
+    // step that goes wrong, or a wish to go back to an older Omabook, never
+    // costs the library. One that can't be copied is left as it is.
+    if (schema > 0 && schema < migrations.size()) {
+        QString why;
+        if (!backUp(schema, &why))
+            return fail("The library needs bringing up to date, but a copy of it couldn't be kept first, so it was left alone: " + why);
+    }
     for (int step = schema; step < migrations.size(); ++step) {
         database.transaction();
         for (const QString &statement : migrations.at(step) + QStringList{QString("PRAGMA user_version = %1").arg(step + 1)}) {

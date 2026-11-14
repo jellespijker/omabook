@@ -312,9 +312,6 @@ bool GraphLayout::step() {
         dy[edge.second] -= y;
     }
     double furthest = 0;
-    // The ring stays out of an oval around the inside, a little off it.
-    const QRectF box = inside();
-    const double across = box.width() / 2 * 1.12 + spacing * 1.1, down = box.height() / 2 * 1.12 + spacing * 1.1;
     double furthestInside = 0;
     for (int i = 0; i < count; ++i) {
         const double wanted = std::hypot(dx.at(i), dy.at(i));
@@ -324,14 +321,8 @@ bool GraphLayout::step() {
         const double moved = std::min(wanted, m_heat);
         m_at[i] += QPointF(dx.at(i) / wanted * moved, dy.at(i) / wanted * moved);
         (m_ring.at(i) ? furthest : furthestInside) = std::max(m_ring.at(i) ? furthest : furthestInside, moved);
-        if (!m_ring.at(i) || m_inside == 0)
-            continue;
-        const QPointF from = m_at.at(i) - box.center();
-        const double within = std::hypot(from.x() / across, from.y() / down);
-        if (within < 1)
-            m_at[i] = within < 1e-6 ? box.center() + QPointF(across * std::cos(i * golden), down * std::sin(i * golden))
-                                    : box.center() + from / within;
     }
+    keepRingOut();
     ++m_steps;
     m_heat *= 0.972;
     // The inside comes to rest by itself, as it would with no ring around
@@ -341,6 +332,31 @@ bool GraphLayout::step() {
     if (m_heat < 0.4 || (m_insideDone && furthest < 0.05) || m_steps >= 400)
         m_heat = 0;
     return !settled();
+}
+
+// The ring stays out of the box around the inside, and a little off it: a
+// node of it that is within is put on the edge of that margin, out along
+// the line from the middle through it. This is done after the inside has
+// moved, against where the inside is now, so that it holds when the layout
+// stops, on whichever step that is.
+void GraphLayout::keepRingOut() {
+    if (m_inside == 0 || m_inside == m_at.size())
+        return;
+    const QRectF box = inside();
+    const double across = box.width() / 2 + spacing * 1.1, down = box.height() / 2 + spacing * 1.1;
+    for (int i = 0; i < m_at.size(); ++i) {
+        if (!m_ring.at(i) || m_fixed.at(i))
+            continue;
+        QPointF from = m_at.at(i) - box.center();
+        if (std::abs(from.x()) >= across || std::abs(from.y()) >= down)
+            continue;
+        // In the very middle there is no way out to follow, so each takes its own.
+        if (std::hypot(from.x(), from.y()) < 1e-6)
+            from = QPointF(std::cos(i * golden), std::sin(i * golden));
+        const double out = std::min(std::abs(from.x()) > 1e-12 ? across / std::abs(from.x()) : 1e300,
+                                    std::abs(from.y()) > 1e-12 ? down / std::abs(from.y()) : 1e300);
+        m_at[i] = box.center() + from * out;
+    }
 }
 
 bool GraphLayout::run(int milliseconds) {

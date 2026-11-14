@@ -103,10 +103,22 @@ AppPopup {
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 2
-                        RowLayout {
+                        // The title, who it is by and what kind of change this
+                        // is in one line; the title on a line of its own where
+                        // the window is too narrow for the three.
+                        GridLayout {
                             Layout.fillWidth: true
-                            spacing: 8
-                            Label { text: row.modelData.title; font.bold: true; elide: Text.ElideRight; Layout.maximumWidth: 380 }
+                            columns: win.compact ? 2 : 3
+                            columnSpacing: 8
+                            rowSpacing: 2
+                            Label {
+                                text: row.modelData.title
+                                font.bold: true
+                                elide: Text.ElideRight
+                                Layout.columnSpan: win.compact ? 2 : 1
+                                Layout.fillWidth: win.compact
+                                Layout.maximumWidth: win.compact ? Number.POSITIVE_INFINITY : 380
+                            }
                             Label { text: row.modelData.authors; color: theme.colors.muted; elide: Text.ElideRight; Layout.fillWidth: true }
                             Label { text: dialog.kinds[row.modelData.kind] || row.modelData.kind; color: theme.accent; font.pixelSize: 12 }
                         }

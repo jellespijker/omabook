@@ -91,6 +91,11 @@ bool Remote::send(const QString &localFile, const QString &remoteFile) const {
     return run("cat > " + quote(remoteFile), localFile).ok();
 }
 
+// The shape of the manifest two computers exchange. It goes up when a change
+// would make an older Omabook misread a newer one's; an older Omabook then
+// refuses to sync and says to update, instead of acting on what it misread.
+constexpr int manifestVersion = 1;
+
 QJsonObject libraryManifest(const Library &library) {
     QJsonArray books;
     for (const Book &book : library.books()) {
@@ -103,7 +108,8 @@ QJsonObject libraryManifest(const Library &library) {
         object.insert("progress", toJson(library.progress(book.id)));
         books << object;
     }
-    return {{"version", 1}, {"books", books}, {"removed", QJsonArray::fromStringList(library.removedHashes())}};
+    return {{"version", manifestVersion}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books},
+            {"removed", QJsonArray::fromStringList(library.removedHashes())}};
 }
 
 SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress) {
@@ -115,6 +121,14 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                             ? "Omabook isn't installed on " + remote.host() + ", or isn't on its PATH."
                             : listed.error.isEmpty() ? remote.host() + " can't be reached over ssh."
                                                      : remote.host() + ": " + listed.error.section('\n', -1);
+        return summary;
+    }
+    // A manifest in a newer shape than this Omabook knows could be misread,
+    // and a sync acts on what it reads; better to say which side to update.
+    if (manifest.value("version").toInt(1) > manifestVersion) {
+        summary.error = QString("%1 runs a newer Omabook (%2) than this computer (%3), and the two can't sync until this one "
+                                "is updated.")
+                            .arg(remote.host(), manifest.value("omabook").toString("unknown"), QStringLiteral(OMABOOK_VERSION));
         return summary;
     }
     QTemporaryDir scratch;

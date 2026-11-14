@@ -1716,6 +1716,7 @@ QString cliSummary() {
            "  plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one\n"
            "  plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help\n"
            "  plugin install|remove           Install a plugin from a folder or a .zip (checked first), or remove one\n"
+           "  plugin add|sources|update       Install a plugin from a GitHub repository, and keep it up to date from there\n"
            "  calibre libraries|plugins|import  What was found of Calibre here; import its libraries\n"
            "  catalog [search] [--format f]   Write the library as csv or bibtex\n"
            "  customize [view]                Show where the interface's files live; copy a view there to edit\n"

@@ -16,6 +16,7 @@
 #include "calibreplugin.h"
 #include "mcp.h"
 #include "plugins.h"
+#include "pluginsources.h"
 #include "scriptapi.h"
 #include "scriptplugins.h"
 #include "settings.h"
@@ -208,7 +209,7 @@ struct Staged {
     Tally tally;
     QString error;
 
-    Staged(const QString &source, const QString &under, const PluginTools::Limits &limits) {
+    Staged(const QString &source, const QString &under, const PluginTools::Limits &limits, const QString &subfolder = {}) {
         tally.limits = limits;
         const QFileInfo given(source);
         if (source.isEmpty() || !given.exists()) {
@@ -229,7 +230,18 @@ struct Staged {
         const QDir top(dir->path());
         const QStringList folders = top.entryList(QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot);
         const QStringList files = top.entryList(QDir::Files | QDir::Hidden);
-        if (files.contains("plugin.json")) {
+        if (!subfolder.isEmpty()) {
+            // The plugin is a folder of the package: that folder, under the
+            // one folder an archive of a repository is wrapped in.
+            QString clean;
+            const QString base = folders.size() == 1 && files.isEmpty() ? top.filePath(folders.first()) : dir->path();
+            if (!landsInside(subfolder, &clean) || !QFileInfo(base + "/" + clean + "/plugin.json").isFile()) {
+                error = "There is no plugin.json in \"" + subfolder + "\" of " + source + ", so that folder isn't a plugin.";
+                return;
+            }
+            root = base + "/" + clean;
+            suggested = clean.section('/', -1);
+        } else if (files.contains("plugin.json")) {
             root = dir->path();
             suggested = given.isDir() ? given.fileName() : given.completeBaseName();
         } else if (folders.size() == 1 && files.isEmpty() && QFileInfo(top.filePath(folders.first() + "/plugin.json")).isFile()) {
@@ -241,6 +253,29 @@ struct Staged {
     }
 };
 
+// What a script looks to add, from reading it: the calls that register
+// something, in the order the manager lists them. It is not run.
+QStringList looksToAdd(const QString &root) {
+    static const QList<QPair<QString, QString>> calls{
+        {"source", "omabook\\s*\\.\\s*metadata\\s*\\.\\s*register"}, {"catalog", "omabook\\s*\\.\\s*catalog\\s*\\.\\s*register"},
+        {"format", "omabook\\s*\\.\\s*format\\s*\\.\\s*register"},   {"importer", "omabook\\s*\\.\\s*importer\\s*\\.\\s*register"},
+        {"command", "omabook\\s*\\.\\s*commands\\s*\\.\\s*register"}, {"panel", "omabook\\s*\\.\\s*ui\\s*\\.\\s*panel"},
+        {"hook", "omabook\\s*\\.\\s*on\\s*\\("}};
+    QString text;
+    QDirIterator walk(root, {"*.js"}, QDir::Files, QDirIterator::Subdirectories);
+    // The scripts of a plugin are small; a megabyte of them says enough.
+    while (walk.hasNext() && text.size() < (1 << 20)) {
+        QFile file(walk.next());
+        if (file.open(QIODevice::ReadOnly))
+            text += QString::fromUtf8(file.read(1 << 20)) + "\n";
+    }
+    QStringList adds;
+    for (const auto &call : calls)
+        if (text.contains(QRegularExpression(call.second)))
+            adds << call.first;
+    return adds;
+}
+
 // What a staged package says of itself, or why it can't be a plugin.
 QJsonObject describePackage(const Staged &staged) {
     QFile manifest(staged.root + "/plugin.json");
@@ -251,6 +286,15 @@ QJsonObject describePackage(const Staged &staged) {
         return problem("Its plugin.json can't be read: "
                        + (parse.error == QJsonParseError::NoError ? QString("it should be a JSON object") : parse.errorString()) + ".");
     const QJsonObject object = document.object();
+    // One written for a newer Omabook is not installed: it wouldn't be run.
+    bool malformed = false;
+    const QString need = ScriptApi::needsNewer(object.value("omabook"), &malformed);
+    if (!need.isEmpty()) {
+        QJsonObject refused = problem(malformed ? "Its " + need : "It n" + need.mid(1));
+        if (!malformed)
+            refused.insert("needsOmabook", object.value("omabook").toString());
+        return refused;
+    }
     const QString script = object.value("script").toString();
     QStringList command, permissions;
     for (const QJsonValue &value : object.value("command").toArray())
@@ -290,6 +334,7 @@ QJsonObject describePackage(const Staged &staged) {
             {"description", object.value("description").toString()},
             {"kind", kind},
             {"permissions", QJsonArray::fromStringList(permissions)},
+            {"adds", QJsonArray::fromStringList(kind == "script" ? looksToAdd(staged.root) : QStringList())},
             {"files", staged.tally.files},
             {"bytes", staged.tally.bytes}};
 }
@@ -358,6 +403,9 @@ QString PluginTools::missingProgram(const PluginInfo &plugin) {
 }
 
 QString PluginTools::state(const PluginInfo &plugin) {
+    // Nothing is wrong with one that asks for a newer Omabook: it waits for it.
+    if (!plugin.needs.isEmpty())
+        return plugin.enabled ? "needs" : "off";
     if (plugin.kind == "script")
         return !plugin.enabled ? "off" : plugin.problem.isEmpty() ? "on" : "broken";
     if (plugin.origin == "folder") {
@@ -418,7 +466,10 @@ QJsonArray PluginTools::overview(const QList<PluginInfo> &plugins, const ScriptP
                         {"removable", plugin.origin == "folder"},
                         {"tryable", plugin.kind == "metadata" && is == "on"}};
         const QString missing = missingProgram(plugin);
-        if (!missing.isEmpty())
+        if (!plugin.needs.isEmpty()) {
+            row.insert("note", plugin.needs);
+            row.insert("needsOmabook", true);
+        } else if (!missing.isEmpty())
             row.insert("note", "Its program, " + missing + ", isn't on this computer.");
         else if (is != "on" && !plugin.problem.isEmpty())
             row.insert("note", plugin.problem);
@@ -452,7 +503,8 @@ QJsonArray PluginTools::overview(const QList<PluginInfo> &plugins, const ScriptP
             row.insert("running", running != nullptr);
             row.insert("adds", adds);
             const QJsonObject error = lastError(QFileInfo(plugin.folder).absolutePath(), name);
-            if (!error.isEmpty())
+            // That it waits for a newer Omabook is no error of its own.
+            if (!error.isEmpty() && plugin.needs.isEmpty())
                 row.insert("error", error);
         }
         rows.append({groups().indexOf(inGroup), row});
@@ -471,6 +523,9 @@ QJsonArray PluginTools::health(const QJsonArray &overview, const CalibrePlugin &
         const QString is = plugin.value("state").toString();
         if (is == "broken")
             issues << QJsonObject{{"id", plugin.value("id")}, {"name", plugin.value("name")}, {"issue", "broken"}};
+        else if (is == "needs" && plugin.value("needsOmabook").toBool())
+            issues << QJsonObject{{"id", plugin.value("id")}, {"name", plugin.value("name")}, {"issue", "needs-omabook"},
+                                  {"note", plugin.value("note")}};
         else if (is == "needs" && plugin.value("origin").toString() == "folder")
             issues << QJsonObject{{"id", plugin.value("id")}, {"name", plugin.value("name")}, {"issue", "missing"}};
     }
@@ -497,7 +552,7 @@ QString PluginTools::folderName(const QString &text) {
 QJsonObject PluginTools::inspect(const Context &context, const QString &source, const InstallOptions &options) {
     const Where where(context);
     // Nothing of it goes near the plugin folder until it is installed.
-    const Staged staged(source, QDir::tempPath(), options.limits);
+    const Staged staged(source, QDir::tempPath(), options.limits, options.subfolder);
     return inspected(staged, source, where.folder, options);
 }
 
@@ -505,7 +560,7 @@ QJsonObject PluginTools::install(const Context &context, const QString &source, 
     const Where where(context);
     // Unpacked beside where it will live, so that putting it in place is
     // one rename; a folder whose name starts with a dot is no plugin.
-    const Staged staged(source, where.folder, options.limits);
+    const Staged staged(source, where.folder, options.limits, options.subfolder);
     QJsonObject answer = inspected(staged, source, where.folder, options);
     if (ScriptTools::failed(answer))
         return answer;
@@ -518,13 +573,22 @@ QJsonObject PluginTools::install(const Context &context, const QString &source, 
 
     // Decided before it is in place: a running Omabook loads what appears
     // in the folder, and one that wasn't approved must not run even once.
-    where.settings->setPluginEnabled("folder:" + name, options.enable);
+    // An update leaves the switch where the person put it.
+    const bool enabled = options.keepState ? where.settings->pluginEnabled("folder:" + name, true) : options.enable;
+    if (!options.keepState)
+        where.settings->setPluginEnabled("folder:" + name, options.enable);
     if (replaces) {
         // What the plugin kept of its own (its data folder) stays with it.
         if (QFileInfo(target + "/data").isDir() && !QFileInfo::exists(staged.root + "/data"))
             copyTree(target + "/data", staged.root + "/data");
         bool trashed = false;
-        if (!discard(target, &trashed))
+        bool moved = false;
+        if (!options.previous.isEmpty()) {
+            // Kept for one step back; the one kept before it has had its turn.
+            QDir(options.previous).removeRecursively();
+            moved = QDir().mkpath(QFileInfo(options.previous).absolutePath()) && QDir().rename(target, options.previous);
+        }
+        if (!moved && !discard(target, &trashed))
             return problem("The plugin that is there, " + target + ", can't be moved out of the way.");
     }
     QFile::remove(target + ".error");
@@ -533,10 +597,10 @@ QJsonObject PluginTools::install(const Context &context, const QString &source, 
 
     answer.insert("id", "folder:" + name);
     answer.insert("folder", target);
-    answer.insert("enabled", options.enable);
+    answer.insert("enabled", enabled);
     answer.insert("replaced", replaces);
     answer.insert("installed", true);
-    if (!options.enable)
+    if (!enabled)
         answer.insert("next", "It is off until you switch it on: omabook plugins enable folder:" + name);
     return answer;
 }
@@ -554,6 +618,8 @@ QJsonObject PluginTools::remove(const Context &context, const QString &name) {
     if (!gone)
         return problem("The plugin can't be removed: " + target);
     QFile::remove(target + ".error");
+    // Where it came from is of no use once it is gone.
+    PluginSources({where.folder, where.settings, {}}).forget(name);
     return {{"name", name}, {"id", "folder:" + name}, {"folder", target}, {"trashed", trashed}};
 }
 

@@ -23,8 +23,9 @@ void Settings::read() {
     QFile config(m_file);
     if (config.open(QIODevice::ReadOnly)) {
         QJsonParseError error;
-        const QJsonObject values = QJsonDocument::fromJson(config.readAll(), &error).object();
+        const QJsonObject read = QJsonDocument::fromJson(config.readAll(), &error).object();
         // A file caught half-written, or with a typo, changes nothing.
+        const QJsonObject values = error.error == QJsonParseError::NoError ? upgraded(read) : read;
         if (error.error == QJsonParseError::NoError && values != m_values) {
             m_values = values;
             emit changed();
@@ -118,6 +119,7 @@ bool Settings::setOption(const QString &key, const QJsonValue &value) {
                       : key == "justify" ? value.isBool()
                       : key == "font_family" ? value.isString()
                       : key == "spread" ? QStringList{"auto", "always", "never"}.contains(value.toString())
+                      : key == "plugin_updates" ? QStringList{"auto", "tell", "never"}.contains(value.toString())
                       : key == "sort" ? QStringList{"recent", "title", "author", "series", "added", "progress", "rating",
                                                     "published", "finished"}.contains(value.toString())
                       : false;
@@ -207,13 +209,29 @@ void Settings::set(const QString &key, const QJsonValue &value) {
     emit changed();
 }
 
+// The shape of config.json. It goes up when a key is renamed or restructured;
+// the step that carries an older file forward is added to `upgraded` below,
+// so a setting made in an older Omabook is never silently dropped. Keys that
+// are only added need no step: a missing key reads as its default.
+constexpr int configVersion = 1;
+
+QJsonObject Settings::upgraded(QJsonObject values) {
+    const int from = values.value("config_version").toInt(0);
+    // if (from < 2) { …move the old key to the new one… }
+    // A file from a newer Omabook is read as it is: keys this one doesn't
+    // know are kept and written back untouched.
+    if (from < configVersion)
+        values.insert("config_version", configVersion);
+    return values;
+}
+
 void Settings::save() const {
     QDir().mkpath(QFileInfo(m_file).absolutePath());
     QSaveFile file(m_file);
     // No rewriting in place: a folder that can't hold the temp file fails the
     // save instead of risking a truncated config.
     file.setDirectWriteFallback(false);
-    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(m_values).toJson()) > 0)
+    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(upgraded(m_values)).toJson()) > 0)
         file.commit();
     const_cast<Settings *>(this)->watch();
 }

@@ -15,7 +15,10 @@
 PluginManager::PluginManager(Settings *settings, Plugins *registry, ScriptPlugins *scripts, FilePicker *picker,
                              QNetworkAccessManager *network, QObject *parent)
     : QObject(parent), m_settings(settings), m_registry(registry), m_scripts(scripts), m_picker(picker), m_network(network),
-      m_opener([](const QUrl &url) { return QDesktopServices::openUrl(url); }) {
+      m_opener([](const QUrl &url) { return QDesktopServices::openUrl(url); }),
+      m_sources({registry->folder(), settings, {}}, network) {
+    m_daily.setSingleShot(true);
+    connect(&m_daily, &QTimer::timeout, this, &PluginManager::dailyCheck);
     connect(m_picker, &FilePicker::picked, this, &PluginManager::picked);
     // The order of the sources and every switch live in the settings, which
     // may be edited by hand or by an agent while the window is up.
@@ -35,6 +38,9 @@ PluginManager::PluginManager(Settings *settings, Plugins *registry, ScriptPlugin
         emit trialChanged();
     });
     refresh();
+    // The daily look at the sources, once the window is up and busy with
+    // nothing else. It asks nothing when no plugin came from a repository.
+    checkSoon(3000);
 }
 
 PluginManager::~PluginManager() = default;
@@ -44,14 +50,47 @@ QString PluginManager::folder() const { return m_registry->folder(); }
 QStringList PluginManager::templates() const { return ScriptApi::templates(); }
 
 void PluginManager::refresh() {
-    const QJsonArray overview = PluginTools::overview(m_registry->known(), m_scripts);
+    // Each plugin that came from a repository says so, and what of the
+    // sources needs attention joins what of the plugins does.
+    const QJsonArray overview = m_sources.annotate(PluginTools::overview(m_registry->known(), m_scripts));
     const QVariantList plugins = overview.toVariantList();
-    const QVariantList health = PluginTools::health(overview, m_registry->calibre()).toVariantList();
-    if (plugins == m_plugins && health == m_health)
+    QJsonArray issues = PluginTools::health(overview, m_registry->calibre());
+    for (const QJsonValue &issue : m_sources.issues())
+        issues << issue;
+    const QVariantList health = issues.toVariantList();
+    bool sourced = false;
+    for (const QJsonValue &row : overview)
+        sourced = sourced || row.toObject().contains("source");
+    if (plugins == m_plugins && health == m_health && sourced == m_sourced)
         return;
     m_plugins = plugins;
     m_health = health;
+    m_sourced = sourced;
     emit changed();
+
+    // An update of this run that stopped with an error after it was loaded
+    // in the window (a panel, a command) is taken back out, as one that
+    // doesn't load at all is.
+    for (const QString &name : QStringList(m_updated)) {
+        const QJsonObject row = [&] {
+            for (const QJsonValue &value : overview)
+                if (value.toObject().value("id").toString() == "folder:" + name)
+                    return value.toObject();
+            return QJsonObject();
+        }();
+        if (row.value("state").toString() != "broken" || !row.value("source").toObject().value("previous").toBool())
+            continue;
+        m_updated.removeAll(name);
+        const QJsonObject back = m_sources.rollBack(name);
+        if (ScriptTools::failed(back))
+            continue;
+        const QString text = tr("%1 stopped with an error after its update, so Omabook went back to version %2.")
+                                 .arg(row.value("name").toString(), back.value("version").toString());
+        note("folder:" + name, text, true);
+        emit said(text);
+        m_scripts->reload();
+        QTimer::singleShot(0, this, &PluginManager::refresh);
+    }
 }
 
 void PluginManager::reload() {
@@ -92,6 +131,30 @@ void PluginManager::consider(const QString &source) {
 }
 
 QVariantMap PluginManager::install(bool enable, bool replace) {
+    if (m_offer.value("from").toString() == "github") {
+        // What was fetched from a repository goes in the same way, and where
+        // it came from is remembered. An update keeps the plugin's switch.
+        const bool update = m_offer.value("update").toBool();
+        const QVariantMap answer = m_sources.installLooked(enable, replace).toVariantMap();
+        if (answer.contains("error") && !answer.contains("rolledBack")) {
+            m_offer.insert("error", answer.value("error"));
+            emit offerChanged();
+            return answer;
+        }
+        m_offer.clear();
+        emit offerChanged();
+        const QString name = answer.value("name").toString();
+        if (answer.contains("error"))
+            note("folder:" + name, answer.value("error").toString(), true);
+        else if (update)
+            note("folder:" + name, tr("Updated from %1 to %2.").arg(answer.value("from").toString(), answer.value("to").toString()));
+        if (update && !answer.contains("error") && !m_updated.contains(name))
+            m_updated << name;
+        m_scripts->reload();
+        refresh();
+        emit touched();
+        return answer;
+    }
     const QString source = m_offer.value("source").toString();
     if (source.isEmpty())
         return {{"error", tr("There is no plugin waiting to be installed.")}};
@@ -115,6 +178,7 @@ QVariantMap PluginManager::install(bool enable, bool replace) {
 }
 
 void PluginManager::dismissOffer() {
+    m_sources.dropLooked();
     if (m_offer.isEmpty())
         return;
     m_offer.clear();
@@ -261,4 +325,188 @@ void PluginManager::stopTrial() {
         return;
     m_trial.clear();
     emit trialChanged();
+}
+
+// --- Plugins from GitHub repositories ---
+
+void PluginManager::setChecking(const QString &id) {
+    if (m_checking == id)
+        return;
+    m_checking = id;
+    emit busyChanged();
+}
+
+void PluginManager::note(const QString &id, const QString &text, bool problem) {
+    m_sourceNote = {{"id", id}, {"text", text}, {"problem", problem}};
+    emit sourceNoteChanged();
+}
+
+void PluginManager::lookUp(const QString &address) {
+    if (m_fetching || address.trimmed().isEmpty())
+        return;
+    m_fetching = true;
+    emit busyChanged();
+    if (!m_offer.isEmpty()) {
+        m_offer.clear();
+        emit offerChanged();
+    }
+    m_sources.look(address, {}, {}, [this](const QJsonObject &offered) {
+        m_fetching = false;
+        emit busyChanged();
+        m_offer = offered.toVariantMap();
+        emit offerChanged();
+    });
+}
+
+QString PluginManager::outcome(const QJsonObject &answer, bool asked) {
+    const QString title = answer.value("title").toString(answer.value("name").toString());
+    if (answer.value("updated").toBool())
+        return tr("%1 was updated from %2 to %3.").arg(title, answer.value("from").toString(), answer.value("to").toString());
+    if (answer.value("waits").toBool())
+        return tr("%1 has an update that needs Omabook %2 or newer; the version installed stays.")
+            .arg(title, answer.value("pending").toObject().value("needs").toString());
+    if (answer.value("review").toBool())
+        return tr("%1 has an update that asks for more than the version installed. Review it under Plugins.").arg(title);
+    // That GitHub wasn't reached, or asked to wait, is only said to someone who asked.
+    if (ScriptTools::failed(answer))
+        return asked || answer.value("gone").toBool() || answer.contains("rolledBack") ? answer.value("error").toString() : QString();
+    if (answer.value("update").toBool())
+        return tr("%1 has an update: %2. Install it under Plugins.").arg(title, answer.value("latest").toObject().value("ref").toString());
+    return asked ? tr("%1 is up to date.").arg(title) : QString();
+}
+
+void PluginManager::sourceAnswered(const QJsonObject &answer, bool asked) {
+    const QString name = answer.value("name").toString();
+    const QString text = outcome(answer, asked);
+    if (answer.value("updated").toBool() && !m_updated.contains(name))
+        m_updated << name;
+    if (!text.isEmpty() && !name.isEmpty())
+        note("folder:" + name, text, ScriptTools::failed(answer));
+    // What happened by itself is said where it is seen; what was asked for
+    // is answered beside the plugin.
+    const bool worthSaying = answer.value("updated").toBool() || answer.value("review").toBool() || answer.contains("rolledBack")
+                             || answer.value("update").toBool();
+    if (!asked && worthSaying && !text.isEmpty())
+        emit said(text);
+}
+
+void PluginManager::checkNow(const QString &id) {
+    if (!m_checking.isEmpty())
+        return;
+    setChecking(id);
+    m_sources.check(id.section(':', 1), [this](const QJsonObject &answer) {
+        setChecking({});
+        sourceAnswered(answer, true);
+        refresh();
+    });
+}
+
+void PluginManager::updateNow(const QString &id) {
+    if (!m_checking.isEmpty())
+        return;
+    setChecking(id);
+    m_sources.update(id.section(':', 1), false, [this, id](const QJsonObject &answer) {
+        setChecking({});
+        sourceAnswered(answer, true);
+        m_scripts->reload();
+        refresh();
+        emit touched();
+        // One that asks for more is shown, for the person to say yes or no to.
+        if (answer.value("review").toBool())
+            reviewUpdate(id);
+    });
+}
+
+void PluginManager::reviewUpdate(const QString &id) {
+    if (m_fetching)
+        return;
+    m_fetching = true;
+    emit busyChanged();
+    m_sources.review(id.section(':', 1), [this](const QJsonObject &offered) {
+        m_fetching = false;
+        emit busyChanged();
+        m_offer = offered.toVariantMap();
+        emit offerChanged();
+    });
+}
+
+void PluginManager::pinTo(const QString &id, const QString &ref) {
+    if (!m_checking.isEmpty())
+        return;
+    setChecking(id);
+    m_sources.pin(id.section(':', 1), ref, [this, id](const QJsonObject &answer) {
+        setChecking({});
+        QJsonObject named = answer;
+        named.insert("name", id.section(':', 1));
+        sourceAnswered(named, true);
+        m_scripts->reload();
+        refresh();
+        emit touched();
+        if (answer.value("review").toBool())
+            reviewUpdate(id);
+    });
+}
+
+void PluginManager::followLatest(const QString &id) {
+    if (ScriptTools::failed(m_sources.follow(id.section(':', 1))))
+        return;
+    refresh();
+    updateNow(id);
+}
+
+void PluginManager::rollBack(const QString &id) {
+    const QString name = id.section(':', 1);
+    const QJsonObject answer = m_sources.rollBack(name);
+    m_updated.removeAll(name);
+    note(id, ScriptTools::failed(answer) ? answer.value("error").toString()
+                                         : tr("Back at version %1.").arg(answer.value("version").toString()),
+         ScriptTools::failed(answer));
+    m_scripts->reload();
+    refresh();
+    emit touched();
+}
+
+void PluginManager::forgetSource(const QString &id) {
+    m_sources.forget(id.section(':', 1));
+    refresh();
+}
+
+void PluginManager::checkAll() {
+    if (!m_checking.isEmpty())
+        return;
+    setChecking("all");
+    // By hand, what is newer is installed unless updates are only to be told of.
+    m_sources.checkAll(m_settings->pluginUpdates() == "auto", false, [this](const QJsonObject &answer) {
+        setChecking({});
+        const QJsonArray results = answer.value("results").toArray();
+        for (const QJsonValue &result : results)
+            sourceAnswered(result.toObject(), true);
+        if (results.size() != 1)
+            note("all", answer.value("limited").toBool() || answer.value("offline").toBool()
+                            ? results.last().toObject().value("error").toString()
+                            : tr("%Ln sources were checked.", "", int(results.size())),
+                 answer.value("limited").toBool() || answer.value("offline").toBool());
+        m_scripts->reload();
+        refresh();
+        emit touched();
+    });
+}
+
+void PluginManager::checkSoon(int milliseconds) { m_daily.start(milliseconds); }
+
+void PluginManager::dailyCheck() {
+    const QString mode = m_settings->pluginUpdates();
+    // Nothing is asked of GitHub when no plugin came from there, when the
+    // person said never to, or when everything was checked within the day.
+    if (mode == "never" || !m_checking.isEmpty() || !m_sources.anyDue())
+        return;
+    setChecking("daily");
+    m_sources.checkAll(mode == "auto", true, [this](const QJsonObject &answer) {
+        setChecking({});
+        for (const QJsonValue &result : answer.value("results").toArray())
+            sourceAnswered(result.toObject(), false);
+        m_scripts->reload();
+        refresh();
+        emit touched();
+    });
 }

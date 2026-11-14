@@ -1,20 +1,31 @@
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QSignalSpy>
+#include <QTcpServer>
+#include <QTcpSocket>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <archive.h>
+#include <archive_entry.h>
 
 #include "calibreplugin.h"
+#include "fakegithub.h"
 #include "fixtures.h"
 #include "mcp.h"
 #include "pluginmanager.h"
+#include "metadatasource.h"
 #include "plugins.h"
+#include "pluginsources.h"
 #include "plugintools.h"
+#include "scriptapi.h"
 #include "scriptplugins.h"
 #include "scripttools.h"
+#include "secretstore.h"
 #include "settings.h"
 
 namespace {
@@ -53,12 +64,68 @@ QJsonObject byId(const QJsonArray &overview, const QString &id) {
     return {};
 }
 
+QByteArray slurp(const QString &path) {
+    QFile file(path);
+    return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+}
+
 Mcp::Result callTool(const QString &name, const QJsonObject &arguments) {
     for (const Mcp::Tool &tool : Mcp::tools())
         if (tool.name == name)
             return tool.handler(arguments);
     return Mcp::Result::fail("There is no tool " + name);
 }
+
+
+// A plugin folder, settings and a GitHub of the test's own, and the sources
+// that talk to it. The clock is the test's too.
+struct Hub {
+    QTemporaryDir dir;
+    Settings settings{dir.filePath("config.json")};
+    FakeGitHub github;
+    qint64 time = 1800000000;
+    PluginTools::Context context{dir.filePath("plugins"), &settings, {}};
+    std::unique_ptr<PluginSources> sources;
+    const QString repository = "someone/omabook-storyteller";
+
+    Hub() { again(); }
+    // As another run of Omabook would find things.
+    void again() {
+        sources = std::make_unique<PluginSources>(context);
+        PluginSources::Service service;
+        service.api = github.api();
+        service.hosts = QStringList{"127.0.0.1"};
+        service.httpsOnly = false;
+        sources->setService(service);
+        sources->setClock([this] { return time; });
+    }
+    QJsonObject add(const QString &address, const PluginSources::AddOptions &options = {}) {
+        return PluginSources::wait([&](PluginSources::Done done) { sources->add(address, options, done); }, 10000);
+    }
+    QJsonObject look(const QString &address, const QString &pin = {}) {
+        return PluginSources::wait([&](PluginSources::Done done) { sources->look(address, pin, {}, done); }, 10000);
+    }
+    QJsonObject check(const QString &name = "storyteller") {
+        return PluginSources::wait([&](PluginSources::Done done) { sources->check(name, done); }, 10000);
+    }
+    QJsonObject update(bool approved = false, const QString &name = "storyteller") {
+        return PluginSources::wait([&](PluginSources::Done done) { sources->update(name, approved, done); }, 10000);
+    }
+    QJsonObject checkAll(bool apply, bool dueOnly) {
+        return PluginSources::wait([&](PluginSources::Done done) { sources->checkAll(apply, dueOnly, done); }, 10000);
+    }
+    QString installedVersion(const QString &name = "storyteller") const {
+        QFile file(dir.filePath("plugins/" + name + "/plugin.json"));
+        return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object().value("version").toString() : QString();
+    }
+    // The storyteller on its default branch, installed and switched on.
+    bool installed(const Made &made = {}) {
+        github.push(repository, "main", sha('a'), made.packed());
+        PluginSources::AddOptions options;
+        options.enable = true;
+        return !ScriptTools::failed(add(repository, options));
+    }
+};
 
 } // namespace
 
@@ -504,6 +571,817 @@ private slots:
         for (const Mcp::Tool &tool : Mcp::tools())
             if (tool.name == "plugin_remove")
                 QCOMPARE(tool.effect, Mcp::Destructive);
+    }
+
+    // --- Plugins from GitHub repositories ---
+
+    void everyFormOfAddressIsRead() {
+        struct Case {
+            const char *text, *repository, *ref, *subfolder;
+        };
+        const QList<Case> cases{
+            {"jellespijker/omabook-storyteller", "jellespijker/omabook-storyteller", "", ""},
+            {"https://github.com/jellespijker/omabook-storyteller", "jellespijker/omabook-storyteller", "", ""},
+            {" https://github.com/jellespijker/omabook-storyteller.git ", "jellespijker/omabook-storyteller", "", ""},
+            {"http://www.github.com/Someone/Repo/", "Someone/Repo", "", ""},
+            {"github.com/someone/repo", "someone/repo", "", ""},
+            {"git@github.com:someone/repo.git", "someone/repo", "", ""},
+            {"https://github.com/someone/repo/releases", "someone/repo", "", ""},
+            {"https://github.com/someone/repo/releases/latest", "someone/repo", "", ""},
+            {"https://github.com/someone/repo/releases/tag/v1.2", "someone/repo", "v1.2", ""},
+            {"https://github.com/someone/repo/tree/v1.2", "someone/repo", "v1.2", ""},
+            {"https://github.com/someone/repo/tree/main/plugins/reading-log", "someone/repo", "main", "plugins/reading-log"},
+            {"https://github.com/someone/repo/tree/main/plugins/Reading%20Log?tab=readme#top", "someone/repo", "main", "plugins/Reading Log"},
+            {"https://github.com/someone/repo/blob/dev/plugins/log/plugin.json", "someone/repo", "dev", "plugins/log"},
+            {"https://github.com/someone/repo/commit/0123abc", "someone/repo", "0123abc", ""},
+            {"https://github.com/someone/repo/archive/refs/tags/v2.0.tar.gz", "someone/repo", "v2.0", ""},
+        };
+        for (const Case &given : cases) {
+            PluginSources::Address address;
+            QString error;
+            QVERIFY2(PluginSources::parse(given.text, &address, &error), qPrintable(QString(given.text) + ": " + error));
+            QCOMPARE(address.repository(), QString(given.repository));
+            QCOMPARE(address.ref, QString(given.ref));
+            QCOMPARE(address.subfolder, QString(given.subfolder));
+        }
+        // What isn't a repository on GitHub says so, and names nothing.
+        for (const char *text : {"", "storyteller", "https://gitlab.com/someone/repo", "https://example.com/a/b",
+                                 "https://github.com/someone", "someone/repo/issues/4", "https://github.com/someone/repo/tree/main/../../etc",
+                                 "../etc/passwd", "someone/.."}) {
+            PluginSources::Address address;
+            QString error;
+            QVERIFY2(!PluginSources::parse(text, &address, &error), text);
+            QVERIFY2(!error.isEmpty(), text);
+        }
+        // The folder it goes in, when nobody says.
+        PluginSources::Address address;
+        QString error;
+        QVERIFY(PluginSources::parse("jellespijker/omabook-storyteller", &address, &error));
+        QCOMPARE(PluginSources::nameFor(address), QString("storyteller"));
+        QVERIFY(PluginSources::parse("someone/Reading.Log", &address, &error));
+        QCOMPARE(PluginSources::nameFor(address), QString("reading-log"));
+        QVERIFY(PluginSources::parse("someone/tools/tree/main/plugins/Shelf Notes", &address, &error));
+        QCOMPARE(PluginSources::nameFor(address), QString("shelf-notes"));
+    }
+
+    void aPluginIsAddedFromItsRepository() {
+        Hub hub;
+        hub.github.push(hub.repository, "main", sha('a'), Made().packed());
+
+        // Looked at first: fetched and described, with nothing installed.
+        const QJsonObject offered = hub.look("https://github.com/someone/omabook-storyteller");
+        QVERIFY2(!ScriptTools::failed(offered), qPrintable(offered.value("error").toString()));
+        QCOMPARE(offered.value("name").toString(), QString("storyteller"));
+        QCOMPARE(offered.value("title").toString(), QString("Storyteller"));
+        QCOMPARE(offered.value("version").toString(), QString("1.0"));
+        QCOMPARE(offered.value("permissions").toVariant().toStringList(), QStringList{"files"});
+        // What it looks to add, from reading its script; it was not run.
+        QCOMPARE(offered.value("adds").toVariant().toStringList(), (QStringList{"command", "hook"}));
+        QCOMPARE(offered.value("repository").toString(), hub.repository);
+        // No release, so it follows the default branch, at the commit that is its head.
+        QCOMPARE(offered.value("ref").toString(), QString("main"));
+        QCOMPARE(offered.value("commit").toString(), sha('a'));
+        QVERIFY(leftIn(hub.dir.filePath("plugins")).isEmpty());
+        // Asked as Omabook, of the stand-in and nobody else, with no token.
+        for (const QByteArray &head : std::as_const(hub.github.heads)) {
+            QVERIFY(FakeGitHub::header(head, "user-agent").startsWith("Omabook/"));
+            QVERIFY(FakeGitHub::header(head, "authorization").isEmpty());
+        }
+
+        // Installed switched off, and where it came from is remembered.
+        const QJsonObject installed = hub.sources->installLooked(false);
+        QVERIFY2(!ScriptTools::failed(installed), qPrintable(installed.value("error").toString()));
+        QVERIFY(!hub.settings.pluginEnabled("folder:storyteller", true));
+        QVERIFY(QFile::exists(hub.dir.filePath("plugins/storyteller/lib/words.js")));
+        QVERIFY(QFile::exists(hub.dir.filePath("plugins/sources.json")));
+        // The registry is a file, so the plugins beside it are all there is to load.
+        QCOMPARE(QDir(hub.dir.filePath("plugins")).entryList(QDir::Dirs | QDir::NoDotAndDotDot), QStringList{"storyteller"});
+
+        // Another run reads the same.
+        hub.again();
+        const QJsonArray list = hub.sources->list();
+        QCOMPARE(list.size(), 1);
+        const QJsonObject entry = list.first().toObject();
+        QCOMPARE(entry.value("name").toString(), QString("storyteller"));
+        QCOMPARE(entry.value("repository").toString(), hub.repository);
+        QCOMPARE(entry.value("channel").toObject().value("kind").toString(), QString("auto"));
+        QCOMPARE(entry.value("installed").toObject().value("version").toString(), QString("1.0"));
+        QCOMPARE(entry.value("installed").toObject().value("commit").toString(), sha('a'));
+        QCOMPARE(entry.value("installed").toObject().value("kind").toString(), QString("branch"));
+        QCOMPARE(qint64(entry.value("checked_at").toDouble()), hub.time);
+        QVERIFY(!entry.value("update").toBool() && !entry.value("missing").toBool());
+        // It shows on the plugin in the manager's overview.
+        Plugins plugins(&hub.settings, hub.dir.filePath("plugins"), "-");
+        const QJsonObject row = byId(hub.sources->annotate(PluginTools::overview(plugins.known())), "folder:storyteller");
+        QCOMPARE(row.value("source").toObject().value("repository").toString(), hub.repository);
+
+        // One of the same name is in the way unless it is to be replaced.
+        QVERIFY(hub.add(hub.repository).value("error").toString().contains("already"));
+        // Forgotten, the plugin stays and is no longer followed; removed, it is forgotten too.
+        QVERIFY(!ScriptTools::failed(hub.sources->forget("storyteller")));
+        QVERIFY(hub.sources->list().isEmpty());
+        QVERIFY(QFile::exists(hub.dir.filePath("plugins/storyteller/main.js")));
+        PluginSources::AddOptions replace;
+        replace.replace = true;
+        QVERIFY(!ScriptTools::failed(hub.add(hub.repository, replace)));
+        QVERIFY(!ScriptTools::failed(PluginTools::remove(hub.context, "storyteller")));
+        QVERIFY(hub.sources->list().isEmpty());
+    }
+
+    void releasesBranchesTagsAndSubfoldersAreFollowed() {
+        Hub hub;
+        Made first, second, inFolder;
+        second.version = "2.0";
+        inFolder.subfolder = "plugins/shelf-notes";
+        inFolder.title = "Shelf Notes";
+        hub.github.push(hub.repository, "main", sha('a'), second.packed());
+        hub.github.push(hub.repository, "dev", sha('d'), second.packed());
+        hub.github.tag(hub.repository, "v1.0", sha('b'), first.packed(), true);
+
+        // A repository with releases is followed by its latest release, not its branch.
+        QJsonObject added = hub.add(hub.repository);
+        QVERIFY2(!ScriptTools::failed(added), qPrintable(added.value("error").toString()));
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        QCOMPARE(hub.sources->source("storyteller").value("installed").toObject().value("kind").toString(), QString("release"));
+        QCOMPARE(hub.sources->source("storyteller").value("installed").toObject().value("ref").toString(), QString("v1.0"));
+        // A newer release is an update.
+        hub.github.tag(hub.repository, "v2.0", sha('c'), second.packed(), true);
+        QVERIFY(hub.check().value("update").toBool());
+        QVERIFY(hub.update().value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("2.0"));
+
+        // A link to a tag stays at that tag, and is never asked about again.
+        PluginSources::AddOptions asTag;
+        asTag.name = "pinned";
+        added = hub.add("https://github.com/someone/omabook-storyteller/releases/tag/v1.0", asTag);
+        QVERIFY2(!ScriptTools::failed(added), qPrintable(added.value("error").toString()));
+        QCOMPARE(hub.installedVersion("pinned"), QString("1.0"));
+        QCOMPARE(hub.sources->source("pinned").value("channel").toObject().value("kind").toString(), QString("tag"));
+        const int before = int(hub.github.asked.size());
+        QVERIFY(hub.check("pinned").value("pinned").toBool());
+        QCOMPARE(int(hub.github.asked.size()), before);
+
+        // --pin with a branch follows that branch.
+        PluginSources::AddOptions asBranch;
+        asBranch.name = "edge";
+        asBranch.pin = "dev";
+        added = hub.add(hub.repository, asBranch);
+        QVERIFY2(!ScriptTools::failed(added), qPrintable(added.value("error").toString()));
+        QCOMPARE(hub.sources->source("edge").value("channel").toObject().value("kind").toString(), QString("branch"));
+        QCOMPARE(hub.sources->source("edge").value("installed").toObject().value("commit").toString(), sha('d'));
+        // And a ref that is neither says so.
+        asBranch.name = "nowhere";
+        asBranch.pin = "v9";
+        QVERIFY(hub.add(hub.repository, asBranch).value("error").toString().contains("v9"));
+        QVERIFY(!QFile::exists(hub.dir.filePath("plugins/nowhere")));
+
+        // Pinned afterwards, a source goes to that tag now; following again
+        // brings it back to the latest release.
+        QJsonObject pinned = PluginSources::wait([&](PluginSources::Done done) { hub.sources->pin("storyteller", "v1.0", done); }, 10000);
+        QVERIFY2(pinned.value("updated").toBool(), qPrintable(pinned.value("error").toString()));
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        QVERIFY(hub.checkAll(true, false).value("results").toArray().size() == 1); // only "edge" is asked: the others stay put
+        QVERIFY(!ScriptTools::failed(hub.sources->follow("storyteller")));
+        QVERIFY(hub.update().value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("2.0"));
+
+        // A plugin kept in a folder of a larger repository: only that folder is installed.
+        hub.github.push("someone/tools", "main", sha('e'), inFolder.packed("someone-tools-eeeeeee"));
+        added = hub.add("https://github.com/someone/tools/tree/main/plugins/shelf-notes");
+        QVERIFY2(!ScriptTools::failed(added), qPrintable(added.value("error").toString()));
+        QCOMPARE(added.value("name").toString(), QString("shelf-notes"));
+        QCOMPARE(leftIn(hub.dir.filePath("plugins/shelf-notes")), (QStringList{"lib", "main.js", "plugin.json"}));
+        QCOMPARE(hub.sources->source("shelf-notes").value("subfolder").toString(), QString("plugins/shelf-notes"));
+        // A folder that holds no plugin is refused.
+        QVERIFY(hub.look("https://github.com/someone/tools/tree/main/docs").value("error").toString().contains("plugin.json"));
+    }
+
+    void anUnchangedSourceCostsNoDownload() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        QCOMPARE(hub.github.downloads, 1);
+        hub.github.asked.clear();
+        hub.github.heads.clear();
+
+        // Asked again: what was answered last time is named, and GitHub says
+        // nothing changed. GitHub doesn't count such an answer against the hour.
+        const QJsonObject checked = hub.check();
+        QVERIFY2(!ScriptTools::failed(checked), qPrintable(checked.value("error").toString()));
+        QVERIFY(!checked.value("update").toBool());
+        QVERIFY(checked.value("unchanged").toBool());
+        QCOMPARE(hub.github.downloads, 1);
+        QCOMPARE(hub.github.count("/commits/main"), 1);
+        QCOMPARE(FakeGitHub::header(hub.github.heads.last(), "if-none-match"), QByteArray("\"" + sha('a').toLatin1() + "\""));
+        // Nor does "update" fetch what it already has.
+        QVERIFY(hub.update().value("upToDate").toBool());
+        QCOMPARE(hub.github.downloads, 1);
+
+        // The daily look leaves a source alone that was checked within the day.
+        hub.github.asked.clear();
+        hub.time += 3600;
+        QVERIFY(!hub.sources->anyDue());
+        QVERIFY(hub.checkAll(true, true).value("results").toArray().isEmpty());
+        QVERIFY(hub.github.asked.isEmpty());
+        hub.time += PluginSources::checkEvery;
+        QVERIFY(hub.sources->anyDue());
+        QCOMPARE(hub.checkAll(true, true).value("results").toArray().size(), 1);
+        QCOMPARE(hub.github.downloads, 1);
+    }
+
+    void anUpdateInstallsItselfAndKeepsDataAndSwitch() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        QVERIFY(hub.settings.pluginEnabled("folder:storyteller", false));
+        // What the plugin kept of its own.
+        QVERIFY(QDir(hub.dir.path()).mkpath("plugins/storyteller/data"));
+        QVERIFY(Fixtures::write(hub.dir.filePath("plugins/storyteller/data/stories.json"), "[\"one\"]"));
+
+        Made newer;
+        newer.version = "1.1";
+        hub.github.push(hub.repository, "main", sha('b'), newer.packed());
+        hub.time += 2 * PluginSources::checkEvery;
+        const QJsonObject looked = hub.checkAll(true, true);
+        const QJsonObject result = looked.value("results").toArray().first().toObject();
+        QVERIFY2(result.value("updated").toBool(), qPrintable(result.value("error").toString()));
+        QCOMPARE(result.value("from").toString(), QString("1.0"));
+        QCOMPARE(result.value("to").toString(), QString("1.1"));
+        QCOMPARE(hub.installedVersion(), QString("1.1"));
+        // Its data and its switch are as they were, and nothing is left lying about.
+        QCOMPARE(slurp(hub.dir.filePath("plugins/storyteller/data/stories.json")), QByteArray("[\"one\"]"));
+        QVERIFY(hub.settings.pluginEnabled("folder:storyteller", false));
+        QCOMPARE(QDir(hub.dir.filePath("plugins")).entryList(QDir::Dirs | QDir::NoDotAndDotDot), QStringList{"storyteller"});
+        QVERIFY(hub.sources->issues().isEmpty());
+        // Switched off, an update leaves it off.
+        hub.settings.setPluginEnabled("folder:storyteller", false);
+        Made third;
+        third.version = "1.2";
+        hub.github.push(hub.repository, "main", sha('c'), third.packed());
+        QVERIFY(hub.update().value("updated").toBool());
+        QVERIFY(!hub.settings.pluginEnabled("folder:storyteller", true));
+
+        // The version before is kept for one step back, by hand. What the
+        // plugin wrote since comes along.
+        QVERIFY(Fixtures::write(hub.dir.filePath("plugins/storyteller/data/stories.json"), "[\"one\", \"two\"]"));
+        QVERIFY(hub.sources->list().first().toObject().value("previous").toBool());
+        const QJsonObject back = hub.sources->rollBack("storyteller");
+        QVERIFY2(!ScriptTools::failed(back), qPrintable(back.value("error").toString()));
+        QCOMPARE(back.value("version").toString(), QString("1.1"));
+        QCOMPARE(hub.installedVersion(), QString("1.1"));
+        QCOMPARE(slurp(hub.dir.filePath("plugins/storyteller/data/stories.json")), QByteArray("[\"one\", \"two\"]"));
+        QCOMPARE(hub.sources->source("storyteller").value("installed").toObject().value("commit").toString(), sha('b'));
+        // Only one step: there is nothing before that.
+        QVERIFY(ScriptTools::failed(hub.sources->rollBack("storyteller")));
+        // What was gone back from is not taken again by itself, though it is
+        // there to take by hand; the one after it is.
+        hub.time += 2 * PluginSources::checkEvery;
+        QVERIFY(!hub.checkAll(true, true).value("results").toArray().first().toObject().value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("1.1"));
+        QCOMPARE(hub.sources->issues().first().toObject().value("issue").toString(), QString("update"));
+        Made fourth;
+        fourth.version = "1.3";
+        hub.github.push(hub.repository, "main", sha('d'), fourth.packed());
+        hub.time += 2 * PluginSources::checkEvery;
+        QVERIFY(hub.checkAll(true, true).value("results").toArray().first().toObject().value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("1.3"));
+
+        // Told only: with "apply" off, what is newer is said and left.
+        Made fifth;
+        fifth.version = "1.4";
+        hub.github.push(hub.repository, "main", sha('e'), fifth.packed());
+        hub.time += 2 * PluginSources::checkEvery;
+        QVERIFY(hub.checkAll(false, true).value("results").toArray().first().toObject().value("update").toBool());
+        QCOMPARE(hub.installedVersion(), QString("1.3"));
+    }
+
+    void anUpdateThatAsksForMoreWaitsForThePerson() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        Made greedy;
+        greedy.version = "2.0";
+        greedy.permissions = QStringList{"files", "http"};
+        hub.github.push(hub.repository, "main", sha('b'), greedy.packed());
+
+        // Not installed: it asks for the network, which the one installed doesn't have.
+        const QJsonObject held = hub.update();
+        QVERIFY(!ScriptTools::failed(held));
+        QVERIFY(!held.value("updated").toBool() && held.value("review").toBool());
+        QCOMPARE(held.value("pending").toObject().value("permissions").toVariant().toStringList(), QStringList{"http"});
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        QJsonObject issue = hub.sources->issues().first().toObject();
+        QCOMPARE(issue.value("issue").toString(), QString("review"));
+        QCOMPARE(issue.value("name").toString(), QString("Storyteller"));
+        QCOMPARE(issue.value("permissions").toVariant().toStringList(), QStringList{"http"});
+        // The daily look doesn't fetch it again while it waits.
+        const int downloads = hub.github.downloads;
+        hub.time += 2 * PluginSources::checkEvery;
+        hub.checkAll(true, true);
+        QCOMPARE(hub.github.downloads, downloads);
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+
+        // Shown for review, it says what is new about it; approved, it goes in.
+        const QJsonObject review = PluginSources::wait([&](PluginSources::Done done) { hub.sources->review("storyteller", done); }, 10000);
+        QVERIFY(review.value("update").toBool());
+        QCOMPARE(review.value("newPermissions").toVariant().toStringList(), QStringList{"http"});
+        QCOMPARE(review.value("fromVersion").toString(), QString("1.0"));
+        const QJsonObject approved = hub.sources->installLooked(false);
+        QVERIFY2(approved.value("updated").toBool(), qPrintable(approved.value("error").toString()));
+        QCOMPARE(hub.installedVersion(), QString("2.0"));
+        QVERIFY(hub.settings.pluginEnabled("folder:storyteller", false));
+        QVERIFY(hub.sources->issues().isEmpty());
+
+        // One that goes by another name waits likewise, and `--yes` takes it.
+        Made renamed;
+        renamed.version = "2.1";
+        renamed.permissions = QStringList{"files", "http"};
+        renamed.title = "Something Else";
+        hub.github.push(hub.repository, "main", sha('c'), renamed.packed());
+        QCOMPARE(hub.update().value("pending").toObject().value("reason").toString(), QString("name"));
+        QCOMPARE(hub.installedVersion(), QString("2.0"));
+        QVERIFY(hub.update(true).value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("2.1"));
+        // Asking for less is no reason to wait.
+        Made modest;
+        modest.version = "2.2";
+        modest.permissions = QStringList{};
+        modest.title = "Something Else";
+        hub.github.push(hub.repository, "main", sha('d'), modest.packed());
+        QVERIFY(hub.update().value("updated").toBool());
+    }
+
+    void anUpdateThatDoesNotLoadIsTakenBackOut() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        QVERIFY(QDir(hub.dir.path()).mkpath("plugins/storyteller/data"));
+        QVERIFY(Fixtures::write(hub.dir.filePath("plugins/storyteller/data/stories.json"), "[\"one\"]"));
+        Made broken;
+        broken.version = "1.1";
+        broken.script = "var story = [];\nomabook.nothing.here();\n";
+        hub.github.push(hub.repository, "main", sha('b'), broken.packed());
+
+        const QJsonObject result = hub.update();
+        QVERIFY(ScriptTools::failed(result));
+        QVERIFY(result.value("rolledBack").toBool());
+        QVERIFY2(result.value("error").toString().contains("1.1") && result.value("error").toString().contains("went back to 1.0"),
+                 qPrintable(result.value("error").toString()));
+        // The one that worked is back, with its data, and still on.
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        QVERIFY(slurp(hub.dir.filePath("plugins/storyteller/main.js")).contains("commands.register"));
+        QCOMPARE(slurp(hub.dir.filePath("plugins/storyteller/data/stories.json")), QByteArray("[\"one\"]"));
+        QVERIFY(hub.settings.pluginEnabled("folder:storyteller", false));
+        QVERIFY(ScriptTools::check(hub.context, "storyteller").value("ok").toBool());
+        // It is said, and the broken one isn't tried again by itself.
+        QCOMPARE(hub.sources->issues().first().toObject().value("issue").toString(), QString("source"));
+        hub.time += 2 * PluginSources::checkEvery;
+        const int downloads = hub.github.downloads;
+        hub.checkAll(true, true);
+        QCOMPARE(hub.github.downloads, downloads);
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        // The fix that follows is.
+        Made fixed;
+        fixed.version = "1.2";
+        hub.github.push(hub.repository, "main", sha('c'), fixed.packed());
+        hub.time += 2 * PluginSources::checkEvery;
+        QVERIFY(hub.checkAll(true, true).value("results").toArray().first().toObject().value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("1.2"));
+        QVERIFY(hub.sources->issues().isEmpty());
+    }
+
+    void aSourceThatIsGoneLeavesThePluginAlone() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        const QByteArray script = slurp(hub.dir.filePath("plugins/storyteller/main.js"));
+
+        // The repository is deleted, or made private.
+        hub.github.repos[hub.repository].gone = true;
+        QJsonObject checked = hub.check();
+        QVERIFY(ScriptTools::failed(checked) && checked.value("gone").toBool());
+        QCOMPARE(slurp(hub.dir.filePath("plugins/storyteller/main.js")), script);
+        QJsonObject issue = hub.sources->issues().first().toObject();
+        QCOMPARE(issue.value("issue").toString(), QString("source"));
+        QVERIFY(issue.value("problem").toString().contains("isn't on GitHub any more"));
+        // Back again, the problem is gone with the next look.
+        hub.github.repos[hub.repository].gone = false;
+        QVERIFY(!ScriptTools::failed(hub.check()));
+        QVERIFY(hub.sources->issues().isEmpty());
+
+        // It moved: GitHub sends the question on, and Omabook doesn't follow
+        // a plugin to an address the person never saw.
+        hub.github.repos[hub.repository].moved = true;
+        hub.github.push(hub.repository, "main", sha('b'), Made().packed());
+        checked = hub.update();
+        QVERIFY2(checked.value("error").toString().contains("moved"), qPrintable(checked.value("error").toString()));
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        QCOMPARE(hub.sources->source("storyteller").value("installed").toObject().value("commit").toString(), sha('a'));
+        hub.github.repos[hub.repository].moved = false;
+
+        // What is there now is no plugin: a repository that was emptied, one
+        // whose plugin.json is broken, one written for a newer Omabook.
+        hub.github.push(hub.repository, "main", sha('c'), tarball({{"someone-repo-ccc/README.md", "Moved elsewhere.\n", {}}}));
+        checked = hub.update();
+        QVERIFY2(checked.value("error").toString().contains("not a plugin"), qPrintable(checked.value("error").toString()));
+        QCOMPARE(slurp(hub.dir.filePath("plugins/storyteller/main.js")), script);
+        QCOMPARE(hub.sources->issues().first().toObject().value("issue").toString(), QString("source"));
+        // Off the network altogether, nothing is said against the source.
+        hub.github.close();
+        hub.github.push(hub.repository, "main", sha('d'), Made().packed());
+        QVERIFY(!ScriptTools::failed(hub.sources->forget("storyteller")));
+        // (Remembered again, without GitHub: as the file would have it.)
+        QVERIFY(Fixtures::write(hub.dir.filePath("plugins/sources.json"),
+                                QJsonDocument(QJsonObject{{"sources", QJsonObject{{"storyteller", QJsonObject{
+                                    {"repository", hub.repository}, {"channel", QJsonObject{{"kind", "auto"}}},
+                                    {"installed", QJsonObject{{"version", "1.0"}, {"commit", sha('a')}, {"ref", "main"}}}}}}}}).toJson()));
+        checked = hub.check();
+        QVERIFY(checked.value("offline").toBool());
+        QVERIFY(hub.sources->issues().isEmpty());
+        QCOMPARE(qint64(hub.sources->source("storyteller").value("checked_at").toDouble()), qint64(0));
+    }
+
+    void gitHubAskingToWaitIsHonoured() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        hub.github.limited = true;
+        hub.github.reset = hub.time + 1800;
+        hub.github.asked.clear();
+
+        QJsonObject checked = hub.check();
+        QVERIFY(checked.value("limited").toBool());
+        QCOMPARE(int(hub.github.asked.size()), 1);
+        // Until then nothing is asked, by this run or the next, of any source.
+        QVERIFY(hub.check().value("limited").toBool());
+        hub.again();
+        QVERIFY(hub.update().value("limited").toBool());
+        QVERIFY(hub.look("someone/other").value("limited").toBool());
+        QVERIFY(hub.checkAll(true, false).value("limited").toBool());
+        QCOMPARE(int(hub.github.asked.size()), 1);
+        // It is nothing against the source, and the plugin is as it was.
+        QVERIFY(hub.sources->issues().isEmpty());
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        // After the time GitHub named, it is asked again.
+        hub.github.limited = false;
+        hub.time += 1801;
+        QVERIFY(!ScriptTools::failed(hub.check()));
+        // Whether there is a release by now, and where the branch stands.
+        QCOMPARE(int(hub.github.asked.size()), 3);
+    }
+
+    void whatIsFetchedIsHeldToTheSameChecks() {
+        Hub hub;
+        const QString top = "someone-evil-abc/";
+        const QByteArray manifest = "{\"name\": \"Evil\", \"script\": \"main.js\"}";
+        struct Case {
+            const char *what;
+            QList<TarEntry> entries;
+            const char *says;
+        };
+        const QList<Case> cases{
+            {"a step up and out", {{top + "plugin.json", manifest, {}}, {top + "main.js", "1", {}}, {top + "../../evil.js", "x", {}}}, "outside"},
+            {"an absolute path", {{top + "plugin.json", manifest, {}}, {top + "main.js", "1", {}}, {"/tmp/omabook-evil.js", "x", {}}}, "outside"},
+            {"a link", {{top + "plugin.json", manifest, {}}, {top + "main.js", "1", {}}, {top + "notes", {}, "/etc/passwd"}}, "link"},
+            {"a file too large", {{top + "plugin.json", manifest, {}}, {top + "main.js", QByteArray(9000, ' '), {}}}, "larger"},
+            {"too many files", {{top + "plugin.json", manifest, {}}, {top + "main.js", "1", {}}, {top + "a.js", "1", {}},
+                                {top + "b.js", "1", {}}, {top + "c.js", "1", {}}}, "files"},
+            {"no plugin at all", {{top + "README.md", "hello", {}}}, "plugin.json"},
+            {"a permission nobody knows", {{top + "plugin.json", "{\"script\": \"main.js\", \"permissions\": [\"root\"]}", {}},
+                                           {top + "main.js", "1", {}}}, "permission"},
+        };
+        PluginTools::Limits small;
+        small.files = 4;
+        small.fileBytes = 4096;
+        small.totalBytes = 64 * 1024;
+        hub.sources->setLimits(small);
+        char letter = 'a';
+        for (const Case &test : cases) {
+            hub.github.push("someone/evil", "main", sha(letter++), tarball(test.entries));
+            PluginSources::AddOptions options;
+            options.enable = true;
+            const QJsonObject answer = hub.add("someone/evil", options);
+            QVERIFY2(ScriptTools::failed(answer), test.what);
+            QVERIFY2(answer.value("error").toString().contains(test.says),
+                     qPrintable(QString("%1: %2").arg(test.what, answer.value("error").toString())));
+            // Nothing of it is installed, remembered or switched on.
+            QVERIFY2(leftIn(hub.dir.filePath("plugins")).isEmpty(), test.what);
+            QVERIFY2(!QFile::exists(hub.dir.filePath("evil.js")) && !QFile::exists("/tmp/omabook-evil.js"), test.what);
+            QVERIFY2(!hub.settings.pluginEnabled("folder:evil", false), test.what);
+        }
+        // A download larger than a plugin may be is cut off, not unpacked.
+        QByteArray noise(200 * 1024, '\0');
+        for (qsizetype i = 0; i < noise.size(); ++i)
+            noise[i] = char(QRandomGenerator::global()->bounded(256));
+        hub.github.push("someone/evil", "main", sha('z'), tarball({{top + "plugin.json", manifest, {}}, {top + "main.js", noise, {}}}));
+        QVERIFY(hub.github.repos["someone/evil"].tarballs.value(sha('z')).size() > small.totalBytes);
+        const QJsonObject large = hub.add("someone/evil");
+        QVERIFY2(large.value("error").toString().contains("larger"), qPrintable(large.value("error").toString()));
+        QVERIFY(leftIn(hub.dir.filePath("plugins")).isEmpty());
+    }
+
+    void aDownloadSentElsewhereIsNotFetched() {
+        Hub hub;
+        hub.github.push(hub.repository, "main", sha('a'), Made().packed());
+        // Somewhere that answers, and isn't one of GitHub's own addresses.
+        FakeGitHub elsewhere;
+        elsewhere.push(hub.repository, "main", sha('a'), Made().packed());
+        hub.github.sendDownloadsTo = QString("http://localhost:%1").arg(elsewhere.serverPort());
+        QJsonObject answer = hub.add(hub.repository);
+        QVERIFY2(answer.value("error").toString().contains("isn't GitHub"), qPrintable(answer.value("error").toString()));
+        QVERIFY(elsewhere.asked.isEmpty());
+        QVERIFY(leftIn(hub.dir.filePath("plugins")).isEmpty());
+        // Nor to somewhere that isn't HTTPS, when that is what is asked for.
+        hub.github.sendDownloadsTo.clear();
+        PluginSources::Service strict;
+        strict.api = hub.github.api();
+        strict.hosts = QStringList{"127.0.0.1"};
+        hub.sources->setService(strict);
+        answer = hub.add(hub.repository);
+        QVERIFY2(answer.value("error").toString().contains("HTTPS"), qPrintable(answer.value("error").toString()));
+        QVERIFY(leftIn(hub.dir.filePath("plugins")).isEmpty());
+        // As shipped, it is GitHub's own addresses over HTTPS and no others.
+        const PluginSources::Service shipped;
+        QCOMPARE(shipped.api, QString("https://api.github.com"));
+        QVERIFY(shipped.httpsOnly && shipped.hosts.contains("codeload.github.com") && !shipped.hosts.contains("localhost"));
+    }
+
+    void aPluginSaysWhichOmabookItNeeds() {
+        Hub hub;
+        const QString here = ScriptApi::hostVersion();
+        // What it asks for is read as a version; missing, equal and older are fine.
+        QVERIFY(ScriptApi::needsNewer(QJsonValue::Undefined).isEmpty());
+        QVERIFY(ScriptApi::needsNewer(here).isEmpty());
+        QVERIFY(ScriptApi::needsNewer("0.0.1").isEmpty());
+        QCOMPARE(ScriptApi::needsNewer("99.0"), QString("Needs Omabook 99.0 or newer; this is %1.").arg(here));
+        for (const QJsonValue &odd : {QJsonValue("newest"), QJsonValue(3), QJsonValue("1.0-beta"), QJsonValue("")}) {
+            bool malformed = false;
+            QVERIFY(!ScriptApi::needsNewer(odd, &malformed).isEmpty());
+            QVERIFY(malformed);
+        }
+        QCOMPARE(ScriptApi::json().value("omabook").toString(), here);
+
+        // A new plugin says the version it was started on, and loads.
+        QVERIFY(!ScriptTools::failed(ScriptTools::create(hub.context, "mine", "hook")));
+        QCOMPARE(QJsonDocument::fromJson(slurp(hub.dir.filePath("plugins/mine/plugin.json"))).object().value("omabook").toString(), here);
+        QVERIFY(ScriptTools::check(hub.context, "mine").value("ok").toBool());
+
+        // One written for a newer Omabook is not loaded or run, and says why.
+        auto withNeed = [&](const QString &name, const QJsonValue &need, bool program = false) {
+            QJsonObject manifest{{"name", name}, {"omabook", need}};
+            if (program)
+                manifest.insert("command", QJsonArray{"sh"});
+            else
+                manifest.insert("script", "main.js");
+            return QDir(hub.dir.path()).mkpath("plugins/" + name)
+                   && Fixtures::write(hub.dir.filePath("plugins/" + name + "/plugin.json"), QJsonDocument(manifest).toJson())
+                   && Fixtures::write(hub.dir.filePath("plugins/" + name + "/main.js"), "omabook.settings.set(\"ran\", true);\n");
+        };
+        QVERIFY(withNeed("future", "99.0"));
+        QVERIFY(withNeed("future-program", "99.0", true));
+        QVERIFY(withNeed("odd", "soon"));
+        const QJsonObject checked = ScriptTools::check(hub.context, "future");
+        QVERIFY(!checked.value("ok").toBool());
+        QVERIFY2(checked.value("error").toString().contains("Needs Omabook 99.0 or newer"), qPrintable(checked.value("error").toString()));
+        QVERIFY(ScriptTools::check(hub.context, "odd").value("error").toString().contains("should be the oldest version"));
+        ScriptServices services;
+        services.settings = &hub.settings;
+        ScriptPlugins scripts(services, hub.dir.filePath("plugins"), nullptr, false);
+        QVERIFY(scripts.plugin("mine"));
+        QVERIFY(!scripts.plugin("future"));
+        QVERIFY(!QFile::exists(hub.dir.filePath("plugins/future/data/settings.json")));
+        // In the manager it needs something, and isn't called broken; a
+        // program that asks the same is not among the sources that are asked.
+        Plugins plugins(&hub.settings, hub.dir.filePath("plugins"), "-");
+        const QJsonArray overview = PluginTools::overview(plugins.known(), &scripts);
+        QCOMPARE(byId(overview, "folder:future").value("state").toString(), QString("needs"));
+        QCOMPARE(byId(overview, "folder:future").value("note").toString(), QString("Needs Omabook 99.0 or newer; this is %1.").arg(here));
+        QVERIFY(!byId(overview, "folder:future").contains("error"));
+        QCOMPARE(byId(overview, "folder:future-program").value("state").toString(), QString("needs"));
+        QCOMPARE(byId(overview, "folder:mine").value("state").toString(), QString("on"));
+        QNetworkAccessManager network;
+        QObject holder;
+        for (const MetadataSource *source : plugins.sources(plugins.known(), &network, &holder))
+            QVERIFY(source->name() != "future-program");
+        QStringList issues;
+        for (const QJsonValue &value : PluginTools::health(overview, plugins.calibre()))
+            issues << value.toObject().value("id").toString() + " " + value.toObject().value("issue").toString();
+        QVERIFY2(issues.contains("folder:future needs-omabook") && issues.contains("folder:future-program needs-omabook"),
+                 qPrintable(issues.join(", ")));
+
+        // Installing one is refused, from a folder as from a repository.
+        QVERIFY(QDir(hub.dir.path()).mkpath("handed"));
+        QVERIFY(QFile::copy(hub.dir.filePath("plugins/future/plugin.json"), hub.dir.filePath("handed/plugin.json")));
+        QVERIFY(QFile::copy(hub.dir.filePath("plugins/future/main.js"), hub.dir.filePath("handed/main.js")));
+        QVERIFY(PluginTools::install(hub.context, hub.dir.filePath("handed")).value("error").toString().contains("needs Omabook 99.0"));
+        QVERIFY(QFile::copy(hub.dir.filePath("plugins/odd/plugin.json"), hub.dir.filePath("handed/odd.json")));
+        QVERIFY(QFile::remove(hub.dir.filePath("handed/plugin.json")) && QFile::rename(hub.dir.filePath("handed/odd.json"), hub.dir.filePath("handed/plugin.json")));
+        QVERIFY(PluginTools::install(hub.context, hub.dir.filePath("handed")).value("error").toString().contains("oldest version"));
+        Made future;
+        future.version = "3.0";
+        const QByteArray futureManifest = "{\"name\": \"Storyteller\", \"version\": \"3.0\", \"omabook\": \"99.0\", \"script\": \"main.js\", "
+                                          "\"permissions\": [\"files\"]}";
+        const QByteArray packed = tarball({{"top/plugin.json", futureManifest, {}}, {"top/main.js", "var a = 1;\n", {}}});
+        hub.github.push("someone/future", "main", sha('f'), packed);
+        QVERIFY(hub.add("someone/future").value("error").toString().contains("needs Omabook 99.0"));
+        QVERIFY(!QFile::exists(hub.dir.filePath("plugins/future/data")));
+
+        // An update to such a version is not applied: the one installed
+        // stays, and it is said that the update waits for a newer Omabook.
+        QVERIFY(hub.installed());
+        hub.github.push(hub.repository, "main", sha('b'), packed);
+        const QJsonObject held = hub.update();
+        QVERIFY(!held.value("updated").toBool() && held.value("waits").toBool());
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+        QJsonObject waiting;
+        for (const QJsonValue &value : hub.sources->issues())
+            if (value.toObject().value("id").toString() == "folder:storyteller")
+                waiting = value.toObject();
+        QCOMPARE(waiting.value("issue").toString(), QString("update-needs-omabook"));
+        QCOMPARE(waiting.value("needs").toString(), QString("99.0"));
+        // Not even approving installs what can't run here.
+        QVERIFY(!hub.update(true).value("updated").toBool());
+        QCOMPARE(hub.installedVersion(), QString("1.0"));
+    }
+
+    void aTokenOpensTheApiAndGoesNowhereElse() {
+        Hub hub;
+        // The keyring is the test's own.
+        SessionSecrets secrets;
+        Secrets::useInstead(&secrets);
+        const auto restore = qScopeGuard([] { Secrets::useInstead(nullptr); });
+        QVERIFY(secrets.put("github", "s3cret-token"));
+        hub.github.push(hub.repository, "main", sha('a'), Made().packed());
+        // Downloads come from another of GitHub's addresses, as they really do.
+        FakeGitHub downloads;
+        downloads.push(hub.repository, "main", sha('a'), Made().packed());
+        hub.github.sendDownloadsTo = QString("http://localhost:%1").arg(downloads.serverPort());
+        const auto withDownloads = [&] {
+            PluginSources::Service service;
+            service.api = hub.github.api();
+            service.hosts = QStringList{"127.0.0.1", "localhost"};
+            service.httpsOnly = false;
+            hub.sources->setService(service);
+        };
+
+        // The keyring is not even asked unless a token was put there.
+        withDownloads();
+        QVERIFY(!ScriptTools::failed(hub.look(hub.repository)));
+        for (const QByteArray &head : hub.github.heads + downloads.heads)
+            QVERIFY(FakeGitHub::header(head, "authorization").isEmpty());
+
+        // With one, it goes to the API, and not along to where the download is.
+        hub.settings.setPluginToken(true);
+        hub.again();
+        withDownloads();
+        hub.github.heads.clear();
+        downloads.heads.clear();
+        PluginSources::AddOptions options;
+        const QJsonObject added = hub.add(hub.repository, options);
+        QVERIFY2(!ScriptTools::failed(added), qPrintable(added.value("error").toString()));
+        QVERIFY(!hub.github.heads.isEmpty() && !downloads.heads.isEmpty());
+        for (const QByteArray &head : std::as_const(hub.github.heads))
+            QCOMPARE(FakeGitHub::header(head, "authorization"), QByteArray("Bearer s3cret-token"));
+        for (const QByteArray &head : std::as_const(downloads.heads))
+            QVERIFY(FakeGitHub::header(head, "authorization").isEmpty());
+        // And it is written nowhere: not in the settings, not with the sources.
+        QVERIFY(!slurp(hub.dir.filePath("config.json")).contains("s3cret"));
+        QVERIFY(!slurp(hub.dir.filePath("plugins/sources.json")).contains("s3cret"));
+        QVERIFY(!QJsonDocument(added).toJson().contains("s3cret"));
+    }
+
+    void theDailyLookDoesNotHoldUpTheStart() {
+        Hub hub;
+        QVERIFY(hub.installed());
+        Made newer;
+        newer.version = "1.1";
+        hub.github.push(hub.repository, "main", sha('b'), newer.packed());
+        // Last checked long ago, as far as the real clock goes.
+        QJsonObject all = QJsonDocument::fromJson(slurp(hub.dir.filePath("plugins/sources.json"))).object();
+        QJsonObject sources = all.value("sources").toObject();
+        QJsonObject entry = sources.value("storyteller").toObject();
+        entry.insert("checked_at", 1000);
+        sources.insert("storyteller", entry);
+        all.insert("sources", sources);
+        QVERIFY(Fixtures::write(hub.dir.filePath("plugins/sources.json"), QJsonDocument(all).toJson()));
+        hub.github.asked.clear();
+
+        // The window's manager finds GitHub where the environment says, as
+        // the tests of the command line do.
+        qputenv("OMABOOK_GITHUB_API", hub.github.api().toUtf8());
+        const auto restore = qScopeGuard([] { qunsetenv("OMABOOK_GITHUB_API"); });
+        Plugins registry(&hub.settings, hub.dir.filePath("plugins"), "-");
+        ScriptServices services;
+        services.settings = &hub.settings;
+        ScriptPlugins scripts(services, hub.dir.filePath("plugins"));
+        FakePicker picker;
+        QNetworkAccessManager network;
+        QStringList said;
+        {
+            // Told never to check, nothing is asked however long it waits.
+            hub.settings.setPluginUpdates("never");
+            PluginManager quiet(&hub.settings, &registry, &scripts, &picker, &network);
+            quiet.checkSoon(0);
+            QTest::qWait(200);
+            QVERIFY(hub.github.asked.isEmpty());
+        }
+        hub.settings.setPluginUpdates("auto");
+        QElapsedTimer started;
+        started.start();
+        PluginManager manager(&hub.settings, &registry, &scripts, &picker, &network);
+        connect(&manager, &PluginManager::said, &manager, [&](const QString &text) { said << text; });
+        manager.checkSoon(0);
+        // Made, and everything it shows is there, before GitHub was asked anything.
+        QVERIFY(started.elapsed() < 2000);
+        QVERIFY(hub.github.asked.isEmpty());
+        QVERIFY(manager.sourced());
+        QVERIFY(!manager.plugins().isEmpty());
+        // And then, beside whatever else goes on, the update comes in and is said once.
+        QTRY_COMPARE_WITH_TIMEOUT(hub.installedVersion(), QString("1.1"), 10000);
+        QTRY_COMPARE(said, QStringList{"Storyteller was updated from 1.0 to 1.1."});
+        QTRY_VERIFY(manager.checking().isEmpty());
+        QVERIFY(scripts.plugin("storyteller"));
+        // "Tell me" says there is one and leaves it.
+        Made third;
+        third.version = "1.2";
+        hub.github.push(hub.repository, "main", sha('c'), third.packed());
+        hub.settings.setPluginUpdates("tell");
+        said.clear();
+        manager.checkAll();
+        QTRY_VERIFY(manager.checking().isEmpty());
+        QCOMPARE(hub.installedVersion(), QString("1.1"));
+        QVariantMap health;
+        for (const QVariant &issue : manager.health())
+            if (issue.toMap().value("issue").toString() == "update")
+                health = issue.toMap();
+        QCOMPARE(health.value("id").toString(), QString("folder:storyteller"));
+        // Updated by hand from there, with a look at it first when it asks for more.
+        manager.updateNow("folder:storyteller");
+        QTRY_COMPARE_WITH_TIMEOUT(hub.installedVersion(), QString("1.2"), 10000);
+        QTRY_VERIFY(manager.checking().isEmpty());
+        QCOMPARE(manager.sourceNote().value("text").toString(), QString("Storyteller was updated from 1.1 to 1.2."));
+
+        // An address looked up for the install sheet is put on offer, and
+        // installed only once it was said how.
+        hub.github.push("someone/omabook-shelf-notes", "main", sha('d'), Made().packed("someone-omabook-shelf-notes-ddd"));
+        manager.lookUp("someone/omabook-shelf-notes");
+        QVERIFY(manager.fetching());
+        QTRY_VERIFY(!manager.fetching());
+        QCOMPARE(manager.offer().value("name").toString(), QString("shelf-notes"));
+        QCOMPARE(manager.offer().value("from").toString(), QString("github"));
+        QVERIFY(!QFile::exists(hub.dir.filePath("plugins/shelf-notes")));
+        QVERIFY(!manager.install(false).contains("error"));
+        QVERIFY(QFile::exists(hub.dir.filePath("plugins/shelf-notes/main.js")));
+        QVERIFY(!hub.settings.pluginEnabled("folder:shelf-notes", true));
+        QCOMPARE(manager.sources()->list().size(), 2);
+        manager.forgetSource("folder:shelf-notes");
+        QCOMPARE(manager.sources()->list().size(), 1);
+    }
+
+    void anAgentAddsAndUpdatesFromGitHub() {
+        Hub hub;
+        hub.github.push(hub.repository, "main", sha('a'), Made().packed());
+        qputenv("OMABOOK_GITHUB_API", hub.github.api().toUtf8());
+        const auto restore = qScopeGuard([] { qunsetenv("OMABOOK_GITHUB_API"); });
+        const QString folder = hub.dir.filePath("cli-plugins");
+
+        QCOMPARE(runPluginCli({"omabook", "plugin", "add", "https://github.com/someone/omabook-storyteller", "--folder", folder}), 0);
+        QVERIFY(QFile::exists(folder + "/storyteller/main.js"));
+        QVERIFY(!Settings().pluginEnabled("folder:storyteller", true));
+        QCOMPARE(runPluginCli({"omabook", "plugin", "sources", "--folder", folder, "--json"}), 0);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "update", "storyteller", "--check", "--folder", folder}), 0);
+        Made newer;
+        newer.version = "1.1";
+        hub.github.push(hub.repository, "main", sha('b'), newer.packed());
+        QCOMPARE(runPluginCli({"omabook", "plugin", "update", "--all", "--folder", folder}), 0);
+        QVERIFY(slurp(folder + "/storyteller/plugin.json").contains("1.1"));
+        QCOMPARE(runPluginCli({"omabook", "plugin", "rollback", "storyteller", "--folder", folder}), 0);
+        QVERIFY(slurp(folder + "/storyteller/plugin.json").contains("1.0"));
+        QCOMPARE(runPluginCli({"omabook", "plugin", "pin", "storyteller", "nothing-there", "--folder", folder}), 1);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "update", "--folder", folder}), 1);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "add", "https://example.com/a/b", "--folder", folder}), 1);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "sources", "--updates", "sometimes", "--folder", folder}), 1);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "sources", "--updates", "tell", "--folder", folder}), 0);
+        QCOMPARE(Settings().pluginUpdates(), QString("tell"));
+        Settings().setPluginUpdates("auto");
+        QCOMPARE(runPluginCli({"omabook", "plugin", "forget-source", "storyteller", "--folder", folder}), 0);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "forget-source", "storyteller", "--folder", folder}), 1);
+        QVERIFY(QFile::exists(folder + "/storyteller/main.js"));
+
+        // The same as tools, on the user's own plugin folder, which is the test's home.
+        const QString plugins = home.filePath("config/omabook/plugins");
+        Mcp::Result result = callTool("plugin_add", {{"address", "someone/omabook-storyteller"}});
+        QVERIFY2(!result.failed(), qPrintable(result.error));
+        QCOMPARE(result.data.value("enabled").toBool(), false);
+        QCOMPARE(result.data.value("permissions").toVariant().toStringList(), QStringList{"files"});
+        QVERIFY(QFile::exists(plugins + "/storyteller/plugin.json"));
+        result = callTool("plugin_sources", {});
+        QCOMPARE(result.data.value("sources").toArray().first().toObject().value("repository").toString(), hub.repository);
+        Made third;
+        third.version = "1.2";
+        hub.github.push(hub.repository, "main", sha('c'), third.packed());
+        result = callTool("plugin_update", {{"name", "storyteller"}, {"check", true}});
+        QVERIFY2(!result.failed(), qPrintable(result.error));
+        QVERIFY(result.data.value("update").toBool());
+        result = callTool("plugin_update", {});
+        QVERIFY(result.data.value("results").toArray().first().toObject().value("updated").toBool());
+        QVERIFY(!callTool("plugin_forget_source", {{"name", "storyteller"}}).failed());
+        QVERIFY(callTool("plugin_forget_source", {{"name", "storyteller"}}).failed());
+        QVERIFY(!callTool("plugin_remove", {{"name", "storyteller"}}).failed());
     }
 };
 

@@ -119,6 +119,12 @@ Everything in it has a key; `?` shows them all in the dialog.
 - **The order sources are asked in** is the order of the list, and yours to change; it is kept in `config.json` as `plugin_order`.
 - **Installing** a plugin someone else wrote (`I`, or `omabook plugin install <folder|zip>`) checks it first: it must hold a `plugin.json` naming a script or a command, ask only for permissions Omabook knows, and stay inside its own folder (no `../`, absolute paths or links) and under 64 MB. Nothing is put in the plugin folder until then, you are shown what it asks to be allowed, and it stays switched off unless you say otherwise (`--enable`). One that replaces a plugin of the same name (`--replace`) sends the old one to the trash and keeps its `data/`.
 - **Removing** (`D`, or `omabook plugin remove <name>`) is for your own plugins and moves the folder to the trash. What is built in, and what Calibre brings, can only be switched off.
+- **From GitHub, and kept up to date.** `I` and a repository's address (`owner/repo`, a link to it, or a link to one of its releases, tags, branches or folders), or `omabook plugin add <address>`, fetches a plugin from a public GitHub repository without git, over HTTPS from GitHub's own addresses only, and puts it through the same check. Where it came from is remembered in `sources.json` beside the plugins (not in `config.json`, which is yours to edit; this is Omabook's bookkeeping, rewritten at every check). A source follows the repository's latest release, or its default branch where it has no releases; `omabook plugin pin <name> <tag|branch>` stays at a tag or follows another branch. Once a day, after the window is up, each source is asked whether there is something newer (an unchanged one costs GitHub nothing, and when GitHub asks to wait, Omabook does), and what happens next is a setting (`,`, or `omabook plugin sources --updates auto|tell|never`):
+  - *Install by themselves* (the default): an update that asks for **no new permission** goes in, keeping the plugin's `data/` and whether it was on or off, and a line says so ("Storyteller was updated from 1.0 to 1.1"). The version before is kept for one step back (**Roll Back**, `omabook plugin rollback <name>`), and an update that doesn't load is rolled back by itself.
+  - An update that asks for a **new permission**, or goes by another name, is never installed by itself: the line at the top of the plugin manager says "Storyteller has an update that asks for the network: review", and it waits for you (`omabook plugin update <name> --yes`).
+  - A repository that is gone, has moved, or no longer holds a plugin leaves the installed plugin untouched and is reported the same way. **Forget the Source** (`omabook plugin forget-source <name>`) stops the updates and keeps the plugin.
+  - Private repositories need a token: `omabook plugin token` reads one from standard input into the desktop's keyring (never `config.json`), and it is sent to `api.github.com` only. There is no list of plugins to browse; you bring the address.
+- **Which Omabook a plugin needs.** `plugin.json` may say `"omabook": "0.1.0"`, the oldest version it runs on. An older Omabook doesn't load or install such a plugin and says "Needs Omabook 0.3.0 or newer; this is 0.1.0"; an update that needs a newer Omabook waits, and the version you have stays.
 
 Sources of book details can be switched on and off; they come from three places:
 
@@ -418,6 +424,10 @@ omabook plugins [enable|disable <id>]   List plugins (built in, Calibre's, your 
 omabook plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help
 omabook plugin install <folder|zip>     Install someone else's plugin, checked first and left off until enabled
 omabook plugin remove <name>            Move one of your own plugins to the trash
+omabook plugin add <github address>     Install a plugin from a GitHub repository and keep it up to date from there
+omabook plugin sources [--updates m]    Where plugins came from and what each follows; what is done about updates
+omabook plugin update [<name>|--all]    Install what is newer (--check only says; --yes approves new permissions)
+omabook plugin pin|follow|rollback|forget-source <name>   Stay at a tag or branch; follow the latest; one version back; stop updating
 omabook calibre libraries|plugins|import  What was found of Calibre here; import its libraries
 omabook catalog [search] [--format f]   Write the library as csv or bibtex
 omabook customize [view]                Show where the interface's files live; copy a view there to edit
@@ -470,6 +480,7 @@ omabook mcp --library ~/Other  # serve one library, whatever the window has open
 | `sync_status`, `sync_run` | Syncing with another computer |
 | `plugins_list`, `plugin_set_enabled` | Plugins, and switching one |
 | `plugin_install`, `plugin_remove` | Install a plugin from a folder or a `.zip`, checked first and left off; move one of your own to the trash |
+| `plugin_add`, `plugin_sources`, `plugin_update`, `plugin_forget_source` | Install a plugin from a GitHub repository; where each came from; check or update them; stop updating one |
 | `graph_find`, `graph_node`, `graph_book`, `graph_add`, `graph_link`, `graph_build`, `graph_export`, ... | The knowledge graph: search it, a node and its neighbours, a book's graph up to a place, add and relate things, grow it with the AI, write it as GraphML, DOT or Cypher, the reading log |
 | `customize_get`, `customize_set`, `customize_undo` | `keys.json`, `style.json` and the look settings, changed with the same checks as a file edited by hand, and undone |
 
@@ -554,6 +565,19 @@ Two decisions worth knowing before changing things:
 - **Formats Omabook doesn't read are converted, not reimplemented.** Calibre's converter does that well, so Omabook leans on it the way video apps lean on ffmpeg, and says what is missing when it isn't installed.
 
 The layering is kept by a test (`theLayersPointOneWay` in `tests/library_tests.cpp`): a format or library file that includes anything from the window fails the build's tests. Each layer has its own test binary, the real window is driven by keyboard in `tests/ui_tests.cpp` and fails on any QML warning, and `tests/cli_tests.sh` runs the real binary with no display.
+
+## Upgrading
+
+A newer Omabook opens an older library and brings it up to date by itself. Nothing needs to be exported or converted.
+
+- **A copy is kept first.** Each time an update changes the library's format, the database is copied to `.backups/` inside the library folder before anything changes (`omabook-format-<n>-<date>.db`; the last five are kept). A library that can't be copied is left untouched and Omabook says why.
+- **Each change is all or nothing.** The steps from one format to the next run one at a time, each in a transaction; a step that fails is undone and the library stays as it was.
+- **There is no going back in place.** An older Omabook refuses a library a newer one has opened and says so. To return to an older version, close Omabook and put the copy from `.backups/` back as `omabook.db`.
+- **Two computers.** Both should run the same version. If one is newer in a way the other could misread, syncing stops and names the computer to update; nothing is exchanged until then.
+- **Settings** in `config.json` carry a version too. A setting that is renamed in a later release is carried over, and settings a newer Omabook wrote are kept when an older one saves the file.
+- **Plugins** keep working across updates of Omabook as long as they use the documented API (`omabook plugin api`). A plugin says the oldest Omabook it runs on with `"omabook": "<version>"` in its `plugin.json`; one written for a newer Omabook than yours is not loaded, and says which version it needs.
+
+For whoever changes the format: add a step to the list in `Library::open` (never edit an old one), add `tests/data/library-<version>.sql` for the release being cut (a dump of a small made-up library), and the test `everyReleasedLibraryStillOpens` then holds every later version to opening it with nothing lost. A change to the sync manifest's shape raises `manifestVersion` in `sync.cpp`; a renamed setting gets a step in `Settings::upgraded`.
 
 ## Known limits
 

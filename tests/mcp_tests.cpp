@@ -244,6 +244,8 @@ private slots:
             {"customize_undo", "change"}, {"plugin_api", "plugin"}, {"plugin_list", "plugin"},
             {"plugin_write", "plugin"}, {"plugin_check", "plugin"}, {"plugin_run", "plugin"},
             {"plugin_enable", "plugin"}, {"plugin_install", "plugin"}, {"plugin_remove", "plugin"},
+            {"plugin_sources", "plugin"}, {"plugin_add", "plugin"}, {"plugin_update", "plugin"},
+            {"plugin_forget_source", "plugin"},
             {"calibre_libraries", "calibre"}, {"calibre_plugins", "calibre"}, {"calibre_import", "calibre"},
             {"reading_site_shelves", "goodreads"}, {"reading_site_sync", "goodreads"},
             {"goodreads_import", "goodreads"}, {"goodreads_export", "goodreads"},

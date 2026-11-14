@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QJsonValue>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -47,6 +48,15 @@ QJsonObject json();
 // "Writing a plugin": the layout, the loop, the reference and two worked
 // examples (the templates themselves), for AGENTS.md and the skill.
 QString guide();
+
+// The version of this Omabook, which a plugin's plugin.json may ask for at
+// least: {"omabook": "0.1.0"}. A plugin that asks for a newer one is not
+// loaded and not run.
+QString hostVersion();
+// Why a plugin that asks for `wanted` can't be used here, in English; empty
+// when it can (it asks for this version or an older one, or doesn't say).
+// `malformed` when what it asks for is no version at all.
+QString needsNewer(const QJsonValue &wanted, bool *malformed = nullptr);
 
 // The plugins `omabook plugin new` starts from, compiled into the binary.
 QStringList templates();

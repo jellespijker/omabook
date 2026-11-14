@@ -3,6 +3,7 @@
     "version": "1.0",
     "author": "",
     "description": "Writes the library as a reading list in Markdown.",
+    "omabook": "{{omabook}}",
     "script": "main.js",
     "permissions": []
 }

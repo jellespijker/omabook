@@ -28,6 +28,7 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiCommand READ aiCommand WRITE setAiCommand NOTIFY changed)
     Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY changed)
     Q_PROPERTY(QString graph READ graph WRITE setGraph NOTIFY changed)
+    Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
     Q_PROPERTY(QString goodreadsUser READ goodreadsUser WRITE setGoodreadsUser NOTIFY changed)
     Q_PROPERTY(QString openLibraryUser READ openLibraryUser WRITE setOpenLibraryUser NOTIFY changed)
 
@@ -59,7 +60,8 @@ public:
     QString spread() const { return m_values.value("spread").toString("auto"); }
 
     // How wide each pane beside the shelf or the page was dragged, by its
-    // name ("details", "contents", "assistant", "graph", "plugins"), in
+    // name ("details", "contents", "assistant", "graph", "graph_details",
+    // "plugins"), in
     // pixels. Pixels and not a share of the window: a pane holds text, which
     // reads at one width whether the window is a narrow tile or a whole 4K
     // screen, so the choice is kept as made and only held within what the
@@ -100,6 +102,23 @@ public:
     // that isn't named comes after those that are. Empty for the order as shipped.
     QStringList pluginOrder() const { return m_values.value("plugin_order").toVariant().toStringList(); }
     void setPluginOrder(const QStringList &ids) { set("plugin_order", QJsonArray::fromStringList(ids)); }
+    // What is done about plugins that came from a GitHub repository (see
+    // PluginSources): "auto" (an update that asks for nothing new installs
+    // itself), "tell" (it is only said that there is one) or "never" (the
+    // repositories aren't asked unless the person does).
+    QString pluginUpdates() const {
+        const QString mode = m_values.value("plugin_updates").toString();
+        return mode == "tell" || mode == "never" ? mode : QStringLiteral("auto");
+    }
+    void setPluginUpdates(const QString &mode) {
+        if (mode == "auto" || mode == "tell" || mode == "never")
+            set("plugin_updates", mode);
+    }
+    // Whether a token for GitHub was put in the keyring (under "github"),
+    // for plugins kept in private repositories. Only that it is there is
+    // written here; the token itself never is.
+    bool pluginToken() const { return m_values.value("plugin_github_token").toBool(false); }
+    void setPluginToken(bool kept) { set("plugin_github_token", kept); }
 
     // What was answered when a Calibre library was offered for import, by
     // its folder: {"answer": "imported", "later" or "never", "at": seconds}.
@@ -164,6 +183,8 @@ signals:
 private:
     void set(const QString &key, const QJsonValue &value);
     void save() const;
+    // An older config.json carried forward to the shape this Omabook writes.
+    static QJsonObject upgraded(QJsonObject values);
     void read();
     void watch();
 

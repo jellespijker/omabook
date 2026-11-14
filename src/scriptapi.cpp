@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
+#include <QVersionNumber>
 
 namespace ScriptApi {
 
@@ -258,6 +259,28 @@ QString markdown() {
     return text;
 }
 
+QString hostVersion() { return QStringLiteral(OMABOOK_VERSION); }
+
+QString needsNewer(const QJsonValue &wanted, bool *malformed) {
+    if (malformed)
+        *malformed = false;
+    if (wanted.isUndefined() || wanted.isNull())
+        return {};
+    qsizetype end = 0;
+    const QString text = wanted.toString().trimmed();
+    const QVersionNumber least = QVersionNumber::fromString(text, &end);
+    // Numbers and dots, all of it: "0.3", "1.0.0". Not "newest", not 3.
+    if (!wanted.isString() || least.isNull() || end != text.size()) {
+        if (malformed)
+            *malformed = true;
+        return "plugin.json's \"omabook\" should be the oldest version of Omabook the plugin runs on, such as \"" + hostVersion()
+               + "\".";
+    }
+    if (QVersionNumber::compare(least, QVersionNumber::fromString(hostVersion())) <= 0)
+        return {};
+    return "Needs Omabook " + text + " or newer; this is " + hostVersion() + ".";
+}
+
 QJsonObject json() {
     QJsonArray functions, eventList, permissionList;
     for (const Entry &entry : entries())
@@ -270,6 +293,8 @@ QJsonObject json() {
         permissionList << QJsonObject{{"name", permission.name}, {"description", permission.what}};
     return {{"language", "JavaScript (ECMAScript 2016, on Qt's QJSEngine; no async/await, no object rest or spread, no modules, no DOM, no "
                          "Node; \\p{...} and lookbehind in regular expressions never match)"},
+            // What to write as "omabook" in plugin.json: the version this was written against.
+            {"omabook", hostVersion()},
             {"functions", functions}, {"events", eventList}, {"permissions", permissionList},
             {"templates", QJsonArray::fromStringList(templates())}};
 }
@@ -290,7 +315,8 @@ QString guide() {
     // what `omabook plugin new` writes and what the tests load.
     auto example = [](const QString &name, const QString &file, const QString &language) {
         return QString("`%1`:\n\n```%2\n%3```\n\n")
-            .arg(file, language, QString::fromUtf8(templateFile(name, file)).replace("{{name}}", name == "metadata" ? "gutenberg" : name == "format" ? "textbook" : "finished"));
+            .arg(file, language, QString::fromUtf8(templateFile(name, file)).replace("{{name}}", name == "metadata" ? "gutenberg" : name == "format" ? "textbook" : "finished")
+                      .replace("{{omabook}}", hostVersion()));
     };
     return QString(R"guide(
 ## Writing a plugin
@@ -313,7 +339,12 @@ key, a panel in the window, and hooks on everything that happens to a book.
   gutenberg.error   why it can't be used, when it can't; gone once it works
 ```
 
-`plugin.json`: `{"name": "Gutenberg", "version": "1.0", "author": "", "description": "...", "script": "main.js", "permissions": ["http"]}`.
+`plugin.json`: `{"name": "Gutenberg", "version": "1.0", "author": "", "description": "...", "omabook": "%6", "script": "main.js", "permissions": ["http"]}`.
+`"omabook"` is the oldest version of Omabook the plugin runs on; write the
+one it was written against (this is %6; `omabook plugin api --json` says it
+as `omabook`). An Omabook older than that doesn't load the plugin, and says
+"Needs Omabook %6 or newer" instead of failing somewhere inside it. Leave it
+out and the plugin is loaded by every version.
 The folder's name is the plugin's id, and the one name it goes by where a
 name is wanted: `omabook plugin check gutenberg`, `omabook.plugin.id` in
 the script, `generated` on a book it made, `backend.scripts.data["gutenberg"]`
@@ -402,6 +433,47 @@ No permissions. %4
 Three more to start from: `omabook plugin new <name> --template command`
 (a key of its own), `catalog` (a format for `omabook catalog`) and `panel`
 (a QML panel beside the shelf, fed by the script).
+
+### Publishing a plugin
+
+A plugin in a public GitHub repository is installed by its address and kept
+up to date from there: `omabook plugin add owner/repo`, or `I` in the
+Plugins dialog. Nobody needs git; Omabook fetches the repository's files
+over HTTPS and checks them like any other plugin before anything is
+installed. https://github.com/jellespijker/omabook-storyteller is one to
+copy: `plugin.json`, `main.js`, `lib/`, `Panel.qml`, tests, a README and a
+licence, all at the root.
+
+- **Layout.** `plugin.json` at the root of the repository. A repository
+  that holds several plugins keeps each in a folder of its own, and is added
+  by the folder's address (`.../tree/main/plugins/reading-log`). Everything
+  in the repository (or that folder) is installed, so keep it to what the
+  plugin needs; no links, and under 64 MB and 2000 files.
+- **Its name.** The plugin is installed under the repository's name without
+  a leading `omabook-` (`omabook-storyteller` is `storyteller`), or the
+  folder's name. That is its id, so don't depend on another.
+- **`"version"`** in plugin.json is what people are shown ("updated from 1.0
+  to 1.1"). Raise it with every change you publish. What Omabook compares is
+  the commit, so forgetting to raise it still updates, under the old number.
+- **`"omabook"`** says the oldest Omabook the new version runs on. An update
+  that needs a newer Omabook than someone has is not installed for them;
+  they keep the version they have until they update Omabook.
+- **Releases or a branch.** A repository with releases is followed by its
+  latest release (not a pre-release or a draft): publish one when a version
+  is ready, and work on the branch in between. A repository without
+  releases is followed by the head of its default branch, so every push to
+  it reaches everyone within a day; keep that branch working. Someone can
+  also pin a tag, or follow another branch.
+- **What makes people approve again.** An update installs by itself only
+  when it asks for nothing new. A permission in `"permissions"` that the
+  installed version didn't have, or another `"name"`, makes it wait until
+  the person has looked at it and said yes; so does turning a script into a
+  program. Asking for less never does.
+- **A broken update is taken back.** An update that doesn't load is
+  replaced by the version before it, automatically, and that commit isn't
+  tried again; the next one is. `omabook plugin check` before you publish.
+- **Your users' data.** Everything in the plugin's `data/` folder is kept
+  across updates and roll-backs. Don't ship a `data/` folder of your own.
 
 ### The knowledge graph
 
@@ -492,7 +564,7 @@ wrote under its `data/` folder.
    key: a promise of their words, or `null` when they would rather not say.
 )guide")
         .arg(templates().join(", "), markdown(), example("metadata", "main.js", "js"), example("hook", "main.js", "js"),
-             example("format", "main.js", "js"));
+             example("format", "main.js", "js"), hostVersion());
 }
 
 } // namespace ScriptApi

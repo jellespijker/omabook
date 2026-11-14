@@ -127,7 +127,8 @@ ApplicationWindow {
     }
     function resizePane(steps) {
         if (win.inReader && readerLoader.item) readerLoader.item.resizePane(steps)
-        else if (!win.graphShown) library.resizePane(steps)
+        else if (win.graphShown && graphLoader.item) graphLoader.item.resizePane(steps)
+        else library.resizePane(steps)
     }
     function showSettings() { prefs.open() }
     function showHelp() { help.show() }

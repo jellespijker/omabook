@@ -1377,6 +1377,14 @@ private slots:
         QTemporaryDir dir;
         Library here(dir.filePath("Here"));
         QVERIFY(here.open());
+        // A computer on a newer Omabook, whose manifest this one could misread, is
+        // not synced with: it says which side to update and changes nothing.
+        const qsizetype before = here.books().size();
+        const SyncSummary newer = syncLibrary(here, Remote("laptop", {script(dir.filePath("newer"),
+                                                           "echo '{\"version\": 99, \"omabook\": \"9.0.0\", \"books\": [], \"removed\": [\"x\"]}'\n")}));
+        QVERIFY2(newer.error.contains("newer Omabook (9.0.0)") && newer.error.contains("updated"), qPrintable(newer.error));
+        QCOMPARE(here.books().size(), before);
+        QVERIFY(!here.wasRemoved("x"));
         const SyncSummary off = syncLibrary(here, Remote("laptop", {script(dir.filePath("off"), "echo 'ssh: connect to host laptop: No route to host' >&2\nexit 255\n")}));
         QVERIFY2(off.error.contains("No route to host"), qPrintable(off.error));
         const SyncSummary missing = syncLibrary(here, Remote("laptop", {script(dir.filePath("none"), "echo 'sh: omabook: command not found' >&2\nexit 127\n")}));

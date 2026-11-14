@@ -90,6 +90,8 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     connect(this, &Backend::pluginsChanged, m_pluginManager.get(), &PluginManager::refresh);
     m_graphJobs = new GraphJobs(this);
     connect(m_pluginManager.get(), &PluginManager::touched, this, &Backend::pluginsChanged);
+    // A plugin that updated itself, or went back a version, says so once.
+    connect(m_pluginManager.get(), &PluginManager::said, this, &Backend::say);
     if (m_library)
         m_scripts->libraryChanged(m_library->books(), libraryPath());
     QTimer::singleShot(0, m_scripts.get(), [this] { m_scripts->emitEvent("app.started"); });

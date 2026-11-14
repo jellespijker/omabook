@@ -9,6 +9,7 @@ import QtQuick.Layouts
 // a relation, folding one thing into another.
 AppPopup {
     id: sheet
+    widest: 488
     objectName: "graphEdit"
     property var browser
     // "edit", "add", "remove", "unlink" or "merge".
@@ -61,6 +62,7 @@ AppPopup {
     GraphWords { id: words }
 
     ColumnLayout {
+        anchors.fill: parent
         spacing: 14
         LayoutMirroring.enabled: win.rightToLeft
         LayoutMirroring.childrenInherit: true
@@ -68,8 +70,6 @@ AppPopup {
         Label {
             objectName: "graphEditHeading"
             Layout.fillWidth: true
-            Layout.maximumWidth: Math.min(440, win.width - 96)
-            Layout.preferredWidth: Math.min(440, win.width - 96)
             font.pixelSize: 18
             wrapMode: Text.Wrap
             textFormat: Text.PlainText
@@ -81,7 +81,6 @@ AppPopup {
         }
         Label {
             Layout.fillWidth: true
-            Layout.maximumWidth: Math.min(440, win.width - 96)
             visible: sheet.asking
             color: theme.colors.muted
             wrapMode: Text.Wrap
@@ -135,16 +134,13 @@ AppPopup {
         Label {
             objectName: "graphEditProblem"
             Layout.fillWidth: true
-            Layout.maximumWidth: Math.min(440, win.width - 96)
             visible: text !== ""
             text: sheet.problem
             color: theme.colors.red
             wrapMode: Text.Wrap
         }
 
-        RowLayout {
-            Layout.alignment: Qt.AlignRight
-            spacing: 8
+        DialogActions {
             AppButton {
                 objectName: "graphEditCancel"
                 text: sheet.asking ? qsTr("Keep") : qsTr("Cancel")

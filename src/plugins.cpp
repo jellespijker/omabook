@@ -12,6 +12,7 @@
 #include "catalog.h"
 #include "goodreads.h"
 #include "hardcover.h"
+#include "scriptapi.h"
 #include "settings.h"
 
 namespace {
@@ -123,6 +124,11 @@ QList<PluginInfo> Plugins::fromFolder() const {
         plugin.command = stringList(object.value("command"));
         plugin.script = object.value("script").toString();
         plugin.permissions = stringList(object.value("permissions"));
+        // One that asks for a newer Omabook is neither loaded nor run.
+        bool malformed = false;
+        const QString need = ScriptApi::needsNewer(object.value("omabook"), &malformed);
+        if (!malformed)
+            plugin.needs = need;
         if (!plugin.script.isEmpty()) {
             // A script is run by ScriptPlugins, which says what is wrong
             // with it in <name>.error beside its folder.
@@ -135,6 +141,8 @@ QList<PluginInfo> Plugins::fromFolder() const {
         }
         if (error.error != QJsonParseError::NoError)
             plugin.problem = "plugin.json can't be read: " + error.errorString();
+        else if (!need.isEmpty())
+            plugin.problem = need;
         else if (plugin.kind != "metadata")
             plugin.problem = "This Omabook doesn't know plugins of type \"" + plugin.kind + "\".";
         else if (plugin.command.isEmpty())

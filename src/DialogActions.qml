@@ -8,6 +8,9 @@ import QtQuick.Layouts
 Item {
     id: actions
     default property alias content: flow.data
+    // In the middle of the row, not at its end: for buttons under words
+    // that are themselves centred.
+    property bool centred: false
     Layout.fillWidth: true
     implicitHeight: flow.height
     // What it would like: its buttons in one row.
@@ -25,7 +28,8 @@ Item {
         }
         // At the end of the row, which mirroring makes the left in a
         // right-to-left language, and no wider than the dialog.
-        anchors.right: parent.right
+        anchors.right: actions.centred ? undefined : parent.right
+        anchors.horizontalCenter: actions.centred ? parent.horizontalCenter : undefined
         width: Math.min(Math.ceil(oneRow) + 1, parent.width)
         spacing: 8
     }

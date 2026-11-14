@@ -172,6 +172,22 @@ AppPopup {
             Material.roundedScale: theme.radius
             onActivated: (index) => settings.graph = modes[index].key
         }
+        // What is done about plugins that came from a GitHub repository.
+        ComboBox {
+            id: pluginUpdates
+            objectName: "pluginUpdates"
+            Layout.fillWidth: true
+            readonly property var modes: [
+                { key: "auto", name: qsTr("Plugin updates: install by themselves") },
+                { key: "tell", name: qsTr("Plugin updates: tell me") },
+                { key: "never", name: qsTr("Plugin updates: never check") }
+            ]
+            model: modes
+            textRole: "name"
+            currentIndex: Math.max(0, modes.findIndex(entry => entry.key === settings.pluginUpdates))
+            Material.roundedScale: theme.radius
+            onActivated: (index) => settings.pluginUpdates = modes[index].key
+        }
 
         DialogActions {
             AppButton {

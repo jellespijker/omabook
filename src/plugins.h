@@ -50,6 +50,7 @@ struct PluginInfo {
     bool enabled = true;
     bool switchable = true; // whether it can be turned off (what Omabook is made of can't)
     QString problem;        // why it can't be used as it is, if it can't
+    QString needs;          // folder plugins: that it asks for a newer Omabook than this, in words
     QString folder;         // folder plugins: where it lives
     QStringList command;    // folder plugins: the program and its arguments
     QString script;         // script plugins: the script's file name

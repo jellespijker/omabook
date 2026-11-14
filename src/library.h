@@ -102,6 +102,11 @@ public:
     bool open(QString *error = nullptr);
     QString root() const { return m_root; }
     QString databasePath() const;
+    // Where copies of the database are kept: one is made each time an
+    // Omabook update changes the library's format, before anything changes.
+    QString backupFolder() const;
+    // The format the database is in, counted from 1; it only ever goes up.
+    int formatVersion() const;
 
     struct Added {
         qint64 id = 0;
@@ -176,6 +181,7 @@ private:
     // The knowledge graph is kept in the same database.
     friend class Graph;
     QString bookFolder(qint64 id) const;
+    bool backUp(int schema, QString *error) const;
     bool exec(const QString &sql, const QVariantList &values = {}) const;
 
     QString m_root;

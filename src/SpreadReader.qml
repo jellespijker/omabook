@@ -45,8 +45,11 @@ Item {
     }
     function paginate() {
         breaks = reader.pageBreaks(leftText.textDocument, pageHeight)
+        // Cut again into more or fewer pages (the window or a pane beside
+        // the page changed width), the spread stays as far through the
+        // chapter as it was, which the same page number no longer is.
         if (wanted >= 0) settle()
-        else show(page)
+        else show(Math.round(reader.fraction * lastLeft))
     }
     function turnTo(index) {
         wanted = -1

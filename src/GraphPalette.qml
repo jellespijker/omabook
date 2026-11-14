@@ -120,7 +120,7 @@ AppPopup {
         TextField {
             id: field
             objectName: "graphPaletteField"
-            Layout.preferredWidth: Math.min(420, win.width - 80)
+            Layout.preferredWidth: Math.min(420, win.width - 2 * win.dialogEdge - 2 * chooser.padding)
             placeholderText: chooser.mode === "filter" ? qsTr("Show") : chooser.mode === "merge" ? qsTr("The same as") : qsTr("Find")
             selectByMouse: true
             Material.roundedScale: theme.radius

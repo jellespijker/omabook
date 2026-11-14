@@ -15,7 +15,33 @@ Item {
     // Whether it stands in place of the list, and so needs a way back.
     property bool alone: false
     readonly property bool has: plugin !== null && plugin !== undefined
-    readonly property bool typing: tryField.activeFocus
+    readonly property bool typing: tryField.activeFocus || pinField.activeFocus
+    // Where it came from, when that is a GitHub repository (see PluginSources).
+    readonly property var source: has && plugin.source ? plugin.source : null
+    readonly property bool asking: has && host.manager.checking === plugin.id
+    function channelText(channel) {
+        if (!channel || channel.kind === "auto" || channel.kind === undefined) return qsTr("The latest release, or the main branch where there is none")
+        return channel.kind === "tag" ? qsTr("Stays at %1").arg(channel.name) : qsTr("The branch %1").arg(channel.name)
+    }
+    function installedText(installed) {
+        const commit = String(installed.commit || "").substring(0, 7)
+        const version = installed.version || installed.ref || ""
+        // "1.2 (ee850f7)"
+        return commit === "" ? version : qsTr("%1 (%2)").arg(version).arg(commit)
+    }
+    function checkedText(seconds) {
+        // Follows the language, so it is written anew when that changes.
+        const language = translator.language
+        return seconds > 0 ? new Date(seconds * 1000).toLocaleString(Qt.locale(), Locale.ShortFormat) : qsTr("Never")
+    }
+    // What stands in the way of an update, in a line.
+    function pendingText(pending) {
+        if (pending.reason === "omabook")
+            return qsTr("An update is there, and needs Omabook %1 or newer. It waits until Omabook is updated.").arg(pending.needs)
+        if (pending.reason === "name")
+            return qsTr("Version %1 goes by another name (%2), so it waits for you.").arg(pending.version).arg(pending.title)
+        return qsTr("Version %1 asks to use %2, which this one doesn't, so it waits for you.").arg(pending.version).arg(host.permissionText(pending.permissions))
+    }
     // The look-up being tried, when it is this plugin's.
     readonly property var trial: has && host.manager.trial.id === plugin.id ? host.manager.trial : ({})
 
@@ -111,7 +137,8 @@ Item {
                 objectName: "pluginDetailOrigin"
                 Layout.fillWidth: true
                 // "Built in · version 1.2 · by Omabook"
-                text: !pane.has ? "" : [host.origins[pane.plugin.origin] || pane.plugin.origin,
+                text: !pane.has ? "" : [pane.source ? qsTr("GitHub: %1").arg(pane.source.repository + (pane.source.subfolder ? "/" + pane.source.subfolder : ""))
+                                                     : host.origins[pane.plugin.origin] || pane.plugin.origin,
                                          pane.plugin.version ? qsTr("version %1").arg(pane.plugin.version) : "",
                                          pane.plugin.author ? qsTr("by %1").arg(pane.plugin.author) : "",
                                          pane.plugin.state === "on" ? "" : host.stateNames[pane.plugin.state]]
@@ -317,6 +344,153 @@ Item {
                     text: pane.has ? pane.plugin.folder : ""
                     textFormat: Text.PlainText
                     wrapMode: Text.WrapAnywhere
+                }
+
+                Label {
+                    visible: follows.visible
+                    Layout.alignment: Qt.AlignTop
+                    text: qsTr("Follows")
+                    color: host.quiet
+                }
+                Label {
+                    id: follows
+                    objectName: "pluginFollows"
+                    visible: pane.source !== null
+                    Layout.fillWidth: true
+                    Layout.bottomMargin: parent.columns === 1 ? 8 : 0
+                    text: pane.source ? pane.channelText(pane.source.channel) : ""
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                }
+                Label {
+                    visible: follows.visible
+                    Layout.alignment: Qt.AlignTop
+                    text: qsTr("Installed")
+                    color: host.quiet
+                }
+                Label {
+                    objectName: "pluginInstalled"
+                    visible: follows.visible
+                    Layout.fillWidth: true
+                    Layout.bottomMargin: parent.columns === 1 ? 8 : 0
+                    text: pane.source ? pane.installedText(pane.source.installed || {}) : ""
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                }
+                Label {
+                    visible: follows.visible
+                    Layout.alignment: Qt.AlignTop
+                    text: qsTr("Checked")
+                    color: host.quiet
+                }
+                Label {
+                    objectName: "pluginChecked"
+                    visible: follows.visible
+                    Layout.fillWidth: true
+                    text: pane.source ? pane.checkedText(pane.source.checked_at || 0) : ""
+                    textFormat: Text.PlainText
+                    wrapMode: Text.Wrap
+                }
+            }
+
+            // Keeping it up to date from where it came from.
+            ColumnLayout {
+                objectName: "pluginSource"
+                visible: pane.source !== null
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                spacing: 8
+
+                Label {
+                    objectName: "pluginSourceState"
+                    Layout.fillWidth: true
+                    visible: text !== "" && !pane.asking
+                    // What waits, what is wrong with the source, or what the last look came to.
+                    readonly property bool noted: pane.has && host.manager.sourceNote.id === pane.plugin.id
+                    text: !pane.source ? ""
+                          : pane.source.pending ? pane.pendingText(pane.source.pending)
+                          : noted ? host.manager.sourceNote.text
+                          : pane.source.problem ? pane.source.problem
+                          : pane.source.update ? qsTr("An update is there: %1.").arg(pane.source.latest.ref)
+                          : ""
+                    textFormat: Text.PlainText
+                    color: !!pane.source && (pane.source.pending || (noted ? host.manager.sourceNote.problem : !!pane.source.problem)) ? theme.colors.orange : host.quiet
+                    wrapMode: Text.Wrap
+                }
+                Thinking {
+                    objectName: "pluginSourceAsking"
+                    active: pane.asking
+                    text: qsTr("Asking GitHub…")
+                    room: parent.width
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    AppButton {
+                        objectName: "pluginCheckNow"
+                        focusPolicy: Qt.TabFocus
+                        enabled: host.manager.checking === ""
+                        visible: !!pane.source && pane.source.channel.kind !== "tag"
+                        text: qsTr("Check Now")
+                        onClicked: host.manager.checkNow(pane.plugin.id)
+                    }
+                    AppButton {
+                        objectName: "pluginUpdateNow"
+                        focusPolicy: Qt.TabFocus
+                        enabled: host.manager.checking === "" && !host.manager.fetching
+                        visible: !!pane.source && (pane.source.update || !!pane.source.pending) && !(pane.source.pending && pane.source.pending.reason === "omabook")
+                        // One that asks for more is looked at before it goes in.
+                        text: !!pane.source && pane.source.pending ? qsTr("Review Update…") : qsTr("Update")
+                        primary: true
+                        onClicked: pane.source.pending ? host.manager.reviewUpdate(pane.plugin.id) : host.manager.updateNow(pane.plugin.id)
+                    }
+                    AppButton {
+                        objectName: "pluginRollBack"
+                        focusPolicy: Qt.TabFocus
+                        visible: !!pane.source && pane.source.previous === true
+                        text: qsTr("Roll Back")
+                        onClicked: host.manager.rollBack(pane.plugin.id)
+                    }
+                    AppButton {
+                        objectName: "pluginFollow"
+                        focusPolicy: Qt.TabFocus
+                        enabled: host.manager.checking === ""
+                        visible: !!pane.source && pane.source.channel.kind !== "auto" && pane.source.channel.kind !== undefined
+                        text: qsTr("Follow the Latest")
+                        onClicked: host.manager.followLatest(pane.plugin.id)
+                    }
+                    AppButton {
+                        objectName: "pluginForgetSource"
+                        focusPolicy: Qt.TabFocus
+                        text: qsTr("Forget the Source")
+                        onClicked: host.manager.forgetSource(pane.plugin.id)
+                    }
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    TextField {
+                        id: pinField
+                        objectName: "pluginPinField"
+                        Layout.fillWidth: true
+                        placeholderText: qsTr("A tag to stay at, or a branch to follow")
+                        selectByMouse: true
+                        focusPolicy: Qt.ClickFocus
+                        inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+                        Material.roundedScale: theme.radius
+                        onAccepted: pin.clicked()
+                    }
+                    AppButton {
+                        id: pin
+                        objectName: "pluginPin"
+                        focusPolicy: Qt.TabFocus
+                        enabled: pinField.text.trim() !== "" && host.manager.checking === ""
+                        text: qsTr("Pin")
+                        onClicked: {
+                            host.manager.pinTo(pane.plugin.id, pinField.text)
+                            pinField.text = ""
+                        }
+                    }
                 }
             }
 

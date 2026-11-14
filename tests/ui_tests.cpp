@@ -24,6 +24,7 @@
 #include "assistant.h"
 #include "backend.h"
 #include "customization.h"
+#include "fakegithub.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "graphcanvas.h"
@@ -3478,7 +3479,7 @@ private slots:
         desk.key(Qt::Key_I);
         QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
         desk.shot("pluginmanager-install");
-        desk.key(Qt::Key_Return);
+        QMetaObject::invokeMethod(desk.find("pluginInstallZip"), "clicked");
         QCOMPARE(desk.picker.asked.last(), FilePicker::InstallPlugin);
         QTRY_COMPARE(desk.value("pluginInstallTitle", "text").toString(), QString("Install Gutenberg?"));
         QCOMPARE(desk.value("pluginInstallPermissions", "text").toString(),
@@ -3496,7 +3497,7 @@ private slots:
         desk.picker.next = {QUrl::fromLocalFile(desk.dir.filePath("evil.zip"))};
         desk.key(Qt::Key_I);
         QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
-        desk.key(Qt::Key_Return);
+        QMetaObject::invokeMethod(desk.find("pluginInstallZip"), "clicked");
         QTRY_VERIFY(desk.value("pluginInstallError", "text").toString().contains("outside"));
         QVERIFY(!desk.value("pluginInstallOn", "visible").toBool());
         desk.key(Qt::Key_Escape);
@@ -4623,6 +4624,126 @@ private slots:
             desk.shot(QString("graph-beyond-%1-reader").arg(look.name));
             QVERIFY2(desk.warnings.isEmpty(), qPrintable(QString(look.name) + ": " + desk.warnings.join('\n')));
         }
+    }
+
+    void aPluginComesFromGitHubAndIsKeptUpToDate() {
+        // GitHub is a stand-in on this computer; nothing here reaches the network.
+        FakeGitHub github;
+        const QString repository = "someone/omabook-storyteller";
+        github.push(repository, "main", sha('a'), Made().packed());
+        qputenv("OMABOOK_GITHUB_API", github.api().toUtf8());
+        const auto restore = qScopeGuard([] { qunsetenv("OMABOOK_GITHUB_API"); });
+        Desk desk;
+        QVERIFY(desk.show());
+        desk.key(Qt::Key_P);
+        QTRY_VERIFY(desk.value("plugins", "opened").toBool());
+        QObject *dialog = desk.find("plugins");
+        // No plugin came from GitHub yet, so nothing offers to check for updates.
+        QVERIFY(!desk.value("pluginsCheckAll", "visible").toBool());
+
+        // I, an address, Enter: it is fetched and described, and nothing is
+        // installed until it is said how.
+        desk.key(Qt::Key_I);
+        QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
+        QTRY_VERIFY(desk.value("pluginInstallAddress", "activeFocus").toBool());
+        desk.find("pluginInstallAddress")->setProperty("text", "https://github.com/someone/omabook-storyteller");
+        desk.shot("pluginsources-address");
+        desk.key(Qt::Key_Return);
+        QTRY_COMPARE(desk.value("pluginInstallTitle", "text").toString(), QString("Install Storyteller?"));
+        QVERIFY(!desk.value("pluginInstallFetching", "visible").toBool());
+        QVERIFY2(desk.value("pluginInstallOrigin", "text").toString().startsWith("From GitHub: someone/omabook-storyteller, main at aaaaaaa"),
+                 qPrintable(desk.value("pluginInstallOrigin", "text").toString()));
+        QCOMPARE(desk.value("pluginInstallPermissions", "text").toString(), QString("It may use: files in its own folder"));
+        QCOMPARE(desk.value("pluginInstallAdds", "text").toString(), QString("It looks to add: commands, hooks on what happens to books"));
+        QVERIFY(!QFile::exists(desk.dir.filePath("plugins/storyteller")));
+        desk.shot("pluginsources-offer");
+        QMetaObject::invokeMethod(desk.find("pluginInstallOn"), "clicked");
+        QTRY_VERIFY(!desk.value("pluginInstall", "visible").toBool());
+        QVERIFY(QFile::exists(desk.dir.filePath("plugins/storyteller/main.js")));
+        QVERIFY(desk.settings->pluginEnabled("folder:storyteller", false));
+        QTRY_VERIFY(desk.backend->scripts()->plugin("storyteller"));
+
+        // It is selected, and says where it came from and what it follows.
+        QCOMPARE(dialog->property("currentId").toString(), QString("folder:storyteller"));
+        QTRY_VERIFY(desk.value("pluginSource", "visible").toBool());
+        QVERIFY(desk.value("pluginDetailOrigin", "text").toString().startsWith("GitHub: someone/omabook-storyteller"));
+        QCOMPARE(desk.value("pluginInstalled", "text").toString(), QString("1.0 (aaaaaaa)"));
+        QVERIFY(desk.value("pluginsCheckAll", "visible").toBool());
+        QVERIFY(!desk.value("pluginUpdateNow", "visible").toBool());
+
+        // A newer version that asks for nothing new: U checks every source
+        // and it installs itself, staying switched on; it can be rolled back.
+        Made newer;
+        newer.version = "1.1";
+        github.push(repository, "main", sha('b'), newer.packed());
+        desk.key(Qt::Key_U);
+        QTRY_COMPARE(desk.value("pluginInstalled", "text").toString(), QString("1.1 (bbbbbbb)"));
+        QTRY_COMPARE(desk.value("pluginSourceState", "text").toString(), QString("Storyteller was updated from 1.0 to 1.1."));
+        QVERIFY(desk.settings->pluginEnabled("folder:storyteller", false));
+        QVERIFY(desk.value("pluginRollBack", "visible").toBool());
+        desk.shot("pluginsources-updated");
+
+        // One that asks for the network waits: the line at the top says so,
+        // and it is shown before it goes in.
+        Made greedy;
+        greedy.version = "2.0";
+        greedy.permissions = QStringList{"files", "http"};
+        github.push(repository, "main", sha('c'), greedy.packed());
+        desk.key(Qt::Key_U);
+        QTRY_COMPARE(desk.value("pluginsHealthText", "text").toString(),
+                     QString("Storyteller has an update that asks for the network: review"));
+        QCOMPARE(desk.value("pluginInstalled", "text").toString(), QString("1.1 (bbbbbbb)"));
+        QTRY_COMPARE(desk.value("pluginUpdateNow", "text").toString(), QString("Review Update…"));
+        desk.shot("pluginsources-waits");
+        QMetaObject::invokeMethod(desk.find("pluginUpdateNow"), "clicked");
+        QTRY_COMPARE(desk.value("pluginInstallTitle", "text").toString(), QString("Update Storyteller to version 2.0?"));
+        QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
+        QVERIFY(desk.value("pluginInstallNew", "text").toString().startsWith("New in this version: it asks to use the network."));
+        desk.shot("pluginsources-review");
+        // Not now leaves it as it is.
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("pluginInstall", "visible").toBool());
+        QCOMPARE(desk.value("pluginInstalled", "text").toString(), QString("1.1 (bbbbbbb)"));
+        QMetaObject::invokeMethod(desk.find("pluginUpdateNow"), "clicked");
+        QTRY_VERIFY(desk.value("pluginInstallUpdate", "visible").toBool());
+        QMetaObject::invokeMethod(desk.find("pluginInstallUpdate"), "clicked");
+        QTRY_COMPARE(desk.value("pluginInstalled", "text").toString(), QString("2.0 (ccccccc)"));
+        QTRY_VERIFY(!desk.value("pluginsHealth", "visible").toBool());
+
+        // Rolled back by hand, and pinned to stay there; then forgotten, it
+        // stays installed and is no longer followed.
+        QMetaObject::invokeMethod(desk.find("pluginRollBack"), "clicked");
+        QTRY_COMPARE(desk.value("pluginInstalled", "text").toString(), QString("1.1 (bbbbbbb)"));
+        github.tag(repository, "v1.0", sha('a'), Made().packed(), false);
+        desk.find("pluginPinField")->setProperty("text", "v1.0");
+        QMetaObject::invokeMethod(desk.find("pluginPin"), "clicked");
+        QTRY_COMPARE(desk.value("pluginFollows", "text").toString(), QString("Stays at v1.0"));
+        QTRY_COMPARE(desk.value("pluginInstalled", "text").toString(), QString("1.0 (aaaaaaa)"));
+        QVERIFY(!desk.value("pluginCheckNow", "visible").toBool());
+        QMetaObject::invokeMethod(desk.find("pluginForgetSource"), "clicked");
+        QTRY_VERIFY(!desk.value("pluginSource", "visible").toBool());
+        QVERIFY(QFile::exists(desk.dir.filePath("plugins/storyteller/main.js")));
+        QVERIFY(!desk.value("pluginsCheckAll", "visible").toBool());
+
+        // An address that isn't a repository says so in the sheet.
+        QTRY_VERIFY(dialog->property("activeFocus").toBool());
+        desk.key(Qt::Key_I);
+        QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
+        desk.find("pluginInstallAddress")->setProperty("text", "https://example.com/a/b");
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("pluginInstallError", "text").toString().contains("Only GitHub"));
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("pluginInstall", "visible").toBool());
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("plugins", "visible").toBool());
+
+        // What is done about updates is a setting.
+        QMetaObject::invokeMethod(desk.window, "showSettings");
+        QTRY_VERIFY(desk.find("pluginUpdates"));
+        QCOMPARE(desk.value("pluginUpdates", "currentIndex").toInt(), 0);
+        desk.settings->setPluginUpdates("never");
+        QTRY_COMPARE(desk.value("pluginUpdates", "currentIndex").toInt(), 2);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };
 

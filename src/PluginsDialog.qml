@@ -87,6 +87,13 @@ AppPopup {
     function healthText(issue) {
         if (issue.issue === "broken") return qsTr("%1 stopped with an error").arg(issue.name)
         if (issue.issue === "missing") return qsTr("%1 can't find its program").arg(issue.name)
+        if (issue.issue === "needs-omabook") return qsTr("%1 needs a newer Omabook than this").arg(issue.name)
+        if (issue.issue === "update-needs-omabook") return qsTr("%1 has an update that waits for Omabook %2").arg(issue.name).arg(issue.needs)
+        if (issue.issue === "review")
+            return issue.reason === "name" ? qsTr("%1 has an update that goes by another name: review").arg(issue.name)
+                                           : qsTr("%1 has an update that asks for %2: review").arg(issue.name).arg(permissionText(issue.permissions))
+        if (issue.issue === "update") return qsTr("%1 has an update").arg(issue.name)
+        if (issue.issue === "source") return qsTr("%1 can't be updated from where it came from").arg(issue.name)
         return qsTr("Calibre is switched off, though a Calibre library is on this computer")
     }
 
@@ -222,6 +229,8 @@ AppPopup {
                 }
             }
             else if (event.key === Qt.Key_A && plain) dialog.showNextIssue()
+            else if (event.key === Qt.Key_U && plain) { if (manager.sourced) manager.checkAll() }
+            else if (event.key === Qt.Key_U && shift) { if (dialog.current && dialog.current.source) manager.updateNow(dialog.current.id) }
             else if ((event.key === Qt.Key_Delete || event.key === Qt.Key_D) && plain) dialog.askRemove(dialog.current)
             else taken = false
             event.accepted = taken
@@ -441,7 +450,7 @@ AppPopup {
                             Label {
                                 visible: row.plugin.origin !== "built-in" && row.plugin.group !== "script" && !row.plugin.beneath
                                 Layout.leftMargin: 6
-                                text: row.plugin.origin === "calibre" ? qsTr("Calibre") : qsTr("Yours")
+                                text: row.plugin.origin === "calibre" ? qsTr("Calibre") : row.plugin.source ? qsTr("GitHub") : qsTr("Yours")
                                 color: dialog.quiet
                                 font.pixelSize: 12
                             }
@@ -511,7 +520,7 @@ AppPopup {
                 // column where two don't fit.
                 readonly property bool paired: width >= 560
                 flow: paired ? GridLayout.TopToBottom : GridLayout.LeftToRight
-                rows: paired ? 8 : -1
+                rows: paired ? 9 : -1
                 columns: paired ? -1 : 1
                 columnSpacing: 24
                 rowSpacing: 8
@@ -526,6 +535,8 @@ AppPopup {
                         { keys: "T", action: qsTr("Try a look-up against a source") },
                         { keys: "Alt+Up  Alt+Down", action: qsTr("Ask a source earlier or later") },
                         { keys: "A", action: qsTr("Show the next plugin that needs attention") },
+                        { keys: "U", action: qsTr("Check every plugin from GitHub for updates") },
+                        { keys: "Shift+U", action: qsTr("Update this plugin from where it came from") },
                         { keys: "<  >", action: qsTr("Make the list narrower or wider") },
                         { keys: "O", action: qsTr("Open its folder, or the plugin folder") },
                         { keys: "R", action: qsTr("Read the plugin folder again, and ask Calibre again") },
@@ -559,14 +570,35 @@ AppPopup {
         RowLayout {
             Layout.fillWidth: true
             spacing: 8
+            // While the sources are asked, that is said where the keys are.
+            Thinking {
+                id: asking
+                objectName: "pluginsAsking"
+                Layout.fillWidth: true
+                active: manager.checking === "all" || manager.checking === "daily"
+                text: qsTr("Asking GitHub for updates…")
+                room: width
+            }
             Label {
                 objectName: "pluginsKeysHint"
+                visible: !asking.active
                 Layout.fillWidth: true
                 // The keys used most; ? shows the rest.
                 text: qsTr("Space switches · Enter shows details · / finds · ? shows every key")
                 color: dialog.quiet
                 font.pixelSize: 12
                 elide: Text.ElideRight
+            }
+            AppButton {
+                objectName: "pluginsCheckAll"
+                // Only where a plugin came from GitHub at all, and where the
+                // window has room for a third button: U does the same, and
+                // each plugin has its own Check Now.
+                visible: manager.sourced && !win.compact
+                enabled: manager.checking === ""
+                focusPolicy: Qt.TabFocus
+                text: qsTr("Check for Updates")
+                onClicked: manager.checkAll()
             }
             AppButton {
                 objectName: "pluginsRefresh"
@@ -594,6 +626,25 @@ AppPopup {
         host: dialog
         onInstalled: (id) => dialog.show(id)
         onClosed: keyboard.forceActiveFocus()
+    }
+    // A button that was pressed with the keyboard and then went away (Forget
+    // the Source, Roll Back) takes the focus with it, and the keys with the
+    // focus; they come back to the dialog.
+    readonly property bool adrift: opened && !activeFocus && !creation.visible && !installation.visible && !removal.visible
+    onAdriftChanged: if (adrift) ashore.restart()
+    Timer {
+        id: ashore
+        interval: 0
+        onTriggered: if (dialog.adrift) keyboard.forceActiveFocus()
+    }
+    // An update that asks for more than the version installed is put on
+    // offer by the manager; it is shown for a yes or a no.
+    Connections {
+        target: dialog.manager
+        function onOfferChanged() {
+            if (dialog.opened && dialog.manager.offer.update === true)
+                installation.review()
+        }
     }
 
     AppPopup {

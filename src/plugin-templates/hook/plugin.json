@@ -3,6 +3,7 @@
     "version": "1.0",
     "author": "",
     "description": "Marks a book as read when it is closed on its last page, and keeps a list of them.",
+    "omabook": "{{omabook}}",
     "script": "main.js",
     "permissions": []
 }

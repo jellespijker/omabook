@@ -3,6 +3,7 @@
     "version": "1.0",
     "author": "",
     "description": "Adds a key that marks the selected book as read today.",
+    "omabook": "{{omabook}}",
     "script": "main.js",
     "permissions": []
 }

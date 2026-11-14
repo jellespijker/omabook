@@ -482,7 +482,7 @@ One flat JSON object, also changed by the Settings dialog. Followed live.
 | `paragraph_spacing` | Space after a paragraph, in pixels | 12 |
 | `justify` | `true` to set text flush on both sides | `false` |
 | `spread` | Two pages side by side: `auto` (wide windows), `always`, `never` | `auto` |
-| `pane_widths` | How wide each side pane was dragged, in pixels, by name (`details`, `contents`, `assistant`, `graph`, `plugins`): `{"assistant": 440}`. A pane that isn't named is as wide as it comes | |
+| `pane_widths` | How wide each side pane was dragged, in pixels, by name (`details`, `contents`, `assistant`, `graph`, `graph_details`, `plugins`): `{"assistant": 440}`. A pane that isn't named is as wide as it comes | |
 | `sync_target` | The computer `sync` talks to: `name` or `name:folder` | |
 | `ai_provider` | `auto`, `claude`, `agy`, `anthropic`, `command` or `off` | `auto` |
 | `ai_command` | The command for `command`; it is given `OMABOOK_AI_TIER` (`main` or `quick`) and `OMABOOK_AI_MODEL` | |

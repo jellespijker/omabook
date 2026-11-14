@@ -68,6 +68,7 @@ private:
     bool m_insideDone = false;
     // The box around the nodes inside, which the ring stays out of.
     QRectF inside() const;
+    void keepRingOut();
     QList<int> m_degree;
     QList<Cell> m_cells;
     double m_heat = 0;

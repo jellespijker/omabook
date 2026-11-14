@@ -1,6 +1,7 @@
 #include "scripttools.h"
 
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QDir>
 #include <QEventLoop>
 #include <QFile>
@@ -18,7 +19,9 @@
 #include "formatprovider.h"
 #include "library.h"
 #include "mcp.h"
+#include "pluginsources.h"
 #include "plugintools.h"
+#include "secretstore.h"
 #include "scriptapi.h"
 #include "scriptplugins.h"
 #include "settings.h"
@@ -212,7 +215,8 @@ QJsonObject ScriptTools::create(const Context &context, const QString &name, con
     QJsonArray files;
     for (const QString &file : ScriptApi::templateFiles(templateName)) {
         QFile written(folder + "/" + file);
-        const QByteArray contents = QString::fromUtf8(ScriptApi::templateFile(templateName, file)).replace("{{name}}", name).toUtf8();
+        const QByteArray contents = QString::fromUtf8(ScriptApi::templateFile(templateName, file)).replace("{{name}}", name)
+                                        .replace("{{omabook}}", ScriptApi::hostVersion()).toUtf8();
         if (!written.open(QIODevice::WriteOnly) || written.write(contents) != contents.size())
             return problem("The plugin can't be written to " + folder + ".");
         files << file;
@@ -367,6 +371,19 @@ int runPluginCli(const QStringList &arguments) {
         "  plugin install <folder|zip>        Install a plugin someone else wrote, checked first; it stays off until\n"
         "                                     enabled (or --enable), so its permissions can be read\n"
         "  plugin remove <name>               Move one of your own plugins to the trash\n"
+        "  plugin add <github address>        Install a plugin from a GitHub repository (owner/repo, or a link to it, to\n"
+        "                                     a release, tag, branch or folder of it), checked the same way, and remember\n"
+        "                                     where it came from; --pin <tag|branch> stays at one\n"
+        "  plugin sources                     Where each plugin came from, what it follows and when it was last checked;\n"
+        "                                     --updates auto|tell|never says what is done about updates\n"
+        "  plugin update [<name>|--all]       Install what is newer (--check only says); one that asks for a permission\n"
+        "                                     the installed version doesn't have waits for --yes\n"
+        "  plugin pin <name> <tag|branch>     Stay at a tag or follow a branch; plugin follow <name> goes back to the\n"
+        "                                     latest release, or the default branch\n"
+        "  plugin rollback <name>             Go back to the version before the last update\n"
+        "  plugin forget-source <name>        Stop updating a plugin; it stays installed\n"
+        "  plugin token [--forget]            Keep a GitHub token (read from standard input) in the keyring, for\n"
+        "                                     plugins in private repositories\n"
         "  plugin api                         Everything a script can call, as Markdown (or --json)");
     parser.addHelpOption();
     parser.addOption({"json", "Print the result as JSON."});
@@ -377,7 +394,14 @@ int runPluginCli(const QStringList &arguments) {
     parser.addOption({"name", "install: the folder name to install under, instead of the package's own.", "name"});
     parser.addOption({"enable", "install: switch the plugin on at once."});
     parser.addOption({"replace", "install: replace a plugin of the same name, which goes to the trash."});
-    parser.addPositionalArgument("action", "new, check, run, list, enable, disable, install, remove or api.");
+    parser.addOption({"pin", "add: the tag to stay at, or the branch to follow, instead of the latest release.", "ref"});
+    parser.addOption({"all", "update: every plugin that has a source."});
+    parser.addOption({"check", "update: only say whether there is something newer."});
+    parser.addOption({"yes", "update: also install an update that asks for a permission the installed version doesn't have."});
+    parser.addOption({"updates", "sources: what is done about updates: auto, tell or never.", "mode"});
+    parser.addOption({"forget", "token: take the token out of the keyring."});
+    parser.addPositionalArgument("action", "new, check, run, list, enable, disable, install, remove, add, sources, update, pin, "
+                                           "follow, rollback, forget-source, token or api.");
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = "omabook plugin";
@@ -538,6 +562,189 @@ int runPluginCli(const QStringList &arguments) {
         const QJsonObject answer = PluginTools::remove(context, words.at(1));
         return finish(answer, ScriptTools::failed(answer) ? QString()
                                   : words.at(1) + (answer.value("trashed").toBool() ? " is in the trash." : " is removed."));
+    }
+    // Plugins from GitHub repositories, and keeping them up to date.
+    const auto channelText = [](const QJsonObject &channel) {
+        const QString kind = channel.value("kind").toString("auto"), name = channel.value("name").toString();
+        return kind == "tag" ? "stays at " + name
+               : kind == "branch" ? "follows the branch " + name
+                                  : QString("follows the latest release, or the default branch while there is none");
+    };
+    const auto versionText = [](const QJsonObject &installed) {
+        const QString version = installed.value("version").toString(), commit = installed.value("commit").toString().left(7);
+        return (version.isEmpty() ? installed.value("ref").toString() : version) + (commit.isEmpty() ? QString() : " (" + commit + ")");
+    };
+    // What became of one source that was checked or updated, as a line.
+    const auto outcome = [&](const QJsonObject &result) {
+        const QString name = result.value("name").toString();
+        if (result.value("updated").toBool())
+            return name + ": updated from " + result.value("from").toString() + " to " + result.value("to").toString() + ".";
+        if (result.value("waits").toBool())
+            return name + ": " + result.value("pending").toObject().value("ref").toString() + " needs Omabook "
+                   + result.value("pending").toObject().value("needs").toString() + " or newer; this is " + ScriptApi::hostVersion()
+                   + ", so the version installed stays.";
+        if (result.value("review").toBool()) {
+            const QJsonObject pending = result.value("pending").toObject();
+            const QStringList more = pending.value("permissions").toVariant().toStringList();
+            return name + ": version " + pending.value("version").toString()
+                   + (more.isEmpty() ? " goes by another name (" + pending.value("title").toString() + ")"
+                                     : " asks for more than the one installed (" + more.join(", ") + ")")
+                   + ", so it wasn't installed. If that is all right: omabook plugin update " + name + " --yes";
+        }
+        if (ScriptTools::failed(result))
+            return name + ": " + result.value("error").toString();
+        if (result.value("pinned").toBool())
+            return name + ": " + channelText(result.value("channel").toObject()) + ", so there is nothing to check.";
+        if (result.value("update").toBool())
+            return name + ": " + result.value("latest").toObject().value("ref").toString() + " is newer than what is installed ("
+                   + versionText(result.value("installed").toObject()) + "). Install it: omabook plugin update " + name;
+        return name + ": up to date.";
+    };
+    if (action == "sources") {
+        Session session(context);
+        if (parser.isSet("updates")) {
+            if (!QStringList{"auto", "tell", "never"}.contains(parser.value("updates"))) {
+                print(stderr, "Updates are auto (installed by themselves), tell (only said) or never (not checked).");
+                return 1;
+            }
+            session.settings()->setPluginUpdates(parser.value("updates"));
+        }
+        const PluginSources sources({session.folder(), session.settings(), {}});
+        const QJsonArray list = sources.list();
+        const QString mode = session.settings()->pluginUpdates();
+        QStringList lines{mode == "auto" ? "Updates install by themselves, unless one asks for more than the version it replaces."
+                          : mode == "tell" ? "Updates are only told of." : "Updates are not checked for."};
+        for (const QJsonValue &value : list) {
+            const QJsonObject entry = value.toObject();
+            const qint64 checked = qint64(entry.value("checked_at").toDouble());
+            const QString folderPart = entry.value("subfolder").toString();
+            lines << QString("%1\t%2\t%3\t%4\tchecked %5%6")
+                         .arg(entry.value("name").toString(), entry.value("repository").toString() + (folderPart.isEmpty() ? QString() : "/" + folderPart),
+                              channelText(entry.value("channel").toObject()), versionText(entry.value("installed").toObject()),
+                              checked > 0 ? QDateTime::fromSecsSinceEpoch(checked).toString("yyyy-MM-dd HH:mm") : QString("never"),
+                              entry.value("missing").toBool() ? "\t(the plugin is gone)"
+                              : !entry.value("pending").toObject().isEmpty() ? "\t(an update waits for you: it asks for more)"
+                              : !entry.value("problem").toString().isEmpty() ? "\t(" + entry.value("problem").toString() + ")"
+                              : entry.value("update").toBool() ? "\t(an update is there)" : QString());
+        }
+        if (list.isEmpty())
+            lines << "No plugin came from a GitHub repository. Add one: omabook plugin add owner/repo";
+        return finish(QJsonObject{{"folder", sources.folder()}, {"updates", mode}, {"sources", list}}, lines.join('\n'));
+    }
+    if (action == "add") {
+        if (!wants(1, "add <github address> [--name <name>] [--pin <tag|branch>] [--enable] [--replace]"))
+            return 1;
+        PluginSources sources(context);
+        PluginSources::AddOptions options;
+        options.name = parser.value("name");
+        options.pin = parser.value("pin");
+        options.enable = parser.isSet("enable");
+        options.replace = parser.isSet("replace");
+        const QJsonObject answer = PluginSources::wait([&](PluginSources::Done done) { sources.add(words.at(1), options, done); });
+        QStringList lines;
+        if (!ScriptTools::failed(answer)) {
+            const QString name = answer.value("name").toString();
+            lines << "Installed " + answer.value("title").toString() + " " + answer.value("version").toString() + " from "
+                         + answer.value("repository").toString() + " (" + answer.value("ref").toString() + ", "
+                         + answer.value("commit").toString().left(7) + ") in " + answer.value("folder").toString();
+            const QStringList permissions = answer.value("permissions").toVariant().toStringList();
+            lines << (answer.value("kind").toString() == "program"
+                          ? QString("It is a program of its own: it can do whatever you can on this computer.")
+                          : permissions.isEmpty() ? QString("It asks for nothing beyond the library.")
+                                                  : "It may: " + permissions.join(", ") + ".");
+            lines << "It " + channelText(answer.value("channel").toObject()) + ".";
+            lines << (answer.value("enabled").toBool() ? name + " is on." : "It is off. Switch it on with: omabook plugins enable folder:" + name);
+        }
+        return finish(answer, lines.join('\n'));
+    }
+    if (action == "update") {
+        if (words.size() < 2 && !parser.isSet("all")) {
+            print(stderr, "Usage: omabook plugin update <name>|--all [--check] [--yes]");
+            return 1;
+        }
+        PluginSources sources(context);
+        const bool only = parser.isSet("check"), approved = parser.isSet("yes");
+        QJsonObject answer;
+        QStringList lines;
+        if (parser.isSet("all")) {
+            answer = PluginSources::wait([&](PluginSources::Done done) { sources.checkAll(!only, false, done); });
+            for (const QJsonValue &result : answer.value("results").toArray())
+                lines << outcome(result.toObject());
+            if (answer.value("results").toArray().isEmpty())
+                lines << "No plugin has a source to check; see omabook plugin sources.";
+            // One that failed fails the command; the rest were still done.
+            for (const QJsonValue &result : answer.value("results").toArray())
+                if (ScriptTools::failed(result.toObject()) && !answer.contains("error"))
+                    answer.insert("error", outcome(result.toObject()));
+            if (json)
+                print(stdout, pretty(answer));
+            else
+                print(ScriptTools::failed(answer) ? stderr : stdout, lines.join('\n'));
+            return ScriptTools::failed(answer) ? 1 : 0;
+        }
+        answer = PluginSources::wait([&](PluginSources::Done done) {
+            if (only)
+                sources.check(words.at(1), done);
+            else
+                sources.update(words.at(1), approved, done);
+        });
+        return finish(answer, ScriptTools::failed(answer) ? QString() : outcome(answer));
+    }
+    if (action == "pin" || action == "follow") {
+        if (!wants(action == "pin" ? 2 : 1, action == "pin" ? "pin <name> <tag|branch>" : "follow <name>"))
+            return 1;
+        PluginSources sources(context);
+        QJsonObject answer;
+        if (action == "follow") {
+            answer = sources.follow(words.at(1));
+            if (!ScriptTools::failed(answer))
+                answer = PluginSources::wait([&](PluginSources::Done done) { sources.update(words.at(1), false, done); });
+        } else {
+            answer = PluginSources::wait([&](PluginSources::Done done) { sources.pin(words.at(1), words.at(2), done); });
+        }
+        return finish(answer, ScriptTools::failed(answer) ? QString()
+                                  : words.at(1) + " " + channelText(sources.source(words.at(1)).value("channel").toObject()) + ". "
+                                        + outcome(answer).section(": ", 1));
+    }
+    if (action == "rollback") {
+        if (!wants(1, "rollback <name>"))
+            return 1;
+        const QJsonObject answer = PluginSources(context).rollBack(words.at(1));
+        return finish(answer, ScriptTools::failed(answer) ? QString()
+                                  : words.at(1) + " is back at " + answer.value("version").toString() + " (it was "
+                                        + answer.value("from").toString() + ").");
+    }
+    if (action == "forget-source") {
+        if (!wants(1, "forget-source <name>"))
+            return 1;
+        const QJsonObject answer = PluginSources(context).forget(words.at(1));
+        return finish(answer, ScriptTools::failed(answer) ? QString()
+                                  : words.at(1) + " is no longer updated from " + answer.value("repository").toString() + ". It stays installed.");
+    }
+    if (action == "token") {
+        Session session(context);
+        if (parser.isSet("forget")) {
+            Secrets::shared().forget("github");
+            session.settings()->setPluginToken(false);
+            return finish(QJsonObject{{"token", false}}, "The GitHub token is forgotten.");
+        }
+        // From standard input, so it is never in a command line or a history.
+        char line[512] = {0};
+        const QString secret = fgets(line, sizeof line, stdin) ? QString::fromUtf8(line).trimmed() : QString();
+        if (secret.isEmpty()) {
+            print(stderr, "Give the token on standard input: omabook plugin token < file, or pipe it in.");
+            return 1;
+        }
+        QString error, why;
+        if (!Secrets::shared().put("github", secret, &error)) {
+            print(stderr, "The token couldn't be kept: " + error);
+            return 1;
+        }
+        session.settings()->setPluginToken(true);
+        const bool lasting = Secrets::shared().lasting(&why);
+        return finish(QJsonObject{{"token", true}, {"lasting", lasting}},
+                      lasting ? QString("The GitHub token is in the keyring. It is sent to api.github.com and nowhere else.")
+                              : "The GitHub token is kept for this run only: " + why);
     }
     print(stderr, "There is no omabook plugin " + action + ".\n\n" + parser.helpText().trimmed());
     return 1;

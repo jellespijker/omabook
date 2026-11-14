@@ -138,10 +138,25 @@ private slots:
     }
 
     void twoThousandNodesSettleInTime() {
-        const int count = 2000;
-        GraphLayout layout;
+        // How fast this machine and this build are, by a layout a tenth the
+        // size: a sanitizer build is several times slower than a release
+        // one, and what is asked is that two thousand nodes cost what they
+        // should next to two hundred, not a number of seconds.
         QElapsedTimer clock;
         clock.start();
+        GraphLayout small;
+        small.start(200, madeUpEdges(200));
+        small.settle();
+        const double reference = std::max(1.0, clock.nsecsElapsed() / 1e6);
+        const int count = 2000;
+        GraphLayout layout, whole;
+        whole.start(count, madeUpEdges(count));
+        clock.restart();
+        QVERIFY(whole.step());
+        // One step is the least a slice can be.
+        const double oneStep = clock.nsecsElapsed() / 1e6;
+        whole.settle();
+        clock.restart();
         layout.start(count, madeUpEdges(count));
         // No slice of it holds the window up for long.
         qint64 longest = 0;
@@ -154,11 +169,19 @@ private slots:
                 break;
         }
         const qint64 took = clock.elapsed();
-        qInfo() << "2000 nodes settled in" << took << "ms over" << layout.steps() << "steps; longest slice" << longest << "ms";
+        qInfo() << "2000 nodes settled in" << took << "ms over" << layout.steps() << "steps; longest slice" << longest
+                << "ms; one step" << oneStep << "ms; 200 nodes in" << reference << "ms";
         QVERIFY(layout.settled());
-        QVERIFY2(took < 6000, qPrintable(QString::number(took)));
-        QVERIFY2(longest < 60, qPrintable(QString::number(longest)));
+        // Ten times the nodes cost a little more than ten times the work a
+        // step (the pushing apart is n log n), over about as many steps.
+        QVERIFY2(took < reference * 60 + 200, qPrintable(QString("%1 ms against %2 ms for 200 nodes").arg(took).arg(reference)));
+        // A slice ends with the step that is running when its time is up.
+        QVERIFY2(longest < 6 + oneStep * 4 + 20, qPrintable(QString("%1 ms, a step being %2 ms").arg(longest).arg(oneStep)));
         QVERIFY(layout.steps() <= 400);
+        // The slices only decide when the steps happen: however the time
+        // fell, it took the same steps to the same picture as in one go.
+        QCOMPARE(layout.steps(), whole.steps());
+        QCOMPARE(layout.positions(), whole.positions());
         QVERIFY2(nearestPair(layout.positions()) > 6, qPrintable(QString::number(nearestPair(layout.positions()))));
     }
 

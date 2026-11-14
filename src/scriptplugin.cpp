@@ -108,6 +108,14 @@ ScriptManifest ScriptManifest::read(const QString &folder) {
         manifest.problem = "plugin.json should be a JSON object.";
         return manifest;
     }
+    // One written for a newer Omabook is not loaded: what it calls may not be here.
+    bool malformed = false;
+    const QString need = ScriptApi::needsNewer(object.value("omabook"), &malformed);
+    if (!need.isEmpty()) {
+        manifest.problem = need;
+        manifest.needsNewer = !malformed;
+        return manifest;
+    }
     if (!manifest.isScript())
         return manifest;
     for (const QString &permission : std::as_const(manifest.permissions))

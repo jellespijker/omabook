@@ -67,13 +67,29 @@ public:
     void cancel() override {}
 };
 
-class NoCatalog : public MetadataSource {
+class FakeCatalog : public MetadataSource {
 public:
     using MetadataSource::MetadataSource;
     QString name() const override { return "Fake Catalog"; }
     QStringList fields() const override { return {"title", "authors"}; }
+    // Three answers, one of them as long as a catalog's can be.
     void search(const BookMeta &) override {
-        QTimer::singleShot(0, this, [this] { emit found({}); });
+        QTimer::singleShot(0, this, [this] {
+            QList<MetaCandidate> candidates;
+            for (const char *title : {"Moss", "The Unabridged and Thoroughly Annotated Chronicle of the Lantern Keepers of the Northern Salt Roads",
+                                      "Moss: A Second Edition, Revised"}) {
+                MetaCandidate candidate;
+                candidate.source = name();
+                candidate.meta.title = title;
+                candidate.meta.authors = QStringList{"Maximiliana Oluwaseun Featherstonehaugh-Abernathy", "Edda Marlowe"};
+                candidate.meta.publisher = "The Press of the Made-Up Harbour and Sons";
+                candidate.meta.published = "1987";
+                candidate.meta.description = "A catalog's blurb, which is long, and says the same thing three times over in the hope "
+                                             "that one of them lands.";
+                candidates << candidate;
+            }
+            emit found(candidates);
+        });
     }
 };
 
@@ -116,7 +132,7 @@ struct Desk {
         settings->setLibraryPath(dir.filePath("Library"));
         auto makeAi = [](QString *) -> std::unique_ptr<AiProvider> { return std::make_unique<LongAi>(); };
         backend.emplace(&*settings, &picker, nullptr, makeAi,
-                        [](QObject *parent) { return QList<MetadataSource *>{new NoCatalog(parent)}; },
+                        [](QObject *parent) { return QList<MetadataSource *>{new FakeCatalog(parent)}; },
                         dir.filePath("plugins"), "-");
         reader.emplace(&*backend, QString());
         assistant.emplace(&*reader, makeAi);
@@ -316,6 +332,9 @@ QList<qint64> stock(Desk &desk) {
         {"The Night Ferry", "Hana Sato", "", 0, "Mystery", "#14213d"},
         {"Seven Kinds of Rain", "Lucia Ferrand", "", 0, "Essays", "#5c80bc"},
         {"Tin Stars", "P. L. Okonkwo", "", 0, "Mystery", "#22333b"},
+        // The same book twice and an author spelled two ways, for the tidy.
+        {"Granite", "Soren Hale", "", 0, "Mystery", "#6b6f73"},
+        {"A Winter Without Lanterns", "Sato, Hana", "", 0, "Mystery", "#14213d"},
     };
     Library *library = desk.backend->library();
     QList<qint64> ids;
@@ -337,7 +356,7 @@ QList<qint64> stock(Desk &desk) {
             QByteArray text;
             for (int chapter = 1; chapter <= 6; ++chapter) {
                 text += "CHAPTER " + QByteArray::number(chapter) + "\n\n";
-                for (int paragraph = 1; paragraph <= 30; ++paragraph)
+                for (int paragraph = 1; paragraph <= 80; ++paragraph)
                     text += "Paragraph " + QByteArray::number(paragraph) + " of a long chapter, with enough words in it to run "
                             "over more than one line of the page so the pages have something to cut between.\n\n";
             }
@@ -545,19 +564,6 @@ class LayoutTests : public QObject {
 
     // Every problem found, by where it was found: "de 480x800 list".
     QStringList found;
-    // Problems in files that were being rewritten by someone else when this
-    // test was written (the graph view). They are
-    // found and printed, and do not fail the test yet. TO DO: empty this
-    // list once those files have settled, and fix what it was hiding.
-    QStringList pending;
-    static bool unfinished(const QString &problem) {
-        static const QStringList files{"GraphPane.qml", "GraphDetails.qml", "GraphEdit.qml", "GraphPalette.qml"};
-        // Named by its file, or, for a button or a label inside one of
-        // them, by what it is under.
-        static const QRegularExpression under(", under .*\\b(readerGraph|libraryGraph|graph(?!Build|Side)[A-Z]\\w*)\\b");
-        return std::any_of(files.begin(), files.end(), [&](const QString &file) { return problem.contains(" in " + file); })
-               || under.match(problem).hasMatch();
-    }
     int looked = 0;
 
     static bool whole() { return qEnvironmentVariableIntValue("OMABOOK_LAYOUT_FULL") > 0; }
@@ -607,7 +613,7 @@ class LayoutTests : public QObject {
         for (const QString &problem : std::as_const(survey.problems))
             if (!once.contains(problem)) {
                 once.insert(problem);
-                (unfinished(problem) ? pending : found) << where + " — " + problem;
+                found << where + " — " + problem;
             }
         desk.shot(QString("%1%2-%3-%4x%5").arg(QString::fromLatin1(desk.language), desk.touch ? "-touch" : "", state)
                       .arg(desk.window->width()).arg(desk.window->height()));
@@ -728,6 +734,17 @@ class LayoutTests : public QObject {
             desk.settings->setPaneWidth(pane, 0);
         desk.reader->close();
         QTRY_VERIFY(!desk.reader->isOpen());
+        // A book that can't be opened says why, in place of the page.
+        // The book's file is gone from under it, as when a disk is not there.
+        QVERIFY(QFile::remove(desk.backend->library()->formatPath(book)));
+        desk.reader->openBook(book);
+        QTRY_VERIFY(!desk.reader->error().isEmpty());
+        for (const QSize &size : dialogSizes()) {
+            QVERIFY(desk.resize(size));
+            look(desk, "reader-error");
+        }
+        desk.reader->close();
+        QTRY_VERIFY(!desk.reader->isOpen());
     }
 
     // Every dialog and popup the window has.
@@ -751,20 +768,83 @@ class LayoutTests : public QObject {
                 QTest::keyClick(desk.window, Qt::Key_I);
                 QTest::qWait(50);
             });
-            dialog(desk, "tidy", [&] { desk.call("showTidy"); });
+            // A plugin that came from a GitHub repository, with an update that
+            // waits: its details say where it is from and what can be done,
+            // and the same sheet shows the update for a yes or a no. The
+            // source is written as Omabook would have; nothing asks the network.
+            const QString storyteller = desk.dir.filePath("plugins/storyteller");
+            if (!QFileInfo::exists(storyteller)) {
+                QDir().mkpath(storyteller);
+                Fixtures::write(storyteller + "/plugin.json",
+                                "{\"name\": \"Storyteller\", \"version\": \"1.0\", \"author\": \"Someone\", \"description\": \"Writes an "
+                                "original book for you, chapter by chapter, as you read it.\", \"script\": \"main.js\", \"permissions\": [\"files\"]}");
+                Fixtures::write(storyteller + "/main.js", "omabook.on(\"book.closed\", function (event) {});\n");
+                Fixtures::write(desk.dir.filePath("plugins/sources.json"),
+                                "{\"sources\": {\"storyteller\": {\"repository\": \"someone/omabook-storyteller\", \"subfolder\": \"\", "
+                                "\"channel\": {\"kind\": \"branch\", \"name\": \"main\"}, \"checked_at\": 1800000000, "
+                                "\"installed\": {\"version\": \"1.0\", \"title\": \"Storyteller\", \"ref\": \"main\", \"commit\": "
+                                "\"ee850f7d23defc4490b813c3168d63527e8f6476\"}, \"latest\": {\"ref\": \"main\", \"commit\": "
+                                "\"aa850f7d23defc4490b813c3168d63527e8f6476\"}, \"previous\": {\"version\": \"0.9\"}, \"pending\": {\"version\": "
+                                "\"2.0\", \"title\": \"Storyteller\", \"reason\": \"permissions\", \"permissions\": [\"http\", \"run\"]}}}}");
+                QDir().mkpath(desk.dir.filePath("plugins/.previous/storyteller"));
+                Fixtures::write(desk.dir.filePath("plugins/.previous/storyteller/plugin.json"), "{}");
+                desk.backend->pluginManager()->reload();
+            }
+            dialog(desk, "plugin-source", [&] {
+                desk.call("showPlugins");
+                desk.waitForPopup();
+                QMetaObject::invokeMethod(desk.find("plugins"), "show", Q_ARG(QVariant, QString("folder:storyteller")));
+                QTest::qWait(50);
+            });
+            dialog(desk, "plugin-install-offer", [&] {
+                desk.call("showPlugins");
+                desk.waitForPopup();
+                // What is on offer, as fetching the update would have put it there.
+                desk.backend->pluginManager()->consider(storyteller);
+                QTest::qWait(50);
+                QMetaObject::invokeMethod(desk.find("pluginInstall"), "review");
+                QTest::qWait(50);
+            });
+            dialog(desk, "tidy", [&] {
+                desk.call("showTidy");
+                // With what it found: the same book twice, an author spelled two ways.
+                (void)QTest::qWaitFor([&] { return !desk.librarian->busy() && desk.find("tidyList") && desk.find("tidyList")->property("count").toInt() > 0; }, 3000);
+            });
             dialog(desk, "sites", [&] { desk.call("showReadingSites"); });
             dialog(desk, "graph-build", [&] { desk.call("showGraphBuild", book); });
             dialog(desk, "ask", [&] { desk.call("showAskLibrary"); });
             dialog(desk, "change", [&] { desk.run("global.change"); });
             dialog(desk, "edit", [&] { desk.call("editBook", book); });
             dialog(desk, "new", [&] { desk.call("newBook"); });
-            dialog(desk, "lookup", [&] { desk.call("lookUpBook", book); });
+            dialog(desk, "lookup", [&] {
+                desk.call("lookUpBook", book);
+                (void)QTest::qWaitFor([&] { return desk.find("lookupList") && desk.find("lookupList")->property("count").toInt() > 0; }, 3000);
+            });
             dialog(desk, "remove", [&] { desk.call("removeBook", book); });
             dialog(desk, "filter", [&] { desk.run("library.filter"); });
             // The whole library as a graph, which takes the shelf's place.
             desk.call("showGraph", 0);
             QTRY_VERIFY(desk.find("libraryGraph"));
             look(desk, "graph");
+            // A thing selected, which brings its details beside the picture
+            // or under it; then the same as a list.
+            QObject *graph = desk.find("libraryGraph");
+            QObject *browser = graph->property("browser").value<QObject *>();
+            const QVariantList rows = browser ? browser->property("rows").toList() : QVariantList();
+            if (!rows.isEmpty()) {
+                QMetaObject::invokeMethod(browser, "select", Q_ARG(qint64, rows.first().toMap().value("id").toLongLong()));
+                graph->setProperty("peek", true);
+                desk.settle();
+                look(desk, "graph-details");
+                graph->setProperty("listing", true);
+                desk.settle();
+                look(desk, "graph-list");
+                graph->setProperty("listing", false);
+                graph->setProperty("peek", false);
+                QMetaObject::invokeMethod(browser, "select", Q_ARG(qint64, 0));
+            } else {
+                found << "graph — the library's graph has nothing in it to select";
+            }
             QMetaObject::invokeMethod(desk.find("libraryGraph"), "done");
             desk.settle();
         }
@@ -797,16 +877,6 @@ class LayoutTests : public QObject {
         }
         const QStringList problems = found;
         found.clear();
-        if (!pending.isEmpty()) {
-            if (!report.isEmpty()) {
-                QFile file(report);
-                if (file.open(QIODevice::Append))
-                    file.write(("PENDING " + pending.join("\nPENDING ") + '\n').toUtf8());
-            }
-            qWarning("%lld layout problems in files that are still being written, not failed yet; the first: %s",
-                     qlonglong(pending.size()), qPrintable(pending.first()));
-            pending.clear();
-        }
         if (problems.isEmpty())
             return;
         const QString shown = problems.mid(0, 40).join('\n');
@@ -1178,6 +1248,77 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // The page keeps its place when its width changes: when a pane opens
+    // beside it and two pages become one, when the pane is dragged and the
+    // lines are cut anew, and when it closes again. It was at the top of
+    // the chapter with the header still saying 50%.
+    void thePageKeepsItsPlaceWhenItsWidthChanges() {
+        Desk desk("en", {}, false);
+        const QList<qint64> ids = stock(desk);
+        QVERIFY(!ids.isEmpty());
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        QVERIFY(desk.resize(QSize(1180, 780)));
+        desk.reader->openBook(ids.first());
+        QTRY_VERIFY(desk.reader->isOpen());
+        // Two pages side by side, turned to the middle of the chapter.
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QTRY_VERIFY(desk.find("spreadReader")->property("pages").toInt() > 3);
+        while (desk.reader->fraction() < 0.45)
+            QTest::keyClick(desk.window, Qt::Key_Space);
+        const double middle = desk.reader->fraction();
+        QVERIFY(middle >= 0.45 && middle < 0.75);
+        const auto through = [&]() -> double {
+            QObject *flow = desk.find("flowReader");
+            return flow && flow->property("range").toReal() > 0 ? flow->property("contentY").toReal() / flow->property("range").toReal() : -1;
+        };
+
+        // The AI's pane opens beside the page, which is now too narrow for
+        // two: one page, at the same place, and the header agrees.
+        QObject *view = desk.find("readerView");
+        view->setProperty("showAssistant", true);
+        QTRY_VERIFY(desk.find("flowReader"));
+        QVERIFY(!desk.item("assistantSide")->property("over").toBool());
+        QTRY_VERIFY2(qAbs(through() - middle) < 0.05, QByteArray::number(through()));
+        QVERIFY(qAbs(desk.reader->fraction() - middle) < 0.05);
+        QVERIFY(desk.find("flowReader")->property("contentY").toReal() > 500);
+
+        // Scrolled by hand, then the pane dragged narrower and wider: the
+        // lines are cut anew each time, and the page stays where it was.
+        for (int line = 0; line < 3; ++line)
+            QTest::keyClick(desk.window, Qt::Key_J);
+        const double scrolled = desk.reader->fraction();
+        QVERIFY(scrolled > middle - 0.05);
+        // The one page's own text; the two pages' is called the same.
+        const auto textWidth = [&] { return desk.find("flowReader")->findChild<QObject *>("flowText")->property("width").toReal(); };
+        const qreal before = textWidth();
+        desk.settings->setPaneWidth("assistant", 600);
+        QTRY_VERIFY(textWidth() < before - 100);
+        desk.settle();
+        QVERIFY2(qAbs(through() - scrolled) < 0.02, QByteArray::number(through()));
+        QVERIFY(qAbs(desk.reader->fraction() - scrolled) < 0.02);
+        const qreal narrow = textWidth();
+        desk.settings->setPaneWidth("assistant", 500);
+        QTRY_VERIFY(textWidth() > narrow + 50);
+        desk.settle();
+        QVERIFY2(qAbs(through() - scrolled) < 0.02, QByteArray::number(through()));
+        QVERIFY(qAbs(desk.reader->fraction() - scrolled) < 0.02);
+
+        // The pane closed, it is two pages again, on the spread that holds that place.
+        view->setProperty("showAssistant", false);
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QObject *spread = desk.find("spreadReader");
+        QTRY_VERIFY(spread->property("pages").toInt() > 3);
+        QTRY_VERIFY(qAbs(double(spread->property("page").toInt()) / spread->property("lastLeft").toInt() - scrolled) < 0.15);
+        QVERIFY(qAbs(desk.reader->fraction() - scrolled) < 0.15);
+
+        // And the same with the map beside the page, which is how it was found.
+        view->setProperty("showGraph", true);
+        QTRY_VERIFY(desk.find("flowReader"));
+        QTRY_VERIFY2(qAbs(through() - scrolled) < 0.15, QByteArray::number(through()));
+        QVERIFY(qAbs(desk.reader->fraction() - scrolled) < 0.15);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     // Mirrored, a pane is on the other side, and so is its handle; dragging
     // away from the window's edge still widens it.
     void aPaneIsDraggedTheOtherWayRightToLeft() {
@@ -1226,14 +1367,25 @@ private slots:
     // The first start: an empty shelf that says how to fill it, the offer
     // of a tour over it, and the tour itself, step by step.
     void anEmptyLibraryAndTheTour() {
+        // A Calibre library found on the computer is offered there too, in
+        // a temp folder that stands in for Calibre's own.
+        QTemporaryDir calibre;
+        QVERIFY(Fixtures::calibreShelf(calibre.filePath("Eine ziemlich lange Calibre-Bibliothek")));
+        QVERIFY(Fixtures::calibreConfig(calibre.filePath("config"), {calibre.filePath("Eine ziemlich lange Calibre-Bibliothek")}));
+        qputenv("CALIBRE_CONFIG_DIRECTORY", calibre.filePath("config").toUtf8());
+        const auto restore = qScopeGuard([] { qunsetenv("CALIBRE_CONFIG_DIRECTORY"); });
         for (const bool touch : {false, true}) {
             Desk desk("de", touch ? QByteArray() : lightTheme, touch);
             desk.settings->setTour("");
             QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            QTRY_VERIFY(desk.shows("calibreOffer"));
             for (const QSize &size : dialogSizes()) {
                 QVERIFY(desk.resize(size));
                 look(desk, "empty-offered");
             }
+            // The offer answered, the tour's own is what is left.
+            QMetaObject::invokeMethod(desk.find("calibreOfferLater"), "clicked");
+            QTRY_VERIFY(!desk.shows("calibreOffer"));
             desk.call("startTour", "tour");
             QTRY_VERIFY(desk.window->property("touring").toBool());
             for (const QSize &size : dialogSizes()) {

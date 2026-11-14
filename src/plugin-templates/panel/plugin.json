@@ -3,6 +3,7 @@
     "version": "1.0",
     "author": "",
     "description": "Shows the books being read beside the shelf.",
+    "omabook": "{{omabook}}",
     "script": "main.js",
     "permissions": []
 }

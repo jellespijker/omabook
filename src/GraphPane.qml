@@ -25,7 +25,19 @@ FocusScope {
     // In a window too low for the picture and the details at once: whether
     // the details were asked for and stand in the picture's place.
     property bool peek: false
-    readonly property bool compact: width < 760
+    // Too narrow for the picture and the details side by side: the picture
+    // would not keep the floor every pane leaves what it stands beside
+    // (`win.contentFloor`) next to the details at the width they come
+    // with. The pane is asked, not the window: beside the page it is a
+    // part of the window, and as wide as it was dragged. Compact, the
+    // details stand under the picture, and names give way to marks.
+    readonly property bool compact: width < win.contentFloor + detailsSide.standard
+    // The least height the picture keeps over the details in a compact
+    // pane. With less, which is what a low window (`win.low`) leaves of it,
+    // it is one or the other: the details open on request in the picture's place.
+    readonly property real pictureFloor: 300
+    // The details beside the picture, wider or narrower by the keys.
+    function resizePane(steps) { if (detailsSide.visible) detailsSide.resize(steps) }
     readonly property bool focused: activeFocus
     readonly property bool popupOpen: chooser.opened || sheet.opened
     readonly property alias browser: graph
@@ -251,6 +263,9 @@ FocusScope {
 
         RowLayout {
             Layout.fillWidth: true
+            // The row takes the width it is given: the title and the count
+            // give way, and the rest is no wider than the narrowest pane.
+            Layout.minimumWidth: 0
             Layout.margins: 16
             Layout.bottomMargin: 8
             spacing: 12
@@ -259,8 +274,10 @@ FocusScope {
             Rectangle {
                 objectName: "graphClose"
                 visible: !pane.reading
-                width: closeRow.implicitWidth + 16
-                height: win.touch ? 40 : 30
+                // The library's name with the arrow where the pane is wide,
+                // the arrow alone where it isn't.
+                Layout.preferredWidth: Math.max(closeRow.implicitWidth + 16, height)
+                Layout.preferredHeight: win.touch ? 40 : 30
                 radius: theme.radius
                 color: closeHover.hovered ? theme.colors.selection : "transparent"
                 Row {
@@ -274,6 +291,7 @@ FocusScope {
                         color: theme.colors.muted
                     }
                     Label {
+                        visible: !pane.compact
                         text: backend.libraryName
                         color: theme.colors.muted
                     }
@@ -283,7 +301,9 @@ FocusScope {
             }
             Label {
                 objectName: "graphTitle"
-                Layout.maximumWidth: pane.width * (pane.compact ? 0.4 : 0.3)
+                Layout.fillWidth: true
+                Layout.minimumWidth: Math.min(implicitWidth, 40)
+                Layout.maximumWidth: Math.min(Math.ceil(implicitWidth), pane.width * (pane.compact ? 0.4 : 0.3))
                 text: pane.reading ? qsTr("Known so far")
                       : graph.showing === "book" ? graph.bookTitle
                       : graph.showing === "series" ? graph.series : words.scope(graph.scope)
@@ -306,6 +326,9 @@ FocusScope {
                 }
                 color: theme.colors.muted
                 elide: Text.ElideRight
+                // Whole or not at all: a count cut to "4…" says nothing,
+                // and the kinds under it carry the same numbers.
+                opacity: width >= implicitWidth - 1 ? 1 : 0
             }
             // The one sign that the graph is being worked on: the AI noting
             // what was read, or a large picture still finding its shape.
@@ -333,15 +356,6 @@ FocusScope {
                 value: graph.depth
                 onMoved: graph.depth = Math.round(value)
                 Accessible.name: qsTr("How far around the selected thing is shown")
-            }
-            // What the keys do, as buttons, where fingers are the keyboard.
-            Row {
-                objectName: "graphTouchBar"
-                visible: win.touch
-                spacing: 8
-                AppButton { objectName: "graphTouchFind"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("find") }
-                AppButton { objectName: "graphTouchFilter"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
-                AppButton { objectName: "graphTouchAdd"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: sheet.show("add", pane.node) }
             }
             // The picture or the list.
             Row {
@@ -392,6 +406,22 @@ FocusScope {
                 HoverHandler { id: hideHover }
                 TapHandler { onTapped: pane.done() }
             }
+        }
+
+        // What the keys do, as buttons, where fingers are the keyboard. A row
+        // of their own under the header, which wraps: beside the title they
+        // ran off a narrow pane, in any language.
+        Flow {
+            objectName: "graphTouchBar"
+            visible: win.touch
+            Layout.fillWidth: true
+            Layout.leftMargin: 16
+            Layout.rightMargin: 16
+            Layout.bottomMargin: 8
+            spacing: 8
+            AppButton { objectName: "graphTouchFind"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("find") }
+            AppButton { objectName: "graphTouchFilter"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
+            AppButton { objectName: "graphTouchAdd"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: sheet.show("add", pane.node) }
         }
 
         // The kinds there are: the picture's legend, and each a switch that
@@ -571,10 +601,10 @@ FocusScope {
             // be asked for: by a tap on a thing, or by the key for them.
             readonly property bool detailed: pane.showDetails && pane.hasNode && (!either || pane.peek)
             // Beside the picture where there is room, under it where there isn't.
-            readonly property real sideWidth: detailed && !pane.compact ? 320 : 0
+            readonly property real sideWidth: detailed && !pane.compact ? detailsSide.implicitWidth : 0
             // In a window too low for both, one thing at a time: the details
             // take the picture's place until they are closed.
-            readonly property bool either: pane.compact && height < 300
+            readonly property bool either: pane.compact && height < pane.pictureFloor
             readonly property real underHeight: !detailed || !pane.compact ? 0
                                                 : either ? height : Math.min(Math.round(height * 0.48), 280)
 
@@ -768,22 +798,40 @@ FocusScope {
                 objectName: "graphGrows"
                 visible: !pane.reading && graph.showing === "scope" && graph.scope === "" && graph.knownCount > 0 && !graph.storied
                          && !pane.listing
+                         // Over a picture with room under it, not on top of a small one.
+                         && canvas.height >= pane.pictureFloor
                 anchors.horizontalCenter: canvas.horizontalCenter
                 anchors.top: parent.top
                 anchors.topMargin: 4
                 width: Math.min(canvas.width - 32, 560)
                 horizontalAlignment: Text.AlignHCenter
                 wrapMode: Text.Wrap
+                // No more of it than a small picture has room for over itself.
+                maximumLineCount: Math.max(1, Math.min(4, Math.floor((canvas.height - 8) / 18)))
+                elide: Text.ElideRight
                 color: theme.colors.muted
                 text: qsTr("These are your books, their authors, series and tags. The people, places and ideas in them join as you read, with the knowledge graph switched on in the settings.")
             }
 
-            // Nothing to show says why, and how the graph comes to be.
-            ColumnLayout {
-                objectName: "graphEmpty"
+            // Nothing to show says why, and how the graph comes to be: in
+            // the middle of the pane, and scrolling where a low or narrow
+            // one has less room than the words and the buttons take.
+            Flickable {
+                id: emptyScroller
+                anchors.fill: parent
                 visible: graph.nodeCount === 0
-                anchors.centerIn: parent
-                width: Math.min(parent.width - 48, 460)
+                contentHeight: emptyColumn.height + 24
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                interactive: contentHeight > height
+                ScrollBar.vertical: ScrollBar {}
+
+            ColumnLayout {
+                id: emptyColumn
+                objectName: "graphEmpty"
+                x: (emptyScroller.width - width) / 2
+                y: Math.max(12, (emptyScroller.height - height) / 2)
+                width: Math.min(emptyScroller.width - 32, 460)
                 spacing: 12
 
                 Label {
@@ -825,17 +873,13 @@ FocusScope {
                     color: theme.colors.muted
                     text: qsTr("%1 adds something by hand.").arg(pane.keyOf("graph.add"))
                 }
-                // A grid, so the buttons stand side by side where there is
-                // room and under each other, still centred, where there isn't.
-                GridLayout {
-                    Layout.alignment: Qt.AlignHCenter
+                // Side by side where there is room and wrapped where there
+                // isn't, in the middle either way, and never wider than the pane.
+                DialogActions {
+                    centred: true
                     Layout.topMargin: 4
-                    columns: parent.width >= 380 ? 3 : 1
-                    columnSpacing: 8
-                    rowSpacing: 8
                     AppButton {
                         objectName: "graphGrow"
-                        Layout.alignment: Qt.AlignHCenter
                         // Reading it in is the AI's work, for the open book.
                         visible: pane.reading && graph.knownCount === 0 && settings.graph !== "off" && assistant.available
                                  && !pane.growing
@@ -846,7 +890,6 @@ FocusScope {
                     }
                     AppButton {
                         objectName: "graphEmptyAdd"
-                        Layout.alignment: Qt.AlignHCenter
                         visible: graph.knownCount === 0
                         focusPolicy: Qt.NoFocus
                         text: qsTr("Add Something")
@@ -854,7 +897,6 @@ FocusScope {
                     }
                     AppButton {
                         objectName: "graphShowAll"
-                        Layout.alignment: Qt.AlignHCenter
                         visible: graph.knownCount > 0
                         focusPolicy: Qt.NoFocus
                         text: qsTr("Show everything again")
@@ -865,16 +907,32 @@ FocusScope {
                     }
                 }
             }
+            }
+
+            // The details are a pane like those beside the shelf and the
+            // page: beside the picture their edge drags and their width is
+            // remembered. Under the picture they are as wide as the pane.
+            SidePane {
+                id: detailsSide
+                objectName: "graphDetailsSide"
+                name: "graph_details"
+                standard: 320
+                least: 260
+                most: 560
+                room: body.width - win.contentFloor
+                fixed: pane.compact
+                lined: false
+                visible: body.detailed
+                anchors.right: parent.right
+                anchors.bottom: parent.bottom
+                width: pane.compact ? parent.width : implicitWidth
+                height: pane.compact ? body.underHeight : parent.height
 
             GraphDetails {
                 id: details
                 objectName: "graphDetails"
-                visible: body.detailed
+                anchors.fill: parent
                 below: pane.compact
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                width: pane.compact ? parent.width : body.sideWidth
-                height: pane.compact ? body.underHeight : parent.height
                 node: pane.node
                 onJump: (id) => graph.jumpTo(id)
                 onLook: graph.recentre()
@@ -886,6 +944,7 @@ FocusScope {
                 onUnlink: (relation) => sheet.show("unlink", pane.node, relation)
                 closable: body.either
                 onClose: pane.peek = false
+            }
             }
         }
     }

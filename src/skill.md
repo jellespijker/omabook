@@ -73,6 +73,9 @@ omabook plugins disable calibre           # everything Calibre at once: its libr
 omabook calibre plugins --json            # Calibre's own plugins of every kind: type, usable by Omabook or why not
 omabook plugin install ./plugin.zip --json  # install someone else's plugin (a folder or a .zip): checked, and off until enabled
 omabook plugin remove reading-log         # move one of the user's own plugins to the trash; ask the user first
+omabook plugin add owner/repo --json      # install a plugin from a public GitHub repository (or a link to a release, tag, branch or folder); off until enabled
+omabook plugin sources --json             # where each plugin came from, what it follows, what is installed, whether an update waits
+omabook plugin update --all               # install what is newer; one that asks for a new permission waits for `update <name> --yes` after the user agreed
 omabook catalog --format csv > books.csv  # the library as a table; --format bibtex for references; takes a search
 ```
 

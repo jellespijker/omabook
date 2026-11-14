@@ -10,6 +10,7 @@
 #include <functional>
 
 #include "filepicker.h"
+#include "pluginsources.h"
 
 class MetadataSource;
 class Plugins;
@@ -39,6 +40,15 @@ class PluginManager : public QObject {
     Q_PROPERTY(QVariantMap trial READ trial NOTIFY trialChanged)
     // A book every catalog knows, to try a source with.
     Q_PROPERTY(QString sampleTitle READ sampleTitle CONSTANT)
+    // Plugins from GitHub repositories (see PluginSources). `fetching` while
+    // an address is being looked up for the install sheet; `checking` holds
+    // the id of the plugin whose source is being asked, or "all"; `sourced`
+    // when any plugin has a source at all; `sourceNote` is what the last
+    // check or update of one plugin came to: {id, text, problem}.
+    Q_PROPERTY(bool fetching READ fetching NOTIFY busyChanged)
+    Q_PROPERTY(QString checking READ checking NOTIFY busyChanged)
+    Q_PROPERTY(bool sourced READ sourced NOTIFY changed)
+    Q_PROPERTY(QVariantMap sourceNote READ sourceNote NOTIFY sourceNoteChanged)
 
 public:
     // What opens a folder in the file manager; tests pass their own.
@@ -57,6 +67,11 @@ public:
     QVariantMap offer() const { return m_offer; }
     QVariantMap trial() const { return m_trial; }
     QString sampleTitle() const { return QStringLiteral("Pride and Prejudice"); }
+    bool fetching() const { return m_fetching; }
+    QString checking() const { return m_checking; }
+    bool sourced() const { return m_sourced; }
+    QVariantMap sourceNote() const { return m_sourceNote; }
+    PluginSources *sources() { return &m_sources; }
 
     // Looks at the plugins again. The registry is asked what is known, so
     // this is cheap enough to do whenever something may have changed.
@@ -86,6 +101,29 @@ public:
     // Moves a source of details earlier (-1) or later (1) in the order asked.
     Q_INVOKABLE bool move(const QString &id, int by);
 
+    // Fetches the plugin at a GitHub address (owner/repo, or a link) and
+    // puts it on offer, as `pick` does for a .zip; `install` then installs
+    // it and remembers where it came from.
+    Q_INVOKABLE void lookUp(const QString &address);
+    // Asks a plugin's source whether there is something newer.
+    Q_INVOKABLE void checkNow(const QString &id);
+    // Installs what is newer. An update that asks for more than the version
+    // installed is put on offer instead, for the person to approve.
+    Q_INVOKABLE void updateNow(const QString &id);
+    Q_INVOKABLE void reviewUpdate(const QString &id);
+    // Stays at a tag or follows a branch; follows the latest release again;
+    // goes back to the version before the last update; stops updating.
+    Q_INVOKABLE void pinTo(const QString &id, const QString &ref);
+    Q_INVOKABLE void followLatest(const QString &id);
+    Q_INVOKABLE void rollBack(const QString &id);
+    Q_INVOKABLE void forgetSource(const QString &id);
+    // Every source now, as the daily look does by itself.
+    Q_INVOKABLE void checkAll();
+    // The daily look, `milliseconds` from now: sources not checked in the
+    // last day are asked, and what the settings say is done about updates.
+    // It is all answered later, so nothing waits on it.
+    void checkSoon(int milliseconds);
+
     // Asks one plugin about one title, to see that it works.
     Q_INVOKABLE void tryOut(const QString &id, const QString &title);
     Q_INVOKABLE void stopTrial();
@@ -94,6 +132,11 @@ signals:
     void changed();
     void offerChanged();
     void trialChanged();
+    void busyChanged();
+    void sourceNoteChanged();
+    // Something the person should hear of though they didn't ask: a plugin
+    // that was updated, or one that went back to the version before.
+    void said(const QString &text);
     // The manager changed what there is (installed, removed, reordered), so
     // whoever else shows the plugins should look again.
     void touched();
@@ -102,6 +145,12 @@ private:
     void picked(FilePicker::Purpose purpose, const QList<QUrl> &urls);
     void answered(MetadataSource *source, const QList<MetaCandidate> &candidates, const QString &problem);
     QString pluginFolder(const QString &id) const;
+    void setChecking(const QString &id);
+    void note(const QString &id, const QString &text, bool problem = false);
+    // What a check or an update of one source came to, in words.
+    QString outcome(const QJsonObject &answer, bool asked);
+    void sourceAnswered(const QJsonObject &answer, bool asked);
+    void dailyCheck();
 
     Settings *m_settings;
     Plugins *m_registry;
@@ -115,4 +164,12 @@ private:
     QObject *m_trialSources = nullptr;
     int m_trialPending = 0;
     QTimer m_trialLimit;
+    PluginSources m_sources;
+    QTimer m_daily;
+    bool m_fetching = false, m_sourced = false;
+    QString m_checking;
+    QVariantMap m_sourceNote;
+    // Plugins updated in this run: one that then stops with an error goes
+    // back to the version before by itself.
+    QStringList m_updated;
 };

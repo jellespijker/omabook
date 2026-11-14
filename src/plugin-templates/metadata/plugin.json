@@ -3,6 +3,7 @@
     "version": "1.0",
     "author": "",
     "description": "Looks book details up in Gutendex, the catalog of Project Gutenberg.",
+    "omabook": "{{omabook}}",
     "script": "main.js",
     "permissions": ["http"]
 }

@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -667,6 +668,28 @@ private slots:
         QVERIFY2(library.open(&error), qPrintable(error));
         QCOMPARE(library.books().size(), 1);
         QCOMPARE(library.books().first().meta.title, QString("Kept"));
+        // Before it was changed it was copied, as it was: format 1, one book.
+        const QStringList copies = QDir(library.backupFolder()).entryList({"omabook-format-1-*.db"});
+        QCOMPARE(copies.size(), 1);
+        {
+            QSqlDatabase copy = QSqlDatabase::addDatabase("QSQLITE", "copy");
+            copy.setDatabaseName(library.backupFolder() + "/" + copies.first());
+            QVERIFY(copy.open());
+            QSqlQuery version(copy);
+            QVERIFY(version.exec("PRAGMA user_version") && version.next());
+            QCOMPARE(version.value(0).toInt(), 1);
+            QSqlQuery kept(copy);
+            QVERIFY(kept.exec("SELECT title FROM books") && kept.next());
+            QCOMPARE(kept.value(0).toString(), QString("Kept"));
+            copy.close();
+        }
+        QSqlDatabase::removeDatabase("copy");
+        // Opened again there is nothing to change, so no second copy.
+        {
+            Library again(dir.path());
+            QVERIFY(again.open());
+            QCOMPARE(QDir(again.backupFolder()).entryList({"omabook-format-*.db"}).size(), 1);
+        }
         QVERIFY(library.removedHashes().isEmpty());
         QVERIFY(!library.wasRemoved("x"));
     }
@@ -1062,6 +1085,77 @@ private slots:
         QString error;
         QVERIFY(!library.open(&error));
         QVERIFY2(error.contains("newer"), qPrintable(error));
+        // It says what to do, and where the copies from before an update are.
+        QVERIFY2(error.contains("Update Omabook") && error.contains(".backups"), qPrintable(error));
+    }
+
+    void everyReleasedLibraryStillOpens() {
+        // A library as each release left it, kept as a dump of its database
+        // (tests/data/library-<version>.sql). Every one must still open, be
+        // brought up to date with nothing lost, and be copied first when its
+        // format changes. A new release adds its own dump; none is removed.
+        const QDir data(QFileInfo(QFINDTESTDATA("data/library-0.1.0.sql")).absolutePath());
+        const QStringList dumps = data.entryList({"library-*.sql"}, QDir::Files, QDir::Name);
+        QVERIFY(dumps.contains("library-0.1.0.sql"));
+        for (const QString &dump : dumps) {
+            QTemporaryDir dir;
+            int format = 0;
+            {
+                QFile file(data.filePath(dump));
+                QVERIFY(file.open(QIODevice::ReadOnly));
+                QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", "released");
+                database.setDatabaseName(dir.filePath("omabook.db"));
+                QVERIFY(database.open());
+                for (const QString &statement : QString::fromUtf8(file.readAll()).split(";\n", Qt::SkipEmptyParts)) {
+                    const QString sql = statement.trimmed();
+                    if (sql.isEmpty() || sql == "COMMIT" || sql.startsWith("BEGIN"))
+                        continue;
+                    QSqlQuery query(database);
+                    QVERIFY2(query.exec(sql), qPrintable(dump + ": " + query.lastError().text() + "\n" + sql.left(120)));
+                }
+                QSqlQuery version(database);
+                QVERIFY(version.exec("PRAGMA user_version") && version.next());
+                format = version.value(0).toInt();
+                version.finish();
+                database.close();
+            }
+            QSqlDatabase::removeDatabase("released");
+            QVERIFY2(format > 0, qPrintable(dump));
+
+            Library library(dir.path());
+            QString error;
+            QVERIFY2(library.open(&error), qPrintable(dump + ": " + error));
+            QVERIFY(library.formatVersion() >= format);
+            // A change of format leaves a copy of the library as it was.
+            const QStringList copies = QDir(library.backupFolder()).entryList({QString("omabook-format-%1-*.db").arg(format)});
+            QCOMPARE(copies.size(), library.formatVersion() > format ? 1 : 0);
+
+            // What 0.1.0 held, which every later Omabook must still show.
+            const QList<Book> books = library.books();
+            QCOMPARE(books.size(), 3);
+            const Book wall = *library.book(1), paper = *library.book(2), later = *library.book(3);
+            QCOMPARE(wall.meta.title, QString("The Sea Wall"));
+            QCOMPARE(wall.meta.series, QString("The Coast"));
+            QCOMPARE(wall.meta.tags, (QStringList{"fiction", "sea"}));
+            QCOMPARE(wall.status(), QString("reading"));
+            QCOMPARE(wall.rating, 4);
+            QCOMPARE(qRound(wall.percent), 60);
+            QCOMPARE(library.progress(1).section, 1);
+            QCOMPARE(library.annotations(1).size(), 1);
+            QCOMPARE(paper.held(), QString("paper"));
+            QCOMPARE(paper.status(), QString("read"));
+            QCOMPARE(paper.finished, QString("2026-03-01"));
+            QCOMPARE(later.held(), QString("none"));
+            QCOMPARE(later.status(), QString("to-read"));
+            const Graph graph(library);
+            const qint64 ann = graph.named({}, "character", "Ann");
+            QVERIFY(ann > 0);
+            QCOMPARE(graph.node(ann)->summary, QString("Walks the sea wall."));
+            QCOMPARE(graph.around(ann, 1).edges.size(), 1);
+            QCOMPARE(graph.ofBook(1).nodes.size(), 2);
+            QVERIFY(graph.scopes().contains("world:1"));
+            QCOMPARE(graph.readingLog(1).size(), 1);
+        }
     }
 
     void theLayersPointOneWay() {

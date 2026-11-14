@@ -141,6 +141,14 @@ expect "what is no plugin is refused" 1 "no plugin.json" "$omabook" plugin insta
 expect "a plugin is removed" 0 "from-zip is" "$omabook" plugin remove from-zip
 [ ! -e "$XDG_CONFIG_HOME/omabook/plugins/from-zip" ] || fail "the removed plugin is still in the plugin folder"
 expect "what isn't there can't be removed" 1 "no plugin from-zip" "$omabook" plugin remove from-zip
+# Plugins from GitHub: nothing here asks the network. An address that isn't GitHub is refused before anything is asked.
+expect "no plugin came from a repository yet" 0 "omabook plugin add owner/repo" "$omabook" plugin sources
+expect "only GitHub is fetched from" 1 "Only GitHub" "$omabook" plugin add https://example.com/someone/plugin
+expect "what is done about updates is a setting" 0 "only told" "$omabook" plugin sources --updates tell
+expect "and only one of three" 1 "auto" "$omabook" plugin sources --updates sometimes
+expect "a plugin without a source has nothing to update" 1 "No source" "$omabook" plugin update reading-list --check
+expect "the host's version is in the reference" 0 '"omabook"' "$omabook" plugin api --json
+expect "a new plugin says which Omabook it was written on" 0 '"omabook"' cat "$XDG_CONFIG_HOME/omabook/plugins/reading-list/plugin.json"
 
 # A book format added by a script, from the template: read by the commands with no window and nobody loading the plugin for them.
 expect "a format plugin starts from a template" 0 "plugins/textbook" "$omabook" plugin new textbook --template format

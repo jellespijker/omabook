@@ -58,6 +58,7 @@ QJsonArray overview(const QList<PluginInfo> &plugins, const ScriptPlugins *scrip
 //   {id, name, issue: "broken"}       a script or program plugin that is at fault
 //   {id, name, issue: "missing", program}   a program plugin whose program isn't there
 //   {id, name, issue: "calibre-off"}  Calibre switched off though its libraries are here
+//   {id, name, issue: "needs-omabook", note}  a plugin that asks for a newer Omabook than this
 QJsonArray health(const QJsonArray &overview, const CalibrePlugin &calibre);
 
 // The last error of a script plugin, from <name>.error beside its folder:
@@ -85,13 +86,25 @@ struct InstallOptions {
     bool enable = false;  // a new plugin stays off until its permissions were seen
     bool replace = false; // put it in the place of one of the same name, which goes to the trash
     Limits limits;
+    // For a plugin kept in a folder of a larger package (a repository):
+    // the folder inside it that holds plugin.json. Only that folder is installed.
+    QString subfolder;
+    // For an update: the plugin's switch is left as it is (`enable` is not
+    // looked at), and the one that is replaced is moved here instead of to
+    // the trash, so there is one step back. See PluginSources.
+    bool keepState = false;
+    QString previous;
 };
 
 // Reads a plugin that is not installed yet, from a folder or a .zip, and
 // says what it is without putting it anywhere: {name, title, version,
-// author, description, kind: "script" or "program", permissions, files,
+// author, description, kind: "script" or "program", permissions, adds, files,
 // bytes, installed (one of that name is there already), source}. A program
 // plugin's one permission is "program": it runs as a program of its own.
+// `adds` is what a script looks to register ("source", "catalog", "format",
+// "importer", "command", "panel", "hook"), found by reading its files: the
+// script is not run to find out, since nothing of a plugin runs before it
+// was approved.
 //
 // It fails for a package with no plugin.json, one that can't be read or
 // names neither a script nor a command, a permission this Omabook doesn't
