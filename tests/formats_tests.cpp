@@ -33,8 +33,8 @@ private slots:
     void cleanHtmlShowsWhatStylesheetsSay() {
         CleanOptions options;
         options.styles = classStyles(".it{font-style:italic} p.c, .other {text-align:center} .deep p{font-weight:bold}");
-        QCOMPARE(options.styles.value("it"), int(Italic));
-        QCOMPARE(options.styles.value("c"), int(Center));
+        QCOMPARE(options.styles.value("it"), TextStyles(TextStyle::Italic));
+        QCOMPARE(options.styles.value("c"), TextStyles(TextStyle::Center));
         QVERIFY(!options.styles.contains("deep"));
         QCOMPARE(cleanHtml("<p class=\"c\"><span class='it'>x</span></p>", options),
                  QString("<p align=\"center\"><i>x</i></p>"));

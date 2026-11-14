@@ -7,59 +7,68 @@
 #include <QFileInfo>
 #include <QUrl>
 #include <algorithm>
+#include <array>
 
 #include "bookarchive.h"
 #include "htmlclean.h"
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
-// What one file of a book may honestly weigh; see bookarchive.cpp.
-const qint64 maximumFileSize = 512LL * 1024 * 1024;
-
-bool hidden(const QString &name) {
-    const QStringList parts = name.split('/');
-    return std::any_of(parts.begin(), parts.end(), [](const QString &part) { return part.startsWith('.') || part == "__MACOSX"; });
+[[nodiscard]] bool hidden(const QString &name) {
+    return std::ranges::any_of(name.split('/'), [](const QString &part) { return part.startsWith('.') || part == "__MACOSX"_L1; });
 }
 
 } // namespace
 
-BookSource::BookSource(const QString &path) : m_path(path) {
+BookSource::BookSource(const QString &path) : m_path(path), m_kind(kindOf(path)) {}
+
+BookSource::Kind BookSource::kindOf(const QString &path) {
     const QFileInfo info(path);
-    m_kind = info.isDir() ? Folder : Single;
     if (info.isDir())
-        return;
+        return Kind::Folder;
     // An archive is told by how it begins, not by what it is called, so a
     // format's own extension for a zipped book needs no list kept here.
     QFile file(path);
     const QByteArray start = file.open(QIODevice::ReadOnly) ? file.read(8) : QByteArray();
-    static const QStringList tarred{"tar", "tgz", "gz", "cbt"};
-    if (start.startsWith("PK") || start.startsWith("Rar!") || start.startsWith("7z\xBC\xAF")
-        || tarred.contains(info.suffix().toLower()))
-        m_kind = Archived;
+    static constexpr std::array tarred{"tar"_L1, "tgz"_L1, "gz"_L1, "cbt"_L1};
+    const bool archived = start.startsWith("PK") || start.startsWith("Rar!") || start.startsWith("7z\xBC\xAF")
+                          || std::ranges::contains(tarred, info.suffix().toLower());
+    return archived ? Kind::Archived : Kind::Single;
 }
 
 QString BookSource::name() const {
     const QFileInfo info(m_path);
-    return m_kind == Folder ? info.fileName() : info.completeBaseName();
+    return m_kind == Kind::Folder ? info.fileName() : info.completeBaseName();
+}
+
+void BookSource::sortNaturally(QStringList &names) {
+    QCollator natural;
+    natural.setNumericMode(true);
+    natural.setCaseSensitivity(Qt::CaseInsensitive);
+    std::ranges::sort(names, natural);
 }
 
 QStringList BookSource::entries() const {
     QStringList names;
-    if (m_kind == Single) {
+    switch (m_kind) {
+    case Kind::Single:
         names << QFileInfo(m_path).fileName();
-    } else if (m_kind == Archived) {
+        break;
+    case Kind::Archived:
         names = Archive(m_path).entries();
-    } else {
+        break;
+    case Kind::Folder: {
         const QDir root(m_path);
         QDirIterator walk(m_path, QDir::Files, QDirIterator::Subdirectories);
         while (walk.hasNext())
             names << root.relativeFilePath(walk.next());
+        break;
     }
-    names.erase(std::remove_if(names.begin(), names.end(), hidden), names.end());
-    QCollator natural;
-    natural.setNumericMode(true);
-    natural.setCaseSensitivity(Qt::CaseInsensitive);
-    std::sort(names.begin(), names.end(), [&](const QString &a, const QString &b) { return natural.compare(a, b) < 0; });
+    }
+    names.removeIf(hidden);
+    sortNaturally(names);
     return names;
 }
 
@@ -67,12 +76,13 @@ QByteArray BookSource::read(const QString &name) const {
     // A name is a path inside the book and nothing else.
     if (name.isEmpty() || name.startsWith('/') || QDir::cleanPath(name).startsWith(".."))
         return {};
-    if (m_kind == Archived)
+    if (m_kind == Kind::Archived)
         return Archive(m_path).read(name);
-    QFile file(m_kind == Single ? m_path : m_path + "/" + name);
-    if (m_kind == Single && name != QFileInfo(m_path).fileName())
+    QFile file(m_kind == Kind::Single ? m_path : m_path + "/" + name);
+    if (m_kind == Kind::Single && name != QFileInfo(m_path).fileName())
         return {};
-    if (file.size() > maximumFileSize || !file.open(QIODevice::ReadOnly))
+    // What one file of a book may honestly weigh is what one member of an archive may.
+    if (file.size() > Archive::maximumEntrySize || !file.open(QIODevice::ReadOnly))
         return {};
     const QByteArray data = file.readAll();
     return data.isNull() ? QByteArray("") : data;

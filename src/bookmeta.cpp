@@ -2,10 +2,11 @@
 
 #include <QJsonArray>
 #include <QRegularExpression>
+#include <utility>
 
 namespace {
 
-QStringList splitList(const QString &text, const QRegularExpression &separator) {
+[[nodiscard]] QStringList splitList(const QString &text, const QRegularExpression &separator) {
     QStringList parts;
     for (const QString &part : text.split(separator, Qt::SkipEmptyParts)) {
         const QString trimmed = part.simplified();
@@ -15,13 +16,13 @@ QStringList splitList(const QString &text, const QRegularExpression &separator) 
     return parts;
 }
 
-QStringList stringList(const QJsonValue &value) {
+[[nodiscard]] QStringList stringList(const QJsonValue &value) {
     QStringList list;
     if (value.isString())
         return BookMeta::splitAuthors(value.toString());
     for (const QJsonValue &item : value.toArray())
-        if (!item.toString().simplified().isEmpty())
-            list << item.toString().simplified();
+        if (const QString name = item.toString().simplified(); !name.isEmpty())
+            list << name;
     return list;
 }
 
@@ -58,7 +59,7 @@ void BookMeta::apply(const BookMeta &other) {
 void BookMeta::fillFrom(const BookMeta &other) {
     BookMeta merged = other;
     merged.apply(*this);
-    *this = merged;
+    *this = std::move(merged);
 }
 
 QJsonObject BookMeta::toJson() const {

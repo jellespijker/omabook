@@ -18,7 +18,7 @@ public:
     QString path() const { return m_path; }
     // The book's name as its folder or file is called, without an extension.
     QString name() const;
-    bool isFolder() const { return m_kind == Folder; }
+    bool isFolder() const noexcept { return m_kind == Kind::Folder; }
 
     // Every file, in natural order ("2" before "10") with hidden files and
     // folders left out; empty when the book can't be read.
@@ -39,8 +39,13 @@ public:
     // one file a library can hold. False when something couldn't be written.
     bool pack(const QString &zipPath) const;
 
+    // Puts names in natural order: "2" before "10", whatever the case.
+    static void sortNaturally(QStringList &names);
+
 private:
-    enum Kind { Folder, Archived, Single };
+    enum class Kind { Folder, Archived, Single };
+    static Kind kindOf(const QString &path);
+
     QString m_path;
     Kind m_kind;
 };

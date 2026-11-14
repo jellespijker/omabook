@@ -2,8 +2,12 @@
 #include <QRegularExpression>
 #include <QTextDocument>
 #include <algorithm>
+#include <array>
+#include <ranges>
 
 #include "formatprovider.h"
+
+using namespace Qt::StringLiterals;
 
 // Markdown books: a folder of Markdown files, or the same folder zipped. It
 // is a format provider like any a plugin adds (see formatprovider.h), which
@@ -18,27 +22,28 @@
 
 namespace {
 
-const QStringList markdownSuffixes{"md", "markdown", "mdown"};
-const QStringList pictureSuffixes{"png", "jpg", "jpeg", "gif", "webp", "svg", "bmp"};
+constexpr std::array markdownSuffixes{"md"_L1, "markdown"_L1, "mdown"_L1};
+constexpr std::array pictureSuffixes{"png"_L1, "jpg"_L1, "jpeg"_L1, "gif"_L1, "webp"_L1, "svg"_L1, "bmp"_L1};
 
-QString suffix(const QString &name) { return QFileInfo(name).suffix().toLower(); }
-bool isMarkdown(const QString &name) { return markdownSuffixes.contains(suffix(name)); }
-QString baseName(const QString &name) { return QFileInfo(name).completeBaseName(); }
-int depth(const QString &name) { return int(name.count('/')); }
+[[nodiscard]] QString suffix(const QString &name) { return QFileInfo(name).suffix().toLower(); }
+[[nodiscard]] bool isMarkdown(const QString &name) { return std::ranges::contains(markdownSuffixes, suffix(name)); }
+[[nodiscard]] bool isPicture(const QString &name) { return std::ranges::contains(pictureSuffixes, suffix(name)); }
+[[nodiscard]] QString baseName(const QString &name) { return QFileInfo(name).completeBaseName(); }
+[[nodiscard]] int depth(const QString &name) { return int(name.count('/')); }
 
 // The book is Markdown and what Markdown brings along: its pictures and the
 // odd settings or licence file. Anything else (source code, other books)
 // makes the folder something other than a book of this kind.
 bool claims(const BookSource &source) {
-    static const QStringList beside{"css", "yml", "yaml", "toml", "json", "txt", ""};
+    static constexpr std::array beside{"css"_L1, "yml"_L1, "yaml"_L1, "toml"_L1, "json"_L1, "txt"_L1, ""_L1};
     const QStringList entries = source.entries();
     const auto fits = [](const QString &name) {
-        return isMarkdown(name) || pictureSuffixes.contains(suffix(name)) || beside.contains(suffix(name));
+        return isMarkdown(name) || isPicture(name) || std::ranges::contains(beside, suffix(name));
     };
-    return std::any_of(entries.begin(), entries.end(), isMarkdown) && std::all_of(entries.begin(), entries.end(), fits);
+    return std::ranges::any_of(entries, isMarkdown) && std::ranges::all_of(entries, fits);
 }
 
-QString unquoted(QString value) {
+[[nodiscard]] QString unquoted(QString value) {
     value = value.trimmed();
     if (value.size() >= 2 && (value.startsWith('"') || value.startsWith('\'')) && value.endsWith(value.at(0)))
         value = value.mid(1, value.size() - 2);
@@ -46,7 +51,7 @@ QString unquoted(QString value) {
 }
 
 // "[a, b]" or "a, b" as its parts.
-QStringList listed(QString value) {
+[[nodiscard]] QStringList listed(QString value) {
     value = value.trimmed();
     if (value.startsWith('[') && value.endsWith(']'))
         value = value.mid(1, value.size() - 2);
@@ -60,7 +65,7 @@ QStringList listed(QString value) {
 // The simple "key: value" lines front matter and book.toml are made of, with
 // a list either on the line or as "- item" lines under it. This is not a
 // YAML parser: it reads what books carry, and skips what it doesn't know.
-QHash<QString, QStringList> settings(const QString &text, QChar separator) {
+[[nodiscard]] QHash<QString, QStringList> settings(const QString &text, QChar separator) {
     QHash<QString, QStringList> found;
     QString key;
     for (const QString &line : text.split('\n')) {
@@ -77,19 +82,22 @@ QHash<QString, QStringList> settings(const QString &text, QChar separator) {
     return found;
 }
 
-// A file's text without its front matter, which is handed back in `front`.
-QString withoutFrontMatter(QString text, QString *front = nullptr) {
+// A file's text, and the front matter that came before it.
+struct Parted {
+    QString front;
+    QString text;
+};
+
+[[nodiscard]] Parted withoutFrontMatter(QString text) {
     text.replace("\r\n", "\n");
     static const QRegularExpression block("\\A---\\n(.*?)\\n(---|\\.\\.\\.)[ \\t]*(\\n|\\z)", QRegularExpression::DotMatchesEverythingOption);
     const QRegularExpressionMatch match = block.match(text);
     if (!match.hasMatch())
-        return text;
-    if (front)
-        *front = match.captured(1);
-    return text.mid(match.capturedEnd());
+        return {.front = {}, .text = text};
+    return {.front = match.captured(1), .text = text.mid(match.capturedEnd())};
 }
 
-QString firstHeading(const QString &markdown) {
+[[nodiscard]] QString firstHeading(const QString &markdown) {
     static const QRegularExpression heading("^#{1,6}[ \\t]+(.+?)[ \\t]*#*$", QRegularExpression::MultilineOption);
     static const QRegularExpression underlined("^(\\S.*)\\n(=+|-+)[ \\t]*$", QRegularExpression::MultilineOption);
     const QRegularExpressionMatch hashed = heading.match(markdown), lined = underlined.match(markdown);
@@ -99,7 +107,7 @@ QString firstHeading(const QString &markdown) {
 }
 
 // "02-the_road" as "The road": a file's name where it has no heading.
-QString titleFromName(const QString &name) {
+[[nodiscard]] QString titleFromName(const QString &name) {
     QString title = baseName(name);
     static const QRegularExpression number("^\\d+[-_. ]+");
     title.remove(number);
@@ -114,19 +122,18 @@ struct Planned {
 };
 
 // The chapters in order: as SUMMARY.md lists them, or by name.
-QList<Planned> plan(const BookSource &source, const QStringList &entries) {
+[[nodiscard]] QList<Planned> plan(const BookSource &source, const QStringList &entries) {
     QList<Planned> chapters;
-    QStringList summaries;
-    for (const QString &name : entries)
-        if (QFileInfo(name).fileName().compare("SUMMARY.md", Qt::CaseInsensitive) == 0)
-            summaries << name;
-    std::sort(summaries.begin(), summaries.end(), [](const QString &a, const QString &b) { return depth(a) < depth(b); });
-    if (!summaries.isEmpty()) {
+    // The contents file nearest the top of the book is the book's.
+    auto summaries = entries | std::views::filter([](const QString &name) {
+        return QFileInfo(name).fileName().compare("SUMMARY.md"_L1, Qt::CaseInsensitive) == 0;
+    });
+    if (const auto summary = std::ranges::min_element(summaries, {}, depth); summary != summaries.end()) {
         static const QRegularExpression item("^([ \\t]*)(?:[-*+][ \\t]+)?\\[([^\\]]+)\\]\\(([^)\\s]*)\\)");
         QList<int> indents;
-        for (const QString &line : withoutFrontMatter(source.text(summaries.first())).split('\n')) {
+        for (const QString &line : withoutFrontMatter(source.text(*summary)).text.split('\n')) {
             const QRegularExpressionMatch match = item.match(line);
-            const QString file = match.hasMatch() ? BookSource::resolve(summaries.first(), match.captured(3)) : QString();
+            const QString file = match.hasMatch() ? BookSource::resolve(*summary, match.captured(3)) : QString();
             if (file.isEmpty() || !entries.contains(file) || !isMarkdown(file))
                 continue;
             // Nesting is by how far a line is indented, whatever the width.
@@ -135,27 +142,22 @@ QList<Planned> plan(const BookSource &source, const QStringList &entries) {
                 indents.removeLast();
             if (indents.isEmpty() || indents.last() < indent)
                 indents << indent;
-            chapters.append({file, match.captured(2).trimmed(), int(indents.size()) - 1});
+            chapters.append({.file = file, .title = match.captured(2).trimmed(), .level = int(indents.size()) - 1});
         }
         if (!chapters.isEmpty())
             return chapters;
     }
     // No contents file: README or index opens the book, the rest follow by
     // name, and a file in a folder sits under it in the contents.
-    QStringList files;
-    for (const QString &name : entries)
-        if (isMarkdown(name))
-            files << name;
+    QStringList files = entries | std::views::filter(isMarkdown) | std::ranges::to<QStringList>();
     const auto opens = [](const QString &name) {
         const QString base = baseName(name).toLower();
-        return depth(name) == 0 && (base == "readme" || base == "index");
+        return depth(name) == 0 && (base == "readme"_L1 || base == "index"_L1);
     };
-    std::stable_partition(files.begin(), files.end(), opens);
-    const int shallowest = files.isEmpty() ? 0 : depth(*std::min_element(files.begin(), files.end(), [](const QString &a, const QString &b) {
-        return depth(a) < depth(b);
-    }));
+    std::ranges::stable_partition(files, opens);
+    const int shallowest = files.isEmpty() ? 0 : std::ranges::min(files | std::views::transform(depth));
     for (const QString &file : std::as_const(files))
-        chapters.append({file, {}, depth(file) - shallowest});
+        chapters.append({.file = file, .title = {}, .level = depth(file) - shallowest});
     return chapters;
 }
 
@@ -171,14 +173,16 @@ std::optional<BookDescription> describe(const BookSource &source, QString *error
     BookDescription book;
     QString front;
     for (const Planned &planned : chapters) {
-        QString chapterFront;
-        const QString markdown = withoutFrontMatter(source.text(planned.file), &chapterFront);
+        const auto [chapterFront, markdown] = withoutFrontMatter(source.text(planned.file));
         if (front.isEmpty())
             front = chapterFront;
         QTextDocument converted;
         converted.setMarkdown(markdown);
-        QString title = planned.title.isEmpty() ? firstHeading(markdown) : planned.title;
-        book.chapters.append({title.isEmpty() ? titleFromName(planned.file) : title, converted.toHtml(), planned.file, planned.level});
+        const QString title = planned.title.isEmpty() ? firstHeading(markdown) : planned.title;
+        book.chapters.append({.title = title.isEmpty() ? titleFromName(planned.file) : title,
+                              .html = converted.toHtml(),
+                              .file = planned.file,
+                              .level = planned.level});
     }
 
     // What the book says of itself: front matter first, mdBook's book.toml
@@ -187,13 +191,13 @@ std::optional<BookDescription> describe(const BookSource &source, QString *error
     for (const QString &name : entries)
         if (said.isEmpty() && QFileInfo(name).fileName() == "book.toml")
             said = settings(source.text(name), '=');
-    const auto one = [&](std::initializer_list<const char *> keys) {
+    const auto one = [&said](std::initializer_list<const char *> keys) {
         for (const char *key : keys)
             if (said.contains(key))
                 return said.value(key).join(", ");
         return QString();
     };
-    const auto many = [&](std::initializer_list<const char *> keys) {
+    const auto many = [&said](std::initializer_list<const char *> keys) {
         for (const char *key : keys)
             if (said.contains(key))
                 return said.value(key).size() == 1 ? listed(said.value(key).first()) : said.value(key);
@@ -201,7 +205,7 @@ std::optional<BookDescription> describe(const BookSource &source, QString *error
     };
     book.meta.title = one({"title"});
     if (book.meta.title.isEmpty())
-        book.meta.title = firstHeading(withoutFrontMatter(source.text(chapters.first().file)));
+        book.meta.title = firstHeading(withoutFrontMatter(source.text(chapters.first().file)).text);
     if (book.meta.title.isEmpty())
         book.meta.title = titleFromName(source.name());
     book.meta.authors = many({"authors", "author"});
@@ -217,7 +221,7 @@ std::optional<BookDescription> describe(const BookSource &source, QString *error
     // The cover the book names, or a picture called "cover" at its top.
     book.cover = BookSource::resolve(chapters.first().file, one({"cover", "cover-image", "cover_image"}));
     for (const QString &name : entries)
-        if (book.cover.isEmpty() && depth(name) <= 1 && baseName(name).toLower() == "cover" && pictureSuffixes.contains(suffix(name)))
+        if (book.cover.isEmpty() && depth(name) <= 1 && baseName(name).toLower() == "cover"_L1 && isPicture(name))
             book.cover = name;
     if (!entries.contains(book.cover))
         book.cover.clear();
@@ -227,5 +231,5 @@ std::optional<BookDescription> describe(const BookSource &source, QString *error
 } // namespace
 
 FormatProvider markdownBookProvider() {
-    return {"markdown", "Markdown book", {"mdz"}, claims, describe};
+    return {.id = "markdown", .name = "Markdown book", .extensions = {"mdz"}, .claims = claims, .describe = describe};
 }

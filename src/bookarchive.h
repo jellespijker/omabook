@@ -13,6 +13,10 @@ class Archive {
 public:
     explicit Archive(const QString &path) : m_path(path) {}
 
+    // A book's largest honest member is a scanned page or an embedded font; this
+    // stops an archive that claims gigabytes from eating the machine's memory.
+    static constexpr qint64 maximumEntrySize = 512LL * 1024 * 1024;
+
     // The files inside, in the archive's own order; empty when it can't be read.
     QStringList entries() const;
     // One file's bytes, or a null array when it is missing or too large.

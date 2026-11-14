@@ -4,6 +4,7 @@
 #include <QSet>
 #include <QUrl>
 #include <QXmlStreamReader>
+#include <algorithm>
 
 #include "bookarchive.h"
 #include "formatreaders.h"
@@ -19,7 +20,7 @@ struct ManifestItem {
 
 // A reference inside a book, relative to the file that makes it, as the path
 // of a file in the archive.
-QString resolve(const QString &base, const QString &reference) {
+[[nodiscard]] QString resolve(const QString &base, const QString &reference) {
     const QString decoded = QUrl::fromPercentEncoding(reference.section('#', 0, 0).toUtf8());
     if (decoded.isEmpty())
         return base;
@@ -30,10 +31,11 @@ QString resolve(const QString &base, const QString &reference) {
     return path;
 }
 
-QString isbnFrom(const QString &identifier) {
-    QString digits = identifier;
-    digits.remove(QRegularExpression("^urn:isbn:", QRegularExpression::CaseInsensitiveOption)).remove('-').remove(' ');
+[[nodiscard]] QString isbnFrom(const QString &identifier) {
+    static const QRegularExpression urn("^urn:isbn:", QRegularExpression::CaseInsensitiveOption);
     static const QRegularExpression isbn("^(97[89])?[0-9]{9}[0-9Xx]$");
+    QString digits = identifier;
+    digits.remove(urn).remove('-').remove(' ');
     return isbn.match(digits).hasMatch() ? digits.toUpper() : QString();
 }
 
@@ -41,40 +43,32 @@ class EpubDocument : public Document {
 public:
     explicit EpubDocument(const QString &path) : m_archive(path) {}
 
-    bool load(QString *error) {
+    std::expected<void, QString> load() {
         const QStringList names = m_archive.entries();
         m_files = QSet<QString>(names.begin(), names.end());
-        if (m_files.isEmpty()) {
-            *error = "Not an EPUB: the file is not a readable zip archive.";
-            return false;
-        }
+        if (m_files.isEmpty())
+            return std::unexpected("Not an EPUB: the file is not a readable zip archive.");
         // Font obfuscation also lists files as encrypted; rights.xml and
         // AES-encrypted content are what a locked book has.
         if (m_files.contains("META-INF/rights.xml")
-            || m_archive.read("META-INF/encryption.xml").contains("xmlenc#aes")) {
-            *error = "This book is protected by DRM, so only the app it was bought for can open it.";
-            return false;
-        }
+            || m_archive.read("META-INF/encryption.xml").contains("xmlenc#aes"))
+            return std::unexpected("This book is protected by DRM, so only the app it was bought for can open it.");
 
         QXmlStreamReader container(m_archive.read("META-INF/container.xml"));
         while (!container.atEnd() && m_opf.isEmpty())
             if (container.readNext() == QXmlStreamReader::StartElement && container.name() == u"rootfile")
                 m_opf = resolve({}, container.attributes().value("full-path").toString());
-        if (m_opf.isEmpty() || !m_files.contains(m_opf)) {
-            *error = "Not an EPUB: it has no package document.";
-            return false;
-        }
+        if (m_opf.isEmpty() || !m_files.contains(m_opf))
+            return std::unexpected("Not an EPUB: it has no package document.");
         readPackage();
-        if (m_spine.isEmpty()) {
-            *error = "This EPUB lists no chapters to read.";
-            return false;
-        }
+        if (m_spine.isEmpty())
+            return std::unexpected("This EPUB lists no chapters to read.");
         readToc();
         for (const ManifestItem &item : std::as_const(m_manifest))
             if (item.type == "text/css")
                 for (auto [name, flags] : classStyles(decodeText(m_archive.read(item.path))).asKeyValueRange())
                     m_styles[name] |= flags;
-        return true;
+        return {};
     }
 
     Kind kind() const override { return Flow; }
@@ -89,16 +83,16 @@ public:
         const QString file = m_spine.at(section);
         CleanOptions options;
         options.styles = m_styles;
-        options.image = [&](const QString &source) {
+        options.image = [this, &file, width](const QString &source) {
             const QString name = resolve(file, source);
             return m_files.contains(name) ? bookImageAttributes(name, m_archive.read(name), width) : QString();
         };
-        options.link = [&](const QString &target) { return linkFor(file, section, target); };
+        options.link = [this, &file, section](const QString &target) { return linkFor(file, section, target); };
         return cleanHtml(decodeText(m_archive.read(file)), options);
     }
 
 private:
-    QString linkFor(const QString &file, int section, const QString &target) const {
+    [[nodiscard]] QString linkFor(const QString &file, int section, const QString &target) const {
         static const QRegularExpression external("^(https?|mailto):", QRegularExpression::CaseInsensitiveOption);
         if (external.match(target).hasMatch())
             return target;
@@ -191,36 +185,40 @@ private:
     void addTocEntry(const QString &file, const QString &target, const QString &title, int level) {
         const int section = m_sectionOf.value(resolve(file, target), -1);
         if (section >= 0 && !title.simplified().isEmpty())
-            m_toc.append({title.simplified(), section, target.contains('#') ? target.section('#', 1) : QString(), level});
+            m_toc.append({.title = title.simplified(),
+                          .section = section,
+                          .anchor = target.contains('#') ? target.section('#', 1) : QString(),
+                          .level = level});
     }
 
     void readToc() {
         // EPUB 3's navigation document: nested lists of links.
         if (!m_nav.isEmpty()) {
+            using enum HtmlToken::Type;
             const QList<HtmlToken> tokens = tokenizeHtml(decodeText(m_archive.read(m_nav)));
             bool inToc = false, sawToc = false;
             int depth = 0;
             QString target, title;
             bool inLink = false;
             for (const HtmlToken &token : tokens) {
-                if (token.type == HtmlToken::Open && token.name == "nav") {
+                if (token.type == Open && token.name == "nav") {
                     inToc = !sawToc && (token.attributes.value("type") == "toc" || !token.attributes.contains("type"));
                     depth = 0;
-                } else if (token.type == HtmlToken::Close && token.name == "nav") {
+                } else if (token.type == Close && token.name == "nav") {
                     sawToc = sawToc || inToc;
                     inToc = false;
                 } else if (!inToc) {
                     continue;
                 } else if (token.name == "ol" || token.name == "ul") {
-                    depth += token.type == HtmlToken::Open ? 1 : -1;
-                } else if (token.name == "a" && token.type == HtmlToken::Open) {
+                    depth += token.type == Open ? 1 : -1;
+                } else if (token.name == "a" && token.type == Open) {
                     inLink = true;
                     target = token.attributes.value("href");
                     title.clear();
-                } else if (token.name == "a" && token.type == HtmlToken::Close && inLink) {
+                } else if (token.name == "a" && token.type == Close && inLink) {
                     inLink = false;
-                    addTocEntry(m_nav, target, htmlToText(title), qMax(0, depth - 1));
-                } else if (inLink && token.type == HtmlToken::Text) {
+                    addTocEntry(m_nav, target, htmlToText(title), std::max(0, depth - 1));
+                } else if (inLink && token.type == Text) {
                     title += token.text;
                 }
             }
@@ -247,16 +245,11 @@ private:
     QHash<QString, ManifestItem> m_manifest;
     QStringList m_spine;
     QHash<QString, int> m_sectionOf;
-    QHash<QString, int> m_styles;
+    QHash<QString, TextStyles> m_styles;
     QList<TocEntry> m_toc;
     BookMeta m_meta;
 };
 
 } // namespace
 
-std::unique_ptr<Document> openEpub(const QString &path, QString *error) {
-    auto document = std::make_unique<EpubDocument>(path);
-    if (!document->load(error))
-        return nullptr;
-    return document;
-}
+OpenedDocument openEpub(const QString &path) { return loaded(std::make_unique<EpubDocument>(path)); }
