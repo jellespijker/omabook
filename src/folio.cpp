@@ -134,6 +134,16 @@ int Folio::run(const QStringList &arguments) {
     const QString command = arguments.value(2);
     const QStringList rest = arguments.mid(3);
     const Settings settings;
+    // Switched off in Omabook's settings, the plugins show nothing in Folio:
+    // no section rows, no details, and no "Add to Library" entry.
+    if (!settings.folio() && (command == "libraries" || command == "reading")) {
+        printJson(QJsonDocument(QJsonObject{{"items", QJsonArray()}, {"actions", QJsonArray()}}));
+        return 0;
+    }
+    if (!settings.folio() && command == "details") {
+        printJson(QJsonDocument(QJsonArray()));
+        return 0;
+    }
     if (command == "libraries") {
         printJson(QJsonDocument(libraries(settings)));
     } else if (command == "reading") {
@@ -148,9 +158,24 @@ int Folio::run(const QStringList &arguments) {
     } else if (command == "open" || command == "open-library") {
         // Folio ends a command's whole process group when the command is
         // done, so the window is started detached, in a session of its own.
-        const QStringList open = command == "open" ? QStringList{"open", rest.value(0)}
-                                                   : QStringList{"open", "--library", rest.value(0)};
-        if (rest.isEmpty() || !QProcess::startDetached(QCoreApplication::applicationFilePath(), open)) {
+        // This command itself runs offscreen, as every command does; the
+        // window is given back the display the desktop had set, or it would
+        // open where nobody can see it.
+        QProcess window;
+        window.setProgram(QCoreApplication::applicationFilePath());
+        window.setArguments(command == "open" ? QStringList{"open", rest.value(0)} : QStringList{"open", "--library", rest.value(0)});
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        const QString desktop = environment.value("OMABOOK_DESKTOP_QPA");
+        environment.remove("OMABOOK_DESKTOP_QPA");
+        if (desktop.isEmpty() || desktop == "-")
+            environment.remove("QT_QPA_PLATFORM");
+        else
+            environment.insert("QT_QPA_PLATFORM", desktop);
+        window.setProcessEnvironment(environment);
+        window.setUnixProcessParameters(QProcess::UnixProcessFlag::CreateNewSession);
+        window.setStandardOutputFile(QProcess::nullDevice());
+        window.setStandardErrorFile(QProcess::nullDevice());
+        if (rest.isEmpty() || !window.startDetached()) {
             printJson(QJsonDocument(QJsonObject{{"error", "Omabook couldn't be started."}}));
             return 1;
         }

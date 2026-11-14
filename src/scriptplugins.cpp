@@ -1,5 +1,7 @@
 #include "scriptplugins.h"
 
+#include "log.h"
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
@@ -170,6 +172,8 @@ void ScriptPlugins::report(const QString &id, const QString &problem, bool still
         QFile::remove(path);
         return;
     }
+    if (m_problems.value(id) != problem)
+        qCWarning(lcPlugins).noquote() << id << (stillRunning ? "(the last version that worked runs on):" : ":") << problem;
     m_problems.insert(id, problem);
     QFile file(path);
     if (file.open(QIODevice::WriteOnly | QIODevice::Truncate))

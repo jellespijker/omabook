@@ -31,6 +31,7 @@
 #include "customization.h"
 #include "folio.h"
 #include "libraries.h"
+#include "log.h"
 #include "formats.h"
 #include "goodreads.h"
 #include "graph.h"
@@ -54,6 +55,7 @@
 #include "sitedesk.h"
 #include "sync.h"
 #include "theme.h"
+#include "themechoice.h"
 
 namespace {
 
@@ -194,6 +196,7 @@ int show(const QStringList &arguments) {
         files.insert(format, library->formatPath(book->id, format));
     object.insert("files", files);
     object.insert("cover", library->coverPath(book->id));
+    object.insert("identifiers", book->identifiers);
     if (command.json()) {
         printJson(object);
     } else {
@@ -202,8 +205,11 @@ int show(const QStringList &arguments) {
             QString text = value.isArray() ? QString() : value.toVariant().toString();
             for (const QJsonValue &item : value.toArray())
                 text += (text.isEmpty() ? "" : ", ") + item.toString();
-            for (const QJsonValue &file : value.toObject())
-                text += (text.isEmpty() ? "" : "\n\t") + file.toString();
+            // Files by their format alone; identifiers as scheme=value.
+            const QJsonObject inside = value.toObject();
+            for (auto item = inside.begin(); item != inside.end(); ++item)
+                text += (text.isEmpty() ? "" : "\n\t") + (it.key() == "identifiers" ? item.key() + "=" : QString())
+                        + item.value().toVariant().toString();
             if (!text.isEmpty())
                 print(stdout, it.key() + ":\t" + text);
         }
@@ -447,8 +453,16 @@ int set(const QStringList &arguments) {
     command.parser.addOption({"rating", "Your stars for it, 1 to 5, or 0 for none.", "stars"});
     command.parser.addOption({"finished", "The day you finished it, as 2026-03-01.", "date"});
     command.parser.addOption({"paper", "Whether there is a copy on a real shelf: yes or no.", "yes|no"});
+    command.parser.addOption({"identifier", "What the book is called elsewhere, as scheme=value (goodreads=4671); scheme= "
+                                            "with nothing after it forgets it. Give it once per scheme.", "scheme=value"});
     if (!command.parse(arguments, 1, 1))
         return 1;
+    QList<QPair<QString, QString>> identifiers;
+    for (const QString &given : command.parser.values("identifier")) {
+        if (!given.contains('='))
+            return fail("An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: " + given);
+        identifiers.append({given.section('=', 0, 0), given.section('=', 1)});
+    }
     QString error;
     const auto library = command.library(&error);
     if (!library)
@@ -478,6 +492,9 @@ int set(const QStringList &arguments) {
     }
     if (meta.title.isEmpty())
         return fail("A book needs a title.");
+    // First, since they are all or nothing: a scheme refused changes nothing.
+    if (!identifiers.isEmpty() && !BookOps::setIdentifiers(*library, id, identifiers, &error))
+        return fail(error);
     if (!library->setMeta(id, meta, &error))
         return fail(error);
     if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {
@@ -509,8 +526,10 @@ int info(const QStringList &arguments) {
         const QString library = command.parser.isSet("library") ? QDir(command.parser.value("library")).absolutePath()
                                                                 : settings.libraryPath();
         if (command.json()) {
+            const Customization custom;
+            const ThemeSource theme = resolveTheme(custom.style().value("theme").toString(), ThemePlaces::here(custom.folder()));
             printJson(QJsonObject{{"version", OMABOOK_VERSION}, {"library", library},
-                                  {"config_folder", Customization().folder()}, {"ai", described}});
+                                  {"config_folder", custom.folder()}, {"ai", described}, {"theme", theme.toJson()}});
         } else {
             print(stdout, "version:\t" OMABOOK_VERSION);
             print(stdout, "library:\t" + library);
@@ -523,6 +542,9 @@ int info(const QStringList &arguments) {
             }
             if (ai.source == AiChoice::OmarchyDefault) print(stdout, "\tOmarchy's default agent");
             if (!ai.problem.isEmpty()) print(stdout, "\t" + ai.problem);
+            const Customization custom;
+            const ThemeSource theme = resolveTheme(custom.style().value("theme").toString(), ThemePlaces::here(custom.folder()));
+            print(stdout, "theme:\t" + theme.name + "\n\t" + theme.why);
         }
         return 0;
     }
@@ -667,7 +689,8 @@ int lookup(const QStringList &arguments) {
                               "optionally have the AI judge what they found. Each candidate says what it would add and change.");
     command.parser.addPositionalArgument("id", "The book's number.");
     command.parser.addOption({"ai", "Also ask the AI, which reads the book's opening pages and weighs the other results."});
-    command.parser.addOption({"apply", "Take the details (and cover) of this candidate, counted from 1.", "number"});
+    command.parser.addOption({"apply", "Take the details (and cover) of this candidate: its number in the last listing (made "
+                                       "with the same --ai or not), or its id from that listing.", "number|id"});
     if (!command.parse(arguments, 1, 1))
         return 1;
     QString error;
@@ -678,9 +701,46 @@ int lookup(const QStringList &arguments) {
     const auto book = library->book(id);
     if (!book)
         return fail("There is no book " + command.argument(0) + " in the library.");
+    const bool ai = command.parser.isSet("ai");
+    const QString flags = QString("omabook lookup %1%2").arg(id).arg(ai ? " --ai" : "");
+
+    // A number means what the last listing showed, never a fresh look-up
+    // that may come out in another order; an id names one candidate whatever
+    // its place.
+    const auto take = [&](const MetaCandidate &candidate) {
+        if (!BookOps::applyCandidate(*library, id, candidate, &error))
+            return fail(error);
+        BookOps::forgetListing(*library, id);
+        if (command.json())
+            printJson(library->book(id)->toJson());
+        else
+            print(stdout, QString("%1 took the details of %2: %3").arg(id).arg(candidate.source, candidate.meta.title));
+        return 0;
+    };
+    const auto listed = BookOps::lastListing(*library, id);
+    const QString wanted = command.parser.value("apply").trimmed();
+    bool isNumber = false;
+    const int number = wanted.toInt(&isNumber);
+    if (command.parser.isSet("apply") && isNumber && listed) {
+        if (listed->ai != ai) {
+            const QString theirs = number >= 1 && number <= listed->ids.size()
+                                       ? QString(" There it was %1 (%2); take it with --apply %3.")
+                                             .arg(listed->candidates.at(number - 1).source, listed->candidates.at(number - 1).meta.title,
+                                                  listed->ids.at(number - 1))
+                                       : QString();
+            return fail(QString("The last listing of book %1 was made %2 --ai, so its numbers aren't this look-up's.%3 Or "
+                                "list them again with: %4")
+                            .arg(id).arg(listed->ai ? "with" : "without", theirs, flags));
+        }
+        if (number < 1 || number > listed->candidates.size())
+            return fail(QString("The last listing of book %1 has %2 candidates.").arg(id).arg(listed->candidates.size()));
+        return take(listed->candidates.at(number - 1));
+    }
+    if (command.parser.isSet("apply") && !isNumber && listed && listed->ids.contains(wanted))
+        return take(listed->candidates.at(listed->ids.indexOf(wanted)));
 
     // The look-up itself is shared with the MCP server; see bookops.h.
-    const BookOps::LookUp found = BookOps::lookUp(*library, *book, command.parser.isSet("ai"));
+    const BookOps::LookUp found = BookOps::lookUp(*library, *book, ai);
     for (const QString &problem : found.problems)
         print(stderr, problem);
     if (!found.error.isEmpty())
@@ -688,20 +748,28 @@ int lookup(const QStringList &arguments) {
     const QList<MetaCandidate> &candidates = found.candidates;
 
     if (command.parser.isSet("apply")) {
-        const int index = command.parser.value("apply").toInt() - 1;
-        if (index < 0 || index >= candidates.size())
-            return fail(QString("There are %1 candidates.").arg(candidates.size()));
-        if (!BookOps::applyCandidate(*library, id, candidates.at(index), &error))
-            return fail(error);
-        if (command.json())
-            printJson(library->book(id)->toJson());
-        return 0;
+        if (isNumber) {
+            // Nothing was listed lately: the number counts in this look-up,
+            // which is said, so it is no surprise.
+            if (number < 1 || number > candidates.size())
+                return fail(QString("There are %1 candidates.").arg(candidates.size()));
+            print(stderr, QString("Nothing was listed for book %1 in the last hour, so %2 is counted in a new look-up.")
+                              .arg(id).arg(number));
+            return take(candidates.at(number - 1));
+        }
+        const auto same = std::ranges::find(candidates, wanted, &BookOps::candidateId);
+        if (same == candidates.end())
+            return fail(QString("No candidate is called %1 now: the sources may answer differently since. List them again "
+                                "with: %2").arg(wanted, flags));
+        return take(*same);
     }
+    BookOps::rememberListing(*library, id, ai, candidates);
     QJsonArray array;
     for (int i = 0; i < candidates.size(); ++i) {
         const MetaCandidate &candidate = candidates.at(i);
         QJsonObject object = BookOps::candidateJson(*book, candidate);
         object.insert("candidate", i + 1);
+        object.insert("candidate_id", BookOps::candidateId(candidate));
         array << object;
         if (!command.json()) {
             QStringList changed;
@@ -710,6 +778,7 @@ int lookup(const QStringList &arguments) {
             const QStringList adds = object.value("adds").toVariant().toStringList();
             print(stdout, QString("%1\t%2\t%3\t%4\t%5").arg(i + 1).arg(candidate.source, candidate.meta.title,
                                                                     candidate.meta.authorText(), candidate.meta.published));
+            print(stdout, "\tid: " + BookOps::candidateId(candidate));
             if (!adds.isEmpty()) print(stdout, "\tadds: " + adds.join(", "));
             if (!changed.isEmpty()) print(stdout, "\tchanges: " + changed.join(", "));
             if (!candidate.why.isEmpty()) print(stdout, "\twhy: " + candidate.why);
@@ -967,7 +1036,7 @@ int tidy(const QStringList &arguments) {
     Command command("tidy", "Look the whole library over and list what would tidy it: the same book twice, an author "
                             "spelled several ways and, with --ai, books that belong to a series. Nothing changes without --apply.");
     command.parser.addOption({"ai", "Also ask the AI which books belong to a series."});
-    command.parser.addOption({"apply", "Make every change listed."});
+    command.parser.addOption({"apply", "Make every change listed, except duplicates marked unsure (pick those by number)."});
     command.parser.addOption({"pick", "Make only these changes, by their numbers in the list: 1,3,4.", "numbers"});
     if (!command.parse(arguments, 0, 0))
         return 1;
@@ -987,7 +1056,7 @@ int tidy(const QStringList &arguments) {
         series = Curation::seriesFrom(*answer, books);
     }
     QJsonArray array;
-    int applied = 0;
+    int applied = 0, unsure = 0;
     // In the order they can be applied in: merges last (see bookops.h).
     const QList<Proposal> proposals = BookOps::tidy(books, series);
     int number = 0;
@@ -998,7 +1067,8 @@ int tidy(const QStringList &arguments) {
         ++number;
         QString line = QString("%1\t%2\t%3\t%4\t").arg(number).arg(proposal.kind).arg(proposal.bookId).arg(book->meta.title);
         if (proposal.kind == "duplicate")
-            line += QString("book %1 folds into it").arg(proposal.otherId);
+            line += QString("book %1 folds into it").arg(proposal.otherId)
+                    + (proposal.unsure ? "\tunsure: " + proposal.why : QString());
         else if (proposal.kind == "author")
             line += book->meta.authorText() + " -> " + proposal.meta.authorText();
         else
@@ -1008,6 +1078,11 @@ int tidy(const QStringList &arguments) {
         array << described;
         if (!command.json())
             print(stdout, line);
+        // An unsure duplicate is only merged when it is picked by its number.
+        if (!command.parser.isSet("pick") && command.parser.isSet("apply") && proposal.unsure) {
+            ++unsure;
+            continue;
+        }
         if (command.parser.isSet("pick") ? picked.contains(number) : command.parser.isSet("apply")) {
             if (Curation::apply(*library, proposal, &error))
                 ++applied;
@@ -1016,9 +1091,10 @@ int tidy(const QStringList &arguments) {
         }
     }
     if (command.json())
-        printJson(QJsonObject{{"proposals", array}, {"applied", applied}});
+        printJson(QJsonObject{{"proposals", array}, {"applied", applied}, {"unsure_left", unsure}});
     else if (command.parser.isSet("apply") || command.parser.isSet("pick"))
-        print(stdout, QString("%1 changes made").arg(applied));
+        print(stdout, QString("%1 changes made").arg(applied)
+                          + (unsure > 0 ? QString("; %1 unsure duplicates left alone: --pick them by number").arg(unsure) : QString()));
     return 0;
 }
 
@@ -1474,9 +1550,10 @@ int change(const QStringList &arguments) {
     const QString wish = command.parser.positionalArguments().join(' ');
     if (wish.trimmed().isEmpty())
         return fail("Say what to change, or use --undo.");
-    // The colors in force are the desktop theme's with style.json over them.
+    // The colors in force are the chosen theme's with style.json over them.
     Theme theme;
-    const Look look(&theme, &custom);
+    ThemeChoice choice(&custom, ThemePlaces::here(custom.folder()));
+    const Look look(&theme, &choice, &custom);
     const auto answer = askAi(Prompts::change(InterfaceChanges::state(custom, settings, look.colors()), wish));
     if (!answer)
         return fail(answer.error());
@@ -1654,6 +1731,61 @@ int skill(const QStringList &arguments) {
 
 // The help the window shows under ?, for a terminal and for agents: the
 // same pages from the same text, and the keys as keys.json has them now.
+int logs(const QStringList &arguments) {
+    Command command("logs", "Show what Omabook did and what went wrong: the window, every command and the MCP server write "
+                            "to one log. It holds what happened, how big and how long; never the text of a book, a question "
+                            "or an answer. The newest lines come last.");
+    command.parser.addOption({{"n", "lines"}, "How many of the newest lines; 100 when not given, 0 for all.", "count", "100"});
+    command.parser.addOption({"level", "Only this level and above: debug, info, warning, critical.", "level", "debug"});
+    command.parser.addOption({"category", "Only one part: ai, library, graph, plugins, sites, sync, app, qml.", "part"});
+    command.parser.addOption({"since", "Only since then: 30m, 2h, 1d, or a date and time like 2026-11-14T21:00.", "when"});
+    command.parser.addOption({"grep", "Only lines that hold these words.", "words"});
+    command.parser.addOption({"path", "Only say where the log file is."});
+    if (!command.parse(arguments, 0, 0))
+        return 1;
+    if (command.parser.isSet("path")) {
+        if (command.json())
+            printJson(QJsonObject{{"path", Log::path()}});
+        else
+            print(stdout, Log::path());
+        return 0;
+    }
+    Log::Filter filter;
+    filter.lines = command.parser.value("lines").toInt();
+    filter.least = command.parser.value("level").toLower();
+    filter.category = command.parser.value("category").toLower();
+    filter.words = command.parser.value("grep");
+    if (const QString since = command.parser.value("since"); !since.isEmpty()) {
+        static const QRegularExpression ago("^(\\d+)([mhd])$");
+        if (const QRegularExpressionMatch match = ago.match(since); match.hasMatch()) {
+            const qint64 amount = match.captured(1).toLongLong();
+            const qint64 seconds = match.captured(2) == "m" ? amount * 60 : match.captured(2) == "h" ? amount * 3600 : amount * 86400;
+            filter.since = QDateTime::currentDateTime().addSecs(-seconds);
+        } else if (const QDateTime at = QDateTime::fromString(since, Qt::ISODate); at.isValid()) {
+            filter.since = at;
+        } else {
+            return fail("--since takes 30m, 2h, 1d, or a date and time like 2026-11-14T21:00.");
+        }
+    }
+    static const QStringList levels{"debug", "info", "warning", "critical"};
+    if (!levels.contains(filter.least))
+        return fail("--level is one of debug, info, warning, critical.");
+    const QList<Log::Entry> entries = Log::read(filter);
+    if (command.json()) {
+        QJsonArray array;
+        for (const Log::Entry &entry : entries)
+            array << entry.toJson();
+        printJson(QJsonObject{{"path", Log::path()}, {"entries", array}});
+        return 0;
+    }
+    for (const Log::Entry &entry : entries)
+        print(stdout, QString("%1 %2 %3 %4  %5").arg(entry.when.toString("yyyy-MM-dd HH:mm:ss"), entry.level.leftJustified(8),
+                                                     entry.program.leftJustified(6), entry.category.leftJustified(8), entry.message));
+    if (entries.isEmpty())
+        print(stderr, "Nothing in the log matches. It is kept at " + Log::path() + ".");
+    return 0;
+}
+
 int help(const QStringList &arguments) {
     Command command("help", "Print a page of Omabook's help, the same the window shows under ?. Without a topic, "
                             "list the commands and the topics. The topic `keys` lists every key as it is bound now, "
@@ -1718,6 +1850,7 @@ constexpr std::array cliCommands{
     CliCommand{"add"_L1, add},
     CliCommand{"folio"_L1, Folio::run},
     CliCommand{"bookmarks"_L1, bookmarks},
+    CliCommand{"logs"_L1, logs},
     CliCommand{"notes"_L1, notes},
     CliCommand{"libraries"_L1, libraries},
     CliCommand{"remove"_L1, remove},
@@ -1739,6 +1872,7 @@ constexpr std::array cliCommands{
     CliCommand{"calibre"_L1, calibre},
     CliCommand{"catalog"_L1, catalog},
     CliCommand{"customize"_L1, customize},
+    CliCommand{"theme"_L1, runThemeCli},
     CliCommand{"tidy"_L1, tidy},
     CliCommand{"suggest"_L1, suggest},
     CliCommand{"goodreads"_L1, readingSite},
@@ -1769,7 +1903,7 @@ QString cliSummary() {
            "  toc <book>                      List a book's contents\n"
            "  text <book> [--section N]       Print a book as plain text\n"
            "  find <book> <words>             Find words in a book\n"
-           "  lookup <id> [--ai] [--apply N]  Look a book's details up with every metadata plugin\n"
+           "  lookup <id> [--ai] [--apply N|ID]  Look a book's details up with every metadata plugin\n"
            "  plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one\n"
            "  plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help\n"
            "  plugin install|remove           Install a plugin from a folder or a .zip (checked first), or remove one\n"
@@ -1777,6 +1911,7 @@ QString cliSummary() {
            "  calibre libraries|plugins|import  What was found of Calibre here; import its libraries\n"
            "  catalog [search] [--format f]   Write the library as csv or bibtex\n"
            "  customize [view]                Show where the interface's files live; copy a view there to edit\n"
+           "  theme [list|use <name>|show]    Which theme the colors come from: Omarchy's, Aether's, or a built-in one\n"
            "  convert <id> [--to format]      Convert a book and add the result to it\n"
            "  export <id> <folder>            Copy a book's file out of the library\n"
            "  ask <book|all> <question>       Ask the AI about a book, or about the whole library\n"
@@ -1787,6 +1922,7 @@ QString cliSummary() {
            "  openlibrary sync|shelves        Bring an Open Library reading log into the library\n"
            "  sites [connect|check|disconnect|sync]  The reading sites, and how you are connected to each\n"
            "  change <wish> | --undo          Ask the AI to change how Omabook looks or works\n"
+           "  logs [-n N] [--level l] [--since 1h]  What Omabook did and what went wrong, from the window and every command\n"
            "  progress <id> [--section N]     Show or set how far a book has been read\n"
            "  sync <computer[:folder]>        Bring this library and another computer's in step over ssh\n"
            "  manifest                        Print the whole library as JSON, as sync reads it\n"

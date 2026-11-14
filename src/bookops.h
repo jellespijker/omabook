@@ -3,10 +3,12 @@
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <functional>
 #include <memory>
+#include <optional>
 
 #include "ai.h"
 #include "curation.h"
@@ -56,8 +58,30 @@ LookUp lookUp(const Library &library, const Book &book, bool ai);
 // A candidate as it is shown: its details, the fields it "adds" and the ones
 // it "changes" with both values.
 QJsonObject candidateJson(const Book &book, const MetaCandidate &candidate);
+// A candidate's name that stays the same however a listing is ordered: its
+// source and a hash of what it would give the book ("apple-books-1a2b3c4d").
+QString candidateId(const MetaCandidate &candidate);
+// The last listing of a book's candidates, kept for a while in the cache
+// folder so that "candidate 1" means what was shown, and so that a candidate
+// can be taken by its id without looking the book up again. `ai` says
+// whether the model judged them, which changes the order.
+struct Listing {
+    bool ai = false;
+    QList<MetaCandidate> candidates;
+    QStringList ids; // candidateId of each, as listed
+};
+constexpr qint64 listingLife = 3600; // seconds a listing is kept to
+void rememberListing(const Library &library, qint64 bookId, bool ai, const QList<MetaCandidate> &candidates);
+std::optional<Listing> lastListing(const Library &library, qint64 bookId);
+void forgetListing(const Library &library, qint64 bookId);
 // Takes a candidate's details and, when it has one worth having, its cover.
 bool applyCandidate(Library &library, qint64 id, const MetaCandidate &candidate, QString *error);
+
+// Sets what a book is called elsewhere, scheme by scheme ("goodreads" →
+// "28507"); an empty value forgets that scheme. All or nothing: a scheme
+// that is empty, holds a space or "=", or is "generated" (which plugin made
+// the book, set by that plugin alone when it makes it) refuses the lot.
+bool setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers, QString *error);
 
 // Converts a book with Calibre's ebook-convert and adds the result to it.
 // Empty `from` is the format the reader prefers. Returns the new file, or an

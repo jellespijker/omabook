@@ -259,7 +259,9 @@ AiRequest Prompts::change(const InterfaceState &state, const QString &wish) {
     request.system =
         "You change how Omabook, an ebook library and reader, looks and works, by rewriting its interface files. The "
         "user says what they want; you answer with the new files.\n\n"
-        "style.json is the look, laid over the desktop's theme. Keys, all optional: \"colors\" (an object of color names "
+        "style.json is the look, laid over a theme. Keys, all optional: \"theme\" (which theme the colors start from: "
+        "\"auto\", the default, follows Omarchy's or Aether's; \"omarchy\", \"aether\", or one of the names in <themes>; "
+        "pick a theme for a wish like \"make it Nord\" or \"a light theme\"), \"colors\" (an object of color names "
         "to \"#rrggbb\": accent, background, foreground, selection, muted, red, green, yellow, orange, blue, magenta, "
         "cyan), \"mode\" (\"light\" or \"dark\", which the result is), \"radius\" (corner rounding in pixels), \"font\" "
         "and \"font_size\" (the interface's). Text must stay readable on its background, and muted text on both.\n\n"
@@ -276,6 +278,8 @@ AiRequest Prompts::change(const InterfaceState &state, const QString &wish) {
         "already in a file unless the user's wish is against it. If the wish is not about how Omabook looks or works, "
         "change nothing and say so in \"say\".";
     QString message = "<commands>\n" + state.commands + "</commands>\n\n";
+    if (!state.themes.isEmpty())
+        message += "<themes>" + state.themes + "</themes>\n\n";
     message += "<colors_now>" + QString::fromUtf8(QJsonDocument(state.colors).toJson(QJsonDocument::Compact)) + "</colors_now>\n\n";
     message += "<style.json>" + (state.style.trimmed().isEmpty() ? "(there is none)" : state.style.trimmed()) + "</style.json>\n\n";
     message += "<keys.json>" + (state.keys.trimmed().isEmpty() ? "(there is none)" : state.keys.trimmed()) + "</keys.json>\n\n";

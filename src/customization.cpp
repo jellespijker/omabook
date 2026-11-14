@@ -19,6 +19,7 @@
 
 #include "scriptapi.h"
 #include "theme.h"
+#include "themechoice.h"
 
 namespace {
 
@@ -391,8 +392,9 @@ void Customization::setPlugins(const QVariantList &commands, const QVariantList 
         emit keysChanged();
 }
 
-// style.json is {"colors": {"accent": "#c96", "background": ...}, "mode":
-// "light", "radius": 8, "font": "Inter", "font_size": 14}; every key is optional.
+// style.json is {"theme": "auto", "colors": {"accent": "#c96", "background": ...},
+// "mode": "light", "radius": 8, "font": "Inter", "font_size": 14}; every key is
+// optional. "theme" is which palette the colors start from (see themechoice.h).
 void Customization::loadStyle() {
     auto [file, exists, problem] = readObject(m_folder + "/style.json");
     QVariantMap style;
@@ -405,10 +407,15 @@ void Customization::loadStyle() {
     }
     if (problem.isEmpty() && file.contains("mode") && !QStringList{"light", "dark"}.contains(file.value("mode").toString()))
         problem = "\"mode\" is \"light\" or \"dark\".";
+    if (problem.isEmpty() && file.contains("theme"))
+        problem = file.value("theme").isString()
+                      ? Themes::problem(file.value("theme").toString(), ThemePlaces::here(m_folder))
+                      : "\"theme\" is a name: \"auto\", \"omarchy\", \"aether\", one from `omabook theme list`, or a colors.toml.";
     report("style", exists ? problem : QString());
     if (!problem.isEmpty())
         return;
     if (!colors.isEmpty()) style.insert("colors", colors);
+    if (!file.value("theme").toString().trimmed().isEmpty()) style.insert("theme", file.value("theme").toString().trimmed());
     if (file.contains("mode")) style.insert("mode", file.value("mode").toString());
     if (file.value("radius").isDouble()) style.insert("radius", std::clamp(file.value("radius").toInt(), 0, 40));
     if (!file.value("font").toString().isEmpty()) style.insert("font", file.value("font").toString());
@@ -577,10 +584,14 @@ function keys, always work.
 %1
 ## style.json: the look
 
-`{"colors": {"accent": "#c9954f", "background": "#1d1a16"}, "mode": "dark", "radius": 8, "font": "Inter", "font_size": 14}`
+`{"theme": "auto", "colors": {"accent": "#c9954f", "background": "#1d1a16"}, "mode": "dark", "radius": 8, "font": "Inter", "font_size": 14}`
 
-Every key is optional and lies over the desktop's Omarchy theme, which
-Omabook otherwise follows. Colors: `accent`, `background`, `foreground`,
+Every key is optional. `theme` is where the palette comes from: `auto` (the
+default: Omarchy's current theme where Omarchy is, else Aether's, else
+Tokyo Night), `omarchy`, `aether`, one of Omarchy's themes by name
+(`omabook theme list`: `tokyo-night`, `catppuccin-latte`, ...), a theme of
+your own in `themes/<name>/colors.toml` here, or the path of any
+`colors.toml`. The rest lies over that theme. Colors: `accent`, `background`, `foreground`,
 `selection`, `muted`, `red`, `green`, `yellow`, `orange`, `blue`, `magenta`,
 `cyan`. `mode` says whether the result is `light` or `dark`. `radius` rounds
 corners; `font` and `font_size` are the interface's (the reader's are in
@@ -628,6 +639,12 @@ a copied view would have to be merged with.
     return path;
 }
 
+Look::Look(Theme *theme, ThemeChoice *choice, Customization *custom, QObject *parent) : Look(theme, custom, parent) {
+    m_choice = choice;
+    if (choice)
+        connect(choice, &ThemeChoice::changed, this, &Look::changed);
+}
+
 Look::Look(Theme *theme, Customization *custom, QObject *parent) : QObject(parent), m_theme(theme), m_custom(custom) {
     connect(theme, &Theme::changed, this, &Look::changed);
     // The interface font is the application's; style.json may name another.
@@ -645,13 +662,32 @@ Look::Look(Theme *theme, Customization *custom, QObject *parent) : QObject(paren
     restyle();
 }
 
+QObject *Look::themes() const noexcept { return m_choice; }
+
+// Per colour: style.json's, then the chosen theme's (over bundled Tokyo
+// Night), then Theme's, whose built-in fallback has every name.
 QColor Look::color(const QString &key) const {
     const QVariantMap colors = m_custom->style().value("colors").toMap();
-    return colors.contains(key) ? colors.value(key).value<QColor>() : m_theme->colors().value(key, m_theme->foreground()).value<QColor>();
+    if (colors.contains(key))
+        return colors.value(key).value<QColor>();
+    if (m_choice && m_choice->palette().colors.contains(key))
+        return m_choice->palette().colors.value(key);
+    return m_theme->colors().value(key, m_theme->foreground()).value<QColor>();
 }
 
 QVariantMap Look::colors() const {
     QVariantMap colors = m_theme->colors();
+    if (m_choice) {
+        // Only the built-in names from Theme: the rest of the desktop's
+        // palette isn't the chosen theme's.
+        QVariantMap base;
+        for (const char *name : {"accent", "background", "foreground", "selection", "muted", "red", "green", "yellow",
+                                 "orange", "blue", "magenta", "cyan"})
+            base.insert(name, colors.value(name));
+        colors = base;
+        for (auto it = m_choice->palette().colors.begin(); it != m_choice->palette().colors.end(); ++it)
+            colors.insert(it.key(), it.value());
+    }
     colors.insert(m_custom->style().value("colors").toMap());
     return colors;
 }
@@ -670,7 +706,7 @@ bool Look::light() const {
         const QColor background = this->background();
         return background.red() + background.green() + background.blue() > 382;
     }
-    return m_theme->light();
+    return m_choice ? m_choice->palette().light : m_theme->light();
 }
 
 int Look::radius() const {

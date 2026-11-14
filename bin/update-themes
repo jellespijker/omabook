@@ -1,0 +1,71 @@
+#!/bin/bash
+# Refetch the palettes of Omarchy's built-in themes into share/omabook/themes/:
+# each theme's colors.toml and nothing else (no wallpapers, no per-app files),
+# Omarchy's licence beside them, and themes.qrc, which compiles them into the
+# binary. They come from one pinned Omarchy release, so a refresh is a
+# deliberate change: pass another tag or commit to move the pin, e.g.
+#
+#   bin/update-themes v4.6.0
+#
+# then build and run the tests: every bundled theme must parse and keep its
+# text, muted text and accent captions readable (tests/services_tests.cpp).
+set -euo pipefail
+
+ref="${1:-v4.5.0}"
+repository="omacom/omarchy"
+root="$(cd "$(dirname "$0")/.." && pwd)"
+themes="$root/share/omabook/themes"
+work="$(mktemp -d)"
+trap 'rm -rf "$work"' EXIT
+
+# The commit the tag names, so what was fetched is written down exactly.
+commit="$(curl -fsSL "https://api.github.com/repos/$repository/commits/$ref" | sed -n 's/^  "sha": "\([0-9a-f]\{40\}\)",$/\1/p' | head -n 1)"
+[ -n "$commit" ] || { echo "Can't find $ref in $repository." >&2; exit 1; }
+
+names="$(curl -fsSL "https://api.github.com/repos/$repository/contents/themes?ref=$commit" \
+  | sed -n 's/^    "name": "\([a-z0-9-]*\)",$/\1/p')"
+[ -n "$names" ] || { echo "No themes found at $commit." >&2; exit 1; }
+
+mkdir -p "$work/themes"
+for name in $names; do
+  mkdir -p "$work/themes/$name"
+  curl -fsSL "https://raw.githubusercontent.com/$repository/$commit/themes/$name/colors.toml" -o "$work/themes/$name/colors.toml"
+done
+curl -fsSL "https://raw.githubusercontent.com/$repository/$commit/LICENSE" -o "$work/themes/LICENSE.omarchy"
+
+# Only what was fetched stays: a theme Omarchy dropped goes too.
+find "$themes" -mindepth 1 -maxdepth 1 -type d -exec rm -rf {} + 2>/dev/null || true
+mkdir -p "$themes"
+cp -r "$work/themes/." "$themes/"
+
+count="$(echo "$names" | wc -l)"
+cat > "$themes/README" <<EOF
+The palettes of Omarchy's $count built-in themes, compiled into Omabook so it
+can look like Omarchy on any computer, with or without Omarchy.
+
+Source:   https://github.com/$repository (themes/<name>/colors.toml)
+Release:  $ref
+Commit:   $commit
+Licence:  MIT, Copyright (c) David Heinemeier Hansson; see LICENSE.omarchy.
+
+Only each theme's colors.toml is here, unchanged: no wallpapers and no
+per-app files. The palettes Omarchy ports (Catppuccin, Tokyo Night, Nord,
+Gruvbox, Rose Pine, Everforest, Kanagawa, Flexoki) are MIT upstream as well.
+
+Refresh them with bin/update-themes [tag or commit]; don't edit them here.
+EOF
+
+{
+  echo '<!-- Written by bin/update-themes. -->'
+  echo '<RCC>'
+  echo '    <qresource prefix="/themes">'
+  echo '        <file>LICENSE.omarchy</file>'
+  echo '        <file>README</file>'
+  for name in $names; do
+    echo "        <file>$name/colors.toml</file>"
+  done
+  echo '    </qresource>'
+  echo '</RCC>'
+} > "$themes/themes.qrc"
+
+echo "$count themes from $repository $ref ($commit) in $themes"

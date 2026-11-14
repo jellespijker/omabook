@@ -1,8 +1,16 @@
 #include "bookops.h"
 
+#include <QCryptographicHash>
+#include <QDateTime>
+#include <QDir>
 #include <QEventLoop>
+#include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
 #include <QNetworkAccessManager>
+#include <QRegularExpression>
+#include <QSaveFile>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <cstdio>
@@ -140,12 +148,14 @@ BookOps::LookUp BookOps::lookUp(const Library &library, const Book &book, bool a
         if (sources.isEmpty())
             return;
         int waiting = sources.size();
+        // In the order the sources are listed, not the order they answer in,
+        // so the same look-up numbers its candidates the same way each time.
+        QList<QList<MetaCandidate>> answers(sources.size());
         QEventLoop loop;
-        for (MetadataSource *source : sources) {
-            QObject::connect(source, &MetadataSource::found, &loop, [&result, &waiting, &loop, source](const QList<MetaCandidate> &found) {
-                // The AI's judgement is the recommendation, so it leads.
-                result.candidates = qobject_cast<AiMetadataSource *>(source) ? found + result.candidates
-                                                                             : result.candidates + found;
+        for (qsizetype at = 0; at < sources.size(); ++at) {
+            MetadataSource *source = sources.at(at);
+            QObject::connect(source, &MetadataSource::found, &loop, [&answers, &waiting, &loop, at](const QList<MetaCandidate> &found) {
+                answers[at] = found;
                 if (--waiting == 0)
                     loop.quit();
             });
@@ -157,6 +167,11 @@ BookOps::LookUp BookOps::lookUp(const Library &library, const Book &book, bool a
             source->search(book.meta);
         }
         loop.exec();
+        QList<MetaCandidate> found;
+        for (const QList<MetaCandidate> &answer : std::as_const(answers))
+            found += answer;
+        // The AI's judgement is the recommendation, so it leads.
+        result.candidates = qobject_cast<AiMetadataSource *>(sources.first()) ? found + result.candidates : result.candidates + found;
     };
     // The sources script plugins add are asked with the others.
     CommandScripts scripts(&settings, library.root());
@@ -195,6 +210,70 @@ QJsonObject BookOps::candidateJson(const Book &book, const MetaCandidate &candid
     return object;
 }
 
+QString BookOps::candidateId(const MetaCandidate &candidate) {
+    // What it would give the book; the AI's "why" is how it was chosen.
+    QJsonObject details = candidate.toJson();
+    details.remove("why");
+    const QByteArray hash = QCryptographicHash::hash(QJsonDocument(details).toJson(QJsonDocument::Compact), QCryptographicHash::Sha1);
+    QString name;
+    for (const QChar c : candidate.source.normalized(QString::NormalizationForm_KD).toLower())
+        if (c.isLetterOrNumber() && c.unicode() < 128)
+            name += c;
+        else if (!name.isEmpty() && !name.endsWith('-'))
+            name += '-';
+    while (name.endsWith('-'))
+        name.chop(1);
+    return (name.isEmpty() ? QString("candidate") : name.left(24)) + "-" + QString::fromLatin1(hash.toHex().left(8));
+}
+
+namespace {
+
+// Where the last listing of a book's candidates is kept, per library.
+QString listingFile(const Library &library, qint64 bookId) {
+    const QByteArray which = QCryptographicHash::hash(library.root().toUtf8(), QCryptographicHash::Sha1).toHex().left(12);
+    return QStandardPaths::writableLocation(QStandardPaths::GenericCacheLocation)
+           + QString("/omabook/lookups/%1-%2.json").arg(QString::fromLatin1(which)).arg(bookId);
+}
+
+} // namespace
+
+void BookOps::rememberListing(const Library &library, qint64 bookId, bool ai, const QList<MetaCandidate> &candidates) {
+    QJsonArray list;
+    for (const MetaCandidate &candidate : candidates) {
+        QJsonObject object = candidate.toJson();
+        object.insert("candidate_id", candidateId(candidate));
+        list << object;
+    }
+    const QString file = listingFile(library, bookId);
+    QDir().mkpath(QFileInfo(file).absolutePath());
+    QSaveFile out(file);
+    if (out.open(QIODevice::WriteOnly)) {
+        out.write(QJsonDocument(QJsonObject{{"book", bookId}, {"ai", ai}, {"at", QDateTime::currentSecsSinceEpoch()},
+                                            {"candidates", list}})
+                      .toJson(QJsonDocument::Compact));
+        out.commit();
+    }
+}
+
+std::optional<BookOps::Listing> BookOps::lastListing(const Library &library, qint64 bookId) {
+    QFile in(listingFile(library, bookId));
+    if (!in.open(QIODevice::ReadOnly))
+        return std::nullopt;
+    const QJsonObject object = QJsonDocument::fromJson(in.readAll()).object();
+    const qint64 age = QDateTime::currentSecsSinceEpoch() - object.value("at").toInteger();
+    if (object.value("book").toInteger() != bookId || age < 0 || age > listingLife)
+        return std::nullopt;
+    Listing listing;
+    listing.ai = object.value("ai").toBool();
+    for (const QJsonValue &value : object.value("candidates").toArray()) {
+        listing.candidates << MetaCandidate::fromJson(value.toObject(), value["source"].toString());
+        listing.ids << value["candidate_id"].toString();
+    }
+    return listing;
+}
+
+void BookOps::forgetListing(const Library &library, qint64 bookId) { QFile::remove(listingFile(library, bookId)); }
+
 bool BookOps::applyCandidate(Library &library, qint64 id, const MetaCandidate &candidate, QString *error) {
     const auto book = library.book(id);
     if (!book) {
@@ -214,6 +293,30 @@ bool BookOps::applyCandidate(Library &library, qint64 id, const MetaCandidate &c
         wait.exec();
     }
     return library.setMeta(id, meta, error);
+}
+
+bool BookOps::setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers, QString *error) {
+    if (!library.book(id)) {
+        *error = QString("There is no book %1 in the library.").arg(id);
+        return false;
+    }
+    static const QRegularExpression unfit("[\\s=]");
+    for (const auto &[scheme, value] : identifiers) {
+        if (scheme.trimmed().isEmpty() || unfit.match(scheme.trimmed()).hasMatch()) {
+            *error = QString("\"%1\" is not a scheme: name one such as goodreads, isbn or calibre, without spaces.").arg(scheme);
+            return false;
+        }
+        if (scheme.trimmed().compare("generated", Qt::CaseInsensitive) == 0) {
+            *error = "\"generated\" says which plugin made a book, and only that plugin sets it, when it makes the book.";
+            return false;
+        }
+    }
+    for (const auto &[scheme, value] : identifiers)
+        if (!library.setIdentifier(id, scheme.trimmed(), value.trimmed())) {
+            *error = "The library can't be written.";
+            return false;
+        }
+    return true;
 }
 
 QString BookOps::convert(Library &library, qint64 id, const QString &to, const QString &from, QString *error) {
@@ -258,6 +361,8 @@ QJsonObject BookOps::proposalJson(const Book &book, const Proposal &proposal) {
     QJsonObject object{{"kind", proposal.kind}, {"id", proposal.bookId}, {"title", book.meta.title}};
     if (proposal.kind == "duplicate") {
         object.insert("folds_in", proposal.otherId);
+        // Unsure: the titles only agree once a subtitle is left off.
+        object.insert("confidence", proposal.unsure ? "low" : "high");
     } else if (proposal.kind == "author") {
         object.insert("authors", QJsonArray::fromStringList(proposal.meta.authors));
     } else {

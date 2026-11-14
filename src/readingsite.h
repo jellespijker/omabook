@@ -216,8 +216,8 @@ QString csvField(const QString &text);
 // The 13 digits of an ISBN, from either form and however it is punctuated;
 // empty when it isn't one.
 QString isbn13(const QString &isbn);
-// What two spellings of a title or a name share. A title loses the series
-// it carries in brackets first.
+// What two spellings of a title or a name share: Curation's keys, which the
+// library's duplicates are found with too.
 QString titleKey(const QString &title);
 QString authorKey(const QString &author);
 

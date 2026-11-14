@@ -91,6 +91,28 @@ AppPopup {
             onEditingFinished: settings.fontFamily = text
         }
 
+        // Which theme the colors come from, and what Automatic came to.
+        Label { visible: !!theme.themes; text: qsTr("Theme"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
+        RowLayout {
+            visible: !!theme.themes
+            Layout.fillWidth: true
+            spacing: 8
+            Label {
+                objectName: "themeInUse"
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: theme.themes ? themePicker.describe(themePicker.current()) : ""
+            }
+            AppButton {
+                objectName: "chooseTheme"
+                text: qsTr("Choose Theme")
+                onClicked: {
+                    dialog.close()
+                    win.showThemes()
+                }
+            }
+        }
+
         Label { text: qsTr("AI"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
         ComboBox {
             id: provider
@@ -187,6 +209,15 @@ AppPopup {
             currentIndex: Math.max(0, modes.findIndex(entry => entry.key === settings.pluginUpdates))
             Material.roundedScale: theme.radius
             onActivated: (index) => settings.pluginUpdates = modes[index].key
+        }
+        // Folio, the file manager, shows Omabook's libraries and what is
+        // being read in its sidebar, and offers "Add to Library".
+        CheckBox {
+            objectName: "folioShown"
+            Layout.fillWidth: true
+            text: qsTr("Show my libraries and what I'm reading in the file manager")
+            checked: settings.folio
+            onToggled: settings.folio = checked
         }
 
         DialogActions {

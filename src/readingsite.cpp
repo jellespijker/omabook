@@ -345,22 +345,11 @@ ReadingSites::TitleParts ReadingSites::splitSeries(const QString &title) {
     return parts;
 }
 
-QString ReadingSites::titleKey(const QString &title) {
-    static const QRegularExpression brackets("\\s*\\([^()]*\\)\\s*$");
-    static const QRegularExpression article("^(the|a|an)\\s+", QRegularExpression::CaseInsensitiveOption);
-    QString bare = title.simplified();
-    // Only when something is left: a title that is all brackets stays.
-    if (const QString without = QString(bare).remove(brackets); !key(without).isEmpty())
-        bare = without;
-    // "The Hobbit" is shelved as "Hobbit, The" as often as not.
-    if (bare.endsWith(", The", Qt::CaseInsensitive))
-        bare.chop(5);
-    if (const QString without = QString(bare).remove(article); !key(without).isEmpty())
-        bare = without;
-    return key(bare);
-}
+// One normaliser for the library's own duplicates and for matching a site's
+// entries: see Curation::titleKey and Curation::authorKey.
+QString ReadingSites::titleKey(const QString &title) { return Curation::titleKey(title); }
 
-QString ReadingSites::authorKey(const QString &author) { return key(Curation::tidyAuthor(author)); }
+QString ReadingSites::authorKey(const QString &author) { return Curation::authorKey(author); }
 
 bool ReadingSites::sameAuthor(const QString &asked, const QStringList &authors) {
     const QString wanted = ReadingSites::authorKey(asked);

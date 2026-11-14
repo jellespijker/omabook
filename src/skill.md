@@ -55,9 +55,11 @@ omabook calibre import             # import the ones not imported yet (or <path>
 omabook add extra.pdf --to 12                          # another format of a book already there
 omabook set 12 --title "Dune" --authors "Frank Herbert" --series "Dune" --series-index 1 --tags "science fiction, classic"
 omabook set 12 --cover ~/Pictures/dune.jpg
-omabook lookup 12 --json           # candidates from every metadata plugin; each lists what it "adds" and "changes"
+omabook set 12 --identifier goodreads=4671 --identifier isbn=   # what it is called elsewhere; "isbn=" forgets one
+omabook lookup 12 --json           # candidates from every metadata plugin; each has a "candidate" number, a "candidate_id", and what it "adds" and "changes"
 omabook lookup 12 --ai --json      # ...and the AI's judgement of them first, with its "why"
-omabook lookup 12 --apply 1        # take candidate 1's details and cover
+omabook lookup 12 --apply apple-books-1a2b3c4d   # take that candidate's details and cover, by its candidate_id
+omabook lookup 12 --ai --apply 1   # or by its number in the last listing, with the same flags (refused otherwise)
 omabook export 12 ~/Desktop        # copy the book's file out
 omabook remove 12                  # to the trash; ask the user before removing
 ```
@@ -85,7 +87,7 @@ A plugin can also be a script (JavaScript) that runs inside Omabook and adds sou
 
 ## Changing how Omabook looks and works
 
-The interface is files in `~/.config/omabook/`, followed live: `config.json` (settings), `keys.json` (any key), `style.json` (colors, corners, font), `ui/*.qml` (replace a view), `mods/<name>/` (add a panel). Run `omabook customize` to write the guide `~/.config/omabook/AGENTS.md`, and read it before editing: it lists every command, setting and color, and the objects a view can use. `omabook customize ReaderView` copies a built-in view into `ui/` to edit. After an edit, check for `keys.error`, `style.error` or `ui.error` in that folder; one appears when a file couldn't be used.
+The interface is files in `~/.config/omabook/`, followed live: `config.json` (settings), `keys.json` (any key), `style.json` (the theme, colors, corners, font; `omabook theme list` and `omabook theme use <name>` pick the theme), `ui/*.qml` (replace a view), `mods/<name>/` (add a panel). Run `omabook customize` to write the guide `~/.config/omabook/AGENTS.md`, and read it before editing: it lists every command, setting and color, and the objects a view can use. `omabook customize ReaderView` copies a built-in view into `ui/` to edit. After an edit, check for `keys.error`, `style.error` or `ui.error` in that folder; one appears when a file couldn't be used.
 
 ## Reading place and other computers
 
@@ -102,7 +104,8 @@ omabook sync laptop:Books/Fiction                # ...with a named library folde
 
 ```bash
 omabook tidy --json            # proposals: the same book twice, authors spelled several ways; --ai adds series
-omabook tidy --ai --apply      # make them all; show the user the list first and ask
+omabook tidy --ai --apply      # make them all but the duplicates with "confidence": "low"; show the user the list first and ask
+omabook tidy --pick 3,7        # only these, by number (an unsure duplicate is merged only like this)
 omabook ask all "Which of my books are about the sea?"   # a question about the library as a whole
 omabook suggest --json         # what to read next: each suggestion looked up on Goodreads/Open Library (state, rating, in_library)
 omabook goodreads import <csv> # bring in a Goodreads export file: shelves, stars, dates; adds paper/wishlist books, removes nothing

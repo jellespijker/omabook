@@ -158,6 +158,23 @@ QList<Manual::Topic> Manual::topicList() {
              {tr("What a sync leaves out"),
               tr("Bookmarks and the AI's notes stay on the computer they were made on.")},
          }},
+        {"themes", tr("Colors and themes"), tr("Look like Omarchy anywhere, follow Aether, or pick a theme."),
+         {
+             {tr("Automatic"),
+              tr("Omabook takes its colors from Omarchy's current theme and follows it as it changes. Without Omarchy it "
+                 "follows the theme Aether writes, and without either it looks like Omarchy's default, Tokyo Night.")},
+             {tr("Choosing a theme"),
+              tr("In the settings ({global.settings}), Choose Theme lists Omarchy's own themes, built into Omabook, with "
+                 "Omarchy and Aether when they are here. The arrow keys show each one on the window as you go; Enter keeps "
+                 "it and Escape puts back what there was. It changes Omabook only, not the desktop.")},
+             {tr("From a terminal"),
+              tr("`omabook theme list` shows the themes, `omabook theme use nord` picks one, and `omabook theme use "
+                 "~/colors.toml` takes any colors.toml. `omabook theme import <name>` makes a theme of your own from an "
+                 "Aether blueprint.")},
+             {tr("Your own colors"),
+              tr("Colors in `~/.config/omabook/style.json` stay over whichever theme is chosen, so a theme can be the "
+                 "start and one color your own.")},
+         }},
         {"agents", tr("For agents"), tr("The command line, the MCP server, and the interface as files."),
          {
              {tr("The command line"),

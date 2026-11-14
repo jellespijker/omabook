@@ -53,7 +53,10 @@ class AiProvider : public QObject {
     Q_OBJECT
 
 public:
-    using QObject::QObject;
+    // Every request is written to the log when it is sent and when it ends:
+    // which provider and model, its tier, how much was sent, how long it
+    // took and how it ended. Never what was asked or answered.
+    explicit AiProvider(QObject *parent = nullptr);
 
     // What to call it in the window, such as "Claude" or "ollama".
     virtual QString name() const = 0;
@@ -76,6 +79,9 @@ signals:
     void noted(const QString &note);
 
 protected:
+    // Called by each provider as it sends a request (also a retry).
+    void began(const AiRequest &request, const QString &model);
+
     // A model that was refused must never break reading. After a failure
     // that is about the model, before anything was answered, this is the
     // model to ask once more: the main one, or the provider's default when
@@ -88,6 +94,9 @@ protected:
 
 private:
     AiModels m_models;
+    qint64 m_began = 0;     // when the request under way was sent, in ms
+    qsizetype m_sent = 0;   // how many characters it held
+    qsizetype m_received = 0;
 };
 
 // Claude through the Anthropic API, with the key from ANTHROPIC_API_KEY.

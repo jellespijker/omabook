@@ -28,6 +28,7 @@
 #include "reader.h"
 #include "settings.h"
 #include "theme.h"
+#include "themechoice.h"
 #include "translator.h"
 
 // The window at every size it is given. Omabook lives on a tiling desktop,
@@ -106,6 +107,7 @@ struct Desk {
     std::optional<Assistant> assistant;
     std::optional<AiAgent> aiAgent;
     std::optional<Customization> custom;
+    std::optional<ThemeChoice> themeChoice;
     std::optional<Look> look;
     std::optional<Librarian> librarian;
     std::optional<Manual> manual;
@@ -127,7 +129,10 @@ struct Desk {
         QCoreApplication::installTranslator(&*translator);
         theme.emplace(dir.filePath("desktop"));
         custom.emplace(dir.filePath("custom"));
-        look.emplace(&*theme, &*custom);
+        // The desktop's theme is Omarchy's here, so the picker has it too.
+        themeChoice.emplace(&*custom, ThemePlaces{dir.filePath("desktop"), dir.filePath("omarchy/themes"), dir.filePath("aether"),
+                                                  dir.filePath("custom/themes")});
+        look.emplace(&*theme, &*themeChoice, &*custom);
         settings.emplace(dir.filePath("config.json"));
         settings->setLibraryPath(dir.filePath("Library"));
         auto makeAi = [](QString *) -> std::unique_ptr<AiProvider> { return std::make_unique<LongAi>(); };
@@ -770,6 +775,7 @@ class LayoutTests : public QObject {
             QVERIFY(desk.resize(size));
             dialog(desk, "help", [&] { desk.call("showHelp"); });
             dialog(desk, "settings", [&] { desk.call("showSettings"); });
+            dialog(desk, "themes", [&] { desk.call("showThemes"); });
             dialog(desk, "libraries", [&] { desk.call("showLibraries"); });
             dialog(desk, "plugins", [&] { desk.call("showPlugins"); });
             // The sheets the plugin manager opens over itself.

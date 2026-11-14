@@ -231,7 +231,7 @@ private slots:
         // the command line. A new tool names its command here, or fails this.
         static const QHash<QString, QString> commands{
             {"omabook_info", "info"}, {"library_list", "libraries"}, {"library_switch", "libraries"},
-            {"library_forget", "libraries"}, {"books_search", "list"}, {"book_get", "show"}, {"book_add", "add"},
+            {"library_forget", "libraries"}, {"logs_read", "logs"}, {"books_search", "list"}, {"book_get", "show"}, {"book_add", "add"},
             {"book_add_format", "add"}, {"book_add_entry", "add"}, {"book_set_details", "set"},
             {"book_set_reading", "set"}, {"book_remove", "remove"}, {"book_export", "export"},
             {"book_convert", "convert"}, {"book_contents", "toc"}, {"book_text", "text"}, {"book_find", "find"},
@@ -254,6 +254,7 @@ private slots:
             {"graph_scopes", "graph"}, {"graph_add", "graph"}, {"graph_link", "graph"}, {"graph_unlink", "graph"},
             {"graph_merge", "graph"}, {"graph_remove", "graph"}, {"graph_build", "graph"}, {"graph_export", "graph"},
             {"graph_copy_scope", "graph"}, {"graph_remove_scope", "graph"}, {"graph_reading_log", "graph"}, {"graph_connect", "graph"},
+            {"themes_list", "theme"}, {"theme_use", "theme"},
         };
         const Machine machine;
         Server server(machine);
@@ -331,6 +332,52 @@ private slots:
         // What leaves this computer says that too.
         QVERIFY(hint("lookup_candidates", "openWorldHint").toBool());
         QVERIFY(!hint("books_search", "openWorldHint").toBool(true));
+    }
+
+    void anAgentNamesBooksElsewhereAndTakesCandidatesById() {
+        const Machine machine;
+        // Two catalogs of the test's own and nothing else, so no network is asked.
+        for (const char *plugin : {"builtin:Open Library", "builtin:Google Books", "builtin:Apple Books", "builtin:Crossref",
+                                   "builtin:Goodreads", "builtin:Hardcover", "calibre"})
+            QCOMPARE(machine.omabook({"plugins", "disable", plugin}).code, 0);
+        for (const QString name : {"alpha", "beta"}) {
+            const QString folder = machine.dir.filePath("home/.config/omabook/plugins/" + name);
+            QVERIFY(QDir().mkpath(folder));
+            QVERIFY(Fixtures::write(folder + "/lookup", "#!/bin/sh\ncat > /dev/null\necho '{\"candidates\": [{\"title\": \"From "
+                                                            + name.toUtf8() + "\", \"authors\": [\"Ann Author\"]}]}'\n"));
+            QVERIFY(QFile::setPermissions(folder + "/lookup", QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+            QVERIFY(Fixtures::write(folder + "/plugin.json", "{\"name\": \"" + name.toUtf8() + "\", \"fields\": [\"title\"], "
+                                                                 "\"command\": [\"" + folder.toUtf8() + "/lookup\"]}"));
+        }
+        QVERIFY(Fixtures::epub(machine.dir.filePath("first.epub"), "The Test Book"));
+        Server server(machine);
+        const qint64 id = server.data("book_add", {{"paths", QJsonArray{machine.dir.filePath("first.epub")}}})
+                              .value("added").toArray().first().toObject().value("id").toInteger();
+        QVERIFY(id > 0);
+
+        // Identifiers: added and changed, forgotten when empty, never "generated".
+        QJsonObject book = server.data("book_set_details", {{"id", id}, {"identifiers", QJsonObject{{"goodreads", "4671"}, {"isbn", "978"}}}});
+        QCOMPARE(book.value("identifiers").toObject().value("goodreads").toString(), QString("4671"));
+        book = server.data("book_set_details", {{"id", id}, {"identifiers", QJsonObject{{"goodreads", "5000"}, {"isbn", ""}}}});
+        QCOMPARE(book.value("identifiers").toObject(), (QJsonObject{{"goodreads", "5000"}}));
+        QVERIFY(server.failure("book_set_details", {{"id", id}, {"title", "Nope"}, {"identifiers", QJsonObject{{"generated", "mine"}}}})
+                    .contains("generated"));
+        QCOMPARE(server.data("book_get", {{"id", id}}).value("title").toString(), QString("The Test Book"));
+        QVERIFY(server.failure("book_set_details", {{"id", id}, {"identifiers", "goodreads=1"}}).contains("object"));
+
+        // Candidates carry their number and an id; the id is what is applied.
+        const QJsonArray candidates = server.data("lookup_candidates", {{"id", id}}).value("candidates").toArray();
+        QCOMPARE(candidates.size(), 2);
+        QCOMPARE(candidates.at(0).toObject().value("number").toInt(), 1);
+        QCOMPARE(candidates.at(1).toObject().value("source").toString(), QString("beta"));
+        const QString beta = candidates.at(1).toObject().value("candidate_id").toString();
+        QVERIFY2(beta.startsWith("beta-"), qPrintable(beta));
+        QVERIFY(server.failure("lookup_apply", {{"id", id}, {"candidate_id", "beta-00000000"}}).contains("lookup_candidates again"));
+        QVERIFY(server.failure("lookup_apply", {{"id", id}}).contains("candidate_id"));
+        QCOMPARE(server.data("lookup_apply", {{"id", id}, {"candidate_id", beta}}).value("title").toString(), QString("From beta"));
+        // Taken, the listing is done with.
+        QVERIFY(!server.failure("lookup_apply", {{"id", id}, {"candidate_id", beta}}).isEmpty());
+        QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
     }
 
     void anAgentWorksTheLibrary() {
@@ -867,6 +914,34 @@ private slots:
         QVERIFY(machine.omabook({"info"}).output.contains("Claude Code"));
         // The tools are listed without a server running.
         QVERIFY(machine.omabook({"mcp", "--tools"}).output.contains("books_search\t"));
+    }
+
+    void anAgentPicksATheme() {
+        // A home with neither Omarchy nor Aether: automatic is Tokyo Night.
+        const Machine machine;
+        Server server(machine);
+        QJsonObject listed = server.data("themes_list");
+        QCOMPARE(listed.value("choice").toString(), QString("auto"));
+        const QJsonArray themes = listed.value("themes").toArray();
+        QVERIFY(themes.size() >= 24);
+        QCOMPARE(themes.first().toObject().value("source").toObject().value("id").toString(), QString("tokyo-night"));
+        QVERIFY(themes.first().toObject().value("current").toBool());
+
+        const QJsonObject used = server.data("theme_use", {{"theme", "Catppuccin Latte"}});
+        QCOMPARE(used.value("id").toString(), QString("catppuccin-latte"));
+        QFile style(machine.dir.filePath("home/.config/omabook/style.json"));
+        QVERIFY(style.open(QIODevice::ReadOnly));
+        QCOMPARE(QJsonDocument::fromJson(style.readAll()).object().value("theme").toString(), QString("catppuccin-latte"));
+        QVERIFY(server.failure("theme_use", {{"theme", "no-such-theme"}}).contains("no theme called"));
+        listed = server.data("themes_list");
+        QCOMPARE(listed.value("choice").toString(), QString("catppuccin-latte"));
+
+        // `omabook info --json` says which theme and why.
+        const QJsonObject theme = QJsonDocument::fromJson(machine.omabook({"info", "--json"}).output.toUtf8()).object().value("theme").toObject();
+        QCOMPARE(theme.value("name").toString(), QString("Catppuccin Latte"));
+        QCOMPARE(theme.value("kind").toString(), QString("bundled"));
+        QVERIFY(theme.value("why").toString().startsWith("Chosen"));
+        QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
     }
 };
 

@@ -8,6 +8,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QRegularExpression>
+#include <QSet>
 #include <algorithm>
 
 namespace {
@@ -37,33 +38,247 @@ QString Curation::tidyAuthor(const QString &name) {
     return tidy.replace(initials, "\\1. ");
 }
 
+QString Curation::authorKey(const QString &name) { return key(tidyAuthor(name)); }
+
+namespace {
+
+// A title taken apart for comparing (see Curation::titleKey).
+struct TitleParts {
+    QString core;      // without the notes in brackets and the number in front
+    QString main;      // the core up to a subtitle
+    QString subtitle;  // after "Title: " or "Title - ", when there is one
+    double index = 0;  // a series number the title carries in front or in brackets
+    bool omnibus = false;
+};
+
+// "The Hobbit", "Hobbit, The" and "Hobbit" alike; only when something is left.
+QString withoutArticle(QString text) {
+    static const QRegularExpression article("^(the|a|an|de|het|een)\\s+", QRegularExpression::CaseInsensitiveOption);
+    static const QRegularExpression moved(",\\s*(the|a|an)$", QRegularExpression::CaseInsensitiveOption);
+    for (const QRegularExpression *pattern : {&moved, &article})
+        if (const QString without = QString(text).remove(*pattern).trimmed(); !key(without).isEmpty())
+            text = without;
+    return text;
+}
+
+// Whether a title names several books in one: a trilogy, a box set, "Books 1-3".
+bool collects(const QString &text) {
+    static const QRegularExpression words(
+        "\\b(trilog(y|ie)|omnibus|box(ed)?\\s*set|boxset|collection|complete\\s+(series|saga|novels|works)|compendium|"
+        "bundle|duology|quartet|tetralogy|books?\\s*\\d+\\s*(-|–|to|&|and|,)\\s*\\d+|volumes?\\s*\\d+\\s*(-|–|to)\\s*\\d+)\\b|"
+        "#\\s*\\d+\\s*(-|–)\\s*\\d+",
+        QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
+    return words.match(text).hasMatch();
+}
+
+// Whether a subtitle describes the book rather than names it: "A Mistborn
+// Novel", "Book Six", "A Brief History of Humankind", or a long one such as
+// non-fiction has. "Skin Deep", "Claudia's Story" or "The Well of Ascension"
+// after a name is a title of its own, not a subtitle to leave off.
+bool describes(const QString &subtitle) {
+    static const QRegularExpression words(
+        "^(a|an|een)\\s|\\b(novel|novella|roman|edition|editie|uitgave|book|volume|deel|part|prequel|sequel|series|"
+        "reeks|cycle|chronicles?|saga)\\b",
+        QRegularExpression::CaseInsensitiveOption);
+    return words.match(subtitle).hasMatch() || subtitle.split(' ', Qt::SkipEmptyParts).size() >= 5;
+}
+
+TitleParts partsOf(const QString &title) {
+    TitleParts parts;
+    QString bare = title.simplified();
+    // Notes in brackets at the end, one after another: a series and its
+    // number, an edition. A number in one is the book's place in a series.
+    static const QRegularExpression brackets("\\s*[(\\[]([^()\\[\\]]*)[)\\]]\\s*$");
+    static const QRegularExpression numbered("(?:#|\\b(?:book|vol(?:ume)?|part|deel|nr|no)\\.?)\\s*(\\d+(?:\\.\\d+)?)\\b",
+                                             QRegularExpression::CaseInsensitiveOption);
+    for (auto note = brackets.match(bare); note.hasMatch(); note = brackets.match(bare)) {
+        const QString without = bare.left(note.capturedStart()).trimmed();
+        if (key(without).isEmpty())
+            break;
+        // "(Mistborn Trilogy, #1)" is one book of a trilogy; "(Books 1-3)" is all of it.
+        static const QRegularExpression range("\\d\\s*(-|–|to)\\s*\\d");
+        const QString inside = note.captured(1);
+        if (const auto number = numbered.match(inside); number.hasMatch() && !range.match(inside).hasMatch()) {
+            if (parts.index == 0)
+                parts.index = number.captured(1).toDouble();
+        } else if (collects(inside)) {
+            parts.omnibus = true;
+        }
+        bare = without;
+    }
+    // A series number in front, with something that sets it apart: "5- ",
+    // "06 - ", "#5 ", "Book 5: ". Three digits at most and a word after it,
+    // so "1984" and "2001: A Space Odyssey" keep theirs.
+    static const QList<QRegularExpression> leading{
+        QRegularExpression("^(?:book|vol(?:ume)?|part|tome|deel|boek|band)\\.?\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*[-–—:.)]?\\s+(?=\\p{L})",
+                           QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption),
+        QRegularExpression("^#\\s*(\\d{1,3}(?:\\.\\d+)?)\\s*[-–—:.)]?\\s*(?=\\p{L})", QRegularExpression::UseUnicodePropertiesOption),
+        QRegularExpression("^(\\d{1,3}(?:\\.\\d+)?)\\s*[-–—:.)_]\\s*(?=\\p{L})", QRegularExpression::UseUnicodePropertiesOption),
+    };
+    for (const QRegularExpression &pattern : leading)
+        if (const auto number = pattern.match(bare); number.hasMatch() && !key(bare.mid(number.capturedEnd())).isEmpty()) {
+            parts.index = number.captured(1).toDouble();
+            bare = bare.mid(number.capturedEnd()).trimmed();
+            break;
+        }
+    parts.core = bare;
+    parts.omnibus = parts.omnibus || collects(bare);
+    // A subtitle: after a colon, or a dash with a space on both sides.
+    static const QRegularExpression subtitle("\\s*:\\s+|\\s+[-–—]\\s+");
+    if (const auto split = subtitle.match(bare); split.hasMatch() && !key(bare.left(split.capturedStart())).isEmpty()
+                                                 && !key(bare.mid(split.capturedEnd())).isEmpty()) {
+        parts.main = bare.left(split.capturedStart());
+        parts.subtitle = bare.mid(split.capturedEnd());
+    } else {
+        parts.main = bare;
+    }
+    return parts;
+}
+
+// Whether two spellings of a name are one person: the same key, or the same
+// family name with the same first name or its initial ("B. Sanderson").
+bool samePerson(const QString &a, const QString &b) {
+    if (Curation::authorKey(a) == Curation::authorKey(b))
+        return true;
+    auto names = [](const QString &name) {
+        QStringList words;
+        for (const QString &word : Curation::tidyAuthor(name).split(' ', Qt::SkipEmptyParts))
+            if (const QString letters = key(word); !letters.isEmpty())
+                words << letters;
+        return words;
+    };
+    const QStringList x = names(a), y = names(b);
+    if (x.size() < 2 || y.size() < 2 || x.last() != y.last())
+        return false;
+    const QString &first = x.first(), &other = y.first();
+    return first == other || (first.size() == 1 && other.startsWith(first)) || (other.size() == 1 && first.startsWith(other));
+}
+
+bool sameAuthors(const QStringList &a, const QStringList &b) {
+    if (a.isEmpty() || b.isEmpty())
+        return a.isEmpty() && b.isEmpty();
+    return std::ranges::any_of(a, [&b](const QString &x) { return std::ranges::any_of(b, [&x](const QString &y) { return samePerson(x, y); }); });
+}
+
+// Books grouped as they are joined, by the first book of their group.
+class Groups {
+public:
+    explicit Groups(qsizetype size) : m_parent(size) {
+        for (qsizetype i = 0; i < size; ++i)
+            m_parent[i] = i;
+    }
+    qsizetype find(qsizetype i) {
+        while (m_parent[i] != i)
+            i = m_parent[i] = m_parent[m_parent[i]];
+        return i;
+    }
+    void join(qsizetype a, qsizetype b) {
+        a = find(a), b = find(b);
+        if (a != b)
+            m_parent[std::max(a, b)] = std::min(a, b);
+    }
+
+private:
+    QList<qsizetype> m_parent;
+};
+
+} // namespace
+
+QString Curation::titleKey(const QString &title) {
+    const TitleParts parts = partsOf(title);
+    // A title that is all article or all brackets is still a title.
+    const QString whole = key(withoutArticle(parts.core));
+    return whole.isEmpty() ? key(title) : whole;
+}
+
 QList<Proposal> Curation::duplicates(const QList<Book> &books) {
-    QHash<QString, QList<Book>> groups;
-    QStringList order;
+    struct Seen {
+        TitleParts parts;
+        QString whole, main; // keys
+        double index = 0;    // its number in a series, when known
+    };
+    QList<Seen> seen;
+    seen.reserve(books.size());
+    QSet<QString> seriesNames;
     for (const Book &book : books) {
-        const QString same = key(book.meta.title) + "|" + key(tidyAuthor(book.meta.authors.value(0)));
-        if (key(book.meta.title).isEmpty())
+        Seen one{partsOf(book.meta.title), {}, {}, 0};
+        one.whole = titleKey(book.meta.title);
+        one.main = key(withoutArticle(one.parts.main));
+        one.index = book.meta.seriesIndex > 0 ? book.meta.seriesIndex : one.parts.index;
+        seen << one;
+        if (const QString series = key(withoutArticle(book.meta.series)); !series.isEmpty())
+            seriesNames << series;
+    }
+    // What would make two books with the same title two books after all.
+    auto apart = [&](qsizetype a, qsizetype b) {
+        const Seen &x = seen.at(a), &y = seen.at(b);
+        return (x.index > 0 && y.index > 0 && !qFuzzyCompare(x.index, y.index)) || x.parts.omnibus != y.parts.omnibus
+               || !sameAuthors(books.at(a).meta.authors, books.at(b).meta.authors);
+    };
+
+    // The same title, set apart from how it is written.
+    QHash<QString, QList<qsizetype>> byTitle;
+    for (qsizetype i = 0; i < books.size(); ++i)
+        if (!seen.at(i).whole.isEmpty())
+            byTitle[seen.at(i).whole] << i;
+    Groups sure(books.size());
+    for (const QList<qsizetype> &same : std::as_const(byTitle))
+        for (qsizetype i = 0; i < same.size(); ++i)
+            for (qsizetype j = i + 1; j < same.size(); ++j)
+                if (!apart(same.at(i), same.at(j)))
+                    sure.join(same.at(i), same.at(j));
+
+    // The same title once a subtitle is left off one of them. Not when what
+    // is left is a series' name, or goes before more than one subtitle:
+    // then it is the series and the subtitles are the books.
+    QHash<QString, QSet<QString>> subtitles;
+    for (const Seen &one : std::as_const(seen))
+        if (!one.parts.subtitle.isEmpty())
+            subtitles[one.main] << key(one.parts.subtitle);
+    Groups likely = sure;
+    for (qsizetype i = 0; i < books.size(); ++i) {
+        const Seen &one = seen.at(i);
+        if (one.parts.subtitle.isEmpty() || !describes(one.parts.subtitle) || one.main.size() < 3
+            || seriesNames.contains(one.main) || subtitles.value(one.main).size() > 1)
             continue;
-        if (!groups.contains(same))
-            order << same;
-        groups[same] << book;
+        for (const qsizetype j : byTitle.value(one.main))
+            if (seen.at(j).parts.subtitle.isEmpty() && !apart(i, j))
+                likely.join(i, j);
+    }
+
+    QHash<qsizetype, QList<qsizetype>> groups;
+    QList<qsizetype> order;
+    for (qsizetype i = 0; i < books.size(); ++i) {
+        const qsizetype group = likely.find(i);
+        if (!groups.contains(group))
+            order << group;
+        groups[group] << i;
     }
     QList<Proposal> proposals;
-    for (const QString &same : std::as_const(order)) {
-        QList<Book> group = groups.value(same);
+    for (const qsizetype first : std::as_const(order)) {
+        QList<qsizetype> group = groups.value(first);
         if (group.size() < 2)
             continue;
         // Kept: the one being read, then the one with the most formats, a
         // cover, a description; the oldest when nothing tells them apart.
-        std::ranges::stable_sort(group, [](const Book &a, const Book &b) {
-            auto worth = [](const Book &book) {
-                return (book.percent > 0 ? 8 : 0) + book.formats.size() * 2 + (book.hasCover ? 1 : 0)
-                       + (book.meta.description.isEmpty() ? 0 : 1);
-            };
-            return worth(a) > worth(b);
+        std::ranges::stable_sort(group, std::greater{}, [&books](qsizetype i) {
+            const Book &book = books.at(i);
+            return (book.percent > 0 ? 8 : 0) + book.formats.size() * 2 + (book.hasCover ? 1 : 0)
+                   + (book.meta.description.isEmpty() ? 0 : 1);
         });
-        for (const Book &other : group.mid(1))
-            proposals.append({"duplicate", group.first().id, other.id, group.first().meta, {}, {}});
+        const qsizetype kept = group.first();
+        for (const qsizetype other : group.mid(1)) {
+            Proposal proposal{"duplicate", books.at(kept).id, books.at(other).id, books.at(kept).meta, {}, {}};
+            if (sure.find(other) != sure.find(kept)) {
+                proposal.unsure = true;
+                const QString &left = seen.at(seen.at(kept).parts.subtitle.isEmpty() ? other : kept).parts.subtitle;
+                proposal.why = left.isEmpty() ? QString("The titles only agree once a subtitle is left off: check that it is the same book.")
+                                              : QString("The titles only agree once \"%1\" is left off: check that it is the same book.").arg(left);
+            } else if (key(books.at(kept).meta.title) != key(books.at(other).meta.title)) {
+                proposal.why = "The same title once a series number, a note in brackets or an article is set aside.";
+            }
+            proposals << proposal;
+        }
     }
     return proposals;
 }
@@ -73,9 +288,9 @@ QList<Proposal> Curation::authorSpellings(const QList<Book> &books) {
     QHash<QString, QHash<QString, int>> spellings;
     for (const Book &book : books)
         for (const QString &author : book.meta.authors)
-            ++spellings[key(tidyAuthor(author))][tidyAuthor(author)];
+            ++spellings[authorKey(author)][tidyAuthor(author)];
     auto preferred = [&](const QString &author) {
-        const QHash<QString, int> seen = spellings.value(key(tidyAuthor(author)));
+        const QHash<QString, int> seen = spellings.value(authorKey(author));
         QString best = tidyAuthor(author);
         for (const auto &[spelling, count] : seen.asKeyValueRange())
             if (count > seen.value(best) || (count == seen.value(best) && spelling < best))

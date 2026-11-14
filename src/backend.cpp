@@ -3,6 +3,7 @@
 #include "graph.h"
 
 #include "libraries.h"
+#include "log.h"
 
 #include <QDir>
 #include <QDirIterator>
@@ -268,6 +269,8 @@ QVariantMap Backend::book(qint64 id) const {
 }
 
 void Backend::say(const QString &message) {
+    if (!message.isEmpty())
+        qCInfo(lcApp).noquote() << "said:" << message;
     m_message = message;
     emit messageChanged();
 }

@@ -188,6 +188,7 @@ ApplicationWindow {
     function showPlugins() { pluginList.open() }
     function showTidy() { tidyUp.show() }
     function showReadingSites() { readingSites.open() }
+    function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
     function showAskLibrary() { askLibrary.open() }
     function showSuggestions() {
@@ -382,6 +383,7 @@ ApplicationWindow {
     PluginAsk { id: pluginAsk }
     TidyDialog { id: tidyUp }
     ReadingSitesDialog { id: readingSites }
+    ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }
     AskDialog {
         id: askLibrary

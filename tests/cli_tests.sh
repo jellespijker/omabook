@@ -72,6 +72,17 @@ expect "show a missing book fails" 1 "no book 9" "$omabook" show 9 --library "$l
 expect "set" 0 '"title": "Renamed"' "$omabook" set 2 --library "$library" --title Renamed --tags "sea, test" --json
 expect "set is kept" 0 "sea, test" "$omabook" show 2 --library "$library"
 expect "set refuses an empty title" 1 "needs a title" "$omabook" set 2 --library "$library" --title ""
+# What the book is called elsewhere: added, changed, forgotten; never "generated", which only a plugin sets.
+expect "set gives identifiers" 0 '"goodreads": "4671"' "$omabook" set 2 --library "$library" --identifier goodreads=4671 --identifier isbn=9780000000001 --json
+expect "show lists them as scheme=value" 0 "goodreads=4671" "$omabook" show 2 --library "$library"
+expect "show has them in JSON" 0 '"isbn": "9780000000001"' "$omabook" show 2 --library "$library" --json
+expect "set changes an identifier" 0 "goodreads=5000" bash -c "'$omabook' set 2 --library '$library' --identifier goodreads=5000 && '$omabook' show 2 --library '$library'"
+"$omabook" set 2 --library "$library" --identifier isbn= > /dev/null || fail "set could not forget an identifier"
+"$omabook" show 2 --library "$library" | grep -q "isbn=" && fail "an identifier given empty was not forgotten"
+expect "set refuses the plugins' own scheme" 1 '"generated"' "$omabook" set 2 --library "$library" --title Nope --identifier generated=mine
+"$omabook" show 2 --library "$library" | grep -q "Nope" && fail "a refused identifier still changed the title"
+"$omabook" show 2 --library "$library" | grep -q "generated=" && fail "generated was set from the command line"
+expect "set wants scheme=value" 1 "scheme=value" "$omabook" set 2 --library "$library" --identifier goodreads
 
 expect "info on a file" 0 '"title": "Command Book"' "$omabook" info "$work/command.epub" --json
 expect "toc" 0 "CHAPTER 2" "$omabook" toc 1 --library "$library"
@@ -110,6 +121,33 @@ expect "the Calibre plugin is switched off" 0 "off	calibre	calibre" "$omabook" p
 expect "and then nothing of Calibre's is looked at" 1 "switched off" "$omabook" calibre libraries
 expect "nor converted with" 1 "switched off" "$omabook" convert 1 --to mobi --library "$library"
 expect "and on again" 0 "on	calibre	calibre" "$omabook" plugins enable calibre
+# A look-up with two catalogs of the user's own and nothing else, so it needs no network.
+for plugin in builtin:Open\ Library "builtin:Google Books" "builtin:Apple Books" builtin:Crossref builtin:Goodreads builtin:Hardcover calibre; do
+  "$omabook" plugins disable "$plugin" > /dev/null || fail "could not switch $plugin off"
+done
+for name in alpha beta; do
+  mkdir -p "$XDG_CONFIG_HOME/omabook/plugins/$name"
+  printf '#!/bin/sh\ncat > /dev/null\necho '"'"'{"candidates": [{"title": "From %s", "authors": ["Cy Shell"]}]}'"'"'\n' "$name" > "$XDG_CONFIG_HOME/omabook/plugins/$name/lookup"
+  chmod +x "$XDG_CONFIG_HOME/omabook/plugins/$name/lookup"
+  printf '{"name": "%s", "fields": ["title"], "command": ["%s"]}' "$name" "$XDG_CONFIG_HOME/omabook/plugins/$name/lookup" > "$XDG_CONFIG_HOME/omabook/plugins/$name/plugin.json"
+done
+expect "lookup lists the candidates in the sources' order" 0 "1	alpha	From alpha" "$omabook" lookup 2 --library "$library"
+expect "each candidate has a number and an id" 0 '"candidate_id": "beta-' "$omabook" lookup 2 --library "$library" --json
+expect "a number from a listing made without --ai is refused with --ai" 1 "made without --ai" "$omabook" lookup 2 --library "$library" --ai --apply 1
+expect "and the refusal names the candidate's id" 1 "--apply alpha-" "$omabook" lookup 2 --library "$library" --ai --apply 1
+# The catalog answers otherwise now; the number still means what was shown.
+sed -i 's/From alpha/Changed alpha/' "$XDG_CONFIG_HOME/omabook/plugins/alpha/lookup"
+expect "a number means the candidate that was listed" 0 '"title": "From alpha"' "$omabook" lookup 2 --library "$library" --apply 1 --json
+beta="$("$omabook" lookup 2 --library "$library" --json | grep -o '"candidate_id": "beta-[0-9a-f]*"' | cut -d'"' -f4)"
+[ -n "$beta" ] || fail "the listing gave beta no id"
+expect "a candidate is taken by its id" 0 '"title": "From beta"' "$omabook" lookup 2 --library "$library" --apply "$beta" --json
+expect "an id no source answers with now is refused" 1 "No candidate is called alpha-00000000" "$omabook" lookup 2 --library "$library" --apply alpha-00000000
+"$omabook" set 2 --library "$library" --title Renamed > /dev/null
+rm -rf "$XDG_CONFIG_HOME/omabook/plugins/alpha" "$XDG_CONFIG_HOME/omabook/plugins/beta"
+for plugin in builtin:Open\ Library "builtin:Google Books" "builtin:Apple Books" builtin:Crossref builtin:Goodreads builtin:Hardcover calibre; do
+  "$omabook" plugins enable "$plugin" > /dev/null
+done
+
 expect "a catalog as csv" 0 "id,title,authors" "$omabook" catalog --library "$library"
 expect "a catalog as bibtex, searched" 0 "@book{" "$omabook" catalog --library "$library" --format bibtex described
 expect "a catalog format there isn't" 1 "csv or bibtex" "$omabook" catalog --library "$library" --format docx
@@ -173,6 +211,29 @@ expect "customize copies a view to edit" 0 "ui/DetailsPane.qml" "$omabook" custo
 [ -w "$XDG_CONFIG_HOME/omabook/ui/DetailsPane.qml" ] || fail "the copied view can't be edited"
 expect "customize won't overwrite your view" 1 "already" "$omabook" customize DetailsPane
 expect "customize knows its views" 1 "no built-in view" "$omabook" customize Nope
+
+# Themes: no Omarchy and no Aether in this home, so Automatic is Tokyo Night.
+expect "the theme in use" 0 "Tokyo Night" "$omabook" theme
+expect "the theme says why" 0 "neither Omarchy nor Aether" "$omabook" theme show
+expect "the themes there are" 0 "catppuccin-latte" "$omabook" theme list
+expect "the themes as JSON" 0 '"choice": "auto"' "$omabook" theme list --json
+expect "a theme by its name" 0 "Rose Pine" "$omabook" theme use "Rose Pine"
+grep -q '"theme": "rose-pine"' "$XDG_CONFIG_HOME/omabook/style.json" || fail "theme use wrote no theme into style.json"
+expect "info says which theme" 0 '"kind": "bundled"' "$omabook" info --json
+expect "an unknown theme is refused" 1 "no theme called" "$omabook" theme use plaid
+grep -q '"theme": "rose-pine"' "$XDG_CONFIG_HOME/omabook/style.json" || fail "a refused theme changed style.json"
+mkdir -p "$work/mine"
+printf 'mode = "light"\nbackground = "#fafafa"\nforeground = "#202020"\naccent = "#005fcc"\n' > "$work/mine/colors.toml"
+expect "a colors.toml of your own" 0 '"kind": "file"' "$omabook" theme use "$work/mine/colors.toml" --json
+mkdir -p "$XDG_CONFIG_HOME/aether/blueprints"
+printf '{"name": "Harbour", "palette": {"colors": ["#101418","#e06c75","#98c379","#e5c07b","#61afef","#c678dd","#56b6c2","#dcdfe4","#5c6370","#e06c75","#98c379","#e5c07b","#61afef","#c678dd","#56b6c2","#ffffff"]}}' > "$XDG_CONFIG_HOME/aether/blueprints/harbour.json"
+expect "the blueprints are listed" 0 '"harbour"' "$omabook" theme list --json
+expect "an Aether blueprint is imported" 0 "omabook theme use harbour" "$omabook" theme import Harbour
+[ -f "$XDG_CONFIG_HOME/omabook/themes/harbour/colors.toml" ] || fail "theme import wrote no colors.toml"
+expect "an imported theme is used" 0 "your own" "$omabook" theme use harbour
+expect "automatic again" 0 "Tokyo Night" "$omabook" theme use auto
+grep -q '"theme"' "$XDG_CONFIG_HOME/omabook/style.json" && fail "theme use auto left a theme in style.json"
+rm -rf "$XDG_CONFIG_HOME/aether" "$XDG_CONFIG_HOME/omabook/style.json"
 rm -rf "$XDG_CONFIG_HOME/omabook/ui"
 
 printf 'One copy.\n' > "$work/Twice - Reader, Rita.txt"

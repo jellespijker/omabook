@@ -1,0 +1,13 @@
+The palettes of Omarchy's 23 built-in themes, compiled into Omabook so it
+can look like Omarchy on any computer, with or without Omarchy.
+
+Source:   https://github.com/omacom/omarchy (themes/<name>/colors.toml)
+Release:  v4.5.0
+Commit:   ac2690cd7be4f47e4a255f5e2e78d904d436b068
+Licence:  MIT, Copyright (c) David Heinemeier Hansson; see LICENSE.omarchy.
+
+Only each theme's colors.toml is here, unchanged: no wallpapers and no
+per-app files. The palettes Omarchy ports (Catppuccin, Tokyo Night, Nord,
+Gruvbox, Rose Pine, Everforest, Kanagawa, Flexoki) are MIT upstream as well.
+
+Refresh them with bin/update-themes [tag or commit]; don't edit them here.

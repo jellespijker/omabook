@@ -116,6 +116,23 @@ const bool registered = [] {
                   schema({{"file", string("Where to write it, as an absolute path.")}}, {"file"}), Changes,
                   [](const QJsonObject &arguments) { return command({"goodreads", "export", arguments.value("file").toString()}); }});
 
+    registerTool({"logs_read", "Read Omabook's log",
+                  "What Omabook did and what went wrong, newest last: AI requests (provider, model, tier, size, time, "
+                  "how they ended), plugin errors, library upgrades, syncs, and what the window told the person. It "
+                  "holds no book text, questions or answers. Use it to find out why something failed.",
+                  schema({{"lines", integer("How many of the newest entries; 100 when not given.")},
+                          {"level", choice("Only this level and above.", {"debug", "info", "warning", "critical"})},
+                          {"category", choice("Only one part of Omabook.", {"ai", "library", "graph", "plugins", "sites", "sync", "app", "qml"})},
+                          {"since", string("Only since then: 30m, 2h, 1d, or an ISO date and time.")},
+                          {"grep", string("Only entries that hold these words.")}}),
+                  ReadOnly, [](const QJsonObject &arguments) {
+                      QStringList asked{"logs", "-n", QString::number(arguments.value("lines").toInt(100))};
+                      for (const char *option : {"level", "category", "since", "grep"})
+                          if (arguments.contains(option))
+                              asked << QString("--") + option << arguments.value(option).toString();
+                      return command(asked);
+                  }});
+
     registerTool({"library_forget", "Forget a library",
                   "Takes a library off the list of the ones Omabook knows. Its folder stays, unless trash is true: "
                   "then the folder, books and all, goes to the trash, which is refused for a folder that is also a "
@@ -127,6 +144,20 @@ const bool registered = [] {
                       return command({"libraries", arguments.value("trash").toBool() ? "--trash" : "--forget",
                                       arguments.value("folder").toString()});
                   }});
+
+    registerTool({"themes_list", "The themes",
+                  "The themes Omabook's colors can come from, the one in use marked: automatic (Omarchy's current "
+                  "theme where Omarchy is, else Aether's, else Tokyo Night), Omarchy's and Aether's where they are, "
+                  "Omarchy's own themes built into Omabook, and the user's own. Also the Aether blueprints that could "
+                  "be imported.",
+                  schema(), ReadOnly, [](const QJsonObject &) { return command({"theme", "list"}); }});
+
+    registerTool({"theme_use", "Use a theme",
+                  "Makes Omabook take its colors from a theme, at once and from then on: \"auto\", \"omarchy\", "
+                  "\"aether\", a name themes_list gives (\"nord\", \"catppuccin-latte\"), or the path of a colors.toml. "
+                  "Colors the user set in style.json still win. It doesn't change the desktop's theme.",
+                  schema({{"theme", string("The theme, as themes_list names it.")}}, {"theme"}), Changes,
+                  [](const QJsonObject &arguments) { return command({"theme", "use", arguments.value("theme").toString()}); }});
     return true;
 }();
 

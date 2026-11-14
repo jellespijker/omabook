@@ -131,7 +131,7 @@ void Settings::setShelf(const QString &library, const QJsonObject &shelf) {
 QJsonObject Settings::options() const {
     return {{"cover_size", coverSize()}, {"font_size", fontSize()}, {"font_family", fontFamily()}, {"line_width", lineWidth()},
             {"line_height", lineHeight()}, {"paragraph_spacing", paragraphSpacing()}, {"justify", justify()},
-            {"spread", spread()}, {"sort", sort()}};
+            {"spread", spread()}, {"folio", folio()}, {"sort", sort()}};
 }
 
 bool Settings::setOption(const QString &key, const QJsonValue &value) {
@@ -142,7 +142,7 @@ bool Settings::setOption(const QString &key, const QJsonValue &value) {
                       : key == "line_width" ? within(320, 1600)
                       : key == "line_height" ? within(100, 300)
                       : key == "paragraph_spacing" ? within(0, 80)
-                      : key == "justify" ? value.isBool()
+                      : key == "justify" || key == "folio" ? value.isBool()
                       : key == "font_family" ? value.isString()
                       : key == "spread" ? oneOf(spreads)
                       : key == "plugin_updates" ? oneOf(pluginUpdateModes)

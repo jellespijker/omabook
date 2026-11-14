@@ -18,7 +18,11 @@ struct Proposal {
     qint64 otherId = 0;  // duplicate: the book that is folded into bookId
     BookMeta meta;       // the book's details once it is applied (not for duplicates)
     QUrl coverUrl;       // details: a cover to fetch
-    QString why;         // the model's reason, when it gave one
+    QString why;         // the model's reason, when it gave one; for a duplicate, why it is thought one
+    // A duplicate found on weaker evidence (the titles only agree once a
+    // subtitle is left off): shown for the person to judge, and left out of
+    // a blind "apply everything".
+    bool unsure = false;
 };
 
 namespace Curation {
@@ -26,8 +30,29 @@ namespace Curation {
 // "Weis, Margaret" and "margaret  weis" are both "Margaret Weis".
 QString tidyAuthor(const QString &name);
 
-// Books that are the same book twice: the same title by the same author.
-// The copy with the most to it is kept and the others fold into it.
+// What two spellings of a name share: the tidied name's letters and digits,
+// lower case, accents dropped. "Sanderson, Brandon" and "brandon sanderson"
+// have one key.
+QString authorKey(const QString &name);
+// What two spellings of one title share. Set aside: case, accents and
+// punctuation; notes in brackets at the end ("(Mistborn #5)", "[Kindle
+// Edition]"); a leading article ("The", "A", "An", "De", "Het", "Een", or
+// one moved to the end: "Hobbit, The"); and a series number in front with a
+// separator ("5- ", "06 - ", "#5 ", "Book 5: "). A number that is part of the
+// title ("Mistborn 2", "1984", "2001: A Space Odyssey") stays.
+QString titleKey(const QString &title);
+
+// Books that are the same book twice: the same title (see titleKey) by the
+// same author (any author of one is one of the other's, however spelled,
+// "B. Sanderson" for "Brandon Sanderson" too). Not the same book: two
+// different numbers in a series, an omnibus beside one of its parts, or the
+// same title by someone else. Titles that only agree once a subtitle is left
+// off ("The Bands of Mourning: A Mistborn Novel", "The Bands of Mourning")
+// are proposed as unsure, when the subtitle describes the book ("A Mistborn
+// Novel", a long non-fiction one) and what is left is not a series' name:
+// "Mistborn: The Well of Ascension" and "Legion: Skin Deep" are books of
+// their own. The copy with the most to it is kept
+// and the others fold into it.
 QList<Proposal> duplicates(const QList<Book> &books);
 // Authors written "Last, First", or one author spelled several ways.
 QList<Proposal> authorSpellings(const QList<Book> &books);

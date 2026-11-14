@@ -2,6 +2,8 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QMap>
+#include <QSet>
 #include <QRegularExpression>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -10,6 +12,7 @@
 #include <QtTest>
 
 #include "booklistmodel.h"
+#include "bookops.h"
 #include "calibre.h"
 #include "catalog.h"
 #include "curation.h"
@@ -18,7 +21,9 @@
 #include "formats.h"
 #include "graph.h"
 #include "libraries.h"
+#include "log.h"
 #include "library.h"
+#include "readingsite.h"
 #include "settings.h"
 
 // The library: books copied in, described, changed, read and removed, all in
@@ -376,6 +381,184 @@ private slots:
         QVERIFY(Curation::authorSpellings(library.books()).isEmpty());
     }
 
+    void theSameBookIsFoundHoweverItsTitleIsWritten() {
+        // One normaliser for titles and names: the library's own and a
+        // reading site's.
+        QCOMPARE(Curation::titleKey("5- Shadows of Self"), Curation::titleKey("Shadows of Self"));
+        for (const char *title : {"06 - Oathbringer", "#3 Oathbringer", "Book 3: Oathbringer", "Oathbringer (The Stormlight Archive #3)",
+                                  "Oathbringer [Kindle Edition] (Stormlight #3)", "The Oathbringer", "Oathbringer, The", "OATHBRINGER!"})
+            QVERIFY2(Curation::titleKey(title) == Curation::titleKey("Oathbringer"), title);
+        QCOMPARE(Curation::titleKey("6-The Bands of Mourning"), QString("bandsofmourning"));
+        // A number that is the title, or part of it, stays.
+        QCOMPARE(Curation::titleKey("2001: A Space Odyssey"), QString("2001aspaceodyssey"));
+        QCOMPARE(Curation::titleKey("1984"), QString("1984"));
+        QVERIFY(Curation::titleKey("Mistborn 2") != Curation::titleKey("Mistborn"));
+        QVERIFY(!Curation::titleKey("The").isEmpty());
+        QCOMPARE(ReadingSites::titleKey("5- Shadows of Self"), Curation::titleKey("Shadows of Self"));
+        QCOMPARE(Curation::authorKey("Sanderson, Brandon"), Curation::authorKey("brandon  sanderson"));
+        QCOMPARE(ReadingSites::authorKey("Sanderson, Brandon"), Curation::authorKey("Brandon Sanderson"));
+        QCOMPARE(Curation::authorKey("V.E. Schwab"), Curation::authorKey("V. E. Schwab"));
+
+        qint64 next = 0;
+        auto book = [&next](const QString &title, const QString &author, const QString &series = {}, double index = 0) {
+            Book made;
+            made.id = ++next;
+            made.meta.title = title;
+            made.meta.authors = BookMeta::splitAuthors(author);
+            made.meta.series = series;
+            made.meta.seriesIndex = index;
+            made.formats = QStringList{"epub"};
+            return made;
+        };
+        // What is proposed: each pair once, smaller id first, and whether unsure.
+        auto pairs = [](const QList<Proposal> &proposals) {
+            QMap<QPair<qint64, qint64>, bool> found;
+            for (const Proposal &proposal : proposals)
+                found.insert({qMin(proposal.bookId, proposal.otherId), qMax(proposal.bookId, proposal.otherId)}, proposal.unsure);
+            return found;
+        };
+
+        const QList<Book> shelf{
+            book("C++ Best Practices", "Jason Turner"),                          // 1
+            book("C++ Best Practices", "Jason Turner"),                          // 2: the same, as another file
+            book("5- Shadows of Self", "Brandon Sanderson", "Mistborn", 5),      // 3
+            book("Shadows of Self", "Brandon Sanderson"),                        // 4
+            book("6-The Bands of Mourning", "Brandon Sanderson", "Mistborn", 6), // 5
+            book("The Bands of Mourning: A Mistborn Novel", "Brandon Sanderson", "Mistborn Trilogy", 6), // 6
+            book("Words of Radiance (Stormlight Archive, The)", "Sanderson, Brandon"),                  // 7
+            book("Words of Radiance", "Brandon Sanderson", "The Stormlight Archive", 2),                // 8
+            book("Elantris", "B. Sanderson"),                                    // 9
+            book("Elantris", "Brandon Sanderson & Someone Else"),                // 10
+            book("The Final Empire (Mistborn Trilogy, #1)", "Brandon Sanderson"), // 11
+            book("The Final Empire", "Brandon Sanderson"),                       // 12
+            // Not the same book as any other.
+            book("Mistborn", "Brandon Sanderson"),                               // 13
+            book("Mistborn 2", "Brandon Sanderson"),                             // 14
+            book("The Well of Ascension", "Brandon Sanderson", "Mistborn", 2),   // 15
+            book("Mistborn: The Hero of Ages", "Brandon Sanderson", "Mistborn", 3), // 16: what is left is a series' name
+            book("Legion", "Brandon Sanderson"),                                 // 17
+            book("Legion: Skin Deep", "Brandon Sanderson"),                      // 18: a title of its own after the colon
+            book("Dune", "Frank Herbert"),                                       // 19
+            book("Dune", "Someone Else"),                                        // 20: same title, another author
+            book("Warbreaker", "Brandon Sanderson"),                             // 21
+            book("Warbreaker (Books 1-3)", "Brandon Sanderson"),                 // 22: an omnibus
+            book("Steelheart (Book 2)", "Brandon Sanderson"),                    // 23
+            book("Steelheart (Book 3)", "Brandon Sanderson"),                    // 24: another number in the series
+            book("Calamity", "Brandon Sanderson", "Reckoners", 3),               // 25
+            book("Calamity", "Brandon Sanderson", "Reckoners", 4),               // 26
+        };
+        const QList<Proposal> proposals = Curation::duplicates(shelf);
+        const auto found = pairs(proposals);
+        const QMap<QPair<qint64, qint64>, bool> wanted{
+            {{1, 2}, false}, {{3, 4}, false}, {{5, 6}, true}, {{7, 8}, false}, {{9, 10}, false}, {{11, 12}, false},
+        };
+        QCOMPARE(found, wanted);
+        // The unsure one says why, and the others found only once their
+        // titles were set apart from how they are written say so too.
+        for (const Proposal &proposal : proposals) {
+            if (proposal.unsure)
+                QVERIFY2(proposal.why.contains("A Mistborn Novel"), qPrintable(proposal.why));
+            if (QSet<qint64>{proposal.bookId, proposal.otherId} == QSet<qint64>{3, 4})
+                QVERIFY(proposal.why.contains("series number"));
+            if (QSet<qint64>{proposal.bookId, proposal.otherId} == QSet<qint64>{1, 2})
+                QVERIFY(proposal.why.isEmpty());
+        }
+        // The unsure one is shown as such.
+        Book kept = shelf.at(4);
+        const auto unsure = std::ranges::find_if(proposals, &Proposal::unsure);
+        QVERIFY(unsure != proposals.end());
+        QCOMPARE(BookOps::proposalJson(kept, *unsure).value("confidence").toString(), QString("low"));
+
+        // "Mistborn" is a series' name here, so nothing is left off down to it.
+        QVERIFY(Curation::duplicates({book("Mistborn: The Well of Ascension", "Brandon Sanderson", "Mistborn", 2),
+                                      book("Mistborn", "Brandon Sanderson")})
+                    .isEmpty());
+        // Two subtitles after one name: it is a series, and the subtitles the books.
+        QVERIFY(Curation::duplicates({book("Cosmere: A Novel of Scadrial", "Brandon Sanderson"),
+                                      book("Cosmere: A Novel of Roshar", "Brandon Sanderson"), book("Cosmere", "Brandon Sanderson")})
+                    .isEmpty());
+    }
+
+    void aMergeKeepsWhatEitherBookKnew() {
+        QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        QVERIFY(Fixtures::epub(dir.filePath("serpent.epub"), "Serpent Mage"));
+        BookMeta meta;
+        meta.title = "Serpent Mage";
+        meta.authors = QStringList{"Margaret Weis", "Tracy Hickman"};
+        const qint64 epub = library.add(dir.filePath("serpent.epub"), meta).id;
+        // The same book as Goodreads knows it, with no file.
+        const qint64 entry = library.addEntry(meta, true).id;
+        QVERIFY(epub > 0 && entry > 0);
+        library.setIdentifier(epub, "calibre", "83355555");
+        library.setIdentifier(epub, "google", "mine");
+        library.setIdentifier(entry, "goodreads", "28507");
+        library.setIdentifier(entry, "goodreads:synced", "read|0|");
+        library.setIdentifier(entry, "google", "theirs");
+        library.setIdentifier(entry, "isbn", "9780553562811");
+        library.setIdentifier(entry, "generated", "some-plugin");
+        QVERIFY(library.setReading(epub, "to-read", 0, {}));
+        QVERIFY(library.setReading(entry, "read", 4, "2024-03-01"));
+        library.setProgress(epub, {1, 0.1, 10, 0});
+        library.setProgress(entry, {3, 0.5, 60, 0});
+        const Annotation mark{0, "bookmark", 2, 0.25, "A line", "", 0};
+        library.addAnnotation(epub, mark);
+        library.addAnnotation(entry, mark); // the same bookmark twice
+        library.addAnnotation(entry, {0, "highlight", 3, 0.5, "Another line", "mine", 0});
+        library.setNotes(epub, "recap", {1, 0.1, "Early notes.", 0});
+        library.setNotes(epub, "cast", {1, 0.1, "Who is who.", 0});
+        library.setNotes(entry, "recap", {3, 0.5, "Later notes.", 0});
+        Graph graph(library);
+        const qint64 epubNode = graph.bookNode(epub), entryNode = graph.bookNode(entry);
+        QVERIFY(epubNode > 0 && entryNode > 0);
+        const qint64 haplo = graph.upsert({}, "character", "Haplo", "A Patryn.", {}, GraphPlace{entry, 3, 0.4});
+        QVERIFY(graph.link(haplo, entryNode, "appears in", {}, GraphPlace{entry, 3, 0.4}) > 0);
+        QVERIFY(graph.link(haplo, epubNode, "appears in") > 0); // both nodes have it: one edge after
+        graph.logReading(entry, 0, 60, "2026-01-01");
+        graph.logReading(epub, 0, 10, "2026-01-01");
+        graph.logReading(entry, 60, 70, "2026-01-02");
+
+        QString error;
+        QVERIFY2(library.merge(epub, entry, &error), qPrintable(error));
+        QVERIFY(!library.book(entry));
+        const Book merged = *library.book(epub);
+        // Every name it has elsewhere, its own where both had one; not the
+        // plugin's mark, since no plugin made this book.
+        QCOMPARE(merged.identifiers.value("calibre").toString(), QString("83355555"));
+        QCOMPARE(merged.identifiers.value("goodreads").toString(), QString("28507"));
+        QCOMPARE(merged.identifiers.value("goodreads:synced").toString(), QString("read|0|"));
+        QCOMPARE(merged.identifiers.value("isbn").toString(), QString("9780553562811"));
+        QCOMPARE(merged.identifiers.value("google").toString(), QString("mine"));
+        QVERIFY(!merged.identifiers.contains("generated"));
+        QCOMPARE(library.bookWithIdentifier("goodreads", "28507"), epub);
+        // Paper, the shelf further along, the stars and the day.
+        QVERIFY(merged.paper);
+        QCOMPARE(merged.held(), QString("both"));
+        QCOMPARE(merged.shelf, QString("read"));
+        QCOMPARE(merged.rating, 4);
+        QCOMPARE(merged.finished, QString("2024-03-01"));
+        // The further place, with its notes; the bookmark once.
+        QCOMPARE(library.progress(epub).percent, 60.0);
+        QCOMPARE(library.annotations(epub).size(), 2);
+        QCOMPARE(library.recap(epub).text, QString("Later notes."));
+        QCOMPARE(library.notes(epub, "cast").text, QString("Who is who."));
+        // The graph: one node for the book, with what was met in the other.
+        QVERIFY(!graph.node(entryNode));
+        QVERIFY(graph.node(epubNode));
+        QCOMPARE(graph.seen(haplo).size(), 1);
+        QCOMPARE(graph.seen(haplo).first().bookId, epub);
+        const GraphView around = graph.around(epubNode);
+        QCOMPARE(std::ranges::count_if(around.edges, [&](const GraphEdge &edge) { return edge.source == haplo; }), 1);
+        QVERIFY(std::ranges::any_of(graph.ofBook(epub).nodes, [&](const GraphNode &node) { return node.id == haplo; }));
+        const QList<ReadingDay> days = graph.readingLog(epub);
+        QCOMPARE(days.size(), 2);
+        for (const ReadingDay &day : days)
+            if (day.day == "2026-01-01")
+                QVERIFY(day.from == 0 && day.to == 60);
+        QVERIFY(graph.readingLog(entry).isEmpty());
+    }
+
     void aQuestionAboutTheLibraryCarriesWhatItHolds() {
         Book read;
         read.meta.title = "Dune";
@@ -613,6 +796,46 @@ private slots:
         QCOMPARE(graph.find("", "book").size(), 1);
         QCOMPARE(graph.ofBook(second).nodes.size(), 0);
         QVERIFY(graph.node(mara).has_value());
+    }
+
+    void whatHappensIsLogged() {
+        QTemporaryDir dir;
+        Log::install("cli", dir.path());
+        qCInfo(lcAi).noquote() << "Claude asked: main tier, 120 characters";
+        qCWarning(lcPlugins).noquote() << "storyteller: main.js:5: TypeError" << "\nsecond line";
+        qCDebug(lcGraph) << "not kept without OMABOOK_DEBUG";
+        qCInfo(lcLibrary) << "opened";
+        // Read back, newest last, one line each whatever was said.
+        const QList<Log::Entry> all = Log::read({}, dir.path());
+        QCOMPARE(all.size(), 3);
+        QCOMPARE(all.first().category, QString("ai"));
+        QCOMPARE(all.first().program, QString("cli"));
+        QCOMPARE(all.at(1).level, QString("warning"));
+        QVERIFY(all.at(1).message.contains("TypeError") && all.at(1).message.contains("second line"));
+        QVERIFY(all.first().when.secsTo(QDateTime::currentDateTime()) < 5);
+        // Filtered by level, part, words and number.
+        const auto where = [](auto set) {
+            Log::Filter filter;
+            set(filter);
+            return filter;
+        };
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.least = "warning"; }), dir.path()).size(), 1);
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.category = "library"; }), dir.path()).size(), 1);
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.words = "typeerror"; }), dir.path()).size(), 1);
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.lines = 1; }), dir.path()).first().category, QString("library"));
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.since = QDateTime::currentDateTime().addSecs(60); }), dir.path()).size(), 0);
+        // A full file is set aside, and its lines are still read.
+        {
+            QFile big(Log::path(dir.path()));
+            QVERIFY(big.open(QIODevice::Append));
+            big.write(QByteArray(2 * 1024 * 1024 + 10, 'x') + "\n");
+        }
+        qCInfo(lcSync) << "after the cut";
+        QVERIFY(QFileInfo::exists(Log::path(dir.path()) + ".1"));
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.lines = 0; }), dir.path()).size(), 4);
+        QCOMPARE(Log::read(where([](Log::Filter &f) { f.lines = 0; }), dir.path()).last().category, QString("sync"));
+        // Back to where the other tests expect messages to go.
+        Log::install("test", QDir::tempPath() + "/omabook-library-tests-log");
     }
 
     void whatWasRemovedIsRemembered() {

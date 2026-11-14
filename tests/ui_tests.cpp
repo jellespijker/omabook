@@ -13,6 +13,7 @@
 #include <QQuickWindow>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QSemaphore>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -42,6 +43,7 @@
 #include "sitedesk.h"
 #include "secretstore.h"
 #include "theme.h"
+#include "themechoice.h"
 #include <QQuickTextDocument>
 #include <QTextCursor>
 #include <QTextDocument>
@@ -2941,7 +2943,7 @@ private slots:
             desk.shot(look.shot);
             // Every page fits too, read with the same keys.
             const int count = desk.value("help", "pages").toList().size();
-            QCOMPARE(count, 9);
+            QCOMPARE(count, 10);
             for (int i = 1; i < count; ++i) {
                 desk.key(Qt::Key_Tab);
                 QVERIFY(fits());
@@ -5146,6 +5148,462 @@ private slots:
 
     // Themes: which one the colors come from (themechoice.h), and the picker.
     // Omarchy, Aether and Omabook's own themes are folders of a temp tree.
+private:
+    struct ThemeHome {
+        QTemporaryDir dir;
+        ThemePlaces places() const {
+            return {dir.filePath("state/omarchy/current"), dir.filePath("config/omarchy/themes"), dir.filePath("config/aether"),
+                    dir.filePath("omabook/themes")};
+        }
+        // Omarchy switched to a theme: its colors and its name.
+        bool omarchy(const QByteArray &name, const QByteArray &colors) const {
+            return QDir().mkpath(places().omarchy + "/theme") && write(places().omarchy + "/theme/colors.toml", colors)
+                   && write(places().omarchy + "/theme.name", name + "\n");
+        }
+        // Aether writing its theme without Omarchy: to a temp file, then
+        // renamed over the old one, as a careful writer does.
+        bool aether(const QByteArray &colors) const {
+            const QString folder = places().aether + "/theme";
+            if (!QDir().mkpath(folder) || !write(folder + "/.colors.toml.new", colors))
+                return false;
+            QFile::remove(folder + "/colors.toml");
+            return QFile::rename(folder + "/.colors.toml.new", folder + "/colors.toml");
+        }
+        bool own(const QString &id, const QByteArray &colors) const {
+            return QDir().mkpath(places().user + "/" + id) && write(places().user + "/" + id + "/colors.toml", colors);
+        }
+    };
+    static QByteArray palette(const char *background, const char *accent, const char *mode = "dark") {
+        return QByteArray("mode = \"") + mode + "\"\nbackground = \"" + background + "\"\nforeground = \"#e0e0e0\"\naccent = \"" + accent
+               + "\"\nmuted = \"#808080\"\nred = \"#ff0000\"\n";
+    }
+    static void clickOn(Desk &desk, const QString &name) {
+        auto *item = qobject_cast<QQuickItem *>(desk.find(name));
+        QVERIFY2(item && item->isVisible(), qPrintable(name));
+        QTest::mouseClick(desk.window, Qt::LeftButton, {}, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+    }
+    static int optionIndex(const ThemeChoice &choice, const QString &wanted) {
+        const QVariantList options = choice.options();
+        for (int i = 0; i < options.size(); ++i)
+            if (options.at(i).toMap().value("choice").toString() == wanted)
+                return i;
+        return -1;
+    }
+    static QString styleTheme(const Desk &desk) {
+        QFile file(desk.dir.filePath("custom/style.json"));
+        return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object().value("theme").toString() : QString();
+    }
+
+private slots:
+    void automaticIsOmarchyThenAetherThenTokyoNight() {
+        ThemeHome home;
+        ThemeSource source = resolveTheme("auto", home.places());
+        QCOMPARE(source.kind, QString("bundled"));
+        QCOMPARE(source.id, QString("tokyo-night"));
+        QCOMPARE(source.name, QString("Tokyo Night"));
+        QCOMPARE(source.path, QString(":/themes/tokyo-night/colors.toml"));
+        QVERIFY(source.note.isEmpty());
+        QVERIFY(source.why.contains("neither Omarchy nor Aether"));
+        // An empty choice, as when style.json says nothing, is the same.
+        QCOMPARE(resolveTheme("", home.places()), source);
+
+        QVERIFY(home.aether(palette("#101010", "#00aaff")));
+        source = resolveTheme("auto", home.places());
+        QCOMPARE(source.kind, QString("aether"));
+        QCOMPARE(source.path, home.places().aether + "/theme/colors.toml");
+
+        QVERIFY(home.omarchy("last-horizon", palette("#202020", "#ff8800")));
+        source = resolveTheme("auto", home.places());
+        QCOMPARE(source.choice, QString("auto"));
+        QCOMPARE(source.kind, QString("omarchy"));
+        QCOMPARE(source.name, QString("Last Horizon"));
+        QCOMPARE(source.path, home.places().omarchy + "/theme/colors.toml");
+    }
+
+    void eachChoiceResolvesOrFallsBackAndSaysSo() {
+        ThemeHome home;
+        // Asked for, but not on this computer: Tokyo Night, and why.
+        for (const char *missing : {"omarchy", "aether"}) {
+            const ThemeSource source = resolveTheme(missing, home.places());
+            QCOMPARE(source.choice, QString(missing));
+            QCOMPARE(source.id, QString("tokyo-night"));
+            QVERIFY2(!source.note.isEmpty(), missing);
+            QVERIFY(Themes::problem(missing, home.places()).isEmpty());
+        }
+        ThemeSource source = resolveTheme("No Such Theme", home.places());
+        QCOMPARE(source.id, QString("tokyo-night"));
+        QVERIFY(source.note.contains("No Such Theme"));
+        QVERIFY(!Themes::problem("No Such Theme", home.places()).isEmpty());
+
+        // A bundled theme by its id or its name.
+        source = resolveTheme("Catppuccin Latte", home.places());
+        QCOMPARE(source.kind, QString("bundled"));
+        QCOMPARE(source.id, QString("catppuccin-latte"));
+        QVERIFY(Themes::palette(source.path, home.places()).light);
+        QCOMPARE(resolveTheme("nord", home.places()).path, QString(":/themes/nord/colors.toml"));
+        // One of the user's own shadows the bundled one of that name.
+        QVERIFY(home.own("nord", palette("#111111", "#123456")));
+        source = resolveTheme("nord", home.places());
+        QCOMPARE(source.kind, QString("user"));
+        QCOMPARE(Themes::palette(source.path, home.places()).colors.value("accent"), QColor("#123456"));
+
+        // A path: to the file, or to the folder holding it.
+        QVERIFY(QDir().mkpath(home.dir.filePath("elsewhere/paper")));
+        QVERIFY(write(home.dir.filePath("elsewhere/paper/colors.toml"), palette("#fafafa", "#005fcc", "light")));
+        for (const QString &path : {home.dir.filePath("elsewhere/paper/colors.toml"), home.dir.filePath("elsewhere/paper")}) {
+            source = resolveTheme(path, home.places());
+            QCOMPARE(source.kind, QString("file"));
+            QCOMPARE(source.name, QString("Paper"));
+            QCOMPARE(source.path, home.dir.filePath("elsewhere/paper/colors.toml"));
+            QVERIFY(Themes::problem(path, home.places()).isEmpty());
+        }
+        source = resolveTheme(home.dir.filePath("nowhere/colors.toml"), home.places());
+        QCOMPARE(source.id, QString("tokyo-night"));
+        QVERIFY(source.note.contains("nowhere"));
+        QVERIFY(!Themes::problem(home.dir.filePath("nowhere/colors.toml"), home.places()).isEmpty());
+
+        // Aether on Omarchy writes a theme into Omarchy and switches to it.
+        QVERIFY(home.omarchy("gruvbox", palette("#282828", "#d79921")));
+        QVERIFY(QDir().mkpath(home.places().omarchyThemes + "/aether"));
+        QVERIFY(write(home.places().omarchyThemes + "/aether/colors.toml", palette("#0a0a0a", "#aa00ff")));
+        QCOMPARE(resolveTheme("aether", home.places()).path, home.places().omarchyThemes + "/aether/colors.toml");
+        QCOMPARE(resolveTheme("omarchy", home.places()).name, QString("Gruvbox"));
+        QVERIFY(home.omarchy("aether", palette("#0a0a0a", "#aa00ff")));
+        QCOMPARE(resolveTheme("aether", home.places()).path, home.places().omarchy + "/theme/colors.toml");
+        QCOMPARE(resolveTheme("auto", home.places()).name, QString("Aether"));
+    }
+
+    void theUsersColorsWinOverTheThemeWhichWinsOverTokyoNight() {
+        ThemeHome home;
+        QTemporaryDir config, desktop;
+        // A theme of the user's, in Omabook's folder, that names only a few colors.
+        ThemePlaces places = home.places();
+        places.user = config.filePath("themes");
+        QVERIFY(QDir().mkpath(places.user + "/sparse"));
+        QVERIFY(write(places.user + "/sparse/colors.toml", "background = \"#102030\"\naccent = \"#405060\"\n"));
+        QVERIFY(write(config.filePath("style.json"), R"({"theme": "sparse", "colors": {"accent": "#abcdef"}})"));
+        Customization custom(config.path());
+        QVERIFY(!QFile::exists(config.filePath("style.error")));
+        Theme theme(desktop.path());
+        ThemeChoice choice(&custom, places);
+        Look look(&theme, &choice, &custom);
+        QCOMPARE(choice.choice(), QString("sparse"));
+        QCOMPARE(look.accent(), QColor("#abcdef"));       // style.json
+        QCOMPARE(look.background(), QColor("#102030"));   // the theme
+        const Theme::Palette tokyo = Theme::readThemeColors(":/themes/tokyo-night/colors.toml");
+        QCOMPARE(look.colors().value("cyan").value<QColor>(), tokyo.colors.value("cyan")); // Tokyo Night
+        QCOMPARE(look.foreground(), tokyo.colors.value("foreground"));
+        QVERIFY(!look.light());
+        // mode in style.json wins over the theme's.
+        QVERIFY(write(config.filePath("style.json"), R"({"theme": "white", "mode": "dark"})"));
+        custom.check();
+        QCOMPARE(look.background(), Theme::readThemeColors(":/themes/white/colors.toml").colors.value("background"));
+        QVERIFY(!look.light());
+        QVERIFY(write(config.filePath("style.json"), R"({"theme": "white"})"));
+        custom.check();
+        QVERIFY(look.light());
+        // A theme that doesn't exist is refused, and the last good one stays.
+        QVERIFY(write(config.filePath("style.json"), R"({"theme": "plaid"})"));
+        QVERIFY(custom.check().contains("plaid"));
+        QCOMPARE(choice.choice(), QString("white"));
+        QVERIFY(look.light());
+        // With no bundled themes at all, Theme's built-in fallback is the floor.
+        ThemePlaces bare = places;
+        bare.bundled = home.dir.filePath("none");
+        QVERIFY(write(config.filePath("style.json"), "{}"));
+        custom.check();
+        ThemeChoice nothing(&custom, bare);
+        Look floor(&theme, &nothing, &custom);
+        QCOMPARE(floor.accent(), QColor("#FFD60A"));
+    }
+
+    void theChoiceFollowsOmarchyAndAetherAsTheyChange() {
+        ThemeHome home;
+        QTemporaryDir config;
+        Customization custom(config.path());
+        ThemeChoice choice(&custom, home.places());
+        QSignalSpy changed(&choice, &ThemeChoice::changed);
+        QCOMPARE(choice.source().id, QString("tokyo-night"));
+        QCOMPARE(choice.options().size(), 1 + 23);
+
+        // Aether arrives, then rewrites its file: followed, once each.
+        QVERIFY(home.aether(palette("#101010", "#00aaff")));
+        QTRY_COMPARE(choice.source().kind, QString("aether"));
+        QCOMPARE(choice.palette().colors.value("accent"), QColor("#00aaff"));
+        QTRY_COMPARE(optionIndex(choice, "aether"), 1);
+        changed.clear();
+        QVERIFY(home.aether(palette("#101010", "#ff00aa")));
+        QTRY_COMPARE(choice.palette().colors.value("accent"), QColor("#ff00aa"));
+        QTest::qWait(250);
+        QCOMPARE(changed.count(), 1);
+
+        // Omarchy installed while Omabook runs takes over Automatic.
+        QVERIFY(home.omarchy("kanagawa", palette("#1f1f28", "#7e9cd8")));
+        QTRY_COMPARE(choice.source().kind, QString("omarchy"));
+        QCOMPARE(choice.source().name, QString("Kanagawa"));
+        QCOMPARE(choice.palette().colors.value("accent"), QColor("#7e9cd8"));
+        QVERIFY(home.omarchy("kanagawa", palette("#1f1f28", "#c0a36e")));
+        QTRY_COMPARE(choice.palette().colors.value("accent"), QColor("#c0a36e"));
+
+        // A theme chosen in style.json stops the following.
+        QVERIFY(write(config.filePath("style.json"), R"({"theme": "nord"})"));
+        QTRY_COMPARE(choice.source().id, QString("nord"));
+        const QColor nord = choice.palette().colors.value("accent");
+        QVERIFY(home.omarchy("kanagawa", palette("#1f1f28", "#00ff00")));
+        QTest::qWait(300);
+        QCOMPARE(choice.palette().colors.value("accent"), nord);
+
+        // A colors.toml of the user's, wherever it is, is followed too.
+        QVERIFY(QDir().mkpath(home.dir.filePath("mine")));
+        QVERIFY(write(home.dir.filePath("mine/colors.toml"), palette("#000000", "#111111")));
+        QVERIFY(choice.choose(home.dir.filePath("mine/colors.toml")).isEmpty());
+        QCOMPARE(choice.palette().colors.value("accent"), QColor("#111111"));
+        QVERIFY(write(home.dir.filePath("mine/colors.toml"), palette("#000000", "#222222")));
+        QTRY_COMPARE(choice.palette().colors.value("accent"), QColor("#222222"));
+    }
+
+    void everyBundledThemeParsesAndStaysReadable() {
+        ThemeHome home;
+        const QStringList ids = QDir(":/themes").entryList(QDir::Dirs | QDir::NoDotAndDotDot);
+        QCOMPARE(ids.size(), 23);
+        QVERIFY(QFile::exists(":/themes/LICENSE.omarchy"));
+        QVERIFY(QFile::exists(":/themes/README"));
+        const QStringList names{"accent", "background", "foreground", "selection", "muted", "red",
+                                "green",  "yellow",     "orange",     "blue",      "magenta", "cyan"};
+        QStringList problems;
+        for (const QString &id : ids) {
+            const QString path = ":/themes/" + id + "/colors.toml";
+            const Theme::Palette own = Theme::readThemeColors(path);
+            if (own.colors.size() < 8)
+                problems << id + ": doesn't parse";
+            QFile file(path);
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            const QString text = QString::fromUtf8(file.readAll());
+            if (text.contains("mode = \"light\"") != own.light)
+                problems << id + ": light isn't what its mode says";
+            // Every name Omabook draws with, from the theme or after aliases.
+            for (const QString &name : names)
+                if (!own.colors.contains(name) && !(name == "orange" && own.colors.contains("yellow")))
+                    problems << id + ": no " + name;
+            const Theme::Palette shown = Themes::palette(path, home.places());
+            const QColor background = shown.colors.value("background"), foreground = shown.colors.value("foreground"),
+                         muted = shown.colors.value("muted"), accent = shown.colors.value("accent"),
+                         selection = shown.colors.value("selection");
+            const QColor onAccent = relativeLuminance(accent) > .179 ? QColor("black") : QColor("white");
+            const auto check = [&](const char *what, const QColor &a, const QColor &b, double least) {
+                if (Themes::contrast(a, b) < least)
+                    problems << QString("%1: %2 is %3:1, under %4:1").arg(id, what).arg(Themes::contrast(a, b), 0, 'f', 2).arg(least);
+            };
+            check("text on the background", foreground, background, 4.5);
+            check("text on the selection", foreground, selection, 4.5);
+            check("muted text on the background", muted, background, 4.5);
+            check("muted text on the selection", muted, selection, 3.0);
+            check("a caption on the accent", onAccent, accent, 4.5);
+            // Readable, and still the theme's muted where it already was.
+            if (Themes::contrast(own.colors.value("muted"), background) >= 4.5
+                && Themes::contrast(own.colors.value("muted"), selection) >= 3.0 && muted != own.colors.value("muted"))
+                problems << id + ": a readable muted was changed";
+        }
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+    }
+
+    void anAetherBlueprintBecomesATheme() {
+        ThemeHome home;
+        QJsonArray colors;
+        for (const char *color : {"#101418", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#dcdfe4",
+                                  "#5c6370", "#e06c75", "#98c379", "#e5c07b", "#61afef", "#c678dd", "#56b6c2", "#ffffff"})
+            colors << color;
+        // Aether's default selection: the foreground and background swapped.
+        QJsonObject palette{{"colors", colors}, {"mode", "normal"}, {"lightMode", false},
+                            {"extendedColors", QJsonObject{{"accent", "#ffaa00"}, {"selection_background", "#dcdfe4"},
+                                                           {"selection_foreground", "#101418"}}},
+                            {"nativeColors", QJsonObject{{"cyan", "#00ffee"}, {"nonsense", "#123456"}}}};
+        QVERIFY(QDir().mkpath(home.places().aether + "/blueprints"));
+        QVERIFY(write(home.places().aether + "/blueprints/harbour.json",
+                      QJsonDocument(QJsonObject{{"name", "Harbour Dusk"}, {"palette", palette}}).toJson()));
+        QString problem;
+        const QString id = Themes::importBlueprint("Harbour Dusk", home.places(), &problem);
+        QVERIFY2(id == "harbour-dusk", qPrintable(problem));
+        const Theme::Palette read = Theme::readThemeColors(home.places().user + "/harbour-dusk/colors.toml");
+        QCOMPARE(read.colors.value("background"), QColor("#101418"));
+        QCOMPARE(read.colors.value("red"), QColor("#e06c75"));
+        QCOMPARE(read.colors.value("foreground"), QColor("#dcdfe4"));
+        QCOMPARE(read.colors.value("muted"), QColor("#5c6370"));
+        QCOMPARE(read.colors.value("accent"), QColor("#ffaa00"));
+        QCOMPARE(read.colors.value("cyan"), QColor("#00ffee"));
+        QVERIFY(!read.light);
+        // The swapped pair gives way to the background a little lighter.
+        QVERIFY(read.colors.value("selection") != QColor("#dcdfe4"));
+        QVERIFY(read.colors.value("selection").lightnessF() > QColor("#101418").lightnessF());
+        QVERIFY(read.colors.value("orange").lightnessF() > QColor("#e06c75").lightnessF());
+        QCOMPARE(resolveTheme("harbour-dusk", home.places()).kind, QString("user"));
+        // By its file, too; a light one says so.
+        palette.insert("lightMode", true);
+        palette.insert("extendedColors", QJsonObject{});
+        QVERIFY(write(home.dir.filePath("Paper Day.json"), QJsonDocument(QJsonObject{{"palette", palette}}).toJson()));
+        QCOMPARE(Themes::importBlueprint(home.dir.filePath("Paper Day.json"), home.places(), &problem), QString("paper-day"));
+        QVERIFY(Theme::readThemeColors(home.places().user + "/paper-day/colors.toml").light);
+        QCOMPARE(Theme::readThemeColors(home.places().user + "/paper-day/colors.toml").colors.value("accent"), QColor("#61afef"));
+
+        // What isn't a blueprint says why.
+        QVERIFY(write(home.dir.filePath("broken.json"), "{ not json"));
+        QVERIFY(Themes::importBlueprint(home.dir.filePath("broken.json"), home.places(), &problem).isEmpty());
+        QVERIFY(problem.contains("isn't an Aether blueprint"));
+        colors.removeLast();
+        QVERIFY(write(home.dir.filePath("short.json"), QJsonDocument(QJsonObject{{"palette", QJsonObject{{"colors", colors}}}}).toJson()));
+        QVERIFY(Themes::importBlueprint(home.dir.filePath("short.json"), home.places(), &problem).isEmpty());
+        QVERIFY(problem.contains("15"));
+        QVERIFY(Themes::importBlueprint("nothing-here", home.places(), &problem).isEmpty());
+        QVERIFY(problem.contains("no Aether blueprint"));
+    }
+
+    void thePickerPreviewsByKeyboardAndEscapePutsItBack() {
+        ThemeHome home;
+        QVERIFY(home.omarchy("catppuccin", "mode = \"dark\"\nbackground = \"#1e1e2e\"\nforeground = \"#cdd6f4\"\n"
+                                           "accent = \"#89b4fa\"\nmuted = \"#6c7086\"\nselection = \"#313244\"\n"));
+        Desk desk;
+        ThemeChoice choice(&*desk.custom, home.places());
+        desk.look.emplace(&*desk.theme, &choice, &*desk.custom);
+        const auto closing = qScopeGuard([&desk] {
+            desk.interface.reset();
+            desk.engine.reset();
+        });
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.window->resize(1180, 780);
+        QCOMPARE(desk.look->background(), QColor("#1e1e2e"));
+        QCOMPARE(desk.window->color(), QColor("#1e1e2e"));
+
+        // The settings say what Automatic came to, and open the picker.
+        QMetaObject::invokeMethod(desk.window, "showSettings");
+        QTRY_VERIFY(desk.value("settings", "opened").toBool());
+        QCOMPARE(desk.value("themeInUse", "text").toString(), QString("Automatic: Omarchy — Catppuccin"));
+        desk.shot("theme-settings");
+        clickOn(desk, "chooseTheme");
+        QTRY_VERIFY(desk.value("themePicker", "opened").toBool());
+        QTRY_VERIFY(!desk.value("settings", "visible").toBool());
+        QCOMPARE(desk.value("themeList", "currentIndex").toInt(), 0);
+        desk.shot("theme-picker-dark");
+
+        // Down the list, each theme on the window as it is reached.
+        const int nord = optionIndex(choice, "nord");
+        QVERIFY(nord > 1);
+        for (int i = 0; i < nord; ++i)
+            desk.key(Qt::Key_Down);
+        QCOMPARE(desk.value("themeList", "currentIndex").toInt(), nord);
+        QCOMPARE(choice.previewing(), QString("nord"));
+        const QColor nordBackground = Theme::readThemeColors(":/themes/nord/colors.toml").colors.value("background");
+        QCOMPARE(desk.look->background(), nordBackground);
+        QTRY_COMPARE(desk.window->color(), nordBackground);
+        // Escape puts back what there was, and nothing is written.
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QCOMPARE(choice.previewing(), QString());
+        QCOMPARE(desk.look->background(), QColor("#1e1e2e"));
+        QVERIFY(!QFile::exists(desk.dir.filePath("custom/style.json")));
+
+        // A light one, kept with Enter: written down, and light it stays.
+        QMetaObject::invokeMethod(desk.window, "showThemes");
+        QTRY_VERIFY(desk.value("themePicker", "opened").toBool());
+        const int white = optionIndex(choice, "white");
+        for (int i = 0; i < white; ++i)
+            desk.key(Qt::Key_Down);
+        QVERIFY(desk.look->light());
+        desk.shot("theme-picker-light");
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QCOMPARE(styleTheme(desk), QString("white"));
+        QCOMPARE(choice.choice(), QString("white"));
+        QVERIFY(desk.look->light());
+        QCOMPARE(desk.window->property("color").value<QColor>(), Theme::readThemeColors(":/themes/white/colors.toml").colors.value("background"));
+        // Once it is gone: a popup gives the keyboard back when its closing ends.
+        QTRY_VERIFY(!desk.value("themePicker", "visible").toBool());
+        QMetaObject::invokeMethod(desk.window, "showSettings");
+        QTRY_VERIFY(desk.value("settings", "opened").toBool());
+        QCOMPARE(desk.value("themeInUse", "text").toString(), QString("White"));
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("settings", "visible").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void thePickerTakesAPointerToo() {
+        ThemeHome home;
+        Desk desk;
+        ThemeChoice choice(&*desk.custom, home.places());
+        desk.look.emplace(&*desk.theme, &choice, &*desk.custom);
+        const auto closing = qScopeGuard([&desk] {
+            desk.interface.reset();
+            desk.engine.reset();
+        });
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.window->resize(1180, 780);
+        // No Omarchy and no Aether here: Automatic is Tokyo Night, and only it is offered beside the themes.
+        QCOMPARE(optionIndex(choice, "omarchy"), -1);
+        QCOMPARE(optionIndex(choice, "aether"), -1);
+        QMetaObject::invokeMethod(desk.window, "showThemes");
+        QTRY_VERIFY(desk.value("themePicker", "opened").toBool());
+        QObject *list = desk.find("themeList");
+        QVERIFY(list);
+        // A click shows a theme, Use Theme keeps it.
+        const int gruvbox = optionIndex(choice, "gruvbox");
+        QMetaObject::invokeMethod(list, "positionViewAtIndex", Q_ARG(int, gruvbox), Q_ARG(int, 1 /* ListView.Center */));
+        QTest::qWait(50);
+        clickOn(desk, "theme-gruvbox");
+        QTRY_COMPARE(choice.previewing(), QString("gruvbox"));
+        clickOn(desk, "themeUse");
+        QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QCOMPARE(styleTheme(desk), QString("gruvbox"));
+        // A double click keeps one at once; Automatic takes the key out again.
+        QMetaObject::invokeMethod(desk.window, "showThemes");
+        QTRY_VERIFY(desk.value("themePicker", "opened").toBool());
+        QMetaObject::invokeMethod(list, "positionViewAtIndex", Q_ARG(int, 0), Q_ARG(int, 1));
+        QTest::qWait(50);
+        auto *automatic = qobject_cast<QQuickItem *>(desk.find("theme-auto"));
+        QVERIFY(automatic);
+        QTest::mouseDClick(desk.window, Qt::LeftButton, {}, automatic->mapToScene(QPointF(automatic->width() / 2, automatic->height() / 2)).toPoint());
+        QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QCOMPARE(choice.choice(), QString("auto"));
+        QVERIFY(QFile::exists(desk.dir.filePath("custom/style.json")));
+        QCOMPARE(styleTheme(desk), QString());
+        // Cancel keeps what there was.
+        QMetaObject::invokeMethod(desk.window, "showThemes");
+        QTRY_VERIFY(desk.value("themePicker", "opened").toBool());
+        desk.key(Qt::Key_Down);
+        QVERIFY(!choice.previewing().isEmpty());
+        clickOn(desk, "themeCancel");
+        QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QCOMPARE(choice.previewing(), QString());
+        QCOMPARE(choice.source().id, QString("tokyo-night"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void theShelfInBundledThemes() {
+        // For looking over (OMABOOK_SHOTS): the shelf in a dark, a light and
+        // a warm theme, and the picker over it.
+        ThemeHome home;
+        Desk desk;
+        ThemeChoice choice(&*desk.custom, home.places());
+        desk.look.emplace(&*desk.theme, &choice, &*desk.custom);
+        const auto closing = qScopeGuard([&desk] {
+            desk.interface.reset();
+            desk.engine.reset();
+        });
+        QVERIFY(!stock(desk).isEmpty());
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.window->resize(1180, 780);
+        for (const char *id : {"catppuccin", "flexoki-light", "gruvbox"}) {
+            QVERIFY(choice.choose(id).isEmpty());
+            QTRY_COMPARE(desk.window->color(), Theme::readThemeColors(QString(":/themes/") + id + "/colors.toml").colors.value("background"));
+            desk.shot(QString("shelf-") + id);
+        }
+        QMetaObject::invokeMethod(desk.window, "showThemes");
+        QTRY_VERIFY(desk.value("themePicker", "opened").toBool());
+        for (int i = 0; i < 3; ++i)
+            desk.key(Qt::Key_Down);
+        desk.shot("themes");
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
 };
 
 QTEST_MAIN(UiTests)

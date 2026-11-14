@@ -1,5 +1,7 @@
 #include "scriptplugin.h"
 
+#include "log.h"
+
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -196,7 +198,14 @@ public:
     }
 
     Q_INVOKABLE void say(const QString &text) { emit p->said(text); }
-    Q_INVOKABLE void log(const QString &level, const QString &text) { p->m_log << (level == "log" ? text : level + ": " + text); }
+    Q_INVOKABLE void log(const QString &level, const QString &text) {
+        p->m_log << (level == "log" ? text : level + ": " + text);
+        // A plugin's own words go in Omabook's log too, under its name.
+        if (level == "error" || level == "warn")
+            qCWarning(lcPlugins).noquote() << p->manifest().id + ":" << text;
+        else
+            qCInfo(lcPlugins).noquote() << p->manifest().id + ":" << text;
+    }
 
     Q_INVOKABLE void on(const QString &event, const QJSValue &handler) {
         p->m_handlers[event] << handler;

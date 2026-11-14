@@ -53,6 +53,7 @@
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>
+        <file alias="ThemePicker.qml">ThemePicker.qml</file>
         <file alias="ModelPicker.qml">ModelPicker.qml</file>
         <file alias="SpreadReader.qml">SpreadReader.qml</file>
         <file alias="TidyDialog.qml">TidyDialog.qml</file>

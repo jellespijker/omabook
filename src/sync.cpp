@@ -1,5 +1,7 @@
 #include "sync.h"
 
+#include "log.h"
+
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
@@ -259,5 +261,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             remote.omabook(progressArguments(theirId, place));
         ++summary.sent;
     }
+    qCInfo(lcSync).noquote() << "with" << remote.host() << ":" << summary.received << "received," << summary.sent << "sent,"
+                             << summary.placesTaken + summary.placesSent << "reading places," << summary.problems.size() << "problems";
     return summary;
 }

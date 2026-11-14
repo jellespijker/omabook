@@ -172,8 +172,14 @@ public:
     Recap recap(qint64 id) const { return notes(id, "recap"); }
     void setRecap(qint64 id, const Recap &recap) { setNotes(id, "recap", recap); }
 
-    // Folds one book into another: the formats `keep` lacks move over, and
-    // what is left of `other` goes to the trash.
+    // Folds one book into another: the formats and cover `keep` lacks move
+    // over; its identifiers are both books' (keep's value where both have
+    // one); it is paper when either is, and keeps its own shelf, stars and
+    // finishing day where it has them (of two shelves, the one further
+    // along); the further reading place wins, with the AI's notes and graph
+    // places that go with it; bookmarks, highlights, the reading log and
+    // the other book's node in the knowledge graph move over. What is left
+    // of `other` goes to the trash.
     bool merge(qint64 keep, qint64 other, QString *error = nullptr);
 
     qint64 addAnnotation(qint64 bookId, const Annotation &annotation);

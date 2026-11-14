@@ -294,12 +294,29 @@ Omabook's interface is files in `~/.config/omabook/`, and it follows them while 
 |---|---|
 | `config.json` | The settings, including ones the dialog doesn't show: `cover_size`, `line_height`, `paragraph_spacing`, `justify`, `spread` (`auto`, `always`, `never`), `pane_widths` (how wide each side pane was dragged, in pixels: `{"assistant": 440}`) |
 | `keys.json` | Any key: `{"reader": {"Space": "next", "N": ""}, "library": {"R": "read"}}` |
-| `style.json` | Colors, corners and the interface font, over the desktop's theme: `{"colors": {"accent": "#8a4b2a", "background": "#f4ecd8"}, "radius": 8}` |
+| `style.json` | The theme, then colors, corners and the interface font over it: `{"theme": "nord", "colors": {"accent": "#8a4b2a"}, "radius": 8}` |
+| `themes/<name>/colors.toml` | A theme of your own, in Omarchy's format, listed with the built-in ones |
 | `ui/<View>.qml` | A view of your own in place of the built-in one. `omabook customize ReaderView` copies the real one there to start from |
 | `mods/<name>/` | A panel of your own (`mod.json` + `Main.qml`) beside the shelf or the page, added without replacing anything |
 | `plugins/<name>/` | A source of book details of your own (see *Plugins*) |
 
 A file with a mistake in it never takes the window down: Omabook keeps the last version that worked and writes what is wrong to `keys.error`, `style.error` or `ui.error` beside it. A copied view is yours to merge when Omabook changes; a mod isn't affected.
+
+### Themes
+
+Omabook always looks like Omarchy, with or without it. Its colors come from one theme, chosen in Settings → Theme (`,`), with `omabook theme use <name>`, by the `theme_use` MCP tool, or by asking (`Ctrl+K`, "make it Nord"):
+
+| `theme` | Where the colors come from |
+|---|---|
+| `auto` (the default) | Omarchy's current theme where Omarchy is; else what [Aether](https://github.com/omacom/aether) writes (`~/.config/aether/theme/colors.toml`); else Tokyo Night, Omarchy's default |
+| `omarchy` | Omarchy's current theme, followed as it changes |
+| `aether` | Aether's palette, followed as it changes: on Omarchy the theme Aether writes into Omarchy, elsewhere its own `colors.toml` |
+| `tokyo-night`, `catppuccin-latte`, ... | One of Omarchy's 23 themes, built into Omabook (`omabook theme list`), or one of yours in `themes/` by that name |
+| `~/somewhere/colors.toml` | Any `colors.toml`, an Omarchy community theme's for instance, followed as it changes |
+
+![The theme picker over the shelf](docs/themes.png)
+
+In the picker the arrow keys show each theme on the whole window as you reach it; `Enter` keeps it and `Esc` puts back what there was. Per color, the colors in `style.json` win over the theme, the theme over Tokyo Night, so a theme that lacks a color still has one. The theme's `muted` is made readable when it is too faint for text (Omarchy's themes use it for borders): it is moved towards the foreground until it reaches 4.5:1. `omabook theme import <name>` turns a saved Aether blueprint (`~/.config/aether/blueprints/<name>.json`) into a theme of your own. Choosing a theme changes Omabook only; `omarchy theme set` changes the desktop. `omabook info --json` and `omabook theme show` say which theme is in use and why.
 
 ## Several computers
 
@@ -427,7 +444,7 @@ omabook info [file]                     Show what a file says about itself, or w
 omabook toc <book>                      List a book's contents
 omabook text <book> [--section N]       Print a book as plain text
 omabook find <book> <words>             Find words in a book
-omabook lookup <id> [--ai] [--apply N]  Look a book's details up with every metadata plugin
+omabook lookup <id> [--ai] [--apply N|ID]  Look a book's details up with every metadata plugin
 omabook plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one
 omabook plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help
 omabook plugin install <folder|zip>     Install someone else's plugin, checked first and left off until enabled
@@ -439,6 +456,7 @@ omabook plugin pin|follow|rollback|forget-source <name>   Stay at a tag or branc
 omabook calibre libraries|plugins|import  What was found of Calibre here; import its libraries
 omabook catalog [search] [--format f]   Write the library as csv or bibtex
 omabook customize [view]                Show where the interface's files live; copy a view there to edit
+omabook theme [list|use <name>|show]    Which theme the colors come from: Omarchy's, Aether's, or a built-in one
 omabook convert <id> [--to format]      Convert a book and add the result to it
 omabook export <id> <folder>            Copy a book's file out of the library
 omabook ask <book|all> <question>       Ask the AI about a book, or about the whole library
@@ -612,6 +630,8 @@ For whoever changes the format: add a step to the list in `Library::open` (never
 ## License
 
 MIT. The theme, translator, build scripts and portal file picker come from the Omarchy apps by David Heinemeier Hansson, under the same license.
+
+The palettes in `share/omabook/themes/` are the `colors.toml` of Omarchy's built-in themes, unchanged, from [Omarchy](https://github.com/omacom/omarchy) v4.5.0 (commit `ac2690c`), © David Heinemeier Hansson under the MIT license (`share/omabook/themes/LICENSE.omarchy`); the palettes they port (Catppuccin, Tokyo Night, Nord, Gruvbox, Rosé Pine, Everforest, Kanagawa, Flexoki) are MIT upstream too. No wallpapers or other files of the themes are included. `bin/update-themes` fetches them again from a pinned release.
 
 ### Calibre
 

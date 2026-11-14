@@ -10,6 +10,7 @@
 #include <QVariantMap>
 
 class Theme;
+class ThemeChoice;
 
 // Omabook's interface as files. Everything in ~/.config/omabook/ that isn't
 // the settings is read here and followed while the app runs:
@@ -123,9 +124,15 @@ class Look : public QObject {
     Q_PROPERTY(QVariantMap colors READ colors NOTIFY changed)
     Q_PROPERTY(bool light READ light NOTIFY changed)
     Q_PROPERTY(int radius READ radius NOTIFY changed)
+    // Which theme the palette comes from, and the others there are (a
+    // ThemeChoice); null where nothing chooses, and the desktop's theme is it.
+    Q_PROPERTY(QObject *themes READ themes CONSTANT)
 
 public:
     Look(Theme *theme, Customization *custom, QObject *parent = nullptr);
+    // With a choice of theme: its palette in place of the desktop's, under
+    // style.json's colors. Theme still gives the corners.
+    Look(Theme *theme, ThemeChoice *choice, Customization *custom, QObject *parent = nullptr);
 
     QColor accent() const { return color("accent"); }
     QColor accentForeground() const;
@@ -134,6 +141,7 @@ public:
     QVariantMap colors() const;
     bool light() const;
     int radius() const;
+    QObject *themes() const noexcept;
 
 signals:
     void changed();
@@ -143,4 +151,5 @@ private:
 
     Theme *m_theme;
     Customization *m_custom;
+    ThemeChoice *m_choice = nullptr;
 };

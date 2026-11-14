@@ -28,6 +28,7 @@
 #include "importer.h"
 #include "interfacechange.h"
 #include "library.h"
+#include "log.h"
 #include "plugins.h"
 #include "settings.h"
 #include "sync.h"
@@ -489,7 +490,13 @@ QList<Tool> coreTools() {
                   "Changes a book's details. Only the fields given are changed; authors and tags replace the lists "
                   "that are there. To take details from a catalog instead, see lookup_candidates.",
                   detailSchema({{"id", integer("The book's number.", 1)},
-                                {"cover_path", string("A picture file to use as the cover.")}},
+                                {"cover_path", string("A picture file to use as the cover.")},
+                                {"identifiers", QJsonObject{{"type", "object"},
+                                                            {"description", "What the book is called elsewhere, scheme to value: "
+                                                                            "{\"goodreads\": \"4671\", \"isbn\": \"...\"}. Only the "
+                                                                            "schemes named change; an empty value forgets one. "
+                                                                            "\"generated\" can't be set."},
+                                                            {"additionalProperties", QJsonObject{{"type", "string"}}}}}},
                                {"id"}),
                   Changes, [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments);
@@ -499,6 +506,18 @@ QList<Tool> coreTools() {
                       applyDetails(meta, arguments);
                       if (meta.title.isEmpty())
                           return Result::fail("A book needs a title.");
+                      // First, since they are all or nothing: a scheme refused changes nothing.
+                      if (arguments.contains("identifiers")) {
+                          if (!arguments.value("identifiers").isObject())
+                              return Result::fail("\"identifiers\" is an object of scheme to value, such as {\"goodreads\": \"4671\"}.");
+                          QList<QPair<QString, QString>> identifiers;
+                          const QJsonObject given = arguments.value("identifiers").toObject();
+                          for (auto it = given.begin(); it != given.end(); ++it)
+                              identifiers.append({it.key(), it.value().isString() ? it.value().toString() : it.value().toVariant().toString()});
+                          QString error;
+                          if (!BookOps::setIdentifiers(*at.library, at.id, identifiers, &error))
+                              return Result::fail(error);
+                      }
                       if (arguments.contains("cover_path")) {
                           QImageReader reader(arguments.value("cover_path").toString());
                           reader.setAutoTransform(true);
@@ -781,7 +800,8 @@ QList<Tool> coreTools() {
                   "Looks a book's details up with every metadata plugin that is switched on (Open Library, Google "
                   "Books and others). Each candidate says which fields it \"adds\" and which it \"changes\". With "
                   "ai, Omabook's own model also weighs them against the book's opening pages and its pick comes "
-                  "first, with its \"why\". Nothing is changed: hand the candidate you choose to lookup_apply.",
+                  "first, with its \"why\". Each has its \"number\" in the list and a \"candidate_id\" that names it "
+                  "whatever its place. Nothing is changed: hand the candidate_id you choose to lookup_apply.",
                   schema({{"id", integer("The book's number.", 1)},
                           {"ai", boolean("Also have Omabook's model judge the candidates. False when not given.")},
                           {"model", string(modelIs)}},
@@ -796,37 +816,60 @@ QList<Tool> coreTools() {
                       const BookOps::LookUp found = BookOps::lookUp(*at.library, book, arguments.value("ai").toBool());
                       if (!found.error.isEmpty())
                           return Result::fail(found.error);
+                      // Kept a while, so lookup_apply takes a candidate by its id as it was shown.
+                      BookOps::rememberListing(*at.library, at.id, arguments.value("ai").toBool(), found.candidates);
                       QJsonArray candidates;
-                      for (const MetaCandidate &candidate : found.candidates)
-                          candidates << BookOps::candidateJson(book, candidate);
+                      for (qsizetype i = 0; i < found.candidates.size(); ++i) {
+                          QJsonObject candidate = BookOps::candidateJson(book, found.candidates.at(i));
+                          candidate.insert("number", int(i + 1));
+                          candidate.insert("candidate_id", BookOps::candidateId(found.candidates.at(i)));
+                          candidates << candidate;
+                      }
                       return Result::ok({{"candidates", candidates}, {"problems", QJsonArray::fromStringList(found.problems)}});
                   },
                   true};
 
     tools << Tool{"lookup_apply", "Take a candidate's details",
                   "Gives a book the details of a candidate from lookup_candidates: every field the candidate has a "
-                  "value for replaces the book's, and its cover is fetched when it has one. Pass the candidate "
-                  "object as it was returned (or with fields you don't want removed).",
+                  "value for replaces the book's, and its cover is fetched when it has one. Name it by the "
+                  "candidate_id lookup_candidates gave it (within the hour), or pass a candidate object with only "
+                  "the fields you want.",
                   schema({{"id", integer("The book's number.", 1)},
-                          {"candidate", object("One candidate from lookup_candidates: title, authors, series, ..., cover_url.")}},
-                         {"id", "candidate"}),
+                          {"candidate_id", string("The candidate_id of one candidate from lookup_candidates for this book.")},
+                          {"candidate", object("Instead of candidate_id: a candidate's details, title, authors, series, ..., "
+                                               "cover_url.")}},
+                         {"id"}),
                   Destructive,
                   [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments);
                       if (!at)
                           return Result::fail(at.error);
-                      const QJsonObject given = arguments.value("candidate").toObject();
-                      const MetaCandidate candidate = MetaCandidate::fromJson(given, given.value("source").toString());
+                      MetaCandidate candidate;
+                      if (arguments.contains("candidate_id")) {
+                          const QString wanted = arguments.value("candidate_id").toString();
+                          const auto listed = BookOps::lastListing(*at.library, at.id);
+                          if (!listed || !listed->ids.contains(wanted))
+                              return Result::fail(QString("Book %1 has no candidate %2 listed in the last hour: call "
+                                                          "lookup_candidates again and take an id from that.").arg(at.id).arg(wanted));
+                          candidate = listed->candidates.at(listed->ids.indexOf(wanted));
+                      } else if (arguments.value("candidate").isObject()) {
+                          const QJsonObject given = arguments.value("candidate").toObject();
+                          candidate = MetaCandidate::fromJson(given, given.value("source").toString());
+                      } else {
+                          return Result::fail("Name the candidate by its \"candidate_id\" from lookup_candidates.");
+                      }
                       QString error;
                       if (!BookOps::applyCandidate(*at.library, at.id, candidate, &error))
                           return Result::fail(error);
+                      BookOps::forgetListing(*at.library, at.id);
                       return Result::ok(full(*at.library, *at.library->book(at.id)));
                   },
                   true};
 
     tools << Tool{"tidy_propose", "Propose a tidy-up",
                   "Looks the whole library over and lists what would tidy it: the same book twice (\"duplicate\": "
-                  "one folds into the other), an author spelled several ways (\"author\") and, with ai, books that "
+                  "one folds into the other; \"confidence\": \"low\" with a \"why\" when the titles only agree once a subtitle is "
+                  "left off, for the user to judge), an author spelled several ways (\"author\") and, with ai, books that "
                   "belong to a series (\"series\"). Nothing is changed: show the list to the user and hand the "
                   "proposals they want to tidy_apply.",
                   schema({{"ai", boolean("Also ask Omabook's model which books belong to a series. False when not given.")},
@@ -1386,6 +1429,8 @@ void toStandardError(QtMsgType, const QMessageLogContext &, const QString &messa
 
 int serve() {
     qInstallMessageHandler(toStandardError);
+    // The log goes on beside it, marked as the MCP server's.
+    Log::install("mcp");
     QFile input;
     if (!input.open(stdin, QIODevice::ReadOnly)) {
         say(stderr, "omabook mcp: standard input can't be read.");

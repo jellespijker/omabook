@@ -22,6 +22,9 @@ class Settings : public QObject {
     Q_PROPERTY(int lineHeight READ lineHeight NOTIFY changed)
     Q_PROPERTY(int paragraphSpacing READ paragraphSpacing NOTIFY changed)
     Q_PROPERTY(bool justify READ justify NOTIFY changed)
+    // Whether Omabook shows its libraries, what is being read and "Add to
+    // Library" in Folio, the file manager.
+    Q_PROPERTY(bool folio READ folio WRITE setFolio NOTIFY changed)
     Q_PROPERTY(QString spread READ spread NOTIFY changed)
     Q_PROPERTY(QVariantMap paneWidths READ paneWidths NOTIFY changed)
     Q_PROPERTY(QString syncTarget READ syncTarget WRITE setSyncTarget NOTIFY changed)
@@ -59,6 +62,8 @@ public:
     int lineHeight() const { return std::clamp(m_values.value("line_height").toInt(150), 100, 300); }
     int paragraphSpacing() const { return std::clamp(m_values.value("paragraph_spacing").toInt(12), 0, 80); }
     bool justify() const { return m_values.value("justify").toBool(false); }
+    bool folio() const { return m_values.value("folio").toBool(true); }
+    void setFolio(bool on) { set("folio", on); }
     QString spread() const { return m_values.value("spread").toString("auto"); }
 
     // How wide each pane beside the shelf or the page was dragged, by its

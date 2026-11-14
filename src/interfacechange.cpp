@@ -7,6 +7,8 @@
 #include <QJsonObject>
 #include <QSaveFile>
 
+#include "themechoice.h"
+
 namespace {
 
 QString read(const QString &path) {
@@ -33,6 +35,10 @@ Prompts::InterfaceState InterfaceChanges::state(const Customization &custom, con
         state.colors.insert(color.key(), color.value().value<QColor>().name());
     for (const Customization::Command &command : Customization::commands())
         state.commands += command.id + " (" + command.keys.join(", ") + "): " + command.what + "\n";
+    QStringList themes;
+    for (const QVariant &theme : Themes::list(ThemePlaces::here(custom.folder())))
+        themes << theme.toMap().value("id").toString() + (theme.toMap().value("light").toBool() ? " (light)" : "");
+    state.themes = themes.join(", ");
     return state;
 }
 

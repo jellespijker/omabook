@@ -1,5 +1,9 @@
 #include "ai.h"
 
+#include "log.h"
+
+#include <QDateTime>
+
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -76,6 +80,28 @@ AnthropicProvider::AnthropicProvider(const QString &apiKey, const QString &model
       m_model(model.isEmpty() ? QString(defaultModel) : model),
       m_baseUrl(baseUrl.isEmpty() ? QStringLiteral("https://api.anthropic.com") : baseUrl) {}
 
+AiProvider::AiProvider(QObject *parent) : QObject(parent) {
+    connect(this, &AiProvider::delta, this, [this](const QString &text) { m_received += text.size(); });
+    connect(this, &AiProvider::finished, this, [this] {
+        qCInfo(lcAi).noquote() << name() << "answered:" << m_received << "characters in"
+                               << (QDateTime::currentMSecsSinceEpoch() - m_began) << "ms";
+    });
+    connect(this, &AiProvider::failed, this, [this](const QString &error) {
+        qCWarning(lcAi).noquote() << name() << "failed after" << (QDateTime::currentMSecsSinceEpoch() - m_began) << "ms:" << error;
+    });
+    connect(this, &AiProvider::noted, this, [this](const QString &note) { qCInfo(lcAi).noquote() << name() << note; });
+}
+
+void AiProvider::began(const AiRequest &request, const QString &model) {
+    m_began = QDateTime::currentMSecsSinceEpoch();
+    m_received = 0;
+    m_sent = request.system.size();
+    for (const AiMessage &message : request.messages)
+        m_sent += message.text.size();
+    qCInfo(lcAi).noquote() << name() << "asked:" << (request.tier == AiRequest::Quick ? "quick" : "main") << "tier,"
+                           << (model.isEmpty() ? QString("its default model") : "model " + model) << "," << m_sent << "characters";
+}
+
 void AnthropicProvider::ask(const AiRequest &request) {
     cancel();
     m_request = request;
@@ -88,6 +114,7 @@ void AnthropicProvider::send(const QString &named) {
     m_sent = named;
     // No model named for this kind of work is the one this was made with.
     const QString model = named.isEmpty() ? m_model : named;
+    began(request, model);
     QJsonArray messages;
     for (const AiMessage &message : request.messages)
         messages.append(QJsonObject{{"role", message.role}, {"content", message.text}});
@@ -339,6 +366,7 @@ void CommandProvider::begin() {
 }
 
 void CommandProvider::start(const QString &accountHome) {
+    began(m_request, m_model);
     QStringList arguments = m_command;
     const QString program = arguments.takeFirst();
     // Before the last argument, which for some is where the prompt comes from.
@@ -398,7 +426,12 @@ AntigravityProvider::AntigravityProvider(const QString &program, QObject *parent
             return;
         read();
         const QString problem = QString::fromUtf8(m_process.readAllStandardError()).trimmed();
-        const QString failure = !m_error.isEmpty() ? "Antigravity: " + m_error
+        // A turn that only reached for a tool says so in Antigravity's terms
+        // (settings files and allow-rules), which mean nothing here.
+        const bool reachedForTool = m_error.contains("permission", Qt::CaseInsensitive) && !m_answered;
+        const QString failure = reachedForTool ? QString("Antigravity tried to use one of its tools instead of answering, and Omabook doesn't "
+                                                         "let it. Asking again usually works; choosing another AI in the settings always does.")
+                                : !m_error.isEmpty() ? "Antigravity: " + m_error
                                 : code == 0 && status == QProcess::NormalExit && m_answered ? QString()
                                 : problem.isEmpty() ? QString("Antigravity gave no answer. Run agy once in a terminal to sign in.")
                                                     : "Antigravity: " + problem.right(400);
@@ -429,10 +462,17 @@ void AntigravityProvider::ask(const AiRequest &request) {
 void AntigravityProvider::start(const QString &model) {
     const AiRequest &request = m_request;
     m_model = model;
+    began(request, model);
     m_answered = false;
     m_buffer.clear();
     m_error.clear();
-    QString prompt = request.system + "\n";
+    // Antigravity is an agent: given a task it reaches for its tools (a
+    // shell, files), which headless mode refuses, and a turn that only tried
+    // a tool ends with no answer at all. Omabook hands it everything it
+    // needs, so it is told it has no tools and is to answer in words.
+    QString prompt = "You have no tools in this conversation: do not run commands, read or write files, or call any tool. "
+                     "Everything you need is in this message; answer in text only.\n\n"
+                     + request.system + "\n";
     for (const AiMessage &message : request.messages)
         prompt += (request.messages.size() > 1 ? (message.role == "user" ? "\nReader:\n" : "\nYou answered:\n") : "\n")
                   + message.text + "\n";

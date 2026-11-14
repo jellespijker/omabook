@@ -1,0 +1,30 @@
+<!-- Written by bin/update-themes. -->
+<RCC>
+    <qresource prefix="/themes">
+        <file>LICENSE.omarchy</file>
+        <file>README</file>
+        <file>catppuccin-latte/colors.toml</file>
+        <file>catppuccin/colors.toml</file>
+        <file>ethereal/colors.toml</file>
+        <file>everforest/colors.toml</file>
+        <file>flexoki-light/colors.toml</file>
+        <file>gruvbox/colors.toml</file>
+        <file>hackerman/colors.toml</file>
+        <file>jade-horse/colors.toml</file>
+        <file>kanagawa/colors.toml</file>
+        <file>last-horizon/colors.toml</file>
+        <file>lumon/colors.toml</file>
+        <file>lupine/colors.toml</file>
+        <file>matte-black/colors.toml</file>
+        <file>miasma/colors.toml</file>
+        <file>nord/colors.toml</file>
+        <file>retro-82/colors.toml</file>
+        <file>ristretto/colors.toml</file>
+        <file>rose-pine/colors.toml</file>
+        <file>solitude/colors.toml</file>
+        <file>starship/colors.toml</file>
+        <file>tokyo-night/colors.toml</file>
+        <file>vantablack/colors.toml</file>
+        <file>white/colors.toml</file>
+    </qresource>
+</RCC>

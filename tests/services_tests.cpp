@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRegularExpression>
 #include <QSignalSpy>
 #include <QTcpServer>
 #include <QTcpSocket>
@@ -10,6 +11,7 @@
 #include <QtTest>
 
 #include "ai.h"
+#include "bookops.h"
 #include "converter.h"
 #include "curation.h"
 #include "customization.h"
@@ -211,7 +213,10 @@ private slots:
         const QJsonObject turn = QJsonDocument::fromJson(sent.readAll()).object();
         QCOMPARE(turn.value("event").toString(), QString("user"));
         const QString content = turn.value("message").toObject().value("content").toString();
-        QVERIFY(content.startsWith("Be brief."));
+        // Told first that it has no tools (it would reach for them and end
+        // with no answer), then the instructions it was given.
+        QVERIFY(content.startsWith("You have no tools in this conversation"));
+        QVERIFY(content.contains("\n\nBe brief."));
         QVERIFY(content.contains(longChapter));
         QVERIFY(content.trimmed().endsWith("Who narrates?"));
     }
@@ -1080,6 +1085,46 @@ private slots:
         QCOMPARE(diff.changes.first().to, QString("Dune"));
         // A book that has a cover would have it replaced.
         QCOMPARE(whatItBrings(book, true, candidate).changes.last().field, QString("cover"));
+    }
+
+    void aCandidateKeepsItsIdAndItsListing() {
+        QTemporaryDir dir;
+        const QByteArray cache = qgetenv("XDG_CACHE_HOME");
+        qputenv("XDG_CACHE_HOME", dir.filePath("cache").toUtf8());
+        MetaCandidate first;
+        first.source = "Apple Books";
+        first.meta.title = "Dune";
+        first.meta.authors = QStringList{"Frank Herbert"};
+        MetaCandidate second = first;
+        second.source = "Open Library";
+        second.meta.published = "1965";
+        // Named by its source and what it says; the AI's reason is not part of it.
+        const QString id = BookOps::candidateId(first);
+        QVERIFY2(QRegularExpression("^apple-books-[0-9a-f]{8}$").match(id).hasMatch(), qPrintable(id));
+        MetaCandidate reasoned = first;
+        reasoned.why = "It matches.";
+        QCOMPARE(BookOps::candidateId(reasoned), id);
+        QVERIFY(BookOps::candidateId(second) != BookOps::candidateId(MetaCandidate(first)));
+        MetaCandidate changed = first;
+        changed.meta.title = "Dune Messiah";
+        QVERIFY(BookOps::candidateId(changed) != id);
+
+        // A listing is kept per library and book, with how it was made.
+        Library library(dir.filePath("Library")), other(dir.filePath("Other"));
+        QVERIFY(library.open() && other.open());
+        QVERIFY(!BookOps::lastListing(library, 7));
+        BookOps::rememberListing(library, 7, true, {first, second});
+        const auto listed = BookOps::lastListing(library, 7);
+        QVERIFY(listed);
+        QVERIFY(listed->ai);
+        QCOMPARE(listed->ids, (QStringList{id, BookOps::candidateId(second)}));
+        QCOMPARE(listed->candidates.at(1).meta.published, QString("1965"));
+        QCOMPARE(listed->candidates.at(1).source, QString("Open Library"));
+        QVERIFY(!BookOps::lastListing(library, 8));
+        QVERIFY(!BookOps::lastListing(other, 7));
+        BookOps::forgetListing(library, 7);
+        QVERIFY(!BookOps::lastListing(library, 7));
+        cache.isEmpty() ? qunsetenv("XDG_CACHE_HOME") : qputenv("XDG_CACHE_HOME", cache);
     }
 
     void aPluginIsAProgramThatAnswersInJson() {

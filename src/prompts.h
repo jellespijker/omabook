@@ -91,6 +91,7 @@ struct InterfaceState {
     QJsonObject settings; // the settings that may be changed, as they are
     QJsonObject colors; // the colors in force, by name
     QString commands;   // the commands keys can be given to, one per line
+    QString themes;     // the themes style.json's "theme" can name, comma separated
 };
 struct InterfaceChange {
     bool valid = false;

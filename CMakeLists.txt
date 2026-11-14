@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.21)
+cmake_minimum_required(VERSION 3.24)
 project(omabook VERSION 0.1.2 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
@@ -30,14 +30,19 @@ target_compile_definitions(omabook_core PUBLIC OMABOOK_VERSION="${PROJECT_VERSIO
 # installed to share/omabook, and found in the source tree by an uninstalled build.
 target_compile_definitions(omabook_core PRIVATE OMABOOK_BRIDGE_SOURCE="${CMAKE_SOURCE_DIR}/share/omabook/calibre_bridge.py")
 
-add_executable(omabook src/main.cpp src/resources.qrc)
-target_link_libraries(omabook PRIVATE omabook_core)
+# Omarchy's theme palettes, compiled in (share/omabook/themes/README).
+set(omabook_themes ${CMAKE_SOURCE_DIR}/share/omabook/themes/themes.qrc)
+add_executable(omabook src/main.cpp src/resources.qrc ${omabook_themes})
+# Whole: files that only register something when the program starts (the MCP
+# tools in mcpcommands.cpp) are referenced by nothing, and the linker would
+# leave them out of a plain static link. Needs CMake 3.24.
+target_link_libraries(omabook PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,omabook_core>")
 
 # The tests load the real Main.qml, so they carry the resources too. One
 # binary per layer: a broken format reader fails without the window.
 enable_testing()
 foreach(test formats library services ui mcp calibre folio readingsites scripting pluginmanager graphview graph reading layout)
-  add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc)
+  add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)
   set_tests_properties(${test}_tests PROPERTIES ENVIRONMENT QT_QPA_PLATFORM=offscreen)
@@ -50,6 +55,8 @@ target_compile_definitions(services_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:
 
 # The Folio plugins are read from the source tree, as they are installed.
 target_compile_definitions(folio_tests PRIVATE OMABOOK_SOURCE="${CMAKE_SOURCE_DIR}")
+target_compile_definitions(folio_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+add_dependencies(folio_tests omabook)
 
 # The MCP server is tested the way an agent meets it: the real binary, spoken
 # to over standard input and output.

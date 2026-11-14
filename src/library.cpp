@@ -19,6 +19,8 @@
 #include <ranges>
 
 #include "formats.h"
+#include "graph.h"
+#include "log.h"
 
 using namespace Qt::StringLiterals;
 
@@ -253,7 +255,10 @@ std::expected<qint64, QString> Library::insert(const QString &sql, const QVarian
 }
 
 bool Library::open(QString *error) {
-    const auto fail = [error](const QString &why) { return failed(error, why); };
+    const auto fail = [this, error](const QString &why) {
+        qCWarning(lcLibrary).noquote() << m_root << "can't be opened:" << why;
+        return failed(error, why);
+    };
     if (!QDir().mkpath(m_root))
         return fail("The library folder can't be created: " + m_root);
     QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", m_connection);
@@ -366,6 +371,8 @@ bool Library::open(QString *error) {
             return fail("The library needs bringing up to date, but a copy of it couldn't be kept first, so it was left alone: "
                         + kept.error());
     }
+    if (schema < migrations.size())
+        qCInfo(lcLibrary).noquote() << "bringing" << m_root << "from format" << schema << "to" << migrations.size();
     for (int step = schema; step < migrations.size(); ++step) {
         database.transaction();
         for (const QString &statement : migrations.at(step) + QStringList{QString("PRAGMA user_version = %1").arg(step + 1)}) {
@@ -694,10 +701,85 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
             return false;
     if (!kept->hasCover && folded->hasCover)
         setCover(keep, QImage(coverPath(other)));
-    // The reading place that is further along is the one that was read.
-    if (progress(other).percent > progress(keep).percent)
-        setProgress(keep, progress(other));
-    return remove(other, error);
+    {
+        const Batch batch(*this);
+        // What the book is called elsewhere: both books' names, the kept
+        // book's where both have one. A site whose number only the other
+        // book had would otherwise add the book again at the next sync.
+        // `generated` says a plugin made the book, which it didn't make.
+        QJsonObject identifiers = kept->identifiers;
+        for (auto it = folded->identifiers.begin(); it != folded->identifiers.end(); ++it)
+            if (it.key() != "generated"_L1 && identifiers.value(it.key()).toVariant().toString().isEmpty())
+                identifiers.insert(it.key(), it.value());
+        // What is said of the reading: the kept book's where it says
+        // anything, and of two shelves the one further along.
+        static constexpr std::array shelves{""_L1, "to-read"_L1, "reading"_L1, "read"_L1};
+        const auto rank = [](const QString &shelf) { return std::ranges::find(shelves, shelf) - shelves.begin(); };
+        const QString shelf = rank(folded->shelf) > rank(kept->shelf) && rank(folded->shelf) < qsizetype(shelves.size())
+                                  ? folded->shelf : kept->shelf;
+        if (!exec("UPDATE books SET identifiers = ?, paper = ?, shelf = ?, rating = ?, finished = ? WHERE id = ?",
+                  {QString::fromUtf8(QJsonDocument(identifiers).toJson(QJsonDocument::Compact)), kept->paper || folded->paper,
+                   shelf, kept->rating > 0 ? kept->rating : folded->rating,
+                   kept->finished.isEmpty() ? folded->finished : kept->finished, keep}))
+            return failed(error, "The library can't be written.");
+
+        // The reading place that is further along is the one that was read,
+        // and the notes and places in the graph that go with it win where
+        // both books have them.
+        const bool furtherOther = progress(other).percent > progress(keep).percent;
+        if (furtherOther)
+            setProgress(keep, progress(other));
+        const QVariantList both{keep, other};
+        // Bookmarks and highlights, without the ones the kept book has too.
+        exec("DELETE FROM annotations WHERE book_id = ? AND EXISTS (SELECT 1 FROM annotations AS mine WHERE mine.book_id = ? "
+             "AND mine.kind = annotations.kind AND mine.section = annotations.section AND mine.fraction = annotations.fraction "
+             "AND mine.text = annotations.text AND mine.note = annotations.note)", {other, keep});
+        exec("UPDATE annotations SET book_id = ? WHERE book_id = ?", both);
+        // The AI's notes.
+        exec(QString("INSERT OR %1 INTO notes (book_id, kind, section, fraction, text, updated) "
+                     "SELECT ?, kind, section, fraction, text, updated FROM notes WHERE book_id = ?")
+                 .arg(furtherOther ? "REPLACE" : "IGNORE"), both);
+        // The knowledge graph: where things were met and facts learned, the
+        // days it was read on, and the node that stands for the book.
+        if (furtherOther)
+            exec("DELETE FROM graph_seen WHERE book_id = ? AND node_id IN (SELECT node_id FROM graph_seen WHERE book_id = ?)", both);
+        exec("UPDATE OR IGNORE graph_seen SET book_id = ? WHERE book_id = ?", both);
+        exec("UPDATE graph_edges SET book_id = ? WHERE book_id = ?", both);
+        exec("UPDATE reading_log SET from_percent = MIN(from_percent, (SELECT o.from_percent FROM reading_log AS o WHERE o.book_id = ? "
+             "AND o.day = reading_log.day)), to_percent = MAX(to_percent, (SELECT o.to_percent FROM reading_log AS o WHERE "
+             "o.book_id = ? AND o.day = reading_log.day)) WHERE book_id = ? AND day IN (SELECT day FROM reading_log WHERE book_id = ?)",
+             {other, other, keep, other});
+        exec("UPDATE OR IGNORE reading_log SET book_id = ? WHERE book_id = ?", both);
+        // Both books' nodes have the book's title for a name, so they are
+        // joined by their ids here rather than looked up by name.
+        QList<qint64> foldedNodes;
+        for (QSqlQuery nodes = query("SELECT id FROM graph_nodes WHERE book_id = ?", {other}); nodes.next();)
+            foldedNodes << nodes.value(0).toLongLong();
+        QSqlQuery mine = query("SELECT id FROM graph_nodes WHERE kind = 'book' AND book_id = ?", {keep});
+        const qint64 keptNode = mine.next() ? mine.value(0).toLongLong() : 0;
+        mine.finish();
+        for (const qint64 node : std::as_const(foldedNodes)) {
+            if (keptNode == 0) {
+                exec("UPDATE graph_nodes SET book_id = ? WHERE id = ?", {keep, node});
+                continue;
+            }
+            const QVariantList nodes{keptNode, node};
+            exec("DELETE FROM graph_edges WHERE (source = ? AND target = ?) OR (source = ? AND target = ?)",
+                 {keptNode, node, node, keptNode});
+            exec("UPDATE OR IGNORE graph_edges SET source = ? WHERE source = ?", nodes);
+            exec("UPDATE OR IGNORE graph_edges SET target = ? WHERE target = ?", nodes);
+            exec("UPDATE OR IGNORE graph_seen SET node_id = ? WHERE node_id = ?", nodes);
+            exec("UPDATE graph_nodes SET summary = (SELECT summary FROM graph_nodes WHERE id = ?) WHERE id = ? AND summary = ''",
+                 {node, keptNode});
+            // What is left of it (edges both nodes had) goes with it.
+            exec("DELETE FROM graph_nodes WHERE id = ?", {node});
+        }
+    }
+    if (!remove(other, error))
+        return false;
+    // The node says what the book is now: its status, stars and formats.
+    Graph(*this).bookNode(keep);
+    return true;
 }
 
 qint64 Library::addAnnotation(qint64 bookId, const Annotation &annotation) {

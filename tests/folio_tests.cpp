@@ -1,4 +1,5 @@
 #include <QJsonDocument>
+#include <QProcess>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -41,6 +42,30 @@ private slots:
         QCOMPARE(item.value("name").toString(), QString("Novels"));
         QCOMPARE(item.value("subtitle").toArray(), (QJsonArray{"%1 books", "1"}));
         QCOMPARE(item.value("open").toObject().value("run").toArray().last().toString(), dir.filePath("Novels"));
+    }
+
+    void switchedOffItShowsNothing() {
+        QTemporaryDir dir;
+        Settings settings(dir.filePath("config.json"));
+        settings.setLibraryPath(dir.filePath("Novels"));
+        QVERIFY(Fixtures::epub(dir.filePath("one.epub")));
+        QVERIFY(!Folio::add(settings, {}, {dir.filePath("one.epub")}).contains("error"));
+        QCOMPARE(Folio::libraries(settings).value("items").toArray().size(), 1);
+        // Switched off in Omabook, the commands Folio runs answer with
+        // nothing to show and nothing to offer.
+        settings.setFolio(false);
+        QVERIFY(!settings.folio());
+        QProcess folio;
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert("XDG_CONFIG_HOME", dir.filePath("config"));
+        QDir().mkpath(dir.filePath("config/omabook"));
+        QFile::copy(dir.filePath("config.json"), dir.filePath("config/omabook/config.json"));
+        folio.setProcessEnvironment(environment);
+        folio.start(QStringLiteral(OMABOOK_BINARY), {"folio", "libraries"});
+        QVERIFY(folio.waitForFinished(20000));
+        const QJsonObject answer = QJsonDocument::fromJson(folio.readAllStandardOutput()).object();
+        QVERIFY(answer.value("items").toArray().isEmpty());
+        QVERIFY(answer.value("actions").isArray() && answer.value("actions").toArray().isEmpty());
     }
 
     void aBookFileSaysWhereItStands() {

@@ -21,12 +21,14 @@
 #include "customization.h"
 #include "importer.h"
 #include "interface.h"
+#include "log.h"
 #include "librarian.h"
 #include "manual.h"
 #include "portalfilepicker.h"
 #include "reader.h"
 #include "settings.h"
 #include "theme.h"
+#include "themechoice.h"
 #include "translator.h"
 
 int main(int argc, char *argv[]) {
@@ -43,12 +45,22 @@ int main(int argc, char *argv[]) {
         const QByteArray argument(argv[i]);
         windowless = windowless || argument == "--help" || argument == "-h" || argument == "--version" || argument == "-v";
     }
-    if (windowless)
+    if (windowless) {
+        // What the desktop had set, for a command that opens a window of its
+        // own (Folio's "open"): that window must not inherit "offscreen".
+        if (!qEnvironmentVariableIsSet("OMABOOK_DESKTOP_QPA"))
+            qputenv("OMABOOK_DESKTOP_QPA", qgetenv("QT_QPA_PLATFORM").isEmpty() ? QByteArray("-") : qgetenv("QT_QPA_PLATFORM"));
         qputenv("QT_QPA_PLATFORM", "offscreen");
+    }
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("omabook");
     app.setApplicationVersion(OMABOOK_VERSION);
+    // What happens is written to the log (omabook logs), from the window and
+    // from every command alike.
+    Log::install(command ? "cli" : "window");
+    if (!command)
+        qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
     if (command)
         return runCli(app.arguments());
 
@@ -83,7 +95,9 @@ int main(int argc, char *argv[]) {
     // the guide there tells whoever edits it (a person, an agent) how.
     Customization custom;
     custom.writeGuide();
-    Look theme(&desktopTheme, &custom);
+    // Which theme the colors come from: style.json's "theme", Omarchy's by default.
+    ThemeChoice themeChoice(&custom, ThemePlaces::here(custom.folder()));
+    Look theme(&desktopTheme, &themeChoice, &custom);
     Settings settings;
     PortalFilePicker picker;
     if (arguments.isSet("library"))
