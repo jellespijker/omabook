@@ -53,7 +53,9 @@ bool Libraries::trash(Settings &settings, const QString &folder, QString *error)
         return fail(error, path + " is also a Calibre library, so Omabook won't throw it away. Forget it instead.");
     if (!forget(settings, path, error))
         return false;
-    if (QFileInfo::exists(path) && !QFile::moveToTrash(path))
-        return fail(error, "The folder couldn't be moved to the trash: " + path);
+    // To the trash, where a mistake can be undone; a filesystem with no trash
+    // gets the folder removed, since the user asked for it to go.
+    if (QFileInfo::exists(path) && !QFile::moveToTrash(path) && !QDir(path).removeRecursively())
+        return fail(error, "The folder couldn't be removed: " + path);
     return true;
 }
