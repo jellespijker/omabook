@@ -10,9 +10,12 @@
 namespace {
 
 // One question to the window's model, waited for on the worker's own thread.
-GraphBuild::Asker askerFor(Backend *backend) {
-    return [backend](const AiRequest &request, QString *answer, QString *error) {
-        std::unique_ptr<AiProvider> provider = backend->newAi(error);
+// The worker holds its own copy of the factory: the backend may go while it
+// works (GraphJobs is its child, so it waits for the worker only once the
+// backend's members are gone).
+[[nodiscard]] GraphBuild::Asker askerFor(Backend::AiFactory factory) {
+    return [factory = std::move(factory)](const AiRequest &request, QString *answer, QString *error) {
+        std::unique_ptr<AiProvider> provider = factory(error);
         if (!provider)
             return false;
         AiCall call(std::move(provider));
@@ -101,7 +104,7 @@ void GraphJobs::start() {
     const QString root = library->root();
     const GraphBatch::Choice choice = m_choice;
     const std::shared_ptr<std::atomic_bool> stop = m_stop;
-    const GraphBuild::Asker ask = askerFor(m_backend);
+    const GraphBuild::Asker ask = askerFor(m_backend->aiFactory());
     const QPointer<GraphJobs> self(this);
     m_work = QtConcurrent::run([self, root, choice, stop, ask] {
         // Closing the window meanwhile leaves the app running until the

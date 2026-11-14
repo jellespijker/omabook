@@ -70,23 +70,23 @@ public:
     // The engine takes ownership of the provider it is given.
     BookImageProvider *imageProvider();
 
-    bool isOpen() const { return m_document != nullptr; }
-    bool loading() const { return m_loading; }
-    QString error() const { return m_error; }
+    bool isOpen() const noexcept { return m_document != nullptr; }
+    bool loading() const noexcept { return m_loading; }
+    QString error() const noexcept { return m_error; }
     qint64 bookId() const { return m_bookId; }
-    QString title() const { return m_title; }
-    QString authors() const { return m_authors; }
+    QString title() const noexcept { return m_title; }
+    QString authors() const noexcept { return m_authors; }
     QString kind() const;
     int count() const { return m_document ? m_document->count() : 0; }
-    QVariantList toc() const { return m_toc; }
+    QVariantList toc() const noexcept { return m_toc; }
     QString imagePrefix() const { return QString("image://book/%1/").arg(m_generation); }
-    int section() const { return m_section; }
+    int section() const noexcept { return m_section; }
     void setSection(int section);
     QString sectionTitle() const;
-    QString html() const { return m_html; }
-    int pageWidth() const { return m_pageWidth; }
+    QString html() const noexcept { return m_html; }
+    int pageWidth() const noexcept { return m_pageWidth; }
     void setPageWidth(int width);
-    double fraction() const { return m_fraction; }
+    double fraction() const noexcept { return m_fraction; }
     void setFraction(double fraction);
     double percent() const;
     QVariantList bookmarks() const;
@@ -98,7 +98,7 @@ public:
     // book that grew while it was open. Nothing when no book is open.
     Q_INVOKABLE void reload();
     // Whether the book that just "changed" is the same one, read anew.
-    bool growing() const { return m_growing; }
+    bool growing() const noexcept { return m_growing; }
     // Moves to another chapter and, in it, to a named place or the very end.
     Q_INVOKABLE void goTo(int section, const QString &anchor = {}, bool atEnd = false);
     // Moves to a place partway down a chapter (0 to 1), as search results and bookmarks do.
@@ -166,8 +166,8 @@ private:
     Backend *m_backend;
     Converter m_converter;
     bool m_calibreOff = false;
-    QPointer<QObject> m_providerGuard;
-    BookImageProvider *m_provider = nullptr;
+    // The engine's once given to it, so it may be gone before the reader.
+    QPointer<BookImageProvider> m_provider;
     // The opened book, or why it couldn't be opened.
     using Opened = QPair<std::shared_ptr<Document>, QString>;
     QFutureWatcher<Opened> m_opening;

@@ -12,6 +12,7 @@
 #include <QJsonArray>
 #include <QPointer>
 #include <QtConcurrent>
+#include <algorithm>
 
 #include "formats.h"
 #include "graphmodel.h"
@@ -25,7 +26,7 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     // The graph views are QML types of the app's own, known before any window loads.
     registerGraphTypes();
     if (!m_aiFactory)
-        m_aiFactory = [this](QString *why) { return makeAiProvider(*m_settings, why); };
+        m_aiFactory = [settings](QString *why) { return makeAiProvider(*settings, why); };
     if (!m_catalogs)
         m_catalogs = [this](QObject *parent) {
             return m_plugins.sources(m_plugins.known(), &m_network, parent)
@@ -126,7 +127,7 @@ void Backend::lookForCalibre(bool asked) {
             offers << library.toJson().toVariantMap();
         QMetaObject::invokeMethod(
             this,
-            [=] {
+            [this, asked, switchedOff, libraries, offers] {
                 m_calibreSwitchedOff = switchedOff;
                 m_calibreLibraries = libraries;
                 m_calibreOffers = offers;
@@ -365,7 +366,7 @@ void Backend::addUrls(const QList<QUrl> &urls) {
     // say; off, it is a folder of books, and the summary says so.
     const CalibrePlugin &calibre = m_plugins.calibre();
     const ImportOptions options = calibre.importOptions();
-    const bool calibreLeftOut = !options.calibre && std::any_of(paths.cbegin(), paths.cend(), [](const QString &path) {
+    const bool calibreLeftOut = !options.calibre && std::ranges::any_of(paths, [](const QString &path) {
         return QFileInfo(path + "/metadata.db").isFile();
     });
     QPointer<Backend> self(this);
@@ -379,12 +380,12 @@ void Backend::addUrls(const QList<QUrl> &urls) {
         } else {
             summary = importBooks(library, paths, [self](int done, int total) {
                 QMetaObject::invokeMethod(
-                    qApp, [=] { if (self) self->setStatus(Backend::tr("Adding %1 of %2…").arg(done).arg(total)); },
+                    qApp, [self, done, total] { if (self) self->setStatus(Backend::tr("Adding %1 of %2…").arg(done).arg(total)); },
                     Qt::QueuedConnection);
             }, options);
         }
         QMetaObject::invokeMethod(
-            qApp, [=] { if (self) self->importFinished(summary, calibreLeftOut); }, Qt::QueuedConnection);
+            qApp, [self, summary, calibreLeftOut] { if (self) self->importFinished(summary, calibreLeftOut); }, Qt::QueuedConnection);
     });
 }
 
@@ -416,11 +417,11 @@ void Backend::sync() {
             summary.problems.clear();
         else
             summary = syncLibrary(library, Remote(target, ssh), [self](const QString &title) {
-                QMetaObject::invokeMethod(qApp, [=] { if (self) self->setStatus(title); }, Qt::QueuedConnection);
+                QMetaObject::invokeMethod(qApp, [self, title] { if (self) self->setStatus(title); }, Qt::QueuedConnection);
             });
         QMetaObject::invokeMethod(
             qApp,
-            [=] {
+            [self, summary] {
                 if (!self)
                     return;
                 --self->m_jobs;
@@ -663,7 +664,7 @@ void Backend::sourceAnswered(int index, const QList<MetaCandidate> &candidates, 
         m_candidates << candidates;
     if (!problem.isEmpty())
         m_searchProblem += (m_searchProblem.isEmpty() ? "" : "\n") + problem;
-    m_pendingSources = qMax(0, m_pendingSources - 1);
+    m_pendingSources = std::max(0, m_pendingSources - 1);
     emit candidatesChanged();
     askAiWhenCatalogsAreDone();
     if (m_pendingSources == 0) {

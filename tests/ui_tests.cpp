@@ -13,11 +13,13 @@
 #include <QQuickWindow>
 #include <QRandomGenerator>
 #include <QRegularExpression>
+#include <QSemaphore>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QVersionNumber>
 #include <QtTest>
+#include <atomic>
 #include <cmath>
 #include <optional>
 
@@ -28,6 +30,7 @@
 #include "fixtures.h"
 #include "graph.h"
 #include "graphcanvas.h"
+#include "graphjobs.h"
 #include "graphmodel.h"
 #include "formats.h"
 #include "interface.h"
@@ -4367,6 +4370,72 @@ private slots:
         desk.key(Qt::Key_Escape);
         QTRY_VERIFY(!desk.value("graphBuild", "opened").toBool());
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void aGraphBuildOutlivesTheBackendThatStartedIt() {
+        // The backend goes while a graph build waits on the model. The
+        // worker asks through a copy of the backend's factory, so what the
+        // factory holds is still there when it answers: the backend's own
+        // members are gone by then, and only its child GraphJobs, which
+        // waits for the worker, is left.
+        QTemporaryDir dir;
+        qputenv("XDG_CACHE_HOME", dir.filePath("cache").toUtf8());
+        Settings settings(dir.filePath("config.json"));
+        settings.setLibraryPath(dir.filePath("Library"));
+        FakePicker picker;
+        QSemaphore asking, gone;
+        std::atomic_int calls = 0;
+        QString heard;
+        // Enough to be kept on the heap, where a destroyed factory would free it.
+        const QString why = "No model here: the window that asked has gone.";
+        const auto makeAi = [why, &asking, &gone, &calls, &heard](QString *reason) -> std::unique_ptr<AiProvider> {
+            // Only the worker's first question waits, for the backend to go.
+            if (QThread::currentThread() != qApp->thread() && calls++ == 0) {
+                asking.release();
+                gone.acquire();
+                heard = why;
+            }
+            if (reason)
+                *reason = why;
+            return nullptr;
+        };
+        std::optional<Backend> backend;
+        backend.emplace(&settings, &picker, nullptr, makeAi, [](QObject *) { return QList<MetadataSource *>(); },
+                        dir.filePath("plugins"), "-");
+        QByteArray story;
+        for (int line = 0; line < 60; ++line)
+            story += "Ann walked the sea wall at dusk and counted the lamps along the harbour, as she did every night.\n\n";
+        QVERIFY(Fixtures::write(dir.filePath("The Sea Wall.txt"), story));
+        const qint64 id = backend->library()->add(dir.filePath("The Sea Wall.txt")).id;
+        backend->library()->setReading(id, "read", 0, {});
+        backend->reload();
+        GraphJobs *jobs = backend->graphJobs();
+        jobs->consider("read", 0, false);
+        QTRY_VERIFY(!jobs->planning());
+        QCOMPARE(jobs->plan().value("books").toInt(), 1);
+        jobs->start();
+        QVERIFY(asking.tryAcquire(1, 10000));
+        QObject::connect(&*backend, &QObject::destroyed, [&gone] { gone.release(); });
+        backend.reset();
+        QCOMPARE(heard, why);
+    }
+
+    void aNewEngineIsGivenPicturesOfItsOwn() {
+        // An engine owns the image provider it is given and deletes it with
+        // itself. The next engine (a test's next window) is given a new one,
+        // never the one that went with the first.
+        Desk desk;
+        {
+            QQmlEngine first;
+            first.addImageProvider("book", desk.reader->imageProvider());
+        }
+        QQmlEngine second;
+        second.addImageProvider("book", desk.reader->imageProvider());
+        auto *provider = dynamic_cast<QQuickImageProvider *>(second.imageProvider("book"));
+        QVERIFY(provider);
+        QSize size;
+        // No book is open, so there is no picture, and asking is safe.
+        QVERIFY(provider->requestImage("1/cover.jpg", &size, {}).isNull());
     }
 
     void theReadingSitesFitASmallWindowInEveryLook() {
