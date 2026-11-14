@@ -38,6 +38,11 @@ QImage BookImageProvider::requestImage(const QString &id, QSize *size, const QSi
 
 Reader::Reader(Backend *backend, const QString &converter, QObject *parent)
     : QObject(parent), m_backend(backend), m_converter(converter), m_marks(new ReadingMarks(this, this)) {
+    m_format = new PageFormat(this, backend->settings(), this);
+    // A book's own format changed elsewhere (the command line, an agent),
+    // or another library came with other books.
+    connect(backend, &Backend::bookFormatsChanged, m_format, &PageFormat::refresh);
+    connect(backend, &Backend::libraryChanged, m_format, &PageFormat::refresh);
     // Where the reader is gets written a moment after they stop moving, not
     // on every pixel scrolled.
     m_saveSoon.setSingleShot(true);

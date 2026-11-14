@@ -21,6 +21,7 @@
 #include "formats.h"
 #include "graph.h"
 #include "log.h"
+#include "readingformat.h"
 
 using namespace Qt::StringLiterals;
 
@@ -192,8 +193,10 @@ Library::~Library() {
 
 Library::Changes Library::changes() const {
     Changes changes;
-    for (QSqlQuery query = this->query("SELECT key, value FROM library_state"); query.next();)
-        (query.value(0).toString() == "books" ? changes.books : changes.graph) = query.value(1).toLongLong();
+    for (QSqlQuery query = this->query("SELECT key, value FROM library_state"); query.next();) {
+        const QString key = query.value(0).toString();
+        (key == "books" ? changes.books : key == "graph" ? changes.graph : changes.format) = query.value(1).toLongLong();
+    }
     return changes;
 }
 
@@ -354,6 +357,16 @@ bool Library::open(QString *error) {
          "CREATE TRIGGER graph_seen_insert_counted AFTER INSERT ON graph_seen BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
          "CREATE TRIGGER graph_seen_update_counted AFTER UPDATE ON graph_seen BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
          "CREATE TRIGGER graph_seen_delete_counted AFTER DELETE ON graph_seen BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END"},
+        // How a book is set on the page where it isn't as the defaults are
+        // (readingformat.h): only the options it has of its own, as a JSON
+        // object. Counted apart, so the reader follows a change made
+        // elsewhere without the shelf being read again.
+        {"CREATE TABLE book_format (book_id INTEGER PRIMARY KEY REFERENCES books(id) ON DELETE CASCADE, "
+         "options TEXT NOT NULL DEFAULT '{}')",
+         "INSERT INTO library_state (key, value) VALUES ('format', 0)",
+         "CREATE TRIGGER book_format_insert_counted AFTER INSERT ON book_format BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'format'; END",
+         "CREATE TRIGGER book_format_update_counted AFTER UPDATE ON book_format BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'format'; END",
+         "CREATE TRIGGER book_format_delete_counted AFTER DELETE ON book_format BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'format'; END"},
     };
 
     // Asked and done with before anything changes: a statement left open
@@ -493,6 +506,24 @@ bool Library::setReading(qint64 id, const QString &shelf, int rating, const QStr
 }
 
 bool Library::setPaper(qint64 id, bool paper) { return exec("UPDATE books SET paper = ? WHERE id = ?", {paper, id}); }
+
+QJsonObject Library::bookFormat(qint64 id) const {
+    QSqlQuery found = query("SELECT options FROM book_format WHERE book_id = ?", {id});
+    return found.next() ? ReadingFormat::fitting(QJsonDocument::fromJson(found.value(0).toString().toUtf8()).object()) : QJsonObject();
+}
+
+bool Library::setBookFormat(qint64 id, const QJsonObject &options) {
+    const QJsonObject kept = ReadingFormat::fitting(options);
+    if (kept.isEmpty())
+        return exec("DELETE FROM book_format WHERE book_id = ?", {id});
+    if (!book(id))
+        return false;
+    // Unchanged, it isn't written: the reader hears of every write.
+    if (kept == bookFormat(id))
+        return true;
+    return exec("INSERT OR REPLACE INTO book_format (book_id, options) VALUES (?, ?)",
+                {id, QString::fromUtf8(QJsonDocument(kept).toJson(QJsonDocument::Compact))});
+}
 
 bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &value) {
     const auto found = book(id);
@@ -739,6 +770,8 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
         exec(QString("INSERT OR %1 INTO notes (book_id, kind, section, fraction, text, updated) "
                      "SELECT ?, kind, section, fraction, text, updated FROM notes WHERE book_id = ?")
                  .arg(furtherOther ? "REPLACE" : "IGNORE"), both);
+        // How it is set on the page, where only the other book had a way of its own.
+        exec("INSERT OR IGNORE INTO book_format (book_id, options) SELECT ?, options FROM book_format WHERE book_id = ?", both);
         // The knowledge graph: where things were met and facts learned, the
         // days it was read on, and the node that stands for the book.
         if (furtherOther)

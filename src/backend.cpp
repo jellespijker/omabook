@@ -242,6 +242,8 @@ void Backend::reloadIfChanged() {
     }
     const Library::Changes now = m_library->changes();
     const Library::Changes before = std::exchange(m_changes, now);
+    if (now.format != before.format)
+        emit bookFormatsChanged();
     if (now.books != before.books) {
         reload();
         return;

@@ -137,6 +137,12 @@ public:
     // far it was read here), stars and the day it was finished.
     bool setReading(qint64 id, const QString &shelf, int rating, const QString &finished);
     bool setPaper(qint64 id, bool paper);
+    // How the book is set on the page where it isn't as the defaults are:
+    // only the reading format options it has of its own (readingformat.h),
+    // empty when it follows the defaults. Setting an empty object, or one
+    // with nothing in it that is an option, puts it back to the defaults.
+    QJsonObject bookFormat(qint64 id) const;
+    bool setBookFormat(qint64 id, const QJsonObject &options);
     // What the book is called on a site; an empty value forgets it.
     bool setIdentifier(qint64 id, const QString &scheme, const QString &value);
     // The book a site calls this, or 0.
@@ -187,10 +193,11 @@ public:
     QList<Annotation> annotations(qint64 bookId) const;
 
     // How often what the shelf shows (books, their files, their reading
-    // places) and the knowledge graph have changed, by anyone. Compared
+    // places), the knowledge graph and the books' own reading formats have
+    // changed, by anyone. Compared
     // with an earlier answer they say what changed since.
     struct Changes {
-        qint64 books = 0, graph = 0;
+        qint64 books = 0, graph = 0, format = 0;
         bool operator==(const Changes &) const = default;
     };
     [[nodiscard]] Changes changes() const;

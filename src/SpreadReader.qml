@@ -17,9 +17,15 @@ Item {
     signal selected()
     // Nothing here scrolls sideways, which is what lets a swipe turn the page.
     readonly property real contentWidth: width
+    // The options the text is set with (readingformat.h). The fold between
+    // the pages is as wide as it always is; the margins are the room at the
+    // outer edges and above and below.
+    readonly property var format: reader.format.effective
     readonly property real gutter: 56
-    readonly property real columnWidth: Math.max(200, Math.min(settings.lineWidth, (width - gutter * 3) / 2))
-    readonly property real pageHeight: Math.max(120, height - 72)
+    readonly property real outer: format.margins + 24
+    readonly property real above: format.margins + 4
+    readonly property real columnWidth: Math.max(200, Math.min(format.line_width, (width - gutter - outer * 2) / 2))
+    readonly property real pageHeight: Math.max(120, height - above * 2)
     // Where each page starts in the column, and where the last one ends.
     property var breaks: [0, 0]
     readonly property int pages: Math.max(1, breaks.length - 1)
@@ -77,7 +83,7 @@ Item {
     function previous() { reader.goTo(reader.section - 1) }
     function toStart() { turnTo(0) }
     function toEnd() { turnTo(lastLeft) }
-    function zoom(steps) { settings.fontSize = settings.fontSize + steps }
+    function zoom(steps) { reader.format.zoom(steps) }
     property real pinched: 1
     function pinch(delta) {
         pinched *= delta
@@ -199,13 +205,9 @@ Item {
             color: theme.foreground
             selectionColor: theme.accent
             selectedTextColor: theme.accentForeground
-            font.pixelSize: settings.fontSize
-            font.family: settings.fontFamily !== "" ? settings.fontFamily : Qt.application.font.family
-            text: "<style>a { color: " + theme.accent + "; text-decoration: none; } "
-              + "p, li, blockquote, dd { line-height: " + settings.lineHeight + "%; } "
-              + "p { margin-top: 0; margin-bottom: " + settings.paragraphSpacing + "px;"
-              + (settings.justify ? " text-align: justify;" : "") + " } "
-              + "h1, h2, h3 { margin-top: 24px; margin-bottom: 16px; }</style>" + reader.html
+            font.pixelSize: spread.format.font_size
+            font.family: spread.format.font_family !== "" ? spread.format.font_family : Qt.application.font.family
+            text: reader.format.html
             onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
             PageMarks {
                 id: pageMarks
@@ -221,7 +223,7 @@ Item {
 
     Row {
         anchors.horizontalCenter: parent.horizontalCenter
-        y: 36
+        y: spread.above
         spacing: spread.gutter
         // The spread reads in the direction of the language.
         layoutDirection: win.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight
@@ -246,6 +248,9 @@ Item {
         // The column was laid out again: new text, another size of type, a
         // picture that arrived.
         function onContentHeightChanged() { later.restart() }
+        // Set anew: another chapter, or the reading format changed, which
+        // can move where lines fall without changing the column's height.
+        function onTextChanged() { later.restart() }
     }
     onColumnWidthChanged: reader.pageWidth = Math.round(columnWidth)
     Component.onCompleted: {
@@ -258,7 +263,7 @@ Item {
     // The fold between the pages.
     Rectangle {
         anchors.horizontalCenter: parent.horizontalCenter
-        y: 36
+        y: spread.above
         width: 1
         height: spread.pageHeight
         color: theme.colors.selection

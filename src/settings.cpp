@@ -10,6 +10,8 @@
 #include <QStandardPaths>
 #include <array>
 
+#include "readingformat.h"
+
 using namespace Qt::StringLiterals;
 
 namespace {
@@ -128,22 +130,67 @@ void Settings::setShelf(const QString &library, const QJsonObject &shelf) {
     set("shelves", shelves);
 }
 
+int Settings::number(QAnyStringView key) const {
+    const ReadingFormat::Range *range = ReadingFormat::range(key);
+    return std::clamp(m_values.value(key.toString()).toInt(range->fallback), range->low, range->high);
+}
+
+void Settings::setNumber(QAnyStringView key, int value) {
+    const ReadingFormat::Range *range = ReadingFormat::range(key);
+    set(key.toString(), std::clamp(value, range->low, range->high));
+}
+
+QString Settings::align() const {
+    const QString align = m_values.value("align").toString();
+    if (std::ranges::contains(ReadingFormat::alignments, align))
+        return align;
+    // A config.json from before there was a choice of alignment says only
+    // whether the text is justified.
+    return m_values.value("justify").toBool(false) ? QString("justify") : QString("start");
+}
+
+void Settings::setAlign(const QString &align) {
+    if (std::ranges::contains(ReadingFormat::alignments, align))
+        set("align", align);
+}
+
+QJsonObject Settings::format() const {
+    QJsonObject format;
+    for (const ReadingFormat::Range &range : ReadingFormat::ranges)
+        format.insert(range.key, number(range.key));
+    format.insert("font_family", fontFamily());
+    format.insert("align", align());
+    return format;
+}
+
 QJsonObject Settings::options() const {
-    return {{"cover_size", coverSize()}, {"font_size", fontSize()}, {"font_family", fontFamily()}, {"line_width", lineWidth()},
-            {"line_height", lineHeight()}, {"paragraph_spacing", paragraphSpacing()}, {"justify", justify()},
-            {"spread", spread()}, {"folio", folio()}, {"sort", sort()}};
+    QJsonObject options = format();
+    options.insert("cover_size", coverSize());
+    options.insert("spread", spread());
+    options.insert("folio", folio());
+    options.insert("sort", sort());
+    return options;
 }
 
 bool Settings::setOption(const QString &key, const QJsonValue &value) {
+    if (ReadingFormat::keys().contains(key)) {
+        if (!ReadingFormat::problem(key, value).isEmpty())
+            return false;
+        set(key, key == "font_family" ? QJsonValue(value.toString().trimmed()) : value);
+        return true;
+    }
+    // The older name for the alignment, still taken from an agent or a
+    // change written before there was a choice.
+    if (key == "justify") {
+        if (!value.isBool())
+            return false;
+        set("align", value.toBool() ? "justify" : "start");
+        return true;
+    }
     const auto within = [&value](int low, int high) { return value.isDouble() && value.toInt() >= low && value.toInt() <= high; };
     const auto oneOf = [&value](const auto &words) { return std::ranges::contains(words, value.toString()); };
     const bool fits = key == "cover_size" ? within(96, 480)
-                      : key == "font_size" ? within(10, 48)
-                      : key == "line_width" ? within(320, 1600)
-                      : key == "line_height" ? within(100, 300)
-                      : key == "paragraph_spacing" ? within(0, 80)
-                      : key == "justify" || key == "folio" ? value.isBool()
-                      : key == "font_family" ? value.isString()
+                      : key == "folio" ? value.isBool()
                       : key == "spread" ? oneOf(spreads)
                       : key == "plugin_updates" ? oneOf(pluginUpdateModes)
                       : key == "sort" ? oneOf(sorts)
@@ -238,11 +285,16 @@ void Settings::set(const QString &key, const QJsonValue &value) {
 // the step that carries an older file forward is added to `upgraded` below,
 // so a setting made in an older Omabook is never silently dropped. Keys that
 // are only added need no step: a missing key reads as its default.
-constexpr int configVersion = 1;
+constexpr int configVersion = 2;
 
 QJsonObject Settings::upgraded(QJsonObject values) {
     const int from = values.value("config_version").toInt(0);
-    // if (from < 2) { …move the old key to the new one… }
+    // 2: "justify" (true or false) became "align", which has four choices.
+    if (from < 2 && values.contains("justify")) {
+        if (!values.contains("align"))
+            values.insert("align", values.value("justify").toBool() ? "justify" : "start");
+        values.remove("justify");
+    }
     // A file from a newer Omabook is read as it is: keys this one doesn't
     // know are kept and written back untouched.
     if (from < configVersion)

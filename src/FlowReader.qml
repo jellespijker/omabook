@@ -38,8 +38,13 @@ Flickable {
         laidView = height
     }
 
+    // The options the text is set with, and the room around it: the margin
+    // asked for, less where a narrow window hasn't the width for it.
+    readonly property var format: reader.format.effective
+    readonly property real side: Math.min(format.margins, Math.max(8, (width - 280) / 2))
+
     contentWidth: width
-    contentHeight: page.height + 96
+    contentHeight: page.height + 2 * side + 32
     boundsBehavior: Flickable.StopAtBounds
     clip: true
     focus: true
@@ -83,7 +88,7 @@ Flickable {
     function previous() { reader.goTo(reader.section - 1) }
     function toStart() { scrollBy(-contentY) }
     function toEnd() { scrollBy(range) }
-    function zoom(steps) { settings.fontSize = settings.fontSize + steps }
+    function zoom(steps) { reader.format.zoom(steps) }
     // A pinch changes the type a size at a time as the fingers spread.
     property real pinched: 1
     function pinch(delta) {
@@ -172,9 +177,9 @@ Flickable {
     TextEdit {
         id: page
         objectName: "flowText"
-        y: 40
+        y: flick.side + 8
         x: Math.round((flick.width - width) / 2)
-        width: Math.max(200, Math.min(settings.lineWidth, flick.width - 64))
+        width: Math.max(200, Math.min(flick.format.line_width, flick.width - 2 * flick.side))
         readOnly: true
         selectByMouse: true
         persistentSelection: true
@@ -184,14 +189,11 @@ Flickable {
         color: theme.foreground
         selectionColor: theme.accent
         selectedTextColor: theme.accentForeground
-        font.pixelSize: settings.fontSize
-        font.family: settings.fontFamily !== "" ? settings.fontFamily : Qt.application.font.family
-        // Links take the accent; paragraphs get room to breathe.
-        text: "<style>a { color: " + theme.accent + "; text-decoration: none; } "
-              + "p, li, blockquote, dd { line-height: " + settings.lineHeight + "%; } "
-              + "p { margin-top: 0; margin-bottom: " + settings.paragraphSpacing + "px;"
-              + (settings.justify ? " text-align: justify;" : "") + " } "
-              + "h1, h2, h3 { margin-top: 24px; margin-bottom: 16px; }</style>" + reader.html
+        font.pixelSize: flick.format.font_size
+        font.family: flick.format.font_family !== "" ? flick.format.font_family : Qt.application.font.family
+        // The chapter set as the reading format says (readingformat.h):
+        // spacing, indent and alignment, and links in the accent.
+        text: reader.format.html
         onWidthChanged: reader.pageWidth = Math.round(width)
         Component.onCompleted: {
             // Where the reader was, taken once: this view leads from here on.

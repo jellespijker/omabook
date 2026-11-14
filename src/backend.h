@@ -77,6 +77,7 @@ public:
 
     BookListModel *books() noexcept { return &m_model; }
     Library *library() noexcept { return m_library.get(); }
+    Settings *settings() noexcept { return m_settings; }
     QString libraryPath() const { return m_library ? m_library->root() : QString(); }
     QString libraryName() const;
     QString libraryError() const noexcept { return m_libraryError; }
@@ -169,6 +170,8 @@ public slots:
 signals:
     void libraryChanged();
     void revisionChanged();
+    // A book's own reading format was changed, here or elsewhere.
+    void bookFormatsChanged();
     void busyChanged();
     void messageChanged();
     void candidatesChanged();

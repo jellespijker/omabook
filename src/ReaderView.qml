@@ -242,6 +242,8 @@ Item {
     Binding { target: reader.marks; property: "colors"; value: theme.colors }
     Binding { target: reader.marks; property: "foreground"; value: theme.foreground }
     Binding { target: reader.marks; property: "background"; value: theme.background }
+    // Links in the text take the accent.
+    Binding { target: reader.format; property: "linkColor"; value: theme.accent }
     // What the AI noted while reading is marked as soon as it is in.
     Connections {
         target: assistant

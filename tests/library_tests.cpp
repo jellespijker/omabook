@@ -23,6 +23,7 @@
 #include "libraries.h"
 #include "log.h"
 #include "library.h"
+#include "readingformat.h"
 #include "readingsite.h"
 #include "settings.h"
 
@@ -872,7 +873,7 @@ private slots:
             model.setDatabaseName(dir.filePath("fresh/omabook.db"));
             QVERIFY(model.open());
             QSqlQuery tables(model);
-            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state') AND name NOT LIKE 'graph_%' AND type != 'trigger'");
+            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND type != 'trigger'");
             while (tables.next())
                 QVERIFY(QSqlQuery(database).exec(tables.value(0).toString()));
             // The columns that came later are not there yet either.
@@ -1301,6 +1302,121 @@ private slots:
         QVERIFY(model.inkOn(QColor("#f4e9c8")).lightnessF() < 0.2);
     }
 
+    void aBookKeepsAReadingFormatOfItsOwn() {
+        QTemporaryDir dir;
+        Library library(dir.path());
+        QVERIFY(library.open());
+        BookMeta meta;
+        meta.title = "Set My Way";
+        const qint64 book = library.addEntry(meta, true).id;
+        meta.title = "As Usual";
+        const qint64 other = library.addEntry(meta, true).id;
+        QVERIFY(library.bookFormat(book).isEmpty());
+        const Library::Changes before = library.changes();
+        // Only what fits is kept: an option out of its bounds, or one that
+        // isn't an option, is left out.
+        QVERIFY(library.setBookFormat(book, {{"font_size", 24}, {"align", "center"}, {"line_height", 900}, {"sparkle", true}}));
+        QCOMPARE(library.bookFormat(book), (QJsonObject{{"font_size", 24}, {"align", "center"}}));
+        QVERIFY(library.bookFormat(other).isEmpty());
+        // It is counted apart from what the shelf shows.
+        const Library::Changes after = library.changes();
+        QVERIFY(after.format > before.format);
+        QCOMPARE(after.books, before.books);
+        // Written again the same, nothing changes.
+        QVERIFY(library.setBookFormat(book, {{"align", "center"}, {"font_size", 24}}));
+        QCOMPARE(library.changes().format, after.format);
+        // Over the defaults, the book's own win and the rest are the defaults'.
+        const QJsonObject defaults{{"font_size", 19}, {"align", "start"}, {"margins", 32}};
+        QCOMPARE(ReadingFormat::over(defaults, library.bookFormat(book)),
+                 (QJsonObject{{"font_size", 24}, {"align", "center"}, {"margins", 32}}));
+        // Reset, it follows the defaults again; a book that isn't there takes none.
+        QVERIFY(library.setBookFormat(book, {}));
+        QVERIFY(library.bookFormat(book).isEmpty());
+        QVERIFY(!library.setBookFormat(9999, {{"indent", 8}}));
+        // Folded into another book, its way goes along where that one has none.
+        QVERIFY(library.setBookFormat(other, {{"indent", 20}}));
+        QVERIFY(library.merge(book, other));
+        QCOMPARE(library.bookFormat(book), (QJsonObject{{"indent", 20}}));
+        // Gone with its book.
+        QVERIFY(library.remove(book));
+        QVERIFY(library.bookFormat(book).isEmpty());
+    }
+
+    void theReadingFormatIsBoundedAndJustifyStillCounts() {
+        QTemporaryDir dir;
+        const QString file = dir.filePath("config.json");
+        // A config.json from before there was a choice of alignment.
+        QVERIFY(Fixtures::write(file, "{\"justify\": true, \"line_height\": 170}"));
+        {
+            Settings settings(file);
+            QCOMPARE(settings.align(), QString("justify"));
+            QVERIFY(settings.justify());
+            QCOMPARE(settings.lineHeight(), 170);
+            // The defaults of what wasn't set, and what each may be.
+            QCOMPARE(settings.indent(), 0);
+            QCOMPARE(settings.margins(), 32);
+            QCOMPARE(settings.format().value("align").toString(), QString("justify"));
+            QCOMPARE(settings.format().keys().size(), ReadingFormat::keys().size());
+            // Out of bounds is refused by name, or held to the bounds by the setters.
+            QVERIFY(!settings.setOption("line_height", 40));
+            QVERIFY(!settings.setOption("margins", 500));
+            QVERIFY(!settings.setOption("indent", -1));
+            QVERIFY(!settings.setOption("font_size", 12.5));
+            QVERIFY(!settings.setOption("align", "sideways"));
+            QVERIFY(settings.setOption("align", "center"));
+            QVERIFY(!settings.justify());
+            settings.setMargins(900);
+            QCOMPARE(settings.margins(), 160);
+            settings.setIndent(-20);
+            QCOMPARE(settings.indent(), 0);
+            // The old key is still taken, as the alignment.
+            QVERIFY(settings.setOption("justify", true));
+            QCOMPARE(settings.align(), QString("justify"));
+            QVERIFY(settings.setOption("justify", false));
+            QCOMPARE(settings.align(), QString("start"));
+            QVERIFY(!settings.setOption("justify", "yes"));
+        }
+        // Saved, the file has the new key and not the old one.
+        QFile saved(file);
+        QVERIFY(saved.open(QIODevice::ReadOnly));
+        const QJsonObject written = QJsonDocument::fromJson(saved.readAll()).object();
+        QCOMPARE(written.value("align").toString(), QString("start"));
+        QVERIFY(!written.contains("justify"));
+        QCOMPARE(written.value("config_version").toInt(), 2);
+        // What a value may be is said in words, with the range.
+        QCOMPARE(ReadingFormat::problem("line_height", 400), QString("line_height is 100 to 300 (percent); 400 is not."));
+        QVERIFY(ReadingFormat::problem("align", "middle").contains("start, justify, center or end"));
+        QVERIFY(ReadingFormat::problem("margins", 0).isEmpty());
+        QVERIFY(ReadingFormat::problem("font_family", "Inter").isEmpty());
+        // Every number's range keeps it readable.
+        for (const ReadingFormat::Range &range : ReadingFormat::ranges)
+            QVERIFY(range.low < range.high && range.fallback >= range.low && range.fallback <= range.high && range.step > 0);
+        QVERIFY(ReadingFormat::range(u"font_size")->low >= 10 && ReadingFormat::range(u"line_width")->low >= 320);
+        QVERIFY(ReadingFormat::range(u"line_height")->low >= 100);
+    }
+
+    void aChapterIsSetAsTheFormatSays() {
+        const QString chapter = "<h1>One</h1><p>First paragraph.</p><p>Second.</p><p align=\"center\">* * *</p><p>Third.</p>";
+        const QJsonObject plain{{"line_height", 160}, {"paragraph_spacing", 10}, {"indent", 0}, {"align", "start"}};
+        QString set = ReadingFormat::setChapter(chapter, plain, QColor("#123456"));
+        QVERIFY(set.contains("line-height: 160%") && set.contains("margin-bottom: 10px") && set.contains("color: #123456"));
+        QVERIFY(set.endsWith(chapter));
+        QVERIFY(!set.contains("text-align"));
+        // Justified and indented: only on the book's plain paragraphs, and
+        // the first after the heading is not indented.
+        set = ReadingFormat::setChapter(chapter, {{"indent", 20}, {"align", "justify"}}, QColor("#123456"));
+        QVERIFY2(set.contains("</h1><p align=\"justify\">First"), qPrintable(set));
+        QVERIFY(set.contains("<p align=\"justify\" style=\"text-indent: 20px\">Second"));
+        QVERIFY(set.contains("<p align=\"center\">* * *"));
+        QVERIFY(set.contains("<p align=\"justify\" style=\"text-indent: 20px\">Third"));
+        // Centred and at the end go in the style sheet, which Qt reads against
+        // the direction of each paragraph; centred lines get no indent.
+        set = ReadingFormat::setChapter(chapter, {{"indent", 20}, {"align", "center"}}, QColor("#123456"));
+        QVERIFY(set.contains("text-align: center") && !set.contains("text-indent"));
+        set = ReadingFormat::setChapter(chapter, {{"align", "end"}}, QColor("#123456"));
+        QVERIFY(set.contains("text-align: right"));
+    }
+
     void settingsAreKeptAndBounded() {
         QTemporaryDir dir;
         const QString file = dir.filePath("deep/config.json");
@@ -1409,6 +1525,14 @@ private slots:
             QCOMPARE(graph.ofBook(1).nodes.size(), 2);
             QVERIFY(graph.scopes().contains("world:1"));
             QCOMPARE(graph.readingLog(1).size(), 1);
+            // From 0.1.3, a book's own reading format, which an older
+            // library has none of and can be given after the upgrade.
+            if (format >= 8)
+                QCOMPARE(library.bookFormat(1), (QJsonObject{{"align", "justify"}, {"font_size", 22}, {"indent", 16}}));
+            else
+                QVERIFY(library.bookFormat(1).isEmpty());
+            QVERIFY(library.setBookFormat(2, {{"line_height", 180}}));
+            QCOMPARE(library.bookFormat(2).value("line_height").toInt(), 180);
         }
     }
 
@@ -1419,7 +1543,7 @@ private slots:
         const QStringList presentation{"backend.h", "backend.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp",
-                                       "readingmarks.h", "readingmarks.cpp",
+                                       "readingmarks.h", "readingmarks.cpp", "pageformat.h", "pageformat.cpp",
                                        "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h",
                                        "portalfilepicker.cpp"};

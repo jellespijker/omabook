@@ -19,8 +19,12 @@ class Settings : public QObject {
     Q_PROPERTY(int lineWidth READ lineWidth WRITE setLineWidth NOTIFY changed)
     Q_PROPERTY(QString sort READ sort WRITE setSort NOTIFY changed)
     Q_PROPERTY(int coverSize READ coverSize NOTIFY changed)
-    Q_PROPERTY(int lineHeight READ lineHeight NOTIFY changed)
-    Q_PROPERTY(int paragraphSpacing READ paragraphSpacing NOTIFY changed)
+    Q_PROPERTY(int lineHeight READ lineHeight WRITE setLineHeight NOTIFY changed)
+    Q_PROPERTY(int paragraphSpacing READ paragraphSpacing WRITE setParagraphSpacing NOTIFY changed)
+    Q_PROPERTY(int indent READ indent WRITE setIndent NOTIFY changed)
+    Q_PROPERTY(int margins READ margins WRITE setMargins NOTIFY changed)
+    Q_PROPERTY(QString align READ align WRITE setAlign NOTIFY changed)
+    // Whether the text is justified: what `align` was before it was there.
     Q_PROPERTY(bool justify READ justify NOTIFY changed)
     // Whether Omabook shows its libraries, what is being read and "Add to
     // Library" in Folio, the file manager.
@@ -45,23 +49,36 @@ public:
     void setLibraryPath(const QString &path);
     QStringList libraries() const;
 
-    // The reader's type size in pixels, its font ("" for the desktop's), and
-    // the widest a line of text gets, in pixels.
-    int fontSize() const { return m_values.value("font_size").toInt(19); }
-    void setFontSize(int size) { set("font_size", std::clamp(size, 10, 48)); }
+    // How the text of a book is set unless the book has its own (see
+    // readingformat.h, which holds the bounds): the type size in pixels, its
+    // font ("" for the desktop's), the widest a line gets, line spacing in
+    // percent, the space after a paragraph, the indent of a paragraph's
+    // first line, the room around the text, and the alignment ("start",
+    // "justify", "center" or "end"). A value out of bounds is held to them.
+    int fontSize() const { return number(u"font_size"); }
+    void setFontSize(int size) { setNumber(u"font_size", size); }
     QString fontFamily() const { return m_values.value("font_family").toString(); }
-    void setFontFamily(const QString &family) { set("font_family", family); }
-    int lineWidth() const { return m_values.value("line_width").toInt(720); }
-    void setLineWidth(int width) { set("line_width", std::clamp(width, 320, 1600)); }
+    void setFontFamily(const QString &family) { set("font_family", family.trimmed()); }
+    int lineWidth() const { return number(u"line_width"); }
+    void setLineWidth(int width) { setNumber(u"line_width", width); }
+    int lineHeight() const { return number(u"line_height"); }
+    void setLineHeight(int percent) { setNumber(u"line_height", percent); }
+    int paragraphSpacing() const { return number(u"paragraph_spacing"); }
+    void setParagraphSpacing(int pixels) { setNumber(u"paragraph_spacing", pixels); }
+    int indent() const { return number(u"indent"); }
+    void setIndent(int pixels) { setNumber(u"indent", pixels); }
+    int margins() const { return number(u"margins"); }
+    void setMargins(int pixels) { setNumber(u"margins", pixels); }
+    QString align() const;
+    void setAlign(const QString &align);
+    bool justify() const { return align() == "justify"; }
+    // All of those by their keys in config.json.
+    QJsonObject format() const;
 
-    // How the shelf and the page are set, for those who want it otherwise:
-    // the width of a book on the shelf, line spacing in percent, the space
-    // after a paragraph, flush text, and when two pages show side by side
-    // ("auto" for wide windows, "always", "never").
+    // How the shelf is set, for those who want it otherwise: the width of a
+    // book on the shelf, and when two pages show side by side ("auto" for
+    // wide windows, "always", "never").
     int coverSize() const { return std::clamp(m_values.value("cover_size").toInt(176), 96, 480); }
-    int lineHeight() const { return std::clamp(m_values.value("line_height").toInt(150), 100, 300); }
-    int paragraphSpacing() const { return std::clamp(m_values.value("paragraph_spacing").toInt(12), 0, 80); }
-    bool justify() const { return m_values.value("justify").toBool(false); }
     bool folio() const { return m_values.value("folio").toBool(true); }
     void setFolio(bool on) { set("folio", on); }
     QString spread() const { return m_values.value("spread").toString("auto"); }
@@ -193,6 +210,8 @@ signals:
 
 private:
     void set(const QString &key, const QJsonValue &value);
+    int number(QAnyStringView key) const;
+    void setNumber(QAnyStringView key, int value);
     void save();
     // An older config.json carried forward to the shape this Omabook writes.
     static QJsonObject upgraded(QJsonObject values);
