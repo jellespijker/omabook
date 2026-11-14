@@ -157,15 +157,44 @@ QHash<int, QByteArray> BookListModel::roleNames() const {
 }
 
 void BookListModel::setBooks(const QList<Book> &books, const QString &libraryRoot) {
+    QList<QVariantMap> maps;
+    maps.reserve(books.size());
+    for (const Book &book : books)
+        maps << bookToMap(book, libraryRoot);
+    // The library is read again whenever its database is written, which is
+    // also when the knowledge graph grows or a reading place is saved. When
+    // nothing the shelf shows has changed, the shelf is left alone, so it
+    // keeps its place under the reader's hand.
+    if (libraryRoot == m_root && maps == m_maps)
+        return;
+    QList<qint64> shownBefore;
+    shownBefore.reserve(m_rows.size());
+    for (const int row : std::as_const(m_rows))
+        shownBefore << m_books.at(row).id;
+    const QList<QVariantMap> mapsBefore = m_maps;
+    const QList<int> rowsBefore = m_rows;
+    const bool sameLibrary = libraryRoot == m_root;
+
     m_books = books;
     m_root = libraryRoot;
-    m_maps.clear();
-    m_maps.reserve(m_books.size());
-    for (const Book &book : std::as_const(m_books))
-        m_maps << bookToMap(book, m_root);
+    m_maps = maps;
     // A book may have been given another file since.
     m_thickness.clear();
-    rebuild();
+    const QList<int> rows = arranged();
+    QList<qint64> shownNow;
+    shownNow.reserve(rows.size());
+    for (const int row : rows)
+        shownNow << m_books.at(row).id;
+    if (!sameLibrary || shownNow != shownBefore) {
+        rebuild();
+        return;
+    }
+    // The same books in the same order: only the ones that changed are
+    // redrawn, and the view keeps its scroll and its selection.
+    m_rows = rows;
+    for (int row = 0; row < m_rows.size(); ++row)
+        if (m_maps.at(m_rows.at(row)) != mapsBefore.at(rowsBefore.at(row)))
+            emit dataChanged(index(row), index(row));
 }
 
 void BookListModel::setQuery(const QString &query) {

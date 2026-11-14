@@ -766,6 +766,37 @@ private slots:
         QVERIFY(book.matches("series:dune title:messiah"));
     }
 
+    void theShelfKeepsItsPlaceWhenNothingItShowsChanged() {
+        // The library is read again on every write to its database, the
+        // knowledge graph's and the reading place's too; the shelf must not
+        // be rebuilt (which scrolls it back) for writes it doesn't show.
+        auto make = [](qint64 id, const QString &title, double percent) {
+            Book book;
+            book.id = id;
+            book.meta.title = title;
+            book.percent = percent;
+            return book;
+        };
+        BookListModel model;
+        model.setSort("title");
+        model.setBooks({make(1, "Alpha", 0), make(2, "Beta", 10), make(3, "Gamma", 0)}, "/lib");
+        QSignalSpy reset(&model, &QAbstractItemModel::modelReset);
+        QSignalSpy changed(&model, &QAbstractItemModel::dataChanged);
+        model.setBooks({make(1, "Alpha", 0), make(2, "Beta", 10), make(3, "Gamma", 0)}, "/lib");
+        QCOMPARE(reset.count(), 0);
+        QCOMPARE(changed.count(), 0);
+        // One book read further: that row is redrawn, nothing else moves.
+        model.setBooks({make(1, "Alpha", 0), make(2, "Beta", 40), make(3, "Gamma", 0)}, "/lib");
+        QCOMPARE(reset.count(), 0);
+        QCOMPARE(changed.count(), 1);
+        QCOMPARE(changed.first().first().toModelIndex().row(), 1);
+        // A book that comes, or an order that changes, does rebuild the shelf.
+        model.setBooks({make(1, "Alpha", 0), make(2, "Beta", 40), make(3, "Gamma", 0), make(4, "Delta", 0)}, "/lib");
+        QCOMPARE(reset.count(), 1);
+        model.setBooks({make(1, "Alpha", 0), make(2, "Beta", 40), make(3, "Gamma", 0), make(4, "Delta", 0)}, "/other");
+        QCOMPARE(reset.count(), 2);
+    }
+
     void theShelfFiltersAndSorts() {
         auto make = [](qint64 id, const QString &title, const QString &author, qint64 lastRead) {
             Book book;
