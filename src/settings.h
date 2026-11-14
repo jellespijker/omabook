@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QStringList>
 #include <QVariantMap>
+#include <algorithm>
 
 // The user's choices, kept in ~/.config/omabook/config.json and written
 // atomically on every change. Tests pass their own file.
@@ -43,19 +44,19 @@ public:
     // The reader's type size in pixels, its font ("" for the desktop's), and
     // the widest a line of text gets, in pixels.
     int fontSize() const { return m_values.value("font_size").toInt(19); }
-    void setFontSize(int size) { set("font_size", qBound(10, size, 48)); }
+    void setFontSize(int size) { set("font_size", std::clamp(size, 10, 48)); }
     QString fontFamily() const { return m_values.value("font_family").toString(); }
     void setFontFamily(const QString &family) { set("font_family", family); }
     int lineWidth() const { return m_values.value("line_width").toInt(720); }
-    void setLineWidth(int width) { set("line_width", qBound(320, width, 1600)); }
+    void setLineWidth(int width) { set("line_width", std::clamp(width, 320, 1600)); }
 
     // How the shelf and the page are set, for those who want it otherwise:
     // the width of a book on the shelf, line spacing in percent, the space
     // after a paragraph, flush text, and when two pages show side by side
     // ("auto" for wide windows, "always", "never").
-    int coverSize() const { return qBound(96, m_values.value("cover_size").toInt(176), 480); }
-    int lineHeight() const { return qBound(100, m_values.value("line_height").toInt(150), 300); }
-    int paragraphSpacing() const { return qBound(0, m_values.value("paragraph_spacing").toInt(12), 80); }
+    int coverSize() const { return std::clamp(m_values.value("cover_size").toInt(176), 96, 480); }
+    int lineHeight() const { return std::clamp(m_values.value("line_height").toInt(150), 100, 300); }
+    int paragraphSpacing() const { return std::clamp(m_values.value("paragraph_spacing").toInt(12), 0, 80); }
     bool justify() const { return m_values.value("justify").toBool(false); }
     QString spread() const { return m_values.value("spread").toString("auto"); }
 
@@ -182,7 +183,7 @@ signals:
 
 private:
     void set(const QString &key, const QJsonValue &value);
-    void save() const;
+    void save();
     // An older config.json carried forward to the shape this Omabook writes.
     static QJsonObject upgraded(QJsonObject values);
     void read();

@@ -6,7 +6,7 @@
 namespace {
 
 // A CSV field: quoted when it holds a comma, a quote or a line break.
-QString csv(QString field) {
+[[nodiscard]] QString csv(QString field) {
     static const QRegularExpression special("[\",\\r\\n]");
     if (!field.contains(special))
         return field;
@@ -14,11 +14,11 @@ QString csv(QString field) {
 }
 
 // BibTeX reads braces and backslashes as its own.
-QString bib(QString value) {
+[[nodiscard]] QString bib(QString value) {
     return value.replace("\\", "\\textbackslash{}").replace("{", "\\{").replace("}", "\\}");
 }
 
-QByteArray makeCsv(const QList<Book> &books) {
+[[nodiscard]] QByteArray makeCsv(const QList<Book> &books) {
     QStringList lines{"id,title,authors,series,series_index,publisher,published,language,isbn,tags,formats,percent_read"};
     for (const Book &book : books) {
         const BookMeta &meta = book.meta;
@@ -31,7 +31,7 @@ QByteArray makeCsv(const QList<Book> &books) {
     return (lines.join("\r\n") + "\r\n").toUtf8();
 }
 
-QByteArray makeBibtex(const QList<Book> &books) {
+[[nodiscard]] QByteArray makeBibtex(const QList<Book> &books) {
     QString out;
     QSet<QString> keys;
     for (const Book &book : books) {

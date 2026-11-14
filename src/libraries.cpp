@@ -6,6 +6,8 @@
 
 #include "library.h"
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 bool fail(QString *error, const QString &why) {
@@ -15,7 +17,7 @@ bool fail(QString *error, const QString &why) {
 }
 
 // How many books the Omabook library in a folder holds; -1 when there is none.
-qsizetype bookCount(const QString &folder) {
+[[nodiscard]] qsizetype bookCount(const QString &folder) {
     if (!QFileInfo::exists(folder + "/omabook.db"))
         return -1;
     Library library(folder);
@@ -42,7 +44,7 @@ bool Libraries::forget(Settings &settings, const QString &folder, QString *error
     settings.forgetLibrary(path);
     // An empty database of Omabook's own among someone else's files is litter.
     if (bookCount(path) == 0 && QFileInfo::exists(path + "/metadata.db"))
-        for (const char *file : {"/omabook.db", "/omabook.db-wal", "/omabook.db-shm"})
+        for (const auto file : {"/omabook.db"_L1, "/omabook.db-wal"_L1, "/omabook.db-shm"_L1})
             QFile::remove(path + file);
     return true;
 }
