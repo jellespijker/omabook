@@ -371,8 +371,8 @@ GraphView Graph::around(qint64 start, int depth, int limit) const {
     return view;
 }
 
-GraphView Graph::ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo, const QString &scope) const {
-    GraphView view;
+QList<std::pair<GraphNode, GraphPlace>> Graph::metIn(qint64 bookId, const QString &scope) const {
+    QList<std::pair<GraphNode, GraphPlace>> met;
     for (QSqlQuery query = m_library->query(
              "SELECT graph_nodes.id, scope, kind, name, summary, data, COALESCE(graph_nodes.book_id, 0), updated, "
              "graph_seen.book_id, graph_seen.section, graph_seen.fraction FROM graph_nodes "
@@ -380,8 +380,15 @@ GraphView Graph::ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo, co
              "ORDER BY graph_seen.section, graph_seen.fraction, graph_nodes.id",
              {bookId, text(scope)});
          query.next();)
-        if (!upTo || placeFrom(query, 8).notAfter(*upTo))
-            view.nodes << nodeFrom(query);
+        met.append({nodeFrom(query), placeFrom(query, 8)});
+    return met;
+}
+
+GraphView Graph::ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo, const QString &scope) const {
+    GraphView view;
+    for (const auto &[node, place] : metIn(bookId, scope))
+        if (!upTo || place.notAfter(*upTo))
+            view.nodes << node;
     // What another book taught about the same things is part of the
     // picture; what this book teaches later is not, yet.
     std::ranges::copy_if(edgesAmong(view.nodes), std::back_inserter(view.edges), [bookId, &upTo](const GraphEdge &edge) {

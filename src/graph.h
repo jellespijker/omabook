@@ -137,6 +137,10 @@ public:
     // general graph's unless a scope is named: a world copied from what the
     // books say keeps where its things were met, and is not the book's graph.
     GraphView ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo = std::nullopt, const QString &scope = {}) const;
+    // The things met in a book, in the order its reader first met them, each
+    // with that place. What a reader at some place has met is therefore the
+    // front of this list, up to the first thing met after it.
+    QList<std::pair<GraphNode, GraphPlace>> metIn(qint64 bookId, const QString &scope = {}) const;
     // What a book connects to elsewhere: the things of other books that a
     // connection across books (see GraphEdge::across) ties to this book's
     // things, and the other books that a thing of this book is also in (a
