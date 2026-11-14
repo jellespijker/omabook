@@ -11,11 +11,51 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QUrl>
+#include <algorithm>
+#include <array>
 #include <cmath>
+#include <compare>
+#include <optional>
+#include <ranges>
+#include <span>
+#include <tuple>
+#include <type_traits>
+#include <utility>
 
+#include "customization.h"
 #include "formats.h"
 
 namespace {
+
+using namespace Qt::StringLiterals;
+
+// The orders the shelf can be in and what it can be narrowed by. Outside
+// this file each goes by its name, in the settings and in the views; the
+// names stand in the order of the kinds they name.
+enum class Sort { Recent, Title, Author, Series, Added, Progress, Rating, Published, Finished };
+constexpr std::array sortNames{"recent"_L1, "title"_L1,  "author"_L1,    "series"_L1,  "added"_L1,
+                               "progress"_L1, "rating"_L1, "published"_L1, "finished"_L1};
+
+enum class Filter { Status, Held, Rating, Format, Language, Tag, Author, Series };
+constexpr std::array filterNames{"status"_L1,   "held"_L1, "rating"_L1, "format"_L1,
+                                 "language"_L1, "tag"_L1,  "author"_L1, "series"_L1};
+
+// The short, fixed lists a filter can be set to, in the order they are thought of.
+constexpr std::array statusChoices{"reading"_L1, "to-read"_L1, "read"_L1, "unread"_L1};
+constexpr std::array heldChoices{"digital"_L1, "paper"_L1, "wishlist"_L1};
+constexpr std::array ratingChoices{"5"_L1, "4"_L1, "3"_L1, "2"_L1, "1"_L1};
+
+template <typename Kind>
+concept NamedKind = std::is_scoped_enum_v<Kind>;
+
+// The kind a name stands for, or nothing when it names none.
+template <NamedKind Kind, std::size_t Count>
+[[nodiscard]] std::optional<Kind> named(const std::array<QLatin1StringView, Count> &names, QStringView name) {
+    const auto found = std::ranges::find_if(names, [name](QLatin1StringView candidate) { return candidate == name; });
+    return found == names.end() ? std::nullopt : std::optional(Kind(found - names.begin()));
+}
+
+[[nodiscard]] QStringList listed(std::span<const QLatin1StringView> names) { return names | std::ranges::to<QStringList>(); }
 
 const QStringList &roles() {
     static const QStringList roles{"bookId", "title", "authors", "series", "seriesIndex", "publisher", "language",
@@ -30,13 +70,57 @@ const QStringList &roles() {
 const QString none = "-";
 
 // The orders that start with the most: the newest, the furthest read, the best.
-bool startsHigh(const QString &sort) {
-    return QStringList{"recent", "added", "progress", "rating", "published", "finished"}.contains(sort);
+[[nodiscard]] constexpr bool startsHigh(Sort sort) noexcept { return sort != Sort::Title && sort != Sort::Author && sort != Sort::Series; }
+
+// What a book is sorted by may be missing (no series, never read, not
+// rated); those come last whichever way the order runs.
+[[nodiscard]] bool missing(const Book &book, Sort sort) {
+    switch (sort) {
+        using enum Sort;
+    case Recent: return book.lastRead == 0;
+    case Author: return book.meta.authors.isEmpty();
+    case Series: return book.meta.series.isEmpty();
+    case Progress: return book.percent <= 0;
+    case Rating: return book.rating == 0;
+    case Published: return book.meta.published.isEmpty();
+    case Finished: return book.finished.isEmpty();
+    case Title:
+    case Added: return false;
+    }
+    std::unreachable();
+}
+
+// Two numbers in order; neither comes first when they can't be told apart.
+[[nodiscard]] constexpr std::weak_ordering number(double a, double b) noexcept {
+    return a < b ? std::weak_ordering::less : a > b ? std::weak_ordering::greater : std::weak_ordering::equivalent;
+}
+
+// Whether a book passes one filter.
+[[nodiscard]] bool passes(const Book &book, Filter kind, const QVariant &value) {
+    const QString wanted = value.toString();
+    const auto among = [&wanted](const QStringList &values) {
+        return wanted == none ? values.isEmpty() : values.contains(wanted, Qt::CaseInsensitive);
+    };
+    const auto only = [](const QString &value) { return value.isEmpty() ? QStringList() : QStringList{value}; };
+    switch (kind) {
+        using enum Filter;
+    case Status:
+        return wanted == "unread"_L1 ? book.status() != "read"_L1 && book.status() != "reading"_L1
+               : wanted == none ? book.status().isEmpty() : book.status() == wanted;
+    case Held: return wanted == "digital"_L1 ? !book.formats.isEmpty() : wanted == "paper"_L1 ? book.paper : book.held() == "none"_L1;
+    case Rating: return book.rating >= value.toInt();
+    case Format: return book.formats.contains(wanted, Qt::CaseInsensitive);
+    case Language: return among(only(book.meta.language));
+    case Tag: return among(book.meta.tags);
+    case Author: return among(book.meta.authors);
+    case Series: return among(only(book.meta.series));
+    }
+    std::unreachable();
 }
 
 // A number in [0, 1) that belongs to a book and a purpose, the same on every
 // run: what makes one spine a little taller than the next, for good.
-double unit(qint64 id, quint32 purpose) {
+[[nodiscard]] constexpr double unit(qint64 id, quint32 purpose) noexcept {
     quint64 x = quint64(id) * 0x9E3779B97F4A7C15ull + purpose * 0xBF58476D1CE4E5B9ull;
     x ^= x >> 31;
     x *= 0x94D049BB133111EBull;
@@ -119,21 +203,17 @@ BookListModel::~BookListModel() {
     if (!m_colorsChanged)
         return;
     QJsonObject colors;
-    for (auto it = m_colors.cbegin(); it != m_colors.cend(); ++it)
-        colors.insert(it.key(), it.value().name());
+    for (const auto &[cover, color] : m_colors.asKeyValueRange())
+        colors.insert(cover, color.name());
     QDir().mkpath(QFileInfo(colorCache()).absolutePath());
     QSaveFile file(colorCache());
     if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(colors).toJson(QJsonDocument::Compact)) > 0)
         file.commit();
 }
 
-QStringList BookListModel::sorts() {
-    return {"recent", "title", "author", "series", "added", "progress", "rating", "published", "finished"};
-}
+QStringList BookListModel::sorts() { return listed(sortNames); }
 
-QStringList BookListModel::filterKinds() {
-    return {"status", "held", "rating", "format", "language", "tag", "author", "series"};
-}
+QStringList BookListModel::filterKinds() { return listed(filterNames); }
 
 int BookListModel::rowCount(const QModelIndex &parent) const { return parent.isValid() ? 0 : m_rows.size(); }
 
@@ -151,18 +231,16 @@ QVariant BookListModel::data(const QModelIndex &index, int role) const {
 
 QHash<int, QByteArray> BookListModel::roleNames() const {
     QHash<int, QByteArray> names;
-    for (int i = 0; i < roles().size(); ++i)
-        names.insert(Qt::UserRole + i, roles().at(i).toLatin1());
+    for (const auto &[index, role] : std::views::enumerate(roles()))
+        names.insert(Qt::UserRole + int(index), role.toLatin1());
     return names;
 }
 
 void BookListModel::setBooks(const QList<Book> &books, const QString &libraryRoot) {
     m_books = books;
     m_root = libraryRoot;
-    m_maps.clear();
-    m_maps.reserve(m_books.size());
-    for (const Book &book : std::as_const(m_books))
-        m_maps << bookToMap(book, m_root);
+    m_maps = m_books | std::views::transform([this](const Book &book) { return bookToMap(book, m_root); })
+             | std::ranges::to<QList<QVariantMap>>();
     // A book may have been given another file since.
     m_thickness.clear();
     rebuild();
@@ -177,7 +255,7 @@ void BookListModel::setQuery(const QString &query) {
 }
 
 void BookListModel::setSort(const QString &sort) {
-    if (sort == m_sort || !sorts().contains(sort))
+    if (sort == m_sort || !named<Sort>(sortNames, sort))
         return;
     m_sort = sort;
     emit sortChanged();
@@ -192,15 +270,20 @@ void BookListModel::setReversed(bool reversed) {
     rebuild();
 }
 
-bool BookListModel::descending() const { return startsHigh(m_sort) != m_reversed; }
+// The order is only ever set to one of sorts(), so its name always names one.
+bool BookListModel::descending() const { return startsHigh(named<Sort>(sortNames, m_sort).value_or(Sort::Recent)) != m_reversed; }
 
 void BookListModel::setFilters(const QVariantMap &filters) {
     // Only what can be filtered on, and only values that say something.
     QVariantMap kept;
-    for (const QString &kind : filterKinds()) {
+    for (const auto &[index, kind] : std::views::enumerate(filterNames)) {
         const QVariant value = filters.value(kind);
-        if (kind == "rating" ? value.toInt() > 0 : !value.toString().isEmpty())
-            kept.insert(kind, kind == "rating" ? QVariant(qBound(1, value.toInt(), 5)) : QVariant(value.toString()));
+        if (Filter(index) == Filter::Rating) {
+            if (value.toInt() > 0)
+                kept.insert(kind, std::clamp(value.toInt(), 1, 5));
+        } else if (!value.toString().isEmpty()) {
+            kept.insert(kind, value.toString());
+        }
     }
     if (kept == m_filters)
         return;
@@ -220,10 +303,8 @@ void BookListModel::clearFilters() { setFilters({}); }
 qint64 BookListModel::idAt(int row) const { return row >= 0 && row < m_rows.size() ? m_books.at(m_rows.at(row)).id : 0; }
 
 int BookListModel::rowOf(qint64 id) const {
-    for (int row = 0; row < m_rows.size(); ++row)
-        if (m_books.at(m_rows.at(row)).id == id)
-            return row;
-    return -1;
+    const auto found = std::ranges::find(m_rows, id, [this](int book) { return m_books.at(book).id; });
+    return found == m_rows.cend() ? -1 : int(found - m_rows.cbegin());
 }
 
 QVariantMap BookListModel::get(int row) const {
@@ -234,103 +315,74 @@ QVariantMap BookListModel::get(int row) const {
     return book;
 }
 
-bool BookListModel::passes(const Book &book, const QString &kind, const QVariant &value) const {
-    const QString wanted = value.toString();
-    auto among = [&](const QStringList &values) {
-        return wanted == none ? values.isEmpty() : values.contains(wanted, Qt::CaseInsensitive);
-    };
-    if (kind == "status")
-        return wanted == "unread" ? book.status() != "read" && book.status() != "reading"
-               : wanted == none ? book.status().isEmpty() : book.status() == wanted;
-    if (kind == "held")
-        return wanted == "digital" ? !book.formats.isEmpty() : wanted == "paper" ? book.paper : book.held() == "none";
-    if (kind == "rating")
-        return book.rating >= value.toInt();
-    if (kind == "format")
-        return book.formats.contains(wanted, Qt::CaseInsensitive);
-    if (kind == "language")
-        return among(book.meta.language.isEmpty() ? QStringList() : QStringList{book.meta.language});
-    if (kind == "tag")
-        return among(book.meta.tags);
-    if (kind == "author")
-        return among(book.meta.authors);
-    if (kind == "series")
-        return among(book.meta.series.isEmpty() ? QStringList() : QStringList{book.meta.series});
-    return true;
-}
-
 QList<int> BookListModel::arranged(const QString &except) const {
-    QList<int> shown;
+    // Every filter but one of `except`'s kind, told apart once rather than for every book.
+    struct Narrowing {
+        Filter kind;
+        QVariant value;
+    };
+    QList<Narrowing> narrowings;
+    for (const auto &[name, value] : m_filters.asKeyValueRange())
+        if (const auto kind = named<Filter>(filterNames, name); kind && name != except)
+            narrowings.append({*kind, value});
     const bool searching = !m_query.trimmed().isEmpty();
-    for (int i = 0; i < m_books.size(); ++i) {
-        const Book &book = m_books.at(i);
-        bool fits = !searching || book.matches(m_query);
-        for (auto filter = m_filters.cbegin(); fits && filter != m_filters.cend(); ++filter)
-            fits = filter.key() == except || passes(book, filter.key(), filter.value());
-        if (fits)
-            shown << i;
-    }
+    auto shown = std::views::iota(0, int(m_books.size())) | std::views::filter([this, searching, &narrowings](int index) {
+                     const Book &book = m_books.at(index);
+                     return (!searching || book.matches(m_query))
+                            && std::ranges::all_of(narrowings, [&book](const Narrowing &narrowing) {
+                                   return passes(book, narrowing.kind, narrowing.value);
+                               });
+                 })
+                 | std::ranges::to<QList<int>>();
 
     QCollator collator;
     collator.setCaseSensitivity(Qt::CaseInsensitive);
     collator.setNumericMode(true);
-    auto number = [](double a, double b) { return a < b ? -1 : a > b ? 1 : 0; };
-    // What a book is sorted by may be missing (no series, never read, not
-    // rated); those come last whichever way the order runs.
-    auto missing = [&](const Book &book) {
-        return m_sort == "recent" ? book.lastRead == 0
-               : m_sort == "author" ? book.meta.authors.isEmpty()
-               : m_sort == "series" ? book.meta.series.isEmpty()
-               : m_sort == "progress" ? book.percent <= 0
-               : m_sort == "rating" ? book.rating == 0
-               : m_sort == "published" ? book.meta.published.isEmpty()
-               : m_sort == "finished" ? book.finished.isEmpty()
-               : false;
+    const auto text = [&collator](const QString &a, const QString &b) -> std::weak_ordering { return collator.compare(a, b) <=> 0; };
+    // A series together, in its order.
+    const auto inSeries = [&text](const Book &a, const Book &b) {
+        const auto series = text(a.meta.series, b.meta.series);
+        return series != 0 ? series : number(a.meta.seriesIndex, b.meta.seriesIndex);
     };
-    auto compare = [&](const Book &a, const Book &b) {
-        if (m_sort == "title")
-            return collator.compare(a.meta.title, b.meta.title);
-        if (m_sort == "author") {
+    const Sort sort = named<Sort>(sortNames, m_sort).value_or(Sort::Recent);
+    const auto compare = [&text, &inSeries, sort](const Book &a, const Book &b) -> std::weak_ordering {
+        switch (sort) {
+            using enum Sort;
+        case Title: return text(a.meta.title, b.meta.title);
+        case Author: {
             // An author's books together, and a series in its order.
-            if (const int authors = collator.compare(lastNameFirst(a.meta.authors), lastNameFirst(b.meta.authors)))
-                return authors;
-            if (const int series = collator.compare(a.meta.series, b.meta.series))
-                return series;
-            return number(a.meta.seriesIndex, b.meta.seriesIndex);
+            const auto authors = text(lastNameFirst(a.meta.authors), lastNameFirst(b.meta.authors));
+            return authors != 0 ? authors : inSeries(a, b);
         }
-        if (m_sort == "series") {
-            if (const int series = collator.compare(a.meta.series, b.meta.series))
-                return series;
-            return number(a.meta.seriesIndex, b.meta.seriesIndex);
+        case Series: return inSeries(a, b);
+        case Added: return std::tie(a.added, a.id) <=> std::tie(b.added, b.id);
+        case Progress: return number(a.percent, b.percent);
+        case Rating: return a.rating <=> b.rating;
+        case Published: return a.meta.published.compare(b.meta.published) <=> 0;
+        case Finished: return a.finished.compare(b.finished) <=> 0;
+        case Recent: return a.lastRead <=> b.lastRead;
         }
-        if (m_sort == "added")
-            return a.added != b.added ? number(a.added, b.added) : number(a.id, b.id);
-        if (m_sort == "progress")
-            return number(a.percent, b.percent);
-        if (m_sort == "rating")
-            return number(a.rating, b.rating);
-        if (m_sort == "published")
-            return a.meta.published.compare(b.meta.published);
-        if (m_sort == "finished")
-            return a.finished.compare(b.finished);
-        return number(a.lastRead, b.lastRead);
+        std::unreachable();
     };
-    const bool down = descending();
+    const bool down = startsHigh(sort) != m_reversed;
     // Among books that are equal, the newest first for what was read
     // lately, and the title otherwise.
-    const bool newestFirst = m_sort == "recent";
-    std::stable_sort(shown.begin(), shown.end(), [&](int left, int right) {
-        const Book &a = m_books.at(left), &b = m_books.at(right);
-        if (missing(a) != missing(b))
-            return missing(b);
-        if (const int order = missing(a) ? 0 : compare(a, b))
-            return down ? order > 0 : order < 0;
-        if (newestFirst)
-            return a.id > b.id;
-        if (const int titles = collator.compare(a.meta.title, b.meta.title))
-            return titles < 0;
-        return a.id < b.id;
-    });
+    const bool newestFirst = sort == Sort::Recent;
+    std::ranges::stable_sort(
+        shown,
+        [&](const Book &a, const Book &b) {
+            const bool without = missing(a, sort);
+            if (without != missing(b, sort))
+                return !without;
+            if (const auto order = without ? std::weak_ordering::equivalent : compare(a, b); order != 0)
+                return down ? order > 0 : order < 0;
+            if (newestFirst)
+                return a.id > b.id;
+            if (const auto titles = text(a.meta.title, b.meta.title); titles != 0)
+                return titles < 0;
+            return a.id < b.id;
+        },
+        [this](int index) -> const Book & { return m_books.at(index); });
     return shown;
 }
 
@@ -352,35 +404,37 @@ QVariantList BookListModel::choices(const QString &kind) const {
         ++counts[value];
     };
     QVariantList list;
-    if (kind == "status" || kind == "held" || kind == "rating") {
+    const auto by = named<Filter>(filterNames, kind);
+    if (!by)
+        return list;
+    if (by == Filter::Status || by == Filter::Held || by == Filter::Rating) {
         // A short, fixed list, in the order it is thought of.
-        const QStringList values = kind == "status" ? QStringList{"reading", "to-read", "read", "unread"}
-                                   : kind == "held" ? QStringList{"digital", "paper", "wishlist"}
-                                   : QStringList{"5", "4", "3", "2", "1"};
-        for (const QString &value : values) {
-            int fitting = 0;
-            for (const Book &book : std::as_const(m_books))
-                fitting += passes(book, kind, value);
+        using Choices = std::span<const QLatin1StringView>;
+        const Choices values = by == Filter::Status ? Choices(statusChoices) : by == Filter::Held ? Choices(heldChoices) : Choices(ratingChoices);
+        for (const QString value : values) {
+            const auto fitting = std::ranges::count_if(m_books, [&](const Book &book) { return passes(book, *by, value); });
             if (fitting > 0)
-                list << QVariantMap{{"value", kind == "rating" ? QVariant(value.toInt()) : QVariant(value)}, {"count", fitting}};
+                list << QVariantMap{{"value", by == Filter::Rating ? QVariant(value.toInt()) : QVariant(value)}, {"count", int(fitting)}};
         }
         return list;
     }
     for (const Book &book : std::as_const(m_books)) {
-        if (kind == "format")
-            for (const QString &format : book.formats) count(format);
-        else if (kind == "language")
-            count(book.meta.language);
-        else if (kind == "tag")
-            for (const QString &tag : book.meta.tags) count(tag);
-        else if (kind == "author")
-            for (const QString &author : book.meta.authors) count(author);
-        else if (kind == "series")
-            count(book.meta.series);
+        switch (*by) {
+            using enum Filter;
+        case Format: std::ranges::for_each(book.formats, count); break;
+        case Language: count(book.meta.language); break;
+        case Tag: std::ranges::for_each(book.meta.tags, count); break;
+        case Author: std::ranges::for_each(book.meta.authors, count); break;
+        case Series: count(book.meta.series); break;
+        case Status:
+        case Held:
+        case Rating: break;
+        }
     }
     QCollator collator;
     collator.setCaseSensitivity(Qt::CaseInsensitive);
-    std::stable_sort(order.begin(), order.end(), [&](const QString &a, const QString &b) {
+    // The most common first, and those as common as each other by name.
+    std::ranges::stable_sort(order, [&](const QString &a, const QString &b) {
         return counts.value(a) != counts.value(b) ? counts.value(a) > counts.value(b) : collator.compare(a, b) < 0;
     });
     for (const QString &value : std::as_const(order))
@@ -395,11 +449,12 @@ QVariantList BookListModel::groups(const QString &kind) const {
     };
     QStringList order;
     QHash<QString, Pile> piles;
+    const auto by = named<Filter>(filterNames, kind);
     for (const int index : arranged(kind)) {
         const Book &book = m_books.at(index);
-        QStringList values = kind == "series" ? QStringList{book.meta.series}
-                             : kind == "author" ? book.meta.authors
-                             : kind == "tag" ? book.meta.tags
+        QStringList values = by == Filter::Series ? QStringList{book.meta.series}
+                             : by == Filter::Author ? book.meta.authors
+                             : by == Filter::Tag ? book.meta.tags
                              : QStringList{book.status()};
         values.removeAll(QString());
         if (values.isEmpty())
@@ -417,13 +472,17 @@ QVariantList BookListModel::groups(const QString &kind) const {
     collator.setCaseSensitivity(Qt::CaseInsensitive);
     collator.setNumericMode(true);
     const QStringList statuses{"reading", "to-read", "read", none};
-    std::stable_sort(order.begin(), order.end(), [&](const QString &a, const QString &b) {
-        if (kind == "status")
-            return statuses.indexOf(a) < statuses.indexOf(b);
-        if ((a == none) != (b == none))
-            return b == none;
-        return collator.compare(kind == "author" ? lastNameFirst({a}) : a, kind == "author" ? lastNameFirst({b}) : b) < 0;
-    });
+    if (by == Filter::Status) {
+        std::ranges::stable_sort(order, {}, [&statuses](const QString &status) { return statuses.indexOf(status); });
+    } else {
+        // An author is filed under their last name, as on the shelf.
+        const auto filed = [by](const QString &value) { return by == Filter::Author ? lastNameFirst({value}) : value; };
+        std::ranges::stable_sort(order, [&](const QString &a, const QString &b) {
+            if ((a == none) != (b == none))
+                return b == none;
+            return collator.compare(filed(a), filed(b)) < 0;
+        });
+    }
     QVariantList list;
     for (const QString &value : std::as_const(order))
         list << QVariantMap{{"value", value}, {"count", piles.value(value).count}, {"books", piles.value(value).books}};
@@ -442,8 +501,8 @@ double BookListModel::thickness(int index) const {
     if (!book.formats.isEmpty())
         for (const QFileInfo &file : QDir(m_root + "/" + book.path).entryInfoList(QDir::Files))
             if (book.formats.contains(file.suffix().toLower()))
-                bytes = qMax(bytes, file.size());
-    const double thickness = bytes > 0 ? qBound(0.0, (std::log10(double(bytes)) - 4.7) / 2.0, 1.0) : unit(book.id, 3);
+                bytes = std::max(bytes, file.size());
+    const double thickness = bytes > 0 ? std::clamp((std::log10(double(bytes)) - 4.7) / 2.0, 0.0, 1.0) : unit(book.id, 3);
     m_thickness.insert(book.id, thickness);
     return thickness;
 }
@@ -467,7 +526,7 @@ QVariantList BookListModel::shelve(qreal width, qreal height) const {
         // About one book in eight starts a pile of two to four lying flat,
         // as long as the pile stays lower than a standing book.
         int lying = unit(id, 2) < 0.13 ? 2 + int(unit(id, 4) * 3) : 0;
-        lying = qMin(lying, int(m_rows.size()) - row);
+        lying = std::min(lying, int(m_rows.size()) - row);
         qreal pile = 0;
         for (int i = 0; i < lying; ++i)
             pile += thick(row + i);
@@ -481,7 +540,7 @@ QVariantList BookListModel::shelve(qreal width, qreal height) const {
         }
         qreal longest = 0;
         for (int i = 0; i < lying; ++i)
-            longest = qMax(longest, tall(row + i));
+            longest = std::max(longest, tall(row + i));
         // A pile is never squared up: each book sits a little off the one below.
         const qreal slack = std::round(height * 0.06), gap = std::round(height * 0.03);
         wrap(longest + slack + 2 * gap);
@@ -513,8 +572,8 @@ void BookListModel::loadColors() const {
     // Covers come and go; a cache grown past any library starts over.
     if (colors.size() > 20000)
         return;
-    for (auto it = colors.begin(); it != colors.end(); ++it)
-        m_colors.insert(it.key(), QColor(it.value().toString()));
+    for (auto color = colors.begin(); color != colors.end(); ++color)
+        m_colors.insert(color.key(), QColor(color.value().toString()));
 }
 
 QColor BookListModel::spineColor(int index) const {
@@ -546,27 +605,26 @@ QColor BookListModel::dominantColor(const QImage &image) {
     struct Bin {
         double weight = 0, red = 0, green = 0, blue = 0;
     };
-    QList<Bin> bins(512);
+    std::array<Bin, 512> bins;
     for (int y = 0; y < small.height(); ++y) {
-        const QRgb *line = reinterpret_cast<const QRgb *>(small.constScanLine(y));
-        for (int x = 0; x < small.width(); ++x) {
-            const QColor pixel(line[x]);
-            const double weight = 1 + 2 * pixel.hsvSaturationF() * pixel.valueF();
-            Bin &bin = bins[(qRed(line[x]) >> 5 << 6) | (qGreen(line[x]) >> 5 << 3) | (qBlue(line[x]) >> 5)];
+        // A line of an RGB32 picture is that many pixels, one after the other.
+        const std::span line(reinterpret_cast<const QRgb *>(small.constScanLine(y)), std::size_t(small.width()));
+        for (const QRgb pixel : line) {
+            const QColor color(pixel);
+            const double weight = 1 + 2 * color.hsvSaturationF() * color.valueF();
+            Bin &bin = bins[(qRed(pixel) >> 5 << 6) | (qGreen(pixel) >> 5 << 3) | (qBlue(pixel) >> 5)];
             bin.weight += weight;
-            bin.red += weight * qRed(line[x]);
-            bin.green += weight * qGreen(line[x]);
-            bin.blue += weight * qBlue(line[x]);
+            bin.red += weight * qRed(pixel);
+            bin.green += weight * qGreen(pixel);
+            bin.blue += weight * qBlue(pixel);
         }
     }
-    const Bin &most = *std::max_element(bins.cbegin(), bins.cend(), [](const Bin &a, const Bin &b) { return a.weight < b.weight; });
+    const Bin &most = *std::ranges::max_element(bins, {}, &Bin::weight);
     return QColor(int(most.red / most.weight), int(most.green / most.weight), int(most.blue / most.weight));
 }
 
 QColor BookListModel::inkOn(const QColor &color) const {
-    auto linear = [](double v) { return v <= .04045 ? v / 12.92 : std::pow((v + .055) / 1.055, 2.4); };
-    const double luminance = .2126 * linear(color.redF()) + .7152 * linear(color.greenF()) + .0722 * linear(color.blueF());
-    const double hue = qMax(0.0f, color.hslHueF());
-    const double saturation = qMin(0.25f, color.hslSaturationF());
-    return QColor::fromHslF(hue, saturation, luminance > .179 ? 0.10 : 0.94);
+    const double hue = std::max(0.0f, color.hslHueF());
+    const double saturation = std::min(0.25f, color.hslSaturationF());
+    return QColor::fromHslF(hue, saturation, relativeLuminance(color) > .179 ? 0.10 : 0.94);
 }
