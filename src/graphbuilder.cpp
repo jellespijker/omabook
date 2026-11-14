@@ -398,6 +398,9 @@ GraphBuild::Applied GraphBuild::apply(Library &library, qint64 bookId, const QLi
         return applied;
     applied.understood = true;
 
+    // One answer is one write: much faster than a statement at a time, and
+    // a window watching the library sees it change once.
+    const Library::Batch batch(library);
     Graph graph(library);
     const Scene scene = sceneOf(library, bookId);
     const qint64 bookNode = graph.bookNode(bookId);

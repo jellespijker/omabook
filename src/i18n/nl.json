@@ -986,5 +986,11 @@
   "%Ln more past your page": {
     "one": "nog %Ln voorbij je bladzijde",
     "other": "nog %Ln voorbij je bladzijde"
-  }
+  },
+  "A graph for books already read": "Een graaf voor boeken die je al las",
+  "{library.graph_build} notes the people, places and ideas of books you read before, or elsewhere, and says what it will cost first. Books are now linked to each other where they share an idea.": "{library.graph_build} noteert de personen, plaatsen en ideeën van boeken die je eerder of elders las, en zegt eerst wat het kost. Boeken zijn nu met elkaar verbonden waar ze een idee delen.",
+  "Plugins from GitHub that keep up to date": "Plugins van GitHub die zichzelf bijwerken",
+  "In the plugins ({library.plugins}), add one by its GitHub address. It updates by itself, unless an update asks for more than it had.": "Voeg bij de plugins ({library.plugins}) er een toe met zijn GitHub-adres. Hij werkt zichzelf bij, tenzij een update om meer vraagt dan hij had.",
+  "Panes as wide as you like": "Panelen zo breed als je wilt",
+  "Drag the inner edge of a pane beside the page or the shelf, or use {global.pane_narrower} and {global.pane_wider}. A double click puts it back.": "Sleep de binnenrand van een paneel naast de bladzijde of de plank, of gebruik {global.pane_narrower} en {global.pane_wider}. Dubbelklikken zet het terug."
 }

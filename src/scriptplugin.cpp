@@ -1105,14 +1105,22 @@ QString ScriptPlugin::describe(const QJSValue &error) const {
     return where.isEmpty() ? error.toString() : where + ": " + error.toString();
 }
 
+// Each stretch of a plugin's own code is one write to the library: a
+// plugin that notes forty things in the knowledge graph makes one change,
+// not forty, which is much faster and wakes the window once.
 void ScriptPlugin::enter() {
-    if (m_depth++ == 0)
+    if (m_depth++ == 0) {
         m_watchdog.arm(m_limit);
+        if (Library *library = m_services.library ? m_services.library() : nullptr)
+            m_batch.emplace(*library);
+    }
 }
 
 void ScriptPlugin::leave() {
-    if (m_depth > 0 && --m_depth == 0)
+    if (m_depth > 0 && --m_depth == 0) {
         m_watchdog.disarm();
+        m_batch.reset();
+    }
 }
 
 // The watchdog stopped the script while nothing of Omabook's was waiting

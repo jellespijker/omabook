@@ -70,5 +70,15 @@ QList<Manual::Step> Manual::features() {
         {"help", "0.1.0", tr("Help you can search"),
          tr("{global.help} lists every key as it is bound now. Type what you want to do, and Enter runs it."),
          "", "global.help", "", ""},
+        {"graphbuild", "0.1.1", tr("A graph for books already read"),
+         tr("{library.graph_build} notes the people, places and ideas of books you read before, or elsewhere, and says what it will cost first. "
+            "Books are now linked to each other where they share an idea."),
+         "", "library.graph_build", "library", ""},
+        {"pluginsources", "0.1.1", tr("Plugins from GitHub that keep up to date"),
+         tr("In the plugins ({library.plugins}), add one by its GitHub address. It updates by itself, unless an update asks for more than it had."),
+         "", "library.plugins", "library", ""},
+        {"panes", "0.1.1", tr("Panes as wide as you like"),
+         tr("Drag the inner edge of a pane beside the page or the shelf, or use {global.pane_narrower} and {global.pane_wider}. A double click puts it back."),
+         "", "global.pane_wider", "", ""},
     };
 }

@@ -207,6 +207,7 @@ GraphLinks::Applied GraphLinks::apply(Library &library, qint64 bookId, const Gra
         return applied;
     applied.understood = true;
 
+    const Library::Batch batch(library);
     Graph graph(library);
     QSet<qint64> own, others;
     for (const GraphNode &node : offer.own)

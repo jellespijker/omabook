@@ -1,5 +1,6 @@
 #include "graph.h"
 
+#include <QCryptographicHash>
 #include <QDate>
 #include <QDateTime>
 #include <QHash>
@@ -146,16 +147,33 @@ Graph::Graph(const Library &library) : m_library(&library) {}
 
 qint64 Graph::named(const QString &scope, const QString &kind, const QString &name) const {
     const QString wanted = name.simplified();
-    QSqlQuery query = m_library->query("SELECT id, name, data FROM graph_nodes WHERE scope = ? AND kind = ?", {text(scope), kind});
-    qint64 byAlias = 0;
-    while (query.next()) {
-        if (query.value(1).toString().compare(wanted, Qt::CaseInsensitive) == 0)
-            return query.value(0).toLongLong();
-        for (const QJsonValue &alias : QJsonDocument::fromJson(query.value(2).toString().toUtf8()).object().value("aliases").toArray())
-            if (byAlias == 0 && alias.toString().compare(wanted, Qt::CaseInsensitive) == 0)
-                byAlias = query.value(0).toLongLong();
-    }
-    return byAlias;
+    // The name itself, through the index: the common case, and cheap however
+    // large the graph. SQLite folds case only for ASCII, so another spelling
+    // of a non-ASCII name is still found by the look through the aliases.
+    if (QSqlQuery exact = m_library->query("SELECT id FROM graph_nodes WHERE scope = ? AND kind = ? AND name = ? COLLATE NOCASE LIMIT 1",
+                                           {text(scope), kind, wanted});
+        exact.next())
+        return exact.value(0).toLongLong();
+    // Then the nodes whose details mention the name at all, which are few,
+    // and of those the one that has it as another name. Where SQLite can't
+    // fold the name's case (letters beyond ASCII), every node of the kind is
+    // looked at, as before.
+    const auto look = [&](const QString &sql, const QVariantList &values) -> qint64 {
+        qint64 byAlias = 0;
+        for (QSqlQuery query = m_library->query(sql, values); query.next();) {
+            if (query.value(1).toString().compare(wanted, Qt::CaseInsensitive) == 0)
+                return query.value(0).toLongLong();
+            for (const QJsonValue &alias : QJsonDocument::fromJson(query.value(2).toString().toUtf8()).object().value("aliases").toArray())
+                if (byAlias == 0 && alias.toString().compare(wanted, Qt::CaseInsensitive) == 0)
+                    byAlias = query.value(0).toLongLong();
+        }
+        return byAlias;
+    };
+    if (const qint64 found = look("SELECT id, name, data FROM graph_nodes WHERE scope = ? AND kind = ? AND data LIKE ?",
+                                  {text(scope), kind, "%" + wanted + "%"}))
+        return found;
+    const bool ascii = std::ranges::all_of(wanted, [](QChar c) { return c.unicode() < 128; });
+    return ascii ? 0 : look("SELECT id, name, data FROM graph_nodes WHERE scope = ? AND kind = ?", {text(scope), kind});
 }
 
 qint64 Graph::upsert(const QString &scope, const QString &kind, const QString &name, const QString &summary,
@@ -226,6 +244,7 @@ bool Graph::remove(qint64 id) { return node(id) && m_library->exec("DELETE FROM 
 bool Graph::unlink(qint64 edge) { return m_library->exec("DELETE FROM graph_edges WHERE id = ?", {edge}); }
 
 bool Graph::merge(qint64 keep, qint64 other) {
+    const Library::Batch batch(*m_library);
     const auto kept = node(keep), folded = node(other);
     if (!kept || !folded || keep == other)
         return false;
@@ -437,12 +456,26 @@ qint64 Graph::bookNode(qint64 bookId) {
     const auto book = m_library->book(bookId);
     if (!book)
         return 0;
-    QSqlQuery query = m_library->query("SELECT id FROM graph_nodes WHERE kind = 'book' AND book_id = ?", {bookId});
+    QSqlQuery query = m_library->query("SELECT id, data FROM graph_nodes WHERE kind = 'book' AND book_id = ?", {bookId});
     qint64 id = query.next() ? query.value(0).toLongLong() : 0;
     QJsonObject data{{"status", book->status()}, {"held", book->held()}};
     if (book->rating > 0) data.insert("rating", book->rating);
     if (!book->finished.isEmpty()) data.insert("finished", book->finished);
     if (book->percent > 0) data.insert("percent_read", qRound(book->percent));
+    // What the node was last made from. Unchanged, there is nothing to
+    // write: bringing a whole library up to date is then a read per book.
+    const QString made = QString::fromLatin1(
+        QCryptographicHash::hash(QStringList{book->meta.title, book->meta.authors.join('\n'), book->meta.series,
+                                             QString::number(book->meta.seriesIndex), book->meta.tags.join('\n'),
+                                             compact(data)}
+                                     .join('\x1f')
+                                     .toUtf8(),
+                                 QCryptographicHash::Sha1)
+            .toHex());
+    if (id != 0 && QJsonDocument::fromJson(query.value(1).toString().toUtf8()).object().value("made").toString() == made)
+        return id;
+    query.finish();
+    data.insert("made", made);
     const qint64 now = QDateTime::currentSecsSinceEpoch();
     if (id == 0) {
         const auto added = m_library->insert(
@@ -468,6 +501,7 @@ qint64 Graph::bookNode(qint64 bookId) {
 }
 
 void Graph::syncLibrary() {
+    const Library::Batch batch(*m_library);
     for (const Book &book : m_library->books())
         bookNode(book.id);
     // Authors, series and tags no book points at any more are left over.
@@ -483,6 +517,7 @@ QStringList Graph::scopes() const {
 }
 
 bool Graph::copyScope(const QString &from, const QString &to) {
+    const Library::Batch batch(*m_library);
     if (to.isEmpty() || from == to || scopes().contains(to))
         return false;
     const GraphView source = whole(from, 1000000);

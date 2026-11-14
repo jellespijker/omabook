@@ -1023,5 +1023,11 @@
     "many": "%Ln más después de tu página",
     "one": "%Ln más después de tu página",
     "other": "%Ln más después de tu página"
-  }
+  },
+  "A graph for books already read": "Un grafo para libros ya leídos",
+  "{library.graph_build} notes the people, places and ideas of books you read before, or elsewhere, and says what it will cost first. Books are now linked to each other where they share an idea.": "{library.graph_build} anota las personas, los lugares y las ideas de libros que leíste antes o en otro lado, y primero dice cuánto costará. Ahora los libros se enlazan entre sí cuando comparten una idea.",
+  "Plugins from GitHub that keep up to date": "Plugins de GitHub que se mantienen al día",
+  "In the plugins ({library.plugins}), add one by its GitHub address. It updates by itself, unless an update asks for more than it had.": "En los plugins ({library.plugins}), agrega uno con su dirección de GitHub. Se actualiza solo, a menos que una actualización pida más de lo que tenía.",
+  "Panes as wide as you like": "Paneles tan anchos como quieras",
+  "Drag the inner edge of a pane beside the page or the shelf, or use {global.pane_narrower} and {global.pane_wider}. A double click puts it back.": "Arrastra el borde interior de un panel junto a la página o el estante, o usa {global.pane_narrower} y {global.pane_wider}. Un doble clic lo restablece."
 }

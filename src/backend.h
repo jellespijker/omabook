@@ -164,6 +164,7 @@ public:
 
 public slots:
     void reload();
+    void reloadIfChanged();
 
 signals:
     void libraryChanged();
@@ -209,6 +210,8 @@ private:
     QFileSystemWatcher m_watcher;
     QTimer m_reloadSoon;
     int m_revision = 0;
+    // What the library's change counters said when it was last read.
+    Library::Changes m_changes;
     int m_jobs = 0;
     QString m_status;
     QString m_message;

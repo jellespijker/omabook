@@ -10,6 +10,9 @@
 #include <QObject>
 #include <QString>
 #include <QStringList>
+#include <optional>
+
+#include "library.h"
 #include <QThread>
 #include <chrono>
 #include <condition_variable>
@@ -21,7 +24,6 @@
 #include "formatprovider.h"
 
 class AiProvider;
-class Library;
 class QNetworkAccessManager;
 class Settings;
 
@@ -264,6 +266,8 @@ private:
     std::unique_ptr<ScriptHost> m_host;
     QJSValue m_settle, m_parse;
     int m_depth = 0;
+    // The library write the code running now makes, as one transaction.
+    std::optional<Library::Batch> m_batch;
     int m_busy = 0;
     int m_holds = 0;
     int m_nextToken = 1;

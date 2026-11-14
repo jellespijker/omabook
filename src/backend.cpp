@@ -64,7 +64,7 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     // restart: the database's files change, and the shelf follows.
     m_reloadSoon.setSingleShot(true);
     m_reloadSoon.setInterval(250);
-    connect(&m_reloadSoon, &QTimer::timeout, this, &Backend::reload);
+    connect(&m_reloadSoon, &QTimer::timeout, this, &Backend::reloadIfChanged);
     connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_reloadSoon.start(); });
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_reloadSoon.start(); });
 
@@ -230,7 +230,29 @@ void Backend::watchLibrary() {
             m_watcher.addPath(path);
 }
 
+// The library's files changed on disk: by this window, a command, an agent
+// or a plugin. The database counts what changed, so a write to the knowledge
+// graph (constant while a book is read or a story written) costs a look at
+// two numbers, not a reading of every book.
+void Backend::reloadIfChanged() {
+    if (!m_library) {
+        reload();
+        return;
+    }
+    const Library::Changes now = m_library->changes();
+    const Library::Changes before = std::exchange(m_changes, now);
+    if (now.books != before.books) {
+        reload();
+        return;
+    }
+    watchLibrary();
+    if (now.graph != before.graph)
+        GraphFeed::announce();
+}
+
 void Backend::reload() {
+    if (m_library)
+        m_changes = m_library->changes();
     m_model.setBooks(m_library ? m_library->books() : QList<Book>(), libraryPath());
     watchLibrary();
     ++m_revision;

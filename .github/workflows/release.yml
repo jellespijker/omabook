@@ -1,0 +1,125 @@
+name: Release
+
+# On a version tag: build the Arch package in a clean container, run the
+# tests inside the package build, and attach the package to the GitHub
+# release, so it installs with `pacman -U <url>`. The same job keeps a small
+# pacman repository on the release tagged `repo`, so `pacman -Syu` brings
+# updates once that repository is added to pacman.conf. The repository is
+# signed when the OMABOOK_REPO_KEY secret holds a signing key; without it
+# the packages are still attached, but the repository is left alone, since
+# an unsigned third-party repository asks people to switch off a check.
+#
+# The recipe below is the same as the one proposed to omacom/omarchy-pkgs,
+# except that it builds the checked-out tag instead of downloading it.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  package:
+    name: Build and publish the package
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install the tools
+        run: pacman -Syu --noconfirm --needed git base-devel pacman-contrib github-cli gnupg
+
+      - uses: actions/checkout@v4
+
+      - name: Write the recipe
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          mkdir -p "$RUNNER_TEMP/pkg"
+          cat > "$RUNNER_TEMP/pkg/PKGBUILD" <<EOF
+          pkgname=omabook
+          pkgver=$version
+          pkgrel=1
+          pkgdesc='An ebook library and reader for Omarchy, with AI as a first-class citizen'
+          arch=('x86_64')
+          url='https://github.com/jellespijker/omabook'
+          license=('MIT' 'GPL-3.0-or-later')
+          options=('!debug')
+          depends=('hicolor-icon-theme' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'xdg-desktop-portal'
+                   'libarchive' 'poppler-qt6')
+          makedepends=('cmake' 'gcc' 'make' 'pkgconf')
+          checkdepends=('ttf-dejavu' 'dbus' 'zip')
+          optdepends=('calibre: import Calibre libraries, use its metadata plugins and read Kindle and other converted formats'
+                      'gnome-keyring: keep reading-site tokens in the keyring'
+                      'folio: Omabook libraries and "Add to Library" in the file manager'
+                      'openssh: sync libraries between computers')
+
+          prepare() {
+            cp -r "$GITHUB_WORKSPACE" "\$srcdir/omabook"
+            rm -rf "\$srcdir/omabook/build" "\$srcdir/omabook/.git"
+          }
+          build() {
+            cd "\$srcdir/omabook"
+            ./bin/build
+          }
+          check() {
+            cd "\$srcdir/omabook"
+            QT_QPA_PLATFORM=offscreen dbus-run-session -- ctest --test-dir build --output-on-failure
+          }
+          package() {
+            cd "\$srcdir/omabook"
+            DESTDIR="\$pkgdir" cmake --install build --prefix /usr
+          }
+          EOF
+
+      - name: Build the package, tests included
+        run: |
+          useradd -m builder
+          echo 'builder ALL=(ALL) NOPASSWD: ALL' > /etc/sudoers.d/builder
+          sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen && locale-gen
+          chown -R builder "$RUNNER_TEMP/pkg" "$GITHUB_WORKSPACE"
+          cd "$RUNNER_TEMP/pkg"
+          su builder -c 'LANG=en_US.UTF-8 makepkg --syncdeps --noconfirm'
+          ls -la *.pkg.tar.zst
+
+      - name: Attach it to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd "$RUNNER_TEMP/pkg"
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --title "Omabook ${GITHUB_REF_NAME#v}" --generate-notes
+          gh release upload "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --clobber omabook-*.pkg.tar.zst
+
+      - name: Bring the signed repository up to date
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO_KEY: ${{ secrets.OMABOOK_REPO_KEY }}
+        if: env.REPO_KEY != ''
+        run: |
+          cd "$RUNNER_TEMP/pkg"
+          export GNUPGHOME="$RUNNER_TEMP/gnupg" && mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$REPO_KEY" | gpg --batch --import
+          key=$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ {print $10; exit}')
+          gh release view repo --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1 \
+            || gh release create repo --repo "$GITHUB_REPOSITORY" --title "Package repository" --latest=false \
+                 --notes "The pacman repository for Omabook. See the README, Install, to add it."
+          # The database so far, so older versions stay installable.
+          gh release download repo --repo "$GITHUB_REPOSITORY" --pattern 'omabook.db.tar.gz' --pattern 'omabook.files.tar.gz' || true
+          for package in omabook-*.pkg.tar.zst; do
+            gpg --batch --yes --local-user "$key" --detach-sign --no-armor "$package"
+          done
+          repo-add --sign --key "$key" omabook.db.tar.gz omabook-*.pkg.tar.zst
+          # pacman asks for the names without .tar.gz; GitHub doesn't keep
+          # links, so those are copies.
+          for name in db files; do
+            cp "omabook.$name.tar.gz" "omabook.$name"
+            cp "omabook.$name.tar.gz.sig" "omabook.$name.sig"
+          done
+          gpg --armor --export "$key" > omabook-repo.asc
+          gh release upload repo --repo "$GITHUB_REPOSITORY" --clobber \
+            omabook-*.pkg.tar.zst omabook-*.pkg.tar.zst.sig \
+            omabook.db omabook.db.sig omabook.db.tar.gz omabook.db.tar.gz.sig \
+            omabook.files omabook.files.sig omabook.files.tar.gz omabook.files.tar.gz.sig omabook-repo.asc

@@ -488,6 +488,16 @@ Other parts of Omabook add their own (script plugins, Calibre, reading sites); `
 
 The server speaks protocol revision `2026-07-28` (no handshake: every request carries its version, and `server/discover` says what is spoken) and, for clients that open with `initialize`, `2025-11-25` back to `2024-11-05`. Requests are answered one at a time, in order.
 
+## Install
+
+Each release has a ready-built package for Arch and Omarchy (x86_64), built and tested in a clean container:
+
+```bash
+sudo pacman -U https://github.com/jellespijker/omabook/releases/download/v0.1.1/omabook-0.1.1-1-x86_64.pkg.tar.zst
+```
+
+Pick the newest release on the [releases page](https://github.com/jellespijker/omabook/releases); installed this way, a newer version is installed the same way. Omabook then appears in the app launcher (`Super + Space`).
+
 ## Build
 
 Omabook needs what every Omarchy app needs (CMake, a C++ compiler, Qt 6 base, declarative, SVG and Wayland) plus `libarchive` and `poppler-qt6`. Calibre is optional, for the formats that are converted.

@@ -649,7 +649,7 @@ private slots:
             model.setDatabaseName(dir.filePath("fresh/omabook.db"));
             QVERIFY(model.open());
             QSqlQuery tables(model);
-            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log') AND name NOT LIKE 'graph_%'");
+            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state') AND name NOT LIKE 'graph_%' AND type != 'trigger'");
             while (tables.next())
                 QVERIFY(QSqlQuery(database).exec(tables.value(0).toString()));
             // The columns that came later are not there yet either.

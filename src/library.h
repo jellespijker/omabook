@@ -180,9 +180,33 @@ public:
     void removeAnnotation(qint64 annotationId);
     QList<Annotation> annotations(qint64 bookId) const;
 
+    // How often what the shelf shows (books, their files, their reading
+    // places) and the knowledge graph have changed, by anyone. Compared
+    // with an earlier answer they say what changed since.
+    struct Changes {
+        qint64 books = 0, graph = 0;
+        bool operator==(const Changes &) const = default;
+    };
+    [[nodiscard]] Changes changes() const;
+
+    // Many writes as one transaction, for as long as it lives: much faster
+    // than each on its own, and seen by others as one change. A batch
+    // inside another joins it.
+    class Batch {
+    public:
+        explicit Batch(const Library &library);
+        ~Batch();
+        Batch(const Batch &) = delete;
+        Batch &operator=(const Batch &) = delete;
+
+    private:
+        const Library &m_library;
+    };
+
 private:
     // The knowledge graph is kept in the same database.
     friend class Graph;
+    mutable int m_batches = 0;
     QString bookFolder(qint64 id) const;
     // Keeps a copy of the database as it is, or says why it couldn't.
     [[nodiscard]] std::expected<void, QString> backUp(int schema) const;

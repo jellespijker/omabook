@@ -188,6 +188,23 @@ Library::~Library() {
     }
 }
 
+Library::Changes Library::changes() const {
+    Changes changes;
+    for (QSqlQuery query = this->query("SELECT key, value FROM library_state"); query.next();)
+        (query.value(0).toString() == "books" ? changes.books : changes.graph) = query.value(1).toLongLong();
+    return changes;
+}
+
+Library::Batch::Batch(const Library &library) : m_library(library) {
+    if (m_library.m_batches++ == 0)
+        QSqlDatabase::database(m_library.m_connection).transaction();
+}
+
+Library::Batch::~Batch() {
+    if (--m_library.m_batches == 0)
+        QSqlDatabase::database(m_library.m_connection).commit();
+}
+
 QString Library::databasePath() const { return m_root + "/omabook.db"; }
 
 QString Library::backupFolder() const { return m_root + "/.backups"; }
@@ -308,6 +325,30 @@ bool Library::open(QString *error) {
          "PRIMARY KEY (node_id, book_id))",
          "CREATE TABLE reading_log (book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE, day TEXT NOT NULL, "
          "from_percent REAL NOT NULL, to_percent REAL NOT NULL, PRIMARY KEY (book_id, day))"},
+        // Counters the database keeps itself, one for what the shelf shows
+        // and one for the knowledge graph, so a window that sees the file
+        // change can tell which changed (often only the graph, while a book
+        // is being read) without reading the whole library again.
+        {"CREATE TABLE library_state (key TEXT PRIMARY KEY, value INTEGER NOT NULL)",
+         "INSERT INTO library_state (key, value) VALUES ('books', 0), ('graph', 0)",
+         "CREATE TRIGGER books_insert_counted AFTER INSERT ON books BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER books_update_counted AFTER UPDATE ON books BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER books_delete_counted AFTER DELETE ON books BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER formats_insert_counted AFTER INSERT ON formats BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER formats_update_counted AFTER UPDATE ON formats BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER formats_delete_counted AFTER DELETE ON formats BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER progress_insert_counted AFTER INSERT ON progress BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER progress_update_counted AFTER UPDATE ON progress BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER progress_delete_counted AFTER DELETE ON progress BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'books'; END",
+         "CREATE TRIGGER graph_nodes_insert_counted AFTER INSERT ON graph_nodes BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_nodes_update_counted AFTER UPDATE ON graph_nodes BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_nodes_delete_counted AFTER DELETE ON graph_nodes BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_edges_insert_counted AFTER INSERT ON graph_edges BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_edges_update_counted AFTER UPDATE ON graph_edges BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_edges_delete_counted AFTER DELETE ON graph_edges BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_seen_insert_counted AFTER INSERT ON graph_seen BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_seen_update_counted AFTER UPDATE ON graph_seen BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_seen_delete_counted AFTER DELETE ON graph_seen BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END"},
     };
 
     // Asked and done with before anything changes: a statement left open

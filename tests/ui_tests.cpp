@@ -4814,6 +4814,38 @@ private slots:
         QTRY_COMPARE(desk.value("pluginUpdates", "currentIndex").toInt(), 2);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
+
+    void aGraphWriteLeavesTheShelfAlone() {
+        // While a book is read in, or a story planned, the knowledge graph is
+        // written many times; the shelf must not read the whole library again
+        // for each, only the graph views look again.
+        Desk desk;
+        QVERIFY(Fixtures::epub(desk.dir.filePath("one.epub")));
+        const qint64 id = desk.add(desk.dir.filePath("one.epub"));
+        QVERIFY(desk.show());
+        QSignalSpy shelf(desk.backend.operator->(), &Backend::revisionChanged);
+        QSignalSpy graph(GraphFeed::instance(), &GraphFeed::changed);
+        {
+            Library elsewhere(desk.backend->library()->root());
+            QVERIFY(elsewhere.open());
+            Graph written(elsewhere);
+            const Library::Batch batch(elsewhere);
+            for (int i = 0; i < 40; ++i)
+                written.upsert({}, "character", QString("Someone %1").arg(i), {}, {}, GraphPlace{id, 0, 0});
+        }
+        QTRY_VERIFY(graph.count() >= 1);
+        QTest::qWait(400);
+        QCOMPARE(shelf.count(), 0);
+        // A change the shelf shows is still followed.
+        {
+            Library elsewhere(desk.backend->library()->root());
+            QVERIFY(elsewhere.open());
+            elsewhere.setProgress(id, {0, 0.5, 50, 0});
+        }
+        QTRY_VERIFY(shelf.count() >= 1);
+        QTRY_COMPARE(qRound(desk.backend->library()->book(id)->percent), 50);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
 };
 
 QTEST_MAIN(UiTests)

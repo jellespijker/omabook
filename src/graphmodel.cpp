@@ -100,7 +100,9 @@ GraphBrowser::GraphBrowser(QObject *parent) : QObject(parent) {
     });
     // Several things changing at once are read once.
     m_refreshSoon.setSingleShot(true);
-    m_refreshSoon.setInterval(30);
+    // While the graph is being written (a book read in, a story planned)
+    // it changes many times a second; the view looks again once it settles.
+    m_refreshSoon.setInterval(400);
     connect(&m_refreshSoon, &QTimer::timeout, this, &GraphBrowser::refresh);
     connect(GraphFeed::instance(), &GraphFeed::changed, &m_refreshSoon, qOverload<>(&QTimer::start));
 }
