@@ -60,8 +60,8 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 | `O` | Open another library | `F` | The book and nothing else, full screen |
 | `P` | Plugins | `C` | Have the AI catch you up |
 | `Shift+T` | Tidy the library | `W` | Who is who so far |
-| `W` | Ask about your library | | |
-| `N` | Suggest what to read next | | |
+| `W` | Ask about your library | `V` | Select words with the keyboard, to ask about them or find them |
+| `N` | Suggest what to read next | `Shift+M` | Mark the map's things in the text: while the map is open, always, or never |
 | `Ctrl+K` | Change Omabook (anywhere) | | |
 | `Y` | Sync with another computer | `Esc` | Back to the library |
 | `I` | Show or hide the details | | |
@@ -399,6 +399,14 @@ Over MCP the same are `graph_find`, `graph_node`, `graph_book`, `graph_scope`, `
 - **By hand.** `N` adds a thing (related to the selected one, if you say how), `E` renames it or rewrites what is said of it, `Shift+M` folds another thing into it when the two are one, and `D` removes it; a relation is removed with the cross on its line. Whatever takes something away asks first.
 
 ![A book's graph with what it connects to in other books around it, tied in by dashed lines](docs/graph-beyond.png)
+
+### In the text
+
+![A chapter with the people, places and things the graph knows marked in their colors, and the card of one of them](docs/reader-marks.png)
+
+With the map beside the page, the names it knows so far are marked in the chapter: a faint tint and an underline in the color their kind has in the map, so a character is the same blue on the page as in the picture. Marking changes how letters are drawn, never their size, so the page doesn't move; `Shift+M` marks them always, or never (`"marks": "map"`, `"always"` or `"never"` in `config.json`). PDFs and comics are pictures and are not marked. Pointing at a name, or tapping it, shows a card: what it is, what is known of it, *Show in graph* and *Ask about this*. Selecting words (drag, double-click, press and hold, or `V` and then the arrow keys or `H` `J` `K` `L`, with `Shift` to widen, `Enter` for the menu) opens a menu beside them: *Ask about this*, *Who or what is this?* (answered from the graph when it knows the name, with no AI call; otherwise one short question with only the words and their paragraph), *Show in graph* or *Add to the graph*, *Find in book*, *Copy*, and up to three questions made from the graph (its threads, places and relations: "Why is Ilse at Glass Harbour?"). *More suggestions* asks the quick model once for that thing at that chapter. In the companion's answers, a who is who or a catch-up, the names the graph knows are marked the same way, and a click on one shows its card, which also goes to where it was first met.
+
+A name is found as whole words, and its capitals count: the character "Will" is not the "will" of "she will", and a one-word name that is also an everyday word (one in a short list, or one the chapter itself uses in lower case) is only marked where it is capitalised in the middle of a sentence. A character is also found by a part of their name ("Ilse" of "Ilse Varga") when that part is no title and belongs to nobody else; the longest name wins, and a name never runs across paragraphs. Only what the reader has met up to their place is marked. A chapter's marks are worked out beside the window (about 7 ms for a chapter of 300,000 characters with 300 names), kept per book, chapter, text and names known, and taken from there when the chapter comes back; they are worked out again only when the graph of this book changed or the reader passed the place where something new was met. Nothing here asks the AI to read: the graph grows as it always did, at the end of a chapter, with the pages since; when it is behind, the card says how far it got.
 
 The picture is laid out by a small simulation in which nodes push each other apart and relations pull them together. It starts from the same places every time, so the same graph is the same picture; it runs a few milliseconds at a time between frames, so a graph of thousands never stalls the window; and it stops when it has settled. When the graph grows while you read, what was there stays where it was. The ring of other books is held by its ties and kept outside, and the book's own things never feel it, so the picture inside is the same with it as without. The keys are a place of their own in `keys.json`, `"graph"`.
 
