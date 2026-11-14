@@ -12,6 +12,7 @@
 #include <QTemporaryFile>
 #include <QTimer>
 #include <memory>
+#include <optional>
 
 class QNetworkReply;
 class Settings;
@@ -27,7 +28,8 @@ struct AiRequest {
     // change to Omabook, whatever a plugin writes. Quick is for reading and
     // parsing into structure: the knowledge graph, judging look-ups, finding
     // series. A small, fast model does that well and for far less.
-    enum Tier { Main, Quick };
+    enum class Tier { Main, Quick };
+    using enum Tier; // AiRequest::Quick, as it always read
 
     QString system;
     QList<AiMessage> messages;
@@ -77,8 +79,8 @@ protected:
     // A model that was refused must never break reading. After a failure
     // that is about the model, before anything was answered, this is the
     // model to ask once more: the main one, or the provider's default when
-    // it was the main one that was refused. False when there is none to try.
-    bool modelToRetry(const QString &refused, const QString &error, QString *next) const;
+    // it was the main one that was refused. Nothing when there is none to try.
+    [[nodiscard]] std::optional<QString> modelToRetry(const QString &refused, const QString &error) const;
     // The failure, saying which model it was and what it was asked for.
     static QString withModel(const QString &error, const QString &model, const AiRequest &request);
     // What is noted when another model answered in place of a refused one.
@@ -93,7 +95,7 @@ class AnthropicProvider : public AiProvider {
     Q_OBJECT
 
 public:
-    static constexpr const char *defaultModel = "claude-opus-5-5";
+    static constexpr auto defaultModel = "claude-opus-5-5";
 
     AnthropicProvider(const QString &apiKey, const QString &model = {}, const QString &baseUrl = {},
                       QObject *parent = nullptr);
@@ -256,13 +258,14 @@ private:
 //   "command"    the command in the settings
 //   "off"        none
 struct AiChoice {
-    enum Source {
+    enum class Source {
         None,           // no model: `problem` says why
         Setting,        // named in Omabook's settings
         OmarchyDefault, // automatic, and Omarchy's default agent
         Fallback,       // automatic, but Omarchy's default couldn't be used: `problem` says why
         Automatic,      // automatic, and Omarchy names no default
     };
+    using enum Source; // AiChoice::Fallback, as it always read
     Source source = None;
     QString id;             // "claude", "codex", "agy", "grok", "pi", "anthropic", "command"; empty for none
     QString name;           // "Claude Code"
@@ -270,7 +273,7 @@ struct AiChoice {
     QString omarchyDefault; // the id Omarchy names, when it names one
     QString problem;        // English
 
-    bool available() const { return source != None; }
+    bool available() const noexcept { return source != None; }
     // {"provider", "name", "source", "omarchy_default", "problem"}, as `omabook info --json` reports it.
     QJsonObject toJson() const;
 };

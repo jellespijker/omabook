@@ -10,15 +10,20 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QStandardPaths>
+#include <algorithm>
+#include <array>
 
 #include "settings.h"
 
 namespace {
 
+using namespace Qt::StringLiterals;
+
 // Models that can hand a declined request to another model inside the same call.
 bool supportsFallbacks(const QString &model) {
-    return QStringList{"claude-opus-5-5", "claude-opus-5", "claude-sonnet-5-5", "claude-fable-5-2", "claude-fable-5-1"}
-        .contains(model);
+    static constexpr std::array models{"claude-opus-5-5"_L1, "claude-opus-5"_L1, "claude-sonnet-5-5"_L1, "claude-fable-5-2"_L1,
+                                       "claude-fable-5-1"_L1};
+    return std::ranges::any_of(models, [&model](QLatin1StringView known) { return model == known; });
 }
 
 // The model named for the whole run of a command or call of a tool; see
@@ -43,16 +48,15 @@ QString AiProvider::modelFor(const AiRequest &request) const {
     return quick ? m_models.quick : m_models.main;
 }
 
-bool AiProvider::modelToRetry(const QString &refused, const QString &error, QString *next) const {
+std::optional<QString> AiProvider::modelToRetry(const QString &refused, const QString &error) const {
     // Only a failure that is about the model: one about the network or a
     // limit would fail the same way again, on a dearer model.
     if (refused.isEmpty() || !error.contains("model", Qt::CaseInsensitive))
-        return false;
+        return std::nullopt;
     const QString instead = refused != m_models.main ? m_models.main : QString();
     if (instead == refused)
-        return false;
-    *next = instead;
-    return true;
+        return std::nullopt;
+    return instead;
 }
 
 QString AiProvider::withModel(const QString &error, const QString &model, const AiRequest &request) {
@@ -190,10 +194,9 @@ void AnthropicProvider::done() {
         emit finished();
         return;
     }
-    QString next;
-    if (!m_answered && status != 401 && modelToRetry(m_sent, problem, &next)) {
-        emit noted(retryNote(m_sent, next, m_request));
-        send(next);
+    if (const auto next = !m_answered && status != 401 ? modelToRetry(m_sent, problem) : std::nullopt) {
+        emit noted(retryNote(m_sent, *next, m_request));
+        send(*next);
         return;
     }
     emit failed(withModel(problem, m_sent, m_request));
@@ -231,10 +234,9 @@ CommandProvider::CommandProvider(const QStringList &command, QObject *parent) : 
         const QString said = held.trimmed().isEmpty() ? errors : held.trimmed();
         const QString problem = said.isEmpty() ? name() + " stopped with an error." : name() + ": " + said.right(400);
         // A model the harness doesn't take is asked for once more without it.
-        QString next;
-        if (!m_answered && modelToRetry(m_model, problem, &next)) {
-            emit noted(retryNote(m_model, next, m_request));
-            m_model = next;
+        if (const auto next = !m_answered ? modelToRetry(m_model, problem) : std::nullopt) {
+            emit noted(retryNote(m_model, *next, m_request));
+            m_model = *next;
             begin();
             return;
         }
@@ -404,10 +406,9 @@ AntigravityProvider::AntigravityProvider(const QString &program, QObject *parent
             emit finished();
             return;
         }
-        QString next;
-        if (!m_answered && modelToRetry(m_model, failure, &next)) {
-            emit noted(retryNote(m_model, next, m_request));
-            start(next);
+        if (const auto next = !m_answered ? modelToRetry(m_model, failure) : std::nullopt) {
+            emit noted(retryNote(m_model, *next, m_request));
+            start(*next);
             return;
         }
         emit failed(withModel(failure, m_model, m_request));
@@ -539,11 +540,22 @@ AiChoice harness(AiChoice choice, AiChoice::Source source, const QString &id, co
     return choice;
 }
 
+// Why this one, as `omabook info --json` and the window say it.
+constexpr const char *sourceName(AiChoice::Source source) noexcept {
+    switch (source) {
+    case AiChoice::None: return "none";
+    case AiChoice::Setting: return "setting";
+    case AiChoice::OmarchyDefault: return "omarchy";
+    case AiChoice::Fallback: return "fallback";
+    case AiChoice::Automatic: return "automatic";
+    }
+    return "none";
+}
+
 } // namespace
 
 QJsonObject AiChoice::toJson() const {
-    const char *sources[] = {"none", "setting", "omarchy", "fallback", "automatic"};
-    return {{"provider", id}, {"name", name}, {"source", sources[source]}, {"omarchy_default", omarchyDefault},
+    return {{"provider", id}, {"name", name}, {"source", sourceName(source)}, {"omarchy_default", omarchyDefault},
             {"problem", problem}};
 }
 
