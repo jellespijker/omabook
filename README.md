@@ -60,6 +60,17 @@ The search language a rule is written in: bare words look in the title, authors,
 
 Collections are kept in the library's database, so they go wherever the library goes: a backup, another computer, the command line and agents all see the same ones.
 
+## Search
+
+`/` searches the shelf as you type, in the search language above, and finds more than a rule does:
+
+- **What you know finds books too.** A bare word also finds a book by the characters, places, groups, ideas, items, events, plot threads, themes and topics the [knowledge graph](#knowledge-graph) met in it, and by the questions you asked of it: `venn` finds the book Mara Venn is in. `knows:` looks there and nowhere else (`knows:"control theory"`, `-knows:tobin`). A word finds a thing when it begins one of its names, or a word of one, so `venn` finds *Mara Venn* and `enn` doesn't; `knows:` also looks in what is said of it.
+- **Never past where you are.** Only what you have read counts: all of a book marked as read, up to the furthest page of one you are reading, and nothing of a book you haven't begun, however far its graph was built. A name a character is given later, or what is said of a thing further on, isn't searched. What you added by hand without a place (a name, a summary, a question) is yours and always counts.
+- **It says why.** A book found that way says so in the details beside the shelf (*Found by what you know: Mara Venn (Character)*), with *Show in the graph* (`Shift+I`) and *Go to the moment* (`Shift+Space`), which opens the book where you met it, the words lit.
+- **Fast on a large library.** The graph is read into memory once, beside the window, when a search wants it and the library has changed since; typing then looks only there, a word a moment after you stop typing. On a library of 1,600 books with a graph of 120,000 things across 300 of them, that reading takes about a second and a half, and a new word about 5 to 10 ms. While the graph keeps growing (a book being read) it is read again at most every second plus four times as long as the last reading took. A collection's rule and `omabook list` keep to the books' own details: a rule holds the same books for everyone who opens the library, whatever they have read.
+
+**Asking the AI.** For what no search can put, *the books where a mentor dies* or *something about control theory I haven't finished*, start the search with `?` and press Enter, press `Shift+W`, or the *AI* button in the search field; a search that finds nothing offers it too. The quick model reads the books of the collection shown, 120 to a request and three requests at a time, each book as its title, authors, series, tags, how far you read it, the start of its description and the things the graph knows of it as far as you got, never its text, and names the books that answer, a reason each. They come in as each batch is read, the best first; Enter or a click opens one. It can be stopped, says in plain words when it can't answer, and an answer is kept with the library's change counters, so the same question of an unchanged library isn't asked again. A library of 1,600 books is 14 requests.
+
 ## Keys
 
 These are the keys as shipped; every one can be changed in `keys.json` (see *Make it yours*), and `?` always shows the ones in force.
@@ -484,6 +495,7 @@ Everything the window does with the library, with no display needed. Every comma
 ```text
 omabook open [book]                     Open the window, and a book file or library number in it
 omabook list [search] [--collection c]  List the library's books, or one collection's
+omabook search <words> [--ai] [--collection c]  Find books by their details and what you know of them; --ai asks the AI
 omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort]  Collections, nested as you like
 omabook show <id>                       Show one book's details and files
 omabook add <file|folder>...            Copy books into the library; a Calibre library comes with its details
@@ -549,6 +561,7 @@ omabook mcp --library ~/Other  # serve one library, whatever the window has open
 |---|---|
 | `omabook_info`, `library_list`, `library_switch` | What Omabook is set up with; its libraries, and which is in use |
 | `books_search`, `book_get` | Find books with the search language (`author:`, `status:`, `is:paper`, `rating:`, ...), a page at a time; one book in full |
+| `books_find` | Search as the window does, by what the user met in the books too (never past their page), saying what found each; with `ai`, a question for the quick model, answered with books and a reason each |
 | `book_add`, `book_add_format`, `book_add_entry` | Add files, folders or a Calibre library; another format of a book; a paper or wishlist book with no file |
 | `book_set_details`, `book_set_reading`, `book_remove` | Change details or the cover; status, stars, the day finished; remove (to the trash) |
 | `book_contents`, `book_text`, `book_find` | Read: the table of contents, a section's text in pieces, where words occur |

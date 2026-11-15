@@ -30,6 +30,16 @@ omabook graph show 12 --beyond --json        # with "beyond": the things of othe
 omabook graph log --json                     # the reading log: per day, from what percent to what percent
 ```
 
+## Find books by what is known, or by a question
+
+```bash
+omabook search venn --json                   # the window's search: details, and things met in the books; "known" says what found each
+omabook search knows:"control theory"        # only what is known; -knows:x leaves out, OR joins
+omabook search --ai "the books where a mentor dies" --json   # the quick model, a batch of books at a time; --collection <path>
+```
+
+Only what the user has read counts: nothing from past their furthest page, nothing of a book not begun. `--ai` sends the books' details and what is known of them, never their text, and costs a request per 120 books; an answer is kept, so asking the same of an unchanged library is free (`"cached": true`). `list` goes by the books' own details only, as a collection's rule does. Over MCP: `books_find` (`words`, `ai`, `collection`).
+
 A relation whose kind starts with `across: ` (`across: echoes`, `"across": true` in JSON) is a connection between things of two books, noticed while reading, not a fact either book states.
 
 Kinds: `character`, `place`, `group`, `concept`, `item`, `event`, `thread`, `theme`, `topic`, `question`, `book`, `author`, `series`, `tag`. Adding a node of a name that exists (in the same scope, of the same kind) brings that node up to date. Write what you make up into a scope of its own (`--scope world:<name>`), not into the general graph, which is what the books say.

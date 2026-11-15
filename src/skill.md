@@ -28,6 +28,7 @@ If you have tools named `books_search`, `book_get`, `book_text` and the like, Om
 ```bash
 omabook list --json                      # every book: id, title, authors, series, tags, formats, percent_read
 omabook list author:herbert format:epub  # search; bare words match title, authors, series and tags
+omabook search venn --json               # also by what the user met in the books; --ai for a question (see graph.md)
 omabook show 12 --json                   # one book, with the paths of its files and cover
 omabook info ~/Downloads/x.epub --json   # what a file says about itself, without adding it
 omabook info --json                      # Omabook itself: version, library in use, which AI answers
