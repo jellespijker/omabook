@@ -113,6 +113,10 @@ QList<Manual::Step> Manual::features() {
             "{library.collections} makes one from a search, each keeps its own view and reading format, and the AI "
             "can propose where your books belong."),
          "collectionStrip|filterLabel|touchFilter", "library.collections", "library", ""},
+        {"search-known", "0.1.4", tr("Search what you know, or ask"),
+         tr("The search finds books by the characters, places and ideas you met in them, never past where you are, and "
+            "says which. Start with ? or press {library.search_ai} to have the AI find books for a question."),
+         "search|searchChoice", "library.search_ai", "library", ""},
         {"find-plugins", "0.1.4", tr("Plugins to try"),
          tr("{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and "
             "showing what it asks to be allowed before anything runs."),

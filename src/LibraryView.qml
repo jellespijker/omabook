@@ -87,6 +87,15 @@ Item {
     Timer { id: collectionsLater; interval: 0; onTriggered: chooser.show("collections") }
 
     Key { command: "library.search"; when: view.visible; onActivated: header.openSearch() }
+    // A question for the AI: what the search field holds, or one to type.
+    Key { command: "library.search_ai"; when: view.visible; onActivated: win.showAiSearch(backend.books.query) }
+    // What found the selected book, when the search found it by what is known.
+    readonly property var foundBy: {
+        backend.books.knownRevision
+        return selectedId > 0 ? backend.books.knownFor(selectedId) : ({})
+    }
+    Key { command: "library.found_graph"; when: view.visible && view.foundBy.node !== undefined; onActivated: win.showFound(view.foundBy) }
+    Key { command: "library.found_moment"; when: view.visible && view.foundBy.node !== undefined; onActivated: win.goToFound(view.foundBy) }
     Key { command: "library.add"; when: view.visible; onActivated: backend.addBooks() }
     Key { command: "library.add_folder"; when: view.visible; onActivated: backend.addFolder() }
     Key { command: "library.edit"; when: view.visible; onActivated: win.editBook(view.selectedId) }
@@ -378,9 +387,60 @@ Item {
                     backend.books.query = ""
                     view.takeFocus()
                 }
-                Keys.onReturnPressed: view.takeFocus()
+                // Words that start with "?" are a question for the AI.
+                Keys.onReturnPressed: {
+                    if (text.trim().startsWith("?")) win.showAiSearch(text)
+                    else view.takeFocus()
+                }
                 Keys.onDownPressed: view.takeFocus()
+                // Room for the AI button at the field's end, whichever way the text runs.
+                readonly property real askRoom: askAi.visible ? askAi.width + 4 : 0
+                rightPadding: Material.textFieldHorizontalPadding + (win.rightToLeft ? 0 : askRoom)
+                leftPadding: Material.textFieldHorizontalPadding + (win.rightToLeft ? askRoom : 0)
+                // The words asked of the AI instead, for a mouse and a finger.
+                Rectangle {
+                    id: askAi
+                    objectName: "searchAskAi"
+                    readonly property string runs: "library.search_ai"
+                    visible: librarian.hasAi
+                    anchors.right: parent.right
+                    anchors.rightMargin: 4
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 36
+                    height: 36
+                    radius: theme.radius
+                    color: askHover.hovered ? theme.colors.selection : "transparent"
+                    Label {
+                        anchors.centerIn: parent
+                        text: qsTr("AI")
+                        font.pixelSize: 12
+                        font.bold: true
+                        color: search.text.trim().startsWith("?") ? theme.accent : theme.colors.muted
+                    }
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Ask the AI to find books")
+                    Accessible.onPressAction: win.showAiSearch(search.text)
+                    HoverHandler { id: askHover; cursorShape: Qt.PointingHandCursor }
+                    TapHandler { onTapped: win.showAiSearch(search.text) }
+                    ToolTip.visible: askHover.hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: qsTr("Ask the AI to find books") + "  " + view.keyOf("library.search_ai")
+                }
             }
+        }
+
+        // Words that start with "?" don't narrow the shelf: they are a
+        // question, and this says what Enter does with it.
+        Label {
+            objectName: "askHint"
+            visible: backend.books.query.trim().startsWith("?")
+            Layout.fillWidth: true
+            Layout.leftMargin: 16
+            Layout.rightMargin: 16
+            Layout.bottomMargin: 8
+            text: librarian.hasAi ? qsTr("Enter asks the AI to find books for this question.") : librarian.aiProblem
+            color: theme.colors.muted
+            wrapMode: Text.Wrap
         }
 
         // The collections, as tabs, once the library has any: which part of
@@ -698,6 +758,16 @@ Item {
                                 onClicked: win.showLibraries()
                             }
                             AppButton { objectName: "emptyPaper"; focusPolicy: Qt.NoFocus; text: qsTr("Add a Paper Book"); onClicked: win.newBook() }
+                        }
+                        // Words the search finds nothing for may be a question.
+                        AppButton {
+                            objectName: "emptyAskAi"
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.maximumWidth: parent.width
+                            visible: backend.books.total > 0 && backend.books.query.trim() !== "" && librarian.hasAi
+                            focusPolicy: Qt.NoFocus
+                            text: qsTr("Ask the AI to find it")
+                            onClicked: win.showAiSearch(backend.books.query)
                         }
                         AppButton {
                             objectName: "clearFilters"

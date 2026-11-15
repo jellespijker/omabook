@@ -1965,7 +1965,7 @@ private slots:
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp",
                                        "readingmarks.h", "readingmarks.cpp", "pageformat.h", "pageformat.cpp",
-                                       "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp",
+                                       "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianfind.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h",
                                        "portalfilepicker.cpp"};
         const QString sources = QFileInfo(QFINDTESTDATA("../src/main.cpp")).absolutePath();

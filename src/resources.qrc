@@ -9,6 +9,7 @@
         <file alias="SidePane.qml">SidePane.qml</file>
         <file alias="FormatControls.qml">FormatControls.qml</file>
         <file alias="FormatPane.qml">FormatPane.qml</file>
+        <file alias="AiSearchDialog.qml">AiSearchDialog.qml</file>
         <file alias="AskDialog.qml">AskDialog.qml</file>
         <file alias="AssistantPane.qml">AssistantPane.qml</file>
         <file alias="BookCover.qml">BookCover.qml</file>

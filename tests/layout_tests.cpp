@@ -19,6 +19,7 @@
 #include <functional>
 #include <optional>
 
+#include "aisearch.h"
 #include "assistant.h"
 #include "backend.h"
 #include "customization.h"
@@ -1595,6 +1596,48 @@ private slots:
         verdict();
     }
 
+    // The search finding a book by what is known of it (the details say
+    // which thing, with a way to the graph and the moment), the hint a
+    // question in the search field gets, and the AI's answer, in a long
+    // language, at every size, and under fingers. The answer is one kept
+    // from before, with long reasons, so no model is asked.
+    void searchAndTheAiAtEverySize() {
+        for (const bool touch : {false, true}) {
+            Desk desk("de", touch ? QByteArray() : lightTheme, touch);
+            const QList<qint64> ids = stock(desk);
+            QVERIFY(!ids.isEmpty());
+            Library *library = desk.backend->library();
+            library->setReading(ids.first(), "read", 4, {});
+            Graph(*library).upsert({}, "character", "Wilhelmina von Hohenstaufen-Overbeck", {}, {}, GraphPlace{ids.first(), 0, 0.1});
+            QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            desk.backend->reload();
+            const QString question = "die Bücher, in denen eine Mentorin stirbt";
+            const QString why = "Eine Leuchtturmwärterin verliert ihre Lehrmeisterin im zweiten Winter am Hafen";
+            AiSearch::remember(AiSearch::cacheKey(*library, question, 0),
+                               {{ids.first(), why, 90}, {ids.value(1), why + " und erzählt davon", 70}});
+            BookListModel *books = desk.backend->books();
+            for (const QSize &size : sizes()) {
+                QVERIFY(desk.resize(size));
+                books->setQuery("hohenstaufen");
+                QTRY_COMPARE(books->count(), 1);
+                look(desk, "search-known");
+                books->setQuery("?" + question);
+                QTRY_COMPARE(books->count(), books->total());
+                look(desk, "search-question");
+            }
+            for (const QSize &size : dialogSizes()) {
+                QVERIFY(desk.resize(size));
+                dialog(desk, "ai-search", [&] {
+                    QMetaObject::invokeMethod(desk.window, "showAiSearch", Q_ARG(QVariant, "?" + question));
+                    QTRY_VERIFY(desk.librarian->findCached());
+                });
+            }
+            books->setQuery({});
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+        verdict();
+    }
+
     // Omabook is the keyboard's first, and nothing is the keyboard's
     // alone: every command in the commands table, and every command a
     // plugin adds, has a control a mouse can click and a finger can tap,
@@ -1685,6 +1728,14 @@ private slots:
             }
             inMenu("bookMore", "book-more");
             if (QTest::currentTestFailed()) return;
+            // A book the search found by what is known of it: the details
+            // say which thing, with its way to the graph and to the moment.
+            BookListModel *books = desk.backend->books();
+            books->setQuery("overbeck");
+            QTRY_COMPARE(books->count(), 1);
+            QTRY_VERIFY(desk.shows("detailsFoundBy"));
+            gather("found");
+            books->setQuery({});
             desk.backend->setView("stacks");
             QTRY_VERIFY(desk.find("shelfLoader")->property("status").toInt() == 1);
             gather("stacks");

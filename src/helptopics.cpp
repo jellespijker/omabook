@@ -117,6 +117,16 @@ QList<Manual::Topic> Manual::topicList() {
                  "`format:`, `lang:`, `publisher:` or `about:` to look in one field, and type `is:paper` or `is:wishlist` "
                  "for the books that have no file. \"Quotes\" keep words together, -word leaves out, and OR joins "
                  "alternatives.")},
+             {tr("Search by what you know"),
+              tr("A word also finds a book by the characters, places, ideas, threads and topics you met in it, and the "
+                 "questions you asked of it, as far as you have read: never a name from further on, and nothing of a book "
+                 "you haven't begun. `knows:` looks only there. The details say what found the book; {library.found_graph} "
+                 "shows it in the graph and {library.found_moment} goes to where you learned it.")},
+             {tr("Ask the AI to find books"),
+              tr("For what a search can't put, such as “the books where a mentor dies”, start the search with ?, press "
+                 "{library.search_ai} or the AI button in the search field. The AI reads your books' details and what you "
+                 "know of them, never their text, and answers with books and why. It keeps to the collection shown, can be "
+                 "stopped, and a question asked again of an unchanged library is answered from what it said before.")},
              {tr("Details"),
               tr("{library.edit} edits a book's details, your stars and whether you have read it. {library.lookup} looks "
                  "the details up online. {library.details} shows or hides them beside the shelf.")},

@@ -76,6 +76,7 @@ ApplicationWindow {
                                        || collectionEditor.opened || commandMenu.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
+                                       || aiSearch.opened
     readonly property bool keys: !typing && !dialogOpen
 
     // Whether anything is being worked on anywhere: the AI, a catalog, an
@@ -203,6 +204,31 @@ ApplicationWindow {
     function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
     function showAskLibrary() { askLibrary.open() }
+    // The AI finds books for a question (a leading "?" is let go of).
+    function showAiSearch(question) { aiSearch.ask(question) }
+    // A book on the shelf, selected: one the search hides shows again.
+    function selectOnShelf(bookId) {
+        if (backend.books.rowOf(bookId) < 0) backend.books.query = ""
+        if (backend.books.rowOf(bookId) < 0) backend.collection = 0
+        library.select(bookId)
+        library.takeFocus()
+    }
+    // What found a book through what is known of it (BookListModel::knownFor):
+    // that thing in the book's graph, or the moment it was learned, its words lit.
+    function showFound(known) {
+        if (!known || !known.node) return
+        showGraph(known.bookId)
+        graphLoader.item.showThing(known.node)
+    }
+    function goToFound(known) {
+        if (!known || !known.node) return
+        if (!(known.metIn > 0) || !known.readable) {
+            showFound(known)
+            return
+        }
+        graphLoader.active = true
+        graphLoader.item.go({ bookId: known.metIn, section: known.section, fraction: known.fraction, anchor: known.anchor })
+    }
     function showSuggestions() {
         askLibrary.open()
         librarian.suggest()
@@ -415,6 +441,10 @@ ApplicationWindow {
         onOnlyToggled: (only) => librarian.onlyCollection = only
         suggestions: librarian.suggestions
         onWanted: (index) => librarian.wantSuggestion(index)
+    }
+    AiSearchDialog {
+        id: aiSearch
+        objectName: "aiSearch"
     }
     AskDialog {
         id: changeIt

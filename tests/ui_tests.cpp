@@ -7009,6 +7009,174 @@ private slots:
         QTRY_VERIFY(library->collectionNamed("Studie/Vogels"));
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
+
+    // The search finds books by what is known of them, as far as each was
+    // read, and says what found each, with the way to it in the graph and
+    // to the moment it was learned. A question the search can't put goes
+    // to the AI: "?" in front, the AI button in the field, Shift+W, or the
+    // button an empty search offers; it answers a list to open, and a
+    // question asked again of the same library isn't asked again.
+    void theSearchFindsWhatIsKnownAndTheAiFindsAQuestion() {
+        Desk desk;
+        QVERIFY(desk.show());
+        const QList<qint64> ids = stock(desk);
+        QCOMPARE(ids.size(), 28);
+        // The Lantern Tide is half read, Harbour of Glass read, A Map of Low Water not begun.
+        Graph graph(*desk.backend->library());
+        const qint64 mara = graph.upsert({}, "character", "Mara Venn", "Keeps the lantern.", {}, GraphPlace{ids.at(1), 0, 0.2}, "Mara Venn");
+        graph.upsert({}, "character", "Hidden Holt", {}, {}, GraphPlace{ids.at(1), 0, 0.9});
+        graph.upsert({}, "topic", "Control theory", {}, {}, GraphPlace{ids.at(2), 0, 0.1});
+        graph.upsert({}, "character", "Old Tobin", {}, {}, GraphPlace{ids.at(0), 3, 0.5});
+        desk.backend->reload();
+        BookListModel *books = desk.backend->books();
+
+        // Typed, a name of a thing met finds its book, a moment after the typing.
+        desk.key(Qt::Key_Slash);
+        QTRY_VERIFY(desk.value("search", "activeFocus").toBool());
+        desk.type("venn");
+        QTRY_COMPARE(books->count(), 1);
+        QCOMPARE(books->idAt(0), ids.at(1));
+        QVERIFY(books->knowledge());
+        QCOMPARE(books->knownFor(ids.at(1)).value("name").toString(), QString("Mara Venn"));
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("detailsFoundBy", "visible").toBool());
+        QCOMPARE(desk.value("detailsFoundByText", "text").toString(), QString("Found by what you know: Mara Venn (Character)"));
+        QVERIFY(desk.value("foundGraph", "visible").toBool());
+        desk.shot("search-known");
+        // Never past the reader's page, nor in a book not begun; a book read finds all of it.
+        books->setQuery("holt");
+        QTest::qWait(400);
+        QCOMPARE(books->count(), 0);
+        books->setQuery("control");
+        QTest::qWait(400);
+        QCOMPARE(books->count(), 0);
+        books->setQuery("tobin");
+        QTRY_COMPARE(books->count(), 1);
+        books->setQuery("knows:keeps");
+        QTRY_COMPARE(books->count(), 1);
+        // Shift+I shows the thing in the book's graph.
+        books->setQuery("venn");
+        QTRY_COMPARE(books->count(), 1);
+        QTRY_VERIFY(desk.value("detailsFoundBy", "visible").toBool());
+        desk.key(Qt::Key_I, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.window->property("graphShown").toBool());
+        QTRY_VERIFY(graphParts(desk, "libraryGraph").browser);
+        QTRY_COMPARE(graphParts(desk, "libraryGraph").browser->selected(), mara);
+        desk.shot("search-known-graph");
+        QMetaObject::invokeMethod(desk.find("libraryGraph"), "done");
+        QTRY_VERIFY(!desk.window->property("graphShown").toBool());
+
+        // "?" in front is a question: the shelf isn't narrowed, and Enter asks.
+        desk.ai.answer = QString("{\"books\": [{\"id\": %1, \"why\": \"A keeper and her lantern\", \"score\": 90}, "
+                                 "{\"id\": 99999, \"why\": \"not here\", \"score\": 99}]}").arg(ids.at(1));
+        desk.key(Qt::Key_Slash);
+        QTRY_VERIFY(desk.value("search", "activeFocus").toBool());
+        desk.key(Qt::Key_A, Qt::ControlModifier);
+        desk.type("?a keeper of lights");
+        QTRY_COMPARE(books->count(), books->total());
+        QVERIFY(desk.value("askHint", "visible").toBool());
+        const int before = int(desk.ai.requests.size());
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("aiSearch", "opened").toBool());
+        QTRY_VERIFY(!desk.librarian->finding());
+        QCOMPARE(desk.librarian->findQuestion(), QString("a keeper of lights"));
+        QCOMPARE(desk.librarian->found().size(), 1);
+        QCOMPARE(desk.librarian->found().first().toMap().value("why").toString(), QString("A keeper and her lantern"));
+        QVERIFY(desk.ai.requests.size() > before);
+        const AiRequest asked = desk.ai.requests.last();
+        QCOMPARE(asked.tier, AiRequest::Quick);
+        QVERIFY(asked.messages.first().text.contains("Mara Venn (character)"));
+        QVERIFY(!asked.messages.first().text.contains("Hidden Holt"));
+        QVERIFY(!asked.messages.first().text.contains("Control theory"));
+        QTRY_VERIFY(desk.value("aiSearchBook0", "visible").toBool());
+        desk.shot("search-ai");
+        // Asked again: from what was kept, without the AI.
+        const int asking = int(desk.ai.requests.size());
+        desk.librarian->find("a keeper of lights");
+        QTRY_VERIFY(desk.librarian->findCached());
+        QCOMPARE(int(desk.ai.requests.size()), asking);
+        QTRY_VERIFY(desk.value("aiSearchKept", "visible").toBool());
+        // The arrows reach the books, and Enter opens one.
+        QTRY_VERIFY(desk.value("aiSearchWords", "activeFocus").toBool());
+        desk.key(Qt::Key_Down);
+        QTRY_VERIFY(desk.value("aiSearchFound", "activeFocus").toBool());
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(!desk.value("aiSearch", "visible").toBool());
+        // It has a file, so it is read.
+        QTRY_VERIFY(desk.reader->isOpen());
+        QTRY_VERIFY(desk.window->property("inReader").toBool() && !desk.window->property("dialogOpen").toBool());
+        QTest::qWait(200);
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.reader->isOpen());
+
+        // The mouse: the AI button in the field opens it with the words there.
+        books->setQuery("lantern keeper");
+        clickItem(desk, "searchAskAi");
+        QTRY_VERIFY(desk.value("aiSearch", "opened").toBool());
+        QTRY_COMPARE(desk.value("aiSearchWords", "text").toString(), QString("lantern keeper"));
+        QTRY_VERIFY(!desk.librarian->finding());
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("aiSearch", "visible").toBool());
+        // A search that finds nothing offers the AI, under a finger too.
+        books->setQuery("zzqx nothing at all");
+        QTRY_COMPARE(books->count(), 0);
+        desk.window->setProperty("touchSeen", true);
+        QTRY_VERIFY(desk.value("emptyAskAi", "visible").toBool());
+        QTRY_VERIFY(desk.value("emptyAskAi", "height").toReal() >= 36);
+        QTest::qWait(100);
+        auto *offer = qobject_cast<QQuickItem *>(desk.find("emptyAskAi"));
+        QVERIFY(offer);
+        QPointingDevice *finger = QTest::createTouchDevice();
+        const QPoint at = offer->mapToScene(QPointF(offer->width() / 2, offer->height() / 2)).toPoint();
+        QTest::touchEvent(desk.window, finger).press(0, at, desk.window);
+        QTest::touchEvent(desk.window, finger).release(0, at, desk.window);
+        QTRY_VERIFY(desk.value("aiSearch", "opened").toBool());
+        QTRY_VERIFY(!desk.librarian->finding());
+        desk.window->setProperty("touchSeen", false);
+        // Stopped, it finds nothing more; failing, it says why in plain words.
+        desk.librarian->find("something else entirely");
+        desk.librarian->stopFinding();
+        QVERIFY(!desk.librarian->finding());
+        desk.ai.available = false;
+        desk.librarian->find("a third question");
+        QTRY_VERIFY(desk.value("aiSearchError", "visible").toBool());
+        QCOMPARE(desk.value("aiSearchError", "text").toString(), QString("No AI is set up for this test."));
+        desk.ai.available = true;
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("aiSearch", "visible").toBool());
+        // Shift+W opens it from the shelf, the keyboard's way in.
+        books->setQuery("");
+        desk.key(Qt::Key_W, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.value("aiSearch", "opened").toBool());
+        QTRY_VERIFY(desk.value("aiSearchWords", "activeFocus").toBool());
+        desk.key(Qt::Key_Escape);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // The same in a light theme and right to left: the answer and why the
+    // shelf found a book read the other way round, with no warning.
+    void theSearchAndTheAiInALightThemeAndRightToLeft() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
+                                 "selection_background = \"#dcdcdc\"\ncolor8 = \"#6f6f6f\"\n";
+        for (const QByteArray &language : {QByteArray("en"), QByteArray("ar")}) {
+            Desk desk({}, language, light);
+            QVERIFY(desk.show());
+            const QList<qint64> ids = stock(desk);
+            Graph(*desk.backend->library()).upsert({}, "place", "The Grey Harbour", {}, {}, GraphPlace{ids.at(1), 0, 0.1});
+            desk.backend->reload();
+            desk.backend->books()->setQuery("grey harbour");
+            QTRY_COMPARE(desk.backend->books()->count(), 1);
+            QTRY_VERIFY(desk.value("detailsFoundBy", "visible").toBool());
+            desk.shot("search-known-light-" + language);
+            desk.ai.answer = QString("{\"books\": [{\"id\": %1, \"why\": \"A harbour, grey and old\", \"score\": 70}]}").arg(ids.at(1));
+            QMetaObject::invokeMethod(desk.window, "showAiSearch", Q_ARG(QVariant, "?a grey harbour"));
+            QTRY_VERIFY(desk.value("aiSearch", "opened").toBool());
+            QTRY_VERIFY(desk.value("aiSearchBook0", "visible").toBool());
+            desk.shot("search-ai-light-" + language);
+            desk.key(Qt::Key_Escape);
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(language + ": " + desk.warnings.join('\n')));
+        }
+    }
 };
 
 QTEST_MAIN(UiTests)

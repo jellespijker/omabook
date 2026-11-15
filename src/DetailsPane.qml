@@ -11,6 +11,7 @@ Item {
     // A plugin's launcher: something to start, which is opened and can be
     // taken off the shelf, and has nothing else a book has.
     readonly property bool launcher: book.launcher === true
+    GraphWords { id: graphWords }
 
     Rectangle {
         anchors.left: parent.left
@@ -110,6 +111,48 @@ Item {
                     return qsTr("%1% read").arg(Math.round(pane.book.percent || 0).toLocaleString(Qt.locale(), 'f', 0))
                 }
                 color: theme.colors.muted
+            }
+            // Found by the search through what is known of it rather than its
+            // details: the thing that did, to see in the graph or to go back
+            // to where it was learned.
+            ColumnLayout {
+                id: foundBy
+                objectName: "detailsFoundBy"
+                readonly property string runs: "library.found_graph library.found_moment"
+                readonly property var known: {
+                    backend.books.knownRevision
+                    return pane.hasBook && !pane.launcher ? backend.books.knownFor(pane.book.bookId) : ({})
+                }
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                visible: foundBy.known.node !== undefined
+                spacing: 6
+                Label {
+                    objectName: "detailsFoundByText"
+                    Layout.fillWidth: true
+                    // "Found by what you know: Mara Venn (Character)"
+                    text: foundBy.visible ? qsTr("Found by what you know: %1 (%2)").arg(foundBy.known.name).arg(graphWords.kind(foundBy.known.kind)) : ""
+                    textFormat: Text.PlainText
+                    color: theme.accent
+                    wrapMode: Text.Wrap
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    AppButton {
+                        objectName: "foundGraph"
+                        text: qsTr("Show in the graph")
+                        focusPolicy: Qt.NoFocus
+                        onClicked: win.showFound(foundBy.known)
+                    }
+                    AppButton {
+                        objectName: "foundMoment"
+                        visible: foundBy.known.readable === true && foundBy.known.metIn > 0
+                        text: qsTr("Go to the moment")
+                        focusPolicy: Qt.NoFocus
+                        onClicked: win.goToFound(foundBy.known)
+                    }
+                }
             }
             // A Flow, so longer words in other languages wrap to a second row.
             Flow {
