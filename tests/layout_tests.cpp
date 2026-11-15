@@ -22,6 +22,7 @@
 #include "backend.h"
 #include "customization.h"
 #include "fixtures.h"
+#include "graph.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
@@ -910,6 +911,46 @@ class LayoutTests : public QObject {
                 QMetaObject::invokeMethod(browser, "select", Q_ARG(qint64, 0));
             } else {
                 found << "graph — the library's graph has nothing in it to select";
+            }
+            // A thing of a book being read, with what is known of it later
+            // kept closed; then asked about; then open.
+            {
+                Library *books = desk.backend->library();
+                BookMeta letters;
+                letters.title = "The Lighthouse Letters";
+                letters.authors = {"Idris Vance"};
+                // Made once: the looks run again at every size.
+                qint64 reading = 0;
+                for (const Book &held : books->books())
+                    if (held.meta.title == letters.title)
+                        reading = held.id;
+                if (reading == 0)
+                    reading = books->addEntry(letters, true).id;
+                books->setReading(reading, "reading", 0, {});
+                books->setProgress(reading, {0, 0.2, 10, 0});
+                Graph facts(*books);
+                const qint64 thing = facts.upsert({}, "character", "Wilhelmina Overbeck-Saltonstall",
+                                                  "Keeps the long lighthouse at the end of the world, and writes to nobody.", {},
+                                                  GraphPlace{reading, 0, 0.1}, "Wilhelmina");
+                facts.learn(thing, "summary", "The keeper's daughter, who has been writing the letters all along, and who knows "
+                                              "where the ship went down on the night of the great storm.",
+                            GraphMoment{{reading, 3, 0.5}, "who has been writing the letters"});
+                facts.learn(thing, "alias", "The Letter Writer of the Northern Lighthouse", GraphMoment{{reading, 3, 0.6}, "The Letter Writer"});
+                QMetaObject::invokeMethod(browser, "refresh");
+                desk.settle();
+                QMetaObject::invokeMethod(browser, "jumpTo", Q_ARG(qint64, thing));
+                graph->setProperty("peek", true);
+                desk.settle();
+                look(desk, "graph-spoilers-closed");
+                if (QObject *details = desk.find("graphDetails"))
+                    details->setProperty("askingFor", thing);
+                desk.settle();
+                look(desk, "graph-spoilers-asking");
+                QMetaObject::invokeMethod(browser, "showAhead", Q_ARG(qint64, thing), Q_ARG(bool, true));
+                desk.settle();
+                look(desk, "graph-spoilers-open");
+                QMetaObject::invokeMethod(browser, "showAhead", Q_ARG(qint64, thing), Q_ARG(bool, false));
+                graph->setProperty("peek", false);
             }
             QMetaObject::invokeMethod(desk.find("libraryGraph"), "done");
             desk.settle();
