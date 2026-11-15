@@ -1660,6 +1660,10 @@ private slots:
         QVERIFY(Fixtures::write(desk.dir.filePath("Long - Ann Author.txt"), text));
         const qint64 id = desk.add(desk.dir.filePath("Long - Ann Author.txt"));
         QVERIFY(desk.show());
+        // Lines short enough that two pages fit with any font the test
+        // machine has: whether they do is a matter of characters, and a
+        // wide font such as DejaVu has fewer of them to a window.
+        desk.settings->setMeasure(54);
         desk.reader->openBook(id);
         QTRY_VERIFY(desk.reader->isOpen());
 

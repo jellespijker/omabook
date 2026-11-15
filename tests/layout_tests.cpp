@@ -1412,6 +1412,10 @@ private slots:
         QVERIFY(!ids.isEmpty());
         QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
         QVERIFY(desk.resize(QSize(1180, 780)));
+        // Lines short enough that two pages fit with any font the test
+        // machine has: whether they do is a matter of characters, and a
+        // wide font such as DejaVu has fewer of them to a window.
+        desk.settings->setMeasure(54);
         desk.reader->openBook(ids.first());
         QTRY_VERIFY(desk.reader->isOpen());
         // Two pages side by side, turned to the middle of the chapter.

@@ -586,7 +586,7 @@ The server speaks protocol revision `2026-07-28` (no handshake: every request ca
 Each release has a ready-built package for Arch and Omarchy (x86_64), built and tested in a clean container:
 
 ```bash
-sudo pacman -U https://github.com/jellespijker/omabook/releases/download/v0.1.4/omabook-0.1.4-1-x86_64.pkg.tar.zst
+sudo pacman -U https://github.com/jellespijker/omabook/releases/download/v0.1.4.1/omabook-0.1.4.1-1-x86_64.pkg.tar.zst
 ```
 
 Pick the newest release on the [releases page](https://github.com/jellespijker/omabook/releases); installed this way, a newer version is installed the same way. Omabook then appears in the app launcher (`Super + Space`).
