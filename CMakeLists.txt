@@ -56,6 +56,7 @@ target_compile_definitions(services_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:
 # The Folio plugins are read from the source tree, as they are installed.
 target_compile_definitions(folio_tests PRIVATE OMABOOK_SOURCE="${CMAKE_SOURCE_DIR}")
 target_compile_definitions(folio_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+target_compile_definitions(folio_tests PRIVATE OMABOOK_TEST_TMP="${CMAKE_BINARY_DIR}")
 add_dependencies(folio_tests omabook)
 
 # The MCP server is tested the way an agent meets it: the real binary, spoken
@@ -78,7 +79,7 @@ install(TARGETS omabook RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR})
 install(FILES share/omabook.desktop DESTINATION ${CMAKE_INSTALL_DATADIR}/applications)
 install(FILES share/omabook.svg DESTINATION ${CMAKE_INSTALL_DATADIR}/icons/hicolor/scalable/apps)
 install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/omabook)
-# Omabook's plugins for Folio, the file manager: its libraries in the sidebar,
-# "Add to Library" on book files, and what is being read.
+# Omabook's plugin for Folio, the file manager: each library in the sidebar
+# as a folder of its books, and its entries on book files.
 install(DIRECTORY share/folio/ DESTINATION ${CMAKE_INSTALL_DATADIR}/folio/plugins)
 install(FILES share/omabook/calibre_bridge.py DESTINATION ${CMAKE_INSTALL_DATADIR}/omabook)

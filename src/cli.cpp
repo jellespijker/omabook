@@ -2075,8 +2075,15 @@ int runCli(const QStringList &given) {
     // MCP server and the file manager's helper; the plugins are loaded only
     // when a format Omabook doesn't read itself is asked about.
     ScriptFormats::loadOnDemand();
-    if (const auto command = cliCommand(arguments.value(1)); command != cliCommands.end())
-        return command->run(arguments);
+    if (const auto command = cliCommand(arguments.value(1)); command != cliCommands.end()) {
+        const int code = command->run(arguments);
+        // What a command changed in a library shows in its view in the file
+        // manager at once; a library nothing changed in costs a look at its
+        // change counter. Folio's own commands keep the views themselves.
+        if (command->name != "folio"_L1)
+            Folio::follow(Settings());
+        return code;
+    }
     print(stdout, "Omabook " OMABOOK_VERSION ": an ebook library and reader.\n\nUsage: omabook <command> [options]\n\n" + cliSummary());
     return 0;
 }
