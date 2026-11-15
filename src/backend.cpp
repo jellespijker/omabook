@@ -486,7 +486,8 @@ void Backend::sync() {
 }
 
 void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) {
-    const int added = summary.added, duplicates = summary.duplicates;
+    // A file that joined a book here without one was added, to the window.
+    const int added = summary.added + summary.joined, duplicates = summary.duplicates;
     const QStringList &problems = summary.problems;
     const qint64 lastId = summary.lastId;
     --m_jobs;

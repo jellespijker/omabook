@@ -15,11 +15,14 @@ struct ImportSummary {
         QString file;
         qint64 id = 0;
         bool duplicate = false;
+        // The file joined a book that was here without one (see importBooks).
+        bool joined = false;
         QString error;
     };
     QList<Item> items;
     int added = 0;
-    int duplicates = 0;
+    int duplicates = 0; // already here: one of the book's files is in the library
+    int joined = 0;
     QStringList problems;
     qint64 lastId = 0;
     // From Calibre libraries: the folders that were read as one, how many of
@@ -39,6 +42,16 @@ struct ImportOptions {
 };
 
 // `progress` is told how many of how many books are in, from the calling thread.
+//
+// A book one of whose files is in the library already is that book: it is
+// counted as already here, and only the formats it lacks are copied in. A
+// book with none of its files here that is the same as a book here without
+// a file (on a paper shelf, wished for, known from a reading site) gives
+// that book its file instead of becoming a second one: the same by an
+// identifier (an ISBN, a Goodreads or Calibre id), else by title and author
+// as tidy finds sure duplicates (Curation::duplicates). The book keeps its
+// shelf, stars, identifiers and paper copy; what the import knows fills
+// only the details it lacks.
 //
 // A Calibre library can be imported again and again: a book already here is
 // found by its file, nothing is added twice, and what Calibre says of its

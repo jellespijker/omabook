@@ -861,17 +861,19 @@ QJsonObject Folio::add(const Settings &settings, const QString &library, const Q
     if (!target.open(&error))
         return {{"error", error}};
     const ImportSummary summary = importBooks(target, paths);
-    if (summary.added == 0 && summary.duplicates == 0)
+    // A file that joined a book here without one was added too.
+    const int added = summary.added + summary.joined;
+    if (added == 0 && summary.duplicates == 0)
         return {{"error", summary.problems.isEmpty() ? QJsonValue(text("No books were found.")) : QJsonValue(summary.problems.first())}};
     const QString name = libraryName(path);
-    if (summary.added == 0)
+    if (added == 0)
         return {{"notice", text("Already in %1.", {name})}};
     if (settings.folio())
         sync(path, Imports::Defer);
     return {{"notice", summary.duplicates > 0
                            ? text("Added %1 to %2; %3 were already there.",
-                                  {QString::number(summary.added), name, QString::number(summary.duplicates)})
-                           : text("Added %1 to %2.", {QString::number(summary.added), name})}};
+                                  {QString::number(added), name, QString::number(summary.duplicates)})
+                           : text("Added %1 to %2.", {QString::number(added), name})}};
 }
 
 QJsonObject Folio::mark(const Settings &settings, const QString &status, const QStringList &files) {

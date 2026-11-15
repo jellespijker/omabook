@@ -211,6 +211,70 @@ private slots:
         QCOMPARE(library.books().size(), 1);
     }
 
+    void aFileJoinsTheBookHereWithoutOne() {
+        QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        // On paper, rated, with an ISBN; and a wish by another author.
+        BookMeta paper;
+        paper.title = "The Sea Story";
+        paper.authors = {"Sailor, Ann"};
+        paper.isbn = "978-0-00-000000-2";
+        const Library::Added onPaper = library.addEntry(paper, true);
+        QVERIFY(library.setReading(onPaper.id, "read", 4, "2020-01-02"));
+        BookMeta wish;
+        wish.title = "Sea Story";
+        wish.authors = {"Bob Other"};
+        const Library::Added wished = library.addEntry(wish, false);
+        QVERIFY(library.setReading(wished.id, "to-read", 0, {}));
+
+        // A folder of books, as dropped on the window or in the file manager.
+        QVERIFY(QDir().mkpath(dir.filePath("Drop")));
+        QVERIFY(Fixtures::write(dir.filePath("Drop/Sea Story - Ann Sailor.txt"), "CHAPTER 1\n\nA dark night.\n"));
+        QVERIFY(Fixtures::write(dir.filePath("Drop/Land Story - Ann Sailor.txt"), "CHAPTER 1\n\nA dry day.\n"));
+        const ImportSummary summary = importBooks(library, {dir.filePath("Drop")});
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.joined, 1);
+        QCOMPARE(summary.added, 1);
+        QCOMPARE(library.books().size(), 3);
+        const Book joined = *library.book(onPaper.id);
+        QCOMPARE(joined.formats, QStringList{"txt"});
+        QVERIFY(joined.paper);
+        QCOMPARE(joined.shelf, QString("read"));
+        QCOMPARE(joined.rating, 4);
+        QCOMPARE(joined.finished, QString("2020-01-02"));
+        QCOMPARE(joined.meta.title, QString("The Sea Story"));
+        QCOMPARE(joined.meta.isbn, QString("978-0-00-000000-2"));
+        // The same title by someone else is another book.
+        QVERIFY(library.book(wished.id)->formats.isEmpty());
+
+        // Dropped again, the file is here already.
+        const ImportSummary again = importBooks(library, {dir.filePath("Drop/Sea Story - Ann Sailor.txt")});
+        QCOMPARE(again.duplicates, 1);
+        QCOMPARE(again.joined, 0);
+        QCOMPARE(again.items.value(0).id, onPaper.id);
+    }
+
+    void aLibraryForTheSessionLeavesTheSettingsAlone() {
+        QTemporaryDir dir;
+        const QString file = dir.filePath("config.json");
+        QVERIFY(Fixtures::write(file, "{\"library\": \"" + dir.filePath("Books").toUtf8() + "\"}"));
+        Settings settings(file);
+        settings.useLibraryForSession(dir.filePath("Other"));
+        QCOMPARE(settings.libraryPath(), dir.filePath("Other"));
+        QVERIFY(settings.libraries().contains(dir.filePath("Other")));
+        // Something else saved meanwhile keeps the library in use.
+        settings.setGraph("off");
+        QCOMPARE(Settings(file).libraryPath(), dir.filePath("Books"));
+        QVERIFY(!Settings(file).libraries().contains(dir.filePath("Other")));
+        // Switching on purpose makes it the one in use.
+        settings.setLibraryPath(dir.filePath("Other"));
+        QCOMPARE(Settings(file).libraryPath(), dir.filePath("Other"));
+        settings.useLibraryForSession(dir.filePath("Third"));
+        settings.setLibraryPath(dir.filePath("Other"));
+        QCOMPARE(settings.libraryPath(), dir.filePath("Other"));
+    }
+
     void aFolderIsSearchedForBooks() {
         QTemporaryDir dir;
         QVERIFY(QDir(dir.path()).mkpath("in/deep/er"));

@@ -352,6 +352,167 @@ private slots:
         QCOMPARE(book.identifiers.value("goodreads").toString(), QString("9001"));
     }
 
+    void aBookWhoseFileIsHereAlreadyIsAlreadyHereNotAProblem() {
+        QTemporaryDir dir;
+        const QString calibre = dir.filePath("Calibre Library");
+        QVERIFY(Fixtures::calibreLibrary(calibre));
+        const QString folder = calibre + "/Writer, Bo/Shelved Wrong (1)/";
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        // Calibre's two files of one book, here as two books.
+        const Library::Added epub = library.add(folder + "Shelved Wrong - Writer, Bo.epub");
+        const Library::Added txt = library.add(folder + "Shelved Wrong - Writer, Bo.txt");
+        QVERIFY(epub.error.isEmpty() && txt.error.isEmpty());
+
+        const ImportSummary summary = importBooks(library, {calibre});
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.added, 0);
+        QCOMPARE(summary.joined, 0);
+        QCOMPARE(summary.duplicates, 1);
+        QVERIFY(summary.items.value(0).duplicate);
+        // Neither file was copied in a second time.
+        QCOMPARE(library.books().size(), 2);
+        QCOMPARE(library.book(epub.id)->formats, QStringList{"epub"});
+        QCOMPARE(library.book(txt.id)->formats, QStringList{"txt"});
+    }
+
+    void aFileAnotherImportPutInPlaceIsNoProblem() {
+        QTemporaryDir dir;
+        const QString calibre = dir.filePath("Calibre Library");
+        QVERIFY(Fixtures::calibreLibrary(calibre));
+        const QString folder = calibre + "/Writer, Bo/Shelved Wrong (1)/";
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        BookMeta meta;
+        meta.title = "Calibre's Title";
+        meta.authors = {"Bo Writer"};
+        const Library::Added added = library.add(folder + "Shelved Wrong - Writer, Bo.epub", meta);
+        QVERIFY(added.error.isEmpty());
+        // Another import (the window's, say) is copying the text file in at
+        // the same time: it has put the file where this one would, and its
+        // own copy is still under way beside it.
+        const QString target = library.root() + "/" + library.book(added.id)->path + "/Calibre's Title - Bo Writer.txt";
+        QVERIFY(QFile::copy(folder + "Shelved Wrong - Writer, Bo.txt", target));
+        QVERIFY(QDir().mkpath(target + ".part"));
+
+        const ImportSummary summary = importBooks(library, {calibre});
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.duplicates, 1);
+        QCOMPARE(library.book(added.id)->formats, (QStringList{"epub", "txt"}));
+        QCOMPARE(library.formatPath(added.id, "txt"), target);
+        QVERIFY(QFileInfo(target + ".part").isDir());
+    }
+
+    void aCopyThatFailsIsStillAProblem() {
+        QTemporaryDir dir;
+        const QString calibre = dir.filePath("Calibre Library");
+        QVERIFY(Fixtures::calibreLibrary(calibre));
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        BookMeta meta;
+        meta.title = "Calibre's Title";
+        meta.authors = {"Bo Writer"};
+        const Library::Added added = library.add(calibre + "/Writer, Bo/Shelved Wrong (1)/Shelved Wrong - Writer, Bo.epub", meta);
+        QVERIFY(added.error.isEmpty());
+        const QString folder = library.root() + "/" + library.book(added.id)->path;
+        QVERIFY(QFile::setPermissions(folder, QFile::ReadOwner | QFile::ExeOwner));
+
+        const ImportSummary summary = importBooks(library, {calibre});
+        QFile::setPermissions(folder, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+        QCOMPARE(summary.duplicates, 1);
+        QCOMPARE(summary.problems.size(), 1);
+        QVERIFY2(summary.problems.first().contains("can't be copied into the library"), qPrintable(summary.problems.first()));
+        QCOMPARE(library.book(added.id)->formats, QStringList{"epub"});
+    }
+
+    void aBookHereWithoutAFileGetsCalibresFile() {
+        QTemporaryDir dir;
+        const QString calibre = dir.filePath("Calibre Library");
+        QVERIFY(Fixtures::calibreLibrary(calibre));
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        // On a real shelf, known to Goodreads by Calibre's book's number, by
+        // another title, with the user's own shelf and stars.
+        BookMeta paper;
+        paper.title = "The Paper Copy";
+        paper.authors = {"B. Writer"};
+        paper.publisher = "Paper House";
+        const Library::Added entry = library.addEntry(paper, true);
+        QVERIFY(entry.error.isEmpty());
+        QVERIFY(library.setIdentifier(entry.id, "goodreads", "4671"));
+        QVERIFY(library.setReading(entry.id, "to-read", 2, {}));
+
+        const ImportSummary summary = importBooks(library, {calibre});
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.added, 0);
+        QCOMPARE(summary.joined, 1);
+        QVERIFY(summary.items.value(0).joined);
+        QCOMPARE(library.books().size(), 1);
+        const Book book = *library.book(entry.id);
+        QCOMPARE(book.formats, (QStringList{"epub", "txt"}));
+        QVERIFY(book.paper);
+        QCOMPARE(book.shelf, QString("to-read"));
+        QCOMPARE(book.rating, 2);
+        // Its details stay; Calibre's fill only what it lacked.
+        QCOMPARE(book.meta.title, QString("The Paper Copy"));
+        QCOMPARE(book.meta.authors, QStringList{"B. Writer"});
+        QCOMPARE(book.meta.publisher, QString("Paper House"));
+        QCOMPARE(book.meta.description, QString("Described by hand."));
+        QCOMPARE(book.meta.series, QString("Curated Series"));
+        QVERIFY(book.hasCover);
+        QCOMPARE(book.identifiers.value("goodreads").toString(), QString("4671"));
+        QCOMPARE(book.identifiers.value("calibre").toString(), QString("11111111-aaaa-4bbb-8ccc-000000000001"));
+        // And a second import finds it here.
+        const ImportSummary again = importBooks(library, {calibre});
+        QCOMPARE(again.joined, 0);
+        QCOMPARE(again.duplicates, 1);
+    }
+
+    void aWishByTitleAndAuthorGetsCalibresFileButNotANearMiss() {
+        QTemporaryDir dir;
+        const QString calibre = dir.filePath("Calibre Library");
+        QVERIFY(Fixtures::calibreLibrary(calibre));
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const auto entry = [&library](const QString &title, const QString &author, const QString &series, double index) {
+            BookMeta meta;
+            meta.title = title;
+            meta.authors = {author};
+            meta.series = series;
+            meta.seriesIndex = index;
+            const Library::Added added = library.addEntry(meta, false);
+            library.setReading(added.id, "to-read", 0, {});
+            return added.id;
+        };
+        // Not the same book: the next one of the series, and the same title by someone else.
+        const qint64 next = entry("Calibre's Title", "Bo Writer", "Curated Series", 5);
+        const qint64 other = entry("Calibre's Title", "Ann Other", {}, 0);
+        const ImportSummary missed = importBooks(library, {calibre});
+        QVERIFY2(missed.problems.isEmpty(), qPrintable(missed.problems.join('\n')));
+        QCOMPARE(missed.joined, 0);
+        QCOMPARE(missed.added, 1);
+        QVERIFY(library.book(next)->formats.isEmpty());
+        QVERIFY(library.book(other)->formats.isEmpty());
+
+        // The same title written otherwise, by one of its authors spelled otherwise.
+        QTemporaryDir second;
+        Library wishes(second.filePath("Library"));
+        QVERIFY(wishes.open());
+        BookMeta meta;
+        meta.title = "Calibre's Title (Curated Series #4)";
+        meta.authors = {"Writer, Bo"};
+        const Library::Added wish = wishes.addEntry(meta, false);
+        QVERIFY(wishes.setReading(wish.id, "to-read", 0, {}));
+        const ImportSummary summary = importBooks(wishes, {calibre});
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.joined, 1);
+        QCOMPARE(summary.added, 0);
+        QCOMPARE(wishes.books().size(), 1);
+        QCOMPARE(wishes.book(wish.id)->formats, (QStringList{"epub", "txt"}));
+        QCOMPARE(wishes.book(wish.id)->shelf, QString("to-read"));
+        QCOMPARE(wishes.book(wish.id)->meta.title, QString("Calibre's Title (Curated Series #4)"));
+    }
+
     void theLibrariesCalibreKnowsAreFound() {
         World world;
         QVERIFY(world.ok);

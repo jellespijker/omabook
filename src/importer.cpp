@@ -16,6 +16,7 @@
 #include "bookarchive.h"
 
 #include "calibre.h"
+#include "curation.h"
 #include "formatprovider.h"
 #include "formats.h"
 
@@ -133,6 +134,97 @@ private:
     return changed;
 }
 
+// An ISBN as it is compared: its digits (and a closing X), whatever the
+// hyphens and spaces.
+[[nodiscard]] QString isbnKey(const QString &isbn) {
+    QString key;
+    for (const QChar c : isbn)
+        if (c.isDigit() || c == 'x' || c == 'X')
+            key += c.toUpper();
+    return key;
+}
+
+// What an incoming book is called elsewhere: its ISBN, and what Calibre
+// knows it by.
+[[nodiscard]] QMap<QString, QString> identifiersOf(const BookMeta &meta, const std::optional<Calibre::Book> &calibre) {
+    QMap<QString, QString> identifiers = calibre ? calibre->identifiers : QMap<QString, QString>();
+    // Calibre's own number is only the same within one Calibre library;
+    // its uuid is the same everywhere.
+    if (calibre && !calibre->uuid.isEmpty())
+        identifiers.insert("calibre", calibre->uuid);
+    if (!meta.isbn.isEmpty() && !identifiers.contains("isbn"))
+        identifiers.insert("isbn", meta.isbn);
+    return identifiers;
+}
+
+// The books here that have no file, which a file being imported joins
+// rather than becoming the same book twice.
+class Fileless {
+public:
+    explicit Fileless(const Library &library) {
+        for (const Book &book : library.books())
+            if (book.formats.isEmpty())
+                m_books << book;
+    }
+
+    // The one that is this book, if any: called the same elsewhere, else the
+    // same title by the same author as tidy is sure of it (two numbers of a
+    // series, or another author, are two books).
+    [[nodiscard]] qint64 match(const BookMeta &meta, const QMap<QString, QString> &identifiers) const {
+        const auto sameId = [](const QString &scheme, const QString &here, const QString &there) {
+            return scheme == "isbn" ? !isbnKey(there).isEmpty() && isbnKey(here) == isbnKey(there)
+                                    : !there.isEmpty() && here == there;
+        };
+        for (const Book &book : m_books)
+            for (const auto &[scheme, value] : identifiers.asKeyValueRange()) {
+                QString here = book.identifiers.value(scheme).toString();
+                if (scheme == "isbn" && here.isEmpty())
+                    here = book.meta.isbn;
+                if (sameId(scheme, here, value))
+                    return book.id;
+            }
+        const QString title = Curation::titleKey(meta.title);
+        if (title.isEmpty())
+            return 0;
+        // Only the books with the title are compared, with this one as -1.
+        QList<Book> same;
+        for (const Book &book : m_books)
+            if (Curation::titleKey(book.meta.title) == title)
+                same << book;
+        if (same.isEmpty())
+            return 0;
+        Book incoming;
+        incoming.id = -1;
+        incoming.meta = meta;
+        same << incoming;
+        for (const Proposal &proposal : Curation::duplicates(same))
+            if (!proposal.unsure && (proposal.bookId == -1 || proposal.otherId == -1))
+                return proposal.bookId == -1 ? proposal.otherId : proposal.bookId;
+        return 0;
+    }
+
+    // It has a file now.
+    void joined(qint64 id) {
+        m_books.removeIf([id](const Book &book) { return book.id == id; });
+    }
+
+private:
+    QList<Book> m_books;
+};
+
+// Gives a book that had no file this one. Its details stay as they were,
+// with what the file's own details add where it had none; its shelf, stars,
+// identifiers and paper copy aren't touched.
+[[nodiscard]] bool join(Library &library, qint64 id, const QString &file, const BookMeta &incoming, QString *error) {
+    const auto entry = library.book(id);
+    if (!entry || !library.addFormat(id, file, error))
+        return false;
+    BookMeta details = entry->meta;
+    details.fillFrom(incoming);
+    details.cover = entry->hasCover ? QImage() : incoming.cover;
+    return library.setMeta(id, details, error);
+}
+
 [[nodiscard]] bool isArchive(const QString &path) {
     static constexpr std::array suffixes{"zip"_L1, "rar"_L1, "7z"_L1, "tar"_L1, "tgz"_L1};
     return std::ranges::contains(suffixes, QFileInfo(path).suffix().toLower()) && !Formats::isBook(path);
@@ -234,6 +326,7 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
     const QTemporaryDir scratch;
     const QList<Incoming> incoming = collect(paths, scratch, options, summary);
     CalibreMemory memory(library.root());
+    Fileless fileless(library);
     // Calibre can hold the same file under two entries. The first one's
     // reading is taken; the second would only undo it, on every import.
     QSet<qint64> taken;
@@ -245,18 +338,52 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
             cover.setAutoTransform(true);
             meta->cover = cover.read();
         }
-        // The first file makes the book; the others join it as more formats.
-        const Library::Added added = library.add(book.files.first(), meta);
-        summary.items.append({.file = book.files.first(), .id = added.id, .duplicate = added.duplicate, .error = added.error});
+        const QString &first = book.files.first();
+        // A book any of whose files is here already is that book.
+        QHash<QString, QString> hashes;
+        qint64 here = 0;
+        for (const QString &file : book.files.mid(1)) {
+            hashes.insert(file, Library::hashFile(file));
+            if (here == 0)
+                here = library.bookWithHash(hashes.value(file));
+        }
+        Library::Added added{.id = here, .duplicate = here != 0, .error = {}};
+        bool joined = false;
+        if (here == 0) {
+            // The first file makes the book, unless it is a book here without
+            // a file; the others join it as more formats.
+            const BookMeta described = meta ? *meta : Formats::readMeta(first);
+            const qint64 entry = fileless.match(described, identifiersOf(described, book.calibre));
+            if (entry == 0) {
+                added = library.add(first, described);
+            } else if (const qint64 same = library.bookWithHash(Library::hashFile(first)); same != 0) {
+                added = {.id = same, .duplicate = true, .error = {}};
+            } else if (QString error; join(library, entry, first, described, &error)) {
+                added = {.id = entry, .duplicate = false, .error = {}};
+                joined = true;
+                fileless.joined(entry);
+            } else {
+                added = {.id = 0, .duplicate = false, .error = error};
+            }
+        }
+        summary.items.append({.file = first, .id = added.id, .duplicate = added.duplicate, .joined = joined, .error = added.error});
         if (!added.error.isEmpty()) {
             summary.problems << added.error;
         } else {
-            added.duplicate ? ++summary.duplicates : ++summary.added;
+            added.duplicate ? ++summary.duplicates : joined ? ++summary.joined : ++summary.added;
             summary.lastId = added.id;
-            const QStringList have = library.book(added.id)->formats;
-            for (const QString &file : book.files.mid(1)) {
-                QString error;
-                if (!have.contains(Formats::extension(file)) && !library.addFormat(added.id, file, &error))
+            QStringList have = library.book(added.id)->formats;
+            for (const QString &file : book.files) {
+                const QString format = Formats::extension(file);
+                if ((file == first && here == 0) || have.contains(format))
+                    continue;
+                // A file that is here already, in this book or another, isn't
+                // copied in again.
+                if (library.bookWithHash(hashes.contains(file) ? hashes.value(file) : Library::hashFile(file)) != 0)
+                    continue;
+                if (QString error; library.addFormat(added.id, file, &error))
+                    have << format;
+                else
                     summary.problems << error;
             }
             if (book.calibre && !taken.contains(added.id)) {

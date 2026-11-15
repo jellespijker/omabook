@@ -310,7 +310,7 @@ int add(const QStringList &arguments) {
             meta->cover = cover.read();
         }
         const Library::Added added = library->add(paths.first(), meta);
-        summary.items.append({paths.first(), added.id, added.duplicate, added.error});
+        summary.items.append({.file = paths.first(), .id = added.id, .duplicate = added.duplicate, .error = added.error});
         if (!added.error.isEmpty())
             summary.problems << added.error;
     } else {
@@ -330,10 +330,12 @@ int add(const QStringList &arguments) {
     QJsonArray results;
     for (const ImportSummary::Item &item : std::as_const(summary.items)) {
         if (command.json())
-            results << QJsonObject{{"file", item.file}, {"id", item.id}, {"duplicate", item.duplicate}, {"error", item.error}};
+            results << QJsonObject{{"file", item.file}, {"id", item.id}, {"duplicate", item.duplicate}, {"joined", item.joined},
+                                   {"error", item.error}};
         else if (item.error.isEmpty())
             print(stdout, QString("%1\t%2%3").arg(item.id).arg(library->book(item.id)->meta.title,
-                                                               item.duplicate ? "\t(already in the library)" : ""));
+                                                               item.duplicate ? "\t(already in the library)"
+                                                               : item.joined ? "\t(joined the book already listed)" : ""));
     }
     if (command.json())
         printJson(results);
@@ -1037,11 +1039,14 @@ int calibre(const QStringList &arguments) {
             settings.setCalibreLibrary(folder, "imported");
     if (command.json())
         printJson(QJsonObject{{"libraries", QJsonArray::fromStringList(summary.calibreLibraries)}, {"added", summary.added},
-                              {"already_here", summary.duplicates}, {"updated", summary.updated}, {"read", summary.read},
-                              {"reading", summary.reading}, {"problems", QJsonArray::fromStringList(summary.problems)}});
+                              {"joined", summary.joined}, {"already_here", summary.duplicates}, {"updated", summary.updated},
+                              {"read", summary.read}, {"reading", summary.reading},
+                              {"problems", QJsonArray::fromStringList(summary.problems)}});
     else
-        print(stdout, QString("%1 added, %2 already here (%3 brought up to date); %4 read, %5 being read")
-                          .arg(summary.added).arg(summary.duplicates).arg(summary.updated).arg(summary.read).arg(summary.reading));
+        print(stdout, QString("%1 added, %2 joined to books here without a file, %3 already here (%4 brought up to date); "
+                              "%5 read, %6 being read")
+                          .arg(summary.added).arg(summary.joined).arg(summary.duplicates).arg(summary.updated)
+                          .arg(summary.read).arg(summary.reading));
     for (const QString &problem : std::as_const(summary.problems))
         print(stderr, problem);
     return summary.problems.isEmpty() ? 0 : 1;
