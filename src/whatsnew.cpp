@@ -117,5 +117,10 @@ QList<Manual::Step> Manual::features() {
          tr("{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and "
             "showing what it asks to be allowed before anything runs."),
          "", "library.plugins", "library", ""},
+        {"pointer", "0.1.4", tr("Every key, a click or a tap away"),
+         tr("The ⋯ above the shelf, over the page and in the graph lists all they can do, each with its key; a right "
+            "click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its "
+            "name, and the keys of each panel."),
+         "libraryMore|touchBar", "global.help", "library", ""},
     };
 }

@@ -143,7 +143,8 @@ QList<Manual::Topic> Manual::topicList() {
              {tr("Your own"),
               tr("A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add "
                  "sources of details, commands with keys of their own, panels in the window, and hooks on what happens "
-                 "to a book; its commands appear in this help under Plugins. `omabook plugin new <name>` starts one and "
+                 "to a book; its commands appear in this help under its name, and in the lists the window's ⋯ opens. "
+                 "`omabook plugin new <name>` starts one and "
                  "`omabook plugin check <name>` tests it.")},
          }},
         {"calibre", tr("Calibre and Goodreads"), tr("Bring in what you already have, and keep it in step."),

@@ -93,7 +93,7 @@
   "A panel beside the shelf or the page": "Een paneel naast de plank of de pagina",
   "A panel: %1": "Een paneel: %1",
   "A plugin called %1 is already installed. This one takes its place, and the one there goes to the trash.": "Er is al een plug-in met de naam %1 geïnstalleerd. Deze neemt zijn plaats in en de bestaande gaat naar de prullenbak.",
-  "A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add sources of details, commands with keys of their own, panels in the window, and hooks on what happens to a book; its commands appear in this help under Plugins. `omabook plugin new <name>` starts one and `omabook plugin check <name>` tests it.": "Een plug-in is een map in `~/.config/omabook/plugins/`. Een scriptplug-in, geschreven in JavaScript, kan bronnen voor gegevens toevoegen, opdrachten met eigen toetsen, panelen in het venster en hooks op wat er met een boek gebeurt; de opdrachten ervan staan in deze hulp onder Plug-ins. `omabook plugin new <name>` begint er een en `omabook plugin check <name>` test hem.",
+  "A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add sources of details, commands with keys of their own, panels in the window, and hooks on what happens to a book; its commands appear in this help under its name, and in the lists the window's ⋯ opens. `omabook plugin new <name>` starts one and `omabook plugin check <name>` tests it.": "Een plug-in is een map in `~/.config/omabook/plugins/`. Een scriptplug-in, geschreven in JavaScript, kan bronnen voor gegevens toevoegen, opdrachten met eigen toetsen, panelen in het venster en hooks op wat er met een boek gebeurt; de opdrachten ervan staan in deze hulp onder de naam van de plug-in, en in de lijsten die de ⋯ in het venster opent. `omabook plugin new <name>` begint er een en `omabook plugin check <name>` test hem.",
   "A say in every book that is added": "Inspraak bij elk boek dat wordt toegevoegd",
   "A short walk through the window": "Een korte rondleiding door het venster",
   "A source of book details, asked in every look-up": "Een bron van boekgegevens, geraadpleegd bij elke zoekactie",
@@ -1303,5 +1303,7 @@
   "In panels and dialogs": "In panelen en dialogen",
   "Plugin: %1": "Plug-in: %1",
   "That one works in its panel or dialog: %1.": "Die werkt in zijn paneel of dialoog: %1.",
-  "Do with this book": "Doen met dit boek"
+  "Do with this book": "Doen met dit boek",
+  "Every key, a click or a tap away": "Elke toets, een klik of een tik verderop",
+  "The ⋯ above the shelf, over the page and in the graph lists all they can do, each with its key; a right click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its name, and the keys of each panel.": "De ⋯ boven de plank, over de pagina en in de graaf geeft alles wat daar kan, elk met zijn toets; een rechtsklik op een boek geeft wat je ermee kunt doen. {global.help} toont de toetsen die een plug-in toevoegt onder zijn naam, en de toetsen van elk paneel."
 }

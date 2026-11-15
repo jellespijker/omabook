@@ -98,18 +98,20 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 
 Books can also be dropped on the window.
 
+**With a mouse or a finger.** Nothing is the keyboard's alone. The ⋯ in the header of the shelf lists everything the shelf can do, each with its key (adding books, collections, sync, tidying, plugins, settings, help, quit), and the commands plugins add there; a right click on a book, or **More** in its details, lists what can be done with that book. Over the page the ⋯ in the corner, or **More** in the bar a finger brings up, does the same for reading, and the graph has its own. The list narrows as you type, like every list in Omabook.
+
 ## Help and the tour
 
 ![The help: every key as it is bound now, searched by typing](docs/help.png)
 
-`?` (or `F1`) opens the help wherever you are. It lists every key **as it is bound now**: change one in `keys.json`, or add a plugin with a command of its own, and the help shows it without anyone having written it down. Type what you want to do ("add a folder", "how do I bookmark") and the list narrows to the commands and pages that match; Up and Down pick one and Enter runs it, so the help is also a way to do things. Typing only ever searches. Opened over a book, the reading keys come first.
+`?` (or `F1`) opens the help wherever you are. It lists every key **as it is bound now**: change one in `keys.json`, or add a plugin with a command of its own, and the help shows it without anyone having written it down: a plugin's keys under its name, each saying whether it works on the shelf, while reading or anywhere, for as long as the plugin is on. After them come the keys a panel or dialog has of its own (the menu beside selected words, the contents, the Aa panel, the plugin manager, the tour...), under the panel they work in. Type what you want to do ("add a folder", "how do I bookmark") and the list narrows to the commands and pages that match; Up and Down pick one and Enter runs it, so the help is also a way to do things. Typing only ever searches. Opened over a book, the reading keys come first.
 
 Beside the keys are a few short pages: getting started, reading, the AI companion, your library, plugins, Calibre and Goodreads, other computers, and one for agents. Tab turns to the next. Each lists the commands it mentions, and the same pages print in a terminal:
 
 ```bash
 omabook help             # the commands, and the topics
 omabook help reading     # one page; --json for an agent
-omabook help keys        # every key, as keys.json has it now
+omabook help keys        # every key, as keys.json has it now, a plugin's and a panel's too
 omabook help new         # what this version brought
 ```
 

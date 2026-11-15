@@ -107,7 +107,7 @@
   "A panel beside the shelf or the page": "Un panel junto al estante o la página",
   "A panel: %1": "Un panel: %1",
   "A plugin called %1 is already installed. This one takes its place, and the one there goes to the trash.": "Ya hay un complemento llamado %1 instalado. Este toma su lugar y el anterior va a la papelera.",
-  "A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add sources of details, commands with keys of their own, panels in the window, and hooks on what happens to a book; its commands appear in this help under Plugins. `omabook plugin new <name>` starts one and `omabook plugin check <name>` tests it.": "Un complemento es una carpeta en `~/.config/omabook/plugins/`. Un complemento de script, escrito en JavaScript, puede agregar fuentes de datos, comandos con teclas propias, paneles en la ventana y ganchos sobre lo que le pasa a un libro; sus comandos aparecen en esta ayuda, en Complementos. `omabook plugin new <name>` crea uno y `omabook plugin check <name>` lo prueba.",
+  "A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add sources of details, commands with keys of their own, panels in the window, and hooks on what happens to a book; its commands appear in this help under its name, and in the lists the window's ⋯ opens. `omabook plugin new <name>` starts one and `omabook plugin check <name>` tests it.": "Un complemento es una carpeta en `~/.config/omabook/plugins/`. Un complemento de script, escrito en JavaScript, puede agregar fuentes de datos, comandos con teclas propias, paneles en la ventana y ganchos sobre lo que le pasa a un libro; sus comandos aparecen en esta ayuda bajo su nombre, y en las listas que abre el ⋯ de la ventana. `omabook plugin new <name>` crea uno y `omabook plugin check <name>` lo prueba.",
   "A say in every book that is added": "Voz en cada libro que se agrega",
   "A short walk through the window": "Un recorrido breve por la ventana",
   "A source of book details, asked in every look-up": "Una fuente de datos del libro, consultada en cada búsqueda",
@@ -1354,5 +1354,7 @@
   "In panels and dialogs": "En paneles y diálogos",
   "Plugin: %1": "Complemento: %1",
   "That one works in its panel or dialog: %1.": "Esa funciona en su panel o diálogo: %1.",
-  "Do with this book": "Hacer con este libro"
+  "Do with this book": "Hacer con este libro",
+  "Every key, a click or a tap away": "Cada tecla, a un clic o un toque",
+  "The ⋯ above the shelf, over the page and in the graph lists all they can do, each with its key; a right click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its name, and the keys of each panel.": "El ⋯ sobre el estante, sobre la página y en el grafo enumera todo lo que se puede hacer ahí, cada cosa con su tecla; un clic derecho en un libro enumera lo que se puede hacer con él. {global.help} muestra las teclas que agrega un complemento bajo su nombre, y las teclas de cada panel."
 }

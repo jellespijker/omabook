@@ -107,7 +107,7 @@
   "A panel beside the shelf or the page": "Un panneau à côté de l'étagère ou de la page",
   "A panel: %1": "Un panneau : %1",
   "A plugin called %1 is already installed. This one takes its place, and the one there goes to the trash.": "Un plugin nommé %1 est déjà installé. Celui-ci prend sa place et l'ancien va à la corbeille.",
-  "A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add sources of details, commands with keys of their own, panels in the window, and hooks on what happens to a book; its commands appear in this help under Plugins. `omabook plugin new <name>` starts one and `omabook plugin check <name>` tests it.": "Un plugin est un dossier dans `~/.config/omabook/plugins/`. Un plugin de script, écrit en JavaScript, peut ajouter des sources d'informations, des commandes avec leurs propres touches, des panneaux dans la fenêtre et des actions déclenchées par ce qui arrive à un livre ; ses commandes apparaissent dans cette aide sous Plugins. `omabook plugin new <name>` en crée un et `omabook plugin check <name>` le teste.",
+  "A plugin is a folder in `~/.config/omabook/plugins/`. A script plugin, written in JavaScript, can add sources of details, commands with keys of their own, panels in the window, and hooks on what happens to a book; its commands appear in this help under its name, and in the lists the window's ⋯ opens. `omabook plugin new <name>` starts one and `omabook plugin check <name>` tests it.": "Un plugin est un dossier dans `~/.config/omabook/plugins/`. Un plugin de script, écrit en JavaScript, peut ajouter des sources d'informations, des commandes avec leurs propres touches, des panneaux dans la fenêtre et des actions déclenchées par ce qui arrive à un livre ; ses commandes apparaissent dans cette aide sous son nom, et dans les listes qu'ouvre le ⋯ de la fenêtre. `omabook plugin new <name>` en crée un et `omabook plugin check <name>` le teste.",
   "A say in every book that is added": "Un mot à dire sur chaque livre ajouté",
   "A short walk through the window": "Une courte visite de la fenêtre",
   "A source of book details, asked in every look-up": "Une source d'informations sur les livres, interrogée à chaque recherche",
@@ -1354,5 +1354,7 @@
   "In panels and dialogs": "Dans les volets et les dialogues",
   "Plugin: %1": "Plugin : %1",
   "That one works in its panel or dialog: %1.": "Celle-ci marche dans son volet ou dialogue : %1.",
-  "Do with this book": "Faire avec ce livre"
+  "Do with this book": "Faire avec ce livre",
+  "Every key, a click or a tap away": "Chaque touche, à un clic ou une touche du doigt",
+  "The ⋯ above the shelf, over the page and in the graph lists all they can do, each with its key; a right click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its name, and the keys of each panel.": "Le ⋯ au-dessus de l'étagère, sur la page et dans le graphe liste tout ce qu'on peut y faire, chacun avec sa touche ; un clic droit sur un livre liste ce qu'on peut en faire. {global.help} montre les touches qu'ajoute un plugin sous son nom, et les touches de chaque volet."
 }
