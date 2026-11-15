@@ -212,8 +212,17 @@ public:
     QList<FormatFile> formatFiles(qint64 id) const;
     // The book that holds a file with this hash, or 0.
     qint64 bookWithHash(const QString &hash) const;
-    // Whether a file with this hash was removed from this library, so a sync
-    // doesn't bring back what the user threw away.
+    // What names a book that has no file across two libraries, where a
+    // file's hash can't: "entry:<scheme>=<value>" for each of its
+    // identifiers and its ISBN, and "entry:title=<title>|<authors>" with
+    // both folded to lower case and letters and digits only. Two books are
+    // the same when any key is the same.
+    static QStringList entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title,
+                                 const QStringList &authors);
+    static QStringList entryKeys(const Book &book);
+    // Whether a file with this hash, or a book without a file of one of its
+    // entryKeys, was removed from this library, so a sync doesn't bring back
+    // what the user threw away.
     bool wasRemoved(const QString &hash) const;
     QStringList removedHashes() const;
     static QString hashFile(const QString &path);

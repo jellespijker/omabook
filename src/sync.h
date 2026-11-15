@@ -42,7 +42,8 @@ public:
     // Runs a shell command there; a file here can be its input or take its output.
     Result run(const QString &command, const QString &inputFile = {}, const QString &outputFile = {}) const;
     bool fetch(const QString &remoteFile, const QString &localFile) const;
-    bool send(const QString &localFile, const QString &remoteFile) const;
+    // Copies a file there; `error`, when given, says why it could not.
+    bool send(const QString &localFile, const QString &remoteFile, QString *error = nullptr) const;
 
     // One argument, quoted for the shell on the other side.
     static QString quote(const QString &argument);

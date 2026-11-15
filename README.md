@@ -371,7 +371,7 @@ Each computer keeps its own whole library. A sync brings two of them in step ove
 omabook sync laptop              # or laptop:Books/Fiction for a library other than its current one
 ```
 
-or name the computer once under Settings and press `Y`. Each side gets the books it lacks, with their details, covers and formats, and for books both have, the more recent reading place wins. A book you removed on one computer is not brought back to it (and is left alone on the other). Omabook must be installed on both, and ssh must log in without asking for a password (Tailscale SSH or a key).
+or name the computer once under Settings and press `Y`. Each side gets the books it lacks, with their details, covers and formats, and books without a file too (paper copies, wishes, books read elsewhere), known by their identifiers or else by title and authors. Shelves, stars and finished days travel with every book, filled in where a side says nothing; for books both have, the more recent reading place wins. A book you removed on one computer is not brought back to it (and is left alone on the other). Omabook must be installed on both, and ssh must log in without asking for a password (Tailscale SSH or a key).
 
 Why not one library on a shared folder (sshfs, NFS, Syncthing)? Because a library is a live database: two computers writing it through a network filesystem can corrupt it, a file syncer can split it in two, and none of them work on a train. With a sync, each database is only ever written by its own computer, a dropped connection leaves both whole, and every computer reads offline. A library folder on a network mount does still open (Omabook switches the database to the journal mode that works there); just don't open it from two computers at once.
 
@@ -586,8 +586,8 @@ The server speaks protocol revision `2026-07-28` (no handshake: every request ca
 Each release has a ready-built package for Arch and Omarchy (x86_64), built and tested in a clean container:
 
 ```bash
-curl -LO https://github.com/jellespijker/omabook/releases/download/v0.1.4.1/omabook-0.1.4.1-1-x86_64.pkg.tar.zst
-sudo pacman -U omabook-0.1.4.1-1-x86_64.pkg.tar.zst
+curl -LO https://github.com/jellespijker/omabook/releases/download/v0.1.4.2/omabook-0.1.4.2-1-x86_64.pkg.tar.zst
+sudo pacman -U omabook-0.1.4.2-1-x86_64.pkg.tar.zst
 ```
 
 The package is downloaded first because pacman asks for a signature file next to a package it fetches from a link, and these packages are not signed; the release page lists each file's SHA-256 to check it against (`sha256sum omabook-*.pkg.tar.zst`). Pick the newest release on the [releases page](https://github.com/jellespijker/omabook/releases); installed this way, a newer version is installed the same way. Omabook then appears in the app launcher (`Super + Space`).

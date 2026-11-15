@@ -1426,6 +1426,94 @@ private slots:
         QCOMPARE(settled.received + settled.sent + settled.placesTaken + settled.placesSent, 0);
     }
 
+    // Books without a file (a paper copy, a wish, a book read elsewhere)
+    // are known by their names elsewhere, else by title and authors: they
+    // travel both ways with their shelf, stars and finished day, a book of
+    // the same name isn't made twice, and one removed here stays away. A
+    // book with a file brings its reading along too.
+    void booksWithoutAFileAreSyncedByWhatTheyAreCalled() {
+        QTemporaryDir dir;
+        const QString ssh = script(dir.filePath("ssh"),
+                                   "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
+                                   "export HOME='" + dir.path().toUtf8() + "/there-home' QT_QPA_PLATFORM=offscreen\n"
+                                   "export PATH=\"" + QFileInfo(OMABOOK_BINARY).absolutePath().toUtf8() + ":$PATH\"\n"
+                                   "exec sh -c \"$1\"\n");
+        QVERIFY(QDir(dir.path()).mkpath("there-home"));
+        const Remote remote("laptop:" + dir.filePath("There"), {ssh});
+        const auto entry = [](Library &library, const QString &title, const QString &author, bool paper) {
+            BookMeta meta;
+            meta.title = title;
+            meta.authors = QStringList{author};
+            return library.addEntry(meta, paper).id;
+        };
+
+        Library here(dir.filePath("Here"));
+        QVERIFY(here.open());
+        const qint64 shelfHere = entry(here, "The Paper One", "Ann Author", true);
+        QVERIFY(here.setReading(shelfHere, "read", 4, "2026-03-01"));
+        QVERIFY(here.setIdentifier(shelfHere, "goodreads", "4671"));
+        const qint64 sameHere = entry(here, "Same Name, Twice", "Bo Writer", false);
+        QVERIFY(here.setReading(sameHere, "to-read", 0, {}));
+        QVERIFY(here.remove(entry(here, "Thrown Away", "Cy Gone", false)));
+        QVERIFY(Fixtures::epub(dir.filePath("filed.epub"), "With A File"));
+        const qint64 filedHere = here.add(dir.filePath("filed.epub")).id;
+        QVERIFY(here.setReading(filedHere, "read", 5, "2026-04-02"));
+        {
+            Library there(dir.filePath("There"));
+            QVERIFY(there.open());
+            const qint64 wished = entry(there, "Only Wished There", "Di Dreamer", false);
+            QVERIFY(there.setReading(wished, "to-read", 0, {}));
+            QVERIFY(there.setIdentifier(wished, "openlibrary", "OL1W"));
+            // The same book as here, written another way: one book, not two.
+            QVERIFY(there.setReading(entry(there, "same name twice", "Bo  Writer", false), "", 3, {}));
+            QVERIFY(there.setReading(entry(there, "Thrown Away", "Cy Gone", false), "read", 2, {}));
+        }
+
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.received, 1);
+        QCOMPARE(summary.sent, 2);
+
+        // Here: the wish arrived with its shelf and name, the same book took
+        // their stars, and the removed one stayed away.
+        QCOMPARE(here.books().size(), 4);
+        const QList<Book> wished = here.books("only wished");
+        QCOMPARE(wished.size(), 1);
+        QCOMPARE(wished.first().shelf, QString("to-read"));
+        QCOMPARE(wished.first().identifiers.value("openlibrary").toString(), QString("OL1W"));
+        QVERIFY(wished.first().formats.isEmpty());
+        QCOMPARE(here.book(sameHere)->rating, 3);
+        QCOMPARE(here.book(sameHere)->shelf, QString("to-read"));
+        QVERIFY(here.books("thrown").isEmpty());
+
+        // There: the paper book and the one with a file arrived with their
+        // reading, and nothing came twice.
+        Library there(dir.filePath("There"));
+        QVERIFY(there.open());
+        QCOMPARE(there.books().size(), 5);
+        const QList<Book> paper = there.books("paper one");
+        QCOMPARE(paper.size(), 1);
+        QVERIFY(paper.first().paper);
+        QCOMPARE(paper.first().shelf, QString("read"));
+        QCOMPARE(paper.first().rating, 4);
+        QCOMPARE(paper.first().finished, QString("2026-03-01"));
+        QCOMPARE(paper.first().identifiers.value("goodreads").toString(), QString("4671"));
+        const QList<Book> filed = there.books("with a file");
+        QCOMPARE(filed.size(), 1);
+        QCOMPARE(filed.first().rating, 5);
+        QCOMPARE(filed.first().finished, QString("2026-04-02"));
+        QCOMPARE(there.books("same name").size(), 1);
+        QCOMPARE(there.books("same name").first().shelf, QString("to-read"));
+
+        // Once more: nothing left to do.
+        const SyncSummary settled = syncLibrary(here, remote);
+        QVERIFY2(settled.problems.isEmpty(), qPrintable(settled.problems.join('\n')));
+        QCOMPARE(settled.received + settled.sent, 0);
+        QCOMPARE(here.books().size(), 4);
+        QCOMPARE(there.books().size(), 5);
+    }
+
     void aComputerThatCannotBeReachedSaysSo() {
         QTemporaryDir dir;
         Library here(dir.filePath("Here"));

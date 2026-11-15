@@ -11,6 +11,7 @@
 #include <QScopeGuard>
 #include <QSet>
 #include <QTemporaryDir>
+#include <algorithm>
 
 #include "collections.h"
 #include "formats.h"
@@ -35,6 +36,55 @@ QStringList progressArguments(qint64 id, const Progress &progress) {
     return {"progress", QString::number(id), "--section", QString::number(progress.section), "--fraction",
             QString::number(progress.fraction, 'g', 12), "--percent", QString::number(progress.percent, 'g', 12),
             "--updated", QString::number(progress.updated)};
+}
+
+// What names a book of the other side's manifest that has no file.
+QStringList entryKeysOf(const QJsonObject &theirs) {
+    return Library::entryKeys(theirs.value("identifiers").toObject(), theirs.value("isbn").toString(), theirs.value("title").toString(),
+                              BookMeta::fromJson(theirs).authors);
+}
+
+// `omabook set` arguments that give the other side this book's reading and
+// its names elsewhere: the shelf, stars, finished day and paper copy.
+QStringList readingArguments(qint64 id, const Book &book) {
+    QStringList arguments{"set", QString::number(id), "--status", book.shelf.isEmpty() ? QStringLiteral("none") : book.shelf,
+                          "--rating", QString::number(book.rating), "--paper", book.paper ? QStringLiteral("yes") : QStringLiteral("no")};
+    if (!book.finished.isEmpty())
+        arguments << "--finished" << book.finished;
+    for (auto it = book.identifiers.begin(); it != book.identifiers.end(); ++it)
+        if (const QString value = it.value().toVariant().toString(); !value.isEmpty())
+            arguments << "--identifier" << it.key() + "=" + value;
+    return arguments;
+}
+
+// Takes in what the other side says of a book's reading where this side
+// says nothing: an empty shelf, no stars, no finished day; a paper copy
+// either side has is had.
+void fillReading(Library &library, qint64 id, const QJsonObject &theirs) {
+    const std::optional<Book> mine = library.book(id);
+    if (!mine)
+        return;
+    const QString shelf = mine->shelf.isEmpty() ? theirs.value("shelf").toString() : mine->shelf;
+    const int rating = mine->rating > 0 ? mine->rating : theirs.value("rating").toInt();
+    const QString finished = mine->finished.isEmpty() ? theirs.value("finished").toString() : mine->finished;
+    if (shelf != mine->shelf || rating != mine->rating || finished != mine->finished)
+        library.setReading(id, shelf, rating, finished);
+    if (!mine->paper && theirs.value("paper").toBool())
+        library.setPaper(id, true);
+    const QJsonObject identifiers = theirs.value("identifiers").toObject();
+    for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
+        if (!mine->identifiers.contains(it.key()))
+            library.setIdentifier(id, it.key(), it.value().toVariant().toString());
+}
+
+// Whether the other side says less of a book's reading than this one does
+// now, so it is given this side's.
+bool saysLess(const QJsonObject &theirs, const Book &mine) {
+    if ((theirs.value("shelf").toString().isEmpty() && !mine.shelf.isEmpty()) || (theirs.value("rating").toInt() == 0 && mine.rating > 0)
+        || (theirs.value("finished").toString().isEmpty() && !mine.finished.isEmpty()) || (!theirs.value("paper").toBool() && mine.paper))
+        return true;
+    const QJsonObject identifiers = theirs.value("identifiers").toObject();
+    return std::ranges::any_of(mine.identifiers.keys(), [&](const QString &scheme) { return !identifiers.contains(scheme); });
 }
 
 } // namespace
@@ -90,8 +140,16 @@ bool Remote::fetch(const QString &remoteFile, const QString &localFile) const {
     return run("cat " + quote(remoteFile), {}, localFile).ok();
 }
 
-bool Remote::send(const QString &localFile, const QString &remoteFile) const {
-    return run("cat > " + quote(remoteFile), localFile).ok();
+bool Remote::send(const QString &localFile, const QString &remoteFile, QString *error) const {
+    if (!QFileInfo(localFile).isReadable()) {
+        if (error)
+            *error = QFileInfo(localFile).fileName() + " can't be read here";
+        return false;
+    }
+    const Result sent = run("cat > " + quote(remoteFile), localFile);
+    if (!sent.ok() && error)
+        *error = sent.error.isEmpty() ? QString("copying %1 stopped").arg(QFileInfo(localFile).fileName()) : sent.error.section('\n', -1);
+    return sent.ok();
 }
 
 // The shape of the manifest two computers exchange. It goes up when a change
@@ -109,6 +167,9 @@ QJsonObject libraryManifest(const Library &library) {
         object.insert("files", files);
         object.insert("cover", library.coverPath(book.id));
         object.insert("progress", toJson(library.progress(book.id)));
+        // What is said of its reading, which a book without a file is all of.
+        object.insert("shelf", book.shelf);
+        object.insert("paper", book.paper);
         books << object;
     }
     // An Omabook from before collections reads past them.
@@ -138,6 +199,13 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     QTemporaryDir scratch;
     int counter = 0;
     QSet<QString> theirHashes;
+    // Books without a file are known by their entry keys (Library::entryKeys):
+    // every book here by its keys, and every key there.
+    QHash<QString, qint64> myKeys;
+    for (const Book &book : library.books())
+        for (const QString &key : Library::entryKeys(book))
+            myKeys.insert(key, book.id);
+    QSet<QString> theirKeys;
 
     // What they have: fetch the books this library lacks, and for the ones
     // both have, the formats it lacks and the newer reading place.
@@ -155,6 +223,16 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 mine = library.bookWithHash(hash);
             removedHere = removedHere || library.wasRemoved(hash);
         }
+        const QStringList keys = entryKeysOf(theirs);
+        for (const QString &key : keys)
+            theirKeys << key;
+        // A book without a file there is the one here of the same name.
+        if (files.isEmpty()) {
+            for (const QString &key : keys) {
+                mine = mine ? mine : myKeys.value(key);
+                removedHere = removedHere || library.wasRemoved(key);
+            }
+        }
         if (!mine && removedHere)
             continue;
         if (progress && !mine)
@@ -171,9 +249,24 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             return local;
         };
 
-        if (!mine) {
-            if (files.isEmpty())
+        if (!mine && files.isEmpty()) {
+            BookMeta meta = BookMeta::fromJson(theirs);
+            const QString cover = theirs.value("cover").toString();
+            if (!cover.isEmpty() && remote.fetch(cover, scratch.filePath("cover.jpg")))
+                meta.cover = QImageReader(scratch.filePath("cover.jpg")).read();
+            const Library::Added added = library.addEntry(meta, theirs.value("paper").toBool());
+            if (!added.error.isEmpty()) {
+                summary.problems << added.error;
                 continue;
+            }
+            fillReading(library, added.id, theirs);
+            if (const std::optional<Book> made = library.book(added.id))
+                for (const QString &key : Library::entryKeys(*made))
+                    myKeys.insert(key, added.id);
+            ++summary.received;
+            continue;
+        }
+        if (!mine) {
             const QString first = fetched(files.first().toObject());
             if (first.isEmpty())
                 continue;
@@ -190,6 +283,12 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             mine = added.id;
             ++summary.received;
         }
+        fillReading(library, mine, theirs);
+        // Older Omabooks don't say "shelf"; they are given nothing they can't keep.
+        if (const std::optional<Book> merged = library.book(mine); merged && theirs.contains("shelf") && saysLess(theirs, *merged))
+            remote.omabook(readingArguments(theirId, *merged));
+        if (files.isEmpty())
+            continue;
         const QStringList have = library.book(mine)->formats;
         for (const QJsonValue &file : files) {
             if (have.contains(file.toObject().value("format").toString()))
@@ -222,7 +321,12 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             known = known || theirHashes.contains(file.hash);
             removed = removed || removedThere.contains(file.hash);
         }
-        if (known || removed || files.isEmpty())
+        if (files.isEmpty())
+            for (const QString &key : Library::entryKeys(book)) {
+                known = known || theirKeys.contains(key);
+                removed = removed || removedThere.contains(key);
+            }
+        if (known || removed)
             continue;
         if (progress)
             progress(book.meta.title);
@@ -236,31 +340,47 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         const auto cleanup = qScopeGuard([&] { remote.run("rm -rf " + Remote::quote(folder)); });
 
         QStringList sentFiles;
-        bool whole = true;
+        QString why;
         for (const FormatFile &file : files) {
             const QString target = folder + "/book." + file.format;
-            whole = whole && remote.send(file.path, target);
+            if (why.isEmpty() && !remote.send(file.path, target, &why))
+                why = file.format.toUpper() + ": " + why;
             sentFiles << target;
         }
         const QString details = scratch.filePath("details.json");
         QFile json(details);
-        whole = whole && json.open(QIODevice::WriteOnly) && json.write(QJsonDocument(book.meta.toJson()).toJson()) > 0;
+        if (why.isEmpty() && !(json.open(QIODevice::WriteOnly) && json.write(QJsonDocument(book.meta.toJson()).toJson()) > 0))
+            why = "its details can't be written here";
         json.close();
-        whole = whole && remote.send(details, folder + "/details.json");
-        QStringList add{"add", sentFiles.value(0), "--meta", folder + "/details.json", "--json"};
+        if (why.isEmpty())
+            remote.send(details, folder + "/details.json", &why);
+        // A book without a file is added as one, then given its reading.
+        QStringList add = files.isEmpty() ? QStringList{"add", book.paper ? "--paper" : "--wish"} : QStringList{"add", sentFiles.value(0)};
+        add << "--meta" << folder + "/details.json" << "--json";
         if (const QString cover = library.coverPath(book.id); !cover.isEmpty() && remote.send(cover, folder + "/cover.jpg"))
             add << "--cover" << folder + "/cover.jpg";
-        const Remote::Result added = whole ? remote.omabook(add) : Remote::Result();
-        const qint64 theirId = QJsonDocument::fromJson(added.output).array().first().toObject().value("id").toInteger();
-        if (!added.ok() || theirId <= 0) {
-            summary.problems << book.meta.title + " could not be sent to " + remote.host() + "."
-                                    + (added.error.isEmpty() ? QString() : " " + added.error.section('\n', -1));
+        const Remote::Result added = why.isEmpty() ? remote.omabook(add) : Remote::Result();
+        // `add` of files answers with a list, `add --paper` with the book.
+        const QJsonDocument answer = QJsonDocument::fromJson(added.output);
+        const qint64 theirId = (answer.isArray() ? answer.array().first().toObject() : answer.object()).value("id").toInteger();
+        if (why.isEmpty() && !added.ok())
+            why = added.error.section('\n', -1);
+        else if (why.isEmpty() && theirId <= 0)
+            why = "Omabook there added nothing: " + QString::fromUtf8(added.output).simplified().left(160);
+        if (!why.isEmpty()) {
+            // A book in a format of a plugin there isn't: say which.
+            if (why.contains("is not a book format Omabook knows"))
+                why = QString("there, nothing reads .%1 files; install the plugin that made it there (for a story: omabook plugin add "
+                              "storyteller)").arg(files.isEmpty() ? QString() : files.first().format);
+            summary.problems << book.meta.title + " could not be sent to " + remote.host() + ": " + why;
+            qCWarning(lcSync).noquote() << "a book could not be sent:" << why.left(200);
             continue;
         }
         for (const QString &file : sentFiles.mid(1))
             remote.omabook({"add", file, "--to", QString::number(theirId)});
         if (const Progress place = library.progress(book.id); place.updated > 0)
             remote.omabook(progressArguments(theirId, place));
+        remote.omabook(readingArguments(theirId, book));
         ++summary.sent;
     }
     // The collections, once both sides have every book: theirs taken in here

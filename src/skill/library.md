@@ -76,7 +76,7 @@ omabook sync laptop                              # exchange books and reading pl
 omabook sync laptop:Books/Fiction                # ...with a named library folder there
 ```
 
-`sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks and the newer reading place wins; a book removed on one side is not brought back to it.
+`sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks, books without a file included (matched by identifiers, else title and authors), with their shelf, stars and finished day, and the newer reading place wins; a book removed on one side is not brought back to it.
 
 ## Plugins
 

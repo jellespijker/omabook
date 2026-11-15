@@ -769,6 +769,31 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
                 {QString::fromUtf8(QJsonDocument(identifiers).toJson(QJsonDocument::Compact)), id});
 }
 
+QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title,
+                               const QStringList &authors) {
+    static const QRegularExpression other(R"([^\p{L}\p{N}]+)");
+    const auto fold = [](QString text) { return text.toCaseFolded().remove(other); };
+    QStringList keys;
+    for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
+        if (const QString value = it.value().toVariant().toString().trimmed(); !value.isEmpty())
+            keys << "entry:" + it.key().toLower() + "=" + value.toLower();
+    if (const QString number = QString(isbn).remove(other).toLower(); !number.isEmpty())
+        keys << "entry:isbn=" + number;
+    if (const QString name = fold(title); !name.isEmpty()) {
+        QStringList folded;
+        for (const QString &author : authors)
+            folded << fold(author);
+        folded.sort();
+        keys << "entry:title=" + name + "|" + folded.join(',');
+    }
+    keys.removeDuplicates();
+    return keys;
+}
+
+QStringList Library::entryKeys(const Book &book) {
+    return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors);
+}
+
 qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) const {
     if (value.isEmpty())
         return 0;
@@ -781,8 +806,13 @@ bool Library::remove(qint64 id, QString *error) {
     const QString folder = bookFolder(id);
     if (folder.isEmpty())
         return failed(error, QString("There is no book %1.").arg(id));
-    for (const FormatFile &format : formatFiles(id))
+    const QList<FormatFile> formats = formatFiles(id);
+    for (const FormatFile &format : formats)
         exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, QDateTime::currentSecsSinceEpoch()});
+    // A book with no file is remembered by what names it instead.
+    if (const std::optional<Book> gone = formats.isEmpty() ? book(id) : std::nullopt)
+        for (const QString &key : entryKeys(*gone))
+            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {key, QDateTime::currentSecsSinceEpoch()});
     // To the trash, where a mistake can be undone; a filesystem with no
     // trash gets the folder removed, since the user asked for it to go.
     if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively())
