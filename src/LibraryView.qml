@@ -28,7 +28,8 @@ Item {
     function resizePane(steps) { if (detailsSide.visible) detailsSide.resize(steps) }
     readonly property var selectedBook: {
         backend.revision
-        return selectedId > 0 ? backend.book(selectedId) : ({})
+        // A launcher a plugin put on the shelf has a number below zero.
+        return selectedId !== 0 ? backend.book(selectedId) : ({})
     }
     readonly property var sorts: ["recent", "title", "author", "series", "added", "progress", "rating", "published", "finished"]
     readonly property var views: ({
@@ -138,7 +139,11 @@ Item {
     Connections {
         target: view.shelf
         function onCurrentRowChanged() { view.selectedId = backend.books.idAt(view.shelf.currentRow) }
-        function onOpened(bookId) { reader.openBook(bookId) }
+        // A launcher calls its plugin; the reader is not opened for it.
+        function onOpened(bookId) {
+            if (bookId < 0) backend.scripts.launch(bookId)
+            else reader.openBook(bookId)
+        }
         function onDetailsWanted() {
             if (view.detailsFit) view.showDetails = true
             else view.detailsOver = true
@@ -234,7 +239,7 @@ Item {
                 visible: header.step < 1 && !header.searching
                 text: backend.books.query === "" && view.filterKinds.length === 0
                       ? qsTr("%Ln books", "", backend.books.total)
-                      : qsTr("%1 of %2").arg(backend.books.count).arg(backend.books.total)
+                      : qsTr("%1 of %2").arg(backend.books.books).arg(backend.books.total)
                 color: theme.colors.muted
             }
             Item {

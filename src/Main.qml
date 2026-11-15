@@ -99,7 +99,7 @@ ApplicationWindow {
     function editBook(id) { if (id > 0) edit.show(id) }
     function newBook() { edit.showNew() }
     function lookUpBook(id) { if (id > 0) lookup.show(id) }
-    function removeBook(id) { if (id > 0) removal.show(id) }
+    function removeBook(id) { if (id !== 0) removal.show(id) }
     function showLibraries() { libraries.open() }
     // The knowledge graph in place of the shelf: of one book, or of the
     // whole library when no book is named.
@@ -381,6 +381,7 @@ ApplicationWindow {
     LibrariesPopup { id: libraries }
     PluginsDialog { id: pluginList }
     PluginAsk { id: pluginAsk }
+    PluginForm { id: pluginForm }
     TidyDialog { id: tidyUp }
     ReadingSitesDialog { id: readingSites }
     ThemePicker { id: themePicker }
@@ -415,9 +416,15 @@ ApplicationWindow {
         objectName: "removal"
         property var bookId: 0
         property string bookTitle: ""
+        // A plugin's launcher is only taken off the shelf; its plugin hears of it.
+        property bool launcher: false
+        property string pluginName: ""
         function show(id) {
+            const book = backend.book(id)
             bookId = id
-            bookTitle = backend.book(id).title || ""
+            bookTitle = book.title || ""
+            launcher = book.launcher === true
+            pluginName = book.pluginName || ""
             open()
         }
 
@@ -426,13 +433,15 @@ ApplicationWindow {
         DialogBody {
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Remove “%1” from the library?").arg(removal.bookTitle)
+                text: removal.launcher ? qsTr("Take “%1” off the shelf?").arg(removal.bookTitle)
+                      : qsTr("Remove “%1” from the library?").arg(removal.bookTitle)
                 font.pixelSize: 18
                 wrapMode: Text.Wrap
             }
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Its files in the library folder move to the trash. The file you added it from is not touched.")
+                text: removal.launcher ? qsTr("It is not a book: %1 put it there to start something new. %1 can put it back.").arg(removal.pluginName)
+                      : qsTr("Its files in the library folder move to the trash. The file you added it from is not touched.")
                 color: theme.colors.muted
                 wrapMode: Text.Wrap
             }
@@ -444,7 +453,8 @@ ApplicationWindow {
                     primary: true
                     focus: true
                     onClicked: {
-                        backend.remove(removal.bookId)
+                        if (removal.launcher) backend.scripts.removeLauncher(removal.bookId)
+                        else backend.remove(removal.bookId)
                         removal.close()
                     }
                 }

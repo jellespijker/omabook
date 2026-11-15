@@ -153,6 +153,13 @@ public:
         QStringList extensions;
         QJSValue claims, open; // claims is not callable when the script gave none
     };
+    // An entry on the shelf that is not a book: opening it calls the
+    // script (omabook.ui.launcher). Nothing of it is in the library.
+    struct Launcher {
+        QString id, title, author, description;
+        QString cover;  // a picture in the plugin's folder, as a path; empty for one drawn from the theme
+        QJSValue open, removed; // removed is not callable when the script gave none
+    };
     // What a call answered, or why it failed (with file and line when known).
     using Done = std::function<void(const QJsonValue &result, const QString &problem)>;
 
@@ -171,6 +178,11 @@ public:
     const QList<Command> &commands() const noexcept { return m_commands; }
     const QList<Panel> &panels() const noexcept { return m_panels; }
     const QList<Format> &formats() const noexcept { return m_formats; }
+    const QList<Launcher> &launchers() const noexcept { return m_launchers; }
+    // Opening a launcher, and the reader taking it off the shelf: the
+    // script is told, and the launcher goes until the script puts it back.
+    void launch(const QString &id, const Done &done = {});
+    void dropLauncher(const QString &id);
     // A format of the script's as the Formats layer takes it (see
     // formatprovider.h): safe to call from any thread, and after the plugin
     // is gone, when it answers that the plugin was switched off.
@@ -201,6 +213,8 @@ public:
     // What the reader typed for an omabook.ui.ask, or null when they
     // dismissed it.
     void answerAsk(int token, const QJsonValue &text);
+    // What was filled in on a form (ScriptForm::values), or null for none.
+    void answerForm(int token, const QJsonValue &values);
 
     // Whether nothing the script started is still under way: no promise
     // unsettled, no timer, request or program running.
@@ -237,6 +251,9 @@ signals:
     // The script wants words from the reader (omabook.ui.ask); answerAsk
     // gives them, or says there are none.
     void askRequested(int token, const QString &title, const QString &placeholder, const QString &text);
+    // The same for a form (omabook.ui.form), checked by ScriptForm::checked;
+    // answerForm answers it.
+    void formRequested(int token, const QJsonObject &form);
     // Something the script started has finished; see idle().
     void settled();
 
@@ -279,6 +296,7 @@ private:
     QList<Command> m_commands;
     QList<Panel> m_panels;
     QList<Format> m_formats;
+    QList<Launcher> m_launchers;
     // The books being opened or looked at right now, by the number the
     // script's handle on each carries; a handle kept is good for nothing.
     QHash<int, const BookSource *> m_books;

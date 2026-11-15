@@ -4,7 +4,9 @@ import QtQuick.Controls
 // A book on the shelf: its cover, or its title on a plain tile when it has
 // none, with how far it has been read along the bottom edge. A book that is
 // not a file says so in a corner, and one that is finished or waiting to be
-// read carries a small mark.
+// read carries a small mark. A plugin's launcher (something to start, such
+// as a new story) is no book: without a picture of its own its cover is
+// drawn from the theme, open rather than bound, with a mark to begin.
 Item {
     id: tile
     property url cover
@@ -17,16 +19,30 @@ Item {
     property string status
     property string held
     readonly property bool wish: held === "none"
+    readonly property bool launcher: held === "launcher"
 
     Rectangle {
         id: frame
         anchors.fill: parent
         radius: Math.min(4, theme.radius)
-        color: theme.colors.selection
+        color: tile.launcher ? Qt.tint(theme.background, Qt.alpha(theme.accent, 0.10)) : theme.colors.selection
+        border.color: tile.launcher && picture.status !== Image.Ready ? theme.accent : "transparent"
+        border.width: tile.launcher ? 1 : 0
         clip: true
 
+        Glyph {
+            objectName: "launcherMark"
+            visible: tile.launcher && picture.status !== Image.Ready
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            anchors.topMargin: Math.round(tile.height * 0.14)
+            name: "plus"
+            size: Math.round(Math.max(18, Math.min(56, tile.width / 3.2)))
+            color: theme.accent
+        }
         Label {
             visible: picture.status !== Image.Ready
+            anchors.topMargin: tile.launcher ? Math.round(tile.height * 0.14 + Math.max(18, Math.min(56, tile.width / 3.2)) + 8) : Math.round(tile.width / 12)
             anchors.fill: parent
             anchors.margins: Math.round(tile.width / 12)
             anchors.bottomMargin: Math.round(tile.width / 4)

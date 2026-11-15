@@ -25,6 +25,7 @@
 #include "graphtools.h"
 #include "library.h"
 #include "scriptapi.h"
+#include "scriptform.h"
 #include "settings.h"
 
 namespace {
@@ -321,6 +322,34 @@ public:
                 p->m_formats.removeAt(i);
         p->m_formats.append({name, list, claims, open});
         emit p->registered();
+    }
+    Q_INVOKABLE void registerLauncher(const QString &id, const QString &title, const QString &author, const QString &description,
+                                      const QString &cover, const QJSValue &open, const QJSValue &removed) {
+        QString picture;
+        if (!cover.isEmpty()) {
+            picture = p->inside(cover, false);
+            if (picture.isEmpty() || !QFileInfo(picture).isFile()) {
+                p->m_engine.throwError("There is no \"" + cover + "\" in the plugin's folder for the launcher's cover.");
+                return;
+            }
+        }
+        // The same id again is the same launcher, said anew; a plugin has
+        // few, since each is a place on everybody's shelf.
+        for (qsizetype i = p->m_launchers.size() - 1; i >= 0; --i)
+            if (p->m_launchers.at(i).id == id)
+                p->m_launchers.removeAt(i);
+        if (p->m_launchers.size() >= 3) {
+            p->m_engine.throwError(QString("A plugin puts at most three launchers on the shelf."));
+            return;
+        }
+        p->m_launchers.append({id, title.simplified(), author.simplified(), description.trimmed(), picture, open, removed});
+        emit p->registered();
+    }
+    Q_INVOKABLE void removeLauncher(const QString &id) {
+        const qsizetype before = p->m_launchers.size();
+        p->m_launchers.removeIf([&id](const ScriptPlugin::Launcher &launcher) { return launcher.id == id; });
+        if (p->m_launchers.size() != before)
+            emit p->registered();
     }
     Q_INVOKABLE QString markdownToHtml(const QString &text) { return htmlFromMarkdown(text); }
     Q_INVOKABLE QString bookEntries(int token) {
@@ -708,6 +737,27 @@ public:
         p->m_asks.insert(token, resolve);
         p->busy(1);
         emit p->askRequested(token, title, placeholder, text);
+    }
+
+    // Why a form can't be drawn, for the script to throw at once; empty when it can.
+    Q_INVOKABLE QString formProblem(const QString &json) {
+        QString error;
+        ScriptForm::checked(parsed(json).toObject(), &error);
+        return error;
+    }
+    Q_INVOKABLE void uiForm(const QString &json, const QJSValue &resolve) {
+        QString error;
+        const QJsonObject form = ScriptForm::checked(parsed(json).toObject(), &error);
+        // As for a question: nobody to fill it in is no answer.
+        static const QMetaMethod asked = QMetaMethod::fromSignal(&ScriptPlugin::formRequested);
+        if (form.isEmpty() || !p->isSignalConnected(asked)) {
+            resolve.call({QJSValue(QJSValue::NullValue)});
+            return;
+        }
+        const int token = p->m_nextToken++;
+        p->m_asks.insert(token, resolve);
+        p->busy(1);
+        emit p->formRequested(token, form);
     }
 
     Q_INVOKABLE QString settings() { return compact(p->kept()); }
@@ -1394,6 +1444,36 @@ void ScriptPlugin::answerAsk(int token, const QJsonValue &text) {
     const QJSValue resolve = m_asks.take(token);
     resolve.call({text.isString() ? QJSValue(text.toString()) : QJSValue(QJSValue::NullValue)});
     busy(-1);
+}
+
+void ScriptPlugin::answerForm(int token, const QJsonValue &values) {
+    if (!m_asks.contains(token))
+        return;
+    const QJSValue resolve = m_asks.take(token);
+    resolve.call({values.isObject() ? QJSValue(compact(values)) : QJSValue(QJSValue::NullValue)});
+    busy(-1);
+}
+
+void ScriptPlugin::launch(const QString &id, const Done &done) {
+    for (const Launcher &known : std::as_const(m_launchers)) {
+        if (known.id == id) {
+            invoke(known.open, QJsonObject{{"launcher", id}}, done);
+            return;
+        }
+    }
+    if (done)
+        done({}, m_manifest.name + " has no launcher " + id + ".");
+}
+
+void ScriptPlugin::dropLauncher(const QString &id) {
+    const auto found = std::ranges::find(m_launchers, id, &Launcher::id);
+    if (found == m_launchers.end())
+        return;
+    const QJSValue removed = found->removed;
+    m_launchers.erase(found);
+    emit registered();
+    if (removed.isCallable())
+        invoke(removed, QJsonObject{{"launcher", id}}, {});
 }
 
 QStringList ScriptPlugin::takeLog() {

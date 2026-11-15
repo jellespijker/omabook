@@ -15,6 +15,7 @@
 
 #include "ai.h"
 #include "backend.h"
+#include "booklistmodel.h"
 #include "cli.h"
 #include "customization.h"
 #include "fixtures.h"
@@ -25,6 +26,7 @@
 #include "mcp.h"
 #include "reader.h"
 #include "scriptapi.h"
+#include "scriptform.h"
 #include "scriptplugins.h"
 #include "scripttools.h"
 #include "settings.h"
@@ -2226,6 +2228,214 @@ omabook.format.register({name: "Spins", extensions: ["spins"], claims: function 
         QVERIFY(agents.contains("## Writing a plugin"));
         QVERIFY(agents.contains("`omabook.library.setMeta(id, details)`"));
         QVERIFY(agents.contains("## keys.json"));
+    }
+
+    void aFormIsCheckedAndAnsweredInTheShapeItAsked() {
+        // What a form may be, and what it is filled in to start with.
+        QString error;
+        const QJsonObject form = ScriptForm::checked(QJsonDocument::fromJson(R"({
+            "title": " Start a story ", "intro": "A few words.", "accept": "Start",
+            "fields": [
+                {"id": "wish", "type": "textarea", "label": "What should it be?", "required": true},
+                {"id": "where", "type": "choice", "label": "Where", "choices": ["new", {"value": "world", "label": "In a world", "help": "Shared"}]},
+                {"id": "story", "type": "choice", "label": "Which", "choices": ["a", "b"], "when": {"where": "world"}},
+                {"id": "skills", "type": "multi", "label": "Skills", "choices": ["lush", "wry", "spare"], "value": ["wry"]},
+                {"id": "words", "type": "number", "label": "Words", "min": 150, "max": 6000, "step": 50, "value": 1200},
+                {"id": "ahead", "type": "toggle", "label": "Write ahead", "value": true},
+                {"id": "name", "label": "Pen name"}
+            ]})").object(), &error);
+        QVERIFY2(error.isEmpty(), qPrintable(error));
+        QCOMPARE(form.value("title").toString(), QString("Start a story"));
+        const QJsonArray fields = form.value("fields").toArray();
+        QCOMPARE(fields.size(), 7);
+        QCOMPARE(fields.at(1).toObject().value("value").toString(), QString("new"));
+        QCOMPARE(fields.at(1).toObject().value("choices").toArray().at(1).toObject().value("help").toString(), QString("Shared"));
+        QCOMPARE(fields.at(6).toObject().value("type").toString(), QString("text"));
+
+        // Answered with a value of its type for every field, within bounds;
+        // what doesn't fit keeps where it started.
+        QJsonObject values = ScriptForm::values(form, QJsonDocument::fromJson(R"({
+            "wish": "a ship", "where": "elsewhere", "skills": ["spare", "made-up", "lush", "spare"], "words": 99999,
+            "ahead": "yes", "name": "  Pen  ", "unknown": 1})").object());
+        QCOMPARE(values.value("wish").toString(), QString("a ship"));
+        QCOMPARE(values.value("where").toString(), QString("new"));
+        QCOMPARE(values.value("story").toString(), QString("a"));
+        QCOMPARE(values.value("skills").toArray(), (QJsonArray{"lush", "spare"}));
+        QCOMPARE(values.value("words").toDouble(), 6000.0);
+        QCOMPARE(values.value("ahead").toBool(), true);
+        QCOMPARE(values.value("name").toString(), QString("Pen"));
+        QVERIFY(!values.contains("unknown"));
+        QCOMPARE(ScriptForm::values(form, {{"words", 1234}}).value("words").toDouble(), 1250.0);
+        // Shown only while what it depends on says so; required only when shown.
+        QVERIFY(!ScriptForm::shown(fields.at(2).toObject(), values));
+        QVERIFY(ScriptForm::shown(fields.at(2).toObject(), ScriptForm::values(form, {{"where", "world"}})));
+        QCOMPARE(ScriptForm::missing(form, ScriptForm::values(form, {})), QString("What should it be?"));
+        QCOMPARE(ScriptForm::missing(form, values), QString());
+
+        // What can't be drawn says why.
+        const QList<QPair<QByteArray, QString>> wrong{
+            {R"({"fields": []})", "needs a title"},
+            {R"({"title": "T", "fields": {}})", "should be a list"},
+            {R"({"title": "T", "fields": [{"id": "a"}, {"id": "a"}]})", "Two fields are called \"a\""},
+            {R"({"title": "T", "fields": [{"id": "9a"}]})", "A field's id"},
+            {R"({"title": "T", "fields": [{"id": "a", "type": "slider"}]})", "of the type \"slider\""},
+            {R"({"title": "T", "fields": [{"id": "a", "type": "choice", "choices": []}]})", "no choices"},
+            {R"({"title": "T", "fields": [{"id": "a", "type": "choice", "choices": ["x", "x"]}]})", "offers \"x\" twice"},
+            {R"({"title": "T", "fields": [{"id": "a", "type": "number", "min": 5, "max": 1}]})", "min is above its max"},
+            {R"({"title": "T", "fields": [{"id": "a", "type": "choice", "choices": ["x"], "value": "y"}]})", "starts at a value"},
+            {R"({"title": "T", "fields": [{"id": "a", "when": {"b": "x"}}, {"id": "b"}]})", "not a field above it"},
+        };
+        for (const auto &[json, why] : wrong) {
+            QString problem;
+            QVERIFY(ScriptForm::checked(QJsonDocument::fromJson(json).object(), &problem).isEmpty());
+            QVERIFY2(problem.contains(why), qPrintable(problem + " / " + why));
+        }
+        // No fields at all is a confirmation.
+        QString none;
+        QVERIFY(!ScriptForm::checked(QJsonObject{{"title", "Remove it?"}}, &none).isEmpty() && none.isEmpty());
+    }
+
+    void aPluginPutsAFormToTheReader() {
+        Bench bench;
+        bench.plugin("former", R"js(
+            function start() {
+                return omabook.ui.form({title: "Start a story", accept: "Start", fields: [
+                    {id: "wish", type: "text", label: "Wish", required: true},
+                    {id: "chapters", type: "number", label: "Chapters", min: 2, max: 60, value: 12},
+                    {id: "lush", type: "toggle", label: "Lush"}]});
+            }
+            function broken() { return omabook.ui.form({title: "T", fields: [{id: "a"}, {id: "a"}]}); }
+        )js");
+        // No window, no answer; a form that can't be drawn throws at once.
+        QJsonObject ran = ScriptTools::run(bench.context(), "former", "start", QJsonArray());
+        QVERIFY2(!ScriptTools::failed(ran), qPrintable(ran.value("error").toString()));
+        QVERIFY(ran.value("result").isNull());
+        ran = ScriptTools::run(bench.context(), "former", "broken", QJsonArray());
+        QVERIFY(ran.value("error").toString().contains("Two fields are called \"a\""));
+
+        ScriptPlugins plugins(bench.services(), bench.folder, nullptr, false);
+        ScriptPlugin *plugin = plugins.plugin("former");
+        QList<QJsonValue> answers;
+        const ScriptPlugin::Done heard = [&](const QJsonValue &value, const QString &) { answers << value; };
+        plugins.attend(true);
+        plugin->callFunction("start", {}, heard);
+        QVariantMap question = plugins.question();
+        QCOMPARE(question.value("title").toString(), QString("Start a story"));
+        const QVariantMap form = question.value("form").toMap();
+        QCOMPARE(form.value("accept").toString(), QString("Start"));
+        QCOMPARE(form.value("fields").toList().size(), 3);
+        // Not sent while what must be filled in is empty; then answered whole.
+        QVERIFY(!plugins.fill(question.value("id").toInt(), {{"wish", "  "}}));
+        QVERIFY(!plugins.question().isEmpty());
+        QCOMPARE(plugins.formMissing(form, plugins.formValues(form, {})), QString("Wish"));
+        QVERIFY(plugins.fill(question.value("id").toInt(), {{"wish", "a ship"}, {"chapters", 99}}));
+        QTRY_COMPARE(answers.size(), 1);
+        QCOMPARE(answers.first().toObject(), (QJsonObject{{"wish", "a ship"}, {"chapters", 60}, {"lush", false}}));
+        // Left (Escape), it is no answer; words are no answer to a form.
+        plugin->callFunction("start", {}, heard);
+        plugins.answer(plugins.question().value("id").toInt(), "words");
+        QTRY_COMPARE(answers.size(), 2);
+        QVERIFY(answers.last().isNull());
+        plugin->callFunction("start", {}, heard);
+        plugins.dismiss(plugins.question().value("id").toInt());
+        QTRY_COMPARE(answers.size(), 3);
+        QVERIFY(answers.last().isNull());
+        // The window going leaves it unanswered.
+        plugin->callFunction("start", {}, heard);
+        plugins.attend(false);
+        QTRY_COMPARE(answers.size(), 4);
+        QVERIFY(answers.last().isNull());
+    }
+
+    void aLauncherIsOnTheShelfAndNowhereElse() {
+        Bench bench;
+        const qint64 real = bench.addBook("A Real Book");
+        Fixtures::write(bench.plugin("teller", R"js(
+            var opened = 0;
+            omabook.ui.launcher({id: "new", title: "Write a new story", author: "Teller", description: "Starts one.",
+                                 open: function (context) { opened += 1; omabook.ui.set("opened", context.launcher + opened); },
+                                 removed: function () { omabook.settings.set("hidden", true); }});
+            omabook.ui.launcher({id: "pic", title: "With a picture", cover: "cover.png", open: function () {}});
+            function broken(which) {
+                if (which === "cover") omabook.ui.launcher({id: "x", title: "X", cover: "nope.png", open: function () {}});
+                if (which === "id") omabook.ui.launcher({id: "Not Ok", title: "X", open: function () {}});
+                if (which === "open") omabook.ui.launcher({id: "x", title: "X"});
+            }
+        )js", {"files"}) + "/cover.png", Fixtures::picture(20, 30, Qt::green));
+        ScriptPlugins plugins(bench.services(), bench.folder, nullptr, false);
+        QVariantList launchers = plugins.launchers();
+        QCOMPARE(launchers.size(), 2);
+        const QVariantMap launcher = launchers.first().toMap();
+        const qint64 number = launcher.value("bookId").toLongLong();
+        QVERIFY(number < 0);
+        QCOMPARE(launcher.value("title").toString(), QString("Write a new story"));
+        QCOMPARE(launcher.value("authors").toString(), QString("Teller"));
+        QVERIFY(launchers.at(1).toMap().value("cover").toUrl().toLocalFile().endsWith("/teller/cover.png"));
+        QCOMPARE(plugins.launchers().first().toMap().value("bookId").toLongLong(), number);
+        for (const char *which : {"cover", "id", "open"}) {
+            QString problem;
+            plugins.plugin("teller")->callNow("broken", {which}, &problem);
+            QVERIFY2(!problem.isEmpty(), which);
+        }
+
+        // On the shelf, first, found by its words, and in no count.
+        BookListModel shelf;
+        shelf.setBooks(bench.library.books(), bench.library.root());
+        shelf.setLaunchers(plugins.launchers());
+        QCOMPARE(shelf.count(), 3);
+        QCOMPARE(shelf.total(), 1);
+        QCOMPARE(shelf.shownBooks(), 1);
+        QCOMPARE(shelf.idAt(0), number);
+        QCOMPARE(shelf.get(0).value("launcher").toBool(), true);
+        QCOMPARE(shelf.get(0).value("held").toString(), QString("launcher"));
+        for (const QString &sort : BookListModel::sorts()) {
+            shelf.setSort(sort);
+            QCOMPARE(shelf.idAt(0), number);
+        }
+        shelf.setQuery("new story");
+        QCOMPARE(shelf.count(), 1);
+        shelf.setQuery("is:wishlist");
+        QCOMPARE(shelf.rowOf(number), -1);
+        shelf.setQuery("");
+        shelf.setFilter("status", "unread");
+        QCOMPARE(shelf.rowOf(number), -1);
+        QCOMPARE(shelf.rowOf(real), 0);
+        shelf.clearFilters();
+        for (const QVariant &choice : shelf.choices("author"))
+            QVERIFY(choice.toMap().value("value").toString() != "Teller");
+        QCOMPARE(shelf.groups("series").first().toMap().value("launcher").toLongLong(), number);
+        // Nothing of it is in the library: not its books, so not in what
+        // is counted, suggested, graphed, tidied, synced or exported.
+        QCOMPARE(bench.library.books().size(), 1);
+        QVERIFY(!bench.library.book(number));
+
+        // Opened, its plugin is called; taken off, its plugin is told.
+        QVERIFY(plugins.launch(number));
+        QTRY_COMPARE(plugins.data().value("teller").toMap().value("opened").toString(), QString("new1"));
+        QVERIFY(plugins.removeLauncher(number));
+        QTRY_COMPARE(plugins.launchers().size(), 1);
+        QTRY_VERIFY(QFile::exists(bench.folder + "/teller/data/settings.json"));
+        QVERIFY(!plugins.launch(number));
+        // With the plugin switched off, it is gone; and with it removed.
+        bench.settings.setPluginEnabled("folder:teller", false);
+        plugins.reload();
+        QVERIFY(plugins.launchers().isEmpty());
+        shelf.setLaunchers(plugins.launchers());
+        QCOMPARE(shelf.count(), 1);
+    }
+
+    void checkAndRunKnowALauncher() {
+        Bench bench;
+        bench.plugin("teller", R"js(
+            omabook.ui.launcher({id: "new", title: "Write a new story", open: function () { return omabook.ui.form({title: "Start"}); }});
+        )js");
+        const QJsonObject checked = ScriptTools::check(bench.context(), "teller");
+        QCOMPARE(checked.value("registered").toObject().value("launchers").toArray().first().toObject().value("title").toString(),
+                 QString("Write a new story"));
+        const QJsonObject ran = ScriptTools::run(bench.context(), "teller", "launcher:new", QJsonObject());
+        QVERIFY2(!ScriptTools::failed(ran), qPrintable(ran.value("error").toString()));
+        QVERIFY(ran.value("result").isNull());
+        QVERIFY(ScriptTools::run(bench.context(), "teller", "launcher:none", QJsonObject()).value("error").toString().contains("no launcher"));
     }
 };
 

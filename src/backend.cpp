@@ -86,6 +86,12 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     connect(m_scripts.get(), &ScriptPlugins::said, this, &Backend::say);
     connect(m_scripts.get(), &ScriptPlugins::touchedLibrary, &m_reloadSoon, qOverload<>(&QTimer::start));
     connect(m_scripts.get(), &ScriptPlugins::changed, this, &Backend::pluginsChanged);
+    // What plugins put on the shelf comes and goes with them.
+    connect(m_scripts.get(), &ScriptPlugins::changed, this, [this] {
+        m_model.setLaunchers(m_scripts->launchers());
+        ++m_revision;
+        emit revisionChanged();
+    });
     // The plugin manager looks again whenever the plugins change, and says
     // so when it changed them itself.
     m_pluginManager = std::make_unique<PluginManager>(m_settings, &m_plugins, m_scripts.get(), m_picker, &m_network);
@@ -268,6 +274,11 @@ void Backend::reload() {
 }
 
 QVariantMap Backend::book(qint64 id) const {
+    // A plugin's launcher, which is on the shelf and in no library.
+    if (id < 0) {
+        const QVariantMap launcher = m_scripts ? m_scripts->launcher(id) : QVariantMap();
+        return launcher.isEmpty() ? QVariantMap() : launcherToMap(launcher);
+    }
     const auto book = m_library ? m_library->book(id) : std::nullopt;
     return book ? bookToMap(*book, m_library->root()) : QVariantMap();
 }

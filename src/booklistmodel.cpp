@@ -61,7 +61,7 @@ const QStringList &roles() {
     static const QStringList roles{"bookId", "title", "authors", "series", "seriesIndex", "publisher", "language",
                                    "isbn", "published", "description", "tags", "formats", "formatNames", "cover",
                                    "percent", "folder", "paper", "held", "status", "shelf", "rating", "finished",
-                                   "added", "lastRead",
+                                   "added", "lastRead", "launcher", "plugin",
                                    // These two are worked out when a view asks, not for every book up front.
                                    "spineColor", "thickness"};
     return roles;
@@ -143,8 +143,19 @@ QString colorCache() {
 }
 
 QVariantMap brief(const QVariantMap &book) {
-    return {{"cover", book.value("cover")}, {"title", book.value("title")}, {"authors", book.value("authors")}};
+    return {{"cover", book.value("cover")}, {"title", book.value("title")}, {"authors", book.value("authors")},
+            {"launcher", book.value("launcher")}, {"held", book.value("held")}};
 }
+
+// A launcher is no book, so it is only ever found by the words on its
+// cover: nothing that asks after a book's format, status or rating finds it.
+bool launcherMatches(const Book &launcher, const QString &query) {
+    const QString words = launcher.meta.title + "\n" + launcher.meta.authorText();
+    return std::ranges::all_of(query.split(' ', Qt::SkipEmptyParts),
+                               [&words](const QString &word) { return !word.contains(':') && words.contains(word, Qt::CaseInsensitive); });
+}
+
+[[nodiscard]] bool isLauncher(const Book &book) noexcept { return book.id < 0; }
 
 } // namespace
 
@@ -194,7 +205,31 @@ QVariantMap bookToMap(const Book &book, const QString &libraryRoot) {
         // Seconds since the epoch, 0 when never.
         {"added", book.added},
         {"lastRead", book.lastRead},
+        {"launcher", false},
+        {"plugin", QString()},
     };
+}
+
+Book launcherBook(const QVariantMap &launcher) {
+    Book book;
+    book.id = launcher.value("bookId").toLongLong();
+    book.meta.title = launcher.value("title").toString();
+    book.meta.authors = QStringList{launcher.value("authors").toString()};
+    book.meta.authors.removeAll(QString());
+    book.meta.description = launcher.value("description").toString();
+    return book;
+}
+
+QVariantMap launcherToMap(const QVariantMap &launcher) {
+    QVariantMap map = bookToMap(launcherBook(launcher), {});
+    map.insert("cover", launcher.value("cover").toUrl());
+    map.insert("folder", QString());
+    // Not a file, not paper, not a wish: something to start.
+    map.insert("held", QStringLiteral("launcher"));
+    map.insert("launcher", true);
+    map.insert("plugin", launcher.value("plugin"));
+    map.insert("pluginName", launcher.value("pluginName"));
+    return map;
 }
 
 BookListModel::BookListModel(QObject *parent) : QAbstractListModel(parent) {}
@@ -241,6 +276,30 @@ void BookListModel::setBooks(const QList<Book> &books, const QString &libraryRoo
     maps.reserve(books.size());
     for (const Book &book : books)
         maps << bookToMap(book, libraryRoot);
+    m_real = books;
+    m_realMaps = maps;
+    present(libraryRoot);
+}
+
+void BookListModel::setLaunchers(const QVariantList &launchers) {
+    QList<QVariantMap> maps;
+    for (const QVariant &launcher : launchers)
+        maps << launcher.toMap();
+    if (maps == m_launchers)
+        return;
+    m_launchers = maps;
+    present(m_root);
+}
+
+void BookListModel::present(const QString &libraryRoot) {
+    // The launchers ride along with the books, after them; the order the
+    // shelf shows puts them first.
+    QList<Book> books = m_real;
+    QList<QVariantMap> maps = m_realMaps;
+    for (const QVariantMap &launcher : std::as_const(m_launchers)) {
+        books << launcherBook(launcher);
+        maps << launcherToMap(launcher);
+    }
     // The library is read again whenever its database is written, which is
     // also when the knowledge graph grows or a reading place is saved. When
     // nothing the shelf shows has changed, the shelf is left alone, so it
@@ -359,6 +418,10 @@ QList<int> BookListModel::arranged(const QString &except) const {
     const bool searching = !m_query.trimmed().isEmpty();
     auto shown = std::views::iota(0, int(m_books.size())) | std::views::filter([this, searching, &narrowings](int index) {
                      const Book &book = m_books.at(index);
+                     // A launcher is on the whole shelf, and in a search
+                     // for its words, but never among books narrowed down.
+                     if (isLauncher(book))
+                         return narrowings.isEmpty() && (!searching || launcherMatches(book, m_query));
                      return (!searching || book.matches(m_query))
                             && std::ranges::all_of(narrowings, [&book](const Narrowing &narrowing) {
                                    return passes(book, narrowing.kind, narrowing.value);
@@ -414,6 +477,10 @@ QList<int> BookListModel::arranged(const QString &except) const {
             return a.id < b.id;
         },
         [this](int index) -> const Book & { return m_books.at(index); });
+    // Whatever the order, the launchers are where the shelf starts, in the
+    // order their plugins put them there.
+    const auto books = std::ranges::stable_partition(shown, [this](int index) { return isLauncher(m_books.at(index)); });
+    std::ranges::sort(shown.begin(), books.begin());
     return shown;
 }
 
@@ -422,6 +489,10 @@ void BookListModel::rebuild() {
     m_rows = arranged();
     endResetModel();
     emit countChanged();
+}
+
+int BookListModel::shownBooks() const {
+    return int(std::ranges::count_if(m_rows, [this](int row) { return !isLauncher(m_books.at(row)); }));
 }
 
 QVariantList BookListModel::choices(const QString &kind) const {
@@ -443,13 +514,13 @@ QVariantList BookListModel::choices(const QString &kind) const {
         using Choices = std::span<const QLatin1StringView>;
         const Choices values = by == Filter::Status ? Choices(statusChoices) : by == Filter::Held ? Choices(heldChoices) : Choices(ratingChoices);
         for (const QString value : values) {
-            const auto fitting = std::ranges::count_if(m_books, [&](const Book &book) { return passes(book, *by, value); });
+            const auto fitting = std::ranges::count_if(m_real, [&](const Book &book) { return passes(book, *by, value); });
             if (fitting > 0)
                 list << QVariantMap{{"value", by == Filter::Rating ? QVariant(value.toInt()) : QVariant(value)}, {"count", int(fitting)}};
         }
         return list;
     }
-    for (const Book &book : std::as_const(m_books)) {
+    for (const Book &book : std::as_const(m_real)) {
         switch (*by) {
             using enum Filter;
         case Format: std::ranges::for_each(book.formats, count); break;
@@ -481,8 +552,15 @@ QVariantList BookListModel::groups(const QString &kind) const {
     QStringList order;
     QHash<QString, Pile> piles;
     const auto by = named<Filter>(filterNames, kind);
+    // A launcher is a pile of its own, before the others, that opens itself.
+    QVariantList launchers;
     for (const int index : arranged(kind)) {
         const Book &book = m_books.at(index);
+        if (isLauncher(book)) {
+            launchers << QVariantMap{{"value", QString()}, {"launcher", book.id}, {"title", book.meta.title},
+                                     {"authors", book.meta.authorText()}, {"count", 0}, {"books", QVariantList{brief(m_maps.at(index))}}};
+            continue;
+        }
         QStringList values = by == Filter::Series ? QStringList{book.meta.series}
                              : by == Filter::Author ? book.meta.authors
                              : by == Filter::Tag ? book.meta.tags
@@ -514,7 +592,7 @@ QVariantList BookListModel::groups(const QString &kind) const {
             return collator.compare(filed(a), filed(b)) < 0;
         });
     }
-    QVariantList list;
+    QVariantList list = launchers;
     for (const QString &value : std::as_const(order))
         list << QVariantMap{{"value", value}, {"count", piles.value(value).count}, {"books", piles.value(value).books}};
     return list;

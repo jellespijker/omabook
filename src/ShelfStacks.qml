@@ -39,7 +39,12 @@ FocusScope {
     }
     function activate() {
         if (inPile) covers.activate()
-        else if (stacks.currentIndex >= 0 && stacks.currentIndex < piles.length) open(piles[stacks.currentIndex].value)
+        else if (stacks.currentIndex >= 0 && stacks.currentIndex < piles.length) openPile(piles[stacks.currentIndex])
+    }
+    // A plugin's launcher is a pile of its own, which opens itself.
+    function openPile(pile) {
+        if (pile.launcher !== undefined) opened(pile.launcher)
+        else open(pile.value)
     }
     function open(value) {
         lastPile = value
@@ -160,6 +165,7 @@ FocusScope {
                         cover: book.cover
                         title: book.title
                         authors: book.authors
+                        held: book.held || ""
                         current: depth === 0 && pile.current
                         Rectangle {
                             visible: member.depth > 0
@@ -175,7 +181,7 @@ FocusScope {
                 anchors.topMargin: 10
                 anchors.left: art.left
                 anchors.right: art.right
-                text: shelf.name(pile.modelData.value)
+                text: pile.modelData.launcher !== undefined ? pile.modelData.title : shelf.name(pile.modelData.value)
                 elide: Text.ElideRight
                 font.pixelSize: 13
                 font.bold: true
@@ -185,7 +191,7 @@ FocusScope {
                 anchors.topMargin: 29
                 anchors.left: art.left
                 anchors.right: art.right
-                text: qsTr("%Ln books", "", pile.modelData.count)
+                text: pile.modelData.launcher !== undefined ? pile.modelData.authors : qsTr("%Ln books", "", pile.modelData.count)
                 elide: Text.ElideRight
                 color: theme.colors.muted
                 font.pixelSize: 12
@@ -195,7 +201,7 @@ FocusScope {
                     stacks.currentIndex = pile.index
                     stacks.forceActiveFocus()
                 }
-                onOpened: shelf.open(pile.modelData.value)
+                onOpened: shelf.openPile(pile.modelData)
             }
         }
     }

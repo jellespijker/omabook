@@ -74,6 +74,29 @@ const QList<Entry> &entries() {
          "Asks the reader for words in a small dialog: `title` is the question, `text` what is filled in to start with. "
          "A promise of what they typed, or of `null` when they left it (Escape) or there is no window to ask in (a "
          "command). Questions are put one at a time."},
+        {"ui.form", "ui.form({title, intro, accept, fields})", "",
+         "Asks the reader to fill in a form, drawn by Omabook in its own style and language, for the keyboard and for "
+         "fingers. `intro` is a few words under the title, `accept` the caption of the button that sends it (Done when "
+         "not given). Each field is `{id, label, type, help, value, ...}`, where `type` is `text` (one line; "
+         "`placeholder`), `textarea` (several), `choice` (one of `choices`), `multi` (any number of `choices`, its value a "
+         "list), `number` (with `min`, `max`, `step`) or `toggle` (true or false). A choice is a string, or `{value, "
+         "label, help}`. `required: true` keeps the form from being sent while that field is empty, and `when: {other: "
+         "value or [values]}` shows a field only while a field above it has one of those values. A promise of `{id: "
+         "value}` for every field, each of its type and within its bounds (a hidden field at its starting value), or of "
+         "`null` when the reader left it (Escape) or there is no window (a command). With no fields it asks to confirm: "
+         "`{}` for yes. A form that can't be drawn (no title, two fields with one id, a choice with nothing to choose) "
+         "throws at once. Forms and questions are put "
+         "one at a time."},
+        {"ui.launcher", "ui.launcher({id, title, author, description, cover, open(context), removed(context)})", "",
+         "Puts an entry on the shelf that is not a book: it is shown in every view of the library and found by a search "
+         "like a book, and opening it (Space, Enter, a double click or a tap, as for any book) calls `open({launcher})` "
+         "instead of the reader. `cover` is a picture in the plugin's folder; without one Omabook draws a cover from the "
+         "theme, marked as something to start rather than to read. It is in the window only: not in the library, so "
+         "never in the counts, the reading statistics, suggestions, the knowledge graph, tidying, sync, catalogs, the "
+         "exports or the file manager, and it goes when the plugin is switched off or removed. When the reader takes it "
+         "off the shelf (Remove), `removed({launcher})` is called and it stays off until the script puts it back; keep "
+         "that choice in `settings` and offer the way back. The same `id` again replaces it; at most three a plugin."},
+        {"ui.removeLauncher", "ui.removeLauncher(id)", "", "Takes one of the plugin's launchers off the shelf."},
 
         {"library.list", "library.list()", "", "Every book: `{id, title, authors, series, series_index, publisher, language, "
                                                "isbn, published, description, tags, formats, added, percent_read, held, status, "
@@ -554,6 +577,13 @@ wrote under its `data/` folder.
 6. Ask the reader where the story should go with
    `omabook.ui.ask({title: "What happens next?"})`, from a command with a
    key: a promise of their words, or `null` when they would rather not say.
+   For more than one answer, `omabook.ui.form({title, fields: [...]})`
+   puts a whole form: choices, numbers, switches, and fields shown only
+   when another field says so.
+7. Let a book be started from the shelf:
+   `omabook.ui.launcher({id: "new", title: "Write a new story", open: start})`
+   puts an entry among the books that calls `start` when it is opened,
+   and is gone again when the plugin is switched off.
 )guide")
         .arg(templates().join(", "), markdown(), example("metadata", "main.js", "js"), example("hook", "main.js", "js"),
              example("format", "main.js", "js"), hostVersion());

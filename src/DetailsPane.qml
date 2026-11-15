@@ -8,6 +8,9 @@ Item {
     id: pane
     property var book: ({})
     readonly property bool hasBook: book.bookId !== undefined
+    // A plugin's launcher: something to start, which is opened and can be
+    // taken off the shelf, and has nothing else a book has.
+    readonly property bool launcher: book.launcher === true
 
     Rectangle {
         anchors.left: parent.left
@@ -42,6 +45,17 @@ Item {
                 held: pane.book.held || "digital"
             }
             Label {
+                objectName: "detailsLauncher"
+                Layout.fillWidth: true
+                visible: pane.launcher
+                // "From the plugin Storyteller: not a book, a way to start one"
+                text: qsTr("From the plugin %1. It starts something new; it is not a book of the library.").arg(pane.book.pluginName || "")
+                textFormat: Text.PlainText
+                color: theme.colors.muted
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+            }
+            Label {
                 objectName: "detailsTitle"
                 Layout.fillWidth: true
                 text: pane.book.title || ""
@@ -68,6 +82,7 @@ Item {
             }
             Stars {
                 objectName: "detailsStars"
+                visible: !pane.launcher
                 rating: pane.book.rating || 0
                 size: 16
                 color: theme.accent
@@ -103,23 +118,26 @@ Item {
                 spacing: 8
                 AppButton {
                     objectName: "readButton"
-                    text: qsTr("Read")
+                    text: pane.launcher ? qsTr("Open") : qsTr("Read")
                     primary: true
                     focusPolicy: Qt.NoFocus
-                    onClicked: reader.openBook(pane.book.bookId)
+                    onClicked: pane.launcher ? backend.scripts.launch(pane.book.bookId) : reader.openBook(pane.book.bookId)
                 }
                 AppButton {
+                    visible: !pane.launcher
                     text: qsTr("Edit")
                     focusPolicy: Qt.NoFocus
                     onClicked: win.editBook(pane.book.bookId)
                 }
                 AppButton {
+                    visible: !pane.launcher
                     text: qsTr("Look Up")
                     focusPolicy: Qt.NoFocus
                     onClicked: win.lookUpBook(pane.book.bookId)
                 }
                 AppButton {
                     objectName: "graphButton"
+                    visible: !pane.launcher
                     text: qsTr("Graph")
                     focusPolicy: Qt.NoFocus
                     onClicked: win.showGraph(pane.book.bookId)

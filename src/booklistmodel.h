@@ -11,6 +11,11 @@
 // A book as QML sees it: the model's roles and Backend::book share this, so
 // a field has one name everywhere in the window.
 QVariantMap bookToMap(const Book &book, const QString &libraryRoot);
+// A plugin's launcher (ScriptPlugins::launchers) as a book is shown, with
+// "launcher" true and "held" "launcher"; and as the Book it stands in for
+// on the shelf, which only its title, author and description are of.
+QVariantMap launcherToMap(const QVariantMap &launcher);
+Book launcherBook(const QVariantMap &launcher);
 
 // The shelf: the library's books, filtered by the search and the filters,
 // and sorted. Every way of looking at the library (covers, spines, a
@@ -31,7 +36,10 @@ class BookListModel : public QAbstractListModel {
     // "rating": 4}. A book shows when it passes all of them. "-" for a tag,
     // author, series or language means books that have none.
     Q_PROPERTY(QVariantMap filters READ filters WRITE setFilters NOTIFY filtersChanged)
+    // The rows shown; of them the books, without the launchers plugins put
+    // first on the shelf (which are no books); and the books there are.
     Q_PROPERTY(int count READ count NOTIFY countChanged)
+    Q_PROPERTY(int books READ shownBooks NOTIFY countChanged)
     Q_PROPERTY(int total READ total NOTIFY countChanged)
 
 public:
@@ -43,6 +51,8 @@ public:
     QHash<int, QByteArray> roleNames() const override;
 
     void setBooks(const QList<Book> &books, const QString &libraryRoot);
+    // The entries plugins put on the shelf; see ScriptPlugins::launchers.
+    void setLaunchers(const QVariantList &launchers);
 
     QString query() const noexcept { return m_query; }
     void setQuery(const QString &query);
@@ -54,7 +64,8 @@ public:
     QVariantMap filters() const noexcept { return m_filters; }
     void setFilters(const QVariantMap &filters);
     int count() const noexcept { return int(m_rows.size()); }
-    int total() const noexcept { return int(m_books.size()); }
+    int shownBooks() const;
+    int total() const noexcept { return int(m_real.size()); }
 
     static QStringList sorts();
     static QStringList filterKinds();
@@ -98,6 +109,7 @@ signals:
     void countChanged();
 
 private:
+    void present(const QString &libraryRoot);
     void rebuild();
     // The books that pass the search and every filter but one of `except`'s
     // kind, as indexes into m_books, in the shelf's order.
@@ -106,6 +118,11 @@ private:
     [[nodiscard]] double thickness(int book) const;
     void loadColors() const;
 
+    // The library's books and the launchers, as given; and both together,
+    // which is what the rows are made of.
+    QList<Book> m_real;
+    QList<QVariantMap> m_realMaps;
+    QList<QVariantMap> m_launchers;
     QList<Book> m_books;
     // Each book as QML sees it, made once when the books arrive: a search
     // or another order only picks among them.

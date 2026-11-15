@@ -25,7 +25,8 @@ AppPopup {
     }
 
     onQuestionChanged: {
-        if (question.id === undefined) {
+        // A form is PluginForm's to show.
+        if (question.id === undefined || question.form !== undefined) {
             shown = -1
             close()
         } else if (question.id !== shown) {

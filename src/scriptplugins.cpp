@@ -1,5 +1,7 @@
 #include "scriptplugins.h"
 
+#include "scriptform.h"
+
 #include "log.h"
 
 #include <QCoreApplication>
@@ -224,9 +226,17 @@ void ScriptPlugins::reload() {
                         plugin->answerAsk(token, QJsonValue());
                         return;
                     }
-                    m_questions.append({m_nextQuestion++, plugin, token, title, placeholder, text});
+                    m_questions.append({m_nextQuestion++, plugin, token, title, placeholder, text, {}});
                     emit questionChanged();
                 });
+        connect(plugin, &ScriptPlugin::formRequested, this, [this, plugin](int token, const QJsonObject &form) {
+            if (m_attending <= 0) {
+                plugin->answerForm(token, QJsonValue());
+                return;
+            }
+            m_questions.append({m_nextQuestion++, plugin, token, form.value("title").toString(), {}, {}, form});
+            emit questionChanged();
+        });
         connect(plugin, &ScriptPlugin::registered, &m_announce, qOverload<>(&QTimer::start));
         QString problem;
         if (plugin->load(&problem)) {
@@ -269,9 +279,13 @@ void ScriptPlugins::reload() {
 
 QVariantMap ScriptPlugins::question() const {
     for (const Question &question : m_questions)
-        if (question.plugin)
-            return {{"id", question.id}, {"plugin", question.plugin->manifest().name}, {"title", question.title},
-                    {"placeholder", question.placeholder}, {"text", question.text}};
+        if (question.plugin) {
+            QVariantMap shown{{"id", question.id}, {"plugin", question.plugin->manifest().name}, {"title", question.title},
+                              {"placeholder", question.placeholder}, {"text", question.text}};
+            if (!question.form.isEmpty())
+                shown.insert("form", question.form.toVariantMap());
+            return shown;
+        }
     return {};
 }
 
@@ -290,11 +304,90 @@ void ScriptPlugins::settle(int id, const QJsonValue &text) {
         if (m_questions.at(i).id != id)
             continue;
         const Question question = m_questions.takeAt(i);
-        if (question.plugin)
-            question.plugin->answerAsk(question.token, text);
+        // A form is answered with what was filled in, of the shape it asked
+        // for, or with nothing; words given to a form are no answer to it.
+        if (question.plugin && !question.form.isEmpty())
+            question.plugin->answerForm(question.token,
+                                        text.isObject() ? QJsonValue(ScriptForm::values(question.form, text.toObject())) : QJsonValue());
+        else if (question.plugin)
+            question.plugin->answerAsk(question.token, text.isObject() ? QJsonValue() : text);
         emit questionChanged();
         return;
     }
+}
+
+bool ScriptPlugins::fill(int id, const QVariantMap &values) {
+    for (const Question &question : std::as_const(m_questions)) {
+        if (question.id != id || question.form.isEmpty())
+            continue;
+        // One that must be filled in and isn't keeps the form open.
+        const QJsonObject filled = ScriptForm::values(question.form, QJsonObject::fromVariantMap(values));
+        if (!ScriptForm::missing(question.form, filled).isEmpty())
+            return false;
+        settle(id, filled);
+        return true;
+    }
+    return false;
+}
+
+QVariantMap ScriptPlugins::formValues(const QVariantMap &form, const QVariantMap &values) const {
+    return ScriptForm::values(QJsonObject::fromVariantMap(form), QJsonObject::fromVariantMap(values)).toVariantMap();
+}
+
+bool ScriptPlugins::fieldShown(const QVariantMap &field, const QVariantMap &values) const {
+    return ScriptForm::shown(QJsonObject::fromVariantMap(field), QJsonObject::fromVariantMap(values));
+}
+
+QString ScriptPlugins::formMissing(const QVariantMap &form, const QVariantMap &values) const {
+    return ScriptForm::missing(QJsonObject::fromVariantMap(form), QJsonObject::fromVariantMap(values));
+}
+
+// --- Launchers ---
+
+qint64 ScriptPlugins::launcherNumber(const QString &plugin, const QString &id) {
+    const QString key = plugin + ":" + id;
+    if (!m_launcherNumbers.contains(key))
+        m_launcherNumbers.insert(key, -1 - qint64(m_launcherNumbers.size()));
+    return m_launcherNumbers.value(key);
+}
+
+QVariantList ScriptPlugins::launchers() {
+    QVariantList list;
+    for (const auto &[id, plugin] : m_plugins) {
+        for (const ScriptPlugin::Launcher &launcher : plugin->launchers()) {
+            list << QVariantMap{{"bookId", launcherNumber(id, launcher.id)}, {"plugin", id}, {"pluginName", plugin->manifest().name},
+                                {"launcher", launcher.id}, {"title", launcher.title}, {"authors", launcher.author},
+                                {"description", launcher.description},
+                                {"cover", launcher.cover.isEmpty() ? QUrl() : QUrl::fromLocalFile(launcher.cover)}};
+        }
+    }
+    return list;
+}
+
+QVariantMap ScriptPlugins::launcher(qint64 number) {
+    for (const QVariant &one : launchers())
+        if (one.toMap().value("bookId").toLongLong() == number)
+            return one.toMap();
+    return {};
+}
+
+bool ScriptPlugins::launch(qint64 number) {
+    const QVariantMap found = launcher(number);
+    ScriptPlugin *owner = found.isEmpty() ? nullptr : plugin(found.value("plugin").toString());
+    if (!owner)
+        return false;
+    // What goes wrong in it is the plugin's, said as a command's would be.
+    owner->launch(found.value("launcher").toString());
+    return true;
+}
+
+bool ScriptPlugins::removeLauncher(qint64 number) {
+    const QVariantMap found = launcher(number);
+    ScriptPlugin *owner = found.isEmpty() ? nullptr : plugin(found.value("plugin").toString());
+    if (!owner)
+        return false;
+    owner->dropLauncher(found.value("launcher").toString());
+    return true;
 }
 
 void ScriptPlugins::setTimeLimit(std::chrono::milliseconds limit) {

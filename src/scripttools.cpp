@@ -88,12 +88,17 @@ QJsonObject registered(const ScriptPlugin &plugin) {
         commands << QJsonObject{{"id", command.id}, {"title", command.title}, {"place", command.place}, {"key", command.key}};
     for (const ScriptPlugin::Panel &panel : plugin.panels())
         panels << QJsonObject{{"place", panel.place}, {"title", panel.title}, {"source", QFileInfo(panel.source).fileName()}};
+    QJsonArray launchers;
+    for (const ScriptPlugin::Launcher &launcher : plugin.launchers())
+        launchers << QJsonObject{{"id", launcher.id}, {"title", launcher.title}, {"author", launcher.author},
+                                 {"cover", launcher.cover.isEmpty() ? QString() : QFileInfo(launcher.cover).fileName()}};
     QJsonArray formats;
     for (const ScriptPlugin::Format &format : plugin.formats())
         formats << QJsonObject{{"name", format.name}, {"extensions", QJsonArray::fromStringList(format.extensions)},
                                {"claims", format.claims.isCallable()}};
     return {{"metadata", sources}, {"catalogs", catalogs}, {"importers", importers}, {"commands", commands},
-            {"events", QJsonArray::fromStringList(plugin.events())}, {"panels", panels}, {"formats", formats}};
+            {"events", QJsonArray::fromStringList(plugin.events())}, {"panels", panels}, {"formats", formats},
+            {"launchers", launchers}};
 }
 
 // One plugin loaded for the length of a call, with what it said and what
@@ -308,6 +313,10 @@ QJsonObject ScriptTools::run(const Context &context, const QString &name, const 
         plugin.runCommand(target, where, done);
     } else if (kind == "importer") {
         plugin.imported(target, object, done);
+    } else if (kind == "launcher") {
+        // Opening it, as the shelf does: there is no window to put a form
+        // in, so a form it shows is answered null.
+        plugin.launch(target, done);
     } else if (kind == "catalog") {
         QJsonArray books = arguments.toArray();
         if (!arguments.isArray())
@@ -329,7 +338,7 @@ QJsonObject ScriptTools::run(const Context &context, const QString &name, const 
         answered = true;
     } else {
         return problem("\"" + what + "\" is not something to run: name a top-level function, or metadata:<source>, "
-                       "command:<id>, catalog:<format>, importer:<name> or event:<name>.");
+                       "command:<id>, catalog:<format>, importer:<name>, launcher:<id> or event:<name>.");
     }
     const double minutes = qBound(0.001, context.waitMinutes, 24.0 * 60);
     const bool finished = ScriptPlugins::waitFor([&] { return answered && plugin.answered(); }, int(minutes * 60000));
@@ -365,15 +374,19 @@ int runPluginCli(const QStringList &arguments) {
         "  plugin new <name> [--template t]   Start a plugin from a template: " + ScriptApi::templates().join(", ") + "\n"
         "  plugin check <name>                Load it with no window; errors come with file and line\n"
         "  plugin run <name> <what> [json]    Run a top-level function, or metadata:<source>, command:<id>,\n"
-        "                                     catalog:<format>, importer:<name>, event:<name>, and print the answer\n"
+        "                                     catalog:<format>, importer:<name>, launcher:<id>, event:<name>, and\n"
+        "                                     print the answer\n"
         "  plugin list                        Every script plugin, what it registered and what is wrong with it\n"
         "  plugin enable|disable <name>       Switch one on or off\n"
         "  plugin install <folder|zip>        Install a plugin someone else wrote, checked first; it stays off until\n"
         "                                     enabled (or --enable), so its permissions can be read\n"
         "  plugin remove <name>               Move one of your own plugins to the trash\n"
-        "  plugin add <github address>        Install a plugin from a GitHub repository (owner/repo, or a link to it, to\n"
-        "                                     a release, tag, branch or folder of it), checked the same way, and remember\n"
-        "                                     where it came from; --pin <tag|branch> stays at one\n"
+        "  plugin search [words]              Find plugins to install: those Omabook's registry lists first, then\n"
+        "                                     repositories on GitHub with the topic omabook-plugin, each checked first\n"
+        "  plugin add <name|github address>   Install a listed plugin by its name, or one from a GitHub repository\n"
+        "                                     (owner/repo, or a link to it, to a release, tag, branch or folder of it),\n"
+        "                                     checked the same way, and remember where it came from; --pin <tag|branch>\n"
+        "                                     stays at one\n"
         "  plugin sources                     Where each plugin came from, what it follows and when it was last checked;\n"
         "                                     --updates auto|tell|never says what is done about updates\n"
         "  plugin update [<name>|--all]       Install what is newer (--check only says); one that asks for a permission\n"
@@ -818,7 +831,8 @@ const bool toolsRegistered = [] {
         "plugin_run", "Run part of a plugin",
         "Runs one thing of a script plugin and answers what it returned, waiting for a promise: a top-level "
         "function (`arguments` is its list of arguments), or `metadata:<source>` (a book), `command:<id>` (a "
-        "context), `catalog:<format>`, `importer:<name>` (a book), `event:<name>` (the payload). The script runs "
+        "context), `catalog:<format>`, `importer:<name>` (a book), `launcher:<id>` (as if opened on the shelf), `event:<name>` "
+        "(the payload). The script runs "
         "with the permissions its plugin.json asks for, on the real library.",
         Mcp::schema({{"name", Mcp::string(nameIs)},
                      {"what", Mcp::string("A top-level function's name, or metadata:<source>, command:<id>, catalog:<format>, "

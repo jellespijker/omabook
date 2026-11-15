@@ -13,6 +13,7 @@ Item {
     readonly property var paths: ({
         "check": "M5 12.5 L10 17.5 L19 7",
         "cross": "M7 7 L17 17 M17 7 L7 17",
+        "plus": "M12 5 V19 M5 12 H19",
         "down": "M6 9 L12 15 L18 9",
         "up": "M6 15 L12 9 L18 15",
         "back": "M15 5 L8 12 L15 19",

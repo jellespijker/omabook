@@ -120,6 +120,27 @@ public:
     Q_INVOKABLE QVariant call(const QString &plugin, const QString &function, const QVariantList &arguments = {});
 
     QVariantMap question() const;
+    // What a form (omabook.ui.form) is answered: the values filled in, of
+    // the shape the form asked for. False, and the form stays, while a field
+    // that must be filled in is empty.
+    Q_INVOKABLE bool fill(int id, const QVariantMap &values);
+    // For the window drawing a form: the values as they would be answered,
+    // whether a field is shown with them, and which field still needs words.
+    Q_INVOKABLE QVariantMap formValues(const QVariantMap &form, const QVariantMap &values) const;
+    Q_INVOKABLE bool fieldShown(const QVariantMap &field, const QVariantMap &values) const;
+    Q_INVOKABLE QString formMissing(const QVariantMap &form, const QVariantMap &values) const;
+
+    // The entries plugins put on the shelf (omabook.ui.launcher), each as a
+    // book is shown: {bookId, plugin, pluginName, launcher, title, authors,
+    // description, cover}. A launcher's bookId is below zero, so no book
+    // has it, and it is the same for as long as Omabook runs.
+    QVariantList launchers();
+    Q_INVOKABLE QVariantMap launcher(qint64 number);
+    // Opening one calls its plugin, not the reader; false when there is no
+    // such launcher (its plugin was switched off meanwhile).
+    Q_INVOKABLE bool launch(qint64 number);
+    // The reader took it off the shelf; its plugin is told.
+    Q_INVOKABLE bool removeLauncher(qint64 number);
     // The window says it is there to put questions to the reader, or no
     // longer is. With nobody attending, a script that asks is answered null.
     Q_INVOKABLE void attend(bool attending);
@@ -168,6 +189,7 @@ private:
         QPointer<ScriptPlugin> plugin;
         int token = 0;
         QString title, placeholder, text;
+        QJsonObject form; // a form's, checked; empty for a question
     };
     QList<Question> m_questions;
     int m_nextQuestion = 1;
@@ -189,6 +211,8 @@ private:
     qint64 m_selectedBook = 0;
     QString m_maker; // the plugin that made the book in front of the reader, if one did
     int m_nextRequest = 1;
+    QHash<QString, qint64> m_launcherNumbers; // by "<plugin>:<launcher>"
+    qint64 launcherNumber(const QString &plugin, const QString &id);
     // The library as the scripts last heard of it.
     QString m_libraryPath;
     QHash<qint64, QJsonObject> m_books;
