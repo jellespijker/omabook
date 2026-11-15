@@ -6503,6 +6503,423 @@ private slots:
         desk.key(Qt::Key_Escape);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
+private:
+    // Collections (library.h): Fiction and Knowledge out of the made-up
+    // library, by their rules alone.
+    static QPair<qint64, qint64> fictionAndKnowledge(Desk &desk) {
+        Library *library = desk.backend->library();
+        const auto fiction = library->addCollection("Fiction", "genre:fiction");
+        const auto knowledge = library->addCollection("Knowledge", "genre:nonfiction");
+        desk.backend->reload();
+        return {fiction.value_or(0), knowledge.value_or(0)};
+    }
+    static int sizeOf(Desk &desk, qint64 collection) {
+        Library *library = desk.backend->library();
+        return int(library->collection(collection)->of(library->books()).size());
+    }
+
+private slots:
+
+    // The collections are tabs above the shelf, shown by key, by mouse and
+    // by finger, and each keeps the view and the order it was left in.
+    void collectionsAreTabsByKeyMouseAndFinger() {
+        Desk desk;
+        QVERIFY(desk.show());
+        QCOMPARE(stock(desk).size(), 28);
+        // None yet: no tabs, and the filter list offers to make one.
+        QVERIFY(!desk.value("collectionStrip", "visible").toBool());
+        desk.key(Qt::Key_F);
+        QTRY_VERIFY(desk.value("palette", "opened").toBool());
+        QCOMPARE(desk.find("palette")->property("entries").value<QJSValue>().property(0).property("act").toString(), QString("collectionNew"));
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("palette", "visible").toBool());
+
+        const auto [fiction, knowledge] = fictionAndKnowledge(desk);
+        QVERIFY(fiction > 0 && knowledge > 0);
+        QTRY_VERIFY(desk.value("collectionStrip", "visible").toBool());
+        QCOMPARE(desk.backend->books()->total(), 28);
+        // Fantasy and Mystery are stories; Essays, Nature and History are not.
+        QCOMPARE(sizeOf(desk, fiction), 13);
+        QCOMPARE(sizeOf(desk, knowledge), 15);
+
+        // ] and [ step through them, All books among them, and round.
+        desk.key(Qt::Key_BracketRight);
+        QTRY_COMPARE(desk.backend->collection(), fiction);
+        QTRY_COMPARE(desk.backend->books()->total(), 13);
+        QTRY_COMPARE(desk.value("bookCount", "text").toString(), QString("13 books"));
+        desk.key(Qt::Key_BracketRight);
+        QTRY_COMPARE(desk.backend->collection(), knowledge);
+        desk.key(Qt::Key_BracketRight);
+        QTRY_COMPARE(desk.backend->collection(), 0);
+        desk.key(Qt::Key_BracketLeft);
+        QTRY_COMPARE(desk.backend->collection(), knowledge);
+        desk.shot("collections-knowledge");
+
+        // Each keeps its own view and order; All books keeps the library's.
+        desk.backend->setCollection(fiction);
+        desk.key(Qt::Key_4);
+        QTRY_VERIFY(desk.find("list"));
+        desk.backend->books()->setSort("title");
+        desk.backend->setCollection(0);
+        QTRY_VERIFY(desk.find("grid"));
+        QCOMPARE(desk.backend->books()->sort(), QString("recent"));
+        desk.backend->setCollection(knowledge);
+        QTRY_VERIFY(desk.find("grid"));
+        desk.backend->setCollection(fiction);
+        QTRY_VERIFY(desk.find("list"));
+        QCOMPARE(desk.backend->books()->sort(), QString("title"));
+        QCOMPARE(desk.backend->library()->collection(fiction)->shelf.value("view").toString(), QString("list"));
+        // Which one is shown is remembered for the library.
+        QCOMPARE(desk.settings->shelf(desk.settings->libraryPath()).value("collection").toInteger(), fiction);
+        desk.shot("collections-fiction-list");
+
+        // The mouse: a click on a tab shows it.
+        clickItem(desk, "collectionTab-" + QString::number(knowledge));
+        QTRY_COMPARE(desk.backend->collection(), knowledge);
+        // A finger: the tabs grow to a fingertip, and a tap shows All books.
+        desk.window->setProperty("touchSeen", true);
+        QTRY_VERIFY(desk.value("collectionStrip", "tabHeight").toReal() >= 36);
+        QTRY_VERIFY(desk.value("collectionNew", "height").toReal() >= 36);
+        auto *all = qobject_cast<QQuickItem *>(desk.find("collectionTab-0"));
+        QVERIFY(all);
+        QTest::qWait(100);
+        QPointingDevice *finger = QTest::createTouchDevice();
+        const QPoint at = all->mapToScene(QPointF(all->width() / 2, all->height() / 2)).toPoint();
+        QTest::touchEvent(desk.window, finger).press(0, at, desk.window);
+        QTest::touchEvent(desk.window, finger).release(0, at, desk.window);
+        QTRY_COMPARE(desk.backend->collection(), 0);
+        desk.shot("collections-touch");
+        desk.window->setProperty("touchSeen", false);
+
+        // C lists them, with what can be done; a few letters and Enter show one.
+        desk.key(Qt::Key_C);
+        QTRY_VERIFY(desk.value("palette", "opened").toBool());
+        QCOMPARE(desk.value("palette", "mode").toString(), QString("collections"));
+        desk.shot("collections-palette");
+        desk.type("know");
+        desk.key(Qt::Key_Return);
+        QTRY_COMPARE(desk.backend->collection(), knowledge);
+        QTRY_VERIFY(!desk.value("palette", "visible").toBool());
+        // A book added while a collection is shown goes into it.
+        BookMeta meta;
+        meta.title = "A Recipe for Clouds";
+        const qint64 paper = desk.backend->newEntry({{"title", meta.title}, {"paper", true}});
+        QVERIFY(paper > 0);
+        QTRY_COMPARE(desk.backend->books()->total(), 16);
+        QVERIFY(desk.backend->library()->collection(knowledge)->included.contains(paper));
+        QVERIFY(desk.backend->books()->rowOf(paper) >= 0);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A collection is made from the keyboard, its rule counted as it is
+    // typed; changed with a right click; a book put in and taken out of it
+    // by hand; and removed, asking first, with its books left in the library.
+    void aCollectionIsMadeChangedAndRemoved() {
+        Desk desk;
+        QVERIFY(desk.show());
+        QCOMPARE(stock(desk).size(), 28);
+        desk.key(Qt::Key_C);
+        QTRY_VERIFY(desk.value("palette", "opened").toBool());
+        desk.type("new");
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("collectionDialog", "opened").toBool());
+        QTRY_VERIFY(desk.value("collectionName", "activeFocus").toBool());
+        desk.type("Stories");
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.value("collectionRule", "activeFocus").toBool());
+        desk.type("tag:mystery OR series:salt");
+        QTRY_COMPARE(desk.value("collectionMatches", "text").toString(), QString("The rule finds 8 books."));
+        desk.shot("collection-new");
+        // A field the search doesn't know is said, and nothing can be made of it.
+        desk.type(" auther:x");
+        QTRY_VERIFY(desk.value("collectionMatches", "text").toString().contains("auther:"));
+        QVERIFY(!desk.value("collectionSave", "enabled").toBool());
+        for (int i = 0; i < 9; ++i)
+            desk.key(Qt::Key_Backspace);
+        QTRY_VERIFY(desk.value("collectionSave", "enabled").toBool());
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(!desk.value("collectionDialog", "visible").toBool());
+        const auto made = desk.backend->library()->collectionNamed("Stories");
+        QVERIFY(made);
+        QCOMPARE(made->rule, QString("tag:mystery OR series:salt"));
+        // The new one is shown at once.
+        QTRY_COMPARE(desk.backend->collection(), made->id);
+        QTRY_COMPARE(desk.backend->books()->total(), 8);
+
+        // A right click on its tab opens it to change.
+        auto *tab = qobject_cast<QQuickItem *>(desk.find("collectionTab-" + QString::number(made->id)));
+        QVERIFY(tab);
+        QTest::qWait(100);
+        QTest::mouseClick(desk.window, Qt::RightButton, {}, tab->mapToScene(QPointF(tab->width() / 2, tab->height() / 2)).toPoint());
+        QTRY_VERIFY(desk.value("collectionDialog", "opened").toBool());
+        QCOMPARE(desk.value("collectionRule", "text").toString(), made->rule);
+        auto *rule = desk.find("collectionRule");
+        rule->setProperty("text", "tag:mystery");
+        QMetaObject::invokeMethod(desk.find("collectionSave"), "clicked");
+        QTRY_VERIFY(!desk.value("collectionDialog", "visible").toBool());
+        QTRY_COMPARE(desk.backend->books()->total(), 5);
+
+        // Shift+C: the selected book's collections, ticked on and off by hand.
+        desk.backend->setCollection(0);
+        QTRY_COMPARE(desk.backend->books()->total(), 28);
+        const qint64 essay = desk.backend->library()->books("Notes on Slow Rivers").first().id;
+        // Once the shelf has settled on the whole library again.
+        QTest::qWait(300);
+        QMetaObject::invokeMethod(desk.find("library"), "select", Q_ARG(QVariant, essay));
+        QTRY_COMPARE(desk.value("library", "selectedId").toLongLong(), essay);
+        desk.key(Qt::Key_C, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.value("palette", "opened").toBool());
+        QCOMPARE(desk.value("palette", "mode").toString(), QString("in"));
+        QCOMPARE(desk.value("palette", "bookId").toLongLong(), essay);
+        QTRY_VERIFY(desk.value("paletteField", "activeFocus").toBool());
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(desk.backend->library()->collection(made->id)->included.contains(essay));
+        // The list stays for the next tick, and shows the first one ticked.
+        QVERIFY(desk.value("palette", "opened").toBool());
+        desk.shot("collection-book");
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("palette", "visible").toBool());
+        // The details beside the shelf say so, and a click takes it out again.
+        QTRY_VERIFY(desk.find("detailsCollection-" + QString::number(made->id)));
+        clickItem(desk, "detailsCollection-" + QString::number(made->id));
+        QTRY_VERIFY(!desk.backend->library()->collection(made->id)->included.contains(essay));
+        QVERIFY(!desk.backend->library()->collection(made->id)->contains(*desk.backend->library()->book(essay)));
+
+        // Removing asks first, and leaves every book in the library.
+        QMetaObject::invokeMethod(desk.window, "editCollection", Q_ARG(QVariant, made->id));
+        QTRY_VERIFY(desk.value("collectionDialog", "opened").toBool());
+        QMetaObject::invokeMethod(desk.find("collectionRemove"), "clicked");
+        QTRY_VERIFY(desk.value("collectionRemoveAsk", "visible").toBool());
+        QVERIFY(desk.backend->library()->collection(made->id));
+        desk.shot("collection-remove");
+        QMetaObject::invokeMethod(desk.find("collectionRemove"), "clicked");
+        QTRY_VERIFY(!desk.value("collectionDialog", "visible").toBool());
+        QVERIFY(!desk.backend->library()->collection(made->id));
+        QCOMPARE(desk.backend->library()->books().size(), 28);
+        QTRY_VERIFY(!desk.value("collectionStrip", "visible").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // The AI sorts the books in no collection, through the tidy: a stand-in
+    // model's answers become proposals to tick, and nothing changes until
+    // they are applied. It is told only what the books are, not their text.
+    void theAiSortsBooksIntoCollectionsThroughTheTidy() {
+        Desk desk;
+        QVERIFY(desk.show());
+        const QList<qint64> ids = stock(desk);
+        QCOMPARE(ids.size(), 28);
+        Library *library = desk.backend->library();
+        const qint64 fiction = *library->addCollection("Fiction", "tag:fantasy");
+        const qint64 knowledge = *library->addCollection("Knowledge", "tag:history");
+        desk.backend->reload();
+        // Mystery, Essays and Nature are in neither.
+        const qint64 mystery = library->books("\"The Quiet Cartographer\"").first().id;
+        const qint64 essays = library->books("\"Notes on Slow Rivers\"").first().id;
+        desk.ai.answer = QString("[{\"id\": %1, \"collection\": \"Fiction\", \"why\": \"A mystery novel\"}, "
+                                 "{\"id\": %2, \"collection\": \"knowledge\", \"why\": \"Essays on rivers\"}, "
+                                 "{\"id\": 99999, \"collection\": \"Fiction\"}, {\"id\": %1, \"collection\": \"Poetry\"}]")
+                             .arg(mystery).arg(essays);
+        QMetaObject::invokeMethod(desk.window, "showCollectionSort");
+        QTRY_VERIFY(desk.value("tidy", "opened").toBool());
+        QTRY_VERIFY(!desk.librarian->busy());
+        // Only books that were asked about; a collection that isn't there
+        // yet is proposed as a new one.
+        QTRY_COMPARE(desk.value("tidyList", "count").toInt(), 3);
+        QVERIFY(desk.librarian->proposals().at(2).toMap().value("isNew").toBool());
+        QCOMPARE(desk.librarian->proposals().at(2).toMap().value("collection").toString(), QString("Poetry"));
+        QCOMPARE(desk.ai.requests.size(), 1);
+        const AiRequest &asked = desk.ai.requests.first();
+        QCOMPARE(asked.tier, AiRequest::Quick);
+        QVERIFY(asked.messages.first().text.contains("The Quiet Cartographer"));
+        QVERIFY(!asked.messages.first().text.contains("Harbour of Glass\",\"id\""));
+        // Nothing changed yet.
+        QVERIFY(!library->collection(fiction)->contains(*library->book(mystery)));
+        desk.shot("collections-sort");
+        // Unticked, the second is left alone.
+        QTRY_VERIFY(desk.value("tidyList", "activeFocus").toBool());
+        desk.key(Qt::Key_Down);
+        desk.key(Qt::Key_Space);
+        QCOMPARE(desk.librarian->chosen(), 2);
+        QMetaObject::invokeMethod(desk.find("tidyApply"), "clicked");
+        QTRY_VERIFY(!desk.value("tidy", "visible").toBool());
+        QVERIFY(library->collection(fiction)->included.contains(mystery));
+        QVERIFY(library->collectionNamed("Poetry")->included.contains(mystery));
+        QVERIFY(!library->collection(knowledge)->contains(*library->book(essays)));
+
+        // The whole tidy offers the pass too, for the books still in none.
+        QMetaObject::invokeMethod(desk.window, "showTidy");
+        QTRY_VERIFY(desk.value("tidy", "opened").toBool());
+        QTRY_VERIFY(desk.value("tidyCollections", "visible").toBool());
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("tidy", "visible").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A collection's own reading format, set from the Aa panel: it lies
+    // over the defaults, and a book's own over it.
+    void aCollectionHasAReadingFormatOfItsOwn() {
+        Desk desk;
+        QVERIFY(Fixtures::epub(desk.dir.filePath("novel.epub"), "A Made-Up Novel"));
+        const qint64 book = desk.add(desk.dir.filePath("novel.epub"));
+        Library *library = desk.backend->library();
+        const qint64 novels = *library->addCollection("Novels", "\"A Made-Up Novel\"");
+        desk.backend->reload();
+        QVERIFY(desk.show());
+        desk.window->resize(1400, 860);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.key(Qt::Key_A, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.value("formatSide", "visible").toBool());
+        QTRY_VERIFY(desk.value("formatThisCollection", "visible").toBool());
+        QVERIFY(desk.value("formatThisCollection", "text").toString().contains("Novels"));
+        clickItem(desk, "formatThisCollection");
+        QTRY_VERIFY(desk.value("readerView", "formatForCollection").toBool());
+        clickItem(desk, "formatAlign_justify");
+        QTRY_COMPARE(library->collection(novels)->format.value("align").toString(), QString("justify"));
+        QCOMPARE(desk.settings->align(), QString("start"));
+        QTRY_COMPARE(desk.reader->format()->effective().value("align").toString(), QString("justify"));
+        desk.shot("collection-format");
+        // The book's own wins over its collection's.
+        clickItem(desk, "formatThisBook");
+        QTRY_VERIFY(desk.value("readerView", "formatBookOnly").toBool());
+        QVERIFY(!desk.value("readerView", "formatForCollection").toBool());
+        clickItem(desk, "formatAlign_center");
+        QTRY_COMPARE(desk.reader->format()->effective().value("align").toString(), QString("center"));
+        QCOMPARE(library->collection(novels)->format.value("align").toString(), QString("justify"));
+        clickItem(desk, "formatResetBook");
+        QTRY_COMPARE(desk.reader->format()->effective().value("align").toString(), QString("justify"));
+        clickItem(desk, "formatResetCollection");
+        QTRY_VERIFY(library->collection(novels)->format.isEmpty());
+        QTRY_COMPARE(desk.reader->format()->effective().value("align").toString(), QString("start"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Asking the library and the graph can keep to the collection shown.
+    void askingAndTheGraphKeepToACollection() {
+        Desk desk;
+        QVERIFY(desk.show());
+        QCOMPARE(stock(desk).size(), 28);
+        const auto [fiction, knowledge] = fictionAndKnowledge(desk);
+        Q_UNUSED(knowledge);
+        desk.backend->setCollection(fiction);
+        desk.key(Qt::Key_W);
+        QTRY_VERIFY(desk.value("askLibrary", "opened").toBool());
+        QTRY_VERIFY(desk.value("askLibraryOnly", "visible").toBool());
+        QVERIFY(desk.value("askLibraryOnly", "text").toString().contains("Fiction"));
+        clickItem(desk, "askLibraryOnly");
+        QTRY_VERIFY(desk.librarian->onlyCollection());
+        desk.librarian->ask("Which of these is set at sea?");
+        QTRY_VERIFY(!desk.librarian->answering());
+        const QString sent = desk.ai.requests.last().messages.first().text;
+        QVERIFY(sent.contains("Harbour of Glass"));
+        QVERIFY(!sent.contains("Notes on Slow Rivers"));
+        desk.shot("ask-collection");
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("askLibrary", "visible").toBool());
+        // Off again, the whole library is asked about.
+        desk.librarian->setOnlyCollection(false);
+        desk.librarian->ask("And now?");
+        QTRY_VERIFY(!desk.librarian->answering());
+        QVERIFY(desk.ai.requests.last().messages.first().text.contains("Notes on Slow Rivers"));
+        // The graph lists the collections among what it can show.
+        desk.key(Qt::Key_6);
+        QTRY_VERIFY(graphParts(desk, "libraryGraph").browser);
+        GraphBrowser *graph = graphParts(desk, "libraryGraph").browser;
+        graph->showCollection("Fiction");
+        QTRY_COMPARE(graph->showing(), QString("collection"));
+        QCOMPARE(graph->collection(), QString("Fiction"));
+        QTRY_COMPARE(desk.value("graphTitle", "text").toString(), QString("Fiction"));
+        // Only the books of the collection are in it: a story's node, no essay's.
+        QStringList names = shownNames(graph);
+        QVERIFY(!names.contains("Notes on Slow Rivers"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // The tabs, the dialog and the lists in a light theme and right to left,
+    // in a window narrow enough that the tabs scroll.
+    void collectionsInALightThemeAndRightToLeft() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
+                                 "selection_background = \"#dcdcdc\"\ncolor8 = \"#6f6f6f\"\n";
+        for (const QByteArray &language : {QByteArray("en"), QByteArray("ar")}) {
+            Desk desk({}, language, light);
+            QVERIFY(desk.show());
+            QCOMPARE(stock(desk).size(), 28);
+            Library *library = desk.backend->library();
+            for (const QString name : {"Fiction", "Knowledge", "Essays and Letters", "Nature Writing", "To Read This Summer",
+                                       "Lent to Friends"})
+                QVERIFY(library->addCollection(name, name == "Fiction" ? "genre:fiction" : "tag:" + name.section(' ', 0, 0)));
+            desk.backend->reload();
+            QTRY_VERIFY(desk.value("collectionStrip", "visible").toBool());
+            desk.backend->stepCollection(1);
+            QTest::qWait(200);
+            desk.shot("collections-light-" + language);
+            desk.window->resize(420, 760);
+            QTest::qWait(200);
+            // Narrow: the tabs scroll, and the one shown stays in view.
+            auto *tabs = qobject_cast<QQuickItem *>(desk.find("collectionTabs"));
+            QVERIFY(tabs);
+            QTRY_VERIFY(tabs->property("interactive").toBool());
+            desk.backend->stepCollection(-2);
+            QTRY_COMPARE(desk.value("collectionStrip", "shownIndex").toInt(), 6);
+            auto *shown = qobject_cast<QQuickItem *>(desk.find("collectionTab-" + QString::number(desk.backend->collection())));
+            QVERIFY(shown);
+            QTRY_VERIFY(shown->mapToItem(tabs, QPointF(0, 0)).x() >= -1);
+            QTRY_VERIFY(shown->mapToItem(tabs, QPointF(shown->width(), 0)).x() <= tabs->width() + 1);
+            desk.shot("collections-narrow-" + language);
+            QMetaObject::invokeMethod(desk.window, "newCollection", Q_ARG(QVariant, "genre:fiction"), Q_ARG(QVariant, 0));
+            QTRY_VERIFY(desk.value("collectionDialog", "opened").toBool());
+            desk.shot("collection-dialog-" + language);
+            desk.key(Qt::Key_Escape);
+            QTRY_VERIFY(!desk.value("collectionDialog", "visible").toBool());
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(language + ": " + desk.warnings.join('\n')));
+        }
+    }
+
+    // Collections inside collections: the top row shows the top ones; one
+    // opened shows those inside it in a row under it, and stays marked while
+    // one of them is shown. Names are the user's own, in any language.
+    void collectionsInsideCollectionsAreASecondRow() {
+        Desk desk;
+        QVERIFY(desk.show());
+        QCOMPARE(stock(desk).size(), 28);
+        Library *library = desk.backend->library();
+        QVERIFY(library->addCollection("Verhalen", "genre:fiction"));
+        QVERIFY(library->addCollection("Studie/Natuur", "tag:nature"));
+        QVERIFY(library->addCollection("Studie/Geschiedenis", "tag:history"));
+        QVERIFY(library->addCollection("Studie/Essays", "tag:essays"));
+        desk.backend->reload();
+        const qint64 studie = library->collectionNamed("Studie")->id;
+        const qint64 natuur = library->collectionNamed("Studie/Natuur")->id;
+        QTRY_VERIFY(desk.value("collectionStrip", "visible").toBool());
+        QVERIFY(!desk.value("collectionInnerStrip", "visible").toBool());
+        // The top row: All books and the two at the top.
+        QTRY_VERIFY(desk.find("collectionTab-" + QString::number(studie)));
+        QVERIFY(!desk.find("collectionTab-" + QString::number(natuur)));
+        clickItem(desk, "collectionTab-" + QString::number(studie));
+        QTRY_COMPARE(desk.backend->collection(), studie);
+        // A parent holds what is inside it.
+        QTRY_COMPARE(desk.backend->books()->total(), 15);
+        QTRY_VERIFY(desk.value("collectionInnerStrip", "visible").toBool());
+        clickItem(desk, "collectionSubTab-" + QString::number(natuur));
+        QTRY_COMPARE(desk.backend->collection(), natuur);
+        QTRY_COMPARE(desk.backend->books()->total(), 6);
+        // Both rows stay, each marking its own.
+        QVERIFY(desk.value("collectionInnerStrip", "visible").toBool());
+        QCOMPARE(desk.value("collectionStrip", "marked").toLongLong(), studie);
+        QCOMPARE(desk.value("collectionInnerStrip", "marked").toLongLong(), natuur);
+        QTest::mouseMove(desk.window, QPoint(desk.window->width() / 3, desk.window->height() - 8));
+        QTest::qWait(300);
+        desk.shot("collections-nested");
+        // A new one made from the inner row lands inside its parent.
+        clickItem(desk, "collectionNewInside");
+        QTRY_VERIFY(desk.value("collectionDialog", "opened").toBool());
+        QCOMPARE(desk.value("collectionDialog", "parentId").toLongLong(), studie);
+        QTRY_VERIFY(desk.value("collectionName", "activeFocus").toBool());
+        desk.type("Vogels");
+        QMetaObject::invokeMethod(desk.find("collectionSave"), "clicked");
+        QTRY_VERIFY(library->collectionNamed("Studie/Vogels"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
 };
 
 QTEST_MAIN(UiTests)

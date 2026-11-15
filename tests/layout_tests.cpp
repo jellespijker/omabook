@@ -1544,6 +1544,43 @@ private slots:
         }
         verdict();
     }
+    // Collections: a row of tabs at the top and one of the collections
+    // inside the one opened, with long names in a long language, at every
+    // size; the tabs scroll rather than squeeze or spill. And the dialog and
+    // the list that make and choose them.
+    void collectionsAtEverySize() {
+        for (const bool touch : {false, true}) {
+            Desk desk("de", touch ? QByteArray() : lightTheme, touch);
+            const QList<qint64> ids = stock(desk);
+            QVERIFY(!ids.isEmpty());
+            Library *library = desk.backend->library();
+            for (const QString path : {"Belletristik", "Fachbücher/Regelungstechnik und Kalman-Filter", "Fachbücher/Hydraulik",
+                                       "Fachbücher/Bodenmechanik und Baggerei", "Fachbücher/Werkstoffe", "Zum Verleihen an Freunde",
+                                       "Sommerlektüre am See"})
+                QVERIFY(library->addCollection(path, path == "Belletristik" ? "genre:fiction" : "tag:" + path.section('/', -1).section(' ', 0, 0)));
+            QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            if (desk.window->minimumWidth() > 420 || desk.window->minimumHeight() > 360)
+                desk.window->setMinimumSize(QSize(420, 360));
+            desk.backend->reload();
+            desk.backend->setCollection(library->collectionNamed("Fachbücher")->id);
+            for (const QSize &size : sizes()) {
+                QVERIFY(desk.resize(size));
+                look(desk, "collections");
+            }
+            // Inside one of them: both rows stay, the inner one marking it.
+            desk.backend->setCollection(library->collectionNamed("Fachbücher/Werkstoffe")->id);
+            for (const QSize &size : dialogSizes()) {
+                QVERIFY(desk.resize(size));
+                look(desk, "collections-inside");
+                dialog(desk, "collection-dialog", [&] {
+                    QMetaObject::invokeMethod(desk.window, "editCollection", Q_ARG(QVariant, desk.backend->collection()));
+                });
+                dialog(desk, "collection-list", [&] { QTest::keyClick(desk.window, Qt::Key_C); });
+            }
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+        verdict();
+    }
 };
 
 QTEST_MAIN(LayoutTests)
