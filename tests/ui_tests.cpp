@@ -4900,9 +4900,19 @@ private:
             int position = -1;
             for (int i = 0; i <= occurrence; ++i)
                 position = int(document->toPlainText().indexOf(words, position + 1));
-            QRectF first, last;
-            QMetaObject::invokeMethod(item, "positionToRectangle", Q_RETURN_ARG(QRectF, first), Q_ARG(int, position + 1));
-            QMetaObject::invokeMethod(item, "positionToRectangle", Q_RETURN_ARG(QRectF, last), Q_ARG(int, position + int(words.size()) - 1));
+            const auto rectAt = [this](int at) {
+                QRectF rect;
+                QMetaObject::invokeMethod(item, "positionToRectangle", Q_RETURN_ARG(QRectF, rect), Q_ARG(int, at));
+                return rect;
+            };
+            // The middle of the words on the line they start on: a name the
+            // measure breaks over two lines ("Aldo / Brenn") is pointed at
+            // where it begins, not between the two lines' ends.
+            const QRectF first = rectAt(position + 1);
+            QRectF last = first;
+            for (int at = position + 2; at < position + int(words.size()); ++at)
+                if (const QRectF next = rectAt(at); qFuzzyCompare(next.top() + 1, first.top() + 1))
+                    last = next;
             return item->mapToScene(QPointF((first.left() + last.right()) / 2, first.center().y())).toPoint();
         }
         QTextCharFormat formatOf(const QString &words) const {
