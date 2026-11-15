@@ -25,18 +25,67 @@ Item {
     }
     Timer { id: soon; interval: 0; onTriggered: helper.lay() }
     onOnChanged: soon.restart()
-    onTextChanged: soon.restart()
+    onTextChanged: { soon.restart(); lightSoon.restart() }
     Component.onCompleted: soon.restart()
     Connections {
         target: helper.text
         // Set anew: another chapter, or the type changed. Marking it changes
         // its formats too, which is noticed and costs one comparison.
-        function onTextChanged() { soon.restart() }
+        function onTextChanged() { soon.restart(); lightSoon.restart() }
     }
     Connections {
         target: reader.marks
         function onChanged() { soon.restart() }
         function onLookChanged() { soon.restart() }
+        function onFlashChanged() { lightSoon.restart() }
+    }
+
+    // A moment gone to from the graph: its words lit for a moment where
+    // this text holds them, so the eye lands on the very spot. Looked for
+    // once the chapter is laid out, which a turn to another one waits for.
+    property var lit: []
+    property real glow: 0
+    Timer { id: lightSoon; interval: 60; onTriggered: helper.light() }
+    function light() {
+        const flash = reader.marks.flash
+        if (!text || !flash.words || flash.section !== reader.section) {
+            lit = []
+            return
+        }
+        const found = reader.marks.findIn(text.textDocument, flash.words, flash.fraction)
+        if (found.end === undefined) return
+        const a = text.positionToRectangle(found.start)
+        const b = text.positionToRectangle(found.end)
+        // One rectangle a line the words are on.
+        const rects = a.y === b.y ? [Qt.rect(a.x, a.y, Math.max(4, b.x - a.x), a.height)]
+                                  : [Qt.rect(a.x, a.y, Math.max(4, text.width - a.x), a.height)]
+        if (a.y !== b.y) {
+            if (b.y - (a.y + a.height) > 1) rects.push(Qt.rect(0, a.y + a.height, text.width, b.y - a.y - a.height))
+            rects.push(Qt.rect(0, b.y, Math.max(4, b.x), b.height))
+        }
+        lit = rects
+        shine.restart()
+    }
+    SequentialAnimation {
+        id: shine
+        NumberAnimation { target: helper; property: "glow"; from: 0; to: 1; duration: 180; easing.type: Easing.OutCubic }
+        PauseAnimation { duration: 1600 }
+        NumberAnimation { target: helper; property: "glow"; to: 0; duration: 900; easing.type: Easing.InOutQuad }
+        ScriptAction { script: helper.lit = [] }
+    }
+    Repeater {
+        model: helper.lit
+        delegate: Rectangle {
+            required property rect modelData
+            objectName: "pageMomentLit"
+            x: modelData.x - 2
+            y: modelData.y
+            width: modelData.width + 4
+            height: modelData.height
+            radius: Math.min(3, theme.radius)
+            color: Qt.alpha(theme.accent, 0.32)
+            opacity: helper.glow
+        }
     }
 
     // A rectangle of the text from one position to another, on the first line.

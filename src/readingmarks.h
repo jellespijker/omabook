@@ -6,6 +6,7 @@
 #include <QObject>
 #include <QPointer>
 #include <QQuickTextDocument>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <functional>
@@ -40,6 +41,9 @@ class ReadingMarks : public QObject {
     Q_PROPERTY(QColor background READ background WRITE setBackground NOTIFY lookChanged)
     // How many things can be marked where the reader is.
     Q_PROPERTY(int known READ known NOTIFY changed)
+    // A moment gone to from the graph, lit on the page for a moment:
+    // {section, fraction, words}; empty when there is none.
+    Q_PROPERTY(QVariantMap flash READ flash NOTIFY flashChanged)
 
 public:
     explicit ReadingMarks(Reader *reader, QObject *parent = nullptr);
@@ -65,8 +69,11 @@ public:
     // mark starts and ends ({start, end}); empty where nothing is marked.
     Q_INVOKABLE QVariantMap at(QQuickTextDocument *chapter, int position) const;
     // Everything the reader may know of a thing: {id, kind, name, summary,
-    // aliases, color, met: {section, fraction, title}, relations: [{relation,
-    // other, otherId, outgoing}]}; empty for one not met yet.
+    // aliases, color, met: {section, fraction, anchor, title}, latest (where
+    // the summary shown was revealed, when that is not where it was met):
+    // {section, fraction, anchor, title}, relations: [{relation, other,
+    // otherId, outgoing}]}; empty for one not met yet. All of it as of the
+    // reader's place: never a summary or a name from further on.
     Q_INVOKABLE QVariantMap thing(qint64 id) const;
     // The known thing that selected words are a name of, or empty.
     Q_INVOKABLE QVariantMap named(const QString &words) const;
@@ -97,6 +104,15 @@ public:
     // Reads the graph again if it changed (the AI noted what was read).
     Q_INVOKABLE void refresh();
 
+    // Goes to a moment of the open book: to the words there when the
+    // section has them (the nearest to `fraction`, where it holds them more
+    // than once), else to the place itself, and lights those words briefly.
+    Q_INVOKABLE void goToMoment(int section, double fraction, const QString &words);
+    QVariantMap flash() const noexcept { return m_flash; }
+    // Where words are in a chapter a TextEdit shows, the nearest to a place
+    // in it (0 to 1): {start, end}, empty when it doesn't hold them.
+    Q_INVOKABLE QVariantMap findIn(QQuickTextDocument *chapter, const QString &words, double fraction) const;
+
     // What is marked in a text of a chapter of the open book, from the
     // cache or worked out now, on this thread; for tests and the timings.
     QList<TextMarks::Mark> marksIn(int section, const QString &text);
@@ -113,6 +129,7 @@ signals:
     // Marks were laid on a chapter.
     void marked();
     void suggestionsChanged();
+    void flashChanged();
 
 private:
     struct Key {
@@ -137,6 +154,8 @@ private:
     bool stillMarked(QTextDocument *document, const Marks &marks) const;
     QString stampOf(const Key &key) const;
     QString titleOf(int section) const;
+    // How many of m_factPlaces are at or before a place.
+    qsizetype factReach(const GraphPlace &place) const;
 
     Reader *m_reader;
     std::function<QString()> m_graphMode;
@@ -149,6 +168,13 @@ private:
     qint64 m_graphCount = -1;
     QList<std::pair<GraphNode, GraphPlace>> m_met;
     qsizetype m_reach = -1;
+    // What was learned of those things and when, and of it the places in
+    // this book, in order: passing one may change a summary or a name.
+    QHash<qint64, QList<GraphFact>> m_facts;
+    QList<GraphPlace> m_factPlaces;
+    qsizetype m_factReach = -1;
+    QVariantMap m_flash;
+    QTimer *m_flashOver = nullptr;
     QHash<qint64, TextMarks::Thing> m_things;
     std::shared_ptr<const TextMarks::Matcher> m_matcher;
     QHash<Key, Marks> m_cache;

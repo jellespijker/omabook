@@ -6,6 +6,7 @@
 #include <QTextDocument>
 #include <QtConcurrent>
 #include <algorithm>
+#include <cmath>
 #include <ranges>
 
 #include "graphbuilder.h"
@@ -35,6 +36,20 @@ ReadingMarks::ReadingMarks(Reader *reader, QObject *parent) : QObject(parent), m
     connect(m_reader, &Reader::sectionChanged, this, &ReadingMarks::follow);
     connect(m_reader, &Reader::fractionChanged, this, &ReadingMarks::follow);
     connect(GraphFeed::instance(), &GraphFeed::changed, this, &ReadingMarks::refresh);
+    // A moment's words stay lit long enough to be found on the page.
+    m_flashOver = new QTimer(this);
+    m_flashOver->setSingleShot(true);
+    m_flashOver->setInterval(4000);
+    connect(m_flashOver, &QTimer::timeout, this, [this] {
+        m_flash.clear();
+        emit flashChanged();
+    });
+    connect(m_reader, &Reader::bookChanged, this, [this] {
+        if (m_flash.isEmpty() || m_reader->growing())
+            return;
+        m_flash.clear();
+        emit flashChanged();
+    });
 }
 
 ReadingMarks::~ReadingMarks() {
@@ -88,6 +103,16 @@ void ReadingMarks::load() {
     m_book = library ? m_reader->bookId() : 0;
     m_graphCount = library ? library->changes().graph : -1;
     m_met = library && enabled() ? Graph(*library).metIn(m_book) : QList<std::pair<GraphNode, GraphPlace>>();
+    m_facts = library && enabled()
+                  ? Graph(*library).factsOf(m_met | std::views::transform([](const auto &met) { return met.first.id; })
+                                            | std::ranges::to<QList<qint64>>())
+                  : QHash<qint64, QList<GraphFact>>();
+    m_factPlaces.clear();
+    for (const QList<GraphFact> &facts : std::as_const(m_facts))
+        for (const GraphFact &fact : facts)
+            if (fact.revealed.place.bookId == m_book)
+                m_factPlaces << fact.revealed.place;
+    std::ranges::sort(m_factPlaces, [](const GraphPlace &a, const GraphPlace &b) { return a.notAfter(b) && !b.notAfter(a); });
     ++m_counts.loads;
     m_noted.clear();
     m_notedFor.clear();
@@ -110,14 +135,25 @@ void ReadingMarks::refresh() {
 void ReadingMarks::follow() {
     if (!m_reader->isOpen() || m_reader->bookId() != m_book)
         return;
-    if (TextMarks::reach(m_met, m_reader->place()) != m_reach)
+    if (TextMarks::reach(m_met, m_reader->place()) != m_reach || factReach(m_reader->place()) != m_factReach)
         rebuild(false);
+}
+
+qsizetype ReadingMarks::factReach(const GraphPlace &place) const {
+    return std::ranges::count_if(m_factPlaces, [&place](const GraphPlace &at) { return at.notAfter(place); });
 }
 
 void ReadingMarks::rebuild(bool force) {
     const GraphPlace place = m_reader->isOpen() ? m_reader->place() : GraphPlace{};
     m_reach = TextMarks::reach(m_met, place);
-    const QList<TextMarks::Thing> things = TextMarks::known(m_met, place);
+    m_factReach = factReach(place);
+    // Each thing as it was known here: a name revealed further on is not
+    // marked, and its card says only what was known by now.
+    QList<std::pair<GraphNode, GraphPlace>> met = m_met;
+    const GraphKnown known = [book = m_book, place](const GraphPlace &at) { return at.bookId != book || at.notAfter(place); };
+    for (auto &[node, at] : met)
+        node = Graph::asKnown(std::move(node), m_facts.value(node.id), m_book, known);
+    const QList<TextMarks::Thing> things = TextMarks::known(met, place);
     auto matcher = std::make_shared<const TextMarks::Matcher>(things);
     const bool same = m_matcher && m_matcher->fingerprint() == matcher->fingerprint();
     m_things.clear();
@@ -348,17 +384,31 @@ QVariantMap ReadingMarks::thing(qint64 id) const {
     const auto found = m_things.constFind(id);
     if (found == m_things.cend())
         return {};
+    const Library *library = m_reader->isOpen() ? m_reader->library() : nullptr;
+    const GraphPlace here = m_reader->place();
+    const QString metAnchor = library ? Graph(*library).firstMet(id, m_book).value_or(GraphMoment()).anchor : QString();
     QVariantMap map{{"id", found->id},
                     {"kind", found->kind},
                     {"name", found->name},
                     {"summary", found->summary},
                     {"aliases", found->aliases},
                     {"color", colorOf(found->kind)},
-                    {"met", QVariantMap{{"section", found->met.section}, {"fraction", found->met.fraction}, {"title", titleOf(found->met.section)}}}};
+                    {"met", QVariantMap{{"section", found->met.section}, {"fraction", found->met.fraction}, {"anchor", metAnchor},
+                                        {"title", titleOf(found->met.section)}}}};
+    // Where the summary it has here was revealed, when that came later than
+    // meeting it: the latest of the book's summaries up to the reader.
+    const GraphFact *latest = nullptr;
+    for (const GraphFact &fact : m_facts.value(id))
+        if (fact.kind == "summary" && fact.revealed.place.bookId == m_book && fact.revealed.place.notAfter(here)
+            && fact.value == found->summary && (!latest || latest->revealed.place.notAfter(fact.revealed.place)))
+            latest = &fact;
+    if (latest && !(latest->revealed.place.section == found->met.section && latest->revealed.place.fraction == found->met.fraction))
+        map.insert("latest", QVariantMap{{"section", latest->revealed.place.section}, {"fraction", latest->revealed.place.fraction},
+                                         {"anchor", latest->revealed.anchor}, {"title", titleOf(latest->revealed.place.section)}});
     // Its relations as the reader may know them, a few, the latest first.
     QVariantList relations;
-    if (const Library *library = m_reader->isOpen() ? m_reader->library() : nullptr) {
-        const GraphView view = Graph(*library).ofBook(m_book, m_reader->place());
+    if (library) {
+        const GraphView view = Graph(*library).ofBook(m_book, here);
         QHash<qint64, QString> names;
         for (const GraphNode &node : view.nodes)
             names.insert(node.id, node.name);
@@ -496,4 +546,47 @@ QString ReadingMarks::notedUpTo() {
     else
         m_noted = tr("Noted up to %1").arg(titleOf(built->section));
     return m_noted;
+}
+
+void ReadingMarks::goToMoment(int section, double fraction, const QString &words) {
+    const QString wanted = words.simplified();
+    double at = fraction;
+    // The words in that section, the nearest to the place kept with them:
+    // the place itself is close, the words are exact.
+    if (wanted.size() >= 2) {
+        double nearest = 2;
+        for (const QVariant &result : m_reader->find(wanted)) {
+            const QVariantMap found = result.toMap();
+            const double there = found.value("fraction").toDouble();
+            if (found.value("section").toInt() == section && std::abs(there - fraction) < nearest) {
+                nearest = std::abs(there - fraction);
+                at = there;
+            }
+        }
+    }
+    m_flash = {{"section", section}, {"fraction", at}, {"words", wanted}};
+    m_reader->goToPlace(section, at);
+    emit flashChanged();
+    m_flashOver->start();
+}
+
+QVariantMap ReadingMarks::findIn(QQuickTextDocument *chapter, const QString &words, double fraction) const {
+    QTextDocument *document = chapter ? chapter->textDocument() : nullptr;
+    QStringList parts;
+    for (const QString &word : words.simplified().split(' ', Qt::SkipEmptyParts))
+        parts << QRegularExpression::escape(word);
+    if (!document || parts.isEmpty())
+        return {};
+    const QRegularExpression phrase(parts.join("\\s+"), QRegularExpression::CaseInsensitiveOption);
+    const double wanted = qBound(0.0, fraction, 1.0) * document->characterCount();
+    QVariantMap best;
+    double nearest = -1;
+    for (QTextCursor found = document->find(phrase); !found.isNull(); found = document->find(phrase, found)) {
+        const double off = std::abs(found.selectionStart() - wanted);
+        if (nearest < 0 || off < nearest) {
+            nearest = off;
+            best = {{"start", found.selectionStart()}, {"end", found.selectionEnd()}};
+        }
+    }
+    return best;
 }

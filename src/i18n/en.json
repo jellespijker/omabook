@@ -170,6 +170,8 @@
     "one": "%Ln thing",
     "other": "%Ln things"
   },
+  "First met: %1": "First met: %1",
+  "Latest: %1": "Latest: %1",
   "%Ln things are known of this book past the place you left it. They may give away what happens.": {
     "one": "%Ln thing is known of this book past the place you left it. It may give away what happens.",
     "other": "%Ln things are known of this book past the place you left it. They may give away what happens."
@@ -474,7 +476,6 @@
   "Go to the next chapter": "Go to the next chapter",
   "Go to the previous chapter": "Go to the previous chapter",
   "Go to the start of the chapter": "Go to the start of the chapter",
-  "Go to where it was first met": "Go to where it was first met",
   "Goodreads": "Goodreads",
   "Goodreads has no way in for apps and shows shelves to few who aren't signed in. The row opens to three steps instead: open its export page, download the file, drop it on the card. Omabook watches your Downloads folder meanwhile and offers the file when it arrives. The way back is a file too, which you upload there.": "Goodreads has no way in for apps and shows shelves to few who aren't signed in. The row opens to three steps instead: open its export page, download the file, drop it on the card. Omabook watches your Downloads folder meanwhile and offers the file when it arrives. The way back is a file too, which you upload there.",
   "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.",

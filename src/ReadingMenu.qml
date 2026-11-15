@@ -96,7 +96,12 @@ FocusScope {
         if (mode === "card") {
             rows.push({ id: "graph", text: qsTr("Show in graph") })
             rows.push({ id: "ask", text: qsTr("Ask about this") })
-            if (fromAnswer && known) rows.push({ id: "met", text: qsTr("Go to where it was first met") })
+            // The moments of the book it is known from, as far as the reader
+            // is: where it was first met, and where what is said of it was.
+            if (known) {
+                rows.push({ id: "met", text: qsTr("First met: %1").arg(thing.met.title) })
+                if (thing.latest) rows.push({ id: "latest", text: qsTr("Latest: %1").arg(thing.latest.title) })
+            }
             return rows
         }
         rows.push({ id: "ask", text: qsTr("Ask about this") })
@@ -123,7 +128,12 @@ FocusScope {
         }
         else if (row.id === "find") { find(words); close() }
         else if (row.id === "copy") { copy(); close() }
-        else if (row.id === "met") { goTo(thing.met); close() }
+        else if (row.id === "met" || row.id === "latest") {
+            // To the very words, lit for a moment on the page.
+            const moment = row.id === "met" ? thing.met : thing.latest
+            close()
+            reader.marks.goToMoment(moment.section, moment.fraction, moment.anchor || "")
+        }
         else if (row.id === "question") { ask(row.text, words); close() }
         else if (row.id === "more") assistant.suggestMore(key, known ? thing.id : 0, words, paragraph)
     }

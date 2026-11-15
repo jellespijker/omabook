@@ -1,5 +1,6 @@
 #include <QAbstractTextDocumentLayout>
 #include <QElapsedTimer>
+#include <QJsonDocument>
 #include <QFontMetricsF>
 #include <QTextBlock>
 #include <QTextLayout>
@@ -356,8 +357,8 @@ private slots:
         GraphView view;
         view.nodes = {ilse, GraphNode{2, {}, "place", "Lowwater Stairs", {}, {}, 0, 0},
                       GraphNode{3, {}, "character", "Aldo", {}, {}, 0, 0}, GraphNode{4, {}, "character", "Tamsin", {}, {}, 0, 0}};
-        view.edges = {GraphEdge{1, 1, 2, "hides at", {}, GraphPlace{9, 0, 0.2}}, GraphEdge{2, 3, 1, "rescued", {}, GraphPlace{9, 0, 0.1}},
-                      GraphEdge{3, 1, 4, "sworn sister of", {}, GraphPlace{9, 0, 0.3}}};
+        view.edges = {GraphEdge{1, 1, 2, "hides at", {}, GraphPlace{9, 0, 0.2}, {}}, GraphEdge{2, 3, 1, "rescued", {}, GraphPlace{9, 0, 0.1}, {}},
+                      GraphEdge{3, 1, 4, "sworn sister of", {}, GraphPlace{9, 0, 0.3}, {}}};
         using Shape = TextMarks::Suggestion::Shape;
         const auto made = TextMarks::suggestions(ilse, GraphPlace{9, 0, 0.1}, view, GraphPlace{9, 2, 0.1});
         QCOMPARE(made.size(), 3);
@@ -612,6 +613,52 @@ private slots:
         forced.setHtml("<p>One.</p><p style=\"page-break-before: always\">Two.</p>");
         forced.setTextWidth(320);
         QCOMPARE(PageLayout::pageBreaks(forced, 600).size(), 3);
+    }
+
+    void theCardKnowsOnlyWhatWasRevealedByThePage() {
+        Bench bench;
+        const qint64 ilse = bench.ids.value("Ilse Varga");
+        {
+            // In the second chapter it turns out whose daughter she is, and
+            // she is given another name.
+            Graph graph(*bench.backend->library());
+            graph.learn(ilse, "summary", "Nerys Varga's daughter, who pilots the night ferry.",
+                        GraphMoment{{bench.book, 1, 0.5}, "Ilse met Nerys Varga"});
+            graph.learn(ilse, "alias", "the Varga girl", GraphMoment{{bench.book, 1, 0.6}, "the Varga girl"});
+        }
+        QVERIFY(bench.open(0, 0.5));
+        ReadingMarks *marks = bench.reader->marks();
+        QTRY_VERIFY(marks->known() > 0);
+        QVariantMap card = marks->named("Ilse Varga");
+        QCOMPARE(card.value("summary").toString(), QString("A glassblower's daughter who pilots the night ferry."));
+        QVERIFY(!card.value("aliases").toStringList().contains("the Varga girl"));
+        QVERIFY(!card.contains("latest"));
+        QCOMPARE(card.value("met").toMap().value("section").toInt(), 0);
+        // A name she is given later is no name of hers yet.
+        QVERIFY(marks->named("the Varga girl").isEmpty());
+        QVERIFY(!QJsonDocument::fromVariant(card).toJson().contains("Nerys Varga's daughter"));
+
+        // Read on past it, the card says so, and where it was revealed.
+        bench.reader->goToPlace(1, 0.9);
+        QTRY_COMPARE(marks->named("Ilse Varga").value("summary").toString(), QString("Nerys Varga's daughter, who pilots the night ferry."));
+        card = marks->named("Ilse Varga");
+        QCOMPARE(card.value("latest").toMap().value("section").toInt(), 1);
+        QCOMPARE(card.value("latest").toMap().value("anchor").toString(), QString("Ilse met Nerys Varga"));
+        QCOMPARE(marks->named("the Varga girl").value("id").toLongLong(), ilse);
+
+        // Going to a moment: to its words in that chapter, which are lit.
+        QSignalSpy lit(marks, &ReadingMarks::flashChanged);
+        marks->goToMoment(0, 0.0, "Aldo  Brenn watched");
+        QCOMPARE(bench.reader->section(), 0);
+        QCOMPARE(lit.count(), 1);
+        QCOMPARE(marks->flash().value("words").toString(), QString("Aldo Brenn watched"));
+        const QString first = bench.reader->sectionText().simplified();
+        QVERIFY(qAbs(bench.reader->fraction() - double(first.indexOf("Aldo Brenn watched")) / first.size()) < 1e-6);
+        // Words the chapter doesn't have go to the place itself.
+        marks->goToMoment(1, 0.25, "words nowhere in it");
+        QCOMPARE(bench.reader->section(), 1);
+        QCOMPARE(bench.reader->fraction(), 0.25);
+        QVERIFY(bench.ai.requests.isEmpty());
     }
 };
 
