@@ -92,5 +92,9 @@ QList<Manual::Step> Manual::features() {
          tr("{reader.format} opens the Aa panel beside the page: the font and its size, the widest line, the spacing, an "
             "indent, the margins, and text justified, centred or to either side. For every book, or only this one."),
          "", "reader.format", "reader", ""},
+        {"folio-folders", "0.1.4", tr("Your library as a folder"),
+         tr("In Folio, the file manager, each library is a folder of its books: open one to read it here, copy a "
+            "book in to add it, or delete one to send it to the trash."),
+         "", "", "", ""},
     };
 }

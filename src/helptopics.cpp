@@ -104,6 +104,11 @@ QList<Manual::Topic> Manual::topicList() {
              {tr("Keeping and removing"),
               tr("{library.export} saves a copy of a book elsewhere. {library.remove} removes it, after asking; its files "
                  "go to the trash. {library.libraries} opens another library: each is a folder of its own.")},
+             {tr("In the file manager"),
+              tr("Folio, Omarchy's file manager, lists your libraries in its sidebar. Each opens as a folder with a file "
+                 "per book: open one to read it in Omabook, copy a book file in to add it, delete one to send its book "
+                 "to the trash, where Undo brings it back. The settings ({global.settings}) switch this off, and can "
+                 "make Omabook the app that opens ebooks.")},
          }},
         {"plugins", tr("Plugins"), tr("What Omabook is made of, and how to add to it."),
          {

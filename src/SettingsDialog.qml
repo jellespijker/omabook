@@ -9,6 +9,7 @@ AppPopup {
     id: dialog
     objectName: "settings"
     widest: 560
+    onAboutToShow: backend.fileManager.checkOpensEbooks()
 
     readonly property var providers: [
         { key: "auto", name: qsTr("Automatic") },
@@ -190,14 +191,33 @@ AppPopup {
             Material.roundedScale: theme.radius
             onActivated: (index) => settings.pluginUpdates = modes[index].key
         }
-        // Folio, the file manager, shows Omabook's libraries and what is
-        // being read in its sidebar, and offers "Add to Library".
+        // Folio, the file manager, shows each library in its sidebar as a
+        // folder of its books, and offers "Add to Library".
         CheckBox {
             objectName: "folioShown"
             Layout.fillWidth: true
-            text: qsTr("Show my libraries and what I'm reading in the file manager")
+            text: qsTr("Show my libraries in the file manager")
             checked: settings.folio
             onToggled: settings.folio = checked
+        }
+        // Which app opens an ebook is the person's to choose; Omabook only
+        // becomes it when asked to here.
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            Label {
+                objectName: "opensEbooks"
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: backend.fileManager.opensEbooks ? qsTr("Ebooks open in Omabook.")
+                                                      : qsTr("Ebooks open in another app.")
+            }
+            AppButton {
+                objectName: "openEbooksWithOmabook"
+                visible: !backend.fileManager.opensEbooks
+                text: qsTr("Open Ebooks with Omabook")
+                onClicked: backend.fileManager.openEbooksWithOmabook()
+            }
         }
 
         DialogActions {
