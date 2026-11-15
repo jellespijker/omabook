@@ -17,21 +17,10 @@
 #include <array>
 
 #include "mcp.h"
+#include "pluginfinder.h"
 #include "scriptplugins.h"
 #include "secretstore.h"
 #include "settings.h"
-
-// What a request came to.
-struct PluginSources::Reply {
-    int status = 0;
-    QByteArray body;
-    QHash<QByteArray, QByteArray> headers; // by lower-case name
-    QString error;
-    bool offline = false;    // GitHub wasn't reached at all
-    bool limited = false;    // GitHub asked to wait
-    bool refused = false;    // it led somewhere that isn't GitHub, or was too large
-    bool redirected = false; // the API sent the request on to another of its addresses
-};
 
 // What a source stands at: a release, the head of a branch, or a tag.
 struct PluginSources::Target {
@@ -188,6 +177,7 @@ PluginSources::Service PluginSources::Service::fromEnvironment() {
     const QUrl stand(qEnvironmentVariable("OMABOOK_GITHUB_API"));
     if (stand.isValid() && (stand.host() == "127.0.0.1" || stand.host() == "localhost")) {
         service.api = stand.toString(QUrl::StripTrailingSlash);
+        service.raw = service.api + "/raw";
         service.hosts = QStringList{stand.host()};
         service.httpsOnly = false;
     }
@@ -691,8 +681,21 @@ void PluginSources::fetch(const Entry &entry, const QString &name, const QString
     });
 }
 
-void PluginSources::look(const QString &address, const QString &pin, const QString &name, Done done) {
+void PluginSources::look(const QString &given, const QString &pin, const QString &givenName, Done done) {
     m_looked.reset();
+    // A plugin of the registry by its name alone: "storyteller".
+    QString address = given.trimmed(), name = givenName;
+    if (ScriptTools::validName(address)) {
+        const QJsonObject listed = PluginFinder({m_folder, m_settings, {}}).listed(address);
+        if (listed.isEmpty()) {
+            done(problem("No plugin called \"" + address + "\" is listed. Find one with: omabook plugin search " + address
+                         + "; or name its repository, as owner/name."));
+            return;
+        }
+        if (name.isEmpty())
+            name = listed.value("name").toString();
+        address = PluginFinder::addressOf(listed);
+    }
     Address found;
     QString error;
     if (!parse(address, &found, &error)) {
@@ -1120,9 +1123,9 @@ const bool toolsRegistered = [] {
         "plugin_add", "Install a plugin from GitHub",
         "Installs a plugin from a public GitHub repository and remembers where it came from, so it can be kept up to "
         "date. The address is owner/repo, a link to the repository, or a link to a release, tag, branch or folder of "
-        "it. The plugin is fetched over HTTPS and checked like any other (plugin_install). It is installed switched off "
+        "it; or the name of a plugin the registry lists (plugin_search), such as storyteller. The plugin is fetched over HTTPS and checked like any other (plugin_install). It is installed switched off "
         "unless `enable` is true; show the user the permissions in the answer before enabling it.",
-        Mcp::schema({{"address", Mcp::string("The repository: owner/repo, or a GitHub link.")},
+        Mcp::schema({{"address", Mcp::string("The repository: owner/repo, or a GitHub link; or a listed plugin's name.")},
                      {"name", Mcp::string("The folder name to install it under; taken from the repository when not given.")},
                      {"pin", Mcp::string("A tag to stay at, or a branch to follow, instead of the latest release.")},
                      {"enable", Mcp::boolean("Switch it on at once. False when not given.")},

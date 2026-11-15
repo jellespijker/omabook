@@ -489,6 +489,16 @@ licence, all at the root.
   tried again; the next one is. `omabook plugin check` before you publish.
 - **Your users' data.** Everything in the plugin's `data/` folder is kept
   across updates and roll-backs. Don't ship a `data/` folder of your own.
+- **Being found.** Give the repository the GitHub topic `omabook-plugin`:
+  `omabook plugin search` and "Find plugins" in the install sheet find it by
+  that topic, check that its `plugin.json` is valid and that the Omabook it
+  asks for is not newer than the one looking, and show it marked "Not
+  reviewed". To be listed, open a pull request on Omabook's repository that
+  adds an entry for it to `share/omabook/plugins.json` (name, title,
+  description, repository, author, licence, permissions, the Omabook it
+  needs, its kinds). A listed plugin is shown first and can be installed by
+  its name (`omabook plugin add <name>`); "reviewed" means the maintainer
+  looked at it before listing it, which is care taken and not a guarantee.
 
 ### The knowledge graph
 

@@ -16,7 +16,10 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QRegularExpression>
 #include <QUrl>
+#include <QUrlQuery>
+#include <algorithm>
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -101,6 +104,20 @@ public:
     qint64 reset = 0;
     QString sendDownloadsTo; // an address to send downloads on to, instead of its own
     int downloads = 0;
+    // Finding plugins: what the search by topic finds (GitHub's repository
+    // objects, in the order it ranks them), how many a page holds, single
+    // files of repositories (by "owner/repo" and path, as the contents API
+    // serves them), and files of raw.githubusercontent.com (by their path).
+    QList<QJsonObject> topical;
+    int pageSize = 30;
+    QHash<QString, QHash<QString, QByteArray>> files;
+    QHash<QString, QByteArray> raw;
+    // A repository as the search answers it.
+    static QJsonObject found(const QString &repository, int stars = 0, bool archived = false, const QString &description = {}) {
+        return {{"full_name", repository}, {"description", description}, {"stargazers_count", stars}, {"archived", archived},
+                {"default_branch", "main"}, {"pushed_at", "2026-10-01T12:00:00Z"}, {"license", QJsonObject{{"spdx_id", "MIT"}}},
+                {"owner", QJsonObject{{"login", repository.section('/', 0, 0)}}}, {"topics", QJsonArray{"omabook-plugin"}}};
+    }
 
     FakeGitHub() {
         listen(QHostAddress::LocalHost);
@@ -162,10 +179,21 @@ private:
             send(socket, 200, body, "ETag: " + etag + "\r\n");
     }
 
-    void answer(QTcpSocket *socket, const QString &path, const QByteArray &head) {
-        asked << path;
+    void answer(QTcpSocket *socket, const QString &whole, const QByteArray &head) {
+        asked << whole;
         heads << head;
+        const QUrl url(whole);
+        const QString path = url.path(QUrl::FullyEncoded);
         const QStringList parts = path.split('/', Qt::SkipEmptyParts);
+        // raw.githubusercontent.com, which counts nothing against a limit.
+        if (parts.value(0) == "raw") {
+            const QString file = parts.mid(1).join('/');
+            if (!raw.contains(file))
+                send(socket, 404, "404: Not Found");
+            else
+                sendTagged(socket, head, "\"" + QByteArray::number(qHash(raw.value(file))) + "\"", raw.value(file));
+            return;
+        }
         if (parts.value(0) == "dl") {
             ++downloads;
             const QByteArray packed = repos.value(parts.value(1) + "/" + parts.value(2)).tarballs.value(parts.value(3));
@@ -177,7 +205,31 @@ private:
                  "x-ratelimit-remaining: 0\r\nx-ratelimit-reset: " + QByteArray::number(reset) + "\r\n");
             return;
         }
+        if (parts.value(0) == "search" && parts.value(1) == "repositories") {
+            const QUrlQuery query(url);
+            const QStringList words = query.queryItemValue("q", QUrl::FullyDecoded).split(QRegularExpression("[ +]"), Qt::SkipEmptyParts).mid(1);
+            QJsonArray matching;
+            for (const QJsonObject &repository : std::as_const(topical)) {
+                const QString all = repository.value("full_name").toString() + " " + repository.value("description").toString();
+                if (std::ranges::all_of(words, [&all](const QString &word) { return all.contains(word, Qt::CaseInsensitive); }))
+                    matching << repository;
+            }
+            const int page = qMax(1, query.queryItemValue("page").toInt());
+            QJsonArray items;
+            for (int i = (page - 1) * pageSize; i < qMin(int(matching.size()), page * pageSize); ++i)
+                items << matching.at(i);
+            send(socket, 200, QJsonDocument(QJsonObject{{"total_count", matching.size()}, {"items", items}}).toJson());
+            return;
+        }
         const QString repository = parts.value(1) + "/" + parts.value(2);
+        if (parts.value(0) == "repos" && parts.value(3) == "contents") {
+            const QString file = parts.mid(4).join('/');
+            if (files.value(repository).contains(file))
+                send(socket, 200, files.value(repository).value(file));
+            else
+                send(socket, 404, "{\"message\": \"Not Found\"}");
+            return;
+        }
         const Repo repo = repos.value(repository);
         if (parts.value(0) != "repos" || !repos.contains(repository) || repo.gone) {
             send(socket, 404, "{\"message\": \"Not Found\"}");

@@ -1,0 +1,17 @@
+{
+    "version": 1,
+    "plugins": [
+        {
+            "name": "storyteller",
+            "title": "Storyteller",
+            "description": "Writes an original book for you, chapter by chapter, as you read it. Start one from the shelf; steer it, ask the author, branch it.",
+            "repository": "jellespijker/omabook-storyteller",
+            "author": "Jelle Spijker",
+            "license": "MIT",
+            "permissions": ["files", "http"],
+            "omabook": "0.1.4",
+            "kinds": ["format", "launcher", "command", "panel", "hook"],
+            "reviewed": true
+        }
+    ]
+}

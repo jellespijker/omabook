@@ -17,8 +17,9 @@
 #include "fakegithub.h"
 #include "fixtures.h"
 #include "mcp.h"
-#include "pluginmanager.h"
 #include "metadatasource.h"
+#include "pluginfinder.h"
+#include "pluginmanager.h"
 #include "plugins.h"
 #include "pluginsources.h"
 #include "plugintools.h"
@@ -1382,6 +1383,243 @@ private slots:
         QVERIFY(!callTool("plugin_forget_source", {{"name", "storyteller"}}).failed());
         QVERIFY(callTool("plugin_forget_source", {{"name", "storyteller"}}).failed());
         QVERIFY(!callTool("plugin_remove", {{"name", "storyteller"}}).failed());
+    }
+
+    // --- Finding plugins ---------------------------------------------------
+
+    void theRegistryShippedPassesItsOwnCheck() {
+        const QJsonObject shipped = PluginFinder::shipped();
+        QVERIFY2(PluginFinder::problem(shipped).isEmpty(), qPrintable(PluginFinder::problem(shipped)));
+        Hub hub;
+        PluginFinder finder(hub.context);
+        finder.setDiscovery(false);
+        const QJsonObject storyteller = finder.listed("storyteller");
+        QCOMPARE(storyteller.value("repository").toString(), QString("jellespijker/omabook-storyteller"));
+        QVERIFY(storyteller.value("reviewed").toBool());
+        QCOMPARE(PluginFinder::addressOf(storyteller), QString("jellespijker/omabook-storyteller"));
+        QVERIFY(storyteller.value("permissions").toArray().contains("files"));
+        // What a registry must hold, each said.
+        const auto with = [&shipped](const QString &field, const QJsonValue &value) {
+            QJsonObject registry = shipped;
+            QJsonArray plugins = registry.value("plugins").toArray();
+            QJsonObject entry = plugins.first().toObject();
+            if (value.isUndefined())
+                entry.remove(field);
+            else
+                entry.insert(field, value);
+            plugins[0] = entry;
+            registry.insert("plugins", plugins);
+            return PluginFinder::problem(registry);
+        };
+        QVERIFY(with("name", "Not A Name").contains("no proper name"));
+        QVERIFY(with("repository", "nowhere").contains("names no repository"));
+        QVERIFY(with("permissions", QJsonArray{"everything"}).contains("\"everything\""));
+        QVERIFY(with("kinds", QJsonArray{"magic"}).contains("\"magic\""));
+        QVERIFY(with("reviewed", QJsonValue::Undefined).contains("reviewed"));
+        QVERIFY(with("omabook", "soon").contains("version of Omabook"));
+        QVERIFY(PluginFinder::problem(QJsonObject{{"version", 2}}).contains("version 1"));
+        QJsonObject twice = shipped;
+        twice.insert("plugins", QJsonArray{shipped.value("plugins").toArray().first(), shipped.value("plugins").toArray().first()});
+        QVERIFY(PluginFinder::problem(twice).contains("twice"));
+    }
+
+    void theRegistryIsFetchedOnceADayAndABadOneIsRefused() {
+        Hub hub;
+        PluginFinder finder(hub.context);
+        PluginSources::Service service;
+        service.api = hub.github.api();
+        service.raw = hub.github.api() + "/raw";
+        service.hosts = QStringList{"127.0.0.1"};
+        service.httpsOnly = false;
+        finder.setService(service);
+        finder.setClock([&hub] { return hub.time; });
+        finder.setDiscovery(true);
+        const auto refresh = [&finder](bool force = false) {
+            return PluginSources::wait([&](PluginSources::Done done) { finder.refresh(force, done); }, 10000);
+        };
+        const QString path = "jellespijker/omabook/main/share/omabook/plugins.json";
+        // Offline (nothing there): quietly the shipped one, asked again in an hour.
+        QJsonObject answer = refresh();
+        QVERIFY(!answer.value("problem").toString().isEmpty() && !ScriptTools::failed(answer));
+        QVERIFY(!finder.listed("storyteller").isEmpty());
+        QVERIFY(finder.listed("reading-log").isEmpty());
+        const qsizetype asked = hub.github.asked.size();
+        QVERIFY(refresh().value("unchanged").toBool());
+        QCOMPARE(hub.github.asked.size(), asked);
+
+        // One listed since this Omabook was built is found.
+        QJsonObject registry = PluginFinder::shipped();
+        QJsonArray plugins = registry.value("plugins").toArray();
+        plugins << QJsonObject{{"name", "reading-log"}, {"title", "Reading Log"}, {"description", "Keeps a log of what you read."},
+                               {"repository", "someone/omabook-reading-log"}, {"author", "Someone"}, {"license", "MIT"},
+                               {"permissions", QJsonArray{"files"}}, {"omabook", "0.1.0"}, {"kinds", QJsonArray{"hook"}}, {"reviewed", false}};
+        registry.insert("plugins", plugins);
+        hub.github.raw.insert(path, QJsonDocument(registry).toJson());
+        hub.time += 3601;
+        QVERIFY(refresh().value("refreshed").toBool());
+        QCOMPARE(finder.listed("reading-log").value("title").toString(), QString("Reading Log"));
+        // Within the day nothing is asked; after it, only whether it changed.
+        hub.time += 3600;
+        const qsizetype fetched = hub.github.asked.size();
+        refresh();
+        QCOMPARE(hub.github.asked.size(), fetched);
+        hub.time += PluginSources::checkEvery;
+        QVERIFY(refresh().value("unchanged").toBool());
+        QVERIFY(!FakeGitHub::header(hub.github.heads.last(), "if-none-match").isEmpty());
+        // A registry that doesn't pass is not taken: the last good one stays.
+        hub.github.raw.insert(path, "{\"version\": 1, \"plugins\": [{\"name\": \"BAD NAME\"}]}");
+        hub.time += PluginSources::checkEvery;
+        answer = refresh(true);
+        QVERIFY(answer.value("problem").toString().contains("no proper name"));
+        QCOMPARE(finder.listed("reading-log").value("title").toString(), QString("Reading Log"));
+        hub.github.raw.insert(path, "not json");
+        QVERIFY(refresh(true).value("problem").toString().contains("can't be read"));
+        QVERIFY(!finder.listed("reading-log").isEmpty());
+
+        // With looking on GitHub switched off, nothing is asked at all.
+        const qsizetype before = hub.github.asked.size();
+        hub.settings.setPluginDiscovery(false);
+        PluginFinder quiet(hub.context);
+        quiet.setService(service);
+        const QJsonObject found = PluginSources::wait([&](PluginSources::Done done) { quiet.search("", done); }, 10000);
+        QVERIFY(!found.value("discovery").toBool());
+        QCOMPARE(found.value("results").toArray().first().toObject().value("name").toString(), QString("storyteller"));
+        QCOMPARE(hub.github.asked.size(), before);
+        hub.settings.setPluginDiscovery(true);
+    }
+
+    void pluginsAreFoundByTheirTopicAndCheckedFirst() {
+        Hub hub;
+        PluginFinder finder(hub.context);
+        PluginSources::Service service;
+        service.api = hub.github.api();
+        service.raw = hub.github.api() + "/raw";
+        service.hosts = QStringList{"127.0.0.1"};
+        service.httpsOnly = false;
+        finder.setService(service);
+        finder.setClock([&hub] { return hub.time; });
+        finder.setDiscovery(true);
+        const auto manifest = [](const QString &name, const QString &omabook = "0.1.0", const QJsonArray &permissions = {}) {
+            return QJsonDocument(QJsonObject{{"name", name}, {"version", "1.0"}, {"script", "main.js"}, {"omabook", omabook},
+                                             {"description", name + " does a thing."}, {"permissions", permissions}}).toJson();
+        };
+        // Two a page, so the search pages.
+        hub.github.pageSize = 2;
+        hub.github.topical = {FakeGitHub::found("jellespijker/omabook-storyteller", 7), FakeGitHub::found("someone/omabook-reading-log", 3),
+                              FakeGitHub::found("someone/omabook-tools", 1), FakeGitHub::found("someone/omabook-future"),
+                              FakeGitHub::found("someone/omabook-old", 0, true), FakeGitHub::found("someone/omabook-empty")};
+        hub.github.files["jellespijker/omabook-storyteller"]["plugin.json"] = manifest("Storyteller", "0.1.4", {"files", "http"});
+        hub.github.files["someone/omabook-reading-log"]["plugin.json"] = manifest("Reading Log", "0.1.0", {"files"});
+        hub.github.files["someone/omabook-tools"]["tools/plugin.json"] = manifest("Tools");
+        hub.github.files["someone/omabook-future"]["plugin.json"] = manifest("Future", "99.0");
+        hub.github.files["someone/omabook-old"]["plugin.json"] = manifest("Old");
+        const auto search = [&finder](const QString &words = {}) {
+            return PluginSources::wait([&](PluginSources::Done done) { finder.search(words, done); }, 10000);
+        };
+        QJsonObject found = search();
+        QVERIFY2(!ScriptTools::failed(found), qPrintable(found.value("error").toString()));
+        QCOMPARE(hub.github.count("/search/repositories"), 3);
+        const QJsonArray results = found.value("results").toArray();
+        QStringList names;
+        for (const QJsonValue &one : results)
+            names << one.toObject().value("name").toString();
+        QCOMPARE(names, (QStringList{"storyteller", "reading-log", "tools"}));
+        // The listed one first, with what GitHub says of it, and shown once.
+        const QJsonObject storyteller = results.at(0).toObject();
+        QVERIFY(storyteller.value("listed").toBool() && storyteller.value("reviewed").toBool());
+        QCOMPARE(storyteller.value("stars").toInt(), 7);
+        QVERIFY(!results.at(1).toObject().value("listed").toBool() && !results.at(1).toObject().value("reviewed").toBool());
+        QCOMPARE(results.at(1).toObject().value("permissions").toArray(), QJsonArray{"files"});
+        QCOMPARE(results.at(1).toObject().value("license").toString(), QString("MIT"));
+        QCOMPARE(results.at(1).toObject().value("updated").toString(), QString("2026-10-01"));
+        QCOMPARE(results.at(2).toObject().value("subfolder").toString(), QString("tools"));
+        QCOMPARE(results.at(2).toObject().value("address").toString(), QString("https://github.com/someone/omabook-tools/tree/main/tools"));
+        // What wasn't offered, and why.
+        QStringList why;
+        for (const QJsonValue &one : found.value("skipped").toArray())
+            why << one.toObject().value("repository").toString() + ": " + one.toObject().value("problem").toString();
+        QCOMPARE(why.size(), 3);
+        QVERIFY(why.join('\n').contains("omabook-future: ") && why.join('\n').contains("99.0"));
+        QVERIFY(why.join('\n').contains("omabook-old: It is archived"));
+        QVERIFY(why.join('\n').contains("omabook-empty: It has no plugin.json"));
+        // Only the one file of each was fetched, never an archive.
+        QCOMPARE(hub.github.count("/tarball"), 0);
+
+        // The same search again is kept for a while; other words ask again.
+        const qsizetype asked = hub.github.asked.size();
+        QCOMPARE(search().value("results").toArray().size(), 3);
+        QCOMPARE(hub.github.asked.size(), asked);
+        QCOMPARE(search("reading").value("results").toArray().last().toObject().value("name").toString(), QString("reading-log"));
+        QVERIFY(hub.github.asked.size() > asked);
+        // A repository that wasn't pushed to isn't looked into again.
+        QCOMPARE(hub.github.count("omabook-reading-log/contents"), 1);
+
+        // GitHub asking to wait is kept to: the registry meanwhile, and nothing asked.
+        hub.github.limited = true;
+        hub.github.reset = hub.time + 600;
+        hub.time += PluginFinder::keepSearch + 1;
+        found = search("anything");
+        QVERIFY(found.value("limited").toBool());
+        QVERIFY(found.value("problem").toString().contains("wait"));
+        const qsizetype limited = hub.github.asked.size();
+        found = search("else");
+        QVERIFY(found.value("limited").toBool());
+        QCOMPARE(hub.github.asked.size(), limited);
+        hub.github.limited = false;
+        hub.time += 601;
+        QVERIFY(!search("again").value("limited").toBool());
+        QVERIFY(hub.github.asked.size() > limited);
+    }
+
+    void aListedPluginIsAddedByItsName() {
+        Hub hub;
+        hub.github.push("jellespijker/omabook-storyteller", "main", sha('a'), Made().packed());
+        PluginSources::AddOptions options;
+        options.enable = true;
+        const QJsonObject added = hub.add("storyteller", options);
+        QVERIFY2(!ScriptTools::failed(added), qPrintable(added.value("error").toString()));
+        QCOMPARE(added.value("name").toString(), QString("storyteller"));
+        QCOMPARE(added.value("repository").toString(), QString("jellespijker/omabook-storyteller"));
+        QVERIFY(hub.add("nothing-listed").value("error").toString().contains("No plugin called \"nothing-listed\" is listed"));
+        // What is installed says so when it is found.
+        PluginFinder finder(hub.context);
+        finder.setDiscovery(false);
+        const QJsonObject found = PluginSources::wait([&](PluginSources::Done done) { finder.search("story", done); }, 10000);
+        QVERIFY(found.value("results").toArray().first().toObject().value("installed").toBool());
+
+        // From the command line and as a tool, the same.
+        qputenv("OMABOOK_GITHUB_API", hub.github.api().toUtf8());
+        const auto restore = qScopeGuard([] { qunsetenv("OMABOOK_GITHUB_API"); });
+        const QString folder = hub.dir.filePath("cli-plugins");
+        QCOMPARE(runPluginCli({"omabook", "plugin", "search", "story", "--folder", folder}), 0);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "search", "--json", "--folder", folder}), 0);
+        QCOMPARE(runPluginCli({"omabook", "plugin", "add", "storyteller", "--folder", folder}), 0);
+        QVERIFY(QFile::exists(folder + "/storyteller/main.js"));
+        const Mcp::Result result = callTool("plugin_search", {{"words", "story"}});
+        QVERIFY2(!result.failed(), qPrintable(result.error));
+        QCOMPARE(result.data.value("results").toArray().first().toObject().value("name").toString(), QString("storyteller"));
+    }
+
+    void theManagerFindsForTheWindow() {
+        Hub hub;
+        hub.settings.setPluginDiscovery(false);
+        Plugins registry(&hub.settings, hub.dir.filePath("plugins"), "-");
+        ScriptServices services;
+        services.settings = &hub.settings;
+        ScriptPlugins scripts(services, hub.dir.filePath("plugins"));
+        FakePicker picker;
+        QNetworkAccessManager network;
+        PluginManager manager(&hub.settings, &registry, &scripts, &picker, &network);
+        QVERIFY(!manager.discovery());
+        QSignalSpy found(&manager, &PluginManager::foundChanged);
+        manager.find("");
+        QTRY_VERIFY(!manager.finding());
+        QCOMPARE(manager.found().first().toMap().value("name").toString(), QString("storyteller"));
+        manager.find("no such words at all");
+        QTRY_VERIFY(!manager.finding());
+        QVERIFY(manager.found().isEmpty());
+        manager.setDiscovery(true);
+        QVERIFY(hub.settings.pluginDiscovery());
     }
 };
 

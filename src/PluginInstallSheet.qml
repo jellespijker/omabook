@@ -3,9 +3,10 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 
-// Installing a plugin someone else wrote: name its GitHub repository, or
-// pick its .zip or its folder, see what it is and what it asks to be
-// allowed, and only then say whether it goes in switched on. Nothing is put
+// Installing a plugin someone else wrote: find it (in the registry Omabook
+// keeps, or on GitHub by the topic omabook-plugin), name its GitHub
+// repository, or pick its .zip or its folder; see what it is and what it
+// asks to be allowed, and only then say whether it goes in switched on. Nothing is put
 // in the plugin folder, and nothing of it runs, before that. The same sheet
 // shows an update that asks for more than the version installed, to be
 // agreed to or left.
@@ -37,9 +38,20 @@ AppPopup {
     function show() {
         host.manager.dismissOffer()
         address.text = ""
+        findWords.text = ""
+        host.manager.find("")
         open()
-        address.forceActiveFocus()
+        findWords.forceActiveFocus()
     }
+    // Installing what was found goes the way an address does: fetched,
+    // checked, and shown with what it asks for, for a yes or a no.
+    function take(found) {
+        if (!fetching && found.installable && !found.installed)
+            host.manager.lookUp(found.address)
+    }
+    readonly property var found: host ? host.manager.found : []
+    readonly property bool finding: host ? host.manager.finding : false
+    Timer { id: findSoon; interval: 300; onTriggered: sheet.host.manager.find(findWords.text) }
     // Opened by the manager for an update that waits to be agreed to; what
     // is on offer is left as it is.
     function review() {
@@ -71,6 +83,178 @@ AppPopup {
             font.pixelSize: 18
             font.bold: true
             wrapMode: Text.Wrap
+        }
+        // Finding one: the registry's first, then what GitHub has by its topic.
+        TextField {
+            id: findWords
+            objectName: "pluginFindWords"
+            visible: !sheet.fits
+            enabled: !sheet.fetching
+            Layout.fillWidth: true
+            placeholderText: qsTr("Find plugins")
+            selectByMouse: true
+            inputMethodHints: Qt.ImhNoAutoUppercase | Qt.ImhNoPredictiveText
+            Material.roundedScale: theme.radius
+            onTextEdited: findSoon.restart()
+            // Enter takes the first that can be installed.
+            onAccepted: {
+                const first = sheet.found.find(one => one.installable && !one.installed)
+                if (first) sheet.take(first)
+            }
+        }
+        Thinking {
+            objectName: "pluginFinding"
+            active: sheet.finding && !sheet.fits
+            text: qsTr("Looking for plugins…")
+            room: parent ? parent.width : 400
+        }
+        Repeater {
+            model: sheet.fits ? [] : sheet.found
+            delegate: Rectangle {
+                id: result
+                required property var modelData
+                required property int index
+                objectName: "pluginFound_" + modelData.name
+                Layout.fillWidth: true
+                implicitHeight: lines.implicitHeight + 20
+                radius: theme.radius
+                color: "transparent"
+                border.color: theme.colors.selection
+                ColumnLayout {
+                    id: lines
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.margins: 10
+                    spacing: 4
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        Label {
+                            Layout.fillWidth: true
+                            text: result.modelData.title
+                            textFormat: Text.PlainText
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+                        // Listed in the registry, or only found by its topic.
+                        Rectangle {
+                            objectName: "pluginFoundMark"
+                            implicitWidth: mark.implicitWidth + 12
+                            implicitHeight: mark.implicitHeight + 4
+                            radius: Math.min(4, theme.radius)
+                            color: "transparent"
+                            border.color: result.modelData.listed ? theme.accent : theme.colors.orange
+                            Label {
+                                id: mark
+                                anchors.centerIn: parent
+                                text: result.modelData.listed ? qsTr("Listed") : qsTr("Not reviewed")
+                                color: result.modelData.listed ? theme.accent : theme.colors.orange
+                                font.pixelSize: 11
+                            }
+                        }
+                        AppButton {
+                            objectName: "pluginFoundInstall_" + result.modelData.name
+                            visible: !result.modelData.installed
+                            enabled: result.modelData.installable && !sheet.fetching
+                            text: qsTr("Install")
+                            primary: result.index === 0
+                            onClicked: sheet.take(result.modelData)
+                        }
+                        Label {
+                            visible: result.modelData.installed === true
+                            text: qsTr("Installed")
+                            color: sheet.host ? sheet.host.quiet : theme.foreground
+                        }
+                    }
+                    Label {
+                        visible: text !== ""
+                        Layout.fillWidth: true
+                        text: result.modelData.description || ""
+                        textFormat: Text.PlainText
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        // "by Someone · 12 stars · updated 2026-11-01 · MIT · jellespijker/omabook-storyteller"
+                        text: {
+                            translator.language
+                            const one = result.modelData
+                            return [one.author ? qsTr("by %1").arg(one.author) : "",
+                                    one.stars !== undefined ? qsTr("%Ln stars", "", one.stars) : "",
+                                    one.updated ? qsTr("updated %1").arg(one.updated) : "",
+                                    one.license || "", one.repository].filter(part => part !== "").join(" · ")
+                        }
+                        textFormat: Text.PlainText
+                        color: sheet.host ? sheet.host.quiet : theme.foreground
+                        font.pixelSize: 12
+                        wrapMode: Text.WrapAtWordBoundaryOrAnywhere
+                    }
+                    Label {
+                        Layout.fillWidth: true
+                        text: result.modelData.program ? qsTr("It is a program of its own: it can do whatever you can on this computer.")
+                              : qsTr("It may use: %1").arg(sheet.host ? sheet.host.permissionText(result.modelData.permissions || []) : "")
+                        textFormat: Text.PlainText
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        visible: !result.modelData.listed
+                        Layout.fillWidth: true
+                        text: qsTr("Nobody has reviewed it for you. A plugin can do whatever its permissions allow.")
+                        textFormat: Text.PlainText
+                        color: theme.colors.orange
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                    Label {
+                        visible: !result.modelData.installable && (result.modelData.problem || "") !== ""
+                        Layout.fillWidth: true
+                        text: result.modelData.problem || ""
+                        textFormat: Text.PlainText
+                        color: theme.colors.orange
+                        font.pixelSize: 12
+                        wrapMode: Text.Wrap
+                    }
+                }
+                TapHandler { onDoubleTapped: sheet.take(result.modelData) }
+            }
+        }
+        Label {
+            objectName: "pluginFoundNone"
+            visible: !sheet.fits && !sheet.finding && sheet.found.length === 0
+            Layout.fillWidth: true
+            text: findWords.text.trim() === "" ? qsTr("No plugins to try were found.") : qsTr("No plugin was found for “%1”.").arg(findWords.text.trim())
+            textFormat: Text.PlainText
+            color: sheet.host ? sheet.host.quiet : theme.foreground
+            wrapMode: Text.Wrap
+        }
+        Label {
+            visible: !sheet.fits && text !== ""
+            Layout.fillWidth: true
+            text: sheet.host ? sheet.host.manager.findProblem : ""
+            textFormat: Text.PlainText
+            color: sheet.host ? sheet.host.quiet : theme.foreground
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+        Switch {
+            objectName: "pluginDiscovery"
+            visible: !sheet.fits
+            Layout.fillWidth: true
+            text: qsTr("Look for plugins on GitHub")
+            checked: sheet.host ? sheet.host.manager.discovery : true
+            onToggled: {
+                sheet.host.manager.discovery = checked
+                sheet.host.manager.find(findWords.text)
+            }
+        }
+        Rectangle {
+            visible: !sheet.fits
+            Layout.fillWidth: true
+            Layout.topMargin: 4
+            implicitHeight: 1
+            color: theme.colors.selection
         }
         Label {
             visible: !sheet.fits

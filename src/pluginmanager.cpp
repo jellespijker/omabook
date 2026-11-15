@@ -17,7 +17,7 @@ PluginManager::PluginManager(Settings *settings, Plugins *registry, ScriptPlugin
                              QNetworkAccessManager *network, QObject *parent)
     : QObject(parent), m_settings(settings), m_registry(registry), m_scripts(scripts), m_picker(picker), m_network(network),
       m_opener([](const QUrl &url) { return QDesktopServices::openUrl(url); }),
-      m_sources({registry->folder(), settings, {}}, network) {
+      m_sources({registry->folder(), settings, {}}, network), m_finder({registry->folder(), settings, {}}, network) {
     m_daily.setSingleShot(true);
     connect(&m_daily, &QTimer::timeout, this, &PluginManager::dailyCheck);
     connect(m_picker, &FilePicker::picked, this, &PluginManager::picked);
@@ -335,6 +335,30 @@ void PluginManager::setChecking(const QString &id) {
 void PluginManager::note(const QString &id, const QString &text, bool problem) {
     m_sourceNote = {{"id", id}, {"text", text}, {"problem", problem}};
     emit sourceNoteChanged();
+}
+
+bool PluginManager::discovery() const { return m_settings->pluginDiscovery(); }
+
+void PluginManager::setDiscovery(bool on) {
+    if (on == discovery())
+        return;
+    m_settings->setPluginDiscovery(on);
+    emit foundChanged();
+}
+
+void PluginManager::find(const QString &words) {
+    const int asked = ++m_findAsked;
+    ++m_finding;
+    emit foundChanged();
+    m_finder.search(words, [this, asked](const QJsonObject &answer) {
+        --m_finding;
+        // An answer to words that were since changed is not shown.
+        if (asked == m_findAsked) {
+            m_found = answer.value("results").toArray().toVariantList();
+            m_findProblem = answer.value("problem").toString();
+        }
+        emit foundChanged();
+    });
 }
 
 void PluginManager::lookUp(const QString &address) {

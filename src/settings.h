@@ -147,6 +147,11 @@ public:
     // written here; the token itself never is.
     bool pluginToken() const { return m_values.value("plugin_github_token").toBool(false); }
     void setPluginToken(bool kept) { set("plugin_github_token", kept); }
+    // Whether plugins are looked for on GitHub, by their topic and in the
+    // registry kept there (see PluginFinder); off, only the registry this
+    // Omabook was built with is shown, and nothing is asked of the network.
+    bool pluginDiscovery() const { return m_values.value("plugin_discovery").toBool(true); }
+    void setPluginDiscovery(bool on) { set("plugin_discovery", on); }
 
     // What was answered when a Calibre library was offered for import, by
     // its folder: {"answer": "imported", "later" or "never", "at": seconds}.

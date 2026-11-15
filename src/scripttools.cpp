@@ -19,6 +19,7 @@
 #include "formatprovider.h"
 #include "library.h"
 #include "mcp.h"
+#include "pluginfinder.h"
 #include "pluginsources.h"
 #include "plugintools.h"
 #include "secretstore.h"
@@ -413,7 +414,7 @@ int runPluginCli(const QStringList &arguments) {
     parser.addOption({"yes", "update: also install an update that asks for a permission the installed version doesn't have."});
     parser.addOption({"updates", "sources: what is done about updates: auto, tell or never.", "mode"});
     parser.addOption({"forget", "token: take the token out of the keyring."});
-    parser.addPositionalArgument("action", "new, check, run, list, enable, disable, install, remove, add, sources, update, pin, "
+    parser.addPositionalArgument("action", "new, check, run, list, enable, disable, install, remove, search, add, sources, update, pin, "
                                            "follow, rollback, forget-source, token or api.");
     QStringList rest = arguments;
     rest.removeAt(1);
@@ -644,8 +645,44 @@ int runPluginCli(const QStringList &arguments) {
             lines << "No plugin came from a GitHub repository. Add one: omabook plugin add owner/repo";
         return finish(QJsonObject{{"folder", sources.folder()}, {"updates", mode}, {"sources", list}}, lines.join('\n'));
     }
+    if (action == "search") {
+        PluginFinder finder(context);
+        const QJsonObject answer = PluginSources::wait([&](PluginSources::Done done) { finder.search(words.mid(1).join(' '), done); });
+        QStringList lines;
+        for (const QJsonValue &value : answer.value("results").toArray()) {
+            const QJsonObject found = value.toObject();
+            const QStringList permissions = found.value("permissions").toVariant().toStringList();
+            QStringList facts{found.value("listed").toBool() ? (found.value("reviewed").toBool() ? "listed, reviewed" : "listed")
+                                                             : "not reviewed"};
+            if (found.contains("stars"))
+                facts << QString::number(found.value("stars").toInt()) + (found.value("stars").toInt() == 1 ? " star" : " stars");
+            if (!found.value("updated").toString().isEmpty())
+                facts << "updated " + found.value("updated").toString();
+            if (!found.value("license").toString().isEmpty())
+                facts << found.value("license").toString();
+            lines << found.value("name").toString() + "\t" + found.value("title").toString() + "\t" + found.value("repository").toString()
+                         + "\t(" + facts.join(", ") + ")";
+            lines << "  " + found.value("description").toString();
+            lines << "  " + (found.value("program").toBool() ? QString("It is a program of its own: it can do whatever you can on this computer.")
+                             : permissions.isEmpty() ? QString("It asks for nothing beyond the library.")
+                                                     : "It may: " + permissions.join(", ") + ".")
+                         + (found.value("installed").toBool() ? QString(" It is installed.")
+                            : !found.value("installable").toBool() ? " It can't be installed here: " + found.value("problem").toString()
+                            : " Install it: omabook plugin add " + (found.value("listed").toBool() ? found.value("name").toString()
+                                                                                                  : found.value("address").toString()));
+            if (!found.value("listed").toBool())
+                lines << "  Not reviewed: nobody has looked at it for you. A plugin can do whatever its permissions allow.";
+        }
+        if (answer.value("results").toArray().isEmpty())
+            lines << "No plugin was found" + (words.size() > 1 ? " for \"" + words.mid(1).join(' ') + "\"" : QString()) + ".";
+        if (!answer.value("problem").toString().isEmpty())
+            lines << answer.value("problem").toString();
+        else if (!answer.value("discovery").toBool())
+            lines << "Only the registry was searched: looking on GitHub is switched off in the settings.";
+        return finish(answer, lines.join('\n'));
+    }
     if (action == "add") {
-        if (!wants(1, "add <github address> [--name <name>] [--pin <tag|branch>] [--enable] [--replace]"))
+        if (!wants(1, "add <name|github address> [--name <name>] [--pin <tag|branch>] [--enable] [--replace]"))
             return 1;
         PluginSources sources(context);
         PluginSources::AddOptions options;

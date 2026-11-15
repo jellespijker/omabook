@@ -10,6 +10,7 @@
 #include <functional>
 
 #include "filepicker.h"
+#include "pluginfinder.h"
 #include "pluginsources.h"
 
 class MetadataSource;
@@ -49,6 +50,14 @@ class PluginManager : public QObject {
     Q_PROPERTY(QString checking READ checking NOTIFY busyChanged)
     Q_PROPERTY(bool sourced READ sourced NOTIFY changed)
     Q_PROPERTY(QVariantMap sourceNote READ sourceNote NOTIFY sourceNoteChanged)
+    // Finding plugins to install (see PluginFinder): what the last `find`
+    // found, as PluginFinder::search answers each, whether it is still
+    // looking, and why GitHub couldn't be asked, if it couldn't. `discovery`
+    // is the setting that has GitHub asked at all.
+    Q_PROPERTY(QVariantList found READ found NOTIFY foundChanged)
+    Q_PROPERTY(bool finding READ finding NOTIFY foundChanged)
+    Q_PROPERTY(QString findProblem READ findProblem NOTIFY foundChanged)
+    Q_PROPERTY(bool discovery READ discovery WRITE setDiscovery NOTIFY foundChanged)
 
 public:
     // What opens a folder in the file manager; tests pass their own.
@@ -72,6 +81,15 @@ public:
     bool sourced() const noexcept { return m_sourced; }
     QVariantMap sourceNote() const noexcept { return m_sourceNote; }
     PluginSources *sources() noexcept { return &m_sources; }
+    PluginFinder *finder() noexcept { return &m_finder; }
+    QVariantList found() const noexcept { return m_found; }
+    bool finding() const noexcept { return m_finding > 0; }
+    QString findProblem() const noexcept { return m_findProblem; }
+    bool discovery() const;
+    void setDiscovery(bool on);
+    // Looks for plugins to install that match the words, every one for
+    // none; the answer is `found`. The newest words win.
+    Q_INVOKABLE void find(const QString &words);
 
     // Looks at the plugins again. The registry is asked what is known, so
     // this is cheap enough to do whenever something may have changed.
@@ -134,6 +152,7 @@ signals:
     void trialChanged();
     void busyChanged();
     void sourceNoteChanged();
+    void foundChanged();
     // Something the person should hear of though they didn't ask: a plugin
     // that was updated, or one that went back to the version before.
     void said(const QString &text);
@@ -165,6 +184,11 @@ private:
     int m_trialPending = 0;
     QTimer m_trialLimit;
     PluginSources m_sources;
+    PluginFinder m_finder;
+    QVariantList m_found;
+    int m_finding = 0;
+    int m_findAsked = 0;
+    QString m_findProblem;
     QTimer m_daily;
     bool m_fetching = false, m_sourced = false;
     QString m_checking;

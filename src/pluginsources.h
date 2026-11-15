@@ -76,8 +76,12 @@ public:
     // this computer, put a stand-in in its place.
     struct Service {
         QString api = "https://api.github.com";
-        // The only hosts a request may be redirected to.
-        QStringList hosts{"github.com", "api.github.com", "codeload.github.com", "objects.githubusercontent.com"};
+        // Where a repository's files are read one at a time (the registry of
+        // plugins, see PluginFinder).
+        QString raw = "https://raw.githubusercontent.com";
+        // The only hosts a request may be sent or redirected to.
+        QStringList hosts{"github.com", "api.github.com", "codeload.github.com", "objects.githubusercontent.com",
+                          "raw.githubusercontent.com"};
         bool httpsOnly = true;
         static Service fromEnvironment();
     };
@@ -161,8 +165,21 @@ public:
     static QJsonObject wait(const std::function<void(Done)> &start, int milliseconds = 180000);
 
 private:
+    // Finding plugins asks GitHub the same careful way: HTTPS to GitHub only,
+    // nothing too large, the token only to the API.
+    friend class PluginFinder;
     using Entry = std::shared_ptr<QJsonObject>;
-    struct Reply;
+    // What a request came to.
+    struct Reply {
+        int status = 0;
+        QByteArray body;
+        QHash<QByteArray, QByteArray> headers; // by lower-case name
+        QString error;
+        bool offline = false;    // GitHub wasn't reached at all
+        bool limited = false;    // GitHub asked to wait
+        bool refused = false;    // it led somewhere that isn't GitHub, or was too large
+        bool redirected = false; // the API sent the request on to another of its addresses
+    };
     struct Target;
     using Answered = std::function<void(const Reply &reply)>;
     using Resolved = std::function<void(const Target &target, const QJsonObject &failure)>;

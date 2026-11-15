@@ -44,6 +44,8 @@
         <file alias="PageReader.qml">PageReader.qml</file>
         <file alias="PluginAsk.qml">PluginAsk.qml</file>
         <file alias="PluginForm.qml">PluginForm.qml</file>
+        <!-- The plugins to try, as this Omabook was built; see PluginFinder. -->
+        <file alias="plugins.json">../share/omabook/plugins.json</file>
         <file alias="PluginsDialog.qml">PluginsDialog.qml</file>
         <file alias="PluginDetail.qml">PluginDetail.qml</file>
         <file alias="PluginMark.qml">PluginMark.qml</file>
