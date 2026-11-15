@@ -232,7 +232,12 @@ QVariantMap launcherToMap(const QVariantMap &launcher) {
     return map;
 }
 
-BookListModel::BookListModel(QObject *parent) : QAbstractListModel(parent) {}
+BookListModel::BookListModel(QObject *parent) : QAbstractListModel(parent) {
+    // Long enough for the next key of a word being typed.
+    m_lookSoon.setSingleShot(true);
+    m_lookSoon.setInterval(150);
+    connect(&m_lookSoon, &QTimer::timeout, this, &BookListModel::lookUpKnown);
+}
 
 BookListModel::~BookListModel() {
     if (!m_colorsChanged)
@@ -326,6 +331,9 @@ void BookListModel::present(const QString &libraryRoot) {
     m_books = books;
     m_root = libraryRoot;
     m_maps = maps;
+    // What is known of the books may have changed with them.
+    if (searching())
+        emit knowledgeWanted();
     // A book may have been given another file since.
     m_thickness.clear();
     const QList<int> rows = arranged();
@@ -350,7 +358,47 @@ void BookListModel::setQuery(const QString &query) {
         return;
     m_query = query;
     emit queryChanged();
+    m_known.setLooking(false);
     rebuild();
+    if (searching()) {
+        m_lookSoon.start();
+        emit knowledgeWanted();
+    }
+}
+
+bool BookListModel::searching() const { return !m_query.trimmed().isEmpty() && !m_query.trimmed().startsWith('?'); }
+
+void BookListModel::setKnowledge(std::shared_ptr<const KnowledgeIndex> index) {
+    m_index = std::move(index);
+    m_known = KnownWords(m_index);
+    m_known.setLooking(!m_lookSoon.isActive());
+    if (searching())
+        lookUpKnown();
+}
+
+void BookListModel::lookUpKnown() {
+    if (m_lookSoon.isActive())
+        return;
+    m_known.setLooking(true);
+    const QList<int> rows = arranged();
+    if (rows != m_rows) {
+        beginResetModel();
+        m_rows = rows;
+        endResetModel();
+        emit countChanged();
+    }
+    ++m_knownRevision;
+    emit knownChanged();
+}
+
+QVariantMap BookListModel::knownFor(qint64 id) const {
+    const auto why = searching() ? m_known.why(id) : std::nullopt;
+    if (!why)
+        return {};
+    QVariantMap map = why->toMap();
+    const auto met = std::ranges::find(m_books, why->met.place.bookId, &Book::id);
+    map.insert("readable", met != m_books.cend() && !met->formats.isEmpty());
+    return map;
 }
 
 void BookListModel::setSort(const QString &sort) {
@@ -424,14 +472,16 @@ QList<int> BookListModel::arranged(const QString &except) const {
     for (const auto &[name, value] : m_filters.asKeyValueRange())
         if (const auto kind = named<Filter>(filterNames, name); kind && name != except)
             narrowings.append({*kind, value});
-    const bool searching = !m_query.trimmed().isEmpty();
-    auto shown = std::views::iota(0, int(m_books.size())) | std::views::filter([this, searching, &narrowings](int index) {
+    const bool searching = this->searching();
+    m_known.forgetWhy();
+    const Book::Knows knows = m_known.hasIndex() ? m_known.asker() : Book::Knows();
+    auto shown = std::views::iota(0, int(m_books.size())) | std::views::filter([this, searching, &narrowings, &knows](int index) {
                      const Book &book = m_books.at(index);
                      // A launcher is on the whole shelf, and in a search
                      // for its words, but never among books narrowed down.
                      if (isLauncher(book))
                          return !m_members && narrowings.isEmpty() && (!searching || launcherMatches(book, m_query));
-                     return member(book) && (!searching || book.matches(m_query))
+                     return member(book) && (!searching || book.matches(m_query, knows))
                             && std::ranges::all_of(narrowings, [&book](const Narrowing &narrowing) {
                                    return passes(book, narrowing.kind, narrowing.value);
                                });
@@ -498,6 +548,8 @@ void BookListModel::rebuild() {
     m_rows = arranged();
     endResetModel();
     emit countChanged();
+    ++m_knownRevision;
+    emit knownChanged();
 }
 
 int BookListModel::shownBooks() const {

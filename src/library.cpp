@@ -142,7 +142,7 @@ namespace {
 
 // The fields a search can look in one at a time, as "key:value".
 constexpr std::array searchKeys{"author"_L1, "title"_L1, "series"_L1, "tag"_L1, "genre"_L1, "format"_L1, "lang"_L1,
-                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1, "rating"_L1};
+                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1, "rating"_L1, "knows"_L1};
 
 // The words of a search, a quoted phrase as one: `tag:"science fiction"`
 // is one word, and so is `"the hobbit"`.
@@ -200,9 +200,11 @@ constexpr std::array worldWords{"nonfiction"_L1, "non-fiction"_L1, "history"_L1,
 
 } // namespace
 
-bool Book::matches(const QString &query) const {
+bool Book::matches(const QString &query) const { return matches(query, {}); }
+
+bool Book::matches(const QString &query, const Knows &knows) const {
     const QString everything = meta.title + "\n" + meta.authorText() + "\n" + meta.series + "\n" + meta.tags.join("\n");
-    const auto found = [this, &everything](const QString &word) {
+    const auto found = [this, &everything, &knows](const QString &word) {
         const QString key = word.section(':', 0, 0).toLower(), value = word.section(':', 1);
         if (word.contains(':')) {
             if (key == "author") return meta.authorText().contains(value, Qt::CaseInsensitive);
@@ -220,8 +222,9 @@ bool Book::matches(const QString &query) const {
                 return value.toLower() == "digital" ? !formats.isEmpty() : value.toLower() == "paper" ? paper
                        : value.toLower() == "wishlist" && held() == "none";
             if (key == "rating") return rating >= value.toInt() && rating > 0;
+            if (key == "knows") return knows && knows(*this, value, true);
         }
-        return everything.contains(word, Qt::CaseInsensitive);
+        return everything.contains(word, Qt::CaseInsensitive) || (knows && knows(*this, word, false));
     };
     // A word with a minus in front is one the book must not match.
     const auto holds = [&found](const QString &word) {
@@ -250,10 +253,15 @@ QString Book::searchProblem(const QString &query) {
     for (const QString &word : words) {
         const QRegularExpressionMatch match = keyed.match(word);
         const QString key = match.captured(1).toLower();
+        // What is known of a book grows as it is read, and a rule holds the
+        // same books for everyone who opens the library.
+        if (match.hasMatch() && key == "knows"_L1)
+            return "A collection's rule goes by the books' own details; knows: is for the search, where what you have read counts.";
         if (match.hasMatch() && std::ranges::none_of(searchKeys, [&key](QLatin1StringView known) { return key == known; })) {
             QStringList keys;
             for (const QLatin1StringView known : searchKeys)
-                keys << known + ':';
+                if (known != "knows"_L1)
+                    keys << known + ':';
             return QString("\"%1:\" isn't a field a search looks in; it can be %2.").arg(match.captured(1), keys.join(", "));
         }
     }

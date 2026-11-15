@@ -189,6 +189,21 @@ public:
     QList<GraphFact> facts(qint64 node) const;
     // The facts of many nodes at once, by node.
     QHash<qint64, QList<GraphFact>> factsOf(const QList<qint64> &nodes) const;
+
+    // Where a thing of the general graph is tied to a book: met in it (with
+    // the place and the words there), asked of it (a question with no place,
+    // `at` of no book), or related to the book's own node (at the place the
+    // relation was learned, of no book when it was made by hand).
+    struct Sighting {
+        GraphNode node;
+        qint64 bookId = 0;
+        GraphMoment at;
+    };
+    // Every such tie of the things of these kinds, and the facts of those
+    // things by node: what a search over what is known reads, in a few
+    // statements however large the graph.
+    QList<Sighting> sightings(const QStringList &kinds) const;
+    QHash<qint64, QList<GraphFact>> factsOfKinds(const QStringList &kinds) const;
     // A node as it is known to whoever `known` says knows a place: its
     // summary the latest it had by then, and only the names it was known by
     // by then. The facts of `bookId` come first, by place; a fact of no book

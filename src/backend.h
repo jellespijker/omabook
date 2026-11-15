@@ -235,6 +235,10 @@ private:
     // Books added by the user while a collection is shown go into it.
     void putInShownCollection(const QList<qint64> &ids);
     void watchLibrary();
+    // Reads what the knowledge graph knows of the books for the search,
+    // beside the window, when the search wants it and what was read last
+    // is out of date.
+    void buildKnowledge();
     void picked(FilePicker::Purpose purpose, const QList<QUrl> &urls);
     void importFinished(const ImportSummary &summary, bool calibreLeftOut);
     void loadPlugins(bool refresh);
@@ -268,6 +272,10 @@ private:
     int m_revision = 0;
     // What the library's change counters said when it was last read.
     Library::Changes m_changes;
+    // The knowledge being read for the search, and whether it is wanted
+    // again once that is done.
+    bool m_knowing = false;
+    bool m_knowAgain = false;
     int m_jobs = 0;
     QString m_status;
     QString m_message;

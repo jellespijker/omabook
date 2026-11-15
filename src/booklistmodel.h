@@ -4,11 +4,14 @@
 #include <QColor>
 #include <QHash>
 #include <QSet>
+#include <QTimer>
 #include <QVariantList>
 #include <QVariantMap>
 #include <algorithm>
+#include <memory>
 #include <optional>
 
+#include "knowledgesearch.h"
 #include "library.h"
 
 // A book as QML sees it: the model's roles and Backend::book share this, so
@@ -44,6 +47,9 @@ class BookListModel : public QAbstractListModel {
     Q_PROPERTY(int count READ count NOTIFY countChanged)
     Q_PROPERTY(int books READ shownBooks NOTIFY countChanged)
     Q_PROPERTY(int total READ total NOTIFY countChanged)
+    // Counts up whenever which books were found by what is known changes
+    // (see knownFor), for bindings to follow.
+    Q_PROPERTY(int knownRevision READ knownRevision NOTIFY knownChanged)
 
 public:
     explicit BookListModel(QObject *parent = nullptr);
@@ -60,6 +66,15 @@ public:
     // library. The search, the filters and their choices then work within
     // it, and the launchers plugins put on the shelf stay with the whole.
     void setMembers(const std::optional<QSet<qint64>> &members);
+    // What the knowledge graph knows of the books, for the search to find
+    // them by too (knowledgesearch.h); none to look only at their details.
+    // While words are being typed only those looked up before are, and the
+    // rest a moment after the typing stops.
+    void setKnowledge(std::shared_ptr<const KnowledgeIndex> index);
+    [[nodiscard]] const KnowledgeIndex *knowledge() const noexcept { return m_index.get(); }
+    // Whether the search narrows the shelf: it has words, and isn't a
+    // question for the AI (one that starts with "?").
+    [[nodiscard]] bool searching() const;
 
     QString query() const noexcept { return m_query; }
     void setQuery(const QString &query);
@@ -83,6 +98,12 @@ public:
     // Everything about the book in a row, for views that lay books out
     // themselves; empty when there is no such row.
     Q_INVOKABLE QVariantMap get(int row) const;
+    // When the search found a book by what is known of it rather than its
+    // details, the thing that did: {"node", "kind", "name", "bookId",
+    // "metIn" (the book it was met in, 0 for none), "section", "fraction",
+    // "anchor", "readable"}. Empty otherwise.
+    Q_INVOKABLE QVariantMap knownFor(qint64 id) const;
+    int knownRevision() const noexcept { return m_knownRevision; }
 
     // Sets one filter; an empty value, or a rating of 0, takes it away.
     Q_INVOKABLE void setFilter(const QString &kind, const QVariant &value);
@@ -115,8 +136,14 @@ signals:
     void sortChanged();
     void filtersChanged();
     void countChanged();
+    void knownChanged();
+    // A search began, or the books changed under one: the knowledge given
+    // may be out of date.
+    void knowledgeWanted();
 
 private:
+    // Looks up the words of the search that were left while typing.
+    void lookUpKnown();
     void present(const QString &libraryRoot);
     [[nodiscard]] bool member(const Book &book) const;
     void rebuild();
@@ -143,6 +170,10 @@ private:
     QVariantMap m_filters;
     QList<int> m_rows;
     std::optional<QSet<qint64>> m_members;
+    std::shared_ptr<const KnowledgeIndex> m_index;
+    mutable KnownWords m_known;
+    QTimer m_lookSoon;
+    int m_knownRevision = 0;
 
     // A cover's color by the cover's address, kept between runs, since
     // finding it means opening the picture.

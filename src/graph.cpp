@@ -480,6 +480,59 @@ QHash<qint64, QList<GraphFact>> Graph::factsOf(const QList<qint64> &nodes) const
     return facts;
 }
 
+QList<Graph::Sighting> Graph::sightings(const QStringList &kinds) const {
+    QList<Sighting> found;
+    if (kinds.isEmpty())
+        return found;
+    const QString kindList = marks(kinds.size());
+    const QVariantList kindValues = kinds | std::ranges::to<QVariantList>();
+    const QString columns = "n.id, n.scope, n.kind, n.name, n.summary, n.data, COALESCE(n.book_id, 0), n.updated"_L1;
+    // Met in a book, through the primary key of graph_seen from each node.
+    for (QSqlQuery query = m_library->query(QString("SELECT %1, s.book_id, s.section, s.fraction, s.anchor FROM graph_nodes AS n "
+                                                    "JOIN graph_seen AS s ON s.node_id = n.id WHERE n.scope = '' AND n.kind IN (%2)")
+                                                .arg(columns, kindList),
+                                            kindValues);
+         query.next();)
+        found.append({nodeFrom(query), query.value(8).toLongLong(), {placeFrom(query, 8), query.value(11).toString()}});
+    // Related to a book's own node, either way round.
+    for (const auto &[thing, book] : {std::pair{"source"_L1, "target"_L1}, std::pair{"target"_L1, "source"_L1}})
+        for (QSqlQuery query = m_library->query(
+                 QString("SELECT %1, b.book_id, e.book_id, e.section, e.fraction, e.anchor FROM graph_edges AS e "
+                         "JOIN graph_nodes AS n ON n.id = e.%2 JOIN graph_nodes AS b ON b.id = e.%3 "
+                         "WHERE b.kind = 'book' AND b.book_id IS NOT NULL AND n.scope = '' AND n.kind IN (%4)")
+                     .arg(columns, thing, book, kindList),
+                 kindValues);
+             query.next();)
+            found.append({nodeFrom(query), query.value(8).toLongLong(), {placeFrom(query, 9), query.value(12).toString()}});
+    // A question asked of a book with no place in it.
+    for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_nodes AS n WHERE n.scope = '' AND n.kind = 'question' "
+                                                    "AND n.data LIKE '%\"book\"%' AND NOT EXISTS (SELECT 1 FROM graph_seen "
+                                                    "WHERE node_id = n.id)")
+                                                .arg(columns));
+         query.next();) {
+        GraphNode node = nodeFrom(query);
+        if (const qint64 book = node.data.value("book").toInteger(); book > 0 && kinds.contains(node.kind))
+            found.append({std::move(node), book, {}});
+    }
+    return found;
+}
+
+QHash<qint64, QList<GraphFact>> Graph::factsOfKinds(const QStringList &kinds) const {
+    QHash<qint64, QList<GraphFact>> facts;
+    if (kinds.isEmpty())
+        return facts;
+    for (QSqlQuery query = m_library->query(
+             QString("SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor "
+                     "FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id WHERE n.scope = '' AND n.kind IN (%1)")
+                 .arg(marks(kinds.size())),
+             kinds | std::ranges::to<QVariantList>());
+         query.next();) {
+        GraphFact fact = factFrom(query);
+        facts[fact.node].append(std::move(fact));
+    }
+    return facts;
+}
+
 GraphNode Graph::asKnown(GraphNode node, const QList<GraphFact> &facts, qint64 bookId, const GraphKnown &known) {
     const GraphFact *ofBook = nullptr, *other = nullptr;
     bool summaries = false;

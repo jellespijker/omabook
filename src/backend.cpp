@@ -55,6 +55,7 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
         m_shelfMoving = false;
     });
     connect(&m_model, &BookListModel::filtersChanged, this, &Backend::keepShelf);
+    connect(&m_model, &BookListModel::knowledgeWanted, this, &Backend::buildKnowledge);
     // config.json is followed while the app runs, the shelf's part of it too.
     connect(m_settings, &Settings::changed, this, [this] {
         if (m_shelfMoving)
@@ -272,8 +273,43 @@ void Backend::reloadIfChanged() {
         return;
     }
     watchLibrary();
-    if (now.graph != before.graph)
+    if (now.graph != before.graph) {
         GraphFeed::announce();
+        if (m_model.searching())
+            buildKnowledge();
+    }
+}
+
+void Backend::buildKnowledge() {
+    if (!m_library || m_settings->graph() == "off") {
+        if (m_model.knowledge())
+            m_model.setKnowledge({});
+        return;
+    }
+    if (m_knowing) {
+        m_knowAgain = true;
+        return;
+    }
+    const KnowledgeIndex *known = m_model.knowledge();
+    if (known && known->changes == m_library->changes())
+        return;
+    m_knowing = true;
+    const QString root = m_library->root();
+    const QPointer<Backend> self(this);
+    (void)QtConcurrent::run([self, root] {
+        Library own(root);
+        auto index = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::build(own) : KnowledgeIndex());
+        QMetaObject::invokeMethod(qApp, [self, root, index] {
+            if (!self)
+                return;
+            self->m_knowing = false;
+            // Read for a library that is no longer the one in use.
+            if (self->m_library && self->m_library->root() == root)
+                self->m_model.setKnowledge(index);
+            if (std::exchange(self->m_knowAgain, false))
+                self->buildKnowledge();
+        });
+    });
 }
 
 void Backend::reload() {

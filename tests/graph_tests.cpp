@@ -21,6 +21,7 @@
 #include "graphcontext.h"
 #include "graphlinks.h"
 #include "graphtools.h"
+#include "knowledgesearch.h"
 #include "library.h"
 #include "prompts.h"
 #include "reader.h"
@@ -1424,6 +1425,56 @@ private slots:
         QVERIFY(!captain.aliases().contains("The Captain"));
         QVERIFY(!captain.aliases().contains("Tobin's son"));
         QVERIFY(find(graph.ofBook(book, upTo(1)), "Corin Ash").aliases().contains("The Captain"));
+    }
+
+    void theSearchFindsBooksByWhatIsKnown() {
+        Shelf shelf;
+        const qint64 book = shelf.book, unopened = shelf.add("The Keeper Again");
+        const auto upTo = [](qint64 id, int section) { return GraphPlace{id, section, 1.0}; };
+        for (const qint64 id : {book, unopened}) {
+            const auto document = shelf.document(id);
+            GraphBuild::apply(shelf.library, id, GraphBuild::passages(*document, std::nullopt, upTo(id, 0)), firstAnswer);
+            GraphBuild::apply(shelf.library, id, GraphBuild::passages(*document, upTo(id, 0), upTo(id, 1)), secondAnswer);
+            GraphBuild::apply(shelf.library, id, GraphBuild::passages(*document, upTo(id, 1), upTo(id, 2)), thirdAnswer);
+        }
+        // Read to the end of the second chapter; the other book never opened.
+        shelf.library.setProgress(book, {.section = 1, .fraction = 1.0, .percent = 60, .updated = 0});
+        const auto found = [&](const QString &word, bool deep = false) { return KnowledgeIndex::build(shelf.library).find(word, deep); };
+
+        // A thing met by then finds its book, by a word of its name, and says so.
+        QVERIFY(found("corin").contains(book));
+        QCOMPARE(found("ash").value(book).name, QString("Corin Ash"));
+        QCOMPARE(found("ash").value(book).kind, QString("character"));
+        QCOMPARE(found("ash").value(book).met.place.section, 1);
+        QVERIFY(!found("orin").contains(book));
+        // Never a book not begun, however far its graph was built.
+        QVERIFY(!found("corin").contains(unopened));
+        // Nor a name, a summary or a thing from past the reader's page.
+        QVERIFY(!found("tobin's son").contains(book));
+        QVERIFY(found("drowned", true).contains(book));
+        QVERIFY(!found("son", true).contains(book));
+        // What the reader wrote by hand counts, wherever they are.
+        QVERIFY(Graph(shelf.library).edit(named(shelf.library, "character", "Mara Venn").id, "Mara Venn", "The keeper, in my own words."));
+        QVERIFY(found("words", true).contains(book));
+        // And so does a question asked of a book, opened or not.
+        GraphContext::noteQuestion(shelf.library, unopened, std::nullopt, "Why does the lamp turn at night?", "It warns the ships.");
+        QCOMPARE(found("lamp").value(unopened).kind, QString("question"));
+        // A book marked as read is known to its end.
+        QVERIFY(shelf.library.setReading(unopened, "read", 0, {}));
+        QVERIFY(found("tobin's son").contains(unopened));
+
+        // The search: details first, then what is known, with why.
+        const QList<KnowledgeSearch::Found> hits = KnowledgeSearch::search(shelf.library, shelf.library.books(), "corin");
+        QCOMPARE(hits.size(), 2);
+        QCOMPARE(hits.first().why->name, QString("Corin Ash"));
+        // Found by its title, a book needs no other reason.
+        const QList<KnowledgeSearch::Found> byTitle = KnowledgeSearch::search(shelf.library, shelf.library.books(), "saltmere");
+        QVERIFY(!byTitle.isEmpty() && byTitle.first().book.id == book && !byTitle.first().why);
+        QCOMPARE(KnowledgeSearch::search(shelf.library, shelf.library.books(), "knows:corin -knows:tobin's").size(), 1);
+        // Without the graph, knows: finds nothing; and it is no collection's rule.
+        QVERIFY(!shelf.library.book(book)->matches("knows:corin"));
+        QVERIFY(!Book::searchProblem("knows:corin").isEmpty());
+        QVERIFY(Book::searchProblem("author:ann").isEmpty());
     }
 
     void nothingLaterReachesTheModel() {

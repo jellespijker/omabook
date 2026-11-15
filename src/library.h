@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <expected>
+#include <functional>
 #include <optional>
 
 #include "bookmeta.h"
@@ -50,9 +51,16 @@ struct Book {
     // a word with "-" in front must not match, and "OR" between words
     // matches either side: `genre:fiction OR series:Dune -tag:poetry`.
     bool matches(const QString &query) const;
+    // What else a search may find a book by, beyond its details: asked of a
+    // bare word the details don't hold (with `only` false), and of the value
+    // of "knows:" (with `only` true), which looks in that and nothing else.
+    // The knowledge graph is what the window's search and `omabook search`
+    // give here (knowledgesearch.h); without it "knows:" finds nothing.
+    using Knows = std::function<bool(const Book &book, const QString &word, bool only)>;
+    bool matches(const QString &query, const Knows &knows) const;
     // What is wrong with a search as a collection's rule, in English: a
-    // field it doesn't know ("auther:"), a quote left open. Empty when it
-    // is fine.
+    // field it doesn't know ("auther:"), a quote left open, or "knows:",
+    // which is for a search and not a rule. Empty when it is fine.
     static QString searchProblem(const QString &query);
     QJsonObject toJson() const;
 };
