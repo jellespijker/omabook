@@ -146,6 +146,8 @@ struct Desk {
         aiAgent.emplace(&*settings, dir.filePath("omarchy/defaults/agent"));
         librarian.emplace(&*backend, &*settings, &*custom, [this] { return look->colors(); });
         settings->setTour("done");
+        // Finding plugins asks only the registry built in: no test reaches GitHub.
+        settings->setPluginDiscovery(false);
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
         const auto followPlugins = [this] { custom->setPlugins(backend->scripts()->commands(), backend->scripts()->panels()); };
@@ -888,6 +890,9 @@ class LayoutTests : public QObject {
                 (void)QTest::qWaitFor([&] { return desk.find("lookupList") && desk.find("lookupList")->property("count").toInt() > 0; }, 3000);
             });
             dialog(desk, "remove", [&] { desk.call("removeBook", book); });
+            // What a plugin asks, drawn by Omabook; and its entry on the shelf, taken off.
+            dialog(desk, "plugin-form", [&] { desk.backend->scripts()->run("former:form"); });
+            dialog(desk, "remove-launcher", [&] { desk.call("removeBook", desk.backend->books()->idAt(0)); });
             dialog(desk, "filter", [&] { desk.run("library.filter"); });
             // The whole library as a graph, which takes the shelf's place.
             desk.call("showGraph", 0);
@@ -968,6 +973,33 @@ class LayoutTests : public QObject {
         if (QTest::currentTestFailed()) return;
         pages(desk, ids.first());
         if (QTest::currentTestFailed()) return;
+        // A plugin with an entry on the shelf and a form of every kind of
+        // field, which the dialogs below put up.
+        QDir().mkpath(desk.dir.filePath("plugins/former"));
+        Fixtures::write(desk.dir.filePath("plugins/former/plugin.json"), "{\"name\": \"Storyteller\", \"script\": \"main.js\"}");
+        Fixtures::write(desk.dir.filePath("plugins/former/main.js"), "            omabook.ui.launcher({id: \"new\", title: \"Write a new story\", author: \"Storyteller\", open: function () {}});\n"
+            "            omabook.commands.register({id: \"form\", title: \"A form\", place: \"global\", run: function () {\n"
+            "                return omabook.ui.form({title: \"Write a new story\", accept: \"Start Writing\",\n"
+            "                    intro: \"Storyteller writes it for you, with the AI set up in Omabook. Chapter one is ready in a few minutes.\",\n"
+            "                    fields: [\n"
+            "                        {id: \"wish\", type: \"textarea\", label: \"What should it be?\", placeholder: \"A mood, a kind of story, a what-if.\", required: true},\n"
+            "                        {id: \"where\", type: \"choice\", label: \"Where does it live?\", choices: [\n"
+            "                            {value: \"new\", label: \"A world of its own\", help: \"A new world, new people, a new plot.\"},\n"
+            "                            {value: \"world\", label: \"A new story in the world of one of yours\", help: \"The world as you know it from that book, new people and a new plot.\"},\n"
+            "                            {value: \"sequel\", label: \"A sequel to one that has ended\"},\n"
+            "                            {value: \"branch\", label: \"A branch of one, from a chapter\"}]},\n"
+            "                        {id: \"skills\", type: \"multi\", label: \"Write it with\", choices: [\"Lush and lyrical\", \"Spare and concrete\", \"Wry\", \"Slow dread\",\n"
+            "                            \"Chapter hooks\", \"Second person\", \"Present tense\", \"Kishotenketsu\", \"Heist\", \"Fair-clue mystery\"]},\n"
+            "                        {id: \"pov\", type: \"choice\", label: \"Point of view\", choices: [\"Let the story decide\", \"First person\", \"Close third person\"]},\n"
+            "                        {id: \"tone\", type: \"text\", label: \"Tone\", placeholder: \"Warm, eerie, wry, tender…\"},\n"
+            "                        {id: \"chapters\", type: \"number\", label: \"Chapters\", min: 2, max: 60, value: 12, help: \"Where the plan aims.\"},\n"
+            "                        {id: \"words\", type: \"number\", label: \"Words a chapter\", min: 150, max: 6000, step: 50, value: 1200},\n"
+            "                        {id: \"many\", type: \"choice\", label: \"Which story?\", choices: [\"One\", \"Two\", \"Three\", \"Four\", \"Five\", \"Six\", \"Seven\"]},\n"
+            "                        {id: \"ahead\", type: \"toggle\", label: \"Write the next chapter as I read\"}]});\n"
+            "            }});\n"
+            "        \n");
+        desk.backend->scripts()->reload();
+        QTRY_VERIFY(desk.backend->books()->idAt(0) < 0);
         dialogs(desk, ids.first());
         if (QTest::currentTestFailed()) return;
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));

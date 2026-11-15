@@ -294,6 +294,8 @@ struct Desk {
         librarian.emplace(&*backend, &*settings, &*custom, [this] { return look->colors(); });
         // The tour was answered long ago, unless a test says this is a first start.
         settings->setTour("done");
+        // Finding plugins asks only the registry built in: no test reaches GitHub.
+        settings->setPluginDiscovery(false);
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
         // What script plugins add joins the interface, as in main.cpp.
@@ -4718,10 +4720,12 @@ private slots:
         // No plugin came from GitHub yet, so nothing offers to check for updates.
         QVERIFY(!desk.value("pluginsCheckAll", "visible").toBool());
 
-        // I, an address, Enter: it is fetched and described, and nothing is
-        // installed until it is said how.
+        // I, Tab past "Find plugins" to the address, Enter: it is fetched and
+        // described, and nothing is installed until it is said how.
         desk.key(Qt::Key_I);
         QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
+        QTRY_VERIFY(desk.value("pluginFindWords", "activeFocus").toBool());
+        QMetaObject::invokeMethod(desk.find("pluginInstallAddress"), "forceActiveFocus");
         QTRY_VERIFY(desk.value("pluginInstallAddress", "activeFocus").toBool());
         desk.find("pluginInstallAddress")->setProperty("text", "https://github.com/someone/omabook-storyteller");
         desk.shot("pluginsources-address");
@@ -4806,6 +4810,7 @@ private slots:
         QTRY_VERIFY(dialog->property("activeFocus").toBool());
         desk.key(Qt::Key_I);
         QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
+        QMetaObject::invokeMethod(desk.find("pluginInstallAddress"), "forceActiveFocus");
         desk.find("pluginInstallAddress")->setProperty("text", "https://example.com/a/b");
         desk.key(Qt::Key_Return);
         QTRY_VERIFY(desk.value("pluginInstallError", "text").toString().contains("Only GitHub"));
@@ -6365,6 +6370,137 @@ private slots:
         QVERIFY(!desk.value("graphDetailsSummary", "visible").toBool());
         QVERIFY(beside(graph, "graphAhead"));
         desk.shot("graph-whole-later");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A plugin's launcher is on the shelf in every view, opens a form
+    // instead of a reader, and the form's answer opens the book it made;
+    // taken off the shelf, its plugin hears of it. In dark and light, left
+    // to right and right to left, with no warning from the window.
+    void aLauncherOnTheShelfOpensAFormAndThenTheBook() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
+                                 "selection_background = \"#dcdcdc\"\ncolor8 = \"#6f6f6f\"\n";
+        struct Case {
+            QByteArray language, colors;
+            QString name;
+        };
+        for (const Case &one : {Case{"en", {}, "dark"}, Case{"en", light, "light"}, Case{"ar", light, "rtl"}}) {
+            Desk desk({}, one.language, one.colors);
+            QVERIFY(Fixtures::epub(desk.dir.filePath("one.epub")));
+            const qint64 real = desk.add(desk.dir.filePath("one.epub"));
+            QVERIFY(QDir(desk.dir.path()).mkpath("plugins/teller"));
+            write(desk.dir.filePath("plugins/teller/main.js"), "                omabook.ui.launcher({id: \"new\", title: \"Write a new story\", author: \"Teller\",\n"
+                "                    open: function () {\n"
+                "                        return omabook.ui.form({title: \"Write a new story\", intro: \"What should it be?\", accept: \"Start Writing\", fields: [\n"
+                "                            {id: \"wish\", type: \"text\", label: \"What should it be?\", required: true},\n"
+                "                            {id: \"where\", type: \"choice\", label: \"Where does it live?\", choices: [\n"
+                "                                {value: \"new\", label: \"A world of its own\"}, {value: \"world\", label: \"In the world of another\", help: \"Shared\"}]},\n"
+                "                            {id: \"story\", type: \"choice\", label: \"Which story?\", choices: [\"One\", \"Two\"], when: {where: \"world\"}},\n"
+                "                            {id: \"skills\", type: \"multi\", label: \"Write it with\", choices: [\"lush\", \"wry\", \"spare\"]},\n"
+                "                            {id: \"chapters\", type: \"number\", label: \"Chapters\", min: 2, max: 60, value: 12},\n"
+                "                            {id: \"ahead\", type: \"toggle\", label: \"Write ahead\", value: true}]})\n"
+                "                        .then(function (values) {\n"
+                "                            if (!values) { omabook.say(\"Nothing started.\"); return null; }\n"
+                "                            omabook.files.write(\"data/story.md\", \"# \" + values.wish + \"\\n\\nBeing written, in \" + values.chapters + \" chapters.\\n\");\n"
+                "                            var book = omabook.library.create({title: values.wish, authors: [\"Teller\"]}, \"data/story.md\");\n"
+                "                            omabook.reader.open(book.id, {section: 0, fraction: 0});\n"
+                "                            return book.id;\n"
+                "                        });\n"
+                "                    },\n"
+                "                    removed: function () { omabook.say(\"Off the shelf.\"); }});\n"
+                "            \n");
+            write(desk.dir.filePath("plugins/teller/plugin.json"), "{\"name\": \"Teller\", \"script\": \"main.js\", \"permissions\": [\"files\"]}");
+            QVERIFY(desk.show());
+            QTRY_VERIFY(desk.backend->books()->count() == 2);
+            const qint64 launcher = desk.backend->books()->idAt(0);
+            QVERIFY(launcher < 0);
+            QCOMPARE(desk.backend->books()->total(), 1);
+            // In every view of the shelf, first.
+            for (const QString &view : {"spines", "carousel", "list", "stacks", "covers"}) {
+                desk.backend->setView(view);
+                QTest::qWait(100);
+                QCOMPARE(desk.backend->books()->idAt(0), launcher);
+            }
+            QMetaObject::invokeMethod(desk.find("library"), "select", Q_ARG(QVariant, launcher));
+            QTRY_COMPARE(desk.value("library", "selectedId").toLongLong(), launcher);
+            QTRY_COMPARE(desk.value("detailsTitle", "text").toString(), QString("Write a new story"));
+            QTRY_VERIFY(desk.value("detailsLauncher", "text").toString().contains("Teller"));
+            desk.shot("launcher-" + one.name);
+
+            // Opened as a book is: the form, and no reader behind it.
+            desk.key(Qt::Key_Space);
+            QTRY_VERIFY(desk.value("pluginForm", "opened").toBool());
+            QVERIFY(!desk.reader->isOpen());
+            QCOMPARE(desk.value("pluginFormTitle", "text").toString(), QString("Write a new story"));
+            QVERIFY(desk.find("pluginFormField_where"));
+            QVERIFY(!desk.value("pluginFormField_story", "visible").toBool());
+            QVERIFY(!desk.value("pluginFormDone", "enabled").toBool());
+            QVERIFY(desk.value("pluginFormMissing", "visible").toBool());
+            desk.shot("launcher-form-" + one.name);
+            // Escape leaves it, and nothing is started.
+            desk.key(Qt::Key_Escape);
+            QTRY_COMPARE(desk.value("toastText", "text").toString(), QString("Nothing started."));
+            QTRY_VERIFY(!desk.value("pluginForm", "visible").toBool());
+
+            // Again, filled in from the keyboard: the field that must be filled
+            // in has the keyboard, the other choice shows the field it opens.
+            desk.key(Qt::Key_Space);
+            QTRY_VERIFY(desk.value("pluginForm", "opened").toBool());
+            QTRY_VERIFY(desk.value("pluginFormText_wish", "activeFocus").toBool());
+            desk.type("A ship");
+            QTRY_VERIFY(desk.value("pluginFormDone", "enabled").toBool());
+            QObject *world = desk.find("pluginFormChoice_where_world");
+            QVERIFY(world);
+            QMetaObject::invokeMethod(world, "toggle");
+            QMetaObject::invokeMethod(world, "toggled");
+            QTRY_VERIFY(desk.value("pluginFormField_story", "visible").toBool());
+            desk.shot("launcher-form-filled-" + one.name);
+            QTest::mouseClick(desk.window, Qt::LeftButton, {},
+                              qobject_cast<QQuickItem *>(desk.find("pluginFormDone"))->mapToScene(QPointF(10, 10)).toPoint());
+            // The book it made opens, with its page.
+            QTRY_VERIFY(desk.reader->isOpen());
+            QCOMPARE(desk.backend->book(desk.reader->bookId()).value("title").toString(), QString("A ship"));
+            QTRY_VERIFY(!desk.value("pluginForm", "visible").toBool());
+            desk.reader->close();
+            QTRY_COMPARE(desk.backend->books()->total(), 2);
+
+            // Taken off the shelf, the plugin hears of it, and the book stays.
+            QMetaObject::invokeMethod(desk.window, "removeBook", Q_ARG(QVariant, launcher));
+            QTRY_VERIFY(desk.value("removal", "opened").toBool());
+            desk.shot("launcher-remove-" + one.name);
+            QMetaObject::invokeMethod(desk.find("confirmRemove"), "clicked");
+            QTRY_COMPARE(desk.value("toastText", "text").toString(), QString("Off the shelf."));
+            QTRY_COMPARE(desk.backend->books()->count(), 2);
+            QVERIFY(desk.backend->books()->rowOf(launcher) < 0);
+            QVERIFY(desk.backend->books()->rowOf(real) >= 0);
+            // Switched off, nothing of it is left on the shelf.
+            desk.backend->setPluginEnabled("folder:teller", false);
+            QTRY_VERIFY(!desk.backend->scripts()->plugin("teller"));
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(one.name + ": " + desk.warnings.join('\n')));
+        }
+    }
+
+    // Finding plugins in the install sheet: the registry's first, marked
+    // listed, each with an Install button that goes through the checked
+    // install. With looking on GitHub off, nothing is asked of the network.
+    void thePluginsToTryAreFoundInTheInstallSheet() {
+        Desk desk;
+        desk.settings->setPluginDiscovery(false);
+        QVERIFY(desk.show());
+        QMetaObject::invokeMethod(desk.window, "showPlugins");
+        QTRY_VERIFY(desk.find("plugins"));
+        QTest::qWait(100);
+        desk.key(Qt::Key_I);
+        QTRY_VERIFY(desk.value("pluginInstall", "opened").toBool());
+        QTRY_VERIFY(desk.find("pluginFound_storyteller"));
+        QTRY_VERIFY(desk.value("pluginFindWords", "activeFocus").toBool());
+        QVERIFY(desk.find("pluginFoundInstall_storyteller"));
+        QVERIFY(!desk.value("pluginDiscovery", "checked").toBool());
+        desk.shot("plugins-to-try");
+        desk.type("nothing like it");
+        QTRY_VERIFY(desk.value("pluginFoundNone", "visible").toBool());
+        QVERIFY(!desk.find("pluginFound_storyteller"));
+        desk.key(Qt::Key_Escape);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };

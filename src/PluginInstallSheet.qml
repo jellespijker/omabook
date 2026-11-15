@@ -70,6 +70,8 @@ AppPopup {
         installed(answer.id)
     }
     onClosed: if (host) host.manager.dismissOffer()
+    // Typing finds, once the sheet is up and has the keyboard.
+    onOpened: if (!fits) findWords.forceActiveFocus()
 
     DialogBody {
 
