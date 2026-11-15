@@ -1117,5 +1117,29 @@
   "Longest line": "Langste regel",
   "One, two or three pages": "Eén, twee of drie pagina's",
   "Pages side by side": "Pagina's naast elkaar",
-  "Pages side by side: as many as fit, one, two or three, and round again": "Pagina's naast elkaar: zoveel als er passen, één, twee of drie, en weer rond"
+  "Pages side by side: as many as fit, one, two or three, and round again": "Pagina's naast elkaar: zoveel als er passen, één, twee of drie, en weer rond",
+  "%Ln stars": {
+    "one": "%Ln ster",
+    "other": "%Ln sterren"
+  },
+  "Fill in “%1” first.": "Vul eerst ‘%1’ in.",
+  "Find plugins": "Plugins zoeken",
+  "From the plugin %1. It starts something new; it is not a book of the library.": "Van de plugin %1. Hiermee begint iets nieuws; het is geen boek uit de bibliotheek.",
+  "Install": "Installeren",
+  "It is a program of its own: it can do whatever you can on this computer.": "Het is een eigen programma: het kan alles wat jij op deze computer kunt.",
+  "It is not a book: %1 put it there to start something new. %1 can put it back.": "Het is geen boek: %1 heeft het daar gezet om iets nieuws te beginnen. %1 kan het terugzetten.",
+  "Listed": "Vermeld",
+  "Look for plugins on GitHub": "Op GitHub naar plugins zoeken",
+  "Looking for plugins…": "Plugins zoeken…",
+  "No plugin was found for “%1”.": "Geen plugin gevonden voor ‘%1’.",
+  "No plugins to try were found.": "Er zijn geen plugins gevonden om te proberen.",
+  "Nobody has reviewed it for you. A plugin can do whatever its permissions allow.": "Niemand heeft het voor je nagekeken. Een plugin kan alles wat zijn rechten toestaan.",
+  "Not reviewed": "Niet nagekeken",
+  "Open": "Openen",
+  "Take “%1” off the shelf?": "‘%1’ van de plank halen?",
+  "updated %1": "bijgewerkt %1",
+  "Write a story from the shelf": "Een verhaal schrijven vanaf de plank",
+  "Plugins to try": "Plugins om te proberen",
+  "With the Storyteller plugin switched on, \"Write a new story\" is the first thing on the shelf. Open it like a book to say what it should be, how long, and whether it lives in the world of one of your stories.": "Met de plugin Storyteller aan staat ‘Write a new story’ als eerste op de plank. Open het als een boek om te zeggen wat het moet worden, hoe lang, en of het in de wereld van een van je verhalen speelt.",
+  "{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and showing what it asks to be allowed before anything runs.": "{library.plugins}, dan Installeren: een lijst met plugins om met één klik te vinden en te installeren, elk nagekeken en met wat het mag willen doen voordat er iets draait."
 }

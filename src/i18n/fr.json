@@ -1159,5 +1159,30 @@
   "Longest line": "Ligne la plus longue",
   "One, two or three pages": "Une, deux ou trois pages",
   "Pages side by side": "Pages côte à côte",
-  "Pages side by side: as many as fit, one, two or three, and round again": "Pages côte à côte : autant qu’il en tient, une, deux ou trois, puis recommencer"
+  "Pages side by side: as many as fit, one, two or three, and round again": "Pages côte à côte : autant qu’il en tient, une, deux ou trois, puis recommencer",
+  "%Ln stars": {
+    "one": "%Ln étoile",
+    "many": "%Ln étoiles",
+    "other": "%Ln étoiles"
+  },
+  "Fill in “%1” first.": "Remplissez d’abord « %1 ».",
+  "Find plugins": "Trouver des plugins",
+  "From the plugin %1. It starts something new; it is not a book of the library.": "Du plugin %1. Il commence quelque chose de nouveau ; ce n’est pas un livre de la bibliothèque.",
+  "Install": "Installer",
+  "It is a program of its own: it can do whatever you can on this computer.": "C’est un programme à part entière : il peut faire tout ce que vous pouvez faire sur cet ordinateur.",
+  "It is not a book: %1 put it there to start something new. %1 can put it back.": "Ce n’est pas un livre : %1 l’a placé là pour commencer quelque chose de nouveau. %1 peut le remettre.",
+  "Listed": "Répertorié",
+  "Look for plugins on GitHub": "Chercher des plugins sur GitHub",
+  "Looking for plugins…": "Recherche de plugins…",
+  "No plugin was found for “%1”.": "Aucun plugin trouvé pour « %1 ».",
+  "No plugins to try were found.": "Aucun plugin à essayer n’a été trouvé.",
+  "Nobody has reviewed it for you. A plugin can do whatever its permissions allow.": "Personne ne l’a vérifié pour vous. Un plugin peut faire tout ce que ses permissions autorisent.",
+  "Not reviewed": "Non vérifié",
+  "Open": "Ouvrir",
+  "Take “%1” off the shelf?": "Retirer « %1 » de l’étagère ?",
+  "updated %1": "mis à jour %1",
+  "Write a story from the shelf": "Écrire une histoire depuis l’étagère",
+  "Plugins to try": "Des plugins à essayer",
+  "With the Storyteller plugin switched on, \"Write a new story\" is the first thing on the shelf. Open it like a book to say what it should be, how long, and whether it lives in the world of one of your stories.": "Avec le plugin Storyteller activé, « Write a new story » est la première chose sur l’étagère. Ouvrez-le comme un livre pour dire ce qu’il doit être, sa longueur, et s’il se passe dans le monde d’une de vos histoires.",
+  "{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and showing what it asks to be allowed before anything runs.": "{library.plugins}, puis Installer : une liste de plugins à trouver et installer en un clic, chacun vérifié et indiquant ce qu’il demande à pouvoir faire avant que rien ne s’exécute."
 }

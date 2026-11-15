@@ -96,9 +96,21 @@ QList<Manual::Step> Manual::features() {
          tr("Lines are as long as read well, 66 characters in your font at your size, and the window shows as many "
             "pages side by side as it has room for, up to three. {reader.pages} chooses one, two or three yourself."),
          "", "reader.pages", "reader", ""},
+        {"moments", "0.1.4", tr("Back to the moment, without spoilers"),
+         tr("The map ({reader.graph}) says when each thing was revealed and takes you to that very line. What happens "
+            "past your furthest page stays closed until you ask, for that one thing."),
+         "", "reader.graph", "reader", ""},
         {"folio-folders", "0.1.4", tr("Your library as a folder"),
          tr("In Folio, the file manager, each library is a folder of its books: open one to read it here, copy a "
             "book in to add it, or delete one to send it to the trash."),
          "", "", "", ""},
+        {"shelf-story", "0.1.4", tr("Write a story from the shelf"),
+         tr("With the Storyteller plugin switched on, \"Write a new story\" is the first thing on the shelf. Open it like "
+            "a book to say what it should be, how long, and whether it lives in the world of one of your stories."),
+         "", "library.plugins", "library", ""},
+        {"find-plugins", "0.1.4", tr("Plugins to try"),
+         tr("{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and "
+            "showing what it asks to be allowed before anything runs."),
+         "", "library.plugins", "library", ""},
     };
 }

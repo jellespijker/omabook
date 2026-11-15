@@ -1117,5 +1117,29 @@
   "Longest line": "Längste Zeile",
   "One, two or three pages": "Eine, zwei oder drei Seiten",
   "Pages side by side": "Seiten nebeneinander",
-  "Pages side by side: as many as fit, one, two or three, and round again": "Seiten nebeneinander: so viele wie passen, eine, zwei oder drei, und wieder von vorn"
+  "Pages side by side: as many as fit, one, two or three, and round again": "Seiten nebeneinander: so viele wie passen, eine, zwei oder drei, und wieder von vorn",
+  "%Ln stars": {
+    "one": "%Ln Stern",
+    "other": "%Ln Sterne"
+  },
+  "Fill in “%1” first.": "Erst „%1“ ausfüllen.",
+  "Find plugins": "Plugins finden",
+  "From the plugin %1. It starts something new; it is not a book of the library.": "Vom Plugin %1. Damit beginnt etwas Neues; es ist kein Buch der Bibliothek.",
+  "Install": "Installieren",
+  "It is a program of its own: it can do whatever you can on this computer.": "Es ist ein eigenes Programm: Es kann alles, was du auf diesem Computer kannst.",
+  "It is not a book: %1 put it there to start something new. %1 can put it back.": "Das ist kein Buch: %1 hat es dorthin gestellt, um etwas Neues zu beginnen. %1 kann es zurückstellen.",
+  "Listed": "Gelistet",
+  "Look for plugins on GitHub": "Auf GitHub nach Plugins suchen",
+  "Looking for plugins…": "Plugins werden gesucht …",
+  "No plugin was found for “%1”.": "Für „%1“ wurde kein Plugin gefunden.",
+  "No plugins to try were found.": "Es wurden keine Plugins zum Ausprobieren gefunden.",
+  "Nobody has reviewed it for you. A plugin can do whatever its permissions allow.": "Niemand hat es für dich geprüft. Ein Plugin kann alles, was seine Berechtigungen erlauben.",
+  "Not reviewed": "Nicht geprüft",
+  "Open": "Öffnen",
+  "Take “%1” off the shelf?": "„%1“ aus dem Regal nehmen?",
+  "updated %1": "aktualisiert %1",
+  "Write a story from the shelf": "Eine Geschichte aus dem Regal schreiben",
+  "Plugins to try": "Plugins zum Ausprobieren",
+  "With the Storyteller plugin switched on, \"Write a new story\" is the first thing on the shelf. Open it like a book to say what it should be, how long, and whether it lives in the world of one of your stories.": "Mit eingeschaltetem Storyteller-Plugin steht „Write a new story“ als Erstes im Regal. Öffne es wie ein Buch und sag, was es werden soll, wie lang, und ob es in der Welt einer deiner Geschichten spielt.",
+  "{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and showing what it asks to be allowed before anything runs.": "{library.plugins}, dann Installieren: eine Liste von Plugins, die sich mit einem Klick finden und installieren lassen, jedes geprüft und mit dem, was es dürfen will, bevor irgendetwas läuft."
 }
