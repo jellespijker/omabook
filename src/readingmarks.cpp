@@ -397,8 +397,10 @@ QVariantMap ReadingMarks::thing(qint64 id) const {
                                         {"title", titleOf(found->met.section)}}}};
     // Where the summary it has here was revealed, when that came later than
     // meeting it: the latest of the book's summaries up to the reader.
+    // `latest` points into this list, so it is held here, not a temporary.
+    const QList<GraphFact> facts = m_facts.value(id);
     const GraphFact *latest = nullptr;
-    for (const GraphFact &fact : m_facts.value(id))
+    for (const GraphFact &fact : facts)
         if (fact.kind == "summary" && fact.revealed.place.bookId == m_book && fact.revealed.place.notAfter(here)
             && fact.value == found->summary && (!latest || latest->revealed.place.notAfter(fact.revealed.place)))
             latest = &fact;
