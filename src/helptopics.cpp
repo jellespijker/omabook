@@ -95,7 +95,7 @@ QList<Manual::Topic> Manual::topicList() {
                  "command such as a local model, or none. Nothing is sent until you ask; then it is your question, the "
                  "book's title and authors, and the part of the text you asked about.")},
          }},
-        {"library", tr("Your library"), tr("Views, order, filters, details, and books on paper."),
+        {"library", tr("Your library"), tr("Views, order, filters, collections, details, and books on paper."),
          {
              {tr("Five views"),
               tr("{library.view_covers} to {library.view_stacks} show the shelf as covers, spines, a carousel, a list or "
@@ -105,9 +105,18 @@ QList<Manual::Topic> Manual::topicList() {
               tr("{library.sort} changes the order and {library.sort_reverse} turns it round. {library.filter} filters: "
                  "type a few letters of a status, a format, a language, a tag, an author, a series or a rating, and Enter "
                  "takes the match. Filters add up and show as chips; {library.filter_clear} takes them all off.")},
+             {tr("Collections"),
+              tr("Parts of the library of your own, named as you like, one inside another if you wish: a book can be in "
+                 "several, and nothing is copied or moved. {library.collections} lists them, to show one, make one or "
+                 "change one, and {library.collection_next} and {library.collection_previous} step through them as tabs "
+                 "above the shelf. Each is filled by a rule, a search, and by the books you put in or take out with "
+                 "{library.collection_book}, which win over the rule. Each keeps its own view, order and reading format, "
+                 "and the AI can propose where books belong, as changes to tick in the tidy ({library.tidy}).")},
              {tr("Search"),
-              tr("{library.search} looks everywhere. Start a word with `author:`, `title:`, `series:`, `tag:`, `format:` "
-                 "or `lang:` to look in one field, and type `is:paper` or `is:wishlist` for the books that have no file.")},
+              tr("{library.search} looks everywhere. Start a word with `author:`, `title:`, `series:`, `tag:`, `genre:`, "
+                 "`format:`, `lang:`, `publisher:` or `about:` to look in one field, and type `is:paper` or `is:wishlist` "
+                 "for the books that have no file. \"Quotes\" keep words together, -word leaves out, and OR joins "
+                 "alternatives.")},
              {tr("Details"),
               tr("{library.edit} edits a book's details, your stars and whether you have read it. {library.lookup} looks "
                  "the details up online. {library.details} shows or hides them beside the shelf.")},

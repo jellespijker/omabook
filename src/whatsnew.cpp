@@ -108,6 +108,11 @@ QList<Manual::Step> Manual::features() {
          tr("With the Storyteller plugin switched on, \"Write a new story\" is the first thing on the shelf. Open it like "
             "a book to say what it should be, how long, and whether it lives in the world of one of your stories."),
          "", "library.plugins", "library", ""},
+        {"collections", "0.1.4", tr("Collections"),
+         tr("Parts of one library, named as you like and one inside another if you wish, as tabs above the shelf: "
+            "{library.collections} makes one from a search, each keeps its own view and reading format, and the AI "
+            "can propose where your books belong."),
+         "collectionStrip|filterLabel|touchFilter", "library.collections", "library", ""},
         {"find-plugins", "0.1.4", tr("Plugins to try"),
          tr("{library.plugins}, then Install: a list of plugins to find and install with one click, each checked and "
             "showing what it asks to be allowed before anything runs."),

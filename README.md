@@ -42,6 +42,24 @@ It follows the theme, light or dark:
 
 ![Spines in a light theme](docs/view-spines-light.png)
 
+## Collections
+
+One library can be split into parts of your own, such as fiction and the books you study, without being split in two: the knowledge graph, the AI's notes, asking about the library, suggestions and your reading history all keep seeing every book. A collection is a saved selection, not a place: a book can be in several, and nothing is copied or moved to put it in one.
+
+![Collections as tabs above the shelf, one opened to show the ones inside it](docs/collections.png)
+
+- **Tabs above the shelf.** Once there is a collection, the shelf has a row of tabs: *All books*, then each collection at the top. A click or a tap shows one, `]` and `[` step through them, and `C` lists them all with what can be done: show one, make one, change the one shown, or have the AI sort books into them. Where the window is too narrow for every tab, the row scrolls and keeps the one shown in view. A right click or a long press on a tab changes that collection.
+- **Inside one another, named as you like.** A collection can hold others, to any depth and in any language: `Werk/Hydraulica` is *Hydraulica* inside *Werk*. Opening one that holds others shows them in a second row of tabs under it, after *All of* it. A collection holds its own books and every book of the collections inside it.
+- **Filled by a rule, and by hand.** Each has a rule, a search as `/` and `omabook list` take it, and the books you put in or take out yourself, which win over the rule. A book that arrives later lands in every collection whose rule finds it, and one added while a collection is shown goes into that one too. `Shift+C`, or the chips under *Collections* in the details beside the shelf, put the selected book in a collection or take it out. A collection without a rule holds only what you put in.
+- **Each keeps its own view and order.** The view, the stacks and the order are the collection's own, so going from one to another shows each as you left it; *All books* keeps the library's. Which one is shown is remembered per library.
+- **Its own reading format.** In the *Aa* panel, *For this collection* sets the type for every book of the collection that has none of its own: justified text for novels, longer lines for technical books. A book's own way wins over its collection's, and the collection's over the defaults. A book in several collections is set as the one it was opened from, or else the deepest one that has a format.
+- **Sorted by the AI, as proposals.** *Sort with AI* (in the `C` list, or *Also sort … into collections* in the tidy, `Shift+T`) asks the quick model where each book belongs that isn't yet in a collection with none inside it: in a collection you have, or in a new one anywhere in the tree, named in the style and language of yours. It is told the books' titles, authors, tags and the start of their descriptions, never their text, eighty books to a request and at most 1,200 books in one pass, so a library of a thousand books costs about thirteen small requests. A book it can't place with confidence is listed as *Yours to decide* rather than guessed. Nothing changes until you tick what you want and apply it.
+- **Asking within one.** With a collection shown, *Only the books in …* in the ask dialog (`W`) keeps the question and the suggestions to that collection, and the graph (`6`, then `F`) can show only the books of a collection. The graph itself stays the whole library's.
+
+The search language a rule is written in: bare words look in the title, authors, series and tags; `author:`, `title:`, `series:`, `tag:`, `format:`, `lang:`, `publisher:` and `about:` (the description) look in one field; `status:` (to-read, reading, read, unread), `is:` (digital, paper, wishlist) and `rating:N` go by your reading; `genre:fiction` and `genre:nonfiction` know the many tags each is spelled as (*Fantasy*, *Thrillers*; *History*, *Programming*), and `genre:` with anything else looks in the tags. `"Quotes"` keep words together, `-word` leaves out, and `OR` joins alternatives: `genre:fiction OR series:Dune -tag:poetry`. Hand-picked books win over any rule, so a rule only has to be roughly right.
+
+Collections are kept in the library's database, so they go wherever the library goes: a backup, another computer, the command line and agents all see the same ones.
+
 ## Keys
 
 These are the keys as shipped; every one can be changed in `keys.json` (see *Make it yours*), and `?` always shows the ones in force.
@@ -63,6 +81,9 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 | `6` `U` | The library, or the selected book, as a graph of what is known | `M` | The map of the book so far, beside the page |
 | `V` `G` | The next view, or stack by something else | | |
 | `O` | Open another library | `F` | The book and nothing else, full screen |
+| `C` | The collections: show one, make, change or sort them | | |
+| `]` `[` | The next or previous collection | | |
+| `Shift+C` | Put the selected book in collections, or take it out | | |
 | `P` | Plugins | `C` | Have the AI catch you up |
 | `Shift+T` | Tidy the library | `W` | Who is who so far |
 | `W` | Ask about your library | `V` | Select words with the keyboard, to ask about them or find them |
@@ -341,6 +362,8 @@ or name the computer once under Settings and press `Y`. Each side gets the books
 
 Why not one library on a shared folder (sshfs, NFS, Syncthing)? Because a library is a live database: two computers writing it through a network filesystem can corrupt it, a file syncer can split it in two, and none of them work on a train. With a sync, each database is only ever written by its own computer, a dropped connection leaves both whole, and every computer reads offline. A library folder on a network mount does still open (Omabook switches the database to the journal mode that works there); just don't open it from two computers at once.
 
+A sync carries the collections too: the books each holds by hand, its rule, its view and its reading format, and a removal. Of a collection both computers have, the one changed last wins whole. A computer with an Omabook from before collections still syncs its books, and gets no collections.
+
 What a sync doesn't carry yet: bookmarks, and edits to the details of a book both computers already have.
 
 ## In the file manager
@@ -352,6 +375,8 @@ Omabook comes with a plugin for [Folio](https://github.com/omacom/folio), Omarch
 - **Delete a book** by deleting its file, as you would any other: the book goes to the trash, its folder with its files and cover. Undo in Folio, or restoring the file from the trash, brings the book back with its details, stars, reading place, bookmarks and highlights; a file deleted for good leaves the book's folder in the trash all the same. Deleting every file of a library at once removes nothing, since that is a folder emptied rather than books thrown away, and neither does the folder itself going.
 - **The right-click menu** of a book: *Open in Omabook*, *Look Up Details* (opens Omabook with the look-up for that book), *Mark as Read*, *Mark as Reading* and *Remove from Library*, which sends it to the trash as deleting does. *Add to Library*, with a library to pick, is on book files and folders anywhere else.
 - **The details pane** of a book shows its title, author, series, how far you read it or when you finished it, your stars, its formats and its library. For a book file elsewhere it says which library has it.
+
+- **Collections are folders too.** Each collection is a folder in the library's folder, holding its books in the same way; one inside another is a folder beside it named by its path, *Werk - Hydraulica*. A collection is a selection rather than a place, so its folder changes the selection and never the library: deleting a book there takes it out of that collection only, and it stays in the library and in its other collections. That is as easy to undo as it was to do: put the file back (Undo, the trash, or a copy from the library's folder) and the book is in the collection again. A book copied in from elsewhere is added to the library and to that collection. Emptying a collection's folder at once, or deleting the folder, changes nothing, and the folder comes back.
 
 A file's name comes from the book's details and follows them: change the details in Omabook (`E`, or *Look Up Details*) and the file is renamed. Renaming the file in Folio changes nothing in the library, and the file gets its name back, because a name like "Dune - Frank Herbert" can't be told apart into a title and an author reliably.
 
@@ -456,7 +481,8 @@ Everything the window does with the library, with no display needed. Every comma
 
 ```text
 omabook open [book]                     Open the window, and a book file or library number in it
-omabook list [search]                   List the library's books
+omabook list [search] [--collection c]  List the library's books, or one collection's
+omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort]  Collections, nested as you like
 omabook show <id>                       Show one book's details and files
 omabook add <file|folder>...            Copy books into the library; a Calibre library comes with its details
 omabook remove <id>                     Move a book to the trash
@@ -498,6 +524,8 @@ omabook mcp [install [agent]]           Run as an MCP server for agents, or regi
 ```
 
 `<book>` is a number from `omabook list` or any book file, so `omabook text ~/Downloads/paper.pdf` works on a file that isn't in the library. `--library <folder>` points a command at another library for that run only, before or after the command's name; `omabook libraries --use <folder>` changes the one in use, and `omabook open --library <folder>` opens a window on another library without changing it.
+
+`omabook collections` lists the collections as a tree. `add Werk/Hydraulica --rule "tag:hydraulics"` makes one (and *Werk* with it, if it isn't there yet; `--parent` says where instead), `rule`, `rename` and `move` change one (a new path moves it, and what is inside goes along), `include`, `exclude` and `follow` put books in by their numbers, take them out, or leave them to the rule again, `show` lists its books, and `format <path> --set align=justify` gives it its own reading format. `sort` has the AI propose where the books not yet placed belong, numbered, with a list of the ones to decide yourself; `sort --pick 1,3` or `--apply` takes them from that same list without asking again, and `--pick 3=Werk/Regeltechniek` puts that one under another name. `omabook ask all --collection c` and `omabook suggest --collection c` keep to one collection.
 
 `omabook format` with no options says how every book is set; with a book's number, how that book is, marking what it has of its own. With options it changes them, for the defaults or for that book alone: `--font-size N`, `--font F` (`""` for the desktop's), `--line-width N`, `--line-height N` (percent), `--paragraph-spacing N`, `--indent N`, `--margins N` (pixels) and `--align start|justify|center|end`; `--reset` puts a book back to the defaults, or the defaults back to Omabook's own. A value out of bounds is refused with the range it may be in, and nothing changes. A book's own way is kept in the library's database, so it is backed up with the library and goes when the book does; a sync with another computer doesn't carry it (yet).
 
