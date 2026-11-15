@@ -325,6 +325,78 @@ expect "pages go back to automatic" 0 '"pages": "auto"' "$omabook" format --libr
 "$omabook" format "$book" --library "$library" --reset >/dev/null
 "$omabook" format --library "$library" --reset >/dev/null
 
+# The options every command takes may come before its name too, and a
+# failing command fails the whole && chain.
+expect "--library and --json before the command" 0 '"title": "Renamed"' "$omabook" --library "$library" --json list
+expect "--library=folder before the command" 0 "Renamed" "$omabook" --library="$library" list
+expect "--help before the command is the command's" 0 "List the library's books" "$omabook" --help list
+expect "an option no command takes is named" 1 "Unknown option 'jsn'" "$omabook" --jsn list --library "$library"
+expect "a word that is no command says so" 1 '"lsit" is not a command' "$omabook" --library "$library" lsit --json
+expect "and so does one with no options" 1 '"lsit" is not a command' "$omabook" lsit
+output="$(bash -c "'$omabook' show 99 --library '$library' && echo went on" 2>&1)"
+[[ "$output" == *"went on"* ]] && fail "a failing command didn't stop the && chain: $output"
+
+# --library is for one run: no command that takes it changes config.json,
+# with the option before the command's name or after, nor does a window
+# opened on another library. Every command in the table is run.
+config="$XDG_CONFIG_HOME/omabook/config.json"
+elsewhere="$work/Elsewhere"
+printf 'CHAPTER 1\n\nAnother dark night.\n' > "$work/elsewhere.txt"
+calibre="$work/Calibre Elsewhere"
+if command -v sqlite3 > /dev/null; then
+  mkdir -p "$calibre/Writer, Ann/Same Book (1)"
+  printf 'Calibre words.\n' > "$calibre/Writer, Ann/Same Book (1)/Same Book - Ann Writer.txt"
+  sqlite3 "$calibre/metadata.db" "CREATE TABLE books (id INTEGER PRIMARY KEY, title TEXT, series_index REAL, pubdate TEXT, path TEXT, has_cover BOOL, uuid TEXT);
+    CREATE TABLE data (id INTEGER PRIMARY KEY, book INTEGER, format TEXT, name TEXT);
+    INSERT INTO books VALUES (1, 'Same Book', 1.0, '2001-01-01', 'Writer, Ann/Same Book (1)', 0, 'uuid-1');
+    INSERT INTO data VALUES (1, 1, 'TXT', 'Same Book - Ann Writer');" || fail "sqlite3 could not make a Calibre library"
+fi
+cp "$config" "$work/config.before"
+# What each command is given to get as far as the library.
+arguments_for() {
+  case "$1" in
+    show|bookmarks|notes|toc|text|progress|format) words=(1) ;;
+    add) words=("$work/elsewhere.txt") ;;
+    set) words=(1 --tags elsewhere) ;;
+    find) words=(1 dark) ;;
+    ask) words=(1 "What happens?") ;;
+    remove|lookup|convert) words=(99) ;;
+    export) words=(99 "$work") ;;
+    graph) words=(show) ;;
+    sync) words=(nohost.invalid) ;;
+    plugin) words=(list) ;;
+    calibre) words=(import "$calibre") ;;
+    goodreads|openlibrary) words=(shelves) ;;
+    theme) words=(list) ;;
+    change) words=(--undo) ;;
+    help) words=(start) ;;
+    *) words=() ;;
+  esac
+}
+commands="$(grep -o 'CliCommand{"[a-z]*"_L1' "$(dirname "$0")/../src/cli.cpp" | sed 's/CliCommand{"\([a-z]*\)".*/\1/')"
+[ -n "$commands" ] || fail "no commands were read from the command table"
+for name in $commands; do
+  "$omabook" "$name" --help 2>&1 | grep -q -- "--library" || continue
+  arguments_for "$name"
+  for order in after before; do
+    if [ "$order" = after ]; then
+      timeout 60 "$omabook" "$name" "${words[@]}" --library "$elsewhere" < /dev/null > /dev/null 2>&1
+    else
+      timeout 60 "$omabook" --library "$elsewhere" "$name" "${words[@]}" < /dev/null > /dev/null 2>&1
+    fi
+    if ! cmp -s "$work/config.before" "$config"; then
+      fail "$name with --library $order it changed config.json: $(diff "$work/config.before" "$config")"
+      cp "$work/config.before" "$config"
+    fi
+  done
+done
+[ -f "$elsewhere/omabook.db" ] || fail "the commands didn't use the library they were given"
+expect "the library in use is still the one it was" 0 "" "$omabook" info --json
+"$omabook" info --json | grep -qF "\"library\": \"$elsewhere\"" && fail "info says the library in use is the one given once"
+QT_QPA_PLATFORM=offscreen timeout 120 "$omabook" open --library "$elsewhere" --screenshot "$work/elsewhere.png" > /dev/null 2>&1 \
+  || fail "the window didn't open on another library"
+cmp -s "$work/config.before" "$config" || fail "opening the window on another library changed config.json: $(diff "$work/config.before" "$config")"
+
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill
 expect "the skill installs" 0 "Installed" "$omabook" skill install
 [ -f "$HOME/.agents/skills/omabook/SKILL.md" ] && [ -L "$HOME/.claude/skills/omabook" ] || fail "skill install left no skill"

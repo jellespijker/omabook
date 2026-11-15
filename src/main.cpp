@@ -41,11 +41,32 @@ int main(int argc, char *argv[]) {
     // Commands and help draw no window, so they must not need a display, even
     // where the desktop exports QT_QPA_PLATFORM=wayland. Bare `omabook` prints
     // help, as a command line tool should; the launcher says `omabook open`.
-    const bool command = argc == 1 || isCliCommand(argv[1]);
+    // Options every command takes may come before the command's name too:
+    // `omabook --library ~/Other list` is `omabook list --library ~/Other`.
+    QStringList given;
+    for (int i = 0; i < argc; ++i)
+        given << QString::fromLocal8Bit(argv[i]);
+    given = commandFirst(given);
+    const bool command = argc == 1 || isCliCommand(given.value(1));
     bool windowless = command;
-    for (int i = 1; i < argc; ++i) {
-        const QByteArray argument(argv[i]);
+    for (const QString &argument : std::as_const(given).mid(1))
         windowless = windowless || argument == "--help" || argument == "-h" || argument == "--version" || argument == "-v";
+    // What isn't a command is the window's, whose one word is a book. A word
+    // that is neither is said to be that, before any window, rather than
+    // leaving the window to complain about an option a command would take.
+    if (!command) {
+        static const QStringList valued{"--library", "--screenshot", "--look-up", "--model"};
+        qsizetype at = given.value(1) == "open" ? 2 : 1;
+        while (at < given.size() && given.at(at).startsWith('-'))
+            at += valued.contains(given.at(at)) ? 2 : 1;
+        const QString word = given.value(at);
+        bool number = false;
+        word.toLongLong(&number);
+        if (!word.isEmpty() && !number && !QFileInfo::exists(word)) {
+            fprintf(stderr, "omabook: \"%s\" is not a command, a book file or a book's number. Run omabook for the commands.\n",
+                    qPrintable(word));
+            return 1;
+        }
     }
     if (windowless) {
         // What the desktop had set, for a command that opens a window of its
@@ -64,7 +85,7 @@ int main(int argc, char *argv[]) {
     if (!command)
         qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
     if (command)
-        return runCli(app.arguments());
+        return runCli(commandFirst(app.arguments()));
 
     QCommandLineParser arguments;
     arguments.setApplicationDescription("An ebook library and reader.\n\n" + cliSummary());
@@ -81,10 +102,18 @@ int main(int argc, char *argv[]) {
     QCommandLineOption lookUp("look-up", "Look up the details of the book with this number.", "id");
     lookUp.setFlags(QCommandLineOption::HiddenFromHelp);
     arguments.addOption(lookUp);
-    QStringList words = app.arguments();
+    QStringList words = commandFirst(app.arguments());
     if (words.value(1) == "open")
         words.removeAt(1);
-    arguments.process(words);
+    if (!arguments.parse(words)) {
+        fprintf(stderr, "omabook: %s\nRun omabook --help for what the window takes, or omabook for the commands.\n",
+                qPrintable(arguments.errorText()));
+        return 1;
+    }
+    if (arguments.isSet("help"))
+        arguments.showHelp();
+    if (arguments.isSet("version"))
+        arguments.showVersion();
 
     // Matches the window to omabook.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon. The compiled-in copy covers

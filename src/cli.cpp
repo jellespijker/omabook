@@ -2077,11 +2077,26 @@ QString cliSummary() {
            "  skill [install]                 Print the skill for coding agents, or install it\n"
            "  mcp [install [agent]]           Run as an MCP server for agents, or register it with one\n\n"
            "<book> is a number from omabook list, or a book file. Every command takes --json and\n"
-           "--library <folder>, and omabook <command> --help says more. A command that asks the AI\n"
-           "takes --model <name>: main, quick, or a model's own name, for that run.";
+           "--library <folder> (that library for this run only), before or after its name, and\n"
+           "omabook <command> --help says more. A command that asks the AI takes --model <name>:\n"
+           "main, quick, or a model's own name, for that run.";
 }
 
 bool isCliCommand(const QString &word) { return cliCommand(word) != cliCommands.end(); }
+
+QStringList commandFirst(const QStringList &arguments) {
+    static const QStringList valued{"--library", "--model"};
+    qsizetype at = 1;
+    while (at < arguments.size() && arguments.at(at).startsWith('-')) {
+        const QString &word = arguments.at(at);
+        at += valued.contains(word) ? 2 : 1;
+    }
+    if (at == 1 || at >= arguments.size() || (!isCliCommand(arguments.at(at)) && arguments.at(at) != "open"))
+        return arguments;
+    // Moved as they are: an option the command doesn't know is then the
+    // command's to name.
+    return arguments.first(1) + QStringList{arguments.at(at)} + arguments.mid(1, at - 1) + arguments.mid(at + 1);
+}
 
 int runCli(const QStringList &given) {
     // --model <name> is taken by every command: the model for whatever the
