@@ -151,6 +151,7 @@ constexpr BuiltIn builtIns[] = {
         {"reader.graph", {"M"}, tr("Show or hide the map of what the book has told so far, beside the page")},
         {"reader.marks", {"Shift+M"}, tr("Mark the graph's people, places and things in the text: while the map is open, always, or never")},
         {"reader.select", {"V"}, tr("Select words with the keyboard: the arrows or H J K L move, Shift widens, Enter shows what to do with them")},
+        {"reader.format", {"Shift+A"}, tr("Show or hide how the text is set: the font, its size, the spacing, the margins and the alignment, for this book or every book")},
         // The graph view, wherever it is open: over the shelf or beside the page.
         {"graph.left", {"H", "Left"}, tr("Select the nearest related thing to the left")},
         {"graph.right", {"L", "Right"}, tr("Select the nearest related thing to the right")},
@@ -544,6 +545,9 @@ Check for it after every edit.
 ## config.json: the settings
 
 One flat JSON object, also changed by the Settings dialog. Followed live.
+The reading format keys (`font_size` to `align`) are the defaults: a book
+can have its own, kept in the library (`omabook format <id> --align
+center`, or the reader's "Aa" panel), which win over these.
 
 | Key | Meaning | Default |
 |---|---|---|
@@ -552,12 +556,14 @@ One flat JSON object, also changed by the Settings dialog. Followed live.
 | `sort_reversed` | `true` to turn that order round | `false` |
 | `shelves` | Per library folder, how its shelf is shown: `{"view": "covers", "spines", "carousel", "list" or "stacks", "group": "series", "author", "tag" or "status", "filters": {"status": "reading", "held": "paper", "format": "epub", "language": "en", "tag": "...", "author": "...", "series": "...", "rating": 4}}` | |
 | `cover_size` | Width of a book on the shelf, in pixels | 176 |
-| `font_size` | The reader's type size, in pixels | 19 |
+| `font_size` | The reader's type size, in pixels (10 to 48) | 19 |
 | `font_family` | The reader's font, empty for the desktop's | |
-| `line_width` | The widest a line of text gets, in pixels | 720 |
-| `line_height` | Line spacing, in percent | 150 |
-| `paragraph_spacing` | Space after a paragraph, in pixels | 12 |
-| `justify` | `true` to set text flush on both sides | `false` |
+| `line_width` | The widest a line of text gets, in pixels (320 to 1600) | 720 |
+| `line_height` | Line spacing, in percent (100 to 300) | 150 |
+| `paragraph_spacing` | Space after a paragraph, in pixels (0 to 80) | 12 |
+| `indent` | Indent of a paragraph's first line, in pixels (0 to 64) | 0 |
+| `margins` | Room around the text, in pixels (0 to 160) | 32 |
+| `align` | `start`, `justify` (filled out to both sides), `center` or `end`; start and end turn round in a right-to-left language. The older `justify: true` still reads as `justify` | `start` |
 | `spread` | Two pages side by side: `auto` (wide windows), `always`, `never` | `auto` |
 | `pane_widths` | How wide each side pane was dragged, in pixels, by name (`details`, `contents`, `assistant`, `graph`, `graph_details`, `plugins`): `{"assistant": 440}`. A pane that isn't named is as wide as it comes | |
 | `sync_target` | The computer `sync` talks to: `name` or `name:folder` | |

@@ -29,7 +29,11 @@ Item {
         "sort": "M5 7 H19 M5 12 H15 M5 17 H11",
         "search": "M4.5 10.5 a6 6 0 1 0 12 0 a6 6 0 1 0 -12 0 M15 15 L20 20",
         "more": "M4 12 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0 M10.7 12 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0 M17.4 12 a1.3 1.3 0 1 0 2.6 0 a1.3 1.3 0 1 0 -2.6 0",
-        "alert": "M12 4.5 L21 19.5 H3 Z M12 10.5 V14.5 M12 17 V17.1"
+        "alert": "M12 4.5 L21 19.5 H3 Z M12 10.5 V14.5 M12 17 V17.1",
+        "alignLeft": "M4 6 H20 M4 10 H14 M4 14 H20 M4 18 H12",
+        "alignRight": "M4 6 H20 M10 10 H20 M4 14 H20 M12 18 H20",
+        "alignCenter": "M4 6 H20 M7 10 H17 M4 14 H20 M8 18 H16",
+        "alignJustify": "M4 6 H20 M4 10 H20 M4 14 H20 M4 18 H13"
     })
     width: size
     height: size

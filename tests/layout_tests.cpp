@@ -705,6 +705,14 @@ class LayoutTests : public QObject {
             show("showAssistant", false);
             look(desk, "reader-graph");
             show("showGraph", false);
+            // The "Aa" panel: beside the page, or along its foot in a
+            // compact window; and with the contents open too.
+            show("showFormat", true);
+            look(desk, "reader-format");
+            show("showIndex", true);
+            look(desk, "reader-contents-format");
+            show("showIndex", false);
+            show("showFormat", false);
         }
         for (const QSize &size : dialogSizes()) {
             QVERIFY(desk.resize(size));

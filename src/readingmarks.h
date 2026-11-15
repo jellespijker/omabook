@@ -132,6 +132,9 @@ private:
     void keep(const Key &key, const Marks &marks);
     void apply(QTextDocument *document, const Marks &marks, const QString &stamp) const;
     void clear(QTextDocument *document) const;
+    // Whether the marks are still in the text: setting a page's text anew,
+    // as a change of its format does, takes them out.
+    bool stillMarked(QTextDocument *document, const Marks &marks) const;
     QString stampOf(const Key &key) const;
     QString titleOf(int section) const;
 

@@ -45,7 +45,9 @@
 #include "theme.h"
 #include "themechoice.h"
 #include <QQuickTextDocument>
+#include <QTextBlock>
 #include <QTextCursor>
+#include <QTextLayout>
 #include <QTextDocument>
 #include "translator.h"
 
@@ -5602,6 +5604,250 @@ private slots:
         desk.shot("themes");
         desk.key(Qt::Key_Escape);
         QTRY_VERIFY(!desk.value("themePicker", "opened").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // The reading format: the "Aa" panel beside the page, and the same
+    // controls in the settings (readingformat.h).
+private:
+    // A chapter long enough to scroll, which names the story graph's
+    // people, and has one paragraph in Arabic to read right to left.
+    static bool longBook(const QString &file) {
+        Fixtures::Entries entries = Fixtures::epubEntries("The Long Tide");
+        QString body = "<h1>The Long Tide</h1>";
+        for (int i = 1; i <= 70; ++i)
+            body += QString("<p>Paragraph %1. Ilse Varga rowed out past the wall while Aldo Brenn kept the lamps; the tide "
+                            "turned slowly under the ferry and the harbour went on breathing in the dark.</p>").arg(i);
+        body += QString::fromUtf8("<p>ذهبت إيلسه إلى الميناء في الليل وكان البحر هادئا والمصابيح مضاءة على الجدار.</p>");
+        body += "<p>Short last line.</p>";
+        for (auto &entry : entries)
+            if (entry.first == "OEBPS/text/ch1.xhtml")
+                entry.second = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body>" + body.toUtf8() + "</body></html>";
+        return Fixtures::zip(file, entries);
+    }
+    static QTextBlock blockOf(const PageText &page, const QString &words) {
+        return page.document->find(words).block();
+    }
+    // How far down the chapter the page is, as the view has it.
+    static double through(Desk &desk) {
+        QObject *flow = desk.find("flowReader");
+        return flow && flow->property("range").toReal() > 0 ? flow->property("contentY").toReal() / flow->property("range").toReal() : -1;
+    }
+
+private slots:
+    void theTextIsSetLiveFromAPanelAndThePlaceIsKept() {
+        Desk desk;
+        const QString file = desk.dir.filePath("long.epub");
+        QVERIFY(longBook(file));
+        const qint64 book = desk.add(file);
+        storyGraph(desk, book);
+        QVERIFY(desk.show());
+        desk.window->resize(1400, 860);
+        desk.settings->setOption("spread", "never");
+        desk.settings->setMarks("always");
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.reader->goToPlace(0, 0.5);
+        QTRY_VERIFY(qAbs(through(desk) - 0.5) < 0.02);
+        PageText page = pageText(desk);
+        QVERIFY(page.document);
+        QTRY_VERIFY(page.formatOf("Aldo Brenn").hasProperty(QTextFormat::TextUnderlineColor));
+        QCOMPARE(blockOf(page, "Paragraph 40.").blockFormat().lineHeight(), 150.0);
+
+        // Its key opens it beside the page, with the keyboard in it.
+        desk.key(Qt::Key_A, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.value("formatSide", "visible").toBool());
+        QTRY_VERIFY(desk.value("formatPane", "focused").toBool());
+        QVERIFY(!desk.value("formatSheet", "visible").toBool());
+        QTRY_VERIFY(qAbs(through(desk) - 0.5) < 0.03);
+        const double place = desk.reader->fraction();
+
+        // More space between the lines: the page shows it at once, at the same place.
+        for (int i = 0; i < 3; ++i)
+            clickItem(desk, "format_line_height_more");
+        QTRY_COMPARE(blockOf(page, "Paragraph 40.").blockFormat().lineHeight(), 180.0);
+        QCOMPARE(desk.settings->lineHeight(), 180);
+        QCOMPARE(desk.value("format_line_height_value", "text").toString(), QString("180%"));
+        QTest::qWait(100);
+        QTRY_VERIFY2(qAbs(through(desk) - place) < 0.03, QByteArray::number(through(desk)));
+        QVERIFY(qAbs(desk.reader->fraction() - place) < 0.03);
+        // The keyboard steps it too, and the page's own keys wait meanwhile.
+        QVERIFY(QMetaObject::invokeMethod(desk.find("format_paragraph_spacing"), "forceActiveFocus"));
+        desk.key(Qt::Key_Right);
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.settings->paragraphSpacing(), 16);
+        QTRY_COMPARE(blockOf(page, "Paragraph 40.").blockFormat().bottomMargin(), 16.0);
+        desk.key(Qt::Key_J);
+        QVERIFY(qAbs(desk.reader->fraction() - place) < 0.03);
+
+        // Justified: filled out to both sides; centred: in the middle.
+        clickItem(desk, "formatAlign_justify");
+        QTRY_COMPARE(int(blockOf(page, "Paragraph 40.").blockFormat().alignment()), int(Qt::AlignJustify));
+        QCOMPARE(desk.settings->align(), QString("justify"));
+        desk.shot("reader-format-justify");
+        clickItem(desk, "formatAlign_center");
+        QTRY_VERIFY(blockOf(page, "Short last line.").blockFormat().alignment() & Qt::AlignHCenter);
+        // Where the first (or last) line of a paragraph is: the blocks are
+        // made anew each time the page is set, so they are looked up again.
+        const auto lineOf = [&page](const QString &words, bool last = false) {
+            const QTextLayout *layout = blockOf(page, words).layout();
+            return layout->lineAt(last ? layout->lineCount() - 1 : 0).naturalTextRect();
+        };
+        const QString arabic = QString::fromUtf8("المصابيح");
+        QVERIFY(lineOf("Short last line.").x() > page.item->width() / 4);
+        desk.shot("reader-format-center");
+        // At the end: against the right in English, against the left in Arabic.
+        clickItem(desk, "formatAlign_end");
+        QTRY_VERIFY(lineOf("Short last line.").x() > page.item->width() / 2);
+        QVERIFY(lineOf(arabic, true).x() < page.item->width() / 4);
+        clickItem(desk, "formatAlign_start");
+        QTRY_VERIFY(lineOf("Short last line.").x() < 1);
+        QVERIFY(lineOf(arabic, true).right() > page.item->width() * 3 / 4);
+        // An indent, but not after the heading.
+        clickItem(desk, "format_indent_more");
+        QTRY_COMPARE(blockOf(page, "Paragraph 40.").blockFormat().textIndent(), 4.0);
+        QCOMPARE(blockOf(page, "Paragraph 1.").blockFormat().textIndent(), 0.0);
+        QTRY_VERIFY(qAbs(desk.reader->fraction() - place) < 0.03);
+
+        // The graph's marks are where their names are, after all that.
+        QTRY_VERIFY(page.formatOf("Aldo Brenn").hasProperty(QTextFormat::TextUnderlineColor));
+        // One of its names on the screen, near the middle.
+        QPoint aldo;
+        for (int occurrence = 0; occurrence < 70 && aldo.isNull(); ++occurrence) {
+            const QPoint at = page.at("Aldo Brenn", occurrence);
+            if (at.y() > desk.window->height() / 3 && at.y() < desk.window->height() * 2 / 3)
+                aldo = at;
+        }
+        QVERIFY(!aldo.isNull());
+        QTest::mouseMove(desk.window, aldo);
+        QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+        QCOMPARE(desk.value("readingMenuName", "text").toString(), QString("Aldo Brenn"));
+        QTest::mouseMove(desk.window, QPoint(5, 5));
+        QTRY_VERIFY(!desk.value("readingMenu", "visible").toBool());
+
+        // For this book alone: the defaults stay, the book has its own.
+        clickItem(desk, "formatThisBook");
+        QTRY_VERIFY(desk.value("readerView", "formatBookOnly").toBool());
+        const int size = desk.settings->fontSize();
+        clickItem(desk, "format_font_size_more");
+        clickItem(desk, "format_font_size_more");
+        QTRY_COMPARE(desk.backend->library()->bookFormat(book).value("font_size").toInt(), size + 2);
+        QCOMPARE(desk.settings->fontSize(), size);
+        QTRY_COMPARE(desk.value("flowText", "font").value<QFont>().pixelSize(), size + 2);
+        QVERIFY(desk.value("formatResetBook", "visible").toBool());
+        desk.shot("reader-format");
+        // The zoom keys go where the size is: the book's own.
+        canvasFocusAway(desk);
+        desk.key(Qt::Key_Minus);
+        QTRY_COMPARE(desk.backend->library()->bookFormat(book).value("font_size").toInt(), size + 1);
+        QCOMPARE(desk.settings->fontSize(), size);
+        // Back to the defaults, by its own button.
+        clickItem(desk, "formatResetBook");
+        QTRY_VERIFY(desk.backend->library()->bookFormat(book).isEmpty());
+        QVERIFY(!desk.value("readerView", "formatBookOnly").toBool());
+        QTRY_COMPARE(desk.value("flowText", "font").value<QFont>().pixelSize(), size);
+
+        // Reset puts back what there was when the panel opened.
+        clickItem(desk, "formatRestore");
+        QTRY_COMPARE(desk.settings->lineHeight(), 150);
+        QCOMPARE(desk.settings->paragraphSpacing(), 12);
+        QCOMPARE(desk.settings->align(), QString("start"));
+        QCOMPARE(desk.settings->indent(), 0);
+        QTRY_COMPARE(blockOf(page, "Paragraph 40.").blockFormat().lineHeight(), 150.0);
+        QTRY_VERIFY(qAbs(desk.reader->fraction() - place) < 0.03);
+
+        // Escape closes it, and the page has the keyboard again.
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("formatSide", "visible").toBool());
+        QVERIFY(desk.reader->isOpen());
+        QTRY_VERIFY(desk.value("flowReader", "activeFocus").toBool());
+
+        // A finger: the bar's Aa opens it.
+        QObject *view = desk.find("readerView");
+        view->setProperty("showBar", true);
+        clickItem(desk, "barFormat");
+        QTRY_VERIFY(desk.value("formatSide", "visible").toBool());
+        QVERIFY(!desk.value("readerBar", "visible").toBool());
+        // It and the AI take turns at the side.
+        view->setProperty("showAssistant", true);
+        QTRY_VERIFY(!desk.value("formatSide", "visible").toBool());
+        QVERIFY(!view->property("showFormat").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void theTextPanelIsUnderThePageInACompactWindowAndMirrored() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
+                                 "selection_background = \"#dcdcdc\"\ncolor8 = \"#6f6f6f\"\n";
+        for (const QByteArray &language : {QByteArray("en"), QByteArray("ar")}) {
+            Desk desk({}, language, light);
+            const QString file = desk.dir.filePath("long.epub");
+            QVERIFY(longBook(file));
+            const qint64 book = desk.add(file);
+            QVERIFY(desk.show());
+            desk.window->resize(1200, 820);
+            desk.reader->openBook(book);
+            QTRY_VERIFY(desk.reader->isOpen());
+            desk.key(Qt::Key_A, Qt::ShiftModifier);
+            QTRY_VERIFY(desk.value("formatSide", "visible").toBool());
+            // Start is on the side the text starts at, and so is its picture.
+            auto *start = qobject_cast<QQuickItem *>(desk.find("formatAlign_start"));
+            auto *end = qobject_cast<QQuickItem *>(desk.find("formatAlign_end"));
+            QVERIFY(start && end);
+            const bool mirrored = language == "ar";
+            QCOMPARE(start->mapToScene(QPointF()).x() > end->mapToScene(QPointF()).x(), mirrored);
+            // The pane is at the side the text ends at.
+            auto *side = qobject_cast<QQuickItem *>(desk.find("formatSide"));
+            QCOMPARE(side->mapToScene(QPointF()).x() < desk.window->width() / 2, mirrored);
+            desk.shot(language == "en" ? "reader-format-light" : "reader-format-rtl");
+
+            // Compact: along the foot of the page, which still shows above it.
+            desk.window->resize(560, 820);
+            QTRY_VERIFY(desk.value("formatSheet", "visible").toBool());
+            QVERIFY(!desk.value("formatSide", "visible").toBool());
+            auto *sheet = qobject_cast<QQuickItem *>(desk.find("formatSheet"));
+            QVERIFY(sheet->height() <= desk.window->height() * 0.61);
+            QTRY_VERIFY(desk.value("formatPane", "focused").toBool());
+            clickItem(desk, "format_font_size_more");
+            QTRY_COMPARE(desk.settings->fontSize(), 20);
+            desk.shot(language == "en" ? "reader-format-compact" : "reader-format-compact-rtl");
+            desk.key(Qt::Key_Escape);
+            QTRY_VERIFY(!desk.value("formatSheet", "visible").toBool());
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+    }
+
+    void thePicturesOfAPdfAreNotSetAndTheSettingsHoldTheDefaults() {
+        Desk desk;
+        const QString pdf = desk.dir.filePath("pages.pdf");
+        QVERIFY(Fixtures::pdf(pdf, "Pictures", {"One page", "Another"}));
+        const qint64 book = desk.add(pdf);
+        QVERIFY(desk.show());
+        desk.window->resize(1200, 820);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QCOMPARE(desk.reader->kind(), QString("pages"));
+        desk.key(Qt::Key_A, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.value("formatSide", "visible").toBool());
+        QVERIFY(desk.value("formatPictures", "visible").toBool());
+        QVERIFY(!desk.find("format_font_size")->property("enabled").toBool());
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("formatSide", "visible").toBool());
+        desk.reader->close();
+        QTRY_VERIFY(!desk.reader->isOpen());
+
+        // The settings have the same controls, for the defaults.
+        QMetaObject::invokeMethod(desk.window, "showSettings");
+        QTRY_VERIFY(desk.value("settings", "opened").toBool());
+        QVERIFY(desk.find("settingsFormat"));
+        const int width = desk.settings->lineWidth();
+        QTest::qWait(300);
+        QVERIFY(QMetaObject::invokeMethod(desk.find("settingsFormat_line_width_more"), "clicked"));
+        QTRY_COMPARE(desk.settings->lineWidth(), width + 40);
+        QVERIFY(QMetaObject::invokeMethod(desk.find("settingsFormatAlign_justify"), "clicked"));
+        QTRY_COMPARE(desk.settings->align(), QString("justify"));
+        desk.shot("settings-format");
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("settings", "opened").toBool());
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };

@@ -43,7 +43,14 @@ QList<Manual::Topic> Manual::topicList() {
                  "map, find them in the book, or a question worth asking.")},
              {tr("Making it comfortable"),
               tr("{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and "
-                 "nothing else, on the whole screen. The font and the width of a line are in the settings ({global.settings}).")},
+                 "nothing else, on the whole screen.")},
+             {tr("Setting the text your way"),
+              tr("{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, "
+                 "the widest line, the space between lines and between paragraphs, a first-line indent, the margins, "
+                 "and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at "
+                 "once and the page stays where you were. With Only this book on, the change is for this book alone; "
+                 "Reset puts back what there was when the panel opened. The defaults for every book are in the "
+                 "settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.")},
              {tr("With fingers"),
               tr("Swipe sideways or tap the left or right edge to turn the page, pinch to resize, and tap the middle of "
                  "the page for buttons to everything else.")},

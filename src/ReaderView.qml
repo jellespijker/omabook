@@ -18,6 +18,18 @@ Item {
     property bool immersive: false
     // The map of what the book has told so far, beside the page.
     property bool showGraph: false
+    // The "Aa" panel: how the text is set. It takes the side the AI and the
+    // map are on, so it puts them away and they put it away; in a compact
+    // window it lies along the foot of the page instead, so the page it
+    // changes is still there to be seen.
+    property bool showFormat: false
+    // What there was when the panel opened, for its Reset, and whether its
+    // changes go to this book alone.
+    property var formatBefore: null
+    property bool formatBookOnly: false
+    // While the panel has the keyboard, its keys are its own.
+    readonly property bool formatting: showFormat && ((formatSide.visible && formatSide.loaded && formatSide.loaded.focused)
+                                                      || (formatSheet.visible && formatSheet.loaded && formatSheet.loaded.focused))
     // The graph's things marked in the text: while the map is beside the
     // page, always, or never (`marks` in config.json). Pages that are
     // pictures (PDF, comics) have no words to mark.
@@ -31,7 +43,7 @@ Item {
     // While the map has the keyboard, the keys are its own (see GraphPane).
     readonly property bool mapping: knowledge.focused
     // Whether the keys that move through the book are the book's right now.
-    readonly property bool paging: win.inReader && !!content && !index.focused && !mapping
+    readonly property bool paging: win.inReader && !!content && !index.focused && !mapping && !formatting
     readonly property var content: contentLoader.item
 
     // Turning a page by hand: the page follows the finger sideways, and past
@@ -63,7 +75,8 @@ Item {
     NumberAnimation { id: settleBack; target: view; property: "slide"; to: 0; duration: 150; easing.type: Easing.OutQuad }
 
     function back() {
-        if (showAssistant) showAssistant = false
+        if (showFormat) closeFormat()
+        else if (showAssistant) showAssistant = false
         else if (showGraph) toggleGraph()
         else if (showIndex) showIndex = false
         else if (immersive) expand(false)
@@ -93,10 +106,35 @@ Item {
         if (showGraph) knowledge.takeFocus()
         else if (content) content.forceActiveFocus()
     }
+    function toggleFormat() {
+        if (showFormat) {
+            closeFormat()
+            return
+        }
+        formatBefore = reader.format.snapshot()
+        formatBookOnly = Object.keys(reader.format.own).length > 0
+        // Under the page in a compact window, where the contents would lie over it.
+        if (win.compact) showIndex = false
+        showFormat = true
+    }
+    function closeFormat() {
+        showFormat = false
+        if (content) content.forceActiveFocus()
+    }
+    // The panel's Reset: what there was when it opened.
+    function restoreFormat() {
+        if (!formatBefore) return
+        reader.format.restore(formatBefore)
+        formatBookOnly = Object.keys(reader.format.own).length > 0
+    }
+    onShowFormatChanged: if (showFormat) { showAssistant = false; showGraph = false }
+    onShowAssistantChanged: if (showAssistant) showFormat = false
+    onShowGraphChanged: if (showGraph) showFormat = false
     // The book and nothing else: the whole screen, no title line, no panes.
     function expand(yes) {
         immersive = yes
         if (yes) {
+            showFormat = false
             showIndex = false
             showAssistant = false
             showGraph = false
@@ -225,8 +263,9 @@ Item {
     Key { command: "reader.previous"; when: view.paging; onActivated: view.content.previous() }
     Key { command: "reader.start"; when: view.paging; onActivated: view.content.toStart() }
     Key { command: "reader.end"; when: view.paging; onActivated: view.content.toEnd() }
-    Key { command: "reader.larger"; when: win.inReader && !!view.content && !view.mapping; onActivated: view.content.zoom(1) }
-    Key { command: "reader.smaller"; when: win.inReader && !!view.content && !view.mapping; onActivated: view.content.zoom(-1) }
+    Key { command: "reader.larger"; when: win.inReader && !!view.content && !view.mapping && !view.formatting; onActivated: view.content.zoom(1) }
+    Key { command: "reader.smaller"; when: win.inReader && !!view.content && !view.mapping && !view.formatting; onActivated: view.content.zoom(-1) }
+    Key { command: "reader.format"; when: reader.open && !view.mapping; onActivated: view.toggleFormat() }
     Key { command: "reader.contents"; when: reader.open; onActivated: view.toggleIndex() }
     Key { command: "reader.catch_up"; when: reader.open; onActivated: view.catchUp() }
     Key { command: "reader.cast"; when: reader.open; onActivated: { view.showAssistant = true; assistant.whoIsWho(); companion.takeFocus() } }
@@ -273,10 +312,12 @@ Item {
     // are never side by side in a narrow window.
     readonly property bool indexOpen: showIndex && reader.open
     readonly property bool graphOpen: showGraph && reader.open
+    // The panel beside the page; under it in a compact window.
+    readonly property bool formatOpen: showFormat && reader.open && !win.compact
     readonly property real slotWidth: sideSlot.visible ? sideSlot.width : 0
     readonly property bool beside: width - slotWidth - (indexOpen ? indexSide.least : 0) - (showAssistant ? assistantSide.least : 0)
-                                   - (graphOpen ? graphSide.least : 0) >= win.contentFloor
-    readonly property string topPane: showAssistant ? "assistant" : graphOpen ? "graph" : indexOpen ? "contents" : ""
+                                   - (graphOpen ? graphSide.least : 0) - (formatOpen ? formatSide.least : 0) >= win.contentFloor
+    readonly property string topPane: formatOpen ? "format" : showAssistant ? "assistant" : graphOpen ? "graph" : indexOpen ? "contents" : ""
     // What a pane lying over the page may take: all but a strip of the
     // page, which is what is clicked to put the pane away.
     readonly property real overRoom: width - 48
@@ -284,6 +325,7 @@ Item {
     // the one on top.
     function resizePane(steps) {
         const pane = index.focused && indexSide.visible ? indexSide : knowledge.focused && graphSide.visible ? graphSide
+                   : topPane === "format" ? formatSide
                    : topPane === "assistant" ? assistantSide : topPane === "graph" ? graphSide : topPane === "contents" ? indexSide : null
         if (pane) pane.resize(steps)
     }
@@ -296,7 +338,8 @@ Item {
             anchors.fill: parent
             anchors.leftMargin: view.beside && indexSide.visible ? indexSide.width : 0
             anchors.rightMargin: view.slotWidth + (view.beside ? (assistantSide.visible ? assistantSide.width : 0)
-                                                                 + (graphSide.visible ? graphSide.width : 0) : 0)
+                                                                 + (graphSide.visible ? graphSide.width : 0)
+                                                                 + (formatSide.visible ? formatSide.width : 0) : 0)
 
             // Where you are: the book and chapter, and how far through.
             RowLayout {
@@ -495,6 +538,13 @@ Item {
                     AppButton { objectName: "barAsk"; text: qsTr("Ask AI"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.askAssistant() } }
                     AppButton { text: qsTr("Smaller"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(-1) }
                     AppButton { objectName: "barLarger"; text: qsTr("Larger"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(1) }
+                    AppButton {
+                        objectName: "barFormat"
+                        text: "Aa"
+                        Accessible.name: qsTr("Text")
+                        focusPolicy: Qt.NoFocus
+                        onClicked: { view.showBar = false; view.toggleFormat() }
+                    }
                 }
             }
 
@@ -515,7 +565,8 @@ Item {
             anchors.top: parent.top
             anchors.bottom: parent.bottom
             anchors.right: parent.right
-            anchors.rightMargin: view.beside ? (assistantSide.visible ? assistantSide.width : 0) + (graphSide.visible ? graphSide.width : 0) : 0
+            anchors.rightMargin: view.beside ? (assistantSide.visible ? assistantSide.width : 0) + (graphSide.visible ? graphSide.width : 0)
+                                               + (formatSide.visible ? formatSide.width : 0) : 0
         }
         // The page behind a pane that lies over it, dimmed; a click on it
         // puts the pane away, as Escape does.
@@ -538,7 +589,7 @@ Item {
             over: !view.beside
             room: over ? view.overRoom
                        : view.width - view.slotWidth - win.contentFloor - (view.showAssistant ? assistantSide.least : 0)
-                         - (view.graphOpen ? graphSide.least : 0)
+                         - (view.graphOpen ? graphSide.least : 0) - (view.formatOpen ? formatSide.least : 0)
             visible: view.indexOpen && (view.beside || view.topPane === "contents")
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -618,6 +669,69 @@ Item {
                     view.showAssistant = false
                     if (view.content) view.content.forceActiveFocus()
                 }
+            }
+        }
+
+        Component {
+            id: formatPane
+            FormatPane {
+                objectName: "formatPane"
+                host: view
+                onDone: view.closeFormat()
+            }
+        }
+        SidePane {
+            id: formatSide
+            objectName: "formatSide"
+            name: "format"
+            standard: 320
+            least: 260
+            most: 520
+            over: !view.beside
+            room: over ? view.overRoom
+                       : view.width - view.slotWidth - win.contentFloor - (indexSide.visible ? indexSide.width : 0)
+            visible: view.formatOpen && (view.beside || view.topPane === "format")
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            z: 5
+            readonly property Item loaded: formatSideLoader.item
+
+            Loader {
+                id: formatSideLoader
+                anchors.fill: parent
+                active: formatSide.visible
+                sourceComponent: formatPane
+                onLoaded: item.takeFocus()
+            }
+        }
+        // In a compact window: along the foot of the page, no higher than
+        // leaves the top of the page in sight.
+        Rectangle {
+            id: formatSheet
+            objectName: "formatSheet"
+            visible: view.showFormat && reader.open && win.compact
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: Math.min(parent.height * 0.6, formatSheetLoader.item ? formatSheetLoader.item.wanted : 360)
+            z: 5
+            color: theme.background
+            readonly property Item loaded: formatSheetLoader.item
+            Rectangle {
+                width: parent.width
+                height: 1
+                color: theme.colors.selection
+            }
+            // A press on the sheet's ground stays on the sheet.
+            TapHandler {}
+            Loader {
+                id: formatSheetLoader
+                anchors.fill: parent
+                anchors.topMargin: 1
+                active: formatSheet.visible
+                sourceComponent: formatPane
+                onLoaded: item.takeFocus()
             }
         }
 

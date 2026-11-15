@@ -15,6 +15,9 @@ Your ebook library and reader for [Omarchy](https://omarchy.org). Add books of a
 - **Works with fingers.** On a touchscreen, tap a cover to open it; while reading, a button in the corner shows the contents, find, the AI and the rest; swipe sideways to turn the page (it follows your finger) or tap the right or left edge, pinch to resize, and tap mid-page for buttons to everything else.
 - **Gets the details.** `M` asks every source that is switched on (Open Library, Google Books, Apple Books, Crossref, Calibre's own metadata plugins, and any you add), shows how each one answered, and says for every result what it would add to the book and what it would change. The AI then weighs those results against the book's own opening pages and puts its recommendation, with its reason, at the top. `E` edits by hand.
 - **Two pages when the window is wide.** A landscape window is an open book: two pages side by side, cut between lines, with the right page carrying on from the left. A portrait window is one page that scrolls. PDFs and comics pair up the same way.
+- **The text set your way.** `Shift+A` (or *Aa* in the bar under fingers) opens a panel beside the page: the font and its size, the widest a line gets, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end, where start and end turn round in a right-to-left language. Every change shows at once and the page stays at your place. *Only this book* keeps a change to the book in front of you, in the library beside its reading place; *Reset* puts back what there was when the panel opened. The defaults are in the settings too, and `omabook format` and the MCP tools set the same. PDFs and comics are pictures and are shown as they are.
+
+  ![The Aa panel beside a justified page](docs/reader-format.png)
 - **An index beside the page.** `T` opens the book's chapters as a tree at the side: click one to go there, fold the ones with parts, and see which you are in. `F` is the opposite: the book and nothing else, on the whole screen.
 - **Remembers your place**, your bookmarks, and how far through each book you are.
 - **Yours to change.** Every key, color, view and panel is a file in `~/.config/omabook/`, followed while the app runs (see *Make it yours*).
@@ -53,7 +56,7 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 | `X` | Save a copy of the book elsewhere | `B` | Bookmark this place |
 | `D` | Remove the book (it asks first) | `A` | Ask the AI about what you are reading |
 | `S` `Shift+S` | Change the order, or turn it round | `+` `-` | Larger or smaller |
-| `F` `Shift+F` | Filter the shelf, or clear the filters | | |
+| `F` `Shift+F` | Filter the shelf, or clear the filters | `Shift+A` | How the text is set: font, size, spacing, margins, alignment |
 | `1` `2` `3` `4` `5` | Covers, spines, carousel, list or stacks | | |
 | `6` `U` | The library, or the selected book, as a graph of what is known | `M` | The map of the book so far, beside the page |
 | `V` `G` | The next view, or stack by something else | | |
@@ -292,7 +295,7 @@ Omabook's interface is files in `~/.config/omabook/`, and it follows them while 
 
 | File | What it changes |
 |---|---|
-| `config.json` | The settings, including ones the dialog doesn't show: `cover_size`, `line_height`, `paragraph_spacing`, `justify`, `spread` (`auto`, `always`, `never`), `pane_widths` (how wide each side pane was dragged, in pixels: `{"assistant": 440}`) |
+| `config.json` | The settings, including ones the dialog doesn't show: `cover_size`, `spread` (`auto`, `always`, `never`), `pane_widths` (how wide each side pane was dragged, in pixels: `{"assistant": 440}`), and the reading format's defaults: `font_size`, `font_family`, `line_width`, `line_height` (percent), `paragraph_spacing`, `indent`, `margins` and `align` (`start`, `justify`, `center`, `end`; the older `"justify": true` still counts) |
 | `keys.json` | Any key: `{"reader": {"Space": "next", "N": ""}, "library": {"R": "read"}}` |
 | `style.json` | The theme, then colors, corners and the interface font over it: `{"theme": "nord", "colors": {"accent": "#8a4b2a"}, "radius": 8}` |
 | `themes/<name>/colors.toml` | A theme of your own, in Omarchy's format, listed with the built-in ones |
@@ -468,6 +471,7 @@ omabook openlibrary sync|shelves        Bring an Open Library reading log into t
 omabook sites [connect|check|disconnect|sync]  The reading sites, and how you are connected to each
 omabook change <wish> | --undo          Ask the AI to change how Omabook looks or works
 omabook progress <id> [--section N]     Show or set how far a book has been read
+omabook format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment
 omabook sync <computer[:folder]>        Bring this library and another computer's in step over ssh
 omabook manifest                        Print the whole library as JSON, as sync reads it
 omabook help [topic]                    Print the help the window shows: getting started, reading, keys, ...
@@ -476,6 +480,8 @@ omabook mcp [install [agent]]           Run as an MCP server for agents, or regi
 ```
 
 `<book>` is a number from `omabook list` or any book file, so `omabook text ~/Downloads/paper.pdf` works on a file that isn't in the library. `--library <folder>` points a command at another library.
+
+`omabook format` with no options says how every book is set; with a book's number, how that book is, marking what it has of its own. With options it changes them, for the defaults or for that book alone: `--font-size N`, `--font F` (`""` for the desktop's), `--line-width N`, `--line-height N` (percent), `--paragraph-spacing N`, `--indent N`, `--margins N` (pixels) and `--align start|justify|center|end`; `--reset` puts a book back to the defaults, or the defaults back to Omabook's own. A value out of bounds is refused with the range it may be in, and nothing changes. A book's own way is kept in the library's database, so it is backed up with the library and goes when the book does; a sync with another computer doesn't carry it (yet).
 
 ## MCP server
 
@@ -620,7 +626,8 @@ For whoever changes the format: add a step to the list in `Library::open` (never
 - Books with DRM can't be opened; Omabook says so rather than failing blankly.
 - Highlights and notes in the text are not there yet (bookmarks are).
 - Sending books to an e-reader and writing details back into a book's own file are not there yet.
-- A sync carries books and reading places, not bookmarks or the AI's notes.
+- A sync carries books and reading places, not bookmarks, the AI's notes or a book's own reading format.
+- There is no automatic hyphenation: Qt's text layout has none, so justified text is filled with wider spaces. A line does break at a soft hyphen that a book already has in its text.
 - Goodreads can't be written to: Omabook's reading goes back as a file you upload on Goodreads' import page. Its live shelves are shown to almost nobody who isn't signed in; the export file always works. Reviews are not brought in.
 - Open Library's reading log has no word for half stars or re-reads, and its stars and finished dates come from an address its own pages use, which could change; the shelves themselves do not depend on it. Hardcover's half stars are rounded to whole ones here.
 - Signing in to Hardcover through its own sign-in page (rather than a pasted token) is not there yet.

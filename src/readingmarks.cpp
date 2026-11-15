@@ -167,8 +167,16 @@ void ReadingMarks::mark(QQuickTextDocument *chapter) {
     const QString text = document->toPlainText();
     const Key key = keyOf(m_reader->section(), text);
     const QString stamp = stampOf(key);
-    if (document->property(stampProperty).toString() == stamp)
+    if (document->property(stampProperty).toString() == stamp) {
+        // The same text, but maybe set anew (the reading format changed),
+        // which took its formats along: then it is marked again.
+        const auto found = m_cache.constFind(key);
+        if (found == m_cache.cend() || stillMarked(document, *found))
+            return;
+        ++m_counts.hits;
+        apply(document, *found, stamp);
         return;
+    }
     if (const auto found = m_cache.constFind(key); found != m_cache.cend()) {
         ++m_counts.hits;
         apply(document, *found, stamp);
@@ -237,6 +245,18 @@ void ReadingMarks::apply(QTextDocument *document, const Marks &marks, const QStr
     }
     cursor.endEditBlock();
     document->setProperty(stampProperty, stamp);
+}
+
+bool ReadingMarks::stillMarked(QTextDocument *document, const Marks &marks) const {
+    const qsizetype end = document->characterCount() - 1;
+    for (const TextMarks::Mark &mark : marks) {
+        if (!m_things.contains(mark.thing) || mark.start + mark.length > end)
+            continue;
+        QTextCursor cursor(document);
+        cursor.setPosition(int(mark.start + 1));
+        return cursor.charFormat().hasProperty(thingProperty);
+    }
+    return true;
 }
 
 void ReadingMarks::clear(QTextDocument *document) const {

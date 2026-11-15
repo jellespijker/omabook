@@ -56,41 +56,6 @@ AppPopup {
             onEditingFinished: settings.syncTarget = text
         }
 
-        Label { text: qsTr("Reading"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
-        GridLayout {
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: 16
-            rowSpacing: 4
-
-            Label { text: qsTr("Text size") }
-            SpinBox {
-                objectName: "fontSize"
-                from: 10
-                to: 48
-                value: settings.fontSize
-                Material.roundedScale: theme.radius
-                onValueModified: settings.fontSize = value
-            }
-            Label { text: qsTr("Line width") }
-            SpinBox {
-                from: 320
-                to: 1600
-                stepSize: 40
-                value: settings.lineWidth
-                Material.roundedScale: theme.radius
-                onValueModified: settings.lineWidth = value
-            }
-        }
-        TextField {
-            Layout.fillWidth: true
-            placeholderText: qsTr("Font, or empty for the desktop's")
-            text: settings.fontFamily
-            selectByMouse: true
-            Material.roundedScale: theme.radius
-            onEditingFinished: settings.fontFamily = text
-        }
-
         // Which theme the colors come from, and what Automatic came to.
         Label { visible: !!theme.themes; text: qsTr("Theme"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
         RowLayout {
@@ -111,6 +76,21 @@ AppPopup {
                     win.showThemes()
                 }
             }
+        }
+
+        Label { text: qsTr("Reading"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
+        Label {
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: theme.colors.muted
+            text: qsTr("How every book is set, unless it has a way of its own: give it one beside the page, with %1.")
+                  .arg((custom.keyText["reader.format"] || "Aa").split("  ")[0])
+        }
+        // The same controls as the reader's panel, for the defaults.
+        FormatControls {
+            objectName: "settingsFormat"
+            prefix: "settingsFormat"
+            Layout.fillWidth: true
         }
 
         Label { text: qsTr("AI"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }

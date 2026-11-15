@@ -88,5 +88,9 @@ QList<Manual::Step> Manual::features() {
          tr("With the map open ({reader.graph}), the people, places and things it knows are marked on the page in their "
             "colors; point at one for what is known of it. Select words, or press {reader.select}, to ask about them."),
          "", "reader.select", "reader", ""},
+        {"format", "0.1.3", tr("Set the text your way"),
+         tr("{reader.format} opens the Aa panel beside the page: the font and its size, the widest line, the spacing, an "
+            "indent, the margins, and text justified, centred or to either side. For every book, or only this one."),
+         "", "reader.format", "reader", ""},
     };
 }
