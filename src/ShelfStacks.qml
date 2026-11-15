@@ -98,6 +98,8 @@ FocusScope {
             Layout.maximumWidth: heading.width - 60
         }
         Item { Layout.fillWidth: true }
+        // A tap stacks them the next way, or steps back out of a pile.
+        readonly property string runs: "library.group"
         TapHandler {
             onTapped: {
                 if (!shelf.back()) {

@@ -54,6 +54,8 @@ Item {
     ListView {
         id: tabs
         objectName: "collectionTabs"
+        // A tap shows a collection: the next, the one before, or any.
+        readonly property string runs: "library.collection_next library.collection_previous"
         anchors.left: parent.left
         anchors.right: actions.left
         anchors.rightMargin: 4
@@ -169,6 +171,7 @@ Item {
         HeaderChoice {
             objectName: "collectionMore"
             visible: !strip.parentId
+            runs: "library.collections"
             worded: false
             glyph: "more"
             text: qsTr("Collections")

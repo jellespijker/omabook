@@ -73,7 +73,7 @@ ApplicationWindow {
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened
                                        || tidyUp.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
-                                       || collectionEditor.opened
+                                       || collectionEditor.opened || commandMenu.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
     readonly property bool keys: !typing && !dialogOpen
@@ -187,6 +187,12 @@ ApplicationWindow {
         return !!key
     }
     function showPlugins() { pluginList.open() }
+    // What can be done here, as a list for a pointer or a finger (see
+    // CommandMenu.qml): "library", "book", "reader" or "graph"; beside `at`
+    // when it is given, and the keyboard back to `focusAfter` before it runs.
+    function showMenu(kind, at, focusAfter) { commandMenu.show(kind, at, focusAfter) }
+    // The book selected on the shelf; below zero for a plugin's entry.
+    function selectedBookId() { return library.selectedId }
     function showTidy() { tidyUp.show("") }
     // Only the tidy's pass that sorts books into collections.
     function showCollectionSort() { tidyUp.show("collections") }
@@ -381,6 +387,7 @@ ApplicationWindow {
     }
 
     HelpOverlay { id: help }
+    CommandMenu { id: commandMenu }
     EditDialog { id: edit }
     LookupDialog { id: lookup }
     SettingsDialog { id: prefs }

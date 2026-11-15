@@ -118,18 +118,23 @@ Item {
                 spacing: 8
                 AppButton {
                     objectName: "readButton"
+                    runs: "library.read"
                     text: pane.launcher ? qsTr("Open") : qsTr("Read")
                     primary: true
                     focusPolicy: Qt.NoFocus
                     onClicked: pane.launcher ? backend.scripts.launch(pane.book.bookId) : reader.openBook(pane.book.bookId)
                 }
                 AppButton {
+                    objectName: "editButton"
+                    runs: "library.edit"
                     visible: !pane.launcher
                     text: qsTr("Edit")
                     focusPolicy: Qt.NoFocus
                     onClicked: win.editBook(pane.book.bookId)
                 }
                 AppButton {
+                    objectName: "lookUpButton"
+                    runs: "library.lookup"
                     visible: !pane.launcher
                     text: qsTr("Look Up")
                     focusPolicy: Qt.NoFocus
@@ -137,6 +142,7 @@ Item {
                 }
                 AppButton {
                     objectName: "graphButton"
+                    runs: "library.graph_book"
                     visible: !pane.launcher
                     text: qsTr("Graph")
                     focusPolicy: Qt.NoFocus
@@ -144,9 +150,19 @@ Item {
                 }
                 AppButton {
                     objectName: "removeButton"
+                    runs: "library.remove"
                     text: qsTr("Remove")
                     focusPolicy: Qt.NoFocus
                     onClicked: win.removeBook(pane.book.bookId)
+                }
+                // The rest of what can be done with it (save a copy, its
+                // collections...), as a right click on the book lists it.
+                AppButton {
+                    objectName: "bookMore"
+                    visible: !pane.launcher
+                    text: qsTr("More")
+                    focusPolicy: Qt.NoFocus
+                    onClicked: win.showMenu("book")
                 }
             }
             // The collections there are, those the book is in filled in: a
@@ -162,6 +178,7 @@ Item {
             Flow {
                 id: inCollections
                 objectName: "detailsCollections"
+                readonly property string runs: "library.collection_book"
                 Layout.fillWidth: true
                 visible: pane.hasBook && !pane.launcher && backend.collections.length > 0
                 spacing: 6

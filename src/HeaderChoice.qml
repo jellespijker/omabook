@@ -19,6 +19,8 @@ Item {
     property bool lit: false
     // The key that does the same, for the tip.
     property string keys
+    // The commands it is the pointer's way to (see AppButton).
+    property string runs: ""
     // Names for the words and the mark, where something looks for them.
     property alias wordsName: label.objectName
     property alias markName: marked.objectName

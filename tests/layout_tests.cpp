@@ -16,6 +16,7 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest>
+#include <functional>
 #include <optional>
 
 #include "assistant.h"
@@ -221,6 +222,10 @@ struct Desk {
     }
     void call(const char *method) { QMetaObject::invokeMethod(window, method); }
     void call(const char *method, const QVariant &argument) { QMetaObject::invokeMethod(window, method, Q_ARG(QVariant, argument)); }
+    // The list of what can be done here (CommandMenu.qml), of a kind.
+    void menu(const QString &kind) {
+        QMetaObject::invokeMethod(window, "showMenu", Q_ARG(QVariant, kind), Q_ARG(QVariant, QVariant()), Q_ARG(QVariant, QVariant()));
+    }
 
     // The window at a size, laid out and drawn.
     bool resize(const QSize &size) {
@@ -755,6 +760,7 @@ class LayoutTests : public QObject {
         for (const QSize &size : dialogSizes()) {
             QVERIFY(desk.resize(size));
             dialog(desk, "find", [&] { desk.run("reader.find"); });
+            dialog(desk, "menu-reader", [&] { desk.menu("reader"); });
             // The menu beside selected words, under them and near the foot
             // of the page, and the hint while the keyboard selects.
             QObject *menu = desk.find("readingMenu");
@@ -894,6 +900,9 @@ class LayoutTests : public QObject {
             dialog(desk, "plugin-form", [&] { desk.backend->scripts()->run("former:form"); });
             dialog(desk, "remove-launcher", [&] { desk.call("removeBook", desk.backend->books()->idAt(0)); });
             dialog(desk, "filter", [&] { desk.run("library.filter"); });
+            // What the ⋯ of the shelf lists, and what a book's does.
+            dialog(desk, "menu-library", [&] { desk.menu("library"); });
+            dialog(desk, "menu-book", [&] { desk.menu("book"); });
             // The whole library as a graph, which takes the shelf's place.
             desk.call("showGraph", 0);
             QTRY_VERIFY(desk.find("libraryGraph"));
@@ -1159,25 +1168,29 @@ private slots:
             QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
         }
 
-        // Under fingers the buttons fold into one that lists them.
+        // Under fingers the row of buttons folds away, and the ⋯ that is
+        // always there lists what they did with everything else.
         Desk desk("de", {}, true);
         QVERIFY(!stock(desk).isEmpty());
         QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
         QVERIFY(desk.resize(QSize(2560, 800)));
-        QVERIFY(desk.shows("touchBar") && !desk.shows("touchMore"));
+        QVERIFY(desk.shows("touchBar") && desk.shows("libraryMore"));
         QVERIFY(desk.resize(QSize(480, 800)));
-        QVERIFY(!desk.shows("touchBar") && desk.shows("touchMore"));
+        QVERIFY(!desk.shows("touchBar") && desk.shows("libraryMore"));
         QPointingDevice *finger = QTest::createTouchDevice();
-        const QPoint at = middle(desk.item("touchMore"));
+        const QPoint at = middle(desk.item("libraryMore"));
         QTest::touchEvent(desk.window, finger).press(0, at, desk.window);
         QTest::touchEvent(desk.window, finger).release(0, at, desk.window);
         QVERIFY(desk.waitForPopup());
-        QCOMPARE(desk.find("palette")->property("mode").toString(), QString("more"));
-        QCOMPARE(desk.find("paletteList")->property("count").toInt(), 5);
-        // "Filtern" is the second of them, and opens the filters.
-        QTest::keyClick(desk.window, Qt::Key_Down);
-        QTest::keyClick(desk.window, Qt::Key_Return);
-        QTRY_COMPARE(desk.find("palette")->property("mode").toString(), QString("filter"));
+        QCOMPARE(desk.find("commandMenu")->property("kind").toString(), QString("library"));
+        for (const char *button : {"library.add", "library.filter", "library.suggest", "library.libraries", "global.settings"})
+            QVERIFY2(desk.find(QString("menuEntry-") + button), button);
+        // "Filtern" among them opens the filters, once the list has gone.
+        const QPoint filter = middle(desk.item("menuEntry-library.filter"));
+        QTest::touchEvent(desk.window, finger).press(0, filter, desk.window);
+        QTest::touchEvent(desk.window, finger).release(0, filter, desk.window);
+        QTRY_VERIFY(desk.find("palette")->property("opened").toBool());
+        QCOMPARE(desk.find("palette")->property("mode").toString(), QString("filter"));
         QVERIFY(desk.waitForPopup());
         QVERIFY(desk.closePopups());
 
@@ -1580,6 +1593,160 @@ private slots:
             QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
         }
         verdict();
+    }
+
+    // Omabook is the keyboard's first, and nothing is the keyboard's
+    // alone: every command in the commands table, and every command a
+    // plugin adds, has a control a mouse can click and a finger can tap,
+    // somewhere on the shelf, a book, the page or the graph, or in the list
+    // a ⋯ there opens. A control says which commands it is the way to with
+    // `runs` (see AppButton.qml); an entry of a list says it of the one it
+    // runs. Under fingers each is a fingertip on its smaller side.
+    //
+    // A new command fails here until it has one. There is no command that
+    // is the keyboard's by nature; one that ever is goes in `keyboardOnly`
+    // with the reason.
+    void everyCommandIsThereForAMouseAndAFinger() {
+        static const QHash<QString, QString> keyboardOnly{};
+        for (const bool touch : {false, true}) {
+            Desk desk("en", {}, touch);
+            const QList<qint64> ids = stock(desk);
+            QVERIFY(!ids.isEmpty());
+            QVERIFY(desk.backend->library()->addCollection("Harbour books", "tag:Fantasy"));
+            // A plugin with a command for the shelf and one for the page.
+            QDir().mkpath(desk.dir.filePath("plugins/shelver"));
+            Fixtures::write(desk.dir.filePath("plugins/shelver/plugin.json"), "{\"name\": \"Shelver\", \"script\": \"main.js\"}");
+            Fixtures::write(desk.dir.filePath("plugins/shelver/main.js"),
+                            "omabook.commands.register({id: \"shelve\", title: \"Shelve it\", place: \"library\", key: \"Ctrl+Shift+E\", "
+                            "run: function () {}});\n"
+                            "omabook.commands.register({id: \"note\", title: \"Note the page\", place: \"reader\", run: function () {}});\n");
+            desk.backend->scripts()->reload();
+            // A thing known of the first book, for its graph.
+            Graph(*desk.backend->library()).upsert({}, "character", "Wilhelmina Overbeck", "Keeps the long lighthouse.", {},
+                                                    GraphPlace{ids.first(), 0, 0.1}, "Wilhelmina");
+            QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            desk.backend->reload();
+            QVERIFY(desk.resize(QSize(1180, 780)));
+            desk.quicken();
+            const QString mode = touch ? "touch" : "mouse";
+
+            // The largest of the smaller sides of the controls for each command.
+            QHash<QString, qreal> reached;
+            const std::function<void(QQuickItem *)> collect = [&](QQuickItem *item) {
+                if (!item->isVisible() || item->opacity() <= 0.01)
+                    return;
+                for (const QString &id : item->property("runs").toString().split(' ', Qt::SkipEmptyParts))
+                    reached[id] = std::max(reached.value(id), std::min(item->width(), item->height()));
+                for (QQuickItem *child : item->childItems())
+                    collect(child);
+            };
+            const auto gather = [&](const QString &state) {
+                desk.settle();
+                collect(desk.window->contentItem());
+                desk.shot("commands-" + mode + "-" + state);
+            };
+            QPointingDevice *finger = QTest::createTouchDevice();
+            const auto press = [&](const QPoint &at, Qt::MouseButton button = Qt::LeftButton) {
+                if (touch && button == Qt::LeftButton) {
+                    QTest::touchEvent(desk.window, finger).press(0, at, desk.window);
+                    QTest::touchEvent(desk.window, finger).release(0, at, desk.window);
+                } else {
+                    QTest::mouseClick(desk.window, button, Qt::NoModifier, at);
+                }
+            };
+            const auto pressItem = [&](const QString &name) {
+                QQuickItem *item = desk.item(name);
+                QVERIFY2(item && desk.shows(name), qPrintable(mode + ": " + name + " is not on screen"));
+                press(middle(item));
+            };
+            const auto inMenu = [&](const QString &opener, const QString &state) {
+                pressItem(opener);
+                QVERIFY2(desk.waitForPopup(), qPrintable(mode + ": " + opener + " opened nothing"));
+                QVERIFY(desk.find("commandMenu")->property("opened").toBool());
+                gather(state);
+                QVERIFY(desk.closePopups());
+            };
+
+            // The shelf, a book selected and its details beside it.
+            QTRY_VERIFY(desk.shows("details"));
+            gather("shelf");
+            inMenu("libraryMore", "library-menu");
+            if (QTest::currentTestFailed()) return;
+            // What can be done with a book: a right click on it, and the
+            // details' "More", which is how a finger gets there.
+            if (!touch) {
+                QQuickItem *grid = desk.item("grid");
+                QVERIFY(grid);
+                press(grid->mapToScene(QPointF(grid->property("cellWidth").toReal() / 2, 120)).toPoint(), Qt::RightButton);
+                QVERIFY2(desk.waitForPopup(), "a right click on a book opened nothing");
+                QCOMPARE(desk.find("commandMenu")->property("kind").toString(), QString("book"));
+                gather("book-menu");
+                QVERIFY(desk.closePopups());
+            }
+            inMenu("bookMore", "book-more");
+            if (QTest::currentTestFailed()) return;
+            desk.backend->setView("stacks");
+            QTRY_VERIFY(desk.find("shelfLoader")->property("status").toInt() == 1);
+            gather("stacks");
+            desk.backend->setView("covers");
+            QTRY_VERIFY(desk.find("shelfLoader")->property("status").toInt() == 1);
+
+            // The graph of a book, a thing in it selected.
+            desk.call("showGraph", ids.first());
+            QTRY_VERIFY(desk.shows("libraryGraph"));
+            QObject *browser = desk.find("libraryGraph")->property("browser").value<QObject *>();
+            QVERIFY(browser);
+            QTRY_VERIFY(!browser->property("rows").toList().isEmpty());
+            const QVariantList rows = browser->property("rows").toList();
+            QMetaObject::invokeMethod(browser, "select", Q_ARG(qint64, rows.first().toMap().value("id").toLongLong()));
+            gather("graph");
+            inMenu("graphMore", "graph-menu");
+            if (QTest::currentTestFailed()) return;
+            QMetaObject::invokeMethod(desk.find("libraryGraph"), "done");
+
+            // The open book: the bar a finger brings up, and the list
+            // behind its "More" or the ⋯ in the corner.
+            desk.reader->openBook(ids.first());
+            QTRY_VERIFY(desk.reader->isOpen());
+            QTRY_VERIFY(desk.shows("touchArea"));
+            gather("page");
+            if (touch) {
+                pressItem("menuButton");
+                QTRY_VERIFY(desk.shows("readerBar"));
+                gather("bar");
+                inMenu("barMore", "reader-menu");
+            } else {
+                QVERIFY(!desk.shows("menuButton"));
+                inMenu("readerMore", "reader-menu");
+            }
+            if (QTest::currentTestFailed()) return;
+            desk.reader->close();
+
+            QStringList missing, small;
+            QStringList wanted;
+            for (const Customization::Command &command : Customization::commands())
+                wanted << command.id;
+            for (const QVariant &command : desk.custom->pluginCommands())
+                wanted << command.toMap().value("id").toString();
+            QVERIFY(wanted.contains("library.shelver:shelve") && wanted.contains("reader.shelver:note"));
+            for (const QString &id : std::as_const(wanted)) {
+                if (keyboardOnly.contains(id))
+                    continue;
+                if (!reached.contains(id))
+                    missing << id;
+                else if (touch && reached.value(id) < Survey::fingertip - 0.5)
+                    small << QString("%1 (%2 px)").arg(id).arg(reached.value(id));
+            }
+            QVERIFY2(missing.isEmpty(), qPrintable(mode + ": no control for " + missing.join(", ")));
+            QVERIFY2(small.isEmpty(), qPrintable(mode + ": smaller than a fingertip: " + small.join(", ")));
+            // And nothing is said to be the way to a command there isn't.
+            QStringList unknown;
+            for (auto it = reached.cbegin(); it != reached.cend(); ++it)
+                if (!wanted.contains(it.key()))
+                    unknown << it.key();
+            QVERIFY2(unknown.isEmpty(), qPrintable("no such command: " + unknown.join(", ")));
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
     }
 };
 

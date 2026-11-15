@@ -300,6 +300,7 @@ FocusScope {
             // Back to the shelf, for a pointer or a finger.
             Rectangle {
                 objectName: "graphClose"
+                readonly property string runs: "graph.close"
                 visible: !pane.reading
                 // The library's name with the arrow where the pane is wide,
                 // the arrow alone where it isn't.
@@ -382,6 +383,7 @@ FocusScope {
             Slider {
                 id: reach
                 objectName: "graphReach"
+                readonly property string runs: "graph.further graph.nearer"
                 visible: !pane.compact && graph.knownCount > 0
                 Layout.preferredWidth: 110
                 focusPolicy: Qt.NoFocus
@@ -403,6 +405,7 @@ FocusScope {
                         required property string modelData
                         readonly property bool current: (modelData === "list") === pane.listing
                         objectName: "graphAs-" + modelData
+                        readonly property string runs: "graph.list"
                         width: win.touch ? 40 : 30
                         height: win.touch ? 40 : 30
                         radius: theme.radius
@@ -426,8 +429,21 @@ FocusScope {
                     }
                 }
             }
+            // Everything else the graph does, each with its key, for a
+            // pointer and a finger: what the keys do that has no button.
+            HeaderChoice {
+                objectName: "graphMore"
+                worded: false
+                glyph: "more"
+                text: qsTr("More")
+                onTapped: {
+                    pane.takeFocus()
+                    win.showMenu("graph", undefined, pane.listing ? rows : canvas)
+                }
+            }
             Rectangle {
                 objectName: "graphHide"
+                readonly property string runs: "graph.close"
                 visible: pane.reading
                 width: win.touch ? 40 : 30
                 height: win.touch ? 40 : 30
@@ -455,9 +471,9 @@ FocusScope {
             Layout.rightMargin: 16
             Layout.bottomMargin: 8
             spacing: 8
-            AppButton { objectName: "graphTouchFind"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("find") }
-            AppButton { objectName: "graphTouchFilter"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
-            AppButton { objectName: "graphTouchAdd"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: sheet.show("add", pane.node) }
+            AppButton { objectName: "graphTouchFind"; runs: "graph.find"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("find") }
+            AppButton { objectName: "graphTouchFilter"; runs: "graph.filter"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
+            AppButton { objectName: "graphTouchAdd"; runs: "graph.add"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: sheet.show("add", pane.node) }
         }
 
         // Before what is known past the page is shown: where that is, and
@@ -568,6 +584,7 @@ FocusScope {
             Rectangle {
                 id: beyondChip
                 objectName: "graphBeyond"
+                readonly property string runs: "graph.beyond"
                 visible: graph.showing === "book" && graph.beyondCount > 0
                 width: beyondRow.implicitWidth + 18
                 height: win.touch ? 38 : 28
@@ -688,6 +705,11 @@ FocusScope {
             GraphCanvas {
                 id: canvas
                 objectName: "graphCanvas"
+                // A tap selects what it lands on and a drag moves the view,
+                // which is what the arrow keys and their Shift do; the
+                // wheel and a pinch zoom.
+                readonly property string runs: "graph.left graph.right graph.up graph.down graph.pan_left graph.pan_right "
+                                               + "graph.pan_up graph.pan_down graph.zoom_in graph.zoom_out"
                 anchors.fill: parent
                 anchors.rightMargin: body.sideWidth
                 anchors.bottomMargin: body.underHeight

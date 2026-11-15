@@ -74,22 +74,16 @@ Item {
         id: chooser
         // Not from a dialog it opened, which has the keyboard now.
         onClosed: if (!win.dialogOpen) view.takeFocus()
-        // The buttons fingers have, taken from the list they fold into.
+        // What a list leads to: another list, or a dialog.
         onActed: (what) => {
-            if (what === "add") backend.addBooks()
-            else if (what === "filter") filterLater.restart()
-            else if (what === "collections") collectionsLater.restart()
+            if (what === "collections") collectionsLater.restart()
             else if (what === "collectionNew") win.newCollection("")
             else if (what === "collectionFromShelf") win.newCollection(backend.shelfRule())
             else if (what === "collectionEdit") win.editCollection(backend.collection)
             else if (what === "collectionSort") win.showCollectionSort()
-            else if (what === "suggest") win.showSuggestions()
-            else if (what === "libraries") win.showLibraries()
-            else if (what === "settings") win.showSettings()
         }
     }
-    // The list of filters opens once the list it was picked from has closed.
-    Timer { id: filterLater; interval: 0; onTriggered: chooser.show("filter") }
+    // A list opens once the list it was picked from has closed.
     Timer { id: collectionsLater; interval: 0; onTriggered: chooser.show("collections") }
 
     Key { command: "library.search"; when: view.visible; onActivated: header.openSearch() }
@@ -178,7 +172,8 @@ Item {
         // before it were not enough, and takes them back the same way:
         //
         //   1. the count of books goes (the shelf itself says as much);
-        //   2. under fingers, the row of buttons folds into one that lists them;
+        //   2. under fingers, the row of buttons goes (the ⋯ beside it lists
+        //      them, with everything else);
         //   3. "Filter" and the order become drawings;
         //   4. the ways to show the shelf fold into the one in use, which lists them;
         //   5. the search field becomes a drawing that opens over the header;
@@ -206,7 +201,8 @@ Item {
                 if (at < 1) parts.push(count.implicitWidth)
                 if (backend.busy) parts.push(28)
                 if (backend.busy && at < 1) parts.push(Math.min(Math.ceil(status.implicitWidth), 200))
-                if (win.touch) parts.push(at < 2 ? touchBar.implicitWidth : touchMore.drawnWidth)
+                if (win.touch && at < 2) parts.push(touchBar.implicitWidth)
+                parts.push(libraryMore.drawnWidth)
                 parts.push(at < 4 ? switcher.implicitWidth : viewChoice.drawnWidth)
                 if (!win.touch) parts.push(at < 3 ? filterChoice.wordsWidth : filterChoice.drawnWidth)
                 parts.push(at < 3 ? sortChoice.wordsWidth : sortChoice.drawnWidth)
@@ -244,6 +240,7 @@ Item {
                 font.pixelSize: 20
                 font.bold: true
                 elide: Text.ElideRight
+                readonly property string runs: "library.libraries"
                 TapHandler { onTapped: win.showLibraries() }
             }
             Label {
@@ -279,21 +276,23 @@ Item {
                 objectName: "touchBar"
                 visible: win.touch && header.step < 2 && !header.searching
                 spacing: 8
-                AppButton { objectName: "touchAdd"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: backend.addBooks() }
-                AppButton { objectName: "touchFilter"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
-                AppButton { objectName: "touchSuggest"; text: qsTr("Suggest"); focusPolicy: Qt.NoFocus; onClicked: win.showSuggestions() }
-                AppButton { text: qsTr("Libraries"); focusPolicy: Qt.NoFocus; onClicked: win.showLibraries() }
-                AppButton { text: qsTr("Settings"); focusPolicy: Qt.NoFocus; onClicked: win.showSettings() }
+                AppButton { objectName: "touchAdd"; runs: "library.add"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: backend.addBooks() }
+                AppButton { objectName: "touchFilter"; runs: "library.filter library.filter_clear"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
+                AppButton { objectName: "touchSuggest"; runs: "library.suggest"; text: qsTr("Suggest"); focusPolicy: Qt.NoFocus; onClicked: win.showSuggestions() }
+                AppButton { runs: "library.libraries"; text: qsTr("Libraries"); focusPolicy: Qt.NoFocus; onClicked: win.showLibraries() }
+                AppButton { runs: "global.settings"; text: qsTr("Settings"); focusPolicy: Qt.NoFocus; onClicked: win.showSettings() }
             }
-            // The same buttons as a list, where they don't fit in a row.
+            // Everything else the shelf can do, for a mouse and a finger:
+            // what has no button of its own (sync, tidy, plugins, help...),
+            // and under fingers what the row above folds away. Each with its key.
             HeaderChoice {
-                id: touchMore
-                objectName: "touchMore"
-                visible: win.touch && header.step >= 2 && !header.searching
+                id: libraryMore
+                objectName: "libraryMore"
+                visible: !header.searching
                 worded: false
                 glyph: "more"
                 text: qsTr("More")
-                onTapped: chooser.show("more")
+                onTapped: win.showMenu("library")
             }
             ViewSwitcher {
                 id: switcher
@@ -310,6 +309,7 @@ Item {
                 mark: "down"
                 text: qsTr("Show as")
                 keys: view.keyOf("library.view_next")
+                runs: "library.view_next library.view_covers library.view_spines library.view_carousel library.view_list library.view_stacks"
                 onTapped: chooser.show("view")
             }
             HeaderChoice {
@@ -321,6 +321,8 @@ Item {
                 lit: !worded && view.filterKinds.length > 0
                 text: qsTr("Filter")
                 keys: view.keyOf("library.filter")
+                // The list it opens takes every filter off too.
+                runs: "library.filter library.filter_clear"
                 onTapped: chooser.show("filter")
             }
             // The order, and which way it runs; a click lists the others.
@@ -335,6 +337,8 @@ Item {
                 mark: backend.books.descending ? "down" : "up"
                 text: words.sort(backend.books.sort)
                 keys: view.keyOf("library.sort")
+                // The list it opens turns the order round too.
+                runs: "library.sort library.sort_reverse"
                 onTapped: chooser.show("sort")
             }
             HeaderChoice {
@@ -347,6 +351,7 @@ Item {
                 lit: backend.books.query !== ""
                 text: qsTr("Search")
                 keys: view.keyOf("library.search")
+                runs: "library.search"
                 onTapped: header.openSearch()
             }
             TextField {
@@ -354,6 +359,7 @@ Item {
                 objectName: "search"
                 // The least it is of use at; narrower than this it folds.
                 readonly property real narrowest: 140
+                readonly property string runs: "library.search"
                 visible: header.step < 5 || header.searching
                 // As wide as it likes where there is room, and otherwise
                 // what is over once everything else has its width; the

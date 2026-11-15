@@ -144,7 +144,7 @@ Item {
                     anchors.left: parent.left
                     anchors.right: parent.right
                     anchors.leftMargin: 4 + chevron.side + row.modelData.level * 16
-                    anchors.rightMargin: 8
+                    anchors.rightMargin: unmark.visible ? unmark.width + 4 : 8
                     text: row.modelData.bookmark > 0 ? "★ " + row.modelData.title : row.modelData.title
                     color: row.reading || row.modelData.bookmark > 0 ? theme.accent : theme.foreground
                     font.bold: row.reading
@@ -155,6 +155,29 @@ Item {
                         list.currentIndex = row.index
                         pane.go(row.modelData)
                     }
+                }
+                HoverHandler { id: rowHover }
+                // A bookmark is taken away here, as Delete does: shown under
+                // a pointer that rests on it, and always under fingers.
+                Item {
+                    id: unmark
+                    objectName: "removeBookmark"
+                    readonly property real side: win.touch ? 36 : 24
+                    visible: row.modelData.bookmark > 0 && (win.touch || rowHover.hovered)
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: side
+                    height: Math.min(parent.height, side)
+                    Accessible.role: Accessible.Button
+                    Accessible.name: qsTr("Remove the selected bookmark")
+                    Glyph {
+                        anchors.centerIn: parent
+                        name: "cross"
+                        size: 12
+                        color: unmarkHover.hovered ? theme.foreground : theme.colors.muted
+                    }
+                    HoverHandler { id: unmarkHover }
+                    TapHandler { onTapped: reader.removeBookmark(row.modelData.bookmark) }
                 }
             }
         }

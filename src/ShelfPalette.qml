@@ -13,8 +13,7 @@ AppPopup {
     objectName: "palette"
     padding: 16
     // What it was opened for: "filter" or "sort", or, from a header too
-    // narrow to show them, "view" (the ways to show the shelf) or "more"
-    // (what the buttons under fingers do); or "collections" (which to show,
+    // narrow to show them, "view" (the ways to show the shelf); or "collections" (which to show,
     // and making, changing and sorting them) and "in" (the collections the
     // selected book, `bookId`, is in, each ticked on or off).
     property string mode: "filter"
@@ -39,7 +38,7 @@ AppPopup {
     function show(what, book) {
         mode = what
         bookId = book || 0
-        entries = what === "sort" ? orders() : what === "view" ? ways() : what === "more" ? actions()
+        entries = what === "sort" ? orders() : what === "view" ? ways()
                   : what === "collections" ? collections() : what === "in" ? bookIn() : filters()
         field.text = ""
         list.currentIndex = 0
@@ -57,11 +56,6 @@ AppPopup {
             key => ({ kindName: "", label: words.view(key), view: key, on: backend.view === key, common: true, count: 0 }))
         list.push({ kindName: "", label: qsTr("Graph"), graph: true, on: false, common: true, count: 0 })
         return list
-    }
-    function actions() {
-        return [["add", qsTr("Add")], ["filter", qsTr("Filter")], ["suggest", qsTr("Suggest")],
-                ["libraries", qsTr("Libraries")], ["settings", qsTr("Settings")]].map(
-            action => ({ kindName: "", label: action[1], act: action[0], on: false, common: true, count: 0 }))
     }
     // Which collection to show, then what can be done with them.
     function collections() {
@@ -157,7 +151,7 @@ AppPopup {
             objectName: "paletteField"
             Layout.preferredWidth: Math.min(400, win.width - 2 * win.dialogEdge - 2 * chooser.padding)
             placeholderText: chooser.mode === "sort" ? qsTr("Order by") : chooser.mode === "view" ? qsTr("Show as")
-                             : chooser.mode === "more" ? qsTr("Do") : chooser.mode === "collections" ? qsTr("Collection")
+                             : chooser.mode === "collections" ? qsTr("Collection")
                              : chooser.mode === "in" ? qsTr("In the collections") : qsTr("Filter by")
             selectByMouse: true
             Material.roundedScale: theme.radius

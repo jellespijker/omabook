@@ -16,6 +16,7 @@
         <file alias="ContentsPane.qml">ContentsPane.qml</file>
         <file alias="DetailsPane.qml">DetailsPane.qml</file>
         <file alias="CollectionStrip.qml">CollectionStrip.qml</file>
+        <file alias="CommandMenu.qml">CommandMenu.qml</file>
         <file alias="CollectionDialog.qml">CollectionDialog.qml</file>
         <file alias="EditDialog.qml">EditDialog.qml</file>
         <file alias="FindPopup.qml">FindPopup.qml</file>

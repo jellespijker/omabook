@@ -36,7 +36,7 @@ QList<Manual::Step> Manual::tourSteps() {
         {"filter", "", tr("Filter and order"),
          tr("{library.filter} narrows the shelf: type a few letters of a status, a tag, an author or a format. "
             "{library.sort} changes the order."),
-         "filterLabel|touchFilter|touchMore", "", "library", ""},
+         "filterLabel|touchFilter|libraryMore", "", "library", ""},
         {"sites", "", tr("Where you kept your reading so far"),
          tr("{library.sites} connects Goodreads, Open Library or Hardcover: what you read, are reading and want to read "
             "comes in with your stars and dates. Nothing is removed, and nothing goes back unless you turn that on."),

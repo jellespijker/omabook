@@ -6,6 +6,8 @@ import QtQuick.Controls
 Row {
     id: switcher
     readonly property var views: ["covers", "spines", "carousel", "list", "stacks"]
+    // Every way is a tap away, which is what "the next way" is for a pointer.
+    readonly property string runs: "library.view_next"
     spacing: 2
 
     Words { id: words }
@@ -17,6 +19,7 @@ Row {
             required property string modelData
             readonly property bool current: backend.view === modelData
             objectName: "view-" + modelData
+            readonly property string runs: "library.view_" + modelData
             width: win.touch ? 40 : 30
             height: win.touch ? 40 : 30
             radius: theme.radius
@@ -40,6 +43,7 @@ Row {
     // it, though not a shelf: it takes the shelf's place until it is closed.
     Rectangle {
         objectName: "view-graph"
+        readonly property string runs: "library.graph"
         width: win.touch ? 40 : 30
         height: win.touch ? 40 : 30
         radius: theme.radius

@@ -1368,6 +1368,85 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // What a plugin adds to the keyboard is in the help (?) under the
+    // plugin's name, each key saying where it works, from the moment the
+    // plugin is on until it is off; and in the lists a mouse or a finger
+    // opens, run from there as its key runs it. The keys a panel has of its
+    // own are in the help as well, saying whose they are.
+    void aPluginsKeysAreInTheHelpAndItsMenusWhileItIsOn() {
+        Desk desk;
+        QVERIFY(Fixtures::epub(desk.dir.filePath("one.epub")));
+        desk.add(desk.dir.filePath("one.epub"));
+        QVERIFY(desk.show());
+        QVERIFY(QDir(desk.dir.path()).mkpath("plugins/shelver"));
+        write(desk.dir.filePath("plugins/shelver/main.js"),
+              "omabook.commands.register({id: \"shelve\", title: \"Shelve it\", place: \"library\", key: \"Ctrl+R\",\n"
+              "    run: function (context) { omabook.say(\"Shelved \" + omabook.library.get(context.book).title); }});\n"
+              "omabook.commands.register({id: \"note\", title: \"Note the page\", place: \"reader\", key: \"Ctrl+Shift+N\",\n"
+              "    run: function () {}});\n");
+        write(desk.dir.filePath("plugins/shelver/plugin.json"), "{\"name\": \"Shelver\", \"script\": \"main.js\"}");
+        QTRY_COMPARE(desk.custom->pluginCommands().size(), 2);
+
+        const auto rows = [&] { return desk.find("help")->property("rows").toList(); };
+        const auto row = [&](const QString &id) {
+            for (const QVariant &value : rows())
+                if (value.toMap().value("id").toString() == id)
+                    return value.toMap();
+            return QVariantMap();
+        };
+        const auto heading = [&](const QString &text) {
+            return std::ranges::any_of(rows(), [&](const QVariant &value) {
+                return value.toMap().value("type").toString() == "heading" && value.toMap().value("text").toString() == text;
+            });
+        };
+        QTest::keyClick(desk.window, '?');
+        QTRY_VERIFY(desk.value("help", "opened").toBool());
+        QVERIFY(heading("Plugin: Shelver"));
+        QCOMPARE(row("library.shelver:shelve").value("keys").toString(), QString("Ctrl+R"));
+        QCOMPARE(row("library.shelver:shelve").value("note").toString(), QString("On the shelf"));
+        QCOMPARE(row("reader.shelver:note").value("keys").toString(), QString("Ctrl+Shift+N"));
+        QCOMPARE(row("reader.shelver:note").value("note").toString(), QString("While reading"));
+        // A panel's own keys, under the panel.
+        QVERIFY(heading("The contents beside the page"));
+        QCOMPARE(row("contents:Delete").value("text").toString(), QString("Remove the selected bookmark"));
+        QVERIFY(heading("The plugin manager"));
+        desk.shot("help-plugin-keys");
+        // Found by what it does, and run from the help.
+        for (const char c : QByteArray("shelve"))
+            QTest::keyClick(desk.window, c);
+        QTRY_VERIFY(row("library.shelver:shelve").value("type").toString() == "command");
+        desk.key(Qt::Key_Return);
+        QTRY_VERIFY(!desk.value("help", "visible").toBool());
+        QTRY_COMPARE(desk.value("toastText", "text").toString(), QString("Shelved The Test Book"));
+        desk.backend->dismissMessage();
+
+        // The shelf's ⋯ lists it with its key, and a click runs it.
+        clickItem(desk, "libraryMore");
+        QTRY_VERIFY(desk.value("commandMenu", "opened").toBool());
+        QTRY_VERIFY(desk.find("menuEntry-library.shelver:shelve"));
+        QVERIFY(!desk.find("menuEntry-reader.shelver:note"));
+        // Typing narrows it, as in every list, to the one wanted.
+        for (const char c : QByteArray("shelve"))
+            QTest::keyClick(desk.window, c);
+        QTRY_COMPARE(desk.value("commandMenuList", "count").toInt(), 1);
+        clickItem(desk, "menuEntry-library.shelver:shelve");
+        QTRY_VERIFY(!desk.value("commandMenu", "visible").toBool());
+        QTRY_COMPARE(desk.value("toastText", "text").toString(), QString("Shelved The Test Book"));
+
+        // Switched off, it leaves the help while it is open, and the lists.
+        QTest::keyClick(desk.window, '?');
+        QTRY_VERIFY(desk.value("help", "opened").toBool());
+        desk.backend->setPluginEnabled("folder:shelver", false);
+        QTRY_VERIFY(!heading("Plugin: Shelver"));
+        QVERIFY(row("library.shelver:shelve").isEmpty());
+        // And back on, it is back.
+        desk.backend->setPluginEnabled("folder:shelver", true);
+        QTRY_VERIFY(heading("Plugin: Shelver"));
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.value("help", "visible").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     void aScriptsFormatIsReadInTheWindow() {
         Desk desk;
         QVERIFY(desk.show());

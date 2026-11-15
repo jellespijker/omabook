@@ -366,6 +366,8 @@ Item {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.margins: view.immersive ? 0 : 12
+                // Clear of the ⋯ at its end.
+                anchors.rightMargin: view.immersive ? 0 : 12 + (readerMore.visible ? readerMore.width + 4 : 0)
                 height: view.immersive ? 0 : 24
                 visible: !view.immersive
                 spacing: 12
@@ -402,6 +404,10 @@ Item {
                 objectName: "touchArea"
                 anchors.fill: contentLoader
                 z: 1
+                // The page itself is how a pointer moves through it: a finger
+                // taps its edges or swipes, a mouse wheel scrolls it or, on
+                // pages side by side, turns them.
+                readonly property string runs: "reader.page_down reader.page_up reader.line_down reader.line_up"
 
                 TapHandler {
                     acceptedDevices: PointerDevice.TouchScreen
@@ -456,6 +462,19 @@ Item {
                     acceptedDevices: PointerDevice.TouchScreen
                     target: null
                     onScaleChanged: (delta) => { if (view.content) view.content.pinch(delta) }
+                }
+                // Pages side by side don't scroll, so the wheel turns them: a
+                // notch of a mouse wheel, or as much from a touchpad.
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    enabled: !!view.content && view.content.objectName === "spreadReader"
+                    property real gathered: 0
+                    onWheel: (event) => {
+                        gathered += event.angleDelta.y
+                        if (Math.abs(gathered) < 120) return
+                        view.turn(gathered < 0)
+                        gathered = 0
+                    }
                 }
             }
 
@@ -513,6 +532,28 @@ Item {
 
             // For fingers: one button that is always there, which shows the
             // bar of everything else (the contents, find, the AI, ...).
+            // For a mouse: what the bar holds and the rest of the reading
+            // keys, as a list, in the corner where the title line ends. In
+            // the book alone on the screen it is there too, faintly, as the
+            // way back out for a pointer.
+            HeaderChoice {
+                id: readerMore
+                objectName: "readerMore"
+                visible: !win.touch && reader.open
+                z: 3
+                anchors.top: parent.top
+                anchors.right: parent.right
+                anchors.topMargin: view.immersive ? 6 : 9
+                anchors.rightMargin: view.immersive ? 6 : 8
+                height: view.immersive ? 30 : 24
+                opacity: view.immersive && !moreHover.hovered ? 0.35 : 1
+                worded: false
+                glyph: "more"
+                text: qsTr("More")
+                onTapped: win.showMenu("reader")
+                HoverHandler { id: moreHover }
+            }
+
             AppButton {
                 objectName: "menuButton"
                 visible: win.touch && reader.open
@@ -549,20 +590,32 @@ Item {
                     y: 12
                     width: Math.min(660, contentLoader.width - 48)
                     spacing: 8
-                    AppButton { objectName: "barBack"; text: qsTr("Library"); focusPolicy: Qt.NoFocus; onClicked: reader.close() }
-                    AppButton { text: qsTr("Contents"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.toggleIndex() } }
-                    AppButton { text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; finder.open() } }
-                    AppButton { text: qsTr("Bookmark"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.bookmark() } }
-                    AppButton { objectName: "barGraph"; text: qsTr("Graph"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.toggleGraph() } }
-                    AppButton { objectName: "barAsk"; text: qsTr("Ask AI"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.askAssistant() } }
-                    AppButton { text: qsTr("Smaller"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(-1) }
-                    AppButton { objectName: "barLarger"; text: qsTr("Larger"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(1) }
+                    AppButton { objectName: "barBack"; runs: "reader.back"; text: qsTr("Library"); focusPolicy: Qt.NoFocus; onClicked: reader.close() }
+                    AppButton { objectName: "barContents"; runs: "reader.contents"; text: qsTr("Contents"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.toggleIndex() } }
+                    AppButton { objectName: "barFind"; runs: "reader.find"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; finder.open() } }
+                    AppButton { objectName: "barBookmark"; runs: "reader.bookmark"; text: qsTr("Bookmark"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.bookmark() } }
+                    AppButton { objectName: "barGraph"; runs: "reader.graph"; text: qsTr("Graph"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.toggleGraph() } }
+                    AppButton { objectName: "barAsk"; runs: "reader.ask"; text: qsTr("Ask AI"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.askAssistant() } }
+                    AppButton { objectName: "barSmaller"; runs: "reader.smaller"; text: qsTr("Smaller"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(-1) }
+                    AppButton { objectName: "barLarger"; runs: "reader.larger"; text: qsTr("Larger"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(1) }
                     AppButton {
                         objectName: "barFormat"
+                        runs: "reader.format"
                         text: "Aa"
                         Accessible.name: qsTr("Text")
                         focusPolicy: Qt.NoFocus
                         onClicked: { view.showBar = false; view.toggleFormat() }
+                    }
+                    // The rest: the AI's catch-up and cast, the marks, the
+                    // pages side by side, chapters, the whole screen, help.
+                    AppButton {
+                        objectName: "barMore"
+                        text: qsTr("More")
+                        focusPolicy: Qt.NoFocus
+                        onClicked: {
+                            view.showBar = false
+                            win.showMenu("reader")
+                        }
                     }
                 }
             }

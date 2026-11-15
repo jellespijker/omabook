@@ -9,6 +9,9 @@ import QtQuick.Controls.Material
 Button {
     id: button
     property bool primary: false
+    // The commands this button is the pointer's way to, by their ids
+    // ("library.add"), for the test that every command has one.
+    property string runs: ""
 
     highlighted: primary
     flat: !primary

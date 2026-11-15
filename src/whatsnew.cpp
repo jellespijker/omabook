@@ -32,7 +32,7 @@ QList<Manual::Step> Manual::features() {
         {"filter", "0.1.0", tr("Filter by typing"),
          tr("{library.filter} and a few letters of a status, a tag, an author, a format or a rating. Filters add up, "
             "and a click on a chip takes one off."),
-         "filterLabel|touchFilter|touchMore", "library.filter", "library", ""},
+         "filterLabel|touchFilter|libraryMore", "library.filter", "library", ""},
         {"paper", "0.1.0", tr("Books on paper, and wishes"),
          tr("{library.new} adds a book that has no file: one on your shelf at home, or one to read some day. They count "
             "in what you have read."),

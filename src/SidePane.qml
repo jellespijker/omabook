@@ -90,6 +90,8 @@ Item {
         height: parent.height
         z: 10
         visible: !side.fixed
+        // Dragged, the pane is wider or narrower, as < and > make it.
+        readonly property string runs: "global.pane_wider global.pane_narrower"
         Accessible.role: Accessible.Separator
         Accessible.name: qsTr("Drag to resize, double-click to reset")
 
