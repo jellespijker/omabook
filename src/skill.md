@@ -94,6 +94,9 @@ The interface is files in `~/.config/omabook/`, followed live: `config.json` (se
 ```bash
 omabook progress 12 --json                       # section, fraction, percent, when
 omabook progress 12 --section 4 --fraction 0.2   # set it
+omabook format --json                            # how every book is set: font, size, line width, spacing, indent, margins, alignment, with their bounds
+omabook format 12 --align justify --line-height 170  # one book's own, over the defaults; without the id, the defaults
+omabook format 12 --reset                        # the book follows the defaults again
 omabook sync laptop                              # exchange books and reading places with another computer over ssh
 omabook sync laptop:Books/Fiction                # ...with a named library folder there
 ```

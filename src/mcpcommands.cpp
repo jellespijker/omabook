@@ -145,6 +145,57 @@ const bool registered = [] {
                                       arguments.value("folder").toString()});
                   }});
 
+    // How books are set on the page: `omabook format`.
+    registerTool({"reading_format_get", "How books are set on the page",
+                  "The reading format: font, type size, widest line, line spacing (percent), space between paragraphs, "
+                  "first-line indent, margins (pixels) and alignment. Without a book, the defaults every book follows; "
+                  "with one, what is in force for it, the defaults, and the options it has of its own (\"own\"). Also "
+                  "the bounds of each. Pages that are pictures (PDF, comics) are not set.",
+                  schema({{"book", integer("A book's id, for its own; the defaults when not given.")}}), ReadOnly,
+                  [](const QJsonObject &arguments) {
+                      QStringList asked{"format"};
+                      if (arguments.contains("book"))
+                          asked << QString::number(arguments.value("book").toInteger());
+                      return command(asked);
+                  }});
+
+    registerTool({"reading_format_set", "Change how books are set on the page",
+                  "Changes the reading format, for one book alone or as the defaults every book without its own "
+                  "follows; the window follows at once. Only the options given change. A value out of bounds is "
+                  "refused with the allowed range, and then nothing changes. reset puts the book back to the defaults "
+                  "(or, without a book, the defaults back to Omabook's own) and goes alone.",
+                  schema({{"book", integer("A book's id, to change its own; the defaults when not given.")},
+                          {"font_size", integer("The type size in pixels, 10 to 48.")},
+                          {"font_family", string("A font's name; \"\" for the desktop's.")},
+                          {"line_width", integer("The widest a line gets, in pixels, 320 to 1600.")},
+                          {"line_height", integer("Line spacing in percent, 100 to 300.")},
+                          {"paragraph_spacing", integer("The space after a paragraph in pixels, 0 to 80.")},
+                          {"indent", integer("The indent of a paragraph's first line in pixels, 0 to 64.")},
+                          {"margins", integer("The room around the text in pixels, 0 to 160.")},
+                          {"align", choice("Where a paragraph's lines go: start, justify (filled out to both sides), "
+                                           "center or end. Start and end turn round in a right-to-left language.",
+                                           {"start", "justify", "center", "end"})},
+                          {"reset", boolean("Back to the defaults (for a book), or to Omabook's own (without one).")}}),
+                  Changes, [](const QJsonObject &arguments) {
+                      QStringList asked{"format"};
+                      if (arguments.contains("book"))
+                          asked << QString::number(arguments.value("book").toInteger());
+                      static const QList<std::pair<const char *, const char *>> options{
+                          {"font_size", "--font-size"}, {"font_family", "--font"}, {"line_width", "--line-width"},
+                          {"line_height", "--line-height"}, {"paragraph_spacing", "--paragraph-spacing"},
+                          {"indent", "--indent"}, {"margins", "--margins"}, {"align", "--align"}};
+                      for (const auto &[key, flag] : options)
+                          if (arguments.contains(key)) {
+                              const QJsonValue value = arguments.value(key);
+                              asked << flag << (value.isDouble() ? QString::number(value.toDouble()) : value.toString());
+                          }
+                      if (arguments.value("reset").toBool())
+                          asked << "--reset";
+                      if (asked.size() == (arguments.contains("book") ? 2 : 1))
+                          return Result::fail("Give at least one option to change, or reset.");
+                      return command(asked);
+                  }});
+
     registerTool({"themes_list", "The themes",
                   "The themes Omabook's colors can come from, the one in use marked: automatic (Omarchy's current "
                   "theme where Omarchy is, else Aether's, else Tokyo Night), Omarchy's and Aether's where they are, "

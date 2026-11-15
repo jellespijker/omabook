@@ -46,6 +46,7 @@
 #include "openlibrarylog.h"
 #include "plugins.h"
 #include "prompts.h"
+#include "readingformat.h"
 #include "readingsite.h"
 #include "scriptapi.h"
 #include "scriptplugins.h"
@@ -379,6 +380,120 @@ int progress(const QStringList &arguments) {
         printJson(QJsonObject{{"section", place.section}, {"fraction", place.fraction}, {"percent", place.percent}, {"updated", place.updated}});
     else
         print(stdout, QString("section %1, %2% of the book").arg(place.section).arg(qRound(place.percent)));
+    return 0;
+}
+
+// How books are set on the page: the defaults every book follows, or one
+// book's own over them (readingformat.h).
+int format(const QStringList &arguments) {
+    Command command("format", "Show or change how books are set on the page: the type, the widest line, the spacing, the "
+                              "indent, the margins and the alignment. Without a book, the defaults every book follows; with "
+                              "one, that book's own, which lie over the defaults. Without options, what is in force and where "
+                              "each comes from. Pages that are pictures (PDF, comics) are not set and ignore it.");
+    command.parser.addPositionalArgument("book", "A book's number from omabook list, for its own; the defaults when not given.", "[book]");
+    struct Flag {
+        const char *name, *key, *what, *value;
+    };
+    static constexpr Flag flags[] = {
+        {"font-size", "font_size", "The type size, in pixels", "N"},
+        {"font", "font_family", "The font, by name; \"\" for the desktop's.", "font"},
+        {"line-width", "line_width", "The widest a line of text gets, in pixels", "N"},
+        {"line-height", "line_height", "Line spacing, in percent", "N"},
+        {"paragraph-spacing", "paragraph_spacing", "The space after a paragraph, in pixels", "N"},
+        {"indent", "indent", "The indent of a paragraph's first line, in pixels", "N"},
+        {"margins", "margins", "The room around the text, in pixels", "N"},
+        {"align", "align", "start, justify (filled out to both sides), center or end. Start and end turn round in a "
+                           "right-to-left language.", "how"},
+    };
+    for (const Flag &flag : flags) {
+        QString what = flag.what;
+        if (const ReadingFormat::Range *range = ReadingFormat::range(QLatin1StringView(flag.key)))
+            what += QString(": %1 to %2, %3 when not set.").arg(range->low).arg(range->high).arg(range->fallback);
+        command.parser.addOption({flag.name, what, flag.value});
+    }
+    command.parser.addOption({"reset", "With a book: it follows the defaults again. Without: the defaults go back to Omabook's own."});
+    if (!command.parse(arguments, 0, 1))
+        return 1;
+
+    Settings settings;
+    std::unique_ptr<Library> library;
+    qint64 id = 0;
+    if (!command.argument(0).isEmpty()) {
+        bool number = false;
+        id = command.argument(0).toLongLong(&number);
+        if (!number)
+            return fail("<book> is a book's number, as omabook list gives it.");
+        QString error;
+        library = command.library(&error);
+        if (!library)
+            return fail(error);
+        if (!library->book(id))
+            return fail(QString("There is no book %1 in the library.").arg(id));
+    }
+
+    // Everything asked is checked before anything changes.
+    QJsonObject changes;
+    for (const Flag &flag : flags) {
+        if (!command.parser.isSet(flag.name))
+            continue;
+        const QString key = flag.key, given = command.parser.value(flag.name);
+        QJsonValue value = given;
+        if (const ReadingFormat::Range *range = ReadingFormat::range(key)) {
+            bool whole = false;
+            const int number = given.toInt(&whole);
+            if (!whole)
+                return fail(QString("--%1 takes a whole number from %2 to %3.").arg(flag.name).arg(range->low).arg(range->high));
+            value = number;
+        }
+        if (const QString why = ReadingFormat::problem(key, value); !why.isEmpty())
+            return fail("--" + QString(flag.name) + why.mid(key.size()));
+        changes.insert(key, value);
+    }
+    const bool reset = command.parser.isSet("reset");
+    if (reset && !changes.isEmpty())
+        return fail("--reset goes alone: it puts everything back.");
+
+    if (id > 0) {
+        QJsonObject own = reset ? QJsonObject() : library->bookFormat(id);
+        for (auto it = changes.begin(); it != changes.end(); ++it)
+            own.insert(it.key(), it.value());
+        if ((reset || !changes.isEmpty()) && !library->setBookFormat(id, own))
+            return fail("The library can't be written.");
+    } else if (reset) {
+        for (const ReadingFormat::Range &range : ReadingFormat::ranges)
+            settings.setOption(range.key, range.fallback);
+        settings.setOption("font_family", "");
+        settings.setOption("align", "start");
+    } else {
+        for (auto it = changes.begin(); it != changes.end(); ++it)
+            settings.setOption(it.key(), it.value());
+    }
+
+    const QJsonObject defaults = settings.format();
+    const QJsonObject own = id > 0 ? library->bookFormat(id) : QJsonObject();
+    const QJsonObject effective = ReadingFormat::over(defaults, own);
+    if (command.json()) {
+        QJsonObject result{{"effective", effective}, {"defaults", defaults}, {"bounds", ReadingFormat::bounds()},
+                           {"changed", reset || !changes.isEmpty()}};
+        if (id > 0) {
+            result.insert("book", id);
+            result.insert("title", library->book(id)->meta.title);
+            result.insert("own", own);
+        }
+        printJson(result);
+        return 0;
+    }
+    print(stdout, id > 0 ? QString("%1 is set like this; \"this book\" marks its own, the rest are the defaults:")
+                               .arg(library->book(id)->meta.title)
+                         : QString("Every book is set like this, unless it has a way of its own:"));
+    for (const QString &key : ReadingFormat::keys()) {
+        const QJsonValue value = effective.value(key);
+        const ReadingFormat::Range *range = ReadingFormat::range(key);
+        const QString shown = range ? QString::number(value.toInt()) + (range->unit == "%"_L1 ? "%" : " px")
+                              : key == "font_family" && value.toString().isEmpty() ? QString("the desktop's")
+                                                                                   : value.toString();
+        print(stdout, QString("  %1 %2%3").arg(key.leftJustified(18), shown, own.contains(key) ? "   (this book)" : ""));
+    }
     return 0;
 }
 
@@ -1865,6 +1980,7 @@ constexpr std::array cliCommands{
     CliCommand{"ask"_L1, ask},
     CliCommand{"graph"_L1, runGraphCli},
     CliCommand{"progress"_L1, progress},
+    CliCommand{"format"_L1, format},
     CliCommand{"sync"_L1, sync},
     CliCommand{"manifest"_L1, manifest},
     CliCommand{"plugins"_L1, plugins},
@@ -1924,6 +2040,7 @@ QString cliSummary() {
            "  change <wish> | --undo          Ask the AI to change how Omabook looks or works\n"
            "  logs [-n N] [--level l] [--since 1h]  What Omabook did and what went wrong, from the window and every command\n"
            "  progress <id> [--section N]     Show or set how far a book has been read\n"
+           "  format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment\n"
            "  sync <computer[:folder]>        Bring this library and another computer's in step over ssh\n"
            "  manifest                        Print the whole library as JSON, as sync reads it\n"
            "  help [topic]                    Print the help the window shows: getting started, reading, keys, ...\n"

@@ -255,6 +255,7 @@ private slots:
             {"graph_merge", "graph"}, {"graph_remove", "graph"}, {"graph_build", "graph"}, {"graph_export", "graph"},
             {"graph_copy_scope", "graph"}, {"graph_remove_scope", "graph"}, {"graph_reading_log", "graph"}, {"graph_connect", "graph"},
             {"themes_list", "theme"}, {"theme_use", "theme"},
+            {"reading_format_get", "format"}, {"reading_format_set", "format"},
         };
         const Machine machine;
         Server server(machine);
@@ -941,6 +942,40 @@ private slots:
         QCOMPARE(theme.value("name").toString(), QString("Catppuccin Latte"));
         QCOMPARE(theme.value("kind").toString(), QString("bundled"));
         QVERIFY(theme.value("why").toString().startsWith("Chosen"));
+        QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
+    }
+
+    void anAgentSetsHowBooksAreSet() {
+        const Machine machine;
+        QVERIFY(Fixtures::epub(machine.dir.filePath("set.epub"), "The Set Book"));
+        Server server(machine);
+        const qint64 id = server.data("book_add", {{"paths", QJsonArray{machine.dir.filePath("set.epub")}}})
+                              .value("added").toArray().first().toObject().value("id").toInteger();
+        QVERIFY(id > 0);
+        // The defaults, with what each may be.
+        QJsonObject format = server.data("reading_format_get");
+        QCOMPARE(format.value("effective").toObject().value("align").toString(), QString("start"));
+        QCOMPARE(format.value("bounds").toObject().value("line_height").toObject().value("high").toInt(), 300);
+        QVERIFY(!format.contains("own"));
+        // "More space between the lines", for every book.
+        format = server.data("reading_format_set", {{"line_height", 190}, {"align", "justify"}});
+        QCOMPARE(format.value("defaults").toObject().value("line_height").toInt(), 190);
+        // One book centred and larger; the rest of it is the defaults'.
+        format = server.data("reading_format_set", {{"book", id}, {"align", "center"}, {"font_size", 24}});
+        QCOMPARE(format.value("own").toObject(), (QJsonObject{{"align", "center"}, {"font_size", 24}}));
+        QCOMPARE(format.value("effective").toObject().value("line_height").toInt(), 190);
+        QCOMPARE(format.value("effective").toObject().value("align").toString(), QString("center"));
+        QCOMPARE(server.data("reading_format_get", {{"book", id}}).value("own").toObject().value("font_size").toInt(), 24);
+        QCOMPARE(server.data("reading_format_get").value("effective").toObject().value("align").toString(), QString("justify"));
+        // Out of bounds is refused with the range, and nothing changes.
+        const QString refused = server.failure("reading_format_set", {{"book", id}, {"margins", 500}, {"indent", 8}});
+        QVERIFY2(refused.contains("0 to 160"), qPrintable(refused));
+        QVERIFY(!server.data("reading_format_get", {{"book", id}}).value("own").toObject().contains("indent"));
+        QVERIFY(server.failure("reading_format_set", {{"book", id}}).contains("at least one"));
+        // Reset, the book follows the defaults again.
+        format = server.data("reading_format_set", {{"book", id}, {"reset", true}});
+        QVERIFY(format.value("own").toObject().isEmpty());
+        QCOMPARE(format.value("effective").toObject().value("align").toString(), QString("justify"));
         QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
     }
 };

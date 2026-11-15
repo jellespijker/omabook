@@ -292,6 +292,26 @@ expect "disconnecting leaves the books" 0 "Your books are as they were" nokeyrin
 expect "the books are still there" 0 "Some Day" "$omabook" list --library "$shelves"
 expect "an unknown site is named as such" 1 "no reading site called nowhere" nokeyring "$omabook" sites check nowhere
 
+# How books are set on the page: the defaults, and one book's own over them.
+book="$("$omabook" list --library "$library" --json | grep -o '"id": [0-9]*' | head -1 | grep -o '[0-9]*$')"
+expect "the format says what every book is set with" 0 "line_height        150%" "$omabook" format --library "$library"
+expect "the defaults change" 0 '"align": "justify"' "$omabook" format --library "$library" --align justify --line-height 170 --json
+grep -q '"line_height": 170' "$XDG_CONFIG_HOME/omabook/config.json" || fail "the default line height is not in config.json"
+expect "a value out of bounds says what it may be" 1 "--line-height is 100 to 300 (percent); 400 is not" "$omabook" format --library "$library" --line-height 400
+expect "a word that isn't an alignment says the four" 1 "start, justify, center or end" "$omabook" format --library "$library" --align middle
+expect "a number that isn't one says the range" 1 "--margins takes a whole number from 0 to 160" "$omabook" format --library "$library" --margins wide
+expect "nothing changed after a refusal" 0 "line_height        170%" "$omabook" format --library "$library"
+expect "a book gets its own" 0 "align              center   (this book)" "$omabook" format "$book" --library "$library" --align center --font-size 23
+expect "and keeps the defaults for the rest" 0 "line_height        170%" "$omabook" format "$book" --library "$library"
+expect "its own as JSON" 0 '"own": {' "$omabook" format "$book" --library "$library" --json
+expect "the defaults are not the book's" 0 "align              justify" "$omabook" format --library "$library"
+expect "a book that isn't there is said to be" 1 "There is no book 99" "$omabook" format 99 --library "$library" --indent 8
+expect "reset goes alone" 1 "--reset goes alone" "$omabook" format "$book" --library "$library" --reset --indent 8
+expect "reset puts the book back to the defaults" 0 "(this book)" "$omabook" format "$book" --library "$library" --align end
+expect "reset puts the book back to the defaults" 0 "align              justify" "$omabook" format "$book" --library "$library" --reset
+"$omabook" format "$book" --library "$library" | grep -qF "(this book)" && fail "the book still has its own after --reset"
+expect "reset without a book puts the defaults back" 0 "line_height        150%" "$omabook" format --library "$library" --reset
+
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill
 expect "the skill installs" 0 "Installed" "$omabook" skill install
 [ -f "$HOME/.agents/skills/omabook/SKILL.md" ] && [ -L "$HOME/.claude/skills/omabook" ] || fail "skill install left no skill"
