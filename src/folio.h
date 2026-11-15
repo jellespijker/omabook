@@ -32,6 +32,22 @@
 // book to the trash. What was there before is remembered beside the views,
 // so only an entry that existed and went counts as deleted, and a view that
 // vanished or was emptied all at once removes nothing.
+//
+// Each of the library's collections (library.h) is a folder in its view,
+// named after it, with an entry for each of its books, made the same way.
+// One inside another is a folder beside it named by its path ("Studie -
+// Python"), so every folder holds only entries.
+// A collection is a saved selection, not a place the books are kept, so its
+// folder changes the selection and never the library: an entry deleted there
+// takes the book out of that collection only, and it stays in the library,
+// at the top of the view and in its other collections' folders. That keeps
+// it undone as easily as it was done: putting the entry back (from the
+// trash, or by copying the book from the top of the view or another
+// collection's folder) puts the book back in, and a book file dropped into
+// the folder from elsewhere is added to the library and to the collection.
+// The folder takes the same care as the view: emptied all at once, or gone,
+// it changes nothing and is made again. The top of the view still is the
+// library, where a deleted entry sends the book to the trash.
 namespace Folio {
 
 // Where the views are: ~/.local/state/omabook/folio. Fixed under the home
@@ -49,6 +65,8 @@ struct Synced {
     int imported = 0;       // book files copied in and added
     int removed = 0;        // books whose entries were deleted, now in the trash
     int linked = 0;         // entries made or put right
+    int excluded = 0;       // books taken out of a collection by deleting their entries in its folder
+    int included = 0;       // books put in a collection by their files arriving in its folder
     bool busy = false;      // another pass held the view; nothing was done
     bool pending = false;   // a copied-in file is still changing; look again soon
     bool importable = false; // with imports deferred: a file is ready to be added

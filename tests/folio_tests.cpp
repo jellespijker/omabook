@@ -291,6 +291,161 @@ private slots:
         QCOMPARE(shelf.books().size(), 2);
     }
 
+    void aCollectionIsAFolderOfItsBooks() {
+        Shelf shelf({"First Novel", "Second Novel", "A Manual"});
+        qint64 novels = 0;
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            novels = library.addCollection("Novels", "title:Novel").value_or(0);
+            QVERIFY(novels > 0);
+        }
+        Folio::sync(shelf.library);
+        QList<Book> books = shelf.books();
+        const QString folder = shelf.view() + "/Novels";
+        // The collection is a folder beside the books, holding its own.
+        QVERIFY(listing(shelf.view()).contains("Novels"));
+        QCOMPARE(listing(shelf.view()).size(), 4);
+        QCOMPARE(listing(folder), (QStringList{nameOf(books.at(0)), nameOf(books.at(1))}));
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            QCOMPARE(inode(folder + "/" + nameOf(books.at(0))), inode(library.formatPath(books.at(0).id)));
+        }
+        // Its entries are the books, as the view's are.
+        const auto found = Folio::find(shelf.settings, folder + "/" + nameOf(books.at(1)));
+        QVERIFY(found);
+        QCOMPARE(found->id, books.at(1).id);
+        // Nothing changed: nothing to do.
+        const Folio::Synced again = Folio::sync(shelf.library);
+        QCOMPARE(again.linked + again.imported + again.removed + again.excluded + again.included, 0);
+
+        // A book its rule finds, added later, is in its folder too.
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            QVERIFY(Fixtures::epub(shelf.dir.filePath("third.epub"), "Third Novel"));
+            QVERIFY(library.add(shelf.dir.filePath("third.epub")).id > 0);
+        }
+        Folio::sync(shelf.library);
+        books = shelf.books();
+        QCOMPARE(listing(folder).size(), 3);
+        QVERIFY(listing(folder).contains(nameOf(books.at(3))));
+    }
+
+    void aDeletedEntryLeavesItsCollectionOnly() {
+        Shelf shelf({"First Novel", "Second Novel", "Third Novel"});
+        qint64 novels = 0;
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            novels = library.addCollection("Novels", "title:Novel").value_or(0);
+        }
+        const auto collection = [&] {
+            Library library(shelf.library);
+            library.open();
+            return *library.collection(novels);
+        };
+        Folio::sync(shelf.library);
+        const QString view = shelf.view(), folder = view + "/Novels";
+        QList<Book> books = shelf.books();
+
+        // Deleted in the collection's folder: out of the collection, and
+        // still in the library and at the top of the view.
+        QString trashedEntry;
+        QVERIFY(QFile::moveToTrash(folder + "/" + nameOf(books.at(0)), &trashedEntry));
+        Folio::Synced synced = Folio::sync(shelf.library);
+        QCOMPARE(synced.excluded, 1);
+        QCOMPARE(synced.removed, 0);
+        QCOMPARE(shelf.books().size(), 3);
+        QVERIFY(collection().excluded.contains(books.at(0).id));
+        QVERIFY(listing(view).contains(nameOf(books.at(0))));
+        QVERIFY(!listing(folder).contains(nameOf(books.at(0))));
+
+        // Put back from the trash, it is in the collection again.
+        QVERIFY(QFile::rename(trashedEntry, folder + "/" + nameOf(books.at(0))));
+        synced = Folio::sync(shelf.library);
+        QCOMPARE(synced.included, 1);
+        QCOMPARE(synced.imported, 0);
+        QVERIFY(collection().contains(books.at(0)));
+        QCOMPARE(listing(folder).size(), 3);
+
+        // Emptied all at once, or gone, the folder changes nothing.
+        for (const QString &name : listing(folder))
+            QVERIFY(QFile::remove(folder + "/" + name));
+        QCOMPARE(Folio::sync(shelf.library).excluded, 0);
+        QCOMPARE(collection().of(shelf.books()).size(), 3);
+        QCOMPARE(listing(folder).size(), 3);
+        QVERIFY(QDir(folder).removeRecursively());
+        QCOMPARE(Folio::sync(shelf.library).excluded, 0);
+        QCOMPARE(collection().of(shelf.books()).size(), 3);
+        QCOMPARE(listing(folder).size(), 3);
+
+        // The top of the view is still the library: deleted there, the book
+        // goes to the trash, though its collection's folder holds its file.
+        QVERIFY(QFile::moveToTrash(view + "/" + nameOf(books.at(1))));
+        synced = Folio::sync(shelf.library);
+        QCOMPARE(synced.removed, 1);
+        QCOMPARE(shelf.books().size(), 2);
+        QCOMPARE(listing(folder).size(), 2);
+        QVERIFY(!listing(folder).contains(nameOf(books.at(1))));
+    }
+
+    void collectionFoldersFollowTheirCollections() {
+        Shelf shelf({"First Novel", "A Manual"});
+        qint64 novels = 0, kept = 0;
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            novels = library.addCollection("Novels", "title:Novel").value_or(0);
+            kept = library.addCollection("Kept", "").value_or(0);
+        }
+        Folio::sync(shelf.library);
+        const QString view = shelf.view();
+        QCOMPARE(listing(view + "/Kept"), QStringList());
+
+        // Renamed and removed in Omabook, the folders follow.
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            QVERIFY(library.renameCollection(novels, "Stories"));
+        }
+        Folio::sync(shelf.library);
+        QVERIFY(!QFileInfo::exists(view + "/Novels"));
+        QCOMPARE(listing(view + "/Stories").size(), 1);
+
+        // A book's file from the top of the view put in a folder puts the book in.
+        const QList<Book> books = shelf.books();
+        QVERIFY(QFile::link(view + "/" + nameOf(books.at(1)), view + "/Kept/manual.epub"));
+        Folio::Synced synced = Folio::sync(shelf.library);
+        QCOMPARE(synced.included, 1);
+        QCOMPARE(synced.removed, 0);
+        QCOMPARE(listing(view + "/Kept"), QStringList{nameOf(books.at(1))});
+
+        // A book file from elsewhere is added to the library and the collection.
+        QVERIFY(Fixtures::epub(view + "/Kept/new.epub", "Brought Book"));
+        Folio::sync(shelf.library);
+        settle();
+        synced = Folio::sync(shelf.library);
+        QCOMPARE(synced.imported, 1);
+        const QList<Book> now = shelf.books();
+        QCOMPARE(now.size(), 3);
+        QCOMPARE(now.last().meta.title, QString("Brought Book"));
+        QVERIFY(!QFileInfo::exists(view + "/Kept/new.epub"));
+        QCOMPARE(listing(view + "/Kept").size(), 2);
+        QVERIFY(listing(view + "/Kept").contains(nameOf(now.last())));
+        QVERIFY(listing(view).contains(nameOf(now.last())));
+        {
+            Library library(shelf.library);
+            QVERIFY(library.open());
+            QVERIFY(library.collection(kept)->contains(now.last()));
+            QVERIFY(library.removeCollection(novels));
+        }
+        Folio::sync(shelf.library);
+        QVERIFY(!QFileInfo::exists(view + "/Stories"));
+        QCOMPARE(shelf.books().size(), 3);
+    }
+
     void theMenuAndTheDetailsGoThroughTheCommandLine() {
         Shelf shelf({"First Book", "Second Book"});
         // The poll, as Folio runs it, makes the view.

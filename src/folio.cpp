@@ -103,14 +103,39 @@ struct ViewState {
     QMap<QString, Seen> failed; // book files that couldn't be added, as they were then
     QJsonObject ignored;    // name: why it wasn't added
     QJsonObject removed;    // a removed book's file hash: what it was
+    // A collection's folder in the view: what it is called and which folder
+    // it is, its entries, and the files copied into it, as for the view.
+    struct Folder {
+        QString name;
+        Identity folder;
+        QMap<QString, Entry> entries;
+        QMap<QString, Seen> pending, failed;
+        QJsonObject ignored;
+    };
+    QMap<qint64, Folder> collections; // by the collection's number
 
-    QJsonObject toJson() const {
+    static QJsonObject entriesJson(const QMap<QString, Entry> &entries) {
         QJsonObject entryObjects;
         for (auto it = entries.begin(); it != entries.end(); ++it)
             entryObjects.insert(it.key(), QJsonObject{{"id", it->id}, {"self", it->self.toJson()}});
+        return entryObjects;
+    }
+    static QMap<QString, Entry> entriesFrom(const QJsonObject &object) {
+        QMap<QString, Entry> entries;
+        for (auto it = object.begin(); it != object.end(); ++it)
+            entries.insert(it.key(), {it->toObject().value("id").toInteger(), Identity::fromJson(it->toObject().value("self"))});
+        return entries;
+    }
+    QJsonObject toJson() const {
+        QJsonObject folders;
+        for (auto it = collections.begin(); it != collections.end(); ++it)
+            folders.insert(QString::number(it.key()),
+                           QJsonObject{{"name", it->name}, {"folder", it->folder.toJson()}, {"entries", entriesJson(it->entries)},
+                                       {"pending", seenJson(it->pending)}, {"failed", seenJson(it->failed)},
+                                       {"ignored", it->ignored}});
         return {{"library", library}, {"folder", folder.toJson()}, {"changes", changes}, {"books", books},
-                {"reading", reading}, {"entries", entryObjects}, {"pending", seenJson(pending)},
-                {"failed", seenJson(failed)}, {"ignored", ignored}, {"removed", removed}};
+                {"reading", reading}, {"entries", entriesJson(entries)}, {"pending", seenJson(pending)},
+                {"failed", seenJson(failed)}, {"ignored", ignored}, {"removed", removed}, {"collections", folders}};
     }
     static QJsonObject seenJson(const QMap<QString, Seen> &files) {
         QJsonObject object;
@@ -133,14 +158,20 @@ struct ViewState {
         state.changes = object.value("changes").toInteger(-1);
         state.books = object.value("books").toInt();
         state.reading = object.value("reading").toInt();
-        const QJsonObject entries = object.value("entries").toObject();
-        for (auto it = entries.begin(); it != entries.end(); ++it)
-            state.entries.insert(it.key(), {it->toObject().value("id").toInteger(),
-                                            Identity::fromJson(it->toObject().value("self"))});
+        state.entries = entriesFrom(object.value("entries").toObject());
         state.pending = seenFrom(object.value("pending").toObject());
         state.failed = seenFrom(object.value("failed").toObject());
         state.ignored = object.value("ignored").toObject();
         state.removed = object.value("removed").toObject();
+        // A view from before collections has none of their folders.
+        const QJsonObject folders = object.value("collections").toObject();
+        for (auto it = folders.begin(); it != folders.end(); ++it) {
+            const QJsonObject folder = it->toObject();
+            state.collections.insert(it.key().toLongLong(),
+                                     {folder.value("name").toString(), Identity::fromJson(folder.value("folder")),
+                                      entriesFrom(folder.value("entries").toObject()), seenFrom(folder.value("pending").toObject()),
+                                      seenFrom(folder.value("failed").toObject()), folder.value("ignored").toObject()});
+        }
         return state;
     }
 };
@@ -182,6 +213,33 @@ QString entryName(const Book &book, const QString &extension) {
     while (name.toUtf8().size() > 200)
         name.chop(1);
     return name.trimmed() + "." + extension;
+}
+
+// A collection's folder name: its own name, made safe as one the way an
+// entry's is, and told apart by its number from another that comes out the same.
+QMap<qint64, QString> folderNames(const QList<Collection> &collections) {
+    QMap<qint64, QString> names;
+    QSet<QString> taken;
+    for (const Collection &collection : collections) {
+        // One inside another is a folder of its own beside it, by its path:
+        // "Studie - Python". Nested folders would hold the parent's entries
+        // and its children's folders side by side, and a delete in one would
+        // read as a delete in both.
+        QString name = collection.path.isEmpty() ? collection.name : collection.path;
+        name.replace('/', u" - "_s);
+        for (QChar &c : name)
+            if (c == '/' || c == '\\' || c.category() == QChar::Other_Control)
+                c = c == '/' || c == '\\' ? QChar('-') : QChar(' ');
+        name = name.simplified();
+        while (name.startsWith('.'))
+            name.remove(0, 1);
+        name = name.trimmed();
+        if (name.isEmpty() || taken.contains(name.toLower()))
+            name = (name.isEmpty() ? u"Collection"_s : name) + QString(" (%1)").arg(collection.id);
+        taken.insert(name.toLower());
+        names.insert(collection.id, name);
+    }
+    return names;
 }
 
 // Files that are on their way and say so by their name: they are neither
@@ -324,11 +382,13 @@ QFileInfoList listing(const QString &view) {
 }
 
 // Names anywhere below the view's top, by identity: an entry moved into a
-// folder of its own in the view hasn't left the library.
-QSet<Identity> inodesBelow(const QString &view) {
+// folder of its own in the view hasn't left the library. Collections' folders
+// are not counted: their entries are the books' own files too, so a book
+// whose entry was deleted from the top would always seem to be still there.
+QSet<Identity> inodesBelow(const QString &view, const QSet<QString> &skip) {
     QSet<Identity> inodes;
     for (const QFileInfo &folder : listing(view)) {
-        if (!folder.isDir() || folder.isSymLink())
+        if (!folder.isDir() || folder.isSymLink() || skip.contains(folder.fileName()))
             continue;
         QDirIterator it(folder.filePath(), QDir::Files | QDir::System | QDir::NoDotAndDotDot | QDir::Hidden,
                         QDirIterator::Subdirectories);
@@ -338,17 +398,30 @@ QSet<Identity> inodesBelow(const QString &view) {
     return inodes;
 }
 
+// The names in a folder that are there (not on their way), sorted.
+QStringList arrived(const QString &folder) {
+    QStringList names;
+    for (const QFileInfo &info : listing(folder))
+        if (!inProgress(info.fileName()))
+            names << info.fileName();
+    names.sort();
+    return names;
+}
+
 bool upToDate(const QString &view, const ViewState &state, const Library &library) {
     if (state.changes != library.changes().books || !state.pending.isEmpty() || state.folder != identityOf(view, false))
         return false;
-    QStringList names;
-    for (const QFileInfo &info : listing(view))
-        if (!inProgress(info.fileName()))
-            names << info.fileName();
     QStringList known = state.entries.keys() + state.ignored.keys();
+    for (const ViewState::Folder &folder : state.collections) {
+        known << folder.name;
+        const QString path = view + "/" + folder.name;
+        QStringList inside = folder.entries.keys() + folder.ignored.keys();
+        inside.sort();
+        if (!folder.pending.isEmpty() || identityOf(path, false) != folder.folder || arrived(path) != inside)
+            return false;
+    }
     known.sort();
-    names.sort();
-    return names == known;
+    return arrived(view) == known;
 }
 
 // Starts `omabook <arguments>` on its own, in a session of its own: Folio
@@ -417,15 +490,23 @@ std::optional<Folio::Found> inLibraryFolder(const QString &root, const QString &
 std::optional<Folio::Found> inView(const QString &root, const QString &file) {
     const QString view = Folio::viewFolder(root);
     const QString canonicalView = QFileInfo(view).canonicalFilePath();
-    if (canonicalView.isEmpty() || QFileInfo(QFileInfo(file).absolutePath()).canonicalFilePath() != canonicalView)
+    const QString parent = QFileInfo(QFileInfo(file).absolutePath()).canonicalFilePath();
+    if (canonicalView.isEmpty() || parent.isEmpty())
         return std::nullopt;
     const auto state = loadState(view);
-    const auto library = state ? openLibrary(root) : nullptr;
+    if (!state)
+        return std::nullopt;
+    // An entry at the top of the view, or in one of its collections' folders.
+    const QMap<QString, ViewState::Entry> *entries = parent == canonicalView ? &state->entries : nullptr;
+    for (const ViewState::Folder &folder : state->collections)
+        if (!entries && QFileInfo(view + "/" + folder.name).canonicalFilePath() == parent)
+            entries = &folder.entries;
+    const auto library = entries ? openLibrary(root) : nullptr;
     if (!library)
         return std::nullopt;
     const Identity self = identityOf(file, false);
     const Identity target = identityOf(file, true);
-    for (auto it = state->entries.begin(); it != state->entries.end(); ++it) {
+    for (auto it = entries->begin(); it != entries->end(); ++it) {
         if (it.key() != QFileInfo(file).fileName() && it->self != self)
             continue;
         // Still the book's file: an entry the view hasn't caught up with
@@ -435,6 +516,240 @@ std::optional<Folio::Found> inView(const QString &root, const QString &file) {
             return Folio::Found{root, it->id};
     }
     return std::nullopt;
+}
+
+// Takes away a collection's folder: the entries Omabook made in it, and the
+// folder once it is empty. What someone else put there stays.
+void dropFolder(const QString &path, const ViewState::Folder &folder) {
+    for (auto it = folder.entries.begin(); it != folder.entries.end(); ++it)
+        removeOwn(path + "/" + it.key(), it->self);
+    QDir().rmdir(path);
+}
+
+// The files that came into a collection's folder since the last pass, by
+// their own identity: a top entry moved into one is a book put in that
+// collection, not one deleted from the library.
+QSet<Identity> arrivals(const QString &view, const ViewState &state) {
+    QSet<Identity> found;
+    for (const ViewState::Folder &folder : state.collections)
+        for (const QFileInfo &info : listing(view + "/" + folder.name)) {
+            const Identity self = identityOf(info.filePath(), false);
+            const auto known = folder.entries.constFind(info.fileName());
+            if (known == folder.entries.cend() || known->self != self)
+                found.insert(self);
+        }
+    return found;
+}
+
+// Brings one collection's folder and the collection in step. The folder is a
+// view of a saved selection, so what is done in it changes the selection and
+// never the library: an entry deleted takes its book out of the collection,
+// a book's file put back (from the trash, or copied from the top of the view
+// or another collection's folder) puts the book in again, and a book file
+// dropped in from elsewhere is added to the library and to the collection.
+// The same care as for the view: a folder emptied all at once, or gone,
+// changes nothing. True when books were added to the library.
+bool syncCollection(Library &library, const QString &view, ViewState::Folder &folder, const Collection &given,
+                    const QString &name, Folio::Imports imports, Folio::Synced &result) {
+    // Renamed: the folder goes with the collection's name, while it is still
+    // the one made for it; otherwise it starts afresh under the new one.
+    if (!folder.name.isEmpty() && folder.name != name) {
+        const QString before = view + "/" + folder.name, after = view + "/" + name;
+        if (identityOf(before, false) == folder.folder && !QFileInfo::exists(after)
+            && ::rename(QFile::encodeName(before).constData(), QFile::encodeName(after).constData()) == 0) {
+            folder.name = name;
+        } else {
+            dropFolder(before, folder);
+            folder = {};
+        }
+    }
+    folder.name = name;
+    const QString path = view + "/" + name;
+    if (!folder.folder || identityOf(path, false) != folder.folder) {
+        // New, or made again after it went: nothing it held before can have
+        // been deleted from it.
+        folder.entries.clear();
+        folder.pending.clear();
+        if (!QDir().mkpath(path))
+            return false;
+        folder.folder = identityOf(path, false);
+    }
+
+    QList<Book> books = library.books();
+    QHash<Identity, qint64> bookOf;
+    for (const Wanted &want : wanted(library, books))
+        bookOf.insert(want.identity, want.id);
+    QSet<qint64> withFile(bookOf.cbegin(), bookOf.cend());
+    Collection collection = given;
+    const auto bookById = [&books](qint64 id) { return std::ranges::find(books, id, &Book::id); };
+
+    QMap<qint64, QPair<QString, Identity>> claimed;
+    QStringList seenEntries, candidates, extras;
+    QList<qint64> came;
+    QJsonObject ignored;
+    for (const QFileInfo &info : listing(path)) {
+        const QString file = info.fileName();
+        const Identity self = identityOf(info.filePath(), false);
+        const Identity target = identityOf(info.filePath(), true);
+        QString remembered = folder.entries.contains(file) && folder.entries.value(file).self == self ? file : QString();
+        for (auto it = folder.entries.cbegin(); remembered.isEmpty() && it != folder.entries.cend(); ++it)
+            if (it->self == self)
+                remembered = it.key();
+        if (!remembered.isEmpty())
+            seenEntries << remembered;
+        const qint64 id = bookOf.value(target, 0);
+        if (target && id != 0) {
+            if (claimed.contains(id)) {
+                extras << info.filePath();
+            } else {
+                claimed.insert(id, {file, self});
+                if (remembered.isEmpty())
+                    came << id;
+            }
+            continue;
+        }
+        if (!remembered.isEmpty()) {
+            removeOwn(info.filePath(), self);
+            continue;
+        }
+        if (info.isSymLink() && !target) {
+            if (info.symLinkTarget().startsWith(library.root() + "/"))
+                QFile::remove(info.filePath());
+            else
+                ignored.insert(file, "a link to nothing");
+            continue;
+        }
+        if (info.isDir()) {
+            ignored.insert(file, "a folder; drop the books in it instead");
+            continue;
+        }
+        if (inProgress(file))
+            continue;
+        if (!Formats::isBook(file)) {
+            ignored.insert(file, "not a book");
+            continue;
+        }
+        candidates << info.filePath();
+    }
+    for (const QString &extra : extras)
+        QFile::remove(extra);
+
+    bool member = false;
+    // Entries that went: their books leave the collection, and stay in the
+    // library. Not when every one went at once.
+    QStringList missing;
+    for (auto it = folder.entries.begin(); it != folder.entries.end(); ++it)
+        if (!seenEntries.contains(it.key()))
+            missing << it.key();
+    const bool emptied = missing.size() > 1 && missing.size() == folder.entries.size();
+    if (emptied)
+        qWarning().noquote() << "Every entry of" << path << "went at once; the collection stays as it was";
+    for (const QString &gone : emptied ? QStringList() : missing) {
+        const qint64 id = folder.entries.value(gone).id;
+        const auto book = bookById(id);
+        if (book == books.end() || !withFile.contains(id) || claimed.contains(id) || !collection.contains(*book))
+            continue;
+        if (library.putInCollection(collection.id, id, false)) {
+            ++result.excluded;
+            member = true;
+        }
+    }
+    // Books whose files came: they are in it now.
+    for (const qint64 id : std::as_const(came)) {
+        const auto book = bookById(id);
+        if (book != books.end() && !collection.contains(*book) && library.putInCollection(collection.id, id, true)) {
+            ++result.included;
+            member = true;
+        }
+    }
+
+    // Book files copied in from elsewhere: added once they have settled, as
+    // in the view, and put in the collection.
+    bool imported = false;
+    QMap<QString, ViewState::Seen> pending, failed;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    for (const QString &copied : candidates) {
+        const QFileInfo info(copied);
+        const QString file = info.fileName();
+        const ViewState::Seen seen{info.size(), info.lastModified().toMSecsSinceEpoch(), now};
+        if (const auto tried = folder.failed.constFind(file);
+            tried != folder.failed.cend() && tried->size == seen.size && tried->modified == seen.modified) {
+            failed.insert(file, *tried);
+            ignored.insert(file, folder.ignored.value(file).toString(u"not a book Omabook can read"_s));
+            continue;
+        }
+        const auto before = folder.pending.constFind(file);
+        const bool same = before != folder.pending.cend() && before->size == seen.size && before->modified == seen.modified;
+        if (!same || now - before->since < settleMs || seen.size == 0) {
+            pending.insert(file, same ? *before : seen);
+            result.pending = true;
+            continue;
+        }
+        if (imports == Folio::Imports::Defer) {
+            pending.insert(file, *before);
+            result.importable = true;
+            continue;
+        }
+        const ImportSummary summary = importBooks(library, {copied});
+        const ImportSummary::Item item = summary.items.value(0);
+        const QString kept = item.id ? library.formatPath(item.id) : QString();
+        if (item.id == 0 || kept.isEmpty() || !QFileInfo::exists(kept)) {
+            ignored.insert(file, item.error.isEmpty() ? summary.problems.value(0, u"not a book Omabook can read"_s) : item.error);
+            failed.insert(file, seen);
+            continue;
+        }
+        library.putInCollection(collection.id, item.id, true);
+        if (identityOf(kept, true) != identityOf(copied, true))
+            QFile::remove(copied);
+        if (!item.duplicate) {
+            ++result.imported;
+            imported = true;
+        }
+        ++result.included;
+        member = true;
+    }
+    folder.pending = pending;
+    folder.failed = failed;
+
+    if (member) {
+        books = library.books();
+        if (const auto now = library.collection(collection.id))
+            collection = *now;
+    }
+
+    // Every book of the collection with a file, under its own name.
+    QMap<QString, ViewState::Entry> entries;
+    QSet<QString> taken;
+    for (const Wanted &want : wanted(library, collection.of(books))) {
+        const auto has = claimed.constFind(want.id);
+        if (has != claimed.cend() && has->first == want.name && identityOf(path + "/" + has->first, true) == want.identity) {
+            entries.insert(want.name, {want.id, has->second});
+            taken.insert(want.name);
+            continue;
+        }
+        if (has != claimed.cend())
+            removeOwn(path + "/" + has->first, has->second);
+        QString entry = want.name;
+        if (taken.contains(entry) || QFileInfo(path + "/" + entry).exists() || QFileInfo(path + "/" + entry).isSymLink()) {
+            const QString extension = Formats::extension(entry);
+            entry = entry.chopped(extension.size() + 1) + QString(" (%1).").arg(want.id) + extension;
+        }
+        const Identity made = makeEntry(want.file, path + "/" + entry);
+        if (!made)
+            continue;
+        entries.insert(entry, {want.id, made});
+        taken.insert(entry);
+        ++result.linked;
+    }
+    // Books that left the collection some other way: their entries go.
+    for (auto it = claimed.begin(); it != claimed.end(); ++it)
+        if (!entries.contains(it->first))
+            removeOwn(path + "/" + it->first, it->second);
+    folder.entries = entries;
+    folder.ignored = ignored;
+    for (auto it = ignored.begin(); it != ignored.end(); ++it)
+        result.ignored << name + "/" + it.key() + ": " + it->toString();
+    return imported;
 }
 
 Folio::Synced syncLocked(const QString &root, const QString &view, Folio::Imports imports) {
@@ -459,6 +774,14 @@ Folio::Synced syncLocked(const QString &root, const QString &view, Folio::Import
     if (upToDate(view, state, library))
         return result;
 
+    // The collections' folders, by what they are called now and were called
+    // at the last pass: they are no entries, nor anything copied in.
+    const QList<Collection> collections = library.collections();
+    const QMap<qint64, QString> folderNamed = folderNames(collections);
+    QSet<QString> collectionFolders(folderNamed.cbegin(), folderNamed.cend());
+    for (const ViewState::Folder &folder : std::as_const(state.collections))
+        collectionFolders.insert(folder.name);
+
     QList<Book> books = library.books();
     QList<Wanted> wants = wanted(library, books);
     QHash<Identity, qint64> bookOf; // the library's files: which book each is
@@ -476,6 +799,8 @@ Folio::Synced syncLocked(const QString &root, const QString &view, Folio::Import
     QStringList extras;
     for (const QFileInfo &info : listing(view)) {
         const QString name = info.fileName();
+        if (info.isDir() && !info.isSymLink() && collectionFolders.contains(name))
+            continue;
         const Identity self = identityOf(info.filePath(), false);
         const Identity target = identityOf(info.filePath(), true);
         // A remembered entry, by its name or (renamed in Folio) by its file.
@@ -536,7 +861,7 @@ Folio::Synced syncLocked(const QString &root, const QString &view, Folio::Import
         qWarning().noquote() << "Every entry of" << view << "went at once; the books stay in" << root;
     bool changed = false;
     if (!missing.isEmpty() && !emptied) {
-        const QSet<Identity> below = inodesBelow(view);
+        const QSet<Identity> below = inodesBelow(view, collectionFolders) + arrivals(view, state);
         for (const QString &name : missing) {
             const ViewState::Entry entry = state.entries.value(name);
             const auto book = library.book(entry.id);
@@ -605,6 +930,20 @@ Folio::Synced syncLocked(const QString &root, const QString &view, Folio::Import
     state.pending = pending;
     state.failed = failed;
 
+    // Each collection's folder, once the view's own deletions are done.
+    QMap<qint64, ViewState::Folder> folders;
+    for (const Collection &collection : collections) {
+        ViewState::Folder folder = state.collections.value(collection.id);
+        if (syncCollection(library, view, folder, collection, folderNamed.value(collection.id), imports, result))
+            changed = true;
+        folders.insert(collection.id, folder);
+    }
+    // Collections that went take their folders with them.
+    for (auto it = state.collections.cbegin(); it != state.collections.cend(); ++it)
+        if (!folders.contains(it.key()))
+            dropFolder(view + "/" + it->name, *it);
+    state.collections = folders;
+
     if (changed) {
         books = library.books();
         wants = wanted(library, books);
@@ -660,6 +999,8 @@ void removeView(const QString &view) {
         return;
     for (auto it = state->entries.begin(); it != state->entries.end(); ++it)
         removeOwn(view + "/" + it.key(), it->self);
+    for (const ViewState::Folder &folder : state->collections)
+        dropFolder(view + "/" + folder.name, folder);
     QFile::remove(statePath(view));
     QDir().rmdir(view);
     lock.unlock();
