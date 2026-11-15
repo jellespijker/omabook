@@ -187,8 +187,9 @@ ApplicationWindow {
         return !!key
     }
     function showPlugins() { pluginList.open() }
-    // The tidy, or with "collections" only its pass that sorts books into collections.
-    function showTidy(pass) { tidyUp.show(pass || "") }
+    function showTidy() { tidyUp.show("") }
+    // Only the tidy's pass that sorts books into collections.
+    function showCollectionSort() { tidyUp.show("collections") }
     // A new collection, its rule filled in when one is given; or one to change.
     function newCollection(rule, parent) { collectionEditor.create(rule, parent || 0) }
     function editCollection(id) { if (id) collectionEditor.change(id) }

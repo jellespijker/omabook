@@ -59,7 +59,7 @@ AppPopup {
         return list
     }
     function actions() {
-        return [["add", qsTr("Add")], ["filter", qsTr("Filter")], ["collections", qsTr("Collections")], ["suggest", qsTr("Suggest")],
+        return [["add", qsTr("Add")], ["filter", qsTr("Filter")], ["suggest", qsTr("Suggest")],
                 ["libraries", qsTr("Libraries")], ["settings", qsTr("Settings")]].map(
             action => ({ kindName: "", label: action[1], act: action[0], on: false, common: true, count: 0 }))
     }

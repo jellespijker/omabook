@@ -82,7 +82,7 @@ Item {
             else if (what === "collectionNew") win.newCollection("")
             else if (what === "collectionFromShelf") win.newCollection(backend.shelfRule())
             else if (what === "collectionEdit") win.editCollection(backend.collection)
-            else if (what === "collectionSort") win.showTidy("collections")
+            else if (what === "collectionSort") win.showCollectionSort()
             else if (what === "suggest") win.showSuggestions()
             else if (what === "libraries") win.showLibraries()
             else if (what === "settings") win.showSettings()
@@ -650,7 +650,7 @@ Item {
                                 visible: librarian.hasAi
                                 focusPolicy: Qt.NoFocus
                                 text: qsTr("Sort with AI")
-                                onClicked: win.showTidy("collections")
+                                onClicked: win.showCollectionSort()
                             }
                             AppButton { objectName: "emptyCollectionAll"; focusPolicy: Qt.NoFocus; text: qsTr("Show all books"); onClicked: backend.collection = 0 }
                         }
