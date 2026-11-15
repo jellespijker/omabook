@@ -1381,5 +1381,6 @@
   "Show in the graph": "Montrer dans le graphe",
   "Go to the moment": "Aller à ce moment",
   "Every key, a click or a tap away": "Chaque touche, à un clic ou une touche du doigt",
-  "The ⋯ above the shelf, over the page and in the graph lists all they can do, each with its key; a right click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its name, and the keys of each panel.": "Le ⋯ au-dessus de l'étagère, sur la page et dans le graphe liste tout ce qu'on peut y faire, chacun avec sa touche ; un clic droit sur un livre liste ce qu'on peut en faire. {global.help} montre les touches qu'ajoute un plugin sous son nom, et les touches de chaque volet."
+  "The ⋯ above the shelf, over the page and in the graph lists all they can do, each with its key; a right click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its name, and the keys of each panel.": "Le ⋯ au-dessus de l'étagère, sur la page et dans le graphe liste tout ce qu'on peut y faire, chacun avec sa touche ; un clic droit sur un livre liste ce qu'on peut en faire. {global.help} montre les touches qu'ajoute un plugin sous son nom, et les touches de chaque volet.",
+  "Change the collection": "Modifier la collection"
 }
