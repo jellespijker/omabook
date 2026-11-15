@@ -333,7 +333,8 @@ FocusScope {
                 Layout.maximumWidth: Math.min(Math.ceil(implicitWidth), pane.width * (pane.compact ? 0.4 : 0.3))
                 text: pane.reading ? qsTr("Known so far")
                       : graph.showing === "book" ? graph.bookTitle
-                      : graph.showing === "series" ? graph.series : words.scope(graph.scope)
+                      : graph.showing === "series" ? graph.series : graph.showing === "collection" ? graph.collection
+                      : words.scope(graph.scope)
                 font.pixelSize: pane.reading ? 16 : 20
                 font.bold: true
                 elide: Text.ElideRight

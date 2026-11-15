@@ -230,11 +230,13 @@ GraphView GraphBrowser::allowed() const {
         return m_centre > 0 && m_depth > 0 ? graph.around(m_centre, m_depth, 400) : graph.whole(m_scope, 2000);
     if (m_what == What::Book)
         return graph.ofBook(m_bookId, m_upTo);
-    // A series is its books' graphs laid over each other.
+    // A series, or a collection, is its books' graphs laid over each other.
     GraphView all;
     QSet<qint64> nodes, edges;
+    const auto collection = m_what == What::Collection ? books->collectionNamed(m_series) : std::nullopt;
     for (const Book &book : books->books()) {
-        if (book.meta.series.compare(m_series, Qt::CaseInsensitive) != 0)
+        if (m_what == What::Collection ? !collection || !collection->contains(book)
+                                       : book.meta.series.compare(m_series, Qt::CaseInsensitive) != 0)
             continue;
         const GraphView one = graph.ofBook(book.id, placeIn(book));
         for (const GraphNode &node : one.nodes)
@@ -306,6 +308,13 @@ void GraphBrowser::showSeries(const QString &series) {
     m_scope.clear();
     m_upTo.reset();
     show(What::Series);
+}
+
+void GraphBrowser::showCollection(const QString &collection) {
+    m_series = collection;
+    m_scope.clear();
+    m_upTo.reset();
+    show(What::Collection);
 }
 
 void GraphBrowser::refresh() { load(true); }

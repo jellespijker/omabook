@@ -279,9 +279,18 @@ AiRequest Prompts::change(const InterfaceState &state, const QString &wish) {
         "\"author\", \"series\", \"added\", \"progress\", \"rating\", \"published\" or \"finished\"). \"More space between "
         "the lines\" raises line_height by 20 or so, \"centre the text\" is align \"center\", \"shorter lines\" lowers "
         "measure by 10 or so, and \"always one page\" is pages 1.\n\n"
+        "Collections are named parts of the library, named as the user likes and in any language, each filled by a rule: a search "
+        "where bare words look in the title, authors, series and tags; author:, title:, series:, tag:, genre: "
+        "(\"fiction\", \"nonfiction\", or a tag), format:, lang:, publisher:, about: (the description), status: "
+        "(to-read, reading, read, unread), is: (digital, paper, wishlist) and rating:N look in one field; \"quotes\" "
+        "keep words together, -word leaves out, and OR joins alternatives. A name with \"/\" puts a collection inside "
+        "another (the user's own in <collections>), and those it goes through are made too. \"Make a collection of my programming books\" "
+        "is a collection named Programming with a rule like tag:programming OR tag:software, made from the tags the "
+        "library has (in <tags>).\n\n"
         "Reply with one JSON object and nothing else: \"style\" (the whole new style.json as an object, or null to leave "
         "it as it is), \"keys\" (the whole new keys.json, or null), \"settings\" (an object of only the settings to "
-        "change, or {}), and \"say\" (one sentence telling the user what you changed, in their language). Keep what is "
+        "change, or {}), \"collections\" (an array of the collections to make, or to give a new rule, each "
+        "{\"name\", \"rule\"}, or []), and \"say\" (one sentence telling the user what you changed, in their language). Keep what is "
         "already in a file unless the user's wish is against it. If the wish is not about how Omabook looks or works, "
         "change nothing and say so in \"say\".";
     QString message = "<commands>\n" + state.commands + "</commands>\n\n";
@@ -291,6 +300,10 @@ AiRequest Prompts::change(const InterfaceState &state, const QString &wish) {
     message += "<style.json>" + (state.style.trimmed().isEmpty() ? "(there is none)" : state.style.trimmed()) + "</style.json>\n\n";
     message += "<keys.json>" + (state.keys.trimmed().isEmpty() ? "(there is none)" : state.keys.trimmed()) + "</keys.json>\n\n";
     message += "<settings>" + QString::fromUtf8(QJsonDocument(state.settings).toJson(QJsonDocument::Compact)) + "</settings>\n\n";
+    if (!state.collections.isEmpty())
+        message += "<collections>\n" + state.collections + "</collections>\n\n";
+    if (!state.tags.isEmpty())
+        message += "<tags>" + state.tags + "</tags>\n\n";
     request.messages.append({"user", message + wish.trimmed()});
     return request;
 }
@@ -310,6 +323,7 @@ Prompts::InterfaceChange Prompts::parseChange(const QString &answer) {
     change.keys = object.value("keys").toObject();
     change.style = object.value("style").toObject();
     change.settings = object.value("settings").toObject();
+    change.collections = object.value("collections").toArray();
     change.say = object.value("say").toString().simplified();
     return change;
 }

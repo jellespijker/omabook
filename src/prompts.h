@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
 
@@ -92,11 +93,15 @@ struct InterfaceState {
     QJsonObject colors; // the colors in force, by name
     QString commands;   // the commands keys can be given to, one per line
     QString themes;     // the themes style.json's "theme" can name, comma separated
+    QString collections; // the library's collections, "name: rule" a line each
+    QString tags;       // the library's tags met most, with how many books have each
 };
 struct InterfaceChange {
     bool valid = false;
     bool hasKeys = false, hasStyle = false;
     QJsonObject keys, style, settings;
+    // Collections to make, or to give another rule: [{"name", "rule"}].
+    QJsonArray collections;
     QString say;        // what was changed, for the user
 };
 AiRequest change(const InterfaceState &state, const QString &wish);

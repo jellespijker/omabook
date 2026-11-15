@@ -13,7 +13,10 @@
 // choose. Duplicates and author spellings are found by comparing; series are
 // the model's reading of the titles; details come from a look-up.
 struct Proposal {
-    QString kind;        // "duplicate", "author", "series" or "details"
+    // "duplicate", "author", "series", "details", "collection", or
+    // "undecided": a book the AI couldn't place with confidence, left for
+    // the person, which applying does nothing to.
+    QString kind;
     qint64 bookId = 0;   // the book it changes
     qint64 otherId = 0;  // duplicate: the book that is folded into bookId
     BookMeta meta;       // the book's details once it is applied (not for duplicates)
@@ -23,6 +26,10 @@ struct Proposal {
     // subtitle is left off): shown for the person to judge, and left out of
     // a blind "apply everything".
     bool unsure = false;
+    // collection: the collection the book is put in, by its number and its
+    // path; with no number, a new one, made at that path when applied.
+    qint64 collectionId = 0;
+    QString collection{};
 };
 
 namespace Curation {
@@ -60,6 +67,27 @@ QList<Proposal> authorSpellings(const QList<Book> &books);
 // Asks which books belong to a series, from their titles and authors alone.
 AiRequest seriesRequest(const QList<Book> &books);
 QList<Proposal> seriesFrom(const QString &answer, const QList<Book> &books);
+
+// The books still to be placed, a batch at a time for the AI to sort: those
+// in no collection that has none inside it (in none at all, or in one whose
+// insides they are in none of). At most `batch` to a request, and `most` in
+// all, so a library of thousands costs a known, bounded number of requests.
+inline constexpr int collectionBatch = 80;
+inline constexpr int collectionMost = 1200;
+QList<QList<Book>> uncollected(const QList<Book> &books, const QList<Collection> &collections, int batch = collectionBatch,
+                               int most = collectionMost);
+// Asks where each book belongs, from what the books are: their titles,
+// authors, tags and the start of their descriptions, and nothing of their
+// text. The collections are described as a tree, each by its path, its rule
+// and a few titles it holds. The model may put a book in a collection there
+// is, propose a new one anywhere in the tree (named in the style and the
+// language of those there are, or from the library itself when there are
+// none), or leave a book it can't place with confidence for the person to
+// decide. `proposed` is the new collections earlier batches proposed, so the
+// batches agree. The quick model's work.
+AiRequest collectionsRequest(const QList<Book> &books, const QList<Collection> &collections, const QList<Book> &library = {},
+                             const QStringList &proposed = {});
+QList<Proposal> collectionsFrom(const QString &answer, const QList<Book> &books, const QList<Collection> &collections);
 
 // Asks a question of the library: what it holds, what each book is about,
 // and what the reader has made of the ones they started.

@@ -22,6 +22,10 @@ AppPopup {
     signal wanted(int index)
     signal asked(string words)
     signal undo()
+    // A collection the question can keep to, by its name; none when empty.
+    property string onlyName
+    property bool only: false
+    signal onlyToggled(bool only)
 
     widest: 640
     onOpened: {
@@ -55,6 +59,18 @@ AppPopup {
             selectByMouse: true
             Material.roundedScale: theme.radius
             onAccepted: if (text.trim() !== "") dialog.asked(text)
+        }
+        Switch {
+            objectName: dialog.objectName + "Only"
+            Layout.fillWidth: true
+            // Tall enough for a fingertip.
+            Layout.minimumHeight: 40
+            visible: dialog.onlyName !== "" && librarian.hasAi
+            enabled: !dialog.working
+            text: qsTr("Only the books in %1").arg(dialog.onlyName)
+            checked: dialog.only
+            Accessible.name: text
+            onToggled: dialog.onlyToggled(checked)
         }
         // At work: thinking before the first word, writing after it.
         Thinking {

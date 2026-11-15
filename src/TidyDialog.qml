@@ -19,8 +19,13 @@ AppPopup {
     })
     readonly property var kinds: ({
         duplicate: qsTr("The same book twice"), author: qsTr("Author's name"), series: qsTr("Series"),
-        details: qsTr("Details looked up")
+        details: qsTr("Details looked up"), collection: qsTr("Collection"), undecided: qsTr("Yours to decide")
     })
+    // What the tidy is: the whole of it, or only "collections", the AI's
+    // proposal of a collection for each book that is in none.
+    property string pass: ""
+    // The books in no collection there are, counted when it opens.
+    property int uncollected: 0
     // "title (dune → Dune), description"
     function changed(proposal) {
         return proposal.changes.map(change => {
@@ -30,9 +35,14 @@ AppPopup {
         }).concat(proposal.adds.map(field => "+ " + (fieldNames[field] || field))).join(", ")
     }
 
-    function show() {
+    function show(what) {
+        pass = what || ""
         open()
-        librarian.tidy(false)
+        uncollected = librarian.uncollected()
+        if (pass === "collections")
+            librarian.sortIntoCollections()
+        else
+            librarian.tidy(false)
         list.forceActiveFocus()
     }
     onClosed: librarian.stop()
@@ -48,7 +58,7 @@ AppPopup {
             spacing: 12
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Tidy the library")
+                text: dialog.pass === "collections" ? qsTr("Sort into collections") : qsTr("Tidy the library")
                 font.pixelSize: 18
                 font.bold: true
             }
@@ -65,7 +75,11 @@ AppPopup {
             wrapMode: Text.Wrap
             color: theme.colors.muted
             text: librarian.busy ? librarian.status
+                  : list.count === 0 && dialog.pass === "collections"
+                    ? (librarian.hasAi ? qsTr("Every book is in a collection, or none of them fits the collections there are.") : librarian.aiProblem)
                   : list.count === 0 ? qsTr("Nothing to tidy: no duplicates, and every author is spelled one way.")
+                  : dialog.pass === "collections"
+                    ? qsTr("Untick what you'd rather leave. Nothing changes until you make the changes; a new collection is made then.")
                   : qsTr("Untick what you'd rather leave. A book folded into another goes to the trash; its formats move over.")
         }
         ListView {
@@ -96,6 +110,8 @@ AppPopup {
 
                     CheckBox {
                         objectName: "tidyChosen"
+                        // Nothing to apply to a book left to the person.
+                        enabled: row.modelData.kind !== "undecided"
                         checked: row.modelData.chosen
                         focusPolicy: Qt.NoFocus
                         onToggled: librarian.setChosen(row.index, checked)
@@ -130,6 +146,9 @@ AppPopup {
                             color: theme.colors.orange
                             text: row.modelData.kind === "duplicate"
                                   ? qsTr("Another copy (%1) folds into this one (%2).").arg(row.modelData.otherFormats).arg(row.modelData.formats)
+                                  : row.modelData.kind === "collection" && row.modelData.isNew ? qsTr("Put in %1, a new collection").arg(row.modelData.collection)
+                                  : row.modelData.kind === "collection" ? qsTr("Put in %1").arg(row.modelData.collection)
+                                  : row.modelData.kind === "undecided" ? qsTr("Not clear where it belongs; put it in a collection yourself with %1.").arg((custom.keyText["library.collection_book"] || "").split("  ")[0])
                                   : dialog.changed(row.modelData)
                         }
                         Label {
@@ -153,6 +172,17 @@ AppPopup {
                 enabled: !librarian.busy
                 text: qsTr("Also look up %1 with missing details").arg(librarian.incomplete())
                 onClicked: librarian.tidy(true)
+            }
+            AppButton {
+                objectName: "tidyCollections"
+                visible: librarian.hasAi && dialog.uncollected > 0 && dialog.pass !== "collections"
+                enabled: !librarian.busy
+                text: qsTr("Also sort %Ln books into collections", "", dialog.uncollected)
+                // Once asked, the button has done its part.
+                onClicked: {
+                    dialog.uncollected = 0
+                    librarian.sortIntoCollections()
+                }
             }
             AppButton { text: qsTr("Close"); onClicked: dialog.close() }
             AppButton {

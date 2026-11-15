@@ -39,6 +39,10 @@ class Librarian : public QObject {
     Q_PROPERTY(QString changeNote READ changeNote NOTIFY changeChanged)
     Q_PROPERTY(bool changing READ changing NOTIFY changeChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY changeChanged)
+    // Whether asking about the library and for suggestions keeps to the
+    // collection the shelf shows. The knowledge graph's picture of the whole
+    // library goes along either way.
+    Q_PROPERTY(bool onlyCollection READ onlyCollection WRITE setOnlyCollection NOTIFY answerChanged)
     Q_PROPERTY(bool hasAi READ hasAi NOTIFY aiChanged)
     Q_PROPERTY(QString aiProblem READ aiProblem NOTIFY aiChanged)
 
@@ -75,6 +79,15 @@ public:
     Q_INVOKABLE void stop();
     // How many books a tidy with look-ups would look up.
     Q_INVOKABLE int incomplete() const;
+    // Has the AI propose a collection for each book that is in none, a
+    // batch at a time (Curation::uncollected), as proposals like the rest:
+    // nothing changes until they are applied. Joins a tidy that is shown.
+    Q_INVOKABLE void sortIntoCollections();
+    // How many books are in no collection and could be sorted, at most
+    // what one pass takes; 0 when the library has no collections.
+    Q_INVOKABLE int uncollected() const;
+    bool onlyCollection() const noexcept { return m_onlyCollection; }
+    void setOnlyCollection(bool only);
 
     Q_INVOKABLE void ask(const QString &question);
     // What to read next that the library doesn't hold, from what was read.
@@ -104,6 +117,9 @@ private:
     void setBusy(bool busy, const QString &status = {});
     void add(const QList<Proposal> &proposals);
     void askSeries();
+    void askCollections();
+    // The books asking and suggesting go by: the shown collection's, or all.
+    QList<Book> askedBooks() const;
     void lookUpNext();
     void finishTidy();
     void startAnswer(std::unique_ptr<AiProvider> provider, const AiRequest &request);
@@ -119,6 +135,10 @@ private:
     bool m_lookUps = false;
     QString m_status;
     std::unique_ptr<AiCall> m_tidyCall;
+    // The batches of books still to be sorted into collections, and how many there were.
+    QList<QList<Book>> m_toSort;
+    int m_sortTotal = 0;
+    bool m_onlyCollection = false;
     // Books still to look up, and the look-up in hand.
     QList<qint64> m_toLookUp;
     int m_lookUpTotal = 0;

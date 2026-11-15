@@ -48,6 +48,9 @@ class GraphBrowser : public QObject {
     Q_PROPERTY(QString scope READ scope NOTIFY changed)
     Q_PROPERTY(qint64 bookId READ bookId NOTIFY changed)
     Q_PROPERTY(QString series READ series NOTIFY changed)
+    // The collection (library.h) whose books' graphs are shown, laid over
+    // each other as a series' are: "only this collection".
+    Q_PROPERTY(QString collection READ collection NOTIFY changed)
     // The book's title, for a book's graph.
     Q_PROPERTY(QString bookTitle READ bookTitle NOTIFY changed)
     // Whether the graph stops at a place in the book: it is being read.
@@ -124,10 +127,13 @@ public:
     // Tests work on a library of their own, without a backend.
     void setLibrary(const Library *library);
 
-    QString showing() const { return m_what == What::Book ? "book" : m_what == What::Series ? "series" : "scope"; }
+    QString showing() const {
+        return m_what == What::Book ? "book" : m_what == What::Series ? "series" : m_what == What::Collection ? "collection" : "scope";
+    }
     QString scope() const noexcept { return m_scope; }
     qint64 bookId() const { return m_what == What::Book ? m_bookId : 0; }
     QString series() const { return m_what == What::Series ? m_series : QString(); }
+    QString collection() const { return m_what == What::Collection ? m_series : QString(); }
     QString bookTitle() const noexcept { return m_bookTitle; }
     bool bounded() const { return m_what == What::Book && m_upTo.has_value(); }
     int nodeCount() const noexcept { return int(m_shown.size()); }
@@ -171,6 +177,8 @@ public:
     Q_INVOKABLE void showBookUpTo(qint64 bookId, int section, double fraction);
     // Every book of a series, each as far as it was read.
     Q_INVOKABLE void showSeries(const QString &series);
+    // The books of a collection, by its name.
+    Q_INVOKABLE void showCollection(const QString &collection);
     // Reads the graph again, keeping what is shown and where it is.
     Q_INVOKABLE void refresh();
 
@@ -225,7 +233,8 @@ signals:
     void reframed();
 
 private:
-    enum class What { Scope, Book, Series };
+    // A collection is shown the way a series is, by its name in m_series.
+    enum class What { Scope, Book, Series, Collection };
     // What was shown, to go back to: which graph, around what, how far.
     struct Visit {
         qint64 centre = 0;

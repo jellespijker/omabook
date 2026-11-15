@@ -89,6 +89,10 @@ AppPopup {
         for (const name of Object.keys(series).sort())
             list.push({ kindName: qsTr("Series"), label: name, act: "series", value: name, on: browser.series === name,
                         common: true, count: 0 })
+        // Only the books of a collection; the graph itself is the whole library's.
+        for (const collection of backend.collections)
+            list.push({ kindName: qsTr("Collection"), label: collection.name, act: "collection", value: collection.name,
+                        on: browser.collection === collection.name, common: true, count: 0 })
         return list
     }
     function take(entry) {
@@ -107,6 +111,7 @@ AppPopup {
         else if (entry.act === "scope") browser.showScope(entry.value)
         else if (entry.act === "book") browser.showBook(entry.value)
         else if (entry.act === "series") browser.showSeries(entry.value)
+        else if (entry.act === "collection") browser.showCollection(entry.value)
     }
 
     GraphWords { id: words }

@@ -402,6 +402,9 @@ ApplicationWindow {
         offer: qsTr("Suggest what to read next")
         onAsked: (words) => librarian.ask(words)
         onOffered: librarian.suggest()
+        onlyName: backend.collection !== 0 ? backend.collectionName : ""
+        only: librarian.onlyCollection
+        onOnlyToggled: (only) => librarian.onlyCollection = only
         suggestions: librarian.suggestions
         onWanted: (index) => librarian.wantSuggestion(index)
     }

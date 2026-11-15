@@ -74,6 +74,8 @@ QVariantList Librarian::proposals() const {
             {"adds", adds},
             {"changes", changes},
             {"why", proposal.why},
+            {"collection", proposal.collection},
+            {"isNew", proposal.kind == "collection" && proposal.collectionId == 0},
             {"chosen", entry.chosen},
         };
     }
@@ -91,8 +93,9 @@ void Librarian::setBusy(bool busy, const QString &status) {
 }
 
 void Librarian::add(const QList<Proposal> &proposals) {
+    // A book left undecided is shown, for the person; there is nothing to apply.
     for (const Proposal &proposal : proposals)
-        m_entries.append({proposal, true});
+        m_entries.append({proposal, proposal.kind != "undecided"});
     emit proposalsChanged();
 }
 
@@ -117,6 +120,79 @@ void Librarian::tidy(bool lookUps) {
         return;
     }
     askSeries();
+}
+
+int Librarian::uncollected() const {
+    Library *library = m_backend->library();
+    // A library with no collections is sorted from the command line, where
+    // the structure the AI proposes is picked by number.
+    if (!library || library->collections().isEmpty())
+        return 0;
+    int count = 0;
+    for (const QList<Book> &batch : Curation::uncollected(library->books(), library->collections()))
+        count += int(batch.size());
+    return count;
+}
+
+void Librarian::sortIntoCollections() {
+    Library *library = m_backend->library();
+    if (!library || m_busy || !hasAi())
+        return;
+    // What an earlier pass proposed is asked again, not shown twice.
+    m_entries.removeIf([](const Entry &entry) { return entry.proposal.kind == "collection" || entry.proposal.kind == "undecided"; });
+    emit proposalsChanged();
+    m_toSort = Curation::uncollected(library->books(), library->collections());
+    m_sortTotal = 0;
+    for (const QList<Book> &batch : std::as_const(m_toSort))
+        m_sortTotal += int(batch.size());
+    askCollections();
+}
+
+// One batch at a time, each its own request, so a large library is sorted
+// in requests of one size and a failed one costs only its batch.
+void Librarian::askCollections() {
+    Library *library = m_backend->library();
+    if (m_toSort.isEmpty() || !library) {
+        m_toSort.clear();
+        setBusy(false);
+        return;
+    }
+    const QList<Book> batch = m_toSort.takeFirst();
+    int done = m_sortTotal;
+    for (const QList<Book> &left : std::as_const(m_toSort))
+        done -= int(left.size());
+    setBusy(true, tr("Sorting books into collections: %1 of %2…").arg(done).arg(m_sortTotal));
+    const QList<Collection> collections = library->collections();
+    // The new collections earlier batches proposed, so each batch uses the same names.
+    QStringList proposed;
+    for (const Entry &entry : std::as_const(m_entries))
+        if (entry.proposal.kind == "collection" && entry.proposal.collectionId == 0 && !proposed.contains(entry.proposal.collection))
+            proposed << entry.proposal.collection;
+    m_tidyCall = std::make_unique<AiCall>(m_backend->newAi(nullptr));
+    connect(m_tidyCall.get(), &AiCall::done, this, [this, batch, collections](const QString &answer) {
+        add(Curation::collectionsFrom(answer, batch, collections));
+        askCollections();
+    });
+    connect(m_tidyCall.get(), &AiCall::failed, this, [this](const QString &error) {
+        m_backend->say(error);
+        m_toSort.clear();
+        setBusy(false);
+    });
+    m_tidyCall->ask(Curation::collectionsRequest(batch, collections, library->books(), proposed));
+}
+
+void Librarian::setOnlyCollection(bool only) {
+    if (only == m_onlyCollection)
+        return;
+    m_onlyCollection = only;
+    emit answerChanged();
+}
+
+QList<Book> Librarian::askedBooks() const {
+    Library *library = m_backend->library();
+    if (!library)
+        return {};
+    return m_onlyCollection && m_backend->collection() ? m_backend->shownBooks() : library->books();
 }
 
 void Librarian::askSeries() {
@@ -222,7 +298,7 @@ void Librarian::lookUpNext() {
 void Librarian::setChosen(int index, bool chosen) {
     if (index < 0 || index >= m_entries.size())
         return;
-    m_entries[index].chosen = chosen;
+    m_entries[index].chosen = chosen && m_entries.at(index).proposal.kind != "undecided";
     emit proposalsChanged();
 }
 
@@ -258,6 +334,7 @@ void Librarian::stop() {
     if (m_tidyCall)
         m_tidyCall->cancel();
     m_tidyCall.reset();
+    m_toSort.clear();
     m_toLookUp.clear();
     m_lookUp.reset();
     if (m_judge)
@@ -279,7 +356,7 @@ void Librarian::ask(const QString &question) {
         return;
     }
     QList<Curation::BookNotes> books;
-    for (const Book &book : library->books())
+    for (const Book &book : askedBooks())
         books.append({book, library->notes(book.id, "recap").text});
     // The knowledge graph's picture of what was read goes along, and the
     // question joins the graph once it is answered; neither with it off.
@@ -326,7 +403,7 @@ void Librarian::suggest() {
         return;
     }
     QList<Curation::BookNotes> books;
-    for (const Book &book : library->books())
+    for (const Book &book : askedBooks())
         books.append({book, library->notes(book.id, "recap").text});
     // The answer is JSON to be checked, not prose to show as it is written.
     m_checking.reset();
@@ -456,7 +533,9 @@ void Librarian::change(const QString &wish) {
     m_changeCall = std::make_unique<AiCall>(std::move(provider));
     connect(m_changeCall.get(), &AiCall::done, this, [this](const QString &answer) {
         const Prompts::InterfaceChange change = Prompts::parseChange(answer);
-        const QString problem = InterfaceChanges::apply(*m_custom, *m_settings, change);
+        const QString problem = InterfaceChanges::apply(*m_custom, *m_settings, change, m_backend->library());
+        if (!change.collections.isEmpty())
+            m_backend->reload();
         m_changeNote = !problem.isEmpty() ? tr("Nothing was changed: %1").arg(problem)
                        : change.say.isEmpty() ? tr("Changed.") : change.say;
         m_changing = false;
@@ -467,11 +546,13 @@ void Librarian::change(const QString &wish) {
         m_changing = false;
         emit changeChanged();
     });
-    m_changeCall->ask(Prompts::change(InterfaceChanges::state(*m_custom, *m_settings, m_colors()), wish));
+    m_changeCall->ask(Prompts::change(InterfaceChanges::state(*m_custom, *m_settings, m_colors(), m_backend->library()), wish));
 }
 
 void Librarian::undoChange() {
-    if (InterfaceChanges::undo(*m_custom, *m_settings))
+    if (InterfaceChanges::undo(*m_custom, *m_settings, m_backend->library())) {
         m_changeNote = tr("Put back as it was.");
+        m_backend->reload();
+    }
     emit changeChanged();
 }
