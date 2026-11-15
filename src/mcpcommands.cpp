@@ -345,8 +345,16 @@ const bool registered = [] {
                   "user's own), from the books' titles, authors, tags and the start of their descriptions, a batch "
                   "at a time. Books it can't place with confidence come back in \"to_decide\", for the user. Nothing "
                   "changes: show the numbered proposals to the user, then apply the ones they pick with "
-                  "collections_sort_apply, which takes them from this list without asking the model again.",
-                  schema(), ReadOnly, [](const QJsonObject &) { return command({"collections", "sort"}); }, true});
+                  "collections_sort_apply, which takes them from this list without asking the model again. With "
+                  "\"within\", it sorts the books of that collection that are in none inside it yet into collections "
+                  "inside it, there or new; they stay in it too.",
+                  schema({{"within", string("A collection's path, to propose collections inside it for its books.")}}), ReadOnly,
+                  [](const QJsonObject &arguments) {
+                      QStringList asked{"collections", "sort"};
+                      if (const QString within = arguments.value("within").toString().trimmed(); !within.isEmpty())
+                          asked << within;
+                      return command(asked);
+                  }, true});
 
     registerTool({"collections_sort_apply", "Apply picked collection proposals",
                   "Applies proposals from the list collections_sort last gave, by their numbers; a proposal can be "

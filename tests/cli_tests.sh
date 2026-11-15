@@ -469,6 +469,23 @@ grep -q "Hidden Holt" "$work/model.prompt" && fail "the AI was told what is in a
 expect "a question asked again is answered from what was kept" 0 '"cached": true' "$omabook" search --ai "a lighthouse keeper" --json --library "$found"
 [ "$(wc -l < "$work/model.calls")" -eq 1 ] || fail "asking again asked the AI again"
 "$omabook" search --ai "a lighthouse keeper" --json --library "$found" | grep -q '"id": 77' && fail "the AI's answer named a book that isn't there"
+
+# Sorting within one collection: its books, placed inside it, staying in it;
+# a place outside it is the user's to decide.
+"$omabook" collections add Kennis --library "$found" > /dev/null
+"$omabook" collections include Kennis 1 2 --library "$found" > /dev/null
+cat > "$work/model" <<SCRIPT
+#!/bin/bash
+cat > "$work/model.prompt"
+echo '[{"id": 1, "collection": "Kennis/Zee", "new": true, "why": "about the sea"}, {"id": 2, "collection": "Elders", "new": true, "why": "somewhere else"}]'
+SCRIPT
+expect "sort within a collection names one that isn't there" 1 "There is no collection Nowhere" "$omabook" collections sort Nowhere --library "$found"
+expect "sort within a collection proposes one inside it" 0 '"collection": "Kennis/Zee"' "$omabook" collections sort Kennis --json --library "$found"
+grep -q "already in the collection" "$work/model.prompt" && grep -q "Kennis/" "$work/model.prompt" || fail "the AI was not told the books stay in Kennis"
+"$omabook" collections sort Kennis --json --library "$found" --pick 1 > /dev/null 2>&1 || true
+expect "a place outside the collection is left to decide" 0 "outside Kennis" "$omabook" collections sort Kennis --json --again --library "$found"
+expect "picked: the book is inside it" 0 "Sea Story" "$omabook" collections show Kennis/Zee --library "$found"
+expect "and still in the collection itself" 0 '"count": 2' "$omabook" collections show Kennis --json --library "$found"
 cp "$work/config.off" "$XDG_CONFIG_HOME/omabook/config.json"
 
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill

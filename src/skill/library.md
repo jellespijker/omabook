@@ -35,6 +35,7 @@ omabook collections rename Studie Werk         # a path moves it; what is inside
 omabook list --collection Studie/Python        # also: ask all --collection, suggest --collection
 omabook collections sort --json                # AI proposals, numbered, and "to_decide": books it can't place
 omabook collections sort --pick 1,4=Werk/Regeltechniek   # from that same list, not asked again; N=path renames
+omabook collections sort Werk --json           # within one: collections inside Werk for its books in none of them; they stay in Werk
 ```
 
 A rule is a search (`tag:`, `genre:fiction`, `-word`, `OR`, `"quotes"`); books put in or out by hand win. Show the user the sort proposals and the to-decide list before picking anything; `--apply` takes them all.

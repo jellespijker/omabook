@@ -53,11 +53,13 @@ constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|in
                        "  remove <name>                     Take the collection away; its books stay in the library\n"
                        "  show <name>                       The books in it\n"
                        "  format <name> [--set key=value]   Its own reading format, between the defaults and a book's own\n"
-                       "  sort [--apply|--pick 1,3=New/Path]  Have the AI propose where the books not yet placed belong,\n"
-                       "                                    in collections there are or new ones; what it can't place is\n"
-                       "                                    listed to decide. Picking takes from the list the last sort gave,\n"
-                       "                                    asking nothing again (--again asks afresh); --pick N=path takes a\n"
-                       "                                    proposal under another name\n\n"
+                       "  sort [<name>] [--apply|--pick 1,3=New/Path]  Have the AI propose where the books not yet placed\n"
+                       "                                    belong, in collections there are or new ones; what it can't place\n"
+                       "                                    is listed to decide. With a collection's name, it proposes\n"
+                       "                                    collections inside that one for the books in it that are in none\n"
+                       "                                    of its own yet; they stay in it too. Picking takes from the list\n"
+                       "                                    the last sort gave, asking nothing again (--again asks afresh);\n"
+                       "                                    --pick N=path takes a proposal under another name\n\n"
                        "The search language: bare words, author:, title:, series:, tag:, genre: (fiction, nonfiction, or a\n"
                        "tag), format:, lang:, publisher:, about:, status:, is: and rating:; \"quotes\" keep words together,\n"
                        "-word leaves out, and OR joins alternatives: genre:fiction OR series:Dune -tag:poetry\n\n"
@@ -312,8 +314,20 @@ int Collections::run(const QStringList &arguments) {
         return 0;
     }
     if (sub == "sort") {
-        const QList<Collection> collections = library.collections();
-        const QList<Book> books = library.books();
+        QList<Collection> collections = library.collections();
+        QList<Book> books = library.books();
+        // Within one collection: its books not yet in one of its own, sorted
+        // into the collections inside it, there or new.
+        const QString within = words.mid(1).join(' ').trimmed();
+        std::optional<Collection> scope;
+        if (!within.isEmpty()) {
+            scope = library.collectionNamed(within);
+            if (!scope)
+                return fail("There is no collection " + within + ". omabook collections lists them.");
+            const QString prefix = scope->path + "/";
+            books = scope->of(books);
+            collections.removeIf([&](const Collection &collection) { return !collection.path.startsWith(prefix); });
+        }
         // Picking from the list asks nothing again: the proposals are the
         // ones the last sort of this library listed, numbers and all. Only
         // a sort without --pick or --apply (or with --again) asks the AI.
@@ -333,9 +347,22 @@ int Collections::run(const QStringList &arguments) {
                 if (proposal.kind == "collection" && proposal.collectionId == 0 && !proposed.contains(proposal.collection))
                     proposed << proposal.collection;
             QString answer;
-            if (!BookOps::ask(Curation::collectionsRequest(batch, collections, books, proposed), &answer, &error))
+            AiRequest request = Curation::collectionsRequest(batch, collections, books, proposed);
+            if (scope)
+                request.system += "\n\nEvery book given is already in the collection \"" + scope->path
+                                  + "\", and stays there. Place each in a collection inside it: every path you give "
+                                    "starts with \"" + scope->path + "/\". When none inside it fits and a new one "
+                                    "wouldn't have company, leave the book undecided.";
+            if (!BookOps::ask(request, &answer, &error))
                 return fail(error);
-            proposals << Curation::collectionsFrom(answer, batch, collections);
+            for (Proposal proposal : Curation::collectionsFrom(answer, batch, collections)) {
+                // A place outside the collection sorted is no answer here.
+                if (scope && proposal.kind != "undecided" && !proposal.collection.startsWith(scope->path + "/")) {
+                    proposal.kind = "undecided";
+                    proposal.why = "proposed outside " + scope->path + ": " + proposal.collection;
+                }
+                proposals << proposal;
+            }
         }
         if (!saved)
             keepProposals(library, proposals);
@@ -389,7 +416,8 @@ int Collections::run(const QStringList &arguments) {
         else if (parser.isSet("apply") || parser.isSet("pick"))
             print(stdout, QString("%1 books put in collections").arg(applied));
         else if (proposals.isEmpty())
-            print(stdout, "Every book is placed, or the AI had nothing to propose.");
+            print(stdout, scope ? "Every book in " + scope->path + " is in a collection inside it, or the AI had nothing to propose."
+                                : QString("Every book is placed, or the AI had nothing to propose."));
         return 0;
     }
     if (sub == "take") {
