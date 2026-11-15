@@ -6134,6 +6134,239 @@ private slots:
         desk.shot("pages-rtl-light");
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
+
+    // A thing's timeline beside the page: each moment a way back to it in
+    // the text, where its words are lit, and what lies past the reader's
+    // furthest place closed until asked for, then confirmed, for that thing
+    // only. In the dark theme left to right, and a light one right to left.
+    void aThingsMomentsLeadBackToTheTextAndSpoilersStayClosed() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
+                                 "selection_background = \"#dcdcdc\"\ncolor8 = \"#6f6f6f\"\n";
+        for (const QByteArray &language : {QByteArray("en"), QByteArray("ar")}) {
+            Desk desk({}, language, language == "ar" ? light : QByteArray());
+            const QString file = desk.dir.filePath("marked.epub");
+            QVERIFY(markedBook(file));
+            const qint64 book = desk.add(file);
+            const QHash<QString, qint64> ids = storyGraph(desk, book);
+            const qint64 ilse = ids.value("Ilse Varga");
+            {
+                // Watched from the wall early on; whose daughter she is, and
+                // a name of her own, only in the second chapter.
+                Graph graph(*desk.backend->library());
+                graph.learn(ilse, "summary", "A glassblower's daughter at the oars, watched from the wall.",
+                            GraphMoment{{book, 0, 0.12}, "Aldo Brenn watched from the wall"});
+                graph.learn(ilse, "summary", "Nerys Varga's daughter, who can sing the tide.", GraphMoment{{book, 1, 0.6}, "Ilse met Nerys Varga"});
+                graph.learn(ilse, "alias", "The Singer's Child", GraphMoment{{book, 1, 0.7}, "Ilse met Nerys Varga"});
+            }
+            QVERIFY(desk.show());
+            desk.window->resize(1400, 860);
+            desk.settings->setOption("spread", "never");
+            desk.reader->openBook(book);
+            QTRY_VERIFY(desk.reader->isOpen());
+            desk.reader->goTo(0, {}, true);
+            QTRY_COMPARE(desk.reader->fraction(), 1.0);
+            desk.backend->library()->setProgress(book, {0, 1.0, 50, 0});
+            desk.key(Qt::Key_M);
+            QTRY_VERIFY(desk.value("readerGraph", "visible").toBool());
+            const GraphParts graph = graphParts(desk, "readerGraph");
+            QTRY_VERIFY(graph.browser->nodeCount() > 10);
+            graph.browser->jumpTo(ilse);
+            QTRY_VERIFY(desk.value("graphDetails", "visible").toBool());
+            QTRY_VERIFY(beside(graph, "graphTimelineTitle"));
+
+            // What the page knows, and nothing of what lies ahead, anywhere:
+            // not in a text, nor in what a screen reader is told.
+            const auto said = [&graph] {
+                QStringList words;
+                QList<QQuickItem *> items{graph.pane};
+                while (!items.isEmpty()) {
+                    QQuickItem *item = items.takeFirst();
+                    if (!item->isVisible())
+                        continue;
+                    words << item->property("text").toString();
+                    for (QObject *attached : item->children())
+                        if (QByteArray(attached->metaObject()->className()).contains("Accessible"))
+                            words << attached->property("name").toString();
+                    items << item->childItems();
+                }
+                return words.join('\n');
+            };
+            QVERIFY(desk.value("graphDetailsSummary", "text").toString().contains("watched from the wall"));
+            QVERIFY(!said().contains("sing the tide"));
+            QVERIFY(!said().contains("The Singer's Child"));
+            QVERIFY(beside(graph, "graphAhead"));
+            QVERIFY(!beside(graph, "graphAheadList"));
+            QVERIFY(!beside(graph, "graphAheadShow"));
+            if (language == "en") {
+                QCOMPARE(beside(graph, "graphAheadTitle")->property("text").toString(), QString("Later in the book (4)"));
+                QVERIFY(beside(graph, "graphAheadWarning")->property("text").toString().contains("gives away"));
+            }
+            desk.shot(QString("graph-timeline-%1").arg(QString::fromLatin1(language)));
+
+            // The keyboard reaches the moments from the picture, moves
+            // among them, and goes back.
+            graph.canvas->forceActiveFocus();
+            desk.key(Qt::Key_R);
+            QTRY_VERIFY(beside(graph, "graphMoment") && beside(graph, "graphMoment")->hasActiveFocus());
+            const qint64 selected = graph.browser->selected();
+            QTest::keyClick(desk.window, Qt::Key_Tab);
+            QTRY_VERIFY(!beside(graph, "graphMoment")->hasActiveFocus());
+            QCOMPARE(graph.browser->selected(), selected);
+            QTest::keyClick(desk.window, Qt::Key_Escape);
+            QTRY_VERIFY(graph.canvas->hasActiveFocus());
+            QVERIFY(graph.pane->isVisible());
+
+            // Opened by the keyboard, it asks first, saying from where.
+            auto *toggle = beside(graph, "graphAheadToggle");
+            toggle->forceActiveFocus();
+            QTest::keyClick(desk.window, Qt::Key_Return);
+            QTRY_VERIFY(beside(graph, "graphAheadShow"));
+            if (language == "en")
+                QCOMPARE(beside(graph, "graphAheadWarning")->property("text").toString(),
+                         QString("This shows what happens after One."));
+            QVERIFY(!said().contains("sing the tide"));
+            desk.shot(QString("graph-spoilers-asking-%1").arg(QString::fromLatin1(language)));
+            // Not now: closed again, as it was.
+            // The choice is brought into sight, with the keyboard on it.
+            auto *showButton = beside(graph, "graphAheadShow");
+            QTRY_VERIFY(showButton->hasActiveFocus());
+            const auto inSight = [&desk](QQuickItem *item) {
+                const QPointF centre = item->mapToScene(QPointF(item->width() / 2, item->height() / 2));
+                return centre.y() > 0 && centre.y() < desk.window->height();
+            };
+            QTRY_VERIFY(inSight(showButton));
+            auto *cancel = beside(graph, "graphAheadCancel");
+            QVERIFY(inSight(cancel));
+            QTest::mouseClick(desk.window, Qt::LeftButton, {}, cancel->mapToScene(QPointF(cancel->width() / 2, cancel->height() / 2)).toPoint());
+            QTRY_VERIFY(!beside(graph, "graphAheadShow"));
+            QVERIFY(!beside(graph, "graphAheadList"));
+            // Asked again and shown: each marked as ahead.
+            toggle->forceActiveFocus();
+            QTest::keyClick(desk.window, Qt::Key_Space);
+            QTRY_VERIFY(beside(graph, "graphAheadShow") && beside(graph, "graphAheadShow")->hasActiveFocus());
+            // Asked still when the details are read again (the graph grew).
+            graph.browser->refresh();
+            QTest::qWait(100);
+            QVERIFY(beside(graph, "graphAheadShow"));
+            QTest::keyClick(desk.window, Qt::Key_Return);
+            QTRY_VERIFY(beside(graph, "graphAheadList"));
+            QTRY_VERIFY(said().contains("sing the tide"));
+            QVERIFY(beside(graph, "graphAheadStep"));
+            if (language == "en")
+                QVERIFY(said().contains("Ahead · Two"));
+            // The summary above it is still the page's.
+            QVERIFY(!desk.value("graphDetailsSummary", "text").toString().contains("sing the tide"));
+            desk.shot(QString("graph-spoilers-open-%1").arg(QString::fromLatin1(language)));
+            // For her only.
+            graph.browser->jumpTo(ids.value("Aldo Brenn"));
+            QTRY_COMPARE(desk.value("graphDetailsName", "text").toString(), QString("Aldo Brenn"));
+            QVERIFY(!beside(graph, "graphAheadList"));
+            graph.browser->jumpTo(ilse);
+            QTRY_VERIFY(beside(graph, "graphAheadList"));
+
+            // A moment of the timeline goes to its words, and lights them.
+            QQuickItem *moment = nullptr;
+            QTRY_VERIFY([&] {
+                QList<QQuickItem *> items{graph.pane};
+                while (!items.isEmpty()) {
+                    QQuickItem *item = items.takeFirst();
+                    if (item->objectName() == "graphMoment" && item->isVisible()
+                        && item->property("step").toMap().value("anchor").toString() == "Aldo Brenn watched from the wall")
+                        moment = item;
+                    items << item->childItems();
+                }
+                return moment != nullptr;
+            }());
+            desk.reader->goTo(1);
+            QTRY_COMPARE(desk.reader->section(), 1);
+            QTest::qWait(700);
+            moment->forceActiveFocus();
+            QTest::keyClick(desk.window, Qt::Key_Return);
+            QTRY_COMPARE(desk.reader->section(), 0);
+            QCOMPARE(desk.reader->marks()->flash().value("words").toString(), QString("Aldo Brenn watched from the wall"));
+            const PageText page = pageText(desk);
+            const QString plain = page.document->toPlainText().simplified();
+            QVERIFY(qAbs(desk.reader->fraction() - double(plain.indexOf("Aldo Brenn watched")) / plain.size()) < 0.02);
+            QQuickItem *lit = nullptr;
+            QTRY_VERIFY([&] {
+                QList<QQuickItem *> items{page.item};
+                while (!items.isEmpty()) {
+                    QQuickItem *item = items.takeFirst();
+                    // The first line of the words, where they run onto two.
+                    if (item->objectName() == "pageMomentLit" && item->isVisible() && (!lit || item->y() < lit->y()))
+                        lit = item;
+                    items << item->childItems();
+                }
+                return lit != nullptr;
+            }());
+            // Lit where the words are on the page.
+            QRectF words;
+            QMetaObject::invokeMethod(page.item, "positionToRectangle", Q_RETURN_ARG(QRectF, words),
+                                      Q_ARG(int, int(page.document->toPlainText().indexOf("Aldo Brenn watched")) + 1));
+            QVERIFY(qAbs(lit->y() - words.y()) < 2);
+            desk.shot(QString("graph-moment-lit-%1").arg(QString::fromLatin1(language)));
+
+            // The card on the page: where she was first met, and where what
+            // is said of her now was, each a way there.
+            QQuickItem *menu = qobject_cast<QQuickItem *>(desk.find("readingMenu"));
+            QVERIFY(menu);
+            const QVariantMap thing = desk.reader->marks()->named("Ilse Varga");
+            QVERIFY(!QJsonDocument::fromVariant(thing).toJson().contains("sing the tide"));
+            QCOMPARE(thing.value("latest").toMap().value("anchor").toString(), QString("Aldo Brenn watched from the wall"));
+            QMetaObject::invokeMethod(menu, "openCard", Q_ARG(QVariant, thing), Q_ARG(QVariant, QRectF(200, 200, 40, 20)),
+                                      Q_ARG(QVariant, false), Q_ARG(QVariant, false));
+            QTRY_VERIFY(desk.value("readingMenu", "visible").toBool());
+            QVERIFY(desk.find("readingAction_met") && desk.find("readingAction_latest"));
+            desk.shot(QString("graph-card-moments-%1").arg(QString::fromLatin1(language)));
+            desk.reader->goTo(1);
+            QTRY_COMPARE(desk.reader->section(), 1);
+            QMetaObject::invokeMethod(menu, "openCard", Q_ARG(QVariant, thing), Q_ARG(QVariant, QRectF(200, 200, 40, 20)),
+                                      Q_ARG(QVariant, false), Q_ARG(QVariant, false));
+            clickItem(desk, "readingAction_met");
+            QTRY_COMPARE(desk.reader->section(), 0);
+            // Met before words were kept with a place: to the place itself.
+            QCOMPARE(desk.reader->fraction(), 0.05);
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+    }
+
+    // From the shelf, what is known past the place a book was left is shown
+    // only once asked, with the same warning, and its details stay careful.
+    void showingEverythingKnownIsAskedFirst() {
+        Desk desk;
+        const QString file = desk.dir.filePath("marked.epub");
+        QVERIFY(markedBook(file));
+        const qint64 book = desk.add(file);
+        const QHash<QString, qint64> ids = storyGraph(desk, book);
+        desk.backend->library()->setProgress(book, {0, 0.5, 30, 0});
+        QVERIFY(desk.show());
+        desk.key(Qt::Key_6);
+        QTRY_VERIFY(desk.find("libraryGraph"));
+        const GraphParts graph = graphParts(desk, "libraryGraph");
+        QTRY_VERIFY(graph.pane->isVisible());
+        graph.browser->showBook(book);
+        QTRY_VERIFY(graph.browser->bounded());
+        QVERIFY(graph.browser->hiddenCount() > 0);
+        clickItem(desk, "graphShowWhole");
+        QTRY_VERIFY(desk.value("graphWholeAsk", "visible").toBool());
+        QCOMPARE(desk.value("graphWholeWarning", "text").toString(), QString("This shows what happens after part 1."));
+        QVERIFY(graph.browser->bounded());
+        desk.shot("graph-whole-asking");
+        clickItem(desk, "graphWholeCancel");
+        QTRY_VERIFY(!desk.value("graphWholeAsk", "visible").toBool());
+        QVERIFY(graph.browser->bounded());
+        clickItem(desk, "graphShowWhole");
+        clickItem(desk, "graphWholeConfirm");
+        QTRY_VERIFY(!graph.browser->bounded());
+        // A thing met only later is in the picture, and says only that.
+        graph.browser->jumpTo(ids.value("Wick"));
+        QTRY_COMPARE(desk.value("graphDetailsName", "text").toString(), QString("Wick"));
+        QVERIFY(desk.value("graphDetailsLater", "visible").toBool());
+        QVERIFY(!desk.value("graphDetailsSummary", "visible").toBool());
+        QVERIFY(beside(graph, "graphAhead"));
+        desk.shot("graph-whole-later");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
 };
 
 QTEST_MAIN(UiTests)

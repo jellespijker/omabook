@@ -1,5 +1,6 @@
 #include <QElapsedTimer>
 #include <QImage>
+#include <QJsonDocument>
 #include <QPainter>
 #include <QSignalSpy>
 #include <QTemporaryDir>
@@ -402,7 +403,9 @@ private slots:
         QVERIFY(!browser.bounded());
         QCOMPARE(browser.nodeCount(), 5);
         QCOMPARE(browser.hiddenCount(), 0);
-        // Left at the very start, nothing is shown, but it is said what is known.
+        // Left at the very start, nothing is shown, but it is said what is
+        // known. (A library that never read it further: no furthest place.)
+        story.library.setNotes(story.first, "furthest", {0, 0, QString(""), 0});
         story.library.setProgress(story.first, {0, 0.01, 0.5, 0});
         browser.showBook(story.first);
         QCOMPARE(browser.knownCount(), 0);
@@ -809,6 +812,106 @@ private slots:
         const QPointF at = canvas.pointOf(ids.at(0));
         QCOMPARE(canvas.nodeAt(at.x(), at.y()), ids.at(0));
         QCOMPARE(canvas.nodeAt(-500000, -500000), 0);
+    }
+
+    // --- When knowledge is revealed, and spoilers ---
+
+    void spoilersAreKeptApartInTheDetails() {
+        Story story;
+        Graph graph(story.library);
+        // Who Mara is turns out late in the book, with a name of her own.
+        graph.learn(story.mara, "summary", "A ferry pilot, and the guild's lost singer.", GraphMoment{{story.first, 6, 0.1}, "the lost singer"});
+        graph.learn(story.mara, "alias", "The Singer", GraphMoment{{story.first, 6, 0.2}, "The Singer"});
+        story.library.setProgress(story.first, {2, 0.6, 30, 0});
+        GraphBrowser browser;
+        browser.setLibrary(&story.library);
+        browser.showBook(story.first);
+        QVERIFY(browser.bounded());
+        QCOMPARE(browser.spoilersAfter().value("section").toInt(), 2);
+        browser.select(story.mara);
+        const auto words = [&browser] { return QString::fromUtf8(QJsonDocument::fromVariant(browser.details()).toJson()); };
+        QVariantMap details = browser.details();
+        QCOMPARE(details.value("summary").toString(), QString("A ferry pilot."));
+        QCOMPARE(details.value("aliases").toStringList(), QStringList{"The Pilot"});
+        // When what is known was revealed, each with its moment.
+        const QVariantList timeline = details.value("timeline").toList();
+        QVERIFY(!timeline.isEmpty());
+        QCOMPARE(timeline.first().toMap().value("section").toInt(), 1);
+        QCOMPARE(timeline.first().toMap().value("text").toString(), QString("A ferry pilot."));
+        // Closed by default: how many, and nothing of what they say.
+        QCOMPARE(details.value("aheadCount").toInt(), 3);
+        QVERIFY(!details.value("aheadShown").toBool());
+        QVERIFY(details.value("ahead").toList().isEmpty());
+        QVERIFY(!words().contains("lost singer"));
+        QVERIFY(!words().contains("The Singer"));
+        QVERIFY(!words().contains("can do"));
+        QVERIFY(browser.find("Singer").isEmpty());
+        QVERIFY(!QJsonDocument::fromVariant(browser.rows()).toJson().contains("lost singer"));
+
+        // Opened for her, it holds each one with its moment, marked as ahead.
+        browser.showAhead(story.mara);
+        details = browser.details();
+        QVERIFY(details.value("aheadShown").toBool());
+        const QVariantList ahead = details.value("ahead").toList();
+        QCOMPARE(ahead.size(), 3);
+        QStringList what;
+        for (const QVariant &step : ahead) {
+            what << step.toMap().value("what").toString();
+            QCOMPARE(step.toMap().value("after").toMap().value("section").toInt(), 2);
+            QCOMPARE(step.toMap().value("section").toInt(), 6);
+        }
+        // In the order the reader would come to them.
+        QCOMPARE(what, (QStringList{"summary", "relation", "alias"}));
+        QCOMPARE(ahead.at(0).toMap().value("text").toString(), QString("A ferry pilot, and the guild's lost singer."));
+        QCOMPARE(ahead.at(0).toMap().value("anchor").toString(), QString("the lost singer"));
+        // The summary above it is still the one of the reader's place.
+        QCOMPARE(details.value("summary").toString(), QString("A ferry pilot."));
+        // For her only, and for as long as the program runs.
+        browser.select(story.guild);
+        QVERIFY(!browser.details().value("aheadShown").toBool());
+        browser.select(story.mara);
+        QVERIFY(browser.details().value("aheadShown").toBool());
+        browser.showAhead(story.mara, false);
+        QVERIFY(!browser.details().value("aheadShown").toBool());
+
+        // Shown whole: what is met later is in the picture, and its details
+        // say it is met later and nothing more until asked.
+        browser.showWhole();
+        QVERIFY(names(browser).contains("Tide-singing"));
+        browser.select(story.singing);
+        QVERIFY(browser.details().value("nodeAhead").toBool());
+        QVERIFY(browser.details().value("summary").toString().isEmpty());
+        QVERIFY(browser.details().value("places").toList().isEmpty());
+        QVERIFY(browser.details().value("aheadCount").toInt() >= 1);
+        browser.select(story.mara);
+        QCOMPARE(browser.details().value("summary").toString(), QString("A ferry pilot."));
+        QVERIFY(!words().contains("can do"));
+        QVERIFY(!QJsonDocument::fromVariant(browser.rows()).toJson().contains("lost singer"));
+        // The graph of everything read is as careful.
+        browser.showScope("");
+        browser.select(story.mara);
+        QCOMPARE(browser.details().value("summary").toString(), QString("A ferry pilot."));
+        QVERIFY(!words().contains("lost singer"));
+        // A name she is given later finds her nowhere (the question asked
+        // of singers is found by its own words).
+        for (const QVariant &found : browser.find("Singer"))
+            QVERIFY(found.toMap().value("id").toLongLong() != story.mara);
+        QCOMPARE(browser.find("Pilot").size(), 1);
+
+        // Going back to an earlier page keeps what was read: no spoilers there.
+        story.library.setProgress(story.first, {1, 0.1, 5, 0});
+        browser.showBook(story.first);
+        QCOMPARE(browser.spoilersAfter().value("section").toInt(), 2);
+        QVERIFY(names(browser).contains("Glass Harbour"));
+
+        // A book marked as read has no spoilers: everything, nothing ahead.
+        story.library.setReading(story.first, "read", 0, {});
+        browser.showBook(story.first);
+        QVERIFY(browser.spoilersAfter().isEmpty());
+        browser.select(story.mara);
+        QCOMPARE(browser.details().value("summary").toString(), QString("A ferry pilot, and the guild's lost singer."));
+        QVERIFY(browser.details().value("aliases").toStringList().contains("The Singer"));
+        QCOMPARE(browser.details().value("aheadCount").toInt(), 0);
     }
 };
 

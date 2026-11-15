@@ -168,6 +168,7 @@ constexpr BuiltIn builtIns[] = {
         {"graph.list", {"V"}, tr("Switch between the graph as a picture and as a list")},
         {"graph.details", {"I"}, tr("Show or hide the details of the selected thing")},
         {"graph.open", {"O"}, tr("Read the selected book, or go to where the selected thing was first met")},
+        {"graph.moments", {"R"}, tr("Go through when what is known of the selected thing was revealed: Tab moves on, Enter goes to that moment in the text")},
         {"graph.further", {"]"}, tr("Show one step further around the centre of the graph")},
         {"graph.nearer", {"["}, tr("Show one step less around the centre of the graph")},
         {"graph.zoom_in", {"+", "="}, tr("Zoom in on the graph")},

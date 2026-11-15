@@ -25,6 +25,16 @@ QtObject {
         return scope === "" ? qsTr("Everything read")
              : scope.startsWith("world:") ? qsTr("World %1").arg(scope.slice(6)) : scope
     }
+    // Where in a book: the chapter's name when the book is open, else its number.
+    function place(place) {
+        if (reader.open && reader.bookId === place.bookId) {
+            let title = ""
+            for (const entry of reader.toc)
+                if (entry.section <= place.section) title = entry.title
+            if (title !== "") return title
+        }
+        return qsTr("part %1").arg((place.section + 1).toLocaleString(Qt.locale(), 'f', 0))
+    }
     // How far around the centre is shown.
     function reach(depth) { return depth <= 0 ? qsTr("Everything") : qsTr("%Ln steps around", "", depth) }
 }

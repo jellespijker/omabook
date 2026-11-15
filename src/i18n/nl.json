@@ -228,7 +228,6 @@
   "Finding your way": "De weg vinden",
   "Finished": "Uitgelezen",
   "Finished on (2026-03-01)": "Uitgelezen op (2026-03-01)",
-  "First met: %1": "Eerste ontmoeting: %1",
   "Five views": "Vijf weergaven",
   "Five views of the shelf": "Vijf weergaven van de plank",
   "Five ways to look at it": "Vijf manieren om ernaar te kijken",
@@ -298,7 +297,6 @@
   "Larger": "Groter",
   "Larger text, or zoom in": "Grotere tekst, of inzoomen",
   "Later": "Later",
-  "Latest: %1": "Laatst: %1",
   "Libraries": "Bibliotheken",
   "Library": "Bibliotheek",
   "List": "Lijst",
@@ -978,10 +976,6 @@
   "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads heeft geen ingang voor apps en neemt geen wijzigingen van ze aan. Wat het wel heeft is een bestand met alles onder Mijn boeken, met wat je hebt gelezen, aan het lezen bent en wilt lezen; dat werkt ook voor een privéprofiel.",
   "Nothing up to your page": "Niets tot aan je bladzijde",
   "Show Everything Known": "Alles tonen wat bekend is",
-  "%Ln things are known of this book past the place you left it. They may give away what happens.": {
-    "one": "%Ln ding is bekend van dit boek voorbij de plek waar je bent gebleven. Het kan verklappen wat er gebeurt.",
-    "other": "%Ln dingen zijn bekend van dit boek voorbij de plek waar je bent gebleven. Ze kunnen verklappen wat er gebeurt."
-  },
   "%Ln more past your page": {
     "one": "nog %Ln voorbij je bladzijde",
     "other": "nog %Ln voorbij je bladzijde"
@@ -1119,6 +1113,39 @@
   "One, two or three pages": "Eén, twee of drie pagina's",
   "Pages side by side": "Pagina's naast elkaar",
   "Pages side by side: as many as fit, one, two or three, and round again": "Pagina's naast elkaar: zoveel als er passen, één, twee of drie, en weer rond",
+  "%Ln things are known of this book past the place you left it.": {
+    "one": "%Ln ding is bekend van dit boek voorbij de plek waar je bent gebleven.",
+    "other": "%Ln dingen zijn bekend van dit boek voorbij de plek waar je bent gebleven."
+  },
+  "Ahead · %1": "Verderop · %1",
+  "Back to the moment, without spoilers": "Terug naar het moment, zonder te verklappen",
+  "Called %1": "Genoemd %1",
+  "First met: %1": "Eerste ontmoeting: %1",
+  "Go through when what is known of the selected thing was revealed: Tab moves on, Enter goes to that moment in the text": "Langs wanneer bekend werd wat er van het geselecteerde ding bekend is: Tab gaat verder, Enter gaat naar dat moment in de tekst",
+  "Go to this moment: %1": "Naar dit moment: %1",
+  "Hidden, as it gives away what happens later.": "Verborgen, want het verklapt wat er later gebeurt.",
+  "Hide what happens later (%Ln)": {
+    "one": "Verberg wat er later gebeurt (%Ln)",
+    "other": "Verberg wat er later gebeurt (%Ln)"
+  },
+  "Later in the book (%Ln)": {
+    "one": "Later in het boek (%Ln)",
+    "other": "Later in het boek (%Ln)"
+  },
+  "Later in the book (%Ln), hidden": {
+    "one": "Later in het boek (%Ln), verborgen",
+    "other": "Later in het boek (%Ln), verborgen"
+  },
+  "Latest: %1": "Laatst: %1",
+  "Met later in the book.": "Komt later in het boek voor.",
+  "Met only after %1, past where you are.": "Komt pas na %1 voor, voorbij waar je bent.",
+  "Moments, and no spoilers": "Momenten, en niets verklapt",
+  "Nothing is known yet of when it was revealed.": "Er is nog niet bekend wanneer het bekend werd.",
+  "The map ({reader.graph}) says when each thing was revealed and takes you to that very line. What happens past your furthest page stays closed until you ask, for that one thing.": "De kaart ({reader.graph}) zegt wanneer elk ding bekend werd en brengt je naar precies die regel. Wat er na je verste pagina gebeurt, blijft dicht tot je erom vraagt, voor dat ene ding.",
+  "The map's details say when each thing known of someone was revealed, and each is a way back to that moment in the text ({graph.moments} from the keyboard), where its words are lit. The card on the page goes to where a thing was first met, and to where what is said of it now was told. What happens past the furthest you have read stays closed under Later in the book: it opens for that one thing only, once you confirm, until Omabook closes. A book marked as read has nothing to hide.": "De details van de kaart zeggen wanneer alles wat van iemand bekend is bekend werd, en elk is een weg terug naar dat moment in de tekst ({graph.moments} met het toetsenbord), waar de woorden oplichten. Het kaartje op de pagina gaat naar waar een ding voor het eerst voorkwam, en naar waar verteld werd wat er nu van gezegd wordt. Wat er na het verste dat je hebt gelezen gebeurt, blijft dicht onder Later in het boek: het gaat alleen voor dat ene ding open, als je het bevestigt, tot Omabook sluit. Een gelezen boek heeft niets te verbergen.",
+  "This shows what happens after %1.": "Dit laat zien wat er na %1 gebeurt.",
+  "This shows what happens later in the book.": "Dit laat zien wat er later in het boek gebeurt.",
+  "When it was revealed": "Wanneer het bekend werd",
   "%Ln stars": {
     "one": "%Ln ster",
     "other": "%Ln sterren"

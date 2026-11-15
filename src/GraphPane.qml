@@ -55,6 +55,12 @@ FocusScope {
     readonly property bool growing: reading ? assistant.graphBusy : backend.graphJobs.busy
     // Whether the picture has been settling long enough to be noticed.
     property bool arranging: false
+    // Showing what is known past the reader's place is asked first.
+    property bool askingWhole: false
+    readonly property string wholeWarning: graph.spoilersAfter.bookId
+        ? qsTr("This shows what happens after %1.").arg(words.place(graph.spoilersAfter))
+        : qsTr("This shows what happens later in the book.")
+    onAskingWholeChanged: if (askingWhole) Qt.callLater(() => { if (wholeConfirm.visible) wholeConfirm.forceActiveFocus() })
     signal done()
 
     function takeFocus() { (listing ? rows : canvas).forceActiveFocus() }
@@ -95,10 +101,11 @@ FocusScope {
         if (reader.open && reader.bookId === bookId) return
         reader.openBook(bookId)
     }
-    // To a place in a book: at once when it is the open one, else once it has opened.
+    // To a moment of a book: at once when it is the open one, else once it
+    // has opened. The words kept with it find the very spot, and are lit.
     function go(place) {
         if (reader.open && reader.bookId === place.bookId) {
-            reader.goToPlace(place.section, place.fraction)
+            reader.marks.goToMoment(place.section, place.fraction, place.anchor || "")
             return
         }
         pending = place
@@ -156,7 +163,7 @@ FocusScope {
         target: reader
         function onBookChanged() {
             if (!pane.pending || !reader.open || reader.bookId !== pane.pending.bookId) return
-            reader.goToPlace(pane.pending.section, pane.pending.fraction)
+            reader.marks.goToMoment(pane.pending.section, pane.pending.fraction, pane.pending.anchor || "")
             pane.pending = null
         }
         // A book that didn't open leaves nothing to go to.
@@ -216,6 +223,16 @@ FocusScope {
         }
     }
     Key { command: "graph.open"; when: pane.keysOn; onActivated: pane.openSelected() }
+    // The keyboard to the selected thing's moments, in the details.
+    Key {
+        command: "graph.moments"
+        when: pane.keysOn && pane.hasNode
+        onActivated: {
+            if (body.either) pane.peek = true
+            else pane.showDetails = true
+            Qt.callLater(() => { if (!details.takeKeys()) backend.say(qsTr("Nothing is known yet of when it was revealed.")) })
+        }
+    }
     Key { command: "graph.further"; when: pane.keysOn; onActivated: graph.depth = Math.min(4, graph.depth + 1) }
     Key { command: "graph.nearer"; when: pane.keysOn; onActivated: graph.depth = Math.max(0, graph.depth - 1) }
     Key { command: "graph.zoom_in"; when: pane.keysOn && !pane.listing; onActivated: canvas.zoomBy(1.3) }
@@ -346,7 +363,7 @@ FocusScope {
                 visible: !pane.reading && graph.knownCount > 0 && graph.hiddenCount > 0
                 focusPolicy: Qt.NoFocus
                 text: qsTr("%Ln more past your page", "", graph.hiddenCount)
-                onClicked: graph.showWhole()
+                onClicked: pane.askingWhole = !pane.askingWhole
             }
             // The one sign that the graph is being worked on: the AI noting
             // what was read, or a large picture still finding its shape.
@@ -440,6 +457,47 @@ FocusScope {
             AppButton { objectName: "graphTouchFind"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("find") }
             AppButton { objectName: "graphTouchFilter"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
             AppButton { objectName: "graphTouchAdd"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: sheet.show("add", pane.node) }
+        }
+
+        // Before what is known past the page is shown: where that is, and
+        // the choice, under the header rather than over the picture.
+        ColumnLayout {
+            objectName: "graphWholeAsk"
+            visible: pane.askingWhole && graph.knownCount > 0 && graph.hiddenCount > 0
+            Layout.fillWidth: true
+            Layout.leftMargin: 16
+            Layout.rightMargin: 16
+            Layout.bottomMargin: 8
+            spacing: 6
+            Label {
+                objectName: "graphWholeWarning"
+                Layout.fillWidth: true
+                text: pane.wholeWarning
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: 8
+                AppButton {
+                    id: wholeConfirm
+                    objectName: "graphWholeConfirm"
+                    primary: true
+                    text: qsTr("Show Everything Known")
+                    onClicked: {
+                        pane.askingWhole = false
+                        graph.showWhole()
+                    }
+                }
+                AppButton {
+                    objectName: "graphWholeCancel"
+                    text: qsTr("Not Now")
+                    onClicked: {
+                        pane.askingWhole = false
+                        pane.takeFocus()
+                    }
+                }
+            }
         }
 
         // The kinds there are: the picture's legend, and each a switch that
@@ -877,7 +935,7 @@ FocusScope {
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     color: theme.colors.muted
-                    text: qsTr("%Ln things are known of this book past the place you left it. They may give away what happens.", "", graph.hiddenCount)
+                    text: qsTr("%Ln things are known of this book past the place you left it.", "", graph.hiddenCount) + " " + pane.wholeWarning
                 }
                 Label {
                     objectName: "graphEmptyText"
@@ -981,6 +1039,8 @@ FocusScope {
                 onMerge: pane.mergeSelected()
                 onRemove: pane.removeSelected()
                 onUnlink: (relation) => sheet.show("unlink", pane.node, relation)
+                onShowAhead: (id, shown) => graph.showAhead(id, shown)
+                onLeave: pane.takeFocus()
                 closable: body.either
                 onClose: pane.peek = false
             }

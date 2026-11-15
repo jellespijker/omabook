@@ -243,7 +243,6 @@
   "Finding your way": "Se repérer",
   "Finished": "Terminé",
   "Finished on (2026-03-01)": "Terminé le (2026-03-01)",
-  "First met: %1": "Première rencontre : %1",
   "Five views": "Cinq vues",
   "Five views of the shelf": "Cinq vues de l'étagère",
   "Five ways to look at it": "Cinq façons de la regarder",
@@ -314,7 +313,6 @@
   "Larger": "Plus grand",
   "Larger text, or zoom in": "Agrandir le texte, ou zoomer",
   "Later": "Plus tard",
-  "Latest: %1": "Dernier : %1",
   "Libraries": "Bibliothèques",
   "Library": "Bibliothèque",
   "List": "Liste",
@@ -1013,11 +1011,6 @@
   "Goodreads has no way in for apps and takes no changes from them. What it does have is a file of everything under My Books, with what you read, are reading and want to read, which works for a private profile too.": "Goodreads n'offre aucun accès aux applications et n'accepte aucune modification de leur part. Il propose en revanche un fichier de tout ce qui se trouve sous Mes livres, avec ce que vous avez lu, lisez et voulez lire, qui fonctionne aussi pour un profil privé.",
   "Nothing up to your page": "Rien jusqu'à votre page",
   "Show Everything Known": "Tout afficher",
-  "%Ln things are known of this book past the place you left it. They may give away what happens.": {
-    "many": "%Ln éléments de ce livre sont connus au-delà de l'endroit où vous vous êtes arrêté. Ils peuvent révéler la suite.",
-    "one": "%Ln élément de ce livre est connu au-delà de l'endroit où vous vous êtes arrêté. Il peut révéler la suite.",
-    "other": "%Ln éléments de ce livre sont connus au-delà de l'endroit où vous vous êtes arrêté. Ils peuvent révéler la suite."
-  },
   "%Ln more past your page": {
     "many": "%Ln de plus après votre page",
     "one": "%Ln de plus après votre page",
@@ -1161,6 +1154,43 @@
   "One, two or three pages": "Une, deux ou trois pages",
   "Pages side by side": "Pages côte à côte",
   "Pages side by side: as many as fit, one, two or three, and round again": "Pages côte à côte : autant qu’il en tient, une, deux ou trois, puis recommencer",
+  "%Ln things are known of this book past the place you left it.": {
+    "one": "%Ln élément de ce livre est connu au-delà de l'endroit où vous vous êtes arrêté.",
+    "many": "%Ln éléments de ce livre sont connus au-delà de l'endroit où vous vous êtes arrêté.",
+    "other": "%Ln éléments de ce livre sont connus au-delà de l'endroit où vous vous êtes arrêté."
+  },
+  "Ahead · %1": "Plus loin · %1",
+  "Back to the moment, without spoilers": "Retour au moment, sans rien révéler",
+  "Called %1": "Appelé %1",
+  "First met: %1": "Première rencontre : %1",
+  "Go through when what is known of the selected thing was revealed: Tab moves on, Enter goes to that moment in the text": "Parcourir quand on a appris ce qu'on sait de l'élément choisi : Tab passe au suivant, Entrée va à ce moment du texte",
+  "Go to this moment: %1": "Aller à ce moment : %1",
+  "Hidden, as it gives away what happens later.": "Masqué, car cela révèle la suite.",
+  "Hide what happens later (%Ln)": {
+    "one": "Masquer la suite (%Ln)",
+    "many": "Masquer la suite (%Ln)",
+    "other": "Masquer la suite (%Ln)"
+  },
+  "Later in the book (%Ln)": {
+    "one": "Plus loin dans le livre (%Ln)",
+    "many": "Plus loin dans le livre (%Ln)",
+    "other": "Plus loin dans le livre (%Ln)"
+  },
+  "Later in the book (%Ln), hidden": {
+    "one": "Plus loin dans le livre (%Ln), masqué",
+    "many": "Plus loin dans le livre (%Ln), masqué",
+    "other": "Plus loin dans le livre (%Ln), masqué"
+  },
+  "Latest: %1": "Dernier : %1",
+  "Met later in the book.": "Rencontré plus loin dans le livre.",
+  "Met only after %1, past where you are.": "Rencontré seulement après %1, au-delà de là où vous en êtes.",
+  "Moments, and no spoilers": "Moments, sans rien révéler",
+  "Nothing is known yet of when it was revealed.": "On ne sait pas encore quand on l'a appris.",
+  "The map ({reader.graph}) says when each thing was revealed and takes you to that very line. What happens past your furthest page stays closed until you ask, for that one thing.": "La carte ({reader.graph}) dit quand chaque chose a été révélée et vous emmène à la ligne même. Ce qui se passe après votre page la plus lointaine reste fermé tant que vous ne le demandez pas, pour cette seule chose.",
+  "The map's details say when each thing known of someone was revealed, and each is a way back to that moment in the text ({graph.moments} from the keyboard), where its words are lit. The card on the page goes to where a thing was first met, and to where what is said of it now was told. What happens past the furthest you have read stays closed under Later in the book: it opens for that one thing only, once you confirm, until Omabook closes. A book marked as read has nothing to hide.": "Les détails de la carte disent quand chaque chose connue de quelqu'un a été révélée, et chacune ramène à ce moment du texte ({graph.moments} au clavier), où ses mots s'allument. La fiche sur la page mène là où une chose a été rencontrée pour la première fois, et là où ce qu'on en dit maintenant a été raconté. Ce qui se passe au-delà de l'endroit le plus lointain que vous avez lu reste fermé sous Plus loin dans le livre : cela ne s'ouvre que pour cette seule chose, une fois confirmé, jusqu'à la fermeture d'Omabook. Un livre lu n'a rien à cacher.",
+  "This shows what happens after %1.": "Ceci montre ce qui se passe après %1.",
+  "This shows what happens later in the book.": "Ceci montre ce qui se passe plus loin dans le livre.",
+  "When it was revealed": "Quand on l'a appris",
   "%Ln stars": {
     "one": "%Ln étoile",
     "many": "%Ln étoiles",

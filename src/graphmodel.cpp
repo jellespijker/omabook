@@ -12,6 +12,7 @@
 
 #include "backend.h"
 #include "graphcanvas.h"
+#include "graphcontext.h"
 
 namespace {
 
@@ -23,6 +24,14 @@ int rankOf(const QString &kind) {
     const int at = int(GraphBrowser::knownKinds().indexOf(kind));
     return at < 0 ? int(GraphBrowser::knownKinds().size()) : at;
 }
+
+// The nodes whose spoilers were opened, for as long as the program runs: a
+// choice made for one node of one library, never for the rest.
+QSet<QString> &opened() {
+    static QSet<QString> nodes;
+    return nodes;
+}
+QString openedKey(const Library *library, qint64 node) { return (library ? library->root() : QString()) + "\n" + QString::number(node); }
 
 bool before(const GraphNode &a, const GraphNode &b) {
     const int ranks = rankOf(a.kind) - rankOf(b.kind);
@@ -141,8 +150,9 @@ std::optional<GraphPlace> GraphBrowser::placeIn(const Book &book) const {
     // known of it is shown.
     if (book.status() == "read" || book.percent <= 0)
         return std::nullopt;
-    const Progress progress = library()->progress(book.id);
-    return GraphPlace{book.id, progress.section, progress.fraction};
+    // As far as it was ever read: going back to an earlier page doesn't
+    // take away what is known already.
+    return GraphContext::furthest(*library(), book.id);
 }
 
 void GraphBrowser::showWhole() {
@@ -151,6 +161,36 @@ void GraphBrowser::showWhole() {
     m_upTo.reset();
     load(false);
     emit reframed();
+}
+
+QVariantMap GraphBrowser::spoilersAfter() const {
+    const auto bound = m_what == What::Book && library() ? GraphContext::spoilersAfter(*library(), m_bookId) : std::nullopt;
+    if (!bound)
+        return {};
+    return {{"bookId", bound->bookId}, {"section", bound->section}, {"fraction", bound->fraction}};
+}
+
+void GraphBrowser::showAhead(qint64 node, bool shown) {
+    const QString key = openedKey(library(), node);
+    if (shown == opened().contains(key))
+        return;
+    if (shown)
+        opened().insert(key);
+    else
+        opened().remove(key);
+    describe();
+    emit selectedChanged();
+}
+
+QList<GraphNode> GraphBrowser::unspoiled(QList<GraphNode> nodes) const {
+    if (!library() || nodes.isEmpty())
+        return nodes;
+    const Graph graph(*library());
+    const auto facts = graph.factsOf(nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QList<qint64>>());
+    const GraphKnown known = GraphContext::unspoiled(*library());
+    for (GraphNode &node : nodes)
+        node = Graph::asKnown(std::move(node), facts.value(node.id), m_what == What::Book ? m_bookId : 0, known);
+    return nodes;
 }
 
 GraphView GraphBrowser::allowed() const {
@@ -289,8 +329,14 @@ void GraphBrowser::load(bool keepPlaces) {
         m_centre = 0;
         m_base = allowed();
     }
+    // A book cut at its reader's place is as it was known there already;
+    // anything shown whole says of each thing only what its reader has
+    // reached, and keeps the rest for the details to offer.
+    if (!bounded())
+        m_base.nodes = unspoiled(m_base.nodes);
     // What the book connects to in other books, as far as it was read.
     m_outer = m_what == What::Book && library() ? Graph(*library()).beyond(m_bookId, m_upTo) : GraphView();
+    m_outer.nodes = unspoiled(m_outer.nodes);
     m_beyondCount = int(m_outer.nodes.size());
     m_knownCount = int(m_base.nodes.size());
     // What is known of the book past the place shown, so the view can say
@@ -699,7 +745,9 @@ QVariantList GraphBrowser::find(const QString &typed) const {
     // A scope is searched whole, past what the picture holds; a book only
     // in what its reader has met.
     if (m_what == What::Scope && !words.isEmpty()) {
-        nodes = Graph(*library()).find(words.join(' '), {}, m_scope, 200);
+        // Found only by what may be shown: a name revealed past a reader's
+        // place finds nothing, so neither the list nor its count gives it away.
+        nodes = unspoiled(Graph(*library()).find(words.join(' '), {}, m_scope, 200));
         nodes.removeIf([&](const GraphNode &node) { return !goesBy(node, words); });
     } else {
         for (const GraphNode &node : m_base.nodes)
@@ -788,17 +836,69 @@ void GraphBrowser::describe() {
                  {"answer", node.data.value("answer").toString()}, {"url", node.data.value("url").toString()},
                  {"outer", m_shown.at(row).outer}, {"fromBook", m_shown.at(row).fromBook}, {"from", m_shown.at(row).from}};
 
+    // What a book's reader has not reached is kept apart, as "ahead".
+    const GraphKnown known = GraphContext::unspoiled(*books);
+    QHash<qint64, std::optional<Book>> bookCache;
+    const auto bookOfId = [&](qint64 id) -> const std::optional<Book> & {
+        if (!bookCache.contains(id))
+            bookCache.insert(id, books->book(id));
+        return *bookCache.constFind(id);
+    };
+    const auto momentMap = [&](const GraphMoment &moment) {
+        const auto &book = bookOfId(moment.place.bookId);
+        return QVariantMap{{"bookId", moment.place.bookId}, {"title", book ? book->meta.title : QString()},
+                           {"section", moment.place.section}, {"fraction", moment.place.fraction}, {"anchor", moment.anchor},
+                           {"readable", book && !book->formats.isEmpty()}};
+    };
+
     // The books it is in, each with where it was first met there.
     QVariantList places;
+    bool metHere = false, metAhead = false;
     for (const GraphPlace &place : graph.seen(node.id)) {
-        const auto book = books->book(place.bookId);
+        const auto &book = bookOfId(place.bookId);
         // Of the book being read, only what is behind the reader.
         if (!book || (m_upTo && place.bookId == m_upTo->bookId && !place.notAfter(*m_upTo)))
             continue;
-        places << QVariantMap{{"bookId", place.bookId}, {"title", book->meta.title}, {"section", place.section},
-                              {"fraction", place.fraction}, {"readable", !book->formats.isEmpty()}};
+        if (!known(place)) {
+            metAhead = true;
+            continue;
+        }
+        metHere = true;
+        places << momentMap(graph.firstMet(node.id, place.bookId).value_or(GraphMoment{place, {}}));
     }
     m_details.insert("places", places);
+    // Met only past where the reader is: everything said of it is ahead.
+    m_details.insert("nodeAhead", metAhead && !metHere);
+
+    // When what is known of it was revealed: each summary it had and each
+    // name it was given, at its moment; and what lies ahead, apart.
+    QVariantList timeline, ahead;
+    const qint64 within = m_what == What::Book ? m_bookId : 0;
+    for (const GraphReveal &step : graph.timeline(node.id, within)) {
+        // Of a book cut at a place, nothing past it: not even as a spoiler.
+        if (m_upTo && step.revealed.place.bookId == m_upTo->bookId && !step.revealed.place.notAfter(*m_upTo) && known(step.revealed.place))
+            continue;
+        QVariantMap entry = momentMap(step.revealed);
+        entry.insert("what", step.what);
+        entry.insert("text", step.text);
+        entry.insert("other", step.other);
+        entry.insert("otherName", step.otherName);
+        entry.insert("outgoing", step.outgoing);
+        if (!known(step.revealed.place)) {
+            const auto bound = GraphContext::spoilersAfter(*books, step.revealed.place.bookId);
+            entry.insert("after", bound ? QVariantMap{{"bookId", bound->bookId}, {"section", bound->section}} : QVariantMap());
+            ahead << entry;
+        } else if (step.what == "summary" || step.what == "alias") {
+            timeline << entry;
+        }
+    }
+    m_details.insert("timeline", timeline);
+    m_details.insert("aheadCount", ahead.size());
+    // Its words only once asked for, for this node.
+    const bool open = opened().contains(openedKey(books, node.id));
+    m_details.insert("aheadShown", open && !ahead.isEmpty());
+    m_details.insert("ahead", open ? ahead : QVariantList());
+    m_details.insert("aheadAfter", ahead.isEmpty() ? QVariantMap() : ahead.first().toMap().value("after").toMap());
 
     // How it relates to other things. A scope knows all of a node's
     // edges; a book only those its reader has learned.
@@ -818,6 +918,9 @@ void GraphBrowser::describe() {
     for (const GraphEdge &edge : near.edges) {
         if (edge.source != node.id && edge.target != node.id)
             continue;
+        // A relation learned past the reader's place is one of the things ahead.
+        if (edge.learned.bookId > 0 && !known(edge.learned))
+            continue;
         const bool outgoing = edge.source == node.id;
         const GraphNode *other = byId.value(outgoing ? edge.target : edge.source);
         if (!other)
@@ -826,6 +929,8 @@ void GraphBrowser::describe() {
         // books says which book its other end is from.
         const bool elsewhere = far.contains(other->id) || (m_what == What::Scope && edge.across());
         relations << QVariantMap{{"edge", edge.id}, {"relation", edge.relation()}, {"note", edge.note}, {"outgoing", outgoing},
+                                 {"bookId", edge.learned.bookId}, {"section", edge.learned.section}, {"fraction", edge.learned.fraction},
+                                 {"anchor", edge.anchor},
                                  {"other", other->id}, {"otherName", other->name}, {"otherKind", other->kind},
                                  {"across", edge.across()}, {"otherFrom", elsewhere ? bookOf(*other).second : QString()}};
     }

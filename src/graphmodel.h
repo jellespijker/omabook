@@ -61,6 +61,10 @@ class GraphBrowser : public QObject {
     // In a book's graph cut off at the reader's place: how many things are
     // known of it beyond that place.
     Q_PROPERTY(int hiddenCount READ hiddenCount NOTIFY changed)
+    // Of the book shown, the furthest its reader got, past which what is
+    // known of it gives away what happens: {bookId, section, fraction}, or
+    // empty for a book without spoilers (read to its end, or never opened).
+    Q_PROPERTY(QVariantMap spoilersAfter READ spoilersAfter NOTIFY changed)
     Q_PROPERTY(bool storied READ storied NOTIFY changed)
     // The kinds there are, each {kind, count, shown}, in the order they are
     // always listed in.
@@ -85,7 +89,10 @@ class GraphBrowser : public QObject {
     Q_PROPERTY(qint64 centre READ centre NOTIFY changed)
     Q_PROPERTY(bool canGoBack READ canGoBack NOTIFY changed)
     Q_PROPERTY(qint64 selected READ selected WRITE select NOTIFY selectedChanged)
-    // Everything known of the selected node; empty when there is none.
+    // Everything known of the selected node; empty when there is none. What
+    // lies past the reader's furthest place in a book is apart, in "ahead",
+    // and in nothing else: not the summary, the names, the places it was
+    // met at or its relations.
     Q_PROPERTY(QVariantMap details READ details NOTIFY selectedChanged)
     Q_PROPERTY(bool settling READ settling NOTIFY settlingChanged)
     // How much wider than tall the picture is laid out, which its view
@@ -129,6 +136,10 @@ public:
     int hiddenCount() const noexcept { return m_hiddenCount; }
     // Shows all that is known of the book, past the reader's place too.
     Q_INVOKABLE void showWhole();
+    QVariantMap spoilersAfter() const;
+    // Opens (or closes again) what lies ahead of the reader for one node,
+    // for as long as the program runs; the details then hold it as "ahead".
+    Q_INVOKABLE void showAhead(qint64 node, bool shown = true);
     bool storied() const noexcept { return m_storied; }
     QVariantList kinds() const noexcept { return m_kinds; }
     QVariantList rows() const noexcept { return m_rows; }
@@ -234,6 +245,9 @@ private:
     std::optional<GraphPlace> placeIn(const Book &book) const;
     // What may be shown at all, before the centre and the filters.
     GraphView allowed() const;
+    // Nodes as they may be shown without a warning: as far as each book was
+    // read (see GraphContext::unspoiled).
+    QList<GraphNode> unspoiled(QList<GraphNode> nodes) const;
     void show(What what);
     void load(bool keepPlaces);
     void describe();

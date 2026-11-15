@@ -5,7 +5,11 @@ import QtQuick.Layouts
 
 // Everything known of the selected node: what it is and is also called,
 // what is said of it, the books it is in and where it was first met in
-// each, and how it relates to other things, each relation a way to go on.
+// each, when each thing known of it was revealed (each a way back to that
+// moment in the text), and how it relates to other things, each relation a
+// way to go on. What lies past the reader's furthest place is a spoiler: it
+// is kept in a section of its own, closed until asked for and confirmed,
+// and nothing of it shows anywhere else, not even to a screen reader.
 Item {
     id: panel
     // GraphBrowser.details: empty when nothing is selected.
@@ -16,6 +20,42 @@ Item {
     readonly property var places: node.places || []
     readonly property var relations: node.relations || []
     readonly property bool isBook: node.kind === "book" && (node.bookId || 0) > 0
+    readonly property var timeline: node.timeline || []
+    readonly property int aheadCount: node.aheadCount || 0
+    readonly property bool aheadShown: !!node.aheadShown
+    // Asked once, before what lies ahead is shown: for this node only, and
+    // still asked when the details are read again (the graph grew).
+    property var askingFor: 0
+    readonly property bool asking: hasNode && askingFor === node.id && !aheadShown
+    function ask(asked) {
+        askingFor = asked ? node.id : 0
+        if (asked) {
+            aheadShowButton.forceActiveFocus()
+            sightSoon.show(aheadShowButton)
+        }
+    }
+    // Once what just appeared is laid out.
+    Timer {
+        id: sightSoon
+        property Item target: null
+        interval: 40
+        function show(item) { target = item; restart() }
+        onTriggered: if (target) panel.keepInSight(target)
+    }
+    // Whether a row is in sight in the scrolled details. A curve-drawn mark
+    // of a row scrolled out of sight would still show over what is beside
+    // the details, so the rows drop theirs while out of sight.
+    function inSight(item, top, height) {
+        const y = item.mapToItem(column, 0, 0).y
+        return y >= top && y + item.height <= top + height
+    }
+    // Brings something of the details into sight, scrolling as little as it can.
+    function keepInSight(item) {
+        const top = item.mapToItem(column, 0, 0).y
+        const bottom = top + item.height
+        if (bottom > flick.contentY + flick.height) flick.contentY = Math.min(Math.max(0, flick.contentHeight - flick.height), bottom - flick.height + 8)
+        if (top < flick.contentY) flick.contentY = Math.max(0, top - 8)
+    }
 
     signal jump(var id)
     signal look()
@@ -25,6 +65,39 @@ Item {
     signal merge()
     signal remove()
     signal unlink(var relation)
+    // What lies ahead of the reader, for this node: opened or closed again.
+    signal showAhead(var id, bool shown)
+    // The keyboard goes back to the picture.
+    signal leave()
+
+    // The keyboard to the first moment, or the section of what lies ahead;
+    // false when there is neither.
+    function takeKeys() {
+        const first = timelineRows.count > 0 ? timelineRows.itemAt(0) : aheadToggle.visible ? aheadToggle : null
+        if (!first) return false
+        first.forceActiveFocus()
+        return true
+    }
+    // Tab and Shift+Tab move among the moments and Escape leaves them, here
+    // rather than as the picture's keys.
+    function moves(event) {
+        return event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab || event.key === Qt.Key_Escape
+    }
+    function move(item, event) {
+        if (event.key === Qt.Key_Escape) {
+            panel.leave()
+            return
+        }
+        const next = item.nextItemInFocusChain(event.key === Qt.Key_Tab)
+        if (next && next.visible && panel.holds(next)) next.forceActiveFocus()
+        else panel.leave()
+    }
+    // Whether an item is part of the details, scrolled into sight or not.
+    function holds(item) {
+        for (let up = item; up; up = up.parent)
+            if (up === column) return true
+        return false
+    }
     // Where the details stand in the picture's place, a way back to it.
     property bool closable: false
     signal close()
@@ -33,14 +106,83 @@ Item {
     GraphWords { id: words }
 
     // Where in a book: the chapter's name when the book is open, else its number.
-    function placeText(place) {
-        if (reader.open && reader.bookId === place.bookId) {
-            let title = ""
-            for (const entry of reader.toc)
-                if (entry.section <= place.section) title = entry.title
-            if (title !== "") return title
+    function placeText(place) { return words.place(place) }
+    // Whether a key works the row that has the keyboard.
+    function activates(event) {
+        return event.modifiers === Qt.NoModifier
+               && (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space)
+    }
+    // What a step of the timeline says: the summary, the name, or the relation.
+    function stepText(step) {
+        if (step.what === "alias") return qsTr("Called %1").arg(step.text)
+        if (step.what === "met") return qsTr("First met")
+        if (step.what === "relation")
+            return step.outgoing ? step.text + " " + step.otherName : step.otherName + " " + step.text
+        return step.text
+    }
+
+    // A moment of the book: where it is, what was revealed there, and a way
+    // to it. The whole row is the way, by pointer, finger or keyboard.
+    component MomentRow: Rectangle {
+        id: moment
+        required property var step
+        property bool ahead: false
+        objectName: ahead ? "graphAheadStep" : "graphMoment"
+        Layout.fillWidth: true
+        Layout.leftMargin: -6
+        implicitHeight: Math.max(win.touch ? 44 : 32, momentLines.implicitHeight + 10)
+        radius: Math.min(4, theme.radius)
+        color: (momentHover.hovered || activeFocus) && step.readable ? theme.colors.selection : "transparent"
+        border.width: activeFocus ? 1 : 0
+        border.color: theme.foreground
+        activeFocusOnTab: step.readable
+        onActiveFocusChanged: if (activeFocus) panel.keepInSight(moment)
+        Accessible.role: Accessible.Button
+        Accessible.name: qsTr("Go to this moment: %1").arg(panel.placeText(step))
+        Accessible.onPressAction: panel.go(step)
+        // Enter and Space are the row's while it has the keyboard, not the
+        // picture's shortcuts for them.
+        Keys.onShortcutOverride: (event) => event.accepted = panel.activates(event) || panel.moves(event)
+        Keys.onPressed: (event) => { if (panel.moves(event)) { panel.move(moment, event); event.accepted = true } }
+        Keys.onReturnPressed: panel.go(step)
+        Keys.onEnterPressed: panel.go(step)
+        Keys.onSpacePressed: panel.go(step)
+        ColumnLayout {
+            id: momentLines
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.leftMargin: 6
+            anchors.rightMargin: moment.step.readable ? 26 : 6
+            spacing: 1
+            // "Ahead · The Crossing", or "The Crossing": where it was revealed.
+            Label {
+                Layout.fillWidth: true
+                text: moment.ahead ? qsTr("Ahead · %1").arg(panel.placeText(moment.step)) : panel.placeText(moment.step)
+                color: moment.ahead ? theme.accent : theme.colors.muted
+                font.pixelSize: 12
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
+            }
+            Label {
+                Layout.fillWidth: true
+                text: panel.stepText(moment.step)
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+            }
         }
-        return qsTr("part %1").arg((place.section + 1).toLocaleString(Qt.locale(), 'f', 0))
+        Glyph {
+            id: momentMark
+            visible: moment.step.readable && panel.inSight(momentMark, flick.contentY, flick.height)
+            anchors.right: parent.right
+            anchors.rightMargin: 8
+            anchors.verticalCenter: parent.verticalCenter
+            name: win.rightToLeft ? "back" : "forward"
+            size: 12
+            color: theme.colors.muted
+        }
+        HoverHandler { id: momentHover }
+        TapHandler { enabled: moment.step.readable; onTapped: panel.go(moment.step) }
     }
 
     Rectangle {
@@ -116,6 +258,18 @@ Item {
                 Layout.fillWidth: true
                 visible: !!panel.node.outer && (panel.node.from || "") !== ""
                 text: qsTr("From %1").arg(panel.node.from || "")
+                color: theme.accent
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+            }
+            // Met only past the reader's place (a book shown whole): said
+            // plainly, with nothing of what is known of it.
+            Label {
+                objectName: "graphDetailsLater"
+                Layout.fillWidth: true
+                visible: !!panel.node.nodeAhead
+                text: (panel.node.aheadAfter || {}).bookId ? qsTr("Met only after %1, past where you are.").arg(panel.placeText(panel.node.aheadAfter))
+                                                          : qsTr("Met later in the book.")
                 color: theme.accent
                 wrapMode: Text.Wrap
                 textFormat: Text.PlainText
@@ -237,7 +391,8 @@ Item {
                     }
                     // A book that can be opened here is a way to that place in it.
                     Glyph {
-                        visible: met.modelData.readable
+                        id: metMark
+                        visible: met.modelData.readable && panel.inSight(metMark, flick.contentY, flick.height)
                         anchors.right: parent.right
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
@@ -247,6 +402,161 @@ Item {
                     }
                     HoverHandler { id: metHover }
                     TapHandler { enabled: met.modelData.readable; onTapped: panel.go(met.modelData) }
+                }
+            }
+
+            // When what is known of it was revealed, each a way back there.
+            Label {
+                id: timelineTitle
+                objectName: "graphTimelineTitle"
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                visible: panel.timeline.length > 0
+                text: qsTr("When it was revealed")
+                color: theme.colors.muted
+                font.pixelSize: 12
+            }
+            Repeater {
+                id: timelineRows
+                model: panel.timeline
+                delegate: MomentRow {
+                    required property var modelData
+                    step: modelData
+                }
+            }
+
+            // What lies past the reader's furthest place: closed, and opened
+            // only once it is confirmed, for this node.
+            ColumnLayout {
+                id: aheadBox
+                objectName: "graphAhead"
+                Layout.fillWidth: true
+                Layout.topMargin: 10
+                visible: panel.aheadCount > 0
+                spacing: 4
+                readonly property string after: (panel.node.aheadAfter || {}).bookId ? panel.placeText(panel.node.aheadAfter) : ""
+
+                Rectangle {
+                    id: aheadToggle
+                    objectName: "graphAheadToggle"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: -6
+                    implicitHeight: Math.max(win.touch ? 44 : 32, aheadHead.implicitHeight + 10)
+                    radius: Math.min(4, theme.radius)
+                    color: aheadHover.hovered || activeFocus ? theme.colors.selection : "transparent"
+                    border.width: activeFocus ? 1 : 0
+                    border.color: theme.foreground
+                    activeFocusOnTab: true
+                    onActiveFocusChanged: if (activeFocus) panel.keepInSight(aheadToggle)
+                    // Says how many, and that they are hidden: never what they say.
+                    Accessible.role: Accessible.Button
+                    Accessible.name: panel.aheadShown ? qsTr("Hide what happens later (%Ln)", "", panel.aheadCount)
+                                                      : qsTr("Later in the book (%Ln), hidden", "", panel.aheadCount)
+                    Accessible.onPressAction: toggle()
+                    Keys.onShortcutOverride: (event) => event.accepted = panel.activates(event) || panel.moves(event)
+                    Keys.onPressed: (event) => { if (panel.moves(event)) { panel.move(aheadToggle, event); event.accepted = true } }
+                    Keys.onReturnPressed: toggle()
+                    Keys.onEnterPressed: toggle()
+                    Keys.onSpacePressed: toggle()
+                    function toggle() {
+                        if (panel.aheadShown) panel.showAhead(panel.node.id, false)
+                        else panel.ask(!panel.asking)
+                    }
+                    RowLayout {
+                        id: aheadHead
+                        anchors.verticalCenter: parent.verticalCenter
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.leftMargin: 6
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        Glyph {
+                            name: "alert"
+                            size: 14
+                            color: theme.accent
+                        }
+                        Label {
+                            objectName: "graphAheadTitle"
+                            Layout.fillWidth: true
+                            text: qsTr("Later in the book (%Ln)", "", panel.aheadCount)
+                            font.bold: true
+                            elide: Text.ElideRight
+                        }
+                        Glyph {
+                            name: panel.aheadShown || panel.asking ? "up" : "down"
+                            size: 12
+                            color: theme.colors.muted
+                        }
+                    }
+                    HoverHandler { id: aheadHover }
+                    TapHandler { onTapped: aheadToggle.toggle() }
+                }
+                Label {
+                    objectName: "graphAheadWarning"
+                    Layout.fillWidth: true
+                    visible: !panel.aheadShown
+                    text: panel.asking
+                          ? (aheadBox.after !== "" ? qsTr("This shows what happens after %1.").arg(aheadBox.after)
+                                                 : qsTr("This shows what happens later in the book."))
+                          : qsTr("Hidden, as it gives away what happens later.")
+                    color: panel.asking ? theme.foreground : theme.colors.muted
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    visible: panel.asking && !panel.aheadShown
+                    spacing: 8
+                    AppButton {
+                        id: aheadShowButton
+                        objectName: "graphAheadShow"
+                        primary: true
+                        text: qsTr("Show")
+                        Keys.onShortcutOverride: (event) => event.accepted = panel.activates(event)
+                        Keys.onSpacePressed: clicked()
+                        onClicked: {
+                            panel.ask(false)
+                            panel.showAhead(panel.node.id, true)
+                            sightSoon.show(aheadList)
+                        }
+                    }
+                    AppButton {
+                        objectName: "graphAheadCancel"
+                        text: qsTr("Not Now")
+                        Keys.onShortcutOverride: (event) => event.accepted = panel.activates(event)
+                        Keys.onSpacePressed: clicked()
+                        onClicked: {
+                            panel.ask(false)
+                            aheadToggle.forceActiveFocus()
+                        }
+                    }
+                }
+                // Opened: each step marked as ahead, on a tint of its own.
+                Rectangle {
+                    id: aheadList
+                    objectName: "graphAheadList"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: -6
+                    visible: panel.aheadShown
+                    implicitHeight: aheadSteps.implicitHeight + 8
+                    radius: Math.min(4, theme.radius)
+                    color: Qt.alpha(theme.accent, 0.07)
+                    ColumnLayout {
+                        id: aheadSteps
+                        x: 6
+                        y: 4
+                        width: parent.width - 6
+                        spacing: 2
+                        Repeater {
+                            model: panel.aheadShown ? (panel.node.ahead || []) : []
+                            delegate: MomentRow {
+                                required property var modelData
+                                step: modelData
+                                ahead: true
+                            }
+                        }
+                    }
                 }
             }
 

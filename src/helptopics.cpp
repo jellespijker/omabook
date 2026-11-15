@@ -48,6 +48,12 @@ QList<Manual::Topic> Manual::topicList() {
                  "one, or tap it, for what is known of it. Select words (drag, double-click, press and hold, or "
                  "{reader.select} and the arrow keys) for a menu: ask about them, who or what they are, show them in the "
                  "map, find them in the book, or a question worth asking.")},
+             {tr("Moments, and no spoilers"),
+              tr("The map's details say when each thing known of someone was revealed, and each is a way back to that "
+                 "moment in the text ({graph.moments} from the keyboard), where its words are lit. The card on the page goes to where a thing was first met, "
+                 "and to where what is said of it now was told. What happens past the furthest you have read stays "
+                 "closed under Later in the book: it opens for that one thing only, once you confirm, until Omabook "
+                 "closes. A book marked as read has nothing to hide.")},
              {tr("Making it comfortable"),
               tr("{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and "
                  "nothing else, on the whole screen.")},
