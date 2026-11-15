@@ -149,6 +149,68 @@ Item {
                     onClicked: win.removeBook(pane.book.bookId)
                 }
             }
+            // The collections there are, those the book is in filled in: a
+            // tap puts it in or takes it out, by hand, whatever the rule.
+            Label {
+                Layout.fillWidth: true
+                Layout.topMargin: 6
+                visible: inCollections.visible
+                text: qsTr("Collections")
+                color: theme.colors.muted
+                font.pixelSize: 12
+            }
+            Flow {
+                id: inCollections
+                objectName: "detailsCollections"
+                Layout.fillWidth: true
+                visible: pane.hasBook && !pane.launcher && backend.collections.length > 0
+                spacing: 6
+                Repeater {
+                    model: {
+                        backend.revision
+                        return inCollections.visible ? backend.bookCollections(pane.book.bookId) : []
+                    }
+                    delegate: Rectangle {
+                        id: chip
+                        required property var modelData
+                        objectName: "detailsCollection-" + modelData.id
+                        width: Math.min(inCollections.width, chipRow.implicitWidth + 20)
+                        height: win.touch ? 38 : 28
+                        radius: theme.radius
+                        color: modelData.in ? Qt.alpha(theme.accent, chipHover.hovered ? 0.3 : 0.18)
+                               : chipHover.hovered ? theme.colors.selection : "transparent"
+                        border.color: modelData.in ? Qt.alpha(theme.accent, 0.6) : theme.colors.selection
+                        Accessible.role: Accessible.CheckBox
+                        Accessible.name: modelData.name
+                        Accessible.checked: modelData.in
+                        Accessible.onToggleAction: backend.setInCollection(modelData.id, pane.book.bookId, !modelData.in)
+                        Row {
+                            id: chipRow
+                            anchors.centerIn: parent
+                            spacing: 6
+                            Glyph {
+                                name: chip.modelData.in ? "check" : "plus"
+                                size: 12
+                                color: chip.modelData.in ? theme.foreground : Qt.alpha(theme.foreground, 0.6)
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                            Label {
+                                text: chip.modelData.name
+                                font.pixelSize: 13
+                                width: Math.min(implicitWidth, inCollections.width - 44)
+                                elide: Text.ElideRight
+                                anchors.verticalCenter: parent.verticalCenter
+                            }
+                        }
+                        HoverHandler { id: chipHover }
+                        TapHandler { onTapped: backend.setInCollection(chip.modelData.id, pane.book.bookId, !chip.modelData.in) }
+                        ToolTip.visible: chipHover.hovered
+                        ToolTip.delay: 600
+                        ToolTip.text: (chip.modelData.in ? qsTr("Take it out of %1") : qsTr("Put it in %1")).arg(chip.modelData.name)
+                                      + "  " + (custom.keyText["library.collection_book"] || "").split("  ")[0]
+                    }
+                }
+            }
             Label {
                 Layout.fillWidth: true
                 Layout.topMargin: 6

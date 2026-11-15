@@ -38,6 +38,8 @@ Item {
     })
     // The view in use; null for the moment one is being swapped for another.
     readonly property var shelf: shelfLoader.item
+    // A collection is shown that holds no book at all (not one a search or a filter emptied).
+    readonly property bool emptyCollection: backend.libraryError === "" && backend.collection !== 0 && backend.books.total === 0
     // The filters in the order they are always listed in.
     readonly property var filterKinds: ["status", "held", "rating", "format", "language", "tag", "author", "series"].filter(
                                            kind => backend.books.filters[kind] !== undefined)
@@ -70,11 +72,17 @@ Item {
     Words { id: words }
     ShelfPalette {
         id: chooser
-        onClosed: view.takeFocus()
+        // Not from a dialog it opened, which has the keyboard now.
+        onClosed: if (!win.dialogOpen) view.takeFocus()
         // The buttons fingers have, taken from the list they fold into.
         onActed: (what) => {
             if (what === "add") backend.addBooks()
             else if (what === "filter") filterLater.restart()
+            else if (what === "collections") collectionsLater.restart()
+            else if (what === "collectionNew") win.newCollection("")
+            else if (what === "collectionFromShelf") win.newCollection(backend.shelfRule())
+            else if (what === "collectionEdit") win.editCollection(backend.collection)
+            else if (what === "collectionSort") win.showTidy("collections")
             else if (what === "suggest") win.showSuggestions()
             else if (what === "libraries") win.showLibraries()
             else if (what === "settings") win.showSettings()
@@ -82,6 +90,7 @@ Item {
     }
     // The list of filters opens once the list it was picked from has closed.
     Timer { id: filterLater; interval: 0; onTriggered: chooser.show("filter") }
+    Timer { id: collectionsLater; interval: 0; onTriggered: chooser.show("collections") }
 
     Key { command: "library.search"; when: view.visible; onActivated: header.openSearch() }
     Key { command: "library.add"; when: view.visible; onActivated: backend.addBooks() }
@@ -104,6 +113,10 @@ Item {
     Key { command: "library.view_next"; when: view.visible; onActivated: view.nextView() }
     Key { command: "library.group"; when: view.visible; onActivated: view.nextGroup() }
     Key { command: "library.libraries"; when: view.visible; onActivated: win.showLibraries() }
+    Key { command: "library.collections"; when: view.visible; onActivated: chooser.show("collections") }
+    Key { command: "library.collection_next"; when: view.visible; onActivated: backend.stepCollection(1) }
+    Key { command: "library.collection_previous"; when: view.visible; onActivated: backend.stepCollection(-1) }
+    Key { command: "library.collection_book"; when: view.visible && view.selectedId > 0; onActivated: chooser.show("in", view.selectedId) }
     Key { command: "library.sync"; when: view.visible; onActivated: backend.sync() }
     Key { command: "library.plugins"; when: view.visible; onActivated: win.showPlugins() }
     Key { command: "library.details"; when: view.visible; onActivated: view.toggleDetails() }
@@ -364,6 +377,38 @@ Item {
             }
         }
 
+        // The collections, as tabs, once the library has any: which part of
+        // it the shelf shows. Each keeps its own view and order.
+        CollectionStrip {
+            id: collectionStrip
+            visible: backend.collections.length > 0
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.leftMargin: 12
+            Layout.rightMargin: 12
+            Layout.bottomMargin: 6
+            onMore: chooser.show("collections")
+            onCreate: (parent) => win.newCollection("", parent)
+            onEdit: (id) => win.editCollection(id)
+        }
+        // Opened, a collection with others inside it shows them in a row
+        // under it; inside one of them, the row stays, for its neighbours.
+        CollectionStrip {
+            id: innerStrip
+            objectName: "collectionInnerStrip"
+            readonly property var shown: backend.collections.find(c => c.id === backend.collection)
+            parentId: !shown ? 0 : shown.children ? shown.id : shown.parent
+            visible: parentId !== 0
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
+            Layout.leftMargin: 20
+            Layout.rightMargin: 12
+            Layout.bottomMargin: 6
+            onMore: chooser.show("collections")
+            onCreate: (parent) => win.newCollection("", parent)
+            onEdit: (id) => win.editCollection(id)
+        }
+
         // What narrows the shelf, each taken off again with a click. The
         // chips wrap onto a second row (one row in a low window); those
         // that still don't fit are counted in a last chip, "+3", which
@@ -579,12 +624,39 @@ Item {
                             wrapMode: Text.Wrap
                             font.pixelSize: 22
                             text: backend.libraryError !== "" ? backend.libraryError
+                                  : view.emptyCollection ? qsTr("Nothing is in %1 yet").arg(backend.collectionName)
                                   : backend.books.total === 0 ? qsTr("No books yet")
                                   : qsTr("No book matches")
                         }
+                        // A collection that holds nothing says how it is filled.
+                        Label {
+                            objectName: "emptyCollection"
+                            Layout.fillWidth: true
+                            visible: view.emptyCollection
+                            horizontalAlignment: Text.AlignHCenter
+                            wrapMode: Text.Wrap
+                            color: theme.colors.muted
+                            text: qsTr("Its rule finds no book. Change the rule, put a book in with %1, or have the AI sort the books that are in no collection.")
+                                  .arg(view.keyOf("library.collection_book"))
+                        }
+                        Flow {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.maximumWidth: parent.width
+                            visible: view.emptyCollection
+                            spacing: 8
+                            AppButton { objectName: "emptyCollectionEdit"; primary: true; focusPolicy: Qt.NoFocus; text: qsTr("Change the collection"); onClicked: win.editCollection(backend.collection) }
+                            AppButton {
+                                objectName: "emptyCollectionSort"
+                                visible: librarian.hasAi
+                                focusPolicy: Qt.NoFocus
+                                text: qsTr("Sort with AI")
+                                onClicked: win.showTidy("collections")
+                            }
+                            AppButton { objectName: "emptyCollectionAll"; focusPolicy: Qt.NoFocus; text: qsTr("Show all books"); onClicked: backend.collection = 0 }
+                        }
                         Label {
                             Layout.fillWidth: true
-                            visible: backend.libraryError === "" && backend.books.total === 0
+                            visible: backend.libraryError === "" && backend.books.total === 0 && !view.emptyCollection
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.Wrap
                             color: theme.colors.muted
@@ -594,7 +666,7 @@ Item {
                         }
                         Label {
                             Layout.fillWidth: true
-                            visible: backend.libraryError === "" && backend.books.total === 0
+                            visible: backend.libraryError === "" && backend.books.total === 0 && !view.emptyCollection
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.Wrap
                             color: theme.colors.muted
@@ -607,7 +679,7 @@ Item {
                             Layout.alignment: Qt.AlignHCenter
                             Layout.maximumWidth: parent.width
                             Layout.topMargin: 4
-                            visible: backend.libraryError === "" && backend.books.total === 0
+                            visible: backend.libraryError === "" && backend.books.total === 0 && !view.emptyCollection
                             spacing: 8
                             AppButton { objectName: "emptyAdd"; primary: true; focusPolicy: Qt.NoFocus; text: qsTr("Add Books"); onClicked: backend.addBooks() }
                             AppButton { objectName: "emptyFolder"; focusPolicy: Qt.NoFocus; text: qsTr("Add a Folder"); onClicked: backend.addFolder() }

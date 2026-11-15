@@ -73,6 +73,7 @@ ApplicationWindow {
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened
                                        || tidyUp.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
+                                       || collectionEditor.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
     readonly property bool keys: !typing && !dialogOpen
@@ -186,7 +187,11 @@ ApplicationWindow {
         return !!key
     }
     function showPlugins() { pluginList.open() }
-    function showTidy() { tidyUp.show() }
+    // The tidy, or with "collections" only its pass that sorts books into collections.
+    function showTidy(pass) { tidyUp.show(pass || "") }
+    // A new collection, its rule filled in when one is given; or one to change.
+    function newCollection(rule, parent) { collectionEditor.create(rule, parent || 0) }
+    function editCollection(id) { if (id) collectionEditor.change(id) }
     function showReadingSites() { readingSites.open() }
     function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
@@ -383,6 +388,7 @@ ApplicationWindow {
     PluginAsk { id: pluginAsk }
     PluginForm { id: pluginForm }
     TidyDialog { id: tidyUp }
+    CollectionDialog { id: collectionEditor }
     ReadingSitesDialog { id: readingSites }
     ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }

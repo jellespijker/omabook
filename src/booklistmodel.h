@@ -3,8 +3,11 @@
 #include <QAbstractListModel>
 #include <QColor>
 #include <QHash>
+#include <QSet>
 #include <QVariantList>
 #include <QVariantMap>
+#include <algorithm>
+#include <optional>
 
 #include "library.h"
 
@@ -53,6 +56,10 @@ public:
     void setBooks(const QList<Book> &books, const QString &libraryRoot);
     // The entries plugins put on the shelf; see ScriptPlugins::launchers.
     void setLaunchers(const QVariantList &launchers);
+    // The books of the collection the shelf shows, or none for the whole
+    // library. The search, the filters and their choices then work within
+    // it, and the launchers plugins put on the shelf stay with the whole.
+    void setMembers(const std::optional<QSet<qint64>> &members);
 
     QString query() const noexcept { return m_query; }
     void setQuery(const QString &query);
@@ -65,7 +72,8 @@ public:
     void setFilters(const QVariantMap &filters);
     int count() const noexcept { return int(m_rows.size()); }
     int shownBooks() const;
-    int total() const noexcept { return int(m_real.size()); }
+    // The books there are: in the collection shown, or in the library.
+    int total() const noexcept { return m_members ? int(std::ranges::count_if(m_real, [this](const Book &book) { return member(book); })) : int(m_real.size()); }
 
     static QStringList sorts();
     static QStringList filterKinds();
@@ -110,6 +118,7 @@ signals:
 
 private:
     void present(const QString &libraryRoot);
+    [[nodiscard]] bool member(const Book &book) const;
     void rebuild();
     // The books that pass the search and every filter but one of `except`'s
     // kind, as indexes into m_books, in the shelf's order.
@@ -133,6 +142,7 @@ private:
     bool m_reversed = false;
     QVariantMap m_filters;
     QList<int> m_rows;
+    std::optional<QSet<qint64>> m_members;
 
     // A cover's color by the cover's address, kept between runs, since
     // finding it means opening the picture.

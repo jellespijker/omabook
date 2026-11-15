@@ -44,6 +44,11 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     connect(&m_model, &BookListModel::sortChanged, this, [this] {
         if (m_shelfMoving)
             return;
+        // A collection keeps its own order; the library's is in the settings.
+        if (m_collection) {
+            keepCollectionShelf();
+            return;
+        }
         m_shelfMoving = true;
         m_settings->setSort(m_model.sort());
         m_settings->setSortReversed(m_model.reversed());
@@ -54,10 +59,6 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     connect(m_settings, &Settings::changed, this, [this] {
         if (m_shelfMoving)
             return;
-        m_shelfMoving = true;
-        m_model.setSort(m_settings->sort());
-        m_model.setReversed(m_settings->sortReversed());
-        m_shelfMoving = false;
         takeShelf();
     });
 
@@ -188,24 +189,29 @@ void Backend::takeShelf() {
     if (m_shelfMoving)
         return;
     const QJsonObject shelf = m_settings->shelf(m_settings->libraryPath());
-    const QString view = views().contains(shelf.value("view").toString()) ? shelf.value("view").toString() : "covers";
-    const QString group = groupings().contains(shelf.value("group").toString()) ? shelf.value("group").toString() : "series";
+    m_libraryView = views().contains(shelf.value("view").toString()) ? shelf.value("view").toString() : "covers";
+    m_libraryGroup = groupings().contains(shelf.value("group").toString()) ? shelf.value("group").toString() : "series";
     m_shelfMoving = true;
     m_model.setFilters(shelf.value("filters").toObject().toVariantMap());
     m_shelfMoving = false;
-    if (view == m_view && group == m_group)
-        return;
-    m_view = view;
-    m_group = group;
-    emit shelfChanged();
+    // The collection that was in view, while it is still there.
+    const qint64 collection = shelf.value("collection").toInteger();
+    const qint64 before = std::exchange(m_collection, m_library && collection > 0 && m_library->collection(collection) ? collection : 0);
+    if (m_collection != before) {
+        if (m_library)
+            readCollections(m_library->books());
+        emit collectionsChanged();
+    }
+    showCollectionShelf();
 }
 
 void Backend::keepShelf() {
     if (m_shelfMoving)
         return;
     m_shelfMoving = true;
-    m_settings->setShelf(m_settings->libraryPath(), {{"view", m_view}, {"group", m_group},
-                                                     {"filters", QJsonObject::fromVariantMap(m_model.filters())}});
+    m_settings->setShelf(m_settings->libraryPath(), {{"view", m_libraryView}, {"group", m_libraryGroup},
+                                                     {"filters", QJsonObject::fromVariantMap(m_model.filters())},
+                                                     {"collection", m_collection}});
     m_shelfMoving = false;
 }
 
@@ -214,6 +220,11 @@ void Backend::setView(const QString &view) {
         return;
     m_view = view;
     emit shelfChanged();
+    if (m_collection) {
+        keepCollectionShelf();
+        return;
+    }
+    m_libraryView = view;
     keepShelf();
 }
 
@@ -222,6 +233,11 @@ void Backend::setGroup(const QString &group) {
         return;
     m_group = group;
     emit shelfChanged();
+    if (m_collection) {
+        keepCollectionShelf();
+        return;
+    }
+    m_libraryGroup = group;
     keepShelf();
 }
 
@@ -263,7 +279,9 @@ void Backend::reloadIfChanged() {
 void Backend::reload() {
     if (m_library)
         m_changes = m_library->changes();
-    m_model.setBooks(m_library ? m_library->books() : QList<Book>(), libraryPath());
+    const QList<Book> books = m_library ? m_library->books() : QList<Book>();
+    readCollections(books);
+    m_model.setBooks(books, libraryPath());
     watchLibrary();
     m_fileManager.libraryChanged();
     ++m_revision;
@@ -492,6 +510,11 @@ void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) 
     const qint64 lastId = summary.lastId;
     --m_jobs;
     setStatus({});
+    QList<qint64> came;
+    for (const ImportSummary::Item &item : summary.items)
+        if (item.id > 0 && !item.duplicate)
+            came << item.id;
+    putInShownCollection(came);
     reload();
     QStringList lines;
     if (added > 0)
@@ -578,6 +601,7 @@ qint64 Backend::newEntry(const QVariantMap &details) {
         say(added.error);
         return 0;
     }
+    putInShownCollection({added.id});
     // The rest goes in the way an edit does.
     saveDetails(added.id, details);
     return added.id;

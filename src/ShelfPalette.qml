@@ -14,8 +14,11 @@ AppPopup {
     padding: 16
     // What it was opened for: "filter" or "sort", or, from a header too
     // narrow to show them, "view" (the ways to show the shelf) or "more"
-    // (what the buttons under fingers do).
+    // (what the buttons under fingers do); or "collections" (which to show,
+    // and making, changing and sorting them) and "in" (the collections the
+    // selected book, `bookId`, is in, each ticked on or off).
     property string mode: "filter"
+    property var bookId: 0
     signal acted(string what)
     property var entries: []
     readonly property var matching: {
@@ -33,9 +36,11 @@ AppPopup {
                : found.map((entry, at) => [rank(entry), at, entry]).sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(ranked => ranked[2])
     }
 
-    function show(what) {
+    function show(what, book) {
         mode = what
-        entries = what === "sort" ? orders() : what === "view" ? ways() : what === "more" ? actions() : filters()
+        bookId = book || 0
+        entries = what === "sort" ? orders() : what === "view" ? ways() : what === "more" ? actions()
+                  : what === "collections" ? collections() : what === "in" ? bookIn() : filters()
         field.text = ""
         list.currentIndex = 0
         open()
@@ -54,15 +59,45 @@ AppPopup {
         return list
     }
     function actions() {
-        return [["add", qsTr("Add")], ["filter", qsTr("Filter")], ["suggest", qsTr("Suggest")],
+        return [["add", qsTr("Add")], ["filter", qsTr("Filter")], ["collections", qsTr("Collections")], ["suggest", qsTr("Suggest")],
                 ["libraries", qsTr("Libraries")], ["settings", qsTr("Settings")]].map(
             action => ({ kindName: "", label: action[1], act: action[0], on: false, common: true, count: 0 }))
+    }
+    // Which collection to show, then what can be done with them.
+    function collections() {
+        const list = [{ kindName: "", label: qsTr("All books"), collection: 0, on: backend.collection === 0, common: true, count: 0 }]
+        for (const collection of backend.collections)
+            list.push({ kindName: "", label: collection.path, collection: collection.id, on: backend.collection === collection.id,
+                        common: true, count: collection.count })
+        list.push({ kindName: "", label: qsTr("New collection…"), act: "collectionNew", on: false, common: true, count: 0 })
+        if (backend.shelfRule() !== "")
+            list.push({ kindName: "", label: qsTr("New collection of this search and filters…"), act: "collectionFromShelf",
+                        on: false, common: true, count: 0 })
+        if (backend.collection !== 0)
+            list.push({ kindName: "", label: qsTr("Change %1…").arg(backend.collectionName), act: "collectionEdit",
+                        on: false, common: true, count: 0 })
+        if (backend.collections.length > 0 && librarian.hasAi)
+            list.push({ kindName: "", label: qsTr("Sort books into collections, with AI…"), act: "collectionSort",
+                        on: false, common: true, count: 0 })
+        return list
+    }
+    // The collections the book is in, to tick on or off.
+    function bookIn() {
+        const list = backend.bookCollections(bookId).map(collection => ({
+            kindName: "", label: collection.name, inCollection: collection.id, on: collection.in, common: true, count: 0 }))
+        list.push({ kindName: "", label: qsTr("New collection…"), act: "collectionNew", on: false, common: true, count: 0 })
+        return list
     }
     function filters() {
         const active = backend.books.filters
         const list = []
         if (Object.keys(active).length > 0)
             list.push({ kindName: "", label: qsTr("Clear the filters"), clear: true, on: false, common: true, count: 0 })
+        // What narrows the shelf can be kept, as a collection.
+        if (backend.shelfRule() !== "")
+            list.push({ kindName: "", label: qsTr("Keep this as a collection…"), act: "collectionFromShelf", on: false, common: true, count: 0 })
+        else if (backend.collections.length === 0)
+            list.push({ kindName: "", label: qsTr("New collection…"), act: "collectionNew", on: false, common: true, count: 0 })
         for (const kind of ["status", "held", "rating", "format", "language", "tag", "author", "series"]) {
             const choices = backend.books.choices(kind)
             for (let i = 0; i < choices.length; ++i) {
@@ -77,7 +112,16 @@ AppPopup {
     function take(entry) {
         if (entry === undefined)
             return
-        if (entry.view !== undefined) {
+        if (entry.inCollection !== undefined) {
+            // Ticked on or off, and the list stays for the next.
+            backend.setInCollection(entry.inCollection, bookId, !entry.on)
+            const at = list.currentIndex
+            entries = bookIn()
+            list.currentIndex = at
+            return
+        } else if (entry.collection !== undefined) {
+            backend.collection = entry.collection
+        } else if (entry.view !== undefined) {
             backend.view = entry.view
         } else if (entry.graph) {
             close()
@@ -113,7 +157,8 @@ AppPopup {
             objectName: "paletteField"
             Layout.preferredWidth: Math.min(400, win.width - 2 * win.dialogEdge - 2 * chooser.padding)
             placeholderText: chooser.mode === "sort" ? qsTr("Order by") : chooser.mode === "view" ? qsTr("Show as")
-                             : chooser.mode === "more" ? qsTr("Do") : qsTr("Filter by")
+                             : chooser.mode === "more" ? qsTr("Do") : chooser.mode === "collections" ? qsTr("Collection")
+                             : chooser.mode === "in" ? qsTr("In the collections") : qsTr("Filter by")
             selectByMouse: true
             Material.roundedScale: theme.radius
             onTextEdited: list.currentIndex = 0

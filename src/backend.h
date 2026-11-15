@@ -66,6 +66,15 @@ class Backend : public QObject {
     // "tag" or "status"). Remembered per library, with the shelf's filters.
     Q_PROPERTY(QString view READ view WRITE setView NOTIFY shelfChanged)
     Q_PROPERTY(QString group READ group WRITE setGroup NOTIFY shelfChanged)
+    // The library's collections (library.h), as a tree read from the top,
+    // each as {"id", "name", "path", "parent", "depth", "children", "rule",
+    // "count", "included", "excluded", "format"}; and
+    // the one the shelf shows, 0 for all the books. Each collection keeps
+    // its own view, stacks and order, so going from one to another shows
+    // each as it was left. Which one is shown is remembered per library.
+    Q_PROPERTY(QVariantList collections READ collections NOTIFY collectionsChanged)
+    Q_PROPERTY(qint64 collection READ collection WRITE setCollection NOTIFY collectionsChanged)
+    Q_PROPERTY(QString collectionName READ collectionName NOTIFY collectionsChanged)
 
 public:
     using AiFactory = std::function<std::unique_ptr<AiProvider>(QString *why)>;
@@ -93,6 +102,29 @@ public:
     void setGroup(const QString &group);
     static QStringList views() { return {"covers", "spines", "carousel", "list", "stacks"}; }
     static QStringList groupings() { return {"series", "author", "tag", "status"}; }
+    QVariantList collections() const noexcept { return m_collections; }
+    qint64 collection() const noexcept { return m_collection; }
+    void setCollection(qint64 id);
+    QString collectionName() const;
+    // The books of the collection shown, or of the library when it is all of them.
+    QList<Book> shownBooks() const;
+
+    // The collection after (1) or before (-1) the one shown, "All books" among them.
+    Q_INVOKABLE void stepCollection(int by);
+    // Makes a collection (id 0) or changes one: its name and rule. Its
+    // number, or 0 with what was wrong said in the window.
+    // `parent` is the collection it goes inside, 0 for the top.
+    Q_INVOKABLE qint64 saveCollection(qint64 id, const QString &name, const QString &rule, qint64 parent = 0);
+    Q_INVOKABLE void removeCollection(qint64 id);
+    // How many books a rule finds, and what is wrong with it ("" when nothing).
+    Q_INVOKABLE int ruleCount(const QString &rule) const;
+    Q_INVOKABLE QString ruleProblem(const QString &rule) const;
+    // The search and the filters the shelf has now, written as a rule.
+    Q_INVOKABLE QString shelfRule() const;
+    // The collections and whether a book is in each: [{"id", "name", "in", "byHand"}].
+    Q_INVOKABLE QVariantList bookCollections(qint64 bookId) const;
+    // Puts a book in a collection, or takes it out, by hand.
+    Q_INVOKABLE void setInCollection(qint64 collectionId, qint64 bookId, bool in);
     bool busy() const noexcept { return m_jobs > 0; }
     QString status() const noexcept { return m_status; }
     QString message() const noexcept { return m_message; }
@@ -183,6 +215,7 @@ signals:
     void pluginsChanged();
     void calibreChanged();
     void shelfChanged();
+    void collectionsChanged();
     // A book was added by the user's own doing, so the shelf can select it.
     void bookAdded(qint64 id);
     void readingFilePicked(bool save, const QString &file);
@@ -192,6 +225,15 @@ private:
     // Reads how the library's shelf was left from the settings, and writes it there.
     void takeShelf();
     void keepShelf();
+    // Shows the shelf as the collection in view keeps it (or the library,
+    // for all the books): its view, its stacks and its order.
+    void showCollectionShelf();
+    // Writes a change to the view or the order into the collection in view.
+    void keepCollectionShelf();
+    // Reads the collections again, with how many books each has.
+    void readCollections(const QList<Book> &books);
+    // Books added by the user while a collection is shown go into it.
+    void putInShownCollection(const QList<qint64> &ids);
     void watchLibrary();
     void picked(FilePicker::Purpose purpose, const QList<QUrl> &urls);
     void importFinished(const ImportSummary &summary, bool calibreLeftOut);
@@ -212,6 +254,11 @@ private:
     BookListModel m_model;
     QString m_view = "covers";
     QString m_group = "series";
+    // How the whole library is shown, whatever collection is in view.
+    QString m_libraryView = "covers";
+    QString m_libraryGroup = "series";
+    qint64 m_collection = 0;
+    QVariantList m_collections;
     // Set while the shelf is read from the settings or written to them, so
     // one doesn't answer the other.
     bool m_shelfMoving = false;

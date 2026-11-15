@@ -291,6 +291,15 @@ void BookListModel::setLaunchers(const QVariantList &launchers) {
     present(m_root);
 }
 
+void BookListModel::setMembers(const std::optional<QSet<qint64>> &members) {
+    if (members == m_members)
+        return;
+    m_members = members;
+    rebuild();
+}
+
+bool BookListModel::member(const Book &book) const { return !m_members || m_members->contains(book.id); }
+
 void BookListModel::present(const QString &libraryRoot) {
     // The launchers ride along with the books, after them; the order the
     // shelf shows puts them first.
@@ -421,8 +430,8 @@ QList<int> BookListModel::arranged(const QString &except) const {
                      // A launcher is on the whole shelf, and in a search
                      // for its words, but never among books narrowed down.
                      if (isLauncher(book))
-                         return narrowings.isEmpty() && (!searching || launcherMatches(book, m_query));
-                     return (!searching || book.matches(m_query))
+                         return !m_members && narrowings.isEmpty() && (!searching || launcherMatches(book, m_query));
+                     return member(book) && (!searching || book.matches(m_query))
                             && std::ranges::all_of(narrowings, [&book](const Narrowing &narrowing) {
                                    return passes(book, narrowing.kind, narrowing.value);
                                });
@@ -514,13 +523,15 @@ QVariantList BookListModel::choices(const QString &kind) const {
         using Choices = std::span<const QLatin1StringView>;
         const Choices values = by == Filter::Status ? Choices(statusChoices) : by == Filter::Held ? Choices(heldChoices) : Choices(ratingChoices);
         for (const QString value : values) {
-            const auto fitting = std::ranges::count_if(m_real, [&](const Book &book) { return passes(book, *by, value); });
+            const auto fitting = std::ranges::count_if(m_real, [&](const Book &book) { return member(book) && passes(book, *by, value); });
             if (fitting > 0)
                 list << QVariantMap{{"value", by == Filter::Rating ? QVariant(value.toInt()) : QVariant(value)}, {"count", int(fitting)}};
         }
         return list;
     }
     for (const Book &book : std::as_const(m_real)) {
+        if (!member(book))
+            continue;
         switch (*by) {
             using enum Filter;
         case Format: std::ranges::for_each(book.formats, count); break;
