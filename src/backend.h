@@ -13,6 +13,7 @@
 #include "ai.h"
 #include "booklistmodel.h"
 #include "filepicker.h"
+#include "folio.h"
 #include "library.h"
 #include "metadatasource.h"
 #include "graphjobs.h"
@@ -50,6 +51,9 @@ class Backend : public QObject {
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
     // Building the knowledge graph for books after the fact.
     Q_PROPERTY(GraphJobs *graphJobs READ graphJobs CONSTANT)
+    // The library's view in the file manager, kept in step while the window
+    // runs, and whether Omabook opens ebooks by default.
+    Q_PROPERTY(Folio::Follower *fileManager READ fileManager CONSTANT)
     // The Calibre plugin as the window shows it: whether the user switched
     // it off, the Calibre libraries found on this computer (each with its
     // path, name, book count and the answer given when it was offered), and
@@ -77,6 +81,7 @@ public:
 
     BookListModel *books() noexcept { return &m_model; }
     Library *library() noexcept { return m_library.get(); }
+    Folio::Follower *fileManager() noexcept { return &m_fileManager; }
     Settings *settings() noexcept { return m_settings; }
     QString libraryPath() const { return m_library ? m_library->root() : QString(); }
     QString libraryName() const;
@@ -212,6 +217,7 @@ private:
     bool m_shelfMoving = false;
     QFileSystemWatcher m_watcher;
     QTimer m_reloadSoon;
+    Folio::Follower m_fileManager{m_settings};
     int m_revision = 0;
     // What the library's change counters said when it was last read.
     Library::Changes m_changes;

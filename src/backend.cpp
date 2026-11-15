@@ -173,6 +173,7 @@ void Backend::openLibrary(const QString &path) {
         m_libraryError = error;
     }
     emit libraryChanged();
+    m_fileManager.follow(m_library ? m_library->root() : QString());
     takeShelf();
     reload();
 }
@@ -258,6 +259,7 @@ void Backend::reload() {
         m_changes = m_library->changes();
     m_model.setBooks(m_library ? m_library->books() : QList<Book>(), libraryPath());
     watchLibrary();
+    m_fileManager.libraryChanged();
     ++m_revision;
     emit revisionChanged();
     // The scripts hear of every book that came, went or changed, whoever did it.

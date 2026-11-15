@@ -1,6 +1,7 @@
 // omabook — an ebook library and reader for Omarchy.
 
 #include <QCommandLineParser>
+#include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
@@ -19,6 +20,7 @@
 #include "cli.h"
 #include "converter.h"
 #include "customization.h"
+#include "folio.h"
 #include "importer.h"
 #include "interface.h"
 #include "log.h"
@@ -73,6 +75,11 @@ int main(int argc, char *argv[]) {
     QCommandLineOption screenshot("screenshot", "Save a picture of the window and quit.", "file");
     screenshot.setFlags(QCommandLineOption::HiddenFromHelp);
     arguments.addOption(screenshot);
+    // Folio's "Look Up Details" on a book's entry: the window opens with the
+    // look-up for that book.
+    QCommandLineOption lookUp("look-up", "Look up the details of the book with this number.", "id");
+    lookUp.setFlags(QCommandLineOption::HiddenFromHelp);
+    arguments.addOption(lookUp);
     QStringList words = app.arguments();
     if (words.value(1) == "open")
         words.removeAt(1);
@@ -102,7 +109,16 @@ int main(int argc, char *argv[]) {
     PortalFilePicker picker;
     if (arguments.isSet("library"))
         settings.setLibraryPath(arguments.value("library"));
+    // A book file that is in a library (an entry of its view in the file
+    // manager, or a file in the library's own folders) is that book, found
+    // by where it is: it opens in its own library where it was left, without
+    // the file being read through to recognise it.
+    const QString book = arguments.positionalArguments().value(0);
+    const auto known = book.isEmpty() || arguments.isSet("library") ? std::nullopt : Folio::find(settings, book);
+    if (known && QDir::cleanPath(known->library) != QDir::cleanPath(QFileInfo(settings.libraryPath()).absoluteFilePath()))
+        settings.setLibraryPath(known->library);
     Backend backend(&settings, &picker);
+    backend.fileManager()->setActive(true);
     // The help, the tour and what is new, which remember what was shown.
     Manual manual(&settings, &custom);
     // Converting is the Calibre plugin's, so there is no converter while it is off.
@@ -129,10 +145,9 @@ int main(int argc, char *argv[]) {
 
     // A book named on the command line joins the library (a file already in
     // it is found by its content) and opens.
-    const QString book = arguments.positionalArguments().value(0);
     bool isNumber = false;
-    qint64 opening = book.toLongLong(&isNumber);
-    if (!book.isEmpty() && !isNumber && backend.library()) {
+    qint64 opening = known ? known->id : book.toLongLong(&isNumber);
+    if (!book.isEmpty() && !isNumber && !known && backend.library()) {
         // Through the importer, so a folder that is one book (Markdown
         // chapters, say) opens like a file does.
         const ImportSummary added = importBooks(*backend.library(), {QFileInfo(book).absoluteFilePath()});
@@ -168,6 +183,8 @@ int main(int argc, char *argv[]) {
         return 1;
     if (opening > 0)
         reader.openBook(opening);
+    if (const qint64 id = arguments.value(lookUp).toLongLong(); id > 0 && interface.window())
+        QMetaObject::invokeMethod(interface.window(), "lookUpBook", Q_ARG(QVariant, id));
     // For the README's picture and for looking at a change without a desktop.
     if (arguments.isSet(screenshot)) {
         QTimer::singleShot(1500, &app, [&app, &interface, &arguments, &screenshot] {
