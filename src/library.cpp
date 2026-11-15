@@ -1,5 +1,6 @@
 #include "library.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
@@ -16,6 +17,7 @@
 #include <QVariant>
 #include <algorithm>
 #include <array>
+#include <atomic>
 #include <ranges>
 
 #include "formats.h"
@@ -500,25 +502,36 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
                          + (book->meta.authors.isEmpty() ? QString() : " - " + fileName(book->meta.authors.first(), "Unknown"))
                          + "." + format;
     const QString target = folder + "/" + name;
+    const QString hash = hashFile(file);
+    // The very file is this book's already: there is nothing to copy.
+    const QList<FormatFile> held = formatFiles(id);
+    if (std::ranges::any_of(held, [&](const FormatFile &one) { return one.format == format && one.hash == hash; }))
+        return true;
     // Copied beside its place and renamed, so a copy cut short never looks
-    // like a book.
-    const QString partial = target + ".part";
-    QFile::remove(partial);
-    if (!QFile::copy(file, partial) || QFileInfo(partial).size() != QFileInfo(file).size()) {
+    // like a book. The name is this copy's own, so two imports into one
+    // library at once (the window and a command, say) don't trip over each
+    // other's.
+    static std::atomic<int> copies = 0;
+    const QString partial = QString("%1.%2-%3.part").arg(target).arg(QCoreApplication::applicationPid()).arg(++copies);
+    const auto copied = [&] {
         QFile::remove(partial);
-        return fail("The book can't be copied into the library: " + target);
-    }
-    const QString old = formatPath(id, format);
-    if (!old.isEmpty())
-        QFile::remove(old);
-    QFile::remove(target);
-    if (!QFile::rename(partial, target)) {
+        if (QFile::copy(file, partial) && QFileInfo(partial).size() == QFileInfo(file).size()) {
+            const QString old = formatPath(id, format);
+            if (!old.isEmpty() && old != target)
+                QFile::remove(old);
+            QFile::remove(target);
+            if (QFile::rename(partial, target))
+                return true;
+        }
         QFile::remove(partial);
-        return fail("The book can't be copied into the library: " + target);
-    }
+        // Another import put the very same file there in the meantime.
+        return QFileInfo::exists(target) && hashFile(target) == hash;
+    };
+    if (!copied())
+        return fail(QString("%1 can't be copied into the library, to %2").arg(file, target));
     QFile::setPermissions(target, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
     if (!exec("INSERT OR REPLACE INTO formats (book_id, format, file, size, hash) VALUES (?, ?, ?, ?, ?)",
-              {id, format, name, QFileInfo(target).size(), hashFile(target)}))
+              {id, format, name, QFileInfo(target).size(), hash}))
         return fail("The library can't be written.");
     return true;
 }
