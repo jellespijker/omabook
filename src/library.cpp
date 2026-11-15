@@ -9,6 +9,7 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QRegularExpression>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -17,8 +18,10 @@
 #include <QVariant>
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <atomic>
 #include <ranges>
+#include <span>
 
 #include "formats.h"
 #include "graph.h"
@@ -135,6 +138,68 @@ QString Book::held() const {
     return !formats.isEmpty() ? (paper ? "both" : "digital") : paper ? "paper" : "none";
 }
 
+namespace {
+
+// The fields a search can look in one at a time, as "key:value".
+constexpr std::array searchKeys{"author"_L1, "title"_L1, "series"_L1, "tag"_L1, "genre"_L1, "format"_L1, "lang"_L1,
+                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1, "rating"_L1};
+
+// The words of a search, a quoted phrase as one: `tag:"science fiction"`
+// is one word, and so is `"the hobbit"`.
+[[nodiscard]] QStringList searchWords(const QString &query, bool *open = nullptr) {
+    QStringList words;
+    QString word;
+    bool quoted = false;
+    for (const QChar c : query) {
+        if (c == '"') {
+            quoted = !quoted;
+        } else if (c.isSpace() && !quoted) {
+            if (!word.isEmpty())
+                words << std::exchange(word, {});
+        } else {
+            word += c;
+        }
+    }
+    if (!word.isEmpty())
+        words << word;
+    if (open)
+        *open = quoted;
+    return words;
+}
+
+// What tags say a book is a story, and what tags say it is about the world.
+// A tag that is both ("Historical Fiction", "Science Fiction") is a story.
+constexpr std::array storyWords{"fiction"_L1, "novel"_L1, "fantasy"_L1, "sci-fi"_L1, "mystery"_L1, "mysteries"_L1,
+                                "thriller"_L1, "romance"_L1, "horror"_L1, "crime"_L1, "adventure"_L1, "short stories"_L1,
+                                "fairy tale"_L1, "dystopia"_L1, "fables"_L1, "graphic novel"_L1, "detective"_L1};
+constexpr std::array worldWords{"nonfiction"_L1, "non-fiction"_L1, "history"_L1, "biography"_L1, "memoir"_L1,
+                                "science"_L1, "programming"_L1, "computer"_L1, "software"_L1, "technology"_L1,
+                                "philosophy"_L1, "business"_L1, "economics"_L1, "reference"_L1, "textbook"_L1,
+                                "self-help"_L1, "psychology"_L1, "mathematics"_L1, "politics"_L1, "essays"_L1,
+                                "travel"_L1, "cooking"_L1, "health"_L1, "education"_L1, "engineering"_L1,
+                                "management"_L1, "design"_L1, "language"_L1, "religion"_L1, "law"_L1,
+                                "nature"_L1, "cookbook"_L1, "parenting"_L1, "medicine"_L1};
+
+[[nodiscard]] bool tagHas(const QString &tag, std::span<const QLatin1StringView> words) {
+    return std::ranges::any_of(words, [&tag](QLatin1StringView word) { return tag.contains(word, Qt::CaseInsensitive); });
+}
+
+[[nodiscard]] bool storyTag(const QString &tag) {
+    return tagHas(tag, storyWords) && !tag.contains("nonfiction"_L1, Qt::CaseInsensitive)
+           && !tag.contains("non-fiction"_L1, Qt::CaseInsensitive);
+}
+
+[[nodiscard]] bool genreOf(const QStringList &tags, const QString &genre) {
+    const QString wanted = genre.toLower().remove(' ');
+    if (wanted == "fiction"_L1)
+        return std::ranges::any_of(tags, storyTag);
+    if (wanted == "nonfiction"_L1 || wanted == "non-fiction"_L1)
+        return std::ranges::any_of(tags, [](const QString &tag) { return tagHas(tag, worldWords) && !storyTag(tag); });
+    return std::ranges::any_of(tags, [&genre](const QString &tag) { return tag.contains(genre, Qt::CaseInsensitive); });
+}
+
+} // namespace
+
 bool Book::matches(const QString &query) const {
     const QString everything = meta.title + "\n" + meta.authorText() + "\n" + meta.series + "\n" + meta.tags.join("\n");
     const auto found = [this, &everything](const QString &word) {
@@ -144,8 +209,11 @@ bool Book::matches(const QString &query) const {
             if (key == "title") return meta.title.contains(value, Qt::CaseInsensitive);
             if (key == "series") return meta.series.contains(value, Qt::CaseInsensitive);
             if (key == "tag") return meta.tags.join("\n").contains(value, Qt::CaseInsensitive);
+            if (key == "genre") return genreOf(meta.tags, value);
             if (key == "format") return formats.contains(value.toLower());
             if (key == "lang") return meta.language.startsWith(value, Qt::CaseInsensitive);
+            if (key == "publisher") return meta.publisher.contains(value, Qt::CaseInsensitive);
+            if (key == "about") return meta.description.contains(value, Qt::CaseInsensitive);
             if (key == "status")
                 return value.toLower() == "unread" ? status() != "read" && status() != "reading" : status() == value.toLower();
             if (key == "is")
@@ -155,7 +223,77 @@ bool Book::matches(const QString &query) const {
         }
         return everything.contains(word, Qt::CaseInsensitive);
     };
-    return std::ranges::all_of(query.split(' ', Qt::SkipEmptyParts), found);
+    // A word with a minus in front is one the book must not match.
+    const auto holds = [&found](const QString &word) {
+        return word.size() > 1 && word.startsWith('-') ? !found(word.mid(1)) : found(word);
+    };
+    // Words joined by OR are alternatives: any one group of words, each of
+    // which matches, is enough.
+    QList<QStringList> groups{{}};
+    for (const QString &word : searchWords(query)) {
+        if (word == "OR"_L1)
+            groups.append(QStringList{});
+        else
+            groups.last() << word;
+    }
+    groups.removeIf([](const QStringList &group) { return group.isEmpty(); });
+    return groups.isEmpty()
+           || std::ranges::any_of(groups, [&holds](const QStringList &group) { return std::ranges::all_of(group, holds); });
+}
+
+QString Book::searchProblem(const QString &query) {
+    bool open = false;
+    const QStringList words = searchWords(query, &open);
+    if (open)
+        return "A quote is left open; close it with another \".";
+    static const QRegularExpression keyed(u"^-?([A-Za-z]+):"_s);
+    for (const QString &word : words) {
+        const QRegularExpressionMatch match = keyed.match(word);
+        const QString key = match.captured(1).toLower();
+        if (match.hasMatch() && std::ranges::none_of(searchKeys, [&key](QLatin1StringView known) { return key == known; })) {
+            QStringList keys;
+            for (const QLatin1StringView known : searchKeys)
+                keys << known + ':';
+            return QString("\"%1:\" isn't a field a search looks in; it can be %2.").arg(match.captured(1), keys.join(", "));
+        }
+    }
+    return {};
+}
+
+bool Collection::Part::holds(const Book &book) const {
+    if (excluded.contains(book.id))
+        return false;
+    return included.contains(book.id) || (!rule.trimmed().isEmpty() && book.matches(rule));
+}
+
+bool Collection::contains(const Book &book) const {
+    // Its own choice by hand wins; then its own rule, and what the
+    // collections inside it hold.
+    if (excluded.contains(book.id))
+        return false;
+    return Part{rule, included, excluded}.holds(book)
+           || std::ranges::any_of(within, [&book](const Part &part) { return part.holds(book); });
+}
+
+QList<Book> Collection::of(const QList<Book> &books) const {
+    QList<Book> in;
+    for (const Book &book : books)
+        if (contains(book))
+            in << book;
+    return in;
+}
+
+QJsonObject Collection::toJson() const {
+    const auto ids = [](const QSet<qint64> &set) {
+        QList<qint64> sorted(set.begin(), set.end());
+        std::ranges::sort(sorted);
+        QJsonArray array;
+        for (const qint64 id : sorted)
+            array << id;
+        return array;
+    };
+    return {{"id", id}, {"name", name}, {"path", path}, {"parent", parent}, {"rule", rule}, {"included", ids(included)},
+            {"excluded", ids(excluded)}, {"shelf", shelf}, {"format", format}};
 }
 
 QJsonObject Book::toJson() const {
@@ -411,6 +549,26 @@ bool Library::open(QString *error) {
          "INSERT OR REPLACE INTO notes (book_id, kind, section, fraction, text, updated) "
          "SELECT NEW.book_id, 'furthest', NEW.section, NEW.fraction, '', NEW.updated WHERE NOT EXISTS (SELECT 1 FROM notes "
          "WHERE book_id = NEW.book_id AND kind = 'furthest' AND (section > NEW.section OR (section = NEW.section AND fraction >= NEW.fraction))); END"},
+        // Collections (library.h): a name, a rule (a search), the books put
+        // in or taken out by hand, how the collection is shown and set on
+        // the page, and the collection it is inside (0 for the top). A removed one is remembered, so a sync with another
+        // computer doesn't bring it back. They are what the shelf shows, so
+        // a change to one is counted as one to the books; and as one to the
+        // reading formats, which a collection's own lie under.
+        {"CREATE TABLE collections (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, rule TEXT NOT NULL DEFAULT '', "
+         "position INTEGER NOT NULL DEFAULT 0, shelf TEXT NOT NULL DEFAULT '{}', format TEXT NOT NULL DEFAULT '{}', "
+         "updated INTEGER NOT NULL, removed INTEGER NOT NULL DEFAULT 0, parent INTEGER NOT NULL DEFAULT 0)",
+         "CREATE UNIQUE INDEX collections_named ON collections(parent, name COLLATE NOCASE)",
+         "CREATE TABLE collection_books (collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE, "
+         "book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE, included INTEGER NOT NULL, "
+         "PRIMARY KEY (collection_id, book_id))",
+         "CREATE INDEX collection_books_book ON collection_books(book_id)",
+         "CREATE TRIGGER collections_insert_counted AFTER INSERT ON collections BEGIN UPDATE library_state SET value = value + 1 WHERE key IN ('books', 'format'); END",
+         "CREATE TRIGGER collections_update_counted AFTER UPDATE ON collections BEGIN UPDATE library_state SET value = value + 1 WHERE key IN ('books', 'format'); END",
+         "CREATE TRIGGER collections_delete_counted AFTER DELETE ON collections BEGIN UPDATE library_state SET value = value + 1 WHERE key IN ('books', 'format'); END",
+         "CREATE TRIGGER collection_books_insert_counted AFTER INSERT ON collection_books BEGIN UPDATE library_state SET value = value + 1 WHERE key IN ('books', 'format'); END",
+         "CREATE TRIGGER collection_books_update_counted AFTER UPDATE ON collection_books BEGIN UPDATE library_state SET value = value + 1 WHERE key IN ('books', 'format'); END",
+         "CREATE TRIGGER collection_books_delete_counted AFTER DELETE ON collection_books BEGIN UPDATE library_state SET value = value + 1 WHERE key IN ('books', 'format'); END"},
     };
 
     // Asked and done with before anything changes: a statement left open
@@ -439,6 +597,16 @@ bool Library::open(QString *error) {
             }
         }
         database.commit();
+    }
+    // A library that took the collections' step in its first form, before
+    // collections nested, is given what nesting needs.
+    QSqlQuery columns = query("SELECT 1 FROM pragma_table_info('collections') WHERE name = 'parent'");
+    const bool nested = columns.next() || formatVersion() < migrations.size();
+    columns.finish();
+    if (!nested) {
+        exec("ALTER TABLE collections ADD COLUMN parent INTEGER NOT NULL DEFAULT 0");
+        exec("DROP INDEX IF EXISTS collections_named");
+        exec("CREATE UNIQUE INDEX collections_named ON collections(parent, name COLLATE NOCASE)");
     }
     return true;
 }
@@ -827,6 +995,10 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
                  .arg(furtherOther ? "REPLACE" : "IGNORE"), both);
         // How it is set on the page, where only the other book had a way of its own.
         exec("INSERT OR IGNORE INTO book_format (book_id, options) SELECT ?, options FROM book_format WHERE book_id = ?", both);
+        // The collections it was put in or taken out of by hand, where the
+        // kept book wasn't.
+        exec("INSERT OR IGNORE INTO collection_books (collection_id, book_id, included) "
+             "SELECT collection_id, ?, included FROM collection_books WHERE book_id = ?", both);
         // The knowledge graph: where things were met and facts learned, the
         // days it was read on, and the node that stands for the book.
         if (furtherOther)
@@ -895,4 +1067,341 @@ QList<Annotation> Library::annotations(qint64 bookId) const {
                             .note = found.value(5).toString(),
                             .created = found.value(6).toLongLong()});
     return annotations;
+}
+
+namespace {
+
+// A collection's name: what it is called on the shelf, in Folio's sidebar and
+// on the command line, so one line of ordinary length. "/" joins a path, so
+// it is in no name.
+[[nodiscard]] QString nameProblem(const QString &name) {
+    if (name.isEmpty())
+        return "A collection needs a name.";
+    if (name.contains('/'))
+        return "A collection's name can't have \"/\" in it; that is what puts one inside another: Studie/Python.";
+    if (name.size() > 60)
+        return "A collection's name can be 60 characters at most.";
+    return {};
+}
+
+[[nodiscard]] QJsonObject objectFrom(const QVariant &text) {
+    return QJsonDocument::fromJson(text.toString().toUtf8()).object();
+}
+
+[[nodiscard]] QString compact(const QJsonObject &object) {
+    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
+}
+
+[[nodiscard]] QStringList pathParts(const QString &path) {
+    QStringList parts;
+    for (const QString &part : path.split('/', Qt::SkipEmptyParts))
+        if (!part.simplified().isEmpty())
+            parts << part.simplified();
+    return parts;
+}
+
+} // namespace
+
+QList<Collection> Library::collections(bool withRemoved) const {
+    QList<Collection> flat;
+    QHash<qint64, qsizetype> at;
+    for (QSqlQuery row = query("SELECT id, name, rule, shelf, format, updated, removed, parent FROM collections "
+                               "ORDER BY position, id");
+         row.next();) {
+        Collection collection;
+        collection.id = row.value(0).toLongLong();
+        collection.name = row.value(1).toString();
+        collection.rule = row.value(2).toString();
+        collection.shelf = objectFrom(row.value(3));
+        collection.format = objectFrom(row.value(4));
+        collection.updated = row.value(5).toLongLong();
+        collection.removed = row.value(6).toBool();
+        collection.parent = row.value(7).toLongLong();
+        at.insert(collection.id, flat.size());
+        flat << collection;
+    }
+    for (QSqlQuery row = query("SELECT collection_id, book_id, included FROM collection_books"); row.next();) {
+        const auto index = at.constFind(row.value(0).toLongLong());
+        if (index == at.cend())
+            continue;
+        Collection &collection = flat[*index];
+        (row.value(2).toBool() ? collection.included : collection.excluded).insert(row.value(1).toLongLong());
+    }
+    // One whose parent is gone (removed, or never synced here) is at the top.
+    for (Collection &collection : flat)
+        if (collection.parent && (!at.contains(collection.parent) || (flat.at(at.value(collection.parent)).removed && !collection.removed)))
+            collection.parent = 0;
+    // The tree, read from the top: each one, then those inside it.
+    QList<Collection> tree;
+    const std::function<void(qint64, const QString &, int, QSet<qint64> &)> visit =
+        [&](qint64 parent, const QString &above, int depth, QSet<qint64> &seen) {
+            for (const Collection &collection : std::as_const(flat)) {
+                if (collection.parent != parent || seen.contains(collection.id))
+                    continue;
+                seen.insert(collection.id);
+                Collection placed = collection;
+                placed.path = above.isEmpty() ? collection.name : above + "/" + collection.name;
+                placed.depth = depth;
+                tree << placed;
+                visit(collection.id, placed.path, depth + 1, seen);
+            }
+        };
+    QSet<qint64> seen;
+    visit(0, {}, 0, seen);
+    // What each holds of those inside it, at every depth.
+    for (qsizetype i = 0; i < tree.size(); ++i)
+        for (qsizetype j = i + 1; j < tree.size() && tree.at(j).depth > tree.at(i).depth; ++j) {
+            if (tree.at(j).removed)
+                continue;
+            tree[i].hasChildren = true;
+            tree[i].within << Collection::Part{tree.at(j).rule, tree.at(j).included, tree.at(j).excluded};
+        }
+    if (!withRemoved)
+        tree.removeIf([](const Collection &collection) { return collection.removed; });
+    return tree;
+}
+
+std::optional<Collection> Library::collection(qint64 id) const {
+    for (const Collection &collection : collections())
+        if (collection.id == id)
+            return collection;
+    return std::nullopt;
+}
+
+std::optional<Collection> Library::collectionNamed(const QString &name) const {
+    const QString wanted = pathParts(name).join('/');
+    const QList<Collection> all = collections();
+    for (const Collection &collection : all)
+        if (collection.path.compare(wanted, Qt::CaseInsensitive) == 0)
+            return collection;
+    // A name alone, where only one collection has it.
+    std::optional<Collection> only;
+    for (const Collection &collection : all)
+        if (collection.name.compare(wanted, Qt::CaseInsensitive) == 0) {
+            if (only)
+                return std::nullopt;
+            only = collection;
+        }
+    if (only)
+        return only;
+    bool number = false;
+    const qint64 id = wanted.toLongLong(&number);
+    for (const Collection &collection : all)
+        if (number && collection.id == id)
+            return collection;
+    return std::nullopt;
+}
+
+std::expected<qint64, QString> Library::addCollection(const QString &name, const QString &rule, qint64 parent) {
+    QStringList parts = pathParts(name);
+    if (parts.isEmpty())
+        return std::unexpected(QString("A collection needs a name."));
+    if (const QString why = Book::searchProblem(rule); !why.isEmpty())
+        return std::unexpected(why);
+    if (parent && !collection(parent))
+        return std::unexpected(QString("There is no collection %1 to put it in.").arg(parent));
+    for (const QString &part : parts)
+        if (const QString why = nameProblem(part); !why.isEmpty())
+            return std::unexpected(why);
+    const Batch batch(*this);
+    // The collections the path goes through, made where they aren't there.
+    const QString named = parts.takeLast();
+    for (const QString &part : std::as_const(parts)) {
+        QSqlQuery there = query("SELECT id FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE AND removed = 0", {parent, part});
+        if (there.next()) {
+            parent = there.value(0).toLongLong();
+            continue;
+        }
+        there.finish();
+        const auto made = addCollection(part, {}, parent);
+        if (!made)
+            return made;
+        parent = *made;
+    }
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    QSqlQuery last = query("SELECT COALESCE(MAX(position), 0) + 1 FROM collections WHERE removed = 0");
+    const int position = last.next() ? last.value(0).toInt() : 1;
+    last.finish();
+    QSqlQuery same = query("SELECT id, removed FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE", {parent, named});
+    if (same.next()) {
+        const qint64 id = same.value(0).toLongLong();
+        const bool removed = same.value(1).toBool();
+        same.finish();
+        if (!removed)
+            return std::unexpected(QString("There is a collection called %1 there already.").arg(named));
+        // One that was removed comes back as new.
+        exec("DELETE FROM collection_books WHERE collection_id = ?", {id});
+        if (!exec("UPDATE collections SET name = ?, rule = ?, position = ?, shelf = '{}', format = '{}', updated = ?, removed = 0 "
+                  "WHERE id = ?",
+                  {named, rule.trimmed(), position, now, id}))
+            return std::unexpected(QString("The library can't be written."));
+        return id;
+    }
+    same.finish();
+    const auto id = insert("INSERT INTO collections (name, rule, position, updated, parent) VALUES (?, ?, ?, ?, ?)",
+                           {named, rule.trimmed(), position, now, parent});
+    if (!id)
+        return std::unexpected("The library can't be written: " + id.error());
+    return *id;
+}
+
+bool Library::renameCollection(qint64 id, const QString &name, QString *error) {
+    const QString named = name.simplified();
+    if (const QString why = nameProblem(named); !why.isEmpty())
+        return failed(error, why);
+    const auto now = collection(id);
+    if (!now)
+        return failed(error, QString("There is no collection %1.").arg(id));
+    if (now->name == named)
+        return true;
+    QSqlQuery other = query("SELECT id, removed FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE AND id <> ?",
+                            {now->parent, named, id});
+    if (other.next() && !other.value(1).toBool())
+        return failed(error, QString("There is a collection called %1 there already.").arg(named));
+    other.finish();
+    // A removed one of that name gives the name up.
+    exec("DELETE FROM collections WHERE removed = 1 AND parent = ? AND name = ? COLLATE NOCASE AND id <> ?", {now->parent, named, id});
+    return exec("UPDATE collections SET name = ?, updated = ? WHERE id = ?", {named, QDateTime::currentSecsSinceEpoch(), id})
+           || failed(error, "The library can't be written.");
+}
+
+bool Library::setCollectionRule(qint64 id, const QString &rule, QString *error) {
+    if (const QString why = Book::searchProblem(rule); !why.isEmpty())
+        return failed(error, why);
+    if (!collection(id))
+        return failed(error, QString("There is no collection %1.").arg(id));
+    return exec("UPDATE collections SET rule = ?, updated = ? WHERE id = ?", {rule.trimmed(), QDateTime::currentSecsSinceEpoch(), id})
+           || failed(error, "The library can't be written.");
+}
+
+bool Library::setCollectionParent(qint64 id, qint64 parent, QString *error) {
+    const QList<Collection> all = collections();
+    const auto moved = std::ranges::find(all, id, &Collection::id);
+    if (moved == all.end())
+        return failed(error, QString("There is no collection %1.").arg(id));
+    if (moved->parent == parent)
+        return true;
+    if (parent) {
+        const auto into = std::ranges::find(all, parent, &Collection::id);
+        if (into == all.end())
+            return failed(error, QString("There is no collection %1 to put it in.").arg(parent));
+        // Not inside itself, nor inside one of those inside it.
+        if (into->path.compare(moved->path, Qt::CaseInsensitive) == 0
+            || into->path.startsWith(moved->path + "/", Qt::CaseInsensitive))
+            return failed(error, QString("%1 can't go inside itself.").arg(moved->name));
+    }
+    if (std::ranges::any_of(all, [&](const Collection &c) {
+            return c.parent == parent && c.id != id && c.name.compare(moved->name, Qt::CaseInsensitive) == 0;
+        }))
+        return failed(error, QString("There is a collection called %1 there already.").arg(moved->name));
+    exec("DELETE FROM collections WHERE removed = 1 AND parent = ? AND name = ? COLLATE NOCASE", {parent, moved->name});
+    return exec("UPDATE collections SET parent = ?, updated = ? WHERE id = ?", {parent, QDateTime::currentSecsSinceEpoch(), id})
+           || failed(error, "The library can't be written.");
+}
+
+bool Library::removeCollection(qint64 id) {
+    const auto gone = collection(id);
+    if (!gone)
+        return false;
+    const Batch batch(*this);
+    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    // Those inside it move up to where it was.
+    exec("UPDATE collections SET parent = ?, updated = ? WHERE parent = ? AND removed = 0", {gone->parent, now, id});
+    exec("DELETE FROM collection_books WHERE collection_id = ?", {id});
+    return exec("UPDATE collections SET removed = 1, rule = '', shelf = '{}', format = '{}', updated = ? WHERE id = ?", {now, id});
+}
+
+bool Library::putInCollection(qint64 id, qint64 bookId, bool in) {
+    const auto collection = this->collection(id);
+    const auto book = this->book(bookId);
+    if (!collection || !book)
+        return false;
+    // What it would be without any choice made by hand for this book: its
+    // rule, and what the collections inside it hold.
+    Collection ruled = *collection;
+    ruled.included.remove(bookId);
+    ruled.excluded.remove(bookId);
+    const Batch batch(*this);
+    exec("UPDATE collections SET updated = ? WHERE id = ?", {QDateTime::currentSecsSinceEpoch(), id});
+    if (in == ruled.contains(*book))
+        return exec("DELETE FROM collection_books WHERE collection_id = ? AND book_id = ?", {id, bookId});
+    return exec("INSERT OR REPLACE INTO collection_books (collection_id, book_id, included) VALUES (?, ?, ?)", {id, bookId, in});
+}
+
+bool Library::followRule(qint64 id, qint64 bookId) {
+    const Batch batch(*this);
+    exec("UPDATE collections SET updated = ? WHERE id = ?", {QDateTime::currentSecsSinceEpoch(), id});
+    return exec("DELETE FROM collection_books WHERE collection_id = ? AND book_id = ?", {id, bookId});
+}
+
+bool Library::setCollectionShelf(qint64 id, const QJsonObject &shelf) {
+    const auto now = collection(id);
+    if (!now)
+        return false;
+    if (now->shelf == shelf)
+        return true;
+    return exec("UPDATE collections SET shelf = ?, updated = ? WHERE id = ?", {compact(shelf), QDateTime::currentSecsSinceEpoch(), id});
+}
+
+bool Library::setCollectionFormat(qint64 id, const QJsonObject &options) {
+    const auto now = collection(id);
+    if (!now)
+        return false;
+    const QJsonObject kept = ReadingFormat::fitting(options);
+    if (now->format == kept)
+        return true;
+    return exec("UPDATE collections SET format = ?, updated = ? WHERE id = ?", {compact(kept), QDateTime::currentSecsSinceEpoch(), id});
+}
+
+bool Library::storeCollection(const Collection &given) {
+    const QString named = given.name.simplified();
+    if (!nameProblem(named).isEmpty())
+        return false;
+    const Batch batch(*this);
+    QSqlQuery same = query("SELECT id FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE", {given.parent, named});
+    qint64 id = same.next() ? same.value(0).toLongLong() : 0;
+    same.finish();
+    if (id == 0) {
+        QSqlQuery last = query("SELECT COALESCE(MAX(position), 0) + 1 FROM collections");
+        const int position = last.next() ? last.value(0).toInt() : 1;
+        last.finish();
+        const auto made = insert("INSERT INTO collections (name, position, updated, parent) VALUES (?, ?, ?, ?)",
+                                 {named, position, given.updated, given.parent});
+        if (!made)
+            return false;
+        id = *made;
+    }
+    if (!exec("UPDATE collections SET name = ?, rule = ?, shelf = ?, format = ?, updated = ?, removed = ?, parent = ? WHERE id = ?",
+              {named, given.rule.trimmed(), compact(given.shelf), compact(ReadingFormat::fitting(given.format)), given.updated,
+               given.removed, given.parent, id}))
+        return false;
+    exec("DELETE FROM collection_books WHERE collection_id = ?", {id});
+    for (const bool in : {true, false})
+        for (const qint64 book : in ? given.included : given.excluded)
+            exec("INSERT OR REPLACE INTO collection_books (collection_id, book_id, included) "
+                 "SELECT ?, id, ? FROM books WHERE id = ?",
+                 {id, in, book});
+    return true;
+}
+
+QList<Collection> Library::collectionsOf(const Book &book) const {
+    QList<Collection> in = collections();
+    in.removeIf([&book](const Collection &collection) { return !collection.contains(book); });
+    return in;
+}
+
+std::optional<Collection> Library::formatCollection(qint64 bookId, qint64 preferred) const {
+    const auto book = this->book(bookId);
+    if (!book)
+        return std::nullopt;
+    const QList<Collection> in = collectionsOf(*book);
+    for (const Collection &collection : in)
+        if (collection.id == preferred && !collection.format.isEmpty())
+            return collection;
+    // The deepest first: "Studie/Python" says more of a book than "Studie".
+    std::optional<Collection> best;
+    for (const Collection &collection : in)
+        if (!collection.format.isEmpty() && (!best || collection.depth > best->depth))
+            best = collection;
+    return best;
 }

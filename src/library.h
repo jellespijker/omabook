@@ -2,6 +2,7 @@
 
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <expected>
@@ -40,9 +41,19 @@ struct Book {
 
     // Whether every word of a search matches: bare words look in the title,
     // authors, series and tags; "author:", "title:", "series:", "tag:",
-    // "format:", "lang:", "status:" (to-read, reading, read, unread),
-    // "is:" (digital, paper, wishlist) and "rating:" look in one field.
+    // "format:", "lang:", "publisher:", "about:" (the description), "status:"
+    // (to-read, reading, read, unread), "is:" (digital, paper, wishlist) and
+    // "rating:" look in one field. "genre:" looks in the tags, where a
+    // book's subjects are, and knows "fiction" and "nonfiction" as the many
+    // tags each is spelled as ("Fantasy", "Thrillers", "History",
+    // "Programming"). "quotes" keep words together (tag:"science fiction"),
+    // a word with "-" in front must not match, and "OR" between words
+    // matches either side: `genre:fiction OR series:Dune -tag:poetry`.
     bool matches(const QString &query) const;
+    // What is wrong with a search as a collection's rule, in English: a
+    // field it doesn't know ("auther:"), a quote left open. Empty when it
+    // is fine.
+    static QString searchProblem(const QString &query);
     QJsonObject toJson() const;
 };
 
@@ -87,6 +98,45 @@ struct Annotation {
     QString text;
     QString note;
     qint64 created = 0;
+};
+
+// A named part of the library, named as its owner likes: a saved
+// selection, not a place. A book can be in several, and nothing is copied or
+// moved to put it in one. What is in it is what its rule (a search, as
+// Book::matches reads it) finds, and the books put in or taken out by hand,
+// which win over the rule; so a new book lands in every collection whose
+// rule finds it, the moment it is added. Collections nest: "Studie" can
+// hold "Python" and "Hydraulica", written "Studie/Python", and holds
+// every book they hold besides its own, unless it takes one out by hand.
+// Collections are kept in the library's database, so they go wherever the
+// library goes.
+struct Collection {
+    qint64 id = 0;
+    qint64 parent = 0;      // the collection it is part of; 0 for one at the top
+    QString name;
+    QString path;           // its name under its parents': "Studie/Python"
+    int depth = 0;          // 0 at the top, 1 inside one, and so on
+    QString rule;
+    QSet<qint64> included, excluded; // by hand
+    // What the collections inside it select, at every depth: it holds that too.
+    struct Part {
+        QString rule;
+        QSet<qint64> included, excluded;
+        [[nodiscard]] bool holds(const Book &book) const;
+    };
+    QList<Part> within;
+    bool hasChildren = false;
+    // How the shelf shows it ({"view", "group", "sort", "reversed"}) and the
+    // reading format options of its own (readingformat.h), which lie between
+    // the library's defaults and a book's own.
+    QJsonObject shelf, format;
+    qint64 updated = 0;     // seconds since the epoch; a sync keeps the newer
+    bool removed = false;   // removed, remembered so a sync doesn't bring it back
+
+    [[nodiscard]] bool contains(const Book &book) const;
+    [[nodiscard]] QList<Book> of(const QList<Book> &books) const;
+    // {"id", "name", "path", "parent", "rule", "included": [ids], "excluded": [ids], "shelf", "format"}.
+    [[nodiscard]] QJsonObject toJson() const;
 };
 
 // A library is a folder: one SQLite file and, per book, a folder holding the
@@ -187,6 +237,45 @@ public:
     // the other book's node in the knowledge graph move over. What is left
     // of `other` goes to the trash.
     bool merge(qint64 keep, qint64 other, QString *error = nullptr);
+
+    // The collections, as a tree read from the top: each one followed by
+    // those inside it, in the order they are listed in. With `withRemoved`
+    // also the removed ones a sync needs to know of.
+    [[nodiscard]] QList<Collection> collections(bool withRemoved = false) const;
+    [[nodiscard]] std::optional<Collection> collection(qint64 id) const;
+    // By its path ("Studie/Python"), its name where only one has it, or
+    // its number; whatever the case.
+    [[nodiscard]] std::optional<Collection> collectionNamed(const QString &name) const;
+    // A new collection, last among those beside it; its number, or why it
+    // can't be. A name with "/" in it is a path, and the collections it goes
+    // through are made where they aren't there yet; `parent` puts it inside
+    // another. A collection of that name that was removed comes back, empty.
+    std::expected<qint64, QString> addCollection(const QString &name, const QString &rule = {}, qint64 parent = 0);
+    bool renameCollection(qint64 id, const QString &name, QString *error = nullptr);
+    bool setCollectionRule(qint64 id, const QString &rule, QString *error = nullptr);
+    // Puts a collection inside another (0 for the top), never inside itself.
+    bool setCollectionParent(qint64 id, qint64 parent, QString *error = nullptr);
+    // Takes a collection away; its books stay in the library, and the
+    // collections inside it move up to where it was.
+    bool removeCollection(qint64 id);
+    // Puts a book in a collection by hand, or takes it out, whatever the
+    // rule says; only what differs from the rule is written down.
+    bool putInCollection(qint64 id, qint64 bookId, bool in);
+    // The book is in the collection as its rule says again.
+    bool followRule(qint64 id, qint64 bookId);
+    bool setCollectionShelf(qint64 id, const QJsonObject &shelf);
+    bool setCollectionFormat(qint64 id, const QJsonObject &options);
+    // Writes everything of a collection as it is given, its time and its
+    // parent too: what a sync brings from another computer. One of a name
+    // not there inside that parent is added.
+    bool storeCollection(const Collection &collection);
+    // The collections a book is in, in their order.
+    [[nodiscard]] QList<Collection> collectionsOf(const Book &book) const;
+    // The collection whose reading format a book is set with: `preferred`
+    // (the one it was opened from) when the book is in it and it has a
+    // format of its own, else the first such one it is in. None when no
+    // collection of the book's has a format.
+    [[nodiscard]] std::optional<Collection> formatCollection(qint64 bookId, qint64 preferred = 0) const;
 
     qint64 addAnnotation(qint64 bookId, const Annotation &annotation);
     void removeAnnotation(qint64 annotationId);
