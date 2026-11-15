@@ -497,7 +497,7 @@ omabook skill [install]                 Print the skill for coding agents, or in
 omabook mcp [install [agent]]           Run as an MCP server for agents, or register it with one
 ```
 
-`<book>` is a number from `omabook list` or any book file, so `omabook text ~/Downloads/paper.pdf` works on a file that isn't in the library. `--library <folder>` points a command at another library.
+`<book>` is a number from `omabook list` or any book file, so `omabook text ~/Downloads/paper.pdf` works on a file that isn't in the library. `--library <folder>` points a command at another library for that run only, before or after the command's name; `omabook libraries --use <folder>` changes the one in use, and `omabook open --library <folder>` opens a window on another library without changing it.
 
 `omabook format` with no options says how every book is set; with a book's number, how that book is, marking what it has of its own. With options it changes them, for the defaults or for that book alone: `--font-size N`, `--font F` (`""` for the desktop's), `--line-width N`, `--line-height N` (percent), `--paragraph-spacing N`, `--indent N`, `--margins N` (pixels) and `--align start|justify|center|end`; `--reset` puts a book back to the defaults, or the defaults back to Omabook's own. A value out of bounds is refused with the range it may be in, and nothing changes. A book's own way is kept in the library's database, so it is backed up with the library and goes when the book does; a sync with another computer doesn't carry it (yet).
 

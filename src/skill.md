@@ -158,4 +158,4 @@ Kinds: `character`, `place`, `group`, `concept`, `item`, `event`, `thread`, `the
 
 ## The window
 
-`omabook open` opens the library, and `omabook open <book>` opens a book in the reader. A library is a plain folder (by default `~/Books`) holding `omabook.db` and one folder per book; `--library <folder>` points any command at another one.
+`omabook open` opens the library, and `omabook open <book>` opens a book in the reader. A library is a plain folder (by default `~/Books`) holding `omabook.db` and one folder per book; `--library <folder>` points any command at another one, for that run only (before or after the command's name); `omabook libraries --use <folder>` changes the one in use.
