@@ -67,6 +67,8 @@
         <file alias="TourNote.qml">TourNote.qml</file>
         <file alias="TourOverlay.qml">TourOverlay.qml</file>
         <file alias="skill.md">skill.md</file>
+        <file alias="skill/library.md">skill/library.md</file>
+        <file alias="skill/graph.md">skill/graph.md</file>
         <file alias="scriptprelude.js">scriptprelude.js</file>
         <file>plugin-templates/metadata/plugin.json</file>
         <file>plugin-templates/metadata/main.js</file>

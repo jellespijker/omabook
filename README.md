@@ -519,7 +519,7 @@ omabook format [id] [--align justify]   Show or change how books are set: type, 
 omabook sync <computer[:folder]>        Bring this library and another computer's in step over ssh
 omabook manifest                        Print the whole library as JSON, as sync reads it
 omabook help [topic]                    Print the help the window shows: getting started, reading, keys, ...
-omabook skill [install]                 Print the skill for coding agents, or install it
+omabook skill [part|install] [--all]    Print the skill for coding agents (parts: library, graph, plugins), or install it
 omabook mcp [install [agent]]           Run as an MCP server for agents, or register it with one
 ```
 

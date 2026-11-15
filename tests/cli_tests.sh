@@ -159,7 +159,10 @@ expect "a script's catalog format is one of the catalog's" 0 "# Books" "$omabook
 expect "part of a plugin is run" 0 "# Books" "$omabook" plugin run reading-list catalog:reading-list --library "$library"
 expect "the script plugins are listed" 0 '"running": true' "$omabook" plugin list --json
 expect "the scripting reference is printed" 0 "omabook.library.setMeta" "$omabook" plugin api
-expect "the skill says how to write a plugin" 0 "## Writing a plugin" "$omabook" skill
+expect "the skill says how to write a plugin" 0 "# Writing a plugin" "$omabook" skill plugins
+expect "the skill points to its parts" 0 "omabook skill <part>" "$omabook" skill
+expect "the skill names an unknown part" 1 "Its parts are library, graph and plugins" "$omabook" skill nonsense
+expect "the whole skill" 0 "omabook graph build" "$omabook" skill --all
 echo 'omabook.nothing.here();' > "$XDG_CONFIG_HOME/omabook/plugins/reading-list/main.js"
 expect "a broken plugin says where" 1 "main.js:1" "$omabook" plugin check reading-list
 expect "a broken plugin leaves the other catalogs alone" 0 "id,title,authors" "$omabook" catalog --library "$library"
@@ -427,5 +430,9 @@ expect "every book is still there" 0 "Command Book" "$omabook" list --library "$
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill
 expect "the skill installs" 0 "Installed" "$omabook" skill install
 [ -f "$HOME/.agents/skills/omabook/SKILL.md" ] && [ -L "$HOME/.claude/skills/omabook" ] || fail "skill install left no skill"
+for part in library graph plugins; do
+    [ -s "$HOME/.agents/skills/omabook/references/$part.md" ] || fail "skill install left out the $part part"
+done
+[ "$("$omabook" skill | wc -c)" -lt 12000 ] || fail "the skill read every time is too long"
 
 [ "$failures" -eq 0 ] && echo "cli: all passed" || { echo "cli: $failures failed" >&2; exit 1; }

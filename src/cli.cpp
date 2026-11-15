@@ -1875,29 +1875,64 @@ int ask(const QStringList &arguments) {
     return 0;
 }
 
+// The skill is laid out as agents' skills are: a short SKILL.md that is
+// read every time, and parts in references/ read only when the task needs
+// them. The part on writing plugins is made from the table the scripts' own
+// `omabook` object is described by, so it says what this build offers.
+namespace {
+const QStringList skillParts{"library", "graph", "plugins"};
+
+std::optional<QByteArray> skillPart(const QString &part) {
+    if (part == "plugins")
+        return QByteArray("# Writing a plugin\n\nPart of the Omabook skill (`omabook skill plugins`; `omabook plugin api` prints the same).\n")
+               + ScriptApi::guide().section('\n', 2).replace("\n### ", "\n## ").toUtf8();
+    QFile bundled(part.isEmpty() ? QString(":/skill.md") : ":/skill/" + part + ".md");
+    if (!bundled.open(QIODevice::ReadOnly))
+        return std::nullopt;
+    return bundled.readAll();
+}
+} // namespace
+
 int skill(const QStringList &arguments) {
-    Command command("skill", "Print the agent skill, or install it for your coding agents with: skill install.");
-    command.parser.addPositionalArgument("install", "Copy to ~/.agents/skills/omabook and link into ~/.claude/skills.", "[install]");
+    Command command("skill", "Print the agent skill, one part of it (library, graph, plugins), or all of it with --all; "
+                             "install it for your coding agents with: skill install.");
+    command.parser.addPositionalArgument("part", "library, graph or plugins; or install, to copy it to ~/.agents/skills/omabook "
+                                                 "and link it into ~/.claude/skills.", "[part|install]");
+    command.parser.addOption({"all", "The skill and every part, one after the other."});
     if (!command.parse(arguments, 0, 1))
         return 1;
-    QFile bundled(":/skill.md");
-    if (!bundled.open(QIODevice::ReadOnly))
-        return fail("The skill is missing from this build.");
-    // The part on writing plugins is made from the table the scripts' own
-    // `omabook` object is described by, so it says what this build offers.
-    const QByteArray contents = bundled.readAll() + ScriptApi::guide().toUtf8();
-    if (command.argument(0).isEmpty()) {
-        print(stdout, QString::fromUtf8(contents).trimmed());
+    const QString asked = command.argument(0);
+    if (asked != "install") {
+        QStringList parts{QString()};
+        if (command.parser.isSet("all"))
+            parts += skillParts;
+        else if (!asked.isEmpty())
+            parts = {asked};
+        if (!asked.isEmpty() && !skillParts.contains(asked))
+            return fail("There is no part " + asked + " of the skill. Its parts are library, graph and plugins.");
+        QStringList text;
+        for (const QString &part : parts) {
+            const auto contents = skillPart(part);
+            if (!contents)
+                return fail("The skill is missing from this build.");
+            text << QString::fromUtf8(*contents).trimmed();
+        }
+        print(stdout, text.join("\n\n"));
         return 0;
     }
-    if (command.argument(0) != "install")
-        return fail("Use omabook skill to print the skill, or omabook skill install.");
     const QDir home = QDir::home();
     const QString directory = home.filePath(".agents/skills/omabook");
-    QFile target(directory + "/SKILL.md");
-    if (!QDir().mkpath(directory) || !target.open(QIODevice::WriteOnly) || target.write(contents) != contents.size())
+    if (!QDir().mkpath(directory + "/references"))
         return fail("The skill can't be written to " + directory);
-    target.close();
+    const QStringList written = QStringList{QString()} + skillParts;
+    for (const QString &part : written) {
+        const auto contents = skillPart(part);
+        if (!contents)
+            return fail("The skill is missing from this build.");
+        QSaveFile target(part.isEmpty() ? directory + "/SKILL.md" : directory + "/references/" + part + ".md");
+        if (!target.open(QIODevice::WriteOnly) || target.write(*contents) != contents->size() || !target.commit())
+            return fail("The skill can't be written to " + directory);
+    }
     // Claude Code looks in its own folder; a link keeps one copy.
     const QString link = home.filePath(".claude/skills/omabook");
     if (!QFileInfo::exists(link) && !QFileInfo(link).isSymLink()
