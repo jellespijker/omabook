@@ -244,6 +244,8 @@ AppPopup {
             objectName: "pluginDiscovery"
             visible: !sheet.fits
             Layout.fillWidth: true
+            // A switch is dense in Material; under fingers it is a fingertip tall.
+            Layout.preferredHeight: Math.max(implicitHeight, win.touch ? 40 : 0)
             text: qsTr("Look for plugins on GitHub")
             checked: sheet.host ? sheet.host.manager.discovery : true
             onToggled: {
