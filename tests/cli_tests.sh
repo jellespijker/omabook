@@ -427,6 +427,37 @@ expect "removed, its books stay" 0 "stay in the library" "$omabook" collections 
 expect "what was inside it moved up" 0 "Hydraulica" "$omabook" collections --library "$shelf"
 expect "every book is still there" 0 "Command Book" "$omabook" list --library "$shelf"
 
+# The search finds books by what is known of them, as far as they were read,
+# and with --ai asks a stand-in model, whose answer is kept for next time.
+found="$work/Found"
+"$omabook" add "$work/Sea Story - Ann Sailor.txt" "$work/command.epub" --library "$found" > /dev/null 2>&1 || fail "no books for the search"
+"$omabook" progress 1 --section 0 --fraction 0.5 --percent 50 --library "$found" > /dev/null
+"$omabook" graph add --kind character --name "Mara Venn" --book 1 --section 0 --library "$found" > /dev/null
+"$omabook" graph add --kind character --name "Hidden Holt" --book 2 --section 0 --library "$found" > /dev/null
+expect "a word finds a book by a character met in it" 0 "Mara Venn (character)" "$omabook" search venn --library "$found"
+expect "knows: looks only at what is known" 0 '"name": "Mara Venn"' "$omabook" search knows:mara --json --library "$found"
+[ -z "$("$omabook" search holt --library "$found")" ] || fail "the search found a book by what is in a book not begun"
+expect "a book's own details are found too" 0 "Command Book" "$omabook" search command --library "$found"
+[ -z "$("$omabook" list venn --library "$found")" ] || fail "list found a book by what is known of it"
+expect "knows: is no collection's rule" 1 "knows:" "$omabook" collections add Known --rule knows:mara --library "$found"
+expect "asking the AI needs one" 1 "AI is turned off" "$omabook" search --ai "a lighthouse keeper" --library "$found"
+cat > "$work/model" <<SCRIPT
+#!/bin/bash
+cat > "$work/model.prompt"
+echo asked >> "$work/model.calls"
+echo '{"books": [{"id": 1, "why": "A keeper by the sea", "score": 80}, {"id": 77, "why": "not here", "score": 99}]}'
+SCRIPT
+chmod +x "$work/model"
+cp "$XDG_CONFIG_HOME/omabook/config.json" "$work/config.off"
+printf '{"ai_provider": "command", "ai_command": "%s"}' "$work/model" > "$XDG_CONFIG_HOME/omabook/config.json"
+expect "the AI finds books for a question" 0 "A keeper by the sea" "$omabook" search --ai "a lighthouse keeper" --library "$found"
+grep -q "Mara Venn" "$work/model.prompt" || fail "the AI wasn't told what is known of the books"
+grep -q "Hidden Holt" "$work/model.prompt" && fail "the AI was told what is in a book not begun"
+expect "a question asked again is answered from what was kept" 0 '"cached": true' "$omabook" search --ai "a lighthouse keeper" --json --library "$found"
+[ "$(wc -l < "$work/model.calls")" -eq 1 ] || fail "asking again asked the AI again"
+"$omabook" search --ai "a lighthouse keeper" --json --library "$found" | grep -q '"id": 77' && fail "the AI's answer named a book that isn't there"
+cp "$work/config.off" "$XDG_CONFIG_HOME/omabook/config.json"
+
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill
 expect "the skill installs" 0 "Installed" "$omabook" skill install
 [ -f "$HOME/.agents/skills/omabook/SKILL.md" ] && [ -L "$HOME/.claude/skills/omabook" ] || fail "skill install left no skill"

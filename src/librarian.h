@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ai.h"
+#include "aisearch.h"
 #include "curation.h"
 #include "customization.h"
 #include "readingsite.h"
@@ -43,6 +44,17 @@ class Librarian : public QObject {
     // collection the shelf shows. The knowledge graph's picture of the whole
     // library goes along either way.
     Q_PROPERTY(bool onlyCollection READ onlyCollection WRITE setOnlyCollection NOTIFY answerChanged)
+    // Books found for a question in the reader's own words (aisearch.h), the
+    // best first: [{"bookId", "title", "authors", "cover", "why", "readable"}].
+    // While it looks, `finding` and a status ("Looked through 240 of 1,600
+    // books…"); a failure in plain words; whether the answer was kept from
+    // asking the same before.
+    Q_PROPERTY(QVariantList found READ found NOTIFY foundChanged)
+    Q_PROPERTY(QString findQuestion READ findQuestion NOTIFY foundChanged)
+    Q_PROPERTY(bool finding READ finding NOTIFY foundChanged)
+    Q_PROPERTY(QString findStatus READ findStatus NOTIFY foundChanged)
+    Q_PROPERTY(QString findError READ findError NOTIFY foundChanged)
+    Q_PROPERTY(bool findCached READ findCached NOTIFY foundChanged)
     Q_PROPERTY(bool hasAi READ hasAi NOTIFY aiChanged)
     Q_PROPERTY(QString aiProblem READ aiProblem NOTIFY aiChanged)
 
@@ -89,6 +101,18 @@ public:
     bool onlyCollection() const noexcept { return m_onlyCollection; }
     void setOnlyCollection(bool only);
 
+    QVariantList found() const;
+    QString findQuestion() const noexcept { return m_findQuestion; }
+    bool finding() const noexcept { return m_finding; }
+    QString findStatus() const noexcept { return m_findStatus; }
+    QString findError() const noexcept { return m_findError; }
+    bool findCached() const noexcept { return m_findCached; }
+    // Has the AI find the books, of the collection shown, that answer a
+    // question; a question asked before of the library as it is now is
+    // answered from what was kept.
+    Q_INVOKABLE void find(const QString &question);
+    Q_INVOKABLE void stopFinding();
+
     Q_INVOKABLE void ask(const QString &question);
     // What to read next that the library doesn't hold, from what was read.
     Q_INVOKABLE void suggest();
@@ -107,6 +131,7 @@ signals:
     void busyChanged();
     void answerChanged();
     void changeChanged();
+    void foundChanged();
     void aiChanged();
 
 private:
@@ -161,6 +186,18 @@ private:
     QPointer<SuggestionCheck> m_check;
 
     SiteDesk m_desk;
+
+    // Finding books by a question: the question, what was found, and the
+    // search under way (deleted later, as it may end inside its own call).
+    void startFinding(std::shared_ptr<const KnowledgeIndex> known, const QList<Book> &books, const QString &key);
+    void finishFinding(const QList<AiSearch::Pick> &picks, const QString &key);
+    QString m_findQuestion;
+    QList<AiSearch::Pick> m_found;
+    bool m_finding = false;
+    QString m_findStatus, m_findError;
+    bool m_findCached = false;
+    int m_findAsked = 0;
+    QPointer<AiSearch::Run> m_findRun;
 
     std::unique_ptr<AiCall> m_changeCall;
     QString m_changeNote;

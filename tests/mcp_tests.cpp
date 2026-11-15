@@ -259,7 +259,7 @@ private slots:
             {"collections_list", "collections"}, {"collection_get", "collections"}, {"collection_add", "collections"},
             {"collection_set_rule", "collections"}, {"collection_rename", "collections"}, {"collection_move", "collections"},
             {"collection_put", "collections"}, {"collection_remove", "collections"}, {"collection_format", "collections"},
-            {"collections_sort", "collections"}, {"collections_sort_apply", "collections"},
+            {"collections_sort", "collections"}, {"collections_sort_apply", "collections"}, {"books_find", "search"},
         };
         const Machine machine;
         Server server(machine);
@@ -1028,6 +1028,30 @@ private slots:
         QCOMPARE(server.data("collection_get", {{"name", "Studie/Plezier"}}).value("count").toInt(), 0);
         server.data("collection_remove", {{"name", "Studie/Hydraulica"}});
         QVERIFY(server.failure("collection_get", {{"name", "Studie/Hydraulica"}}).contains("no collection"));
+        QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
+    }
+
+    void anAgentFindsBooksByWhatIsKnownAndByAQuestion() {
+        Machine machine;
+        QVERIFY(Fixtures::epub(machine.dir.filePath("garden.epub"), "The Glass Orchard"));
+        QVERIFY(Fixtures::epub(machine.dir.filePath("river.epub"), "Rivers of Copper"));
+        Server server(machine);
+        const QJsonArray added = server.data("book_add", {{"paths", QJsonArray{machine.dir.filePath("garden.epub"),
+                                                                                 machine.dir.filePath("river.epub")}}})
+                                     .value("added").toArray();
+        const qint64 garden = added.at(0).toObject().value("id").toInteger(), river = added.at(1).toObject().value("id").toInteger();
+        server.data("progress_set", {{"id", garden}, {"section", 0}, {"fraction", 0.5}, {"percent", 50}});
+        server.data("graph_add", {{"kind", "character"}, {"name", "Mara Venn"}, {"book", garden}, {"section", 0}});
+        // Met in a book never opened: not found, as a spoiler would be.
+        server.data("graph_add", {{"kind", "topic"}, {"name", "Control theory"}, {"book", river}, {"section", 0}});
+        const QJsonArray found = server.data("books_find", {{"words", "venn"}}).value("result").toArray();
+        QCOMPARE(found.size(), 1);
+        QCOMPARE(found.first().toObject().value("id").toInteger(), garden);
+        QCOMPARE(found.first().toObject().value("known").toObject().value("name").toString(), QString("Mara Venn"));
+        QVERIFY(server.data("books_find", {{"words", "knows:control"}}).value("result").toArray().isEmpty());
+        QCOMPARE(server.data("books_find", {{"words", "-knows:mara"}}).value("result").toArray().size(), 1);
+        // The AI is off here, and says so.
+        QVERIFY(server.failure("books_find", {{"words", "a mentor dies"}, {"ai", true}}).contains("AI is turned off"));
         QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
     }
 };

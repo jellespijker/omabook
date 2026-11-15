@@ -23,6 +23,7 @@
 #include <unistd.h>
 
 #include "ai.h"
+#include "aisearch.h"
 #include "bookops.h"
 #include "calibreplugin.h"
 #include "catalog.h"
@@ -40,6 +41,7 @@
 #include "graphtools.h"
 #include "importer.h"
 #include "interfacechange.h"
+#include "knowledgesearch.h"
 #include "library.h"
 #include "manual.h"
 #include "mcp.h"
@@ -193,6 +195,98 @@ int list(const QStringList &arguments) {
     } else {
         for (const Book &book : books)
             print(stdout, QString("%1\t%2\t%3\t%4").arg(book.id).arg(book.meta.title, book.meta.authorText(), book.formats.join(',')));
+    }
+    return 0;
+}
+
+int search(const QStringList &arguments) {
+    Command command("search", "Find books as the window's search does: by their details and by what the knowledge graph "
+                              "knows of them, as far as you have read. With --ai, the AI looks through the library for a "
+                              "question no search can put, and answers with the books and a reason each.");
+    command.parser.addPositionalArgument("words", "A search: bare words also find books by the characters, places, ideas and "
+                                                  "questions met in them; knows: looks only there. With --ai, a question "
+                                                  "in your own words.",
+                                         "<words...>");
+    command.parser.addOption({"ai", "Ask the AI, a batch of books at a time; an answer is kept, so asking again doesn't ask again."});
+    command.parser.addOption({"collection", "Only the books of this collection (omabook collections lists them).", "name"});
+    if (!command.parse(arguments, 1))
+        return 1;
+    QString error;
+    const auto library = command.library(&error);
+    if (!library)
+        return fail(error);
+    QList<Book> books = library->books();
+    qint64 collectionId = 0;
+    if (command.parser.isSet("collection")) {
+        const auto collection = library->collectionNamed(command.parser.value("collection"));
+        if (!collection)
+            return fail("There is no collection called " + command.parser.value("collection") + ". omabook collections lists them.");
+        books = collection->of(books);
+        collectionId = collection->id;
+    }
+    const QString words = command.parser.positionalArguments().join(' ');
+    // What is known of the books, unless the graph is switched off.
+    const auto known = std::make_shared<const KnowledgeIndex>(Settings().graph() != "off" ? KnowledgeIndex::build(*library)
+                                                                                         : KnowledgeIndex());
+    if (!command.parser.isSet("ai")) {
+        const QList<KnowledgeSearch::Found> found = KnowledgeSearch::search(*library, books, words, known);
+        if (command.json()) {
+            QJsonArray array;
+            for (const KnowledgeSearch::Found &one : found) {
+                QJsonObject object = one.book.toJson();
+                if (one.why)
+                    object.insert("known", one.why->toJson());
+                array << object;
+            }
+            printJson(array);
+        } else {
+            for (const KnowledgeSearch::Found &one : found)
+                print(stdout, QString("%1\t%2\t%3\t%4")
+                                  .arg(one.book.id)
+                                  .arg(one.book.meta.title, one.book.meta.authorText(),
+                                       one.why ? one.why->name + " (" + one.why->kind + ")" : QString()));
+        }
+        return 0;
+    }
+
+    const QString key = AiSearch::cacheKey(*library, words, collectionId);
+    std::optional<QList<AiSearch::Pick>> picks = AiSearch::cached(key);
+    const bool cached = picks.has_value();
+    int requests = 0;
+    if (!picks) {
+        const Settings settings;
+        QString why;
+        if (!makeAiProvider(settings, &why))
+            return fail(why);
+        AiSearch::Run run([&settings](QString *problem) { return makeAiProvider(settings, problem); }, words, books, known);
+        requests = run.total();
+        if (!command.json() && requests > 1)
+            print(stderr, QString("Looking through %1 books, %2 requests…").arg(run.books()).arg(requests));
+        QEventLoop loop;
+        QString failure;
+        QObject::connect(&run, &AiSearch::Run::finished, &loop, &QEventLoop::quit, Qt::QueuedConnection);
+        QObject::connect(&run, &AiSearch::Run::failed, &loop, [&failure, &loop](const QString &problem) {
+            failure = problem;
+            loop.quit();
+        }, Qt::QueuedConnection);
+        run.start();
+        loop.exec();
+        if (!failure.isEmpty())
+            return fail(failure);
+        picks = run.picks();
+        AiSearch::remember(key, *picks);
+    }
+    if (command.json()) {
+        QJsonArray array;
+        for (const AiSearch::Pick &pick : *picks)
+            array << AiSearch::toJson(pick, library->book(pick.bookId));
+        printJson(QJsonObject{{"question", words}, {"books", array}, {"cached", cached}, {"requests", requests}});
+    } else {
+        if (picks->isEmpty())
+            print(stdout, "No book answers that.");
+        for (const AiSearch::Pick &pick : *picks)
+            if (const auto book = library->book(pick.bookId))
+                print(stdout, QString("%1\t%2\t%3\t%4").arg(pick.bookId).arg(book->meta.title, book->meta.authorText(), pick.why));
     }
     return 0;
 }
@@ -2009,6 +2103,16 @@ int help(const QStringList &arguments) {
     Customization custom;
     const Manual manual(nullptr, &custom);
     const QString topic = command.argument(0).toLower();
+    // The keys are the window's: with what the script plugins that are
+    // switched on register, under each plugin's name.
+    Settings settings;
+    std::optional<ScriptPlugins> scripts;
+    if (topic == "keys") {
+        ScriptServices services;
+        services.settings = &settings;
+        scripts.emplace(services, QString(), nullptr, false);
+        custom.setPlugins(scripts->commands(), {});
+    }
     if (topic.isEmpty()) {
         if (command.json())
             printJson(manual.overviewJson());
@@ -2059,6 +2163,7 @@ struct CliCommand {
 
 constexpr std::array cliCommands{
     CliCommand{"list"_L1, list},
+    CliCommand{"search"_L1, search},
     CliCommand{"show"_L1, show},
     CliCommand{"add"_L1, add},
     CliCommand{"folio"_L1, Folio::run},
@@ -2110,6 +2215,7 @@ QString cliSummary() {
     return "Commands:\n"
            "  open [book]                     Open the window, and a book file or library number in it\n"
            "  list [search] [--collection c]  List the library's books, or one collection's\n"
+           "  search <words> [--ai]           Find books by their details and what you know of them; --ai asks the AI\n"
            "  collections [add|rule|move|sort|...]  Named parts of the library, nested as you like\n"
            "  show <id>                       Show one book's details and files\n"
            "  add <file|folder>...            Copy books into the library; a Calibre library comes with its details\n"

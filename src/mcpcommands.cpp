@@ -314,6 +314,31 @@ const bool registered = [] {
                       return command({"collections", "move", arguments.value("name").toString(), arguments.value("parent").toString()});
                   }});
 
+    registerTool({"books_find", "Find books by what is known of them, or by a question",
+                  "Searches as the window's search box does: the words of books_search, where a bare word also finds a "
+                  "book by the characters, places, ideas, events, plot threads, themes, topics and questions the "
+                  "knowledge graph met in it, and knows:<word> looks only there. Only what the user has read counts: "
+                  "nothing from past their furthest page, and nothing of a book they haven't begun. A book found that "
+                  "way says what found it under \"known\" (the node, its kind, and where it was met). With ai, the "
+                  "words are a question in the user's own words (\"the books where a mentor dies\", \"something "
+                  "about control theory I haven't finished\"): Omabook's quick model reads the library a batch at a "
+                  "time, from the books' details and what is known of them, never their text, and answers with the "
+                  "books that fit, the best first, a reason each. An answer is kept, so the same question of an "
+                  "unchanged library isn't asked again.",
+                  schema({{"words", string("The search, or with ai the question.")},
+                          {"ai", boolean("Ask the AI rather than search.")},
+                          {"collection", string("Only the books of this collection, by its path.")}},
+                         {"words"}),
+                  ReadOnly, [](const QJsonObject &arguments) {
+                      // A leading space keeps "-word" from reading as an option.
+                      QStringList asked{"search", " " + arguments.value("words").toString()};
+                      if (arguments.value("ai").toBool())
+                          asked << "--ai";
+                      if (!arguments.value("collection").toString().trimmed().isEmpty())
+                          asked << "--collection" << arguments.value("collection").toString();
+                      return command(asked);
+                  }, true});
+
     registerTool({"collections_sort", "Propose where books belong",
                   "Has Omabook's quick model propose, for each book not yet in a collection with none inside it, "
                   "a collection there is or a new one anywhere in the tree (named in the style and language of the "
