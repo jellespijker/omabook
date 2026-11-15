@@ -9,6 +9,7 @@
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <array>
+#include <utility>
 
 #include "pagelayout.h"
 #include "readingformat.h"
@@ -61,17 +62,34 @@ void Settings::watch() {
 }
 
 QString Settings::libraryPath() const {
+    if (!m_sessionLibrary.isEmpty())
+        return m_sessionLibrary;
     const QString path = m_values.value("library").toString();
     return path.isEmpty() ? QDir::homePath() + "/Books" : path;
 }
 
 void Settings::setLibraryPath(const QString &path) {
     const QString absolute = QDir(path).absolutePath();
+    const bool wasSession = !std::exchange(m_sessionLibrary, QString()).isEmpty();
     QStringList known = libraries();
     known.removeAll(absolute);
     known.prepend(absolute);
     m_values.insert("libraries", QJsonArray::fromStringList(known));
+    // Already the one in use: only the session's library is let go of.
+    if (wasSession && m_values.value("library") == absolute) {
+        save();
+        emit changed();
+        return;
+    }
     set("library", absolute);
+}
+
+void Settings::useLibraryForSession(const QString &path) {
+    const QString absolute = QDir(path).absolutePath();
+    if (absolute == libraryPath())
+        return;
+    m_sessionLibrary = absolute;
+    emit changed();
 }
 
 QStringList Settings::libraries() const {

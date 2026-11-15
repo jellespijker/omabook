@@ -44,9 +44,15 @@ class Settings : public QObject {
 public:
     explicit Settings(const QString &file = {}, QObject *parent = nullptr);
 
-    // The library in use, and every library that has been.
+    // The library in use, and every library that has been. Setting it makes
+    // it the one in use from now on, for the window, the command line and
+    // agents alike, and ends any library used for this session only.
     QString libraryPath() const;
     void setLibraryPath(const QString &path);
+    // A library for as long as this Settings lives (`omabook open --library`,
+    // a book opened from another library in the file manager): libraryPath()
+    // and libraries() say it, config.json keeps the one in use.
+    void useLibraryForSession(const QString &path);
     QStringList libraries() const;
 
     // How the text of a book is set unless the book has its own (see
@@ -233,4 +239,5 @@ private:
 
     QString m_file;
     QJsonObject m_values;
+    QString m_sessionLibrary;
 };

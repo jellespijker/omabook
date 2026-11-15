@@ -71,7 +71,8 @@ int main(int argc, char *argv[]) {
     arguments.addHelpOption();
     arguments.addVersionOption();
     arguments.addPositionalArgument("book", "A book file, or a book's number in the library, to open.", "[book]");
-    arguments.addOption({"library", "Open the library in this folder, and use it from now on.", "folder"});
+    arguments.addOption({"library", "Open the library in this folder in this window; the one in use stays as it is "
+                                    "(omabook libraries --use changes that).", "folder"});
     QCommandLineOption screenshot("screenshot", "Save a picture of the window and quit.", "file");
     screenshot.setFlags(QCommandLineOption::HiddenFromHelp);
     arguments.addOption(screenshot);
@@ -107,8 +108,11 @@ int main(int argc, char *argv[]) {
     Look theme(&desktopTheme, &themeChoice, &custom);
     Settings settings;
     PortalFilePicker picker;
+    // A library named here, or found by the book being opened, is this
+    // window's; which library is in use from now on is changed only on
+    // purpose: in the window's Libraries, or with omabook libraries --use.
     if (arguments.isSet("library"))
-        settings.setLibraryPath(arguments.value("library"));
+        settings.useLibraryForSession(arguments.value("library"));
     // A book file that is in a library (an entry of its view in the file
     // manager, or a file in the library's own folders) is that book, found
     // by where it is: it opens in its own library where it was left, without
@@ -116,7 +120,7 @@ int main(int argc, char *argv[]) {
     const QString book = arguments.positionalArguments().value(0);
     const auto known = book.isEmpty() || arguments.isSet("library") ? std::nullopt : Folio::find(settings, book);
     if (known && QDir::cleanPath(known->library) != QDir::cleanPath(QFileInfo(settings.libraryPath()).absoluteFilePath()))
-        settings.setLibraryPath(known->library);
+        settings.useLibraryForSession(known->library);
     Backend backend(&settings, &picker);
     backend.fileManager()->setActive(true);
     // The help, the tour and what is new, which remember what was shown.

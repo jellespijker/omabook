@@ -83,7 +83,8 @@ struct Command {
         parser.setApplicationDescription(description);
         parser.addHelpOption();
         parser.addOption({"json", "Print the result as JSON."});
-        parser.addOption({"library", "Use the library in this folder instead of the current one.", "folder"});
+        parser.addOption({"library", "Use the library in this folder instead of the current one, for this run only "
+                                     "(omabook libraries --use changes the one in use).", "folder"});
         this->name = name;
     }
 
@@ -109,6 +110,15 @@ struct Command {
         if (!library->open(error))
             return nullptr;
         return library;
+    }
+
+    // Whether the library worked on is the one in use. What is remembered
+    // in the settings about a library's books (which Calibre libraries were
+    // imported into it) is remembered only then: --library is for one run,
+    // and leaves the settings as they were.
+    bool libraryInUse(const Settings &settings) const {
+        return !parser.isSet("library")
+               || QDir::cleanPath(QDir(parser.value("library")).absolutePath()) == QDir::cleanPath(settings.libraryPath());
     }
 
     QString name;
@@ -312,8 +322,9 @@ int add(const QStringList &arguments) {
             if (calibre.switchedOff() && QFileInfo(path + "/metadata.db").isFile())
                 print(stderr, "The Calibre plugin is switched off, so " + path + " was added as a plain folder of books. "
                               "Switch it on with: omabook plugins enable calibre");
-        for (const QString &folder : std::as_const(summary.calibreLibraries))
-            settings.setCalibreLibrary(QDir(folder).absolutePath(), "imported");
+        if (command.libraryInUse(settings))
+            for (const QString &folder : std::as_const(summary.calibreLibraries))
+                settings.setCalibreLibrary(QDir(folder).absolutePath(), "imported");
     }
 
     QJsonArray results;
@@ -1021,8 +1032,9 @@ int calibre(const QStringList &arguments) {
     if (!library)
         return fail(error);
     const ImportSummary summary = importBooks(*library, folders, {}, plugin.importOptions());
-    for (const QString &folder : std::as_const(summary.calibreLibraries))
-        settings.setCalibreLibrary(folder, "imported");
+    if (command.libraryInUse(settings))
+        for (const QString &folder : std::as_const(summary.calibreLibraries))
+            settings.setCalibreLibrary(folder, "imported");
     if (command.json())
         printJson(QJsonObject{{"libraries", QJsonArray::fromStringList(summary.calibreLibraries)}, {"added", summary.added},
                               {"already_here", summary.duplicates}, {"updated", summary.updated}, {"read", summary.read},
