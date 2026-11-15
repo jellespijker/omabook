@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- A Markdown book zipped: a folder of Markdown chapters and their pictures
+     in one .mdz file. Named here so file managers know it as a book and
+     offer to open it with Omabook. -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-markdown-book">
+    <comment>Markdown book</comment>
+    <sub-class-of type="application/zip"/>
+    <glob pattern="*.mdz"/>
+  </mime-type>
+</mime-info>

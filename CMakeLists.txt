@@ -82,4 +82,6 @@ install(FILES LICENSE DESTINATION ${CMAKE_INSTALL_DATADIR}/licenses/omabook)
 # Omabook's plugin for Folio, the file manager: each library in the sidebar
 # as a folder of its books, and its entries on book files.
 install(DIRECTORY share/folio/ DESTINATION ${CMAKE_INSTALL_DATADIR}/folio/plugins)
+# .mdz, a zipped Markdown book, as a type of its own.
+install(FILES share/omabook-mime.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages RENAME omabook.xml)
 install(FILES share/omabook/calibre_bridge.py DESTINATION ${CMAKE_INSTALL_DATADIR}/omabook)
