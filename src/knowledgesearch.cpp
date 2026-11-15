@@ -13,7 +13,7 @@ namespace {
 
 // What is said of a thing is looked in this far, which holds a summary's
 // gist and keeps the index small.
-constexpr qsizetype saidRoom = 400;
+constexpr qsizetype saidRoom = 240;
 
 // Whether `word` (case folded) starts a word somewhere in `text` (case
 // folded): "venn" in "mara venn", not "enn".

@@ -199,9 +199,10 @@ public:
         qint64 bookId = 0;
         GraphMoment at;
     };
-    // Every such tie of the things of these kinds, and the facts of those
-    // things by node: what a search over what is known reads, in a few
-    // statements however large the graph.
+    // Every such tie of the things of these kinds (of whose data only the
+    // other names are read), and the facts of those things by node: what a
+    // search over what is known reads, in a few statements however large
+    // the graph.
     QList<Sighting> sightings(const QStringList &kinds) const;
     QHash<qint64, QList<GraphFact>> factsOfKinds(const QStringList &kinds) const;
     // A node as it is known to whoever `known` says knows a place: its

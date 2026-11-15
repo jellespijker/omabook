@@ -71,7 +71,7 @@ public:
     // While words are being typed only those looked up before are, and the
     // rest a moment after the typing stops.
     void setKnowledge(std::shared_ptr<const KnowledgeIndex> index);
-    [[nodiscard]] const KnowledgeIndex *knowledge() const noexcept { return m_index.get(); }
+    [[nodiscard]] const std::shared_ptr<const KnowledgeIndex> &knowledge() const noexcept { return m_index; }
     // Whether the search narrows the shelf: it has words, and isn't a
     // question for the AI (one that starts with "?").
     [[nodiscard]] bool searching() const;

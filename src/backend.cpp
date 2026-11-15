@@ -7,6 +7,7 @@
 
 #include <QDir>
 #include <QDirIterator>
+#include <QElapsedTimer>
 #include <QEventLoopLocker>
 #include <QFileInfo>
 #include <QImageReader>
@@ -56,6 +57,8 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     });
     connect(&m_model, &BookListModel::filtersChanged, this, &Backend::keepShelf);
     connect(&m_model, &BookListModel::knowledgeWanted, this, &Backend::buildKnowledge);
+    m_knowSoon.setSingleShot(true);
+    connect(&m_knowSoon, &QTimer::timeout, this, &Backend::readKnowledge);
     // config.json is followed while the app runs, the shelf's part of it too.
     connect(m_settings, &Settings::changed, this, [this] {
         if (m_shelfMoving)
@@ -182,6 +185,8 @@ void Backend::openLibrary(const QString &path) {
     }
     emit libraryChanged();
     m_fileManager.follow(m_library ? m_library->root() : QString());
+    // What was known of the other library's books is no use here.
+    m_model.setKnowledge({});
     takeShelf();
     reload();
 }
@@ -290,19 +295,32 @@ void Backend::buildKnowledge() {
         m_knowAgain = true;
         return;
     }
-    const KnowledgeIndex *known = m_model.knowledge();
-    if (known && known->changes == m_library->changes())
+    const auto &known = m_model.knowledge();
+    if (!known) {
+        readKnowledge();
+        return;
+    }
+    if (known->changes == m_library->changes() || m_knowSoon.isActive())
+        return;
+    m_knowSoon.start(int(std::clamp<qint64>(1000 + 4 * m_knowingTook, 1000, 30000)));
+}
+
+void Backend::readKnowledge() {
+    if (!m_library || m_knowing)
         return;
     m_knowing = true;
     const QString root = m_library->root();
     const QPointer<Backend> self(this);
     (void)QtConcurrent::run([self, root] {
+        QElapsedTimer took;
+        took.start();
         Library own(root);
         auto index = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::build(own) : KnowledgeIndex());
-        QMetaObject::invokeMethod(qApp, [self, root, index] {
+        QMetaObject::invokeMethod(qApp, [self, root, index, took = took.elapsed()] {
             if (!self)
                 return;
             self->m_knowing = false;
+            self->m_knowingTook = took;
             // Read for a library that is no longer the one in use.
             if (self->m_library && self->m_library->root() == root)
                 self->m_model.setKnowledge(index);

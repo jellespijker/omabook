@@ -239,6 +239,7 @@ private:
     // beside the window, when the search wants it and what was read last
     // is out of date.
     void buildKnowledge();
+    void readKnowledge();
     void picked(FilePicker::Purpose purpose, const QList<QUrl> &urls);
     void importFinished(const ImportSummary &summary, bool calibreLeftOut);
     void loadPlugins(bool refresh);
@@ -276,6 +277,10 @@ private:
     // again once that is done.
     bool m_knowing = false;
     bool m_knowAgain = false;
+    // Read again only so often while the graph keeps growing (as it does
+    // while a book is read), in proportion to how long a reading takes.
+    QTimer m_knowSoon;
+    qint64 m_knowingTook = 0;
     int m_jobs = 0;
     QString m_status;
     QString m_message;

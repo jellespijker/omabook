@@ -487,13 +487,32 @@ QList<Graph::Sighting> Graph::sightings(const QStringList &kinds) const {
     const QString kindList = marks(kinds.size());
     const QVariantList kindValues = kinds | std::ranges::to<QVariantList>();
     const QString columns = "n.id, n.scope, n.kind, n.name, n.summary, n.data, COALESCE(n.book_id, 0), n.updated"_L1;
+    // Each node made once, however many books it is tied to, and of its
+    // data only its other names, which is all a search looks at.
+    QHash<qint64, GraphNode> nodes;
+    const auto nodeOf = [&nodes](const QSqlQuery &query) {
+        const qint64 id = query.value(0).toLongLong();
+        if (const auto known = nodes.constFind(id); known != nodes.cend())
+            return *known;
+        GraphNode node;
+        node.id = id;
+        node.scope = query.value(1).toString();
+        node.kind = query.value(2).toString();
+        node.name = query.value(3).toString();
+        node.summary = query.value(4).toString();
+        if (const QString data = query.value(5).toString(); data.contains("\"aliases\""_L1))
+            node.data = QJsonObject{{"aliases", QJsonDocument::fromJson(data.toUtf8()).object().value("aliases")}};
+        node.bookId = query.value(6).toLongLong();
+        node.updated = query.value(7).toLongLong();
+        return *nodes.insert(id, node);
+    };
     // Met in a book, through the primary key of graph_seen from each node.
     for (QSqlQuery query = m_library->query(QString("SELECT %1, s.book_id, s.section, s.fraction, s.anchor FROM graph_nodes AS n "
                                                     "JOIN graph_seen AS s ON s.node_id = n.id WHERE n.scope = '' AND n.kind IN (%2)")
                                                 .arg(columns, kindList),
                                             kindValues);
          query.next();)
-        found.append({nodeFrom(query), query.value(8).toLongLong(), {placeFrom(query, 8), query.value(11).toString()}});
+        found.append({nodeOf(query), query.value(8).toLongLong(), {placeFrom(query, 8), query.value(11).toString()}});
     // Related to a book's own node, either way round.
     for (const auto &[thing, book] : {std::pair{"source"_L1, "target"_L1}, std::pair{"target"_L1, "source"_L1}})
         for (QSqlQuery query = m_library->query(
@@ -503,7 +522,7 @@ QList<Graph::Sighting> Graph::sightings(const QStringList &kinds) const {
                      .arg(columns, thing, book, kindList),
                  kindValues);
              query.next();)
-            found.append({nodeFrom(query), query.value(8).toLongLong(), {placeFrom(query, 9), query.value(12).toString()}});
+            found.append({nodeOf(query), query.value(8).toLongLong(), {placeFrom(query, 9), query.value(12).toString()}});
     // A question asked of a book with no place in it.
     for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_nodes AS n WHERE n.scope = '' AND n.kind = 'question' "
                                                     "AND n.data LIKE '%\"book\"%' AND NOT EXISTS (SELECT 1 FROM graph_seen "
