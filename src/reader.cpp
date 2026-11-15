@@ -210,9 +210,17 @@ void Reader::loaded() {
         if (!m_document)
             return;
         if (!document) {
+            // A book renamed as it is written moves its file; the new path is
+            // there a moment later, so it is read again before anything is said.
+            if (++m_reloadFailures <= 2) {
+                QTimer::singleShot(400 * m_reloadFailures, this, &Reader::reload);
+                return;
+            }
+            m_reloadFailures = 0;
             m_backend->say(tr("The book changed, and can't be read as it is now: %1").arg(error));
             return;
         }
+        m_reloadFailures = 0;
     } else {
         if (m_pendingId == 0)
             return; // closed while it was opening

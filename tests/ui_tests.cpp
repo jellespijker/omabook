@@ -1506,6 +1506,10 @@ private slots:
               "    return omabook.library.create({title: \"A Tale Being Told\", authors: [\"Tess Teller\"]}, \"data/story.txt\").id;\n"
               "}\n"
               "function grow(id) { omabook.files.write(\"data/story.txt\", story(5)); omabook.library.replaceFile(id, \"data/story.txt\"); }\n"
+              // As a story is named once it is planned: a new title moves the
+              // book's file, and the story grows in the same breath.
+              "function rename(id) { omabook.files.write(\"data/story.txt\", story(6)); omabook.library.replaceFile(id, \"data/story.txt\");\n"
+              "                      omabook.library.setMeta(id, {title: \"The Tale Has A Name\"}); }\n"
               "omabook.commands.register({id: \"steer\", title: \"Steer the story\", place: \"global\", key: \"Ctrl+R\", run: function () {\n"
               "    return omabook.ui.ask({title: \"What happens next?\", placeholder: \"A wish\", text: \"They go north.\"})\n"
               "        .then(function (words) { omabook.say(words === null ? \"Left to the teller.\" : \"Heard: \" + words); });\n"
@@ -1544,6 +1548,24 @@ private slots:
         // And reading on leads into what was added.
         desk.reader->goTo(4);
         QTRY_VERIFY(desk.reader->html().contains("The opening of chapter 5."));
+
+        // Renamed while it is read, its file moved: the reader follows it to
+        // the new name, with nothing said of a book that can't be read.
+        desk.backend->scripts()->call("teller", "rename", {id});
+        QTRY_COMPARE(desk.backend->book(id).value("title").toString(), QString("The Tale Has A Name"));
+        QTRY_COMPARE(desk.reader->count(), 6);
+        // And when a reread starts just as the file is moved (a story renamed
+        // while its last change is still being read), the reader tries again
+        // once the file is back, and says nothing.
+        const QString file = desk.backend->library()->formatPath(id, "txt");
+        QVERIFY(QFile::rename(file, file + ".moving"));
+        desk.reader->reload();
+        QTest::qWait(150);
+        QVERIFY(QFile::rename(file + ".moving", file));
+        QTest::qWait(1500);
+        QVERIFY2(!desk.value("toastText", "text").toString().contains("can't be read"), qPrintable(desk.value("toastText", "text").toString()));
+        QVERIFY(desk.reader->isOpen());
+        QCOMPARE(desk.reader->count(), 6);
 
         // The plugin's key asks for words, here in the reader: what is
         // typed is what the script hears.

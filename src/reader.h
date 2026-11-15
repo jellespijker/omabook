@@ -196,6 +196,9 @@ private:
     double m_wantedFraction = 0;
     bool m_reloading = false;
     bool m_reloadWanted = false; // the file changed again while it was being read anew
+    // Rereads that failed in a row: a book whose file is being renamed (its
+    // title changed) can't be read for a moment, so it is tried again.
+    int m_reloadFailures = 0;
     bool m_growing = false;
     ReadingMarks *m_marks;
     PageFormat *m_format = nullptr;
