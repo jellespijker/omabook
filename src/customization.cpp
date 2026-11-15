@@ -151,7 +151,8 @@ constexpr BuiltIn builtIns[] = {
         {"reader.graph", {"M"}, tr("Show or hide the map of what the book has told so far, beside the page")},
         {"reader.marks", {"Shift+M"}, tr("Mark the graph's people, places and things in the text: while the map is open, always, or never")},
         {"reader.select", {"V"}, tr("Select words with the keyboard: the arrows or H J K L move, Shift widens, Enter shows what to do with them")},
-        {"reader.format", {"Shift+A"}, tr("Show or hide how the text is set: the font, its size, the spacing, the margins and the alignment, for this book or every book")},
+        {"reader.format", {"Shift+A"}, tr("Show or hide how the text is set: the font, its size, the longest line, the pages side by side, the spacing, the margins and the alignment, for this book or every book")},
+        {"reader.pages", {"Shift+P"}, tr("Pages side by side: as many as fit, one, two or three, and round again")},
         // The graph view, wherever it is open: over the shelf or beside the page.
         {"graph.left", {"H", "Left"}, tr("Select the nearest related thing to the left")},
         {"graph.right", {"L", "Right"}, tr("Select the nearest related thing to the right")},
@@ -558,13 +559,13 @@ center`, or the reader's "Aa" panel), which win over these.
 | `cover_size` | Width of a book on the shelf, in pixels | 176 |
 | `font_size` | The reader's type size, in pixels (10 to 48) | 19 |
 | `font_family` | The reader's font, empty for the desktop's | |
-| `line_width` | The widest a line of text gets, in pixels (320 to 1600) | 720 |
+| `measure` | The longest line, in characters of the reader's font (40 to 90); its width in pixels follows the font and its size. An older `line_width` in pixels is carried over | 66 |
 | `line_height` | Line spacing, in percent (100 to 300) | 150 |
 | `paragraph_spacing` | Space after a paragraph, in pixels (0 to 80) | 12 |
 | `indent` | Indent of a paragraph's first line, in pixels (0 to 64) | 0 |
 | `margins` | Room around the text, in pixels (0 to 160) | 32 |
 | `align` | `start`, `justify` (filled out to both sides), `center` or `end`; start and end turn round in a right-to-left language. The older `justify: true` still reads as `justify` | `start` |
-| `spread` | Two pages side by side: `auto` (wide windows), `always`, `never` | `auto` |
+| `pages` | Pages side by side in the reader: `"auto"` (as many as the window has room for, each with lines of at least 45 characters, up to three), or `1`, `2` or `3`, shown where each page keeps 45 characters (the most that do otherwise). An older `spread` is carried over | `"auto"` |
 | `pane_widths` | How wide each side pane was dragged, in pixels, by name (`details`, `contents`, `assistant`, `graph`, `graph_details`, `plugins`): `{"assistant": 440}`. A pane that isn't named is as wide as it comes | |
 | `sync_target` | The computer `sync` talks to: `name` or `name:folder` | |
 | `ai_provider` | `auto`, `claude`, `agy`, `anthropic`, `command` or `off` | `auto` |
@@ -619,7 +620,7 @@ Start from the real one: `omabook customize ReaderView` writes the built-in
   `openBook(id)`, `close()`, `goTo(section, anchor)`, `find(words)`, `addBookmark(text)`.
 - `assistant`: the AI. `available`, `messages`, `streaming`, `busy`,
   `ask(question, scope, selection)`, `catchUp()`, `cancel()`.
-- `settings`: config.json as properties (`fontSize`, `lineWidth`, `coverSize`, ...).
+- `settings`: config.json as properties (`fontSize`, `measure`, `pages`, `coverSize`, ...).
 - `theme`: the look (`accent`, `accentForeground`, `background`, `foreground`,
   `colors.<name>`, `light`, `radius`).
 - `custom`: these files (`plainKeys`, `chordKeys`, `keyText`, `style`, `mods`).

@@ -10,6 +10,7 @@
 #include <QStandardPaths>
 #include <array>
 
+#include "pagelayout.h"
 #include "readingformat.h"
 
 using namespace Qt::StringLiterals;
@@ -18,7 +19,6 @@ namespace {
 
 // What a setting with a few words to choose from may be.
 constexpr std::array graphModes{"auto"_L1, "ask"_L1, "off"_L1};
-constexpr std::array spreads{"auto"_L1, "always"_L1, "never"_L1};
 constexpr std::array markModes{"map"_L1, "always"_L1, "never"_L1};
 constexpr std::array pluginUpdateModes{"auto"_L1, "tell"_L1, "never"_L1};
 constexpr std::array sorts{"recent"_L1, "title"_L1,  "author"_L1,    "series"_L1,  "added"_L1,
@@ -140,6 +140,16 @@ void Settings::setNumber(QAnyStringView key, int value) {
     set(key.toString(), std::clamp(value, range->low, range->high));
 }
 
+int Settings::pages() const {
+    const int pages = m_values.value("pages").toInt(0);
+    return pages >= 1 && pages <= 3 ? pages : 0;
+}
+
+void Settings::setPages(int pages) {
+    if (pages >= 0 && pages <= 3)
+        set("pages", pages == 0 ? QJsonValue("auto") : QJsonValue(pages));
+}
+
 QString Settings::align() const {
     const QString align = m_values.value("align").toString();
     if (std::ranges::contains(ReadingFormat::alignments, align))
@@ -166,7 +176,7 @@ QJsonObject Settings::format() const {
 QJsonObject Settings::options() const {
     QJsonObject options = format();
     options.insert("cover_size", coverSize());
-    options.insert("spread", spread());
+    options.insert("pages", pages() == 0 ? QJsonValue("auto") : QJsonValue(pages()));
     options.insert("folio", folio());
     options.insert("sort", sort());
     return options;
@@ -187,11 +197,33 @@ bool Settings::setOption(const QString &key, const QJsonValue &value) {
         set("align", value.toBool() ? "justify" : "start");
         return true;
     }
+    // The older names of the longest line and of the pages side by side,
+    // still taken from a plugin written before they changed.
+    if (key == "line_width") {
+        if (!value.isDouble() || value.toInt() < 320 || value.toInt() > 1600)
+            return false;
+        setMeasure(PageLayout::measureFromPixels(value.toInt(), fontSize()));
+        return true;
+    }
+    if (key == "spread") {
+        const QString spread = value.toString();
+        if (spread != "auto" && spread != "always" && spread != "never")
+            return false;
+        setPages(spread == "always" ? 2 : spread == "never" ? 1 : 0);
+        return true;
+    }
+    // The pages side by side, as a word or a number.
+    if (key == "pages") {
+        const QString word = value.isDouble() ? QString::number(value.toDouble()) : value.toString();
+        if (word != "auto" && word != "1" && word != "2" && word != "3")
+            return false;
+        setPages(word == "auto" ? 0 : word.toInt());
+        return true;
+    }
     const auto within = [&value](int low, int high) { return value.isDouble() && value.toInt() >= low && value.toInt() <= high; };
     const auto oneOf = [&value](const auto &words) { return std::ranges::contains(words, value.toString()); };
     const bool fits = key == "cover_size" ? within(96, 480)
                       : key == "folio" ? value.isBool()
-                      : key == "spread" ? oneOf(spreads)
                       : key == "plugin_updates" ? oneOf(pluginUpdateModes)
                       : key == "sort" ? oneOf(sorts)
                       : false;
@@ -285,7 +317,7 @@ void Settings::set(const QString &key, const QJsonValue &value) {
 // the step that carries an older file forward is added to `upgraded` below,
 // so a setting made in an older Omabook is never silently dropped. Keys that
 // are only added need no step: a missing key reads as its default.
-constexpr int configVersion = 2;
+constexpr int configVersion = 3;
 
 QJsonObject Settings::upgraded(QJsonObject values) {
     const int from = values.value("config_version").toInt(0);
@@ -294,6 +326,24 @@ QJsonObject Settings::upgraded(QJsonObject values) {
         if (!values.contains("align"))
             values.insert("align", values.value("justify").toBool() ? "justify" : "start");
         values.remove("justify");
+    }
+    // 3: the longest line became a measure in characters ("measure"), from
+    // pixels ("line_width"), and the choice of two pages ("spread": "auto",
+    // "always" or "never") a count of pages ("pages": "auto", 1, 2 or 3).
+    // A width left at the old default is the new default.
+    if (from < 3) {
+        if (values.contains("line_width")) {
+            const int pixels = values.value("line_width").toInt(720);
+            if (!values.contains("measure") && pixels != 720)
+                values.insert("measure", PageLayout::measureFromPixels(pixels, values.value("font_size").toInt(19)));
+            values.remove("line_width");
+        }
+        if (values.contains("spread")) {
+            const QString spread = values.value("spread").toString();
+            if (!values.contains("pages"))
+                values.insert("pages", spread == "always" ? QJsonValue(2) : spread == "never" ? QJsonValue(1) : QJsonValue("auto"));
+            values.remove("spread");
+        }
     }
     // A file from a newer Omabook is read as it is: keys this one doesn't
     // know are kept and written back untouched.

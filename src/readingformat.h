@@ -30,12 +30,13 @@ struct Range {
     QLatin1StringView key;  // as config.json, the database and the tools name it
     int low, high, fallback;
     int step;               // what one press of a stepper changes it by
-    QLatin1StringView unit; // "px" or "%"
+    QLatin1StringView unit; // "px", "%" or "characters"
 };
 
 inline constexpr std::array ranges{
     Range{"font_size"_L1, 10, 48, 19, 1, "px"_L1},
-    Range{"line_width"_L1, 320, 1600, 720, 40, "px"_L1},
+    // The longest line, in characters of the body font (see pagelayout.h).
+    Range{"measure"_L1, 40, 90, 66, 2, "characters"_L1},
     Range{"line_height"_L1, 100, 300, 150, 10, "%"_L1},
     Range{"paragraph_spacing"_L1, 0, 80, 12, 2, "px"_L1},
     Range{"indent"_L1, 0, 64, 0, 4, "px"_L1},

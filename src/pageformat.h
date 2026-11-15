@@ -6,6 +6,8 @@
 #include <QStringList>
 #include <QVariantMap>
 
+#include "pagelayout.h"
+
 class Reader;
 class Settings;
 
@@ -28,6 +30,30 @@ class PageFormat : public QObject {
     // The color links are shown in, which is the theme's.
     Q_PROPERTY(QColor linkColor READ linkColor WRITE setLinkColor NOTIFY htmlChanged)
 
+    // How the text is laid out across the room it has (pagelayout.h). The
+    // reading view says how wide its reading area is (`available`, the
+    // panes beside it already taken off); the rest follows from it, the
+    // format in force and the setting of pages, and every reader lays its
+    // text out by these and nothing else.
+    Q_PROPERTY(double available READ available WRITE setAvailable NOTIFY layoutChanged)
+    // The advance of an average character of the body font, and the longest
+    // line (the measure) in pixels.
+    Q_PROPERTY(double characterWidth READ characterWidth NOTIFY layoutChanged)
+    Q_PROPERTY(double lineWidth READ lineWidth NOTIFY layoutChanged)
+    // The room at the spread's outer edges, and between two of its pages.
+    Q_PROPERTY(double margin READ margin NOTIFY layoutChanged)
+    Q_PROPERTY(double gutter READ gutter NOTIFY layoutChanged)
+    // The pages side by side; what Automatic gives here; the most that keep
+    // the minimum measure; each page's width; and whether a choice of 1, 2
+    // or 3 is what shows.
+    Q_PROPERTY(int columns READ columns NOTIFY layoutChanged)
+    Q_PROPERTY(int automaticColumns READ automaticColumns NOTIFY layoutChanged)
+    Q_PROPERTY(int mostColumns READ mostColumns NOTIFY layoutChanged)
+    Q_PROPERTY(double columnWidth READ columnWidth NOTIFY layoutChanged)
+    Q_PROPERTY(bool pagesHonoured READ pagesHonoured NOTIFY layoutChanged)
+    // The fewest characters a page of a spread is set to.
+    Q_PROPERTY(int minimumMeasure READ minimumMeasure CONSTANT)
+
 public:
     PageFormat(Reader *reader, Settings *settings, QObject *parent = nullptr);
 
@@ -41,6 +67,19 @@ public:
     QString html() const noexcept { return m_html; }
     QColor linkColor() const noexcept { return m_links; }
     void setLinkColor(const QColor &color);
+
+    double available() const noexcept { return m_available; }
+    void setAvailable(double width);
+    double characterWidth() const noexcept { return m_space.characterWidth; }
+    double lineWidth() const noexcept { return m_space.characterWidth * m_space.measure; }
+    double margin() const noexcept { return m_space.margin; }
+    double gutter() const noexcept { return m_space.gutter; }
+    int columns() const noexcept { return m_columns.count; }
+    int automaticColumns() const noexcept { return m_columns.automatic; }
+    int mostColumns() const noexcept { return m_columns.most; }
+    double columnWidth() const noexcept { return m_columns.width; }
+    bool pagesHonoured() const noexcept { return m_columns.honoured; }
+    static constexpr int minimumMeasure() noexcept { return PageLayout::minimumMeasure; }
 
     // Changes one option, for the open book alone or for the defaults; what
     // is wrong with the value when it can't be, else empty.
@@ -61,13 +100,19 @@ public:
 signals:
     void changed();
     void htmlChanged();
+    void layoutChanged();
 
 private:
     void restyle();
+    // Works the layout out again from the room, the format and the setting.
+    void relayout();
 
     Reader *m_reader;
     Settings *m_settings;
     QJsonObject m_defaults, m_own, m_effective;
     QString m_html, m_chapter;
     QColor m_links{"#7aa2f7"};
+    double m_available = 0;
+    PageLayout::Space m_space;
+    PageLayout::Columns m_columns;
 };

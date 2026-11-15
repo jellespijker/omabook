@@ -1,14 +1,20 @@
 import QtQuick
 import QtQuick.Controls
 
-// A flowing book in a wide window: two pages side by side, like the book
-// lying open. The chapter is laid out once as a column and cut into pages
-// where its lines allow; the left page shows one, the right the next, and a
-// turn moves on by two.
+// A flowing book in a wide window: two or three pages side by side, like
+// the book lying open (how many is PageLayout::columns' to say, through
+// reader.format). The chapter is laid out once per page as a column and cut
+// into pages where its lines allow; the first page shows one, the next the
+// one after, and a turn moves on by the whole spread. Where the reader is,
+// is the start of the first page.
 Item {
     id: spread
     objectName: "spreadReader"
-    readonly property string selectedText: leftText.selectedText !== "" ? leftText.selectedText : rightText.selectedText
+    readonly property string selectedText: {
+        for (const sheet of sheets)
+            if (sheet.text.selectedText !== "") return sheet.text.selectedText
+        return ""
+    }
     // Whether the graph's things are marked in the text.
     property bool marking: false
     // The thing under the pointer changed (null for none), and a selection
@@ -17,25 +23,33 @@ Item {
     signal selected()
     // Nothing here scrolls sideways, which is what lets a swipe turn the page.
     readonly property real contentWidth: width
-    // The options the text is set with (readingformat.h). The fold between
-    // the pages is as wide as it always is; the margins are the room at the
-    // outer edges and above and below.
+    // The options the text is set with (readingformat.h), and how they are
+    // laid out across the room (pagelayout.h). The pages are as wide as the
+    // measure allows; the margins are the room at the outer edges and above
+    // and below.
     readonly property var format: reader.format.effective
-    readonly property real gutter: 56
-    readonly property real outer: format.margins + 24
+    readonly property int columns: Math.max(2, Math.min(3, reader.format.columns))
+    readonly property real gutter: reader.format.gutter
     readonly property real above: format.margins + 4
-    readonly property real columnWidth: Math.max(200, Math.min(format.line_width, (width - gutter - outer * 2) / 2))
+    readonly property real columnWidth: Math.max(200, reader.format.columnWidth)
     readonly property real pageHeight: Math.max(120, height - above * 2)
+    // The pages that show, the first first.
+    readonly property var sheets: columns === 3 ? [page0, page1, page2] : [page0, page1]
+    readonly property Item firstText: page0.text
     // Where each page starts in the column, and where the last one ends.
     property var breaks: [0, 0]
     readonly property int pages: Math.max(1, breaks.length - 1)
-    // The left page of the last spread.
-    readonly property int lastLeft: Math.max(0, pages - 1 - (pages - 1) % 2)
-    // The page on the left.
+    // The first page of the last spread.
+    readonly property int lastLeft: Math.max(0, pages - 1 - (pages - 1) % columns)
+    // The first page of the spread that shows.
     property int page: 0
     // The place to show once the chapter is laid out, until the reader turns a page.
     property real wanted: -1
     property string wantedAnchor: ""
+    // Where in the chapter's text the first page starts, while the reader
+    // is turning through it: what is shown again when the pages are cut
+    // anew, or there are more or fewer of them side by side.
+    property int placeAt: -1
     // Cutting the pages again waits a moment for the layout to finish, on a
     // timer that goes when this view does.
     Timer { id: later; interval: 0; onTriggered: spread.paginate() }
@@ -46,36 +60,42 @@ Item {
             if (breaks[i] <= y + 0.5) index = i
         return index
     }
-    function show(index) { page = Math.max(0, Math.min(lastLeft, index - index % 2)) }
+    function show(index) { page = Math.max(0, Math.min(lastLeft, index - index % columns)) }
+    function startOf(index) { return firstText.positionAt(0, breaks[Math.min(index, breaks.length - 1)] + 1) }
     // Shows the wanted place. The column's height keeps changing while its
     // pictures arrive, so this runs each time the pages are cut again.
     function settle() {
         if (wanted < 0)
             return
-        const at = wantedAnchor !== "" ? reader.anchorPosition(leftText.textDocument, wantedAnchor) : -1
-        show(at >= 0 ? pageOf(leftText.positionToRectangle(at).y) : Math.round(wanted * lastLeft))
+        // A place in the chapter is as far through its text (which is how
+        // a found word is told), and shows on the spread that has it.
+        const anchored = wantedAnchor !== "" ? reader.anchorPosition(firstText.textDocument, wantedAnchor) : -1
+        const at = anchored >= 0 ? anchored : Math.round(wanted * Math.max(0, firstText.length - 1))
+        show(wanted >= 1 && anchored < 0 ? lastLeft : pageOf(firstText.positionToRectangle(at).y))
     }
     function paginate() {
-        breaks = reader.pageBreaks(leftText.textDocument, pageHeight)
+        breaks = reader.pageBreaks(firstText.textDocument, pageHeight)
         // Cut again into more or fewer pages (the window or a pane beside
-        // the page changed width), the spread stays as far through the
-        // chapter as it was, which the same page number no longer is.
+        // the page changed width, the type changed), the spread still holds
+        // the words that began it, which the same page number no longer does.
         if (wanted >= 0) settle()
+        else if (placeAt >= 0) show(pageOf(firstText.positionToRectangle(placeAt).y))
         else show(Math.round(reader.fraction * lastLeft))
     }
     function turnTo(index) {
         wanted = -1
         show(index)
+        placeAt = startOf(page)
         reader.fraction = lastLeft > 0 ? page / lastLeft : 0
     }
     // A turn past the last spread goes on to the next chapter.
     function pageDown() {
         if (page >= lastLeft) next()
-        else turnTo(page + 2)
+        else turnTo(page + columns)
     }
     function pageUp() {
         if (page <= 0) { if (reader.section > 0) reader.goTo(reader.section - 1, "", true) }
-        else turnTo(page - 2)
+        else turnTo(page - columns)
     }
     function lineDown() { pageDown() }
     function lineUp() { pageUp() }
@@ -90,17 +110,23 @@ Item {
         if (pinched > 1.08) { zoom(1); pinched = 1 }
         else if (pinched < 0.92) { zoom(-1); pinched = 1 }
     }
-    // The words at the top of the left page, to name a bookmark by.
     // The reading view's ways into the text; points and rectangles are in
-    // this item's coordinates. Both pages hold the whole chapter, each
+    // this item's coordinates. Every page holds the whole chapter, each
     // showing its own stretch of it, so a point is asked of the page it is on.
     function pageAt(x, y) {
-        for (const sheet of [leftPage, rightPage]) {
+        for (const sheet of sheets) {
             if (!sheet.there) continue
             const at = sheet.text.mapFromItem(spread, x, y)
             if (at.x >= 0 && at.x <= sheet.width && at.y >= spread.breaks[sheet.index] && at.y <= spread.breaks[sheet.index + 1])
                 return sheet
         }
+        return null
+    }
+    // The page a place in the column shows on.
+    function sheetShowing(y) {
+        for (const sheet of sheets)
+            if (sheet.there && y >= breaks[sheet.index] && y < breaks[sheet.index + 1])
+                return sheet
         return null
     }
     function fromText(sheet, rect) {
@@ -116,12 +142,11 @@ Item {
         return found
     }
     function selection() {
-        for (const sheet of [leftPage, rightPage]) {
+        for (const sheet of sheets) {
             const chosen = sheet.marks.selection()
             if (!chosen) continue
             // On the page it shows on.
-            const onRight = sheet === leftPage && rightPage.there && chosen.rect.y >= spread.breaks[rightPage.index]
-            chosen.rect = fromText(onRight ? rightPage : sheet, chosen.rect)
+            chosen.rect = fromText(sheetShowing(chosen.rect.y) || sheet, chosen.rect)
             return chosen
         }
         return null
@@ -132,57 +157,68 @@ Item {
         const at = sheet.text.mapFromItem(spread, x, y)
         return sheet.marks.selectWordAt(at.x, at.y)
     }
-    // The keyboard's selection starts at the first word of the left page,
-    // and is shown on both pages, each showing its part of it.
+    // The keyboard's selection starts at the first word of the first page,
+    // and is shown on every page, each showing its part of it.
     function beginSelecting() {
-        rightText.deselect()
-        leftPage.marks.begin(leftText.positionAt(0, breaks[page] + leftText.font.pixelSize))
+        for (const sheet of sheets) if (sheet !== page0) sheet.text.deselect()
+        page0.marks.begin(firstText.positionAt(0, breaks[page] + firstText.font.pixelSize))
         mirror()
     }
-    function mirror() { rightText.select(leftText.selectionStart, leftText.selectionEnd) }
+    function mirror() {
+        for (const sheet of sheets)
+            if (sheet !== page0) sheet.text.select(firstText.selectionStart, firstText.selectionEnd)
+    }
     function stepSelecting(words, lines, extend) {
-        leftPage.marks.step(words, lines, extend)
+        page0.marks.step(words, lines, extend)
         mirror()
-        // Kept in sight: on past the right page, back before the left.
-        const r = leftPage.marks.activeRect()
-        if (r.y >= breaks[Math.min(breaks.length - 1, page + 2)] && page < lastLeft) show(page + 2)
-        else if (r.y < breaks[page] && page > 0) show(page - 2)
+        // Kept in sight: on past the last page, back before the first.
+        const r = page0.marks.activeRect()
+        if (r.y >= breaks[Math.min(breaks.length - 1, page + columns)] && page < lastLeft) show(page + columns)
+        else if (r.y < breaks[page] && page > 0) show(page - columns)
+        placeAt = startOf(page)
         reader.fraction = lastLeft > 0 ? page / lastLeft : 0
     }
-    function endSelecting() { leftPage.marks.finish() }
+    function endSelecting() { page0.marks.finish() }
     function clearSelection() {
-        leftPage.marks.finish()
-        leftText.deselect()
-        rightText.deselect()
+        page0.marks.finish()
+        for (const sheet of sheets) sheet.text.deselect()
     }
     function copySelection() {
-        if (leftText.selectedText !== "") leftText.copy()
-        else rightText.copy()
+        for (const sheet of sheets)
+            if (sheet.text.selectedText !== "") { sheet.text.copy(); return }
     }
     function placeText() {
-        const start = leftText.positionAt(columnWidth / 2, breaks[page] + 8)
-        return leftText.getText(start, start + 120)
+        const start = firstText.positionAt(columnWidth / 2, breaks[page] + 8)
+        return firstText.getText(start, start + 120)
     }
 
     onPageHeightChanged: later.restart()
+    // Another page more or fewer: the same pages, as a spread of another size.
+    onColumnsChanged: later.restart()
     Connections {
         target: reader
         function onMoved(anchor, fraction) {
             spread.wanted = fraction
             spread.wantedAnchor = anchor
+            spread.placeAt = -1
             spread.settle()
         }
+        function onSectionChanged() { spread.placeAt = -1 }
     }
 
     // One page: a window onto the column, as tall as its page of lines.
     component Page: Item {
         id: sheet
-        property int index: 0
+        // Which of the spread's pages it is, counted from the first.
+        property int offset: 0
+        readonly property int index: spread.page + offset
+        readonly property bool shown: offset < spread.columns
         property alias text: column
         property alias marks: pageMarks
-        readonly property bool there: index < spread.pages
+        readonly property bool there: shown && index < spread.pages
         // Every page takes its place in the spread, written on or not; what
         // shows of the column is cut off after the page's last whole line.
+        visible: shown
         width: spread.columnWidth
         height: spread.pageHeight
 
@@ -191,33 +227,43 @@ Item {
             height: sheet.there ? Math.max(0, spread.breaks[sheet.index + 1] - spread.breaks[sheet.index]) : 0
             clip: true
 
-        TextEdit {
-            id: column
-            y: sheet.there ? -spread.breaks[sheet.index] : 0
-            width: spread.columnWidth
-            visible: sheet.there
-            readOnly: true
-            selectByMouse: true
-            persistentSelection: true
-            activeFocusOnPress: false
-            textFormat: TextEdit.RichText
-            wrapMode: TextEdit.Wrap
-            color: theme.foreground
-            selectionColor: theme.accent
-            selectedTextColor: theme.accentForeground
-            font.pixelSize: spread.format.font_size
-            font.family: spread.format.font_family !== "" ? spread.format.font_family : Qt.application.font.family
-            text: reader.format.html
-            onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
-            PageMarks {
-                id: pageMarks
-                anchors.fill: parent
-                text: column
-                on: spread.marking && sheet.there
-                onHoveredChanged: spread.pointed(hovered ? Object.assign({}, hovered, { rect: spread.fromText(sheet, hovered.rect) }) : null)
-                onReleased: spread.selected()
+            TextEdit {
+                id: column
+                y: sheet.there ? -spread.breaks[sheet.index] : 0
+                width: spread.columnWidth
+                visible: sheet.there
+                readOnly: true
+                selectByMouse: true
+                persistentSelection: true
+                activeFocusOnPress: false
+                textFormat: TextEdit.RichText
+                wrapMode: TextEdit.Wrap
+                color: theme.foreground
+                selectionColor: theme.accent
+                selectedTextColor: theme.accentForeground
+                font.pixelSize: spread.format.font_size
+                font.family: spread.format.font_family !== "" ? spread.format.font_family : Qt.application.font.family
+                // A page that isn't part of the spread lays nothing out.
+                text: sheet.shown ? reader.format.html : ""
+                onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
+                PageMarks {
+                    id: pageMarks
+                    anchors.fill: parent
+                    text: column
+                    on: spread.marking && sheet.there
+                    onHoveredChanged: spread.pointed(hovered ? Object.assign({}, hovered, { rect: spread.fromText(sheet, hovered.rect) }) : null)
+                    onReleased: spread.selected()
+                }
             }
         }
+        // The fold before the next page, halfway across the gutter.
+        Rectangle {
+            visible: sheet.offset + 1 < spread.columns
+            x: win.rightToLeft ? -spread.gutter / 2 : sheet.width + spread.gutter / 2
+            width: 1
+            height: spread.pageHeight
+            color: theme.colors.selection
+            opacity: 0.6
         }
     }
 
@@ -225,26 +271,18 @@ Item {
         anchors.horizontalCenter: parent.horizontalCenter
         y: spread.above
         spacing: spread.gutter
-        // The spread reads in the direction of the language.
-        layoutDirection: win.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight
+        // The spread reads in the direction of the language: the window's
+        // mirroring turns this round in a right-to-left one.
+        layoutDirection: Qt.LeftToRight
 
-        Page {
-            id: leftPage
-            objectName: "leftPage"
-            index: spread.page
-        }
-        Page {
-            id: rightPage
-            objectName: "rightPage"
-            index: spread.page + 1
-        }
+        Page { id: page0; objectName: "page0"; offset: 0 }
+        Page { id: page1; objectName: "page1"; offset: 1 }
+        Page { id: page2; objectName: "page2"; offset: 2 }
     }
-    readonly property alias leftText: leftPage.text
-    readonly property alias rightText: rightPage.text
 
-    Binding { target: leftPage.text; property: "objectName"; value: "flowText" }
+    Binding { target: page0.text; property: "objectName"; value: "flowText" }
     Connections {
-        target: leftPage.text
+        target: page0.text
         // The column was laid out again: new text, another size of type, a
         // picture that arrived.
         function onContentHeightChanged() { later.restart() }
@@ -258,15 +296,5 @@ Item {
         wanted = reader.fraction
         reader.pageWidth = Math.round(columnWidth)
         later.restart()
-    }
-
-    // The fold between the pages.
-    Rectangle {
-        anchors.horizontalCenter: parent.horizontalCenter
-        y: spread.above
-        width: 1
-        height: spread.pageHeight
-        color: theme.colors.selection
-        opacity: 0.6
     }
 }

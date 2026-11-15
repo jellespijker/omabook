@@ -1382,7 +1382,7 @@ private slots:
         const QJsonObject written = QJsonDocument::fromJson(saved.readAll()).object();
         QCOMPARE(written.value("align").toString(), QString("start"));
         QVERIFY(!written.contains("justify"));
-        QCOMPARE(written.value("config_version").toInt(), 2);
+        QCOMPARE(written.value("config_version").toInt(), 3);
         // What a value may be is said in words, with the range.
         QCOMPARE(ReadingFormat::problem("line_height", 400), QString("line_height is 100 to 300 (percent); 400 is not."));
         QVERIFY(ReadingFormat::problem("align", "middle").contains("start, justify, center or end"));
@@ -1391,8 +1391,103 @@ private slots:
         // Every number's range keeps it readable.
         for (const ReadingFormat::Range &range : ReadingFormat::ranges)
             QVERIFY(range.low < range.high && range.fallback >= range.low && range.fallback <= range.high && range.step > 0);
-        QVERIFY(ReadingFormat::range(u"font_size")->low >= 10 && ReadingFormat::range(u"line_width")->low >= 320);
+        QVERIFY(ReadingFormat::range(u"font_size")->low >= 10 && ReadingFormat::range(u"measure")->low >= 40
+                && ReadingFormat::range(u"measure")->high <= 90 && ReadingFormat::range(u"measure")->fallback == 66);
         QVERIFY(ReadingFormat::range(u"line_height")->low >= 100);
+    }
+
+    // The longest line was a width in pixels and is a measure in
+    // characters; two pages or one was "spread" and is a count of pages.
+    // An older config.json is carried over and written in the new shape.
+    void theOldWidthOfALineBecomesAMeasure() {
+        QTemporaryDir dir;
+        const auto upgraded = [&dir](const QJsonObject &old) {
+            const QString file = dir.filePath(QString("config-%1.json").arg(qHash(QJsonDocument(old).toJson())));
+            QFile config(file);
+            if (!config.open(QIODevice::WriteOnly) || config.write(QJsonDocument(old).toJson()) <= 0)
+                return QJsonObject();
+            config.close();
+            Settings settings(file);
+            settings.setSort("title");
+            QFile saved(file);
+            return saved.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(saved.readAll()).object() : QJsonObject();
+        };
+        // A width chosen at its size of type: what it held there.
+        QJsonObject written = upgraded({{"config_version", 2}, {"line_width", 900}, {"font_size", 20}, {"spread", "always"}});
+        QCOMPARE(written.value("measure").toInt(), 90);
+        QCOMPARE(written.value("pages").toInt(), 2);
+        QVERIFY(!written.contains("line_width") && !written.contains("spread"));
+        QCOMPARE(written.value("config_version").toInt(), 3);
+        written = upgraded({{"config_version", 2}, {"line_width", 560}, {"spread", "never"}});
+        QCOMPARE(written.value("measure").toInt(), 59);
+        QCOMPARE(written.value("pages").toInt(), 1);
+        // The old default is the new default; "auto" stays automatic.
+        written = upgraded({{"line_width", 720}, {"spread", "auto"}});
+        QVERIFY(!written.contains("measure"));
+        QCOMPARE(written.value("pages").toString(), QString("auto"));
+        QCOMPARE(Settings(dir.filePath("none.json")).measure(), 66);
+        QCOMPARE(Settings(dir.filePath("none.json")).pages(), 0);
+        // A measure already there wins over an older width beside it.
+        written = upgraded({{"line_width", 400}, {"measure", 70}});
+        QCOMPARE(written.value("measure").toInt(), 70);
+
+        // The settings take the new keys, and the old ones from a plugin.
+        Settings settings(dir.filePath("set.json"));
+        QVERIFY(settings.setOption("measure", 58));
+        QCOMPARE(settings.measure(), 58);
+        QVERIFY(!settings.setOption("measure", 120));
+        QVERIFY(!settings.setOption("measure", 20));
+        QCOMPARE(ReadingFormat::problem("measure", 120), QString("measure is 40 to 90 (characters); 120 is not."));
+        QVERIFY(settings.setOption("pages", 3));
+        QCOMPARE(settings.pages(), 3);
+        QVERIFY(settings.setOption("pages", "2"));
+        QCOMPARE(settings.pages(), 2);
+        QVERIFY(settings.setOption("pages", "auto"));
+        QCOMPARE(settings.pages(), 0);
+        QCOMPARE(settings.options().value("pages").toString(), QString("auto"));
+        QVERIFY(!settings.setOption("pages", 4));
+        QVERIFY(!settings.setOption("pages", "many"));
+        QVERIFY(settings.setOption("spread", "always"));
+        QCOMPARE(settings.pages(), 2);
+        settings.setFontSize(20);
+        QVERIFY(settings.setOption("line_width", 800));
+        QCOMPARE(settings.measure(), 80);
+        QVERIFY(!settings.setOption("line_width", 100));
+        QCOMPARE(settings.format().value("measure").toInt(), 80);
+        QVERIFY(!settings.format().contains("line_width"));
+    }
+
+    // A book's own longest line in pixels, from a library an older Omabook
+    // kept, is its own measure in characters once the library is opened.
+    void aBooksOwnWidthOfALineBecomesItsMeasure() {
+        QTemporaryDir dir;
+        {
+            QFile file(QFINDTESTDATA("data/library-0.1.3.sql"));
+            QVERIFY(file.open(QIODevice::ReadOnly));
+            QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", "older");
+            database.setDatabaseName(dir.filePath("omabook.db"));
+            QVERIFY(database.open());
+            QStringList statements = QString::fromUtf8(file.readAll()).split(";\n", Qt::SkipEmptyParts);
+            // As 0.1.3 wrote a book's own width: at its own size, and at the default size.
+            statements << "UPDATE book_format SET options = '{\"align\":\"justify\",\"font_size\":22,\"line_width\":640}' WHERE book_id = 1"
+                       << "INSERT INTO book_format VALUES(2,'{\"line_width\":1000,\"indent\":8}')"
+                       << "INSERT INTO book_format VALUES(3,'{\"line_width\":480,\"measure\":70}')";
+            for (const QString &statement : statements) {
+                const QString sql = statement.trimmed();
+                if (sql.isEmpty() || sql == "COMMIT" || sql.startsWith("BEGIN"))
+                    continue;
+                QSqlQuery query(database);
+                QVERIFY2(query.exec(sql), qPrintable(query.lastError().text() + "\n" + sql.left(120)));
+            }
+            database.close();
+        }
+        QSqlDatabase::removeDatabase("older");
+        Library library(dir.path());
+        QString error;
+        QVERIFY2(library.open(&error), qPrintable(error));
+        QCOMPARE(library.bookFormat(1), (QJsonObject{{"align", "justify"}, {"font_size", 22}, {"measure", 58}}));
+        QCOMPARE(library.bookFormat(2), (QJsonObject{{"indent", 8}, {"measure", 90}}));
+        QCOMPARE(library.bookFormat(3), (QJsonObject{{"measure", 70}}));
     }
 
     void aChapterIsSetAsTheFormatSays() {

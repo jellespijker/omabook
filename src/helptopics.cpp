@@ -31,7 +31,14 @@ QList<Manual::Topic> Manual::topicList() {
              {tr("Turning pages"),
               tr("{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. "
                  "{reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few "
-                 "lines. A wide window shows two pages side by side, a tall one a single page that scrolls.")},
+                 "lines. Where the window has room, two or three pages stand side by side and a turn moves on by all of "
+                 "them; otherwise one page scrolls.")},
+             {tr("How many pages"),
+              tr("A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you "
+                 "read in. As many pages stand side by side as each keep most of that, up to three, and none with lines "
+                 "shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} "
+                 "goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows "
+                 "the most that do. A pane beside the page leaves less room, as a narrower window does.")},
              {tr("Finding your place"),
               tr("{reader.contents} shows the chapters beside the page, and {reader.find} finds words in the book. "
                  "{reader.bookmark} keeps a bookmark. Your place is remembered when you leave with {reader.back}.")},
@@ -46,7 +53,7 @@ QList<Manual::Topic> Manual::topicList() {
                  "nothing else, on the whole screen.")},
              {tr("Setting the text your way"),
               tr("{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, "
-                 "the widest line, the space between lines and between paragraphs, a first-line indent, the margins, "
+                 "the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line indent, the margins, "
                  "and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at "
                  "once and the page stays where you were. With Only this book on, the change is for this book alone; "
                  "Reset puts back what there was when the panel opened. The defaults for every book are in the "

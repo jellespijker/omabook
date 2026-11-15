@@ -27,7 +27,7 @@ QString problem(const QString &key, const QJsonValue &value) {
                 .arg(key)
                 .arg(numeric->low)
                 .arg(numeric->high)
-                .arg(numeric->unit == "%"_L1 ? QString("percent") : QString("pixels"))
+                .arg(numeric->unit == "%"_L1 ? QString("percent") : numeric->unit == "px"_L1 ? QString("pixels") : QString(numeric->unit))
                 .arg(value.isDouble() ? QString::number(number) : value.toVariant().toString());
         return {};
     }

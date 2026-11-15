@@ -7,6 +7,7 @@
   "%1 books are read by converting them to EPUB, which needs Calibre's ebook-convert. Install the calibre package and open the book again.": "%1 books are read by converting them to EPUB, which needs Calibre's ebook-convert. Install the calibre package and open the book again.",
   "%1 can't be updated from where it came from": "%1 can't be updated from where it came from",
   "%1 can't find its program": "%1 can't find its program",
+  "%1 characters": "%1 characters",
   "%1 has an update": "%1 has an update",
   "%1 has an update that asks for %2: review": "%1 has an update that asks for %2: review",
   "%1 has an update that asks for more than the version installed. Review it under Plugins.": "%1 has an update that asks for more than the version installed. Review it under Plugins.",
@@ -27,6 +28,7 @@
   "%1 on %2": "%1 on %2",
   "%1 or more": "%1 or more",
   "%1 px": "%1 px",
+  "%1 px in this font at this size": "%1 px in this font at this size",
   "%1 stopped with an error": "%1 stopped with an error",
   "%1 stopped with an error after its update, so Omabook went back to version %2.": "%1 stopped with an error after its update, so Omabook went back to version %2.",
   "%1 things and %2 relations were added from %Ln books.": {
@@ -120,6 +122,18 @@
     "one": "%Ln more past your page",
     "other": "%Ln more past your page"
   },
+  "%Ln pages": {
+    "one": "%Ln page",
+    "other": "%Ln pages"
+  },
+  "%Ln pages side by side": {
+    "one": "%Ln page",
+    "other": "%Ln pages side by side"
+  },
+  "%Ln pages side by side where they fit": {
+    "one": "%Ln page where it fits",
+    "other": "%Ln pages side by side where they fit"
+  },
   "%Ln places": {
     "one": "%Ln place",
     "other": "%Ln places"
@@ -182,6 +196,7 @@
   "A graph for books already read": "A graph for books already read",
   "A knowledge graph of what you read": "A knowledge graph of what you read",
   "A library is a live database, and two computers writing it through a network folder can corrupt it. So each computer keeps a whole library of its own, readable offline, and a sync brings them in step.": "A library is a live database, and two computers writing it through a network folder can corrupt it. So each computer keeps a whole library of its own, readable offline, and a sync brings them in step.",
+  "A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you read in. As many pages stand side by side as each keep most of that, up to three, and none with lines shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows the most that do. A pane beside the page leaves less room, as a narrower window does.": "A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you read in. As many pages stand side by side as each keep most of that, up to three, and none with lines shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows the most that do. A pane beside the page leaves less room, as a narrower window does.",
   "A link to your profile, or your user name": "A link to your profile, or your user name",
   "A panel beside the shelf or the page": "A panel beside the shelf or the page",
   "A panel: %1": "A panel: %1",
@@ -253,8 +268,13 @@
   "Automatic": "Automatic",
   "Automatic follows Omarchy, or Aether, as they change. In the settings ({global.settings}), Choose Theme shows each of Omarchy's own themes on the window as you move through them, also on a computer without Omarchy.": "Automatic follows Omarchy, or Aether, as they change. In the settings ({global.settings}), Choose Theme shows each of Omarchy's own themes on the window as you move through them, also on a computer without Omarchy.",
   "Automatic: %1": "Automatic: %1",
+  "Automatic: %Ln pages here": {
+    "one": "Automatic: %Ln page here",
+    "other": "Automatic: %Ln pages here"
+  },
   "Automatic: Aether": "Automatic: Aether",
   "Automatic: Omarchy — %1": "Automatic: Omarchy — %1",
+  "Automatic: as many pages as the window has room for, up to three": "Automatic: as many pages as the window has room for, up to three",
   "Back": "Back",
   "Back a step, then close": "Back a step, then close",
   "Back at version %1.": "Back at version %1.",
@@ -465,6 +485,7 @@
   "How every book is set, unless it has a way of its own: give it one beside the page, with %1.": "How every book is set, unless it has a way of its own: give it one beside the page, with %1.",
   "How far around the selected thing is shown": "How far around the selected thing is shown",
   "How far through the book you are. Your place is kept when you leave, and {reader.bookmark} keeps a bookmark besides.": "How far through the book you are. Your place is kept when you leave, and {reader.bookmark} keeps a bookmark besides.",
+  "How many pages": "How many pages",
   "ISBN": "ISBN",
   "Import": "Import",
   "Import Again": "Import Again",
@@ -532,9 +553,11 @@
   "Library": "Library",
   "Light": "Light",
   "Line spacing": "Line spacing",
+  "Lines are as long as read well, 66 characters in your font at your size, and the window shows as many pages side by side as it has room for, up to three. {reader.pages} chooses one, two or three yourself.": "Lines are as long as read well, 66 characters in your font at your size, and the window shows as many pages side by side as it has room for, up to three. {reader.pages} chooses one, two or three yourself.",
   "List": "List",
   "Load Again": "Load Again",
   "Load this script again": "Load this script again",
+  "Longest line": "Longest line",
   "Look Again": "Look Again",
   "Look Up": "Look Up",
   "Look around": "Look around",
@@ -633,6 +656,11 @@
   "On": "On",
   "On my shelf": "On my shelf",
   "On your to-read list": "On your to-read list",
+  "One, two or three pages": "One, two or three pages",
+  "Only %Ln pages fit at this width with lines of at least %1 characters": {
+    "one": "Only %Ln page fits at this width with lines of at least %1 characters",
+    "other": "Only %Ln pages fit at this width with lines of at least %1 characters"
+  },
   "Only connections between books": "Only connections between books",
   "Only this book": "Only this book",
   "Only what I have asked about": "Only what I have asked about",
@@ -654,6 +682,8 @@
   "Other computers": "Other computers",
   "Page %1": "Page %1",
   "Pages": "Pages",
+  "Pages side by side": "Pages side by side",
+  "Pages side by side: as many as fit, one, two or three, and round again": "Pages side by side: as many as fit, one, two or three, and round again",
   "Panes as wide as you like": "Panes as wide as you like",
   "Paper": "Paper",
   "Paper books and wishes": "Paper books and wishes",
@@ -767,7 +797,7 @@
   "Show my libraries in the file manager": "Show my libraries in the file manager",
   "Show one step further around the centre of the graph": "Show one step further around the centre of the graph",
   "Show one step less around the centre of the graph": "Show one step less around the centre of the graph",
-  "Show or hide how the text is set: the font, its size, the spacing, the margins and the alignment, for this book or every book": "Show or hide how the text is set: the font, its size, the spacing, the margins and the alignment, for this book or every book",
+  "Show or hide how the text is set: the font, its size, the longest line, the pages side by side, the spacing, the margins and the alignment, for this book or every book": "Show or hide how the text is set: the font, its size, the longest line, the pages side by side, the spacing, the margins and the alignment, for this book or every book",
   "Show or hide the contents beside the page": "Show or hide the contents beside the page",
   "Show or hide the details beside the shelf": "Show or hide the details beside the shelf",
   "Show or hide the details of the selected thing": "Show or hide the details of the selected thing",
@@ -966,7 +996,6 @@
   "Why is %1 %2 %3?": "Why is %1 %2 %3?",
   "Why is %1 at %2?": "Why is %1 at %2?",
   "Why not a shared folder": "Why not a shared folder",
-  "Widest line": "Widest line",
   "Wishlist": "Wishlist",
   "With Calibre installed, Omabook uses its converter for the formats it doesn't read itself, and its metadata plugins for look-ups. All of that is one plugin, which {library.plugins} can switch off.": "With Calibre installed, Omabook uses its converter for the formats it doesn't read itself, and its metadata plugins for look-ups. All of that is one plugin, which {library.plugins} can switch off.",
   "With fingers": "With fingers",
@@ -1079,11 +1108,11 @@
   "{reader.contents} shows the chapters beside the page, and {reader.find} finds words in the book. {reader.bookmark} keeps a bookmark. Your place is remembered when you leave with {reader.back}.": "{reader.contents} shows the chapters beside the page, and {reader.find} finds words in the book. {reader.bookmark} keeps a bookmark. Your place is remembered when you leave with {reader.back}.",
   "{reader.contents} shows the chapters beside the page. {reader.find} finds words in the book.": "{reader.contents} shows the chapters beside the page. {reader.find} finds words in the book.",
   "{reader.expand} hides everything but the book, and {reader.back} goes back to the shelf. {global.help} has the rest.": "{reader.expand} hides everything but the book, and {reader.back} goes back to the shelf. {global.help} has the rest.",
-  "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the widest line, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.": "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the widest line, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.",
+  "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.": "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.",
   "{reader.format} opens the Aa panel beside the page: the font and its size, the widest line, the spacing, an indent, the margins, and text justified, centred or to either side. For every book, or only this one.": "{reader.format} opens the Aa panel beside the page: the font and its size, the widest line, the spacing, an indent, the margins, and text justified, centred or to either side. For every book, or only this one.",
   "{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and nothing else, on the whole screen.": "{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and nothing else, on the whole screen.",
   "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.larger} and {reader.smaller} change the size of the type.": "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.larger} and {reader.smaller} change the size of the type.",
-  "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. A wide window shows two pages side by side, a tall one a single page that scrolls.": "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. A wide window shows two pages side by side, a tall one a single page that scrolls.",
+  "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. Where the window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one page scrolls.": "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. Where the window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one page scrolls.",
   "“%1”": "“%1”",
   "…and %Ln more left out.": {
     "one": "…and %Ln more left out.",

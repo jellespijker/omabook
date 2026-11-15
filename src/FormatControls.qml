@@ -4,7 +4,8 @@ import QtQuick.Controls.Material
 import QtQuick.Layouts
 
 // The reading format as controls: the font, its size, the measure, the
-// spacing, the indent, the margins and the alignment (readingformat.h). Each
+// pages side by side, the spacing, the indent, the margins and the
+// alignment (readingformat.h, pagelayout.h). Each
 // change shows on the page at once. The same controls are in the reader's
 // "Aa" panel, for the open book or the defaults (`scoped`), and in the
 // settings, for the defaults.
@@ -31,7 +32,7 @@ ColumnLayout {
     function shown(key, value) {
         const unit = reader.format.bounds[key] ? reader.format.bounds[key].unit : "px"
         const number = Number(value).toLocaleString(Qt.locale(), 'f', 0)
-        return unit === "%" ? qsTr("%1%").arg(number) : qsTr("%1 px").arg(number)
+        return unit === "%" ? qsTr("%1%").arg(number) : unit === "characters" ? qsTr("%1 characters").arg(number) : qsTr("%1 px").arg(number)
     }
 
     // A number, a step at a time: the buttons, or the arrow keys, + and -,
@@ -100,7 +101,8 @@ ColumnLayout {
             }
             Label {
                 objectName: stepper.objectName + "_value"
-                Layout.minimumWidth: 58
+                // One width for every value, so the buttons stand in a column.
+                Layout.minimumWidth: 96
                 horizontalAlignment: Text.AlignHCenter
                 text: stepper.valueText
                 // A value the book has of its own is in the accent.
@@ -150,7 +152,91 @@ ColumnLayout {
     }
 
     Stepper { key: "font_size"; label: qsTr("Text size") }
-    Stepper { key: "line_width"; label: qsTr("Widest line") }
+    Stepper { key: "measure"; label: qsTr("Longest line") }
+    // What the measure comes to in this font at this size.
+    Label {
+        objectName: controls.prefix + "_measure_pixels"
+        Layout.fillWidth: true
+        Layout.leftMargin: 6
+        wrapMode: Text.Wrap
+        color: theme.colors.muted
+        font.pixelSize: 12
+        text: qsTr("%1 px in this font at this size").arg(Math.round(reader.format.lineWidth).toLocaleString(Qt.locale(), 'f', 0))
+    }
+
+    // How many pages stand side by side: as many as fit, or a choice of
+    // one, two or three, for every book (the setting isn't a book's own).
+    Label {
+        Layout.topMargin: 4
+        text: qsTr("Pages side by side")
+        color: theme.colors.muted
+        font.pixelSize: 12
+    }
+    RowLayout {
+        objectName: controls.prefix + "Pages"
+        Layout.fillWidth: true
+        spacing: 4
+        Repeater {
+            model: [0, 1, 2, 3]
+            delegate: AbstractButton {
+                id: count
+                required property int modelData
+                readonly property bool chosen: settings.pages === modelData
+                readonly property string name: modelData === 0 ? qsTr("Automatic") : modelData.toLocaleString(Qt.locale(), 'f', 0)
+                objectName: controls.prefix + "Pages_" + modelData
+                Layout.fillWidth: true
+                // Automatic is a word; the counts are a digit each.
+                Layout.preferredWidth: modelData === 0 ? 120 : 44
+                implicitHeight: 36
+                focusPolicy: Qt.StrongFocus
+                checkable: true
+                checked: chosen
+                Accessible.role: Accessible.RadioButton
+                Accessible.name: modelData === 0 ? name : qsTr("%Ln pages", "", modelData)
+                Accessible.checked: chosen
+                Keys.onReturnPressed: clicked()
+                Keys.onEnterPressed: clicked()
+                onClicked: {
+                    checked = Qt.binding(() => count.chosen)
+                    settings.pages = modelData
+                }
+                background: Rectangle {
+                    radius: theme.radius
+                    color: count.chosen ? theme.accent : count.down || count.hovered ? theme.colors.selection : "transparent"
+                    border.width: count.visualFocus ? 2 : 1
+                    border.color: count.visualFocus ? theme.foreground : count.chosen ? theme.accent : theme.colors.selection
+                }
+                contentItem: Label {
+                    text: count.name
+                    horizontalAlignment: Text.AlignHCenter
+                    verticalAlignment: Text.AlignVCenter
+                    elide: Text.ElideRight
+                    color: count.chosen ? theme.accentForeground : theme.foreground
+                }
+            }
+        }
+    }
+    // What shows, and why when it isn't what was chosen.
+    Label {
+        objectName: controls.prefix + "PagesName"
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: theme.colors.muted
+        font.pixelSize: 12
+        text: {
+            translator.language
+            const shown = reader.format.columns
+            if (!reader.open)
+                return settings.pages === 0 ? qsTr("Automatic: as many pages as the window has room for, up to three")
+                                            : qsTr("%Ln pages side by side where they fit", "", settings.pages)
+            if (settings.pages === 0)
+                return qsTr("Automatic: %Ln pages here", "", reader.format.automaticColumns)
+            if (!reader.format.pagesHonoured)
+                return qsTr("Only %Ln pages fit at this width with lines of at least %1 characters", "", shown)
+                    .arg(reader.format.minimumMeasure.toLocaleString(Qt.locale(), 'f', 0))
+            return qsTr("%Ln pages side by side", "", shown)
+        }
+    }
     Stepper { key: "line_height"; label: qsTr("Line spacing") }
     Stepper { key: "paragraph_spacing"; label: qsTr("Between paragraphs") }
     Stepper { key: "indent"; label: qsTr("First-line indent") }

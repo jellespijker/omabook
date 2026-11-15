@@ -248,6 +248,15 @@ Item {
                   : next === "never" ? qsTr("Nothing is marked in the text")
                   : qsTr("The graph's things are marked in the text while the map is open"))
     }
+    // Shift+P: as many pages as fit, one, two, three, and round again.
+    function cyclePages() {
+        settings.pages = (settings.pages + 1) % 4
+        const wanted = settings.pages
+        backend.say(wanted === 0 ? qsTr("Automatic: %Ln pages here", "", reader.format.automaticColumns)
+                  : reader.format.pagesHonoured ? qsTr("%Ln pages side by side", "", wanted)
+                  : qsTr("Only %Ln pages fit at this width with lines of at least %1 characters", "", reader.format.columns)
+                        .arg(reader.format.minimumMeasure.toLocaleString(Qt.locale(), 'f', 0)))
+    }
     function bookmark() {
         if (!content) return
         reader.addBookmark(content.placeText())
@@ -275,6 +284,7 @@ Item {
     Key { command: "reader.expand"; when: win.inReader && !view.mapping; onActivated: view.expand(!view.immersive) }
     Key { command: "reader.graph"; when: reader.open; onActivated: view.toggleGraph() }
     Key { command: "reader.marks"; when: reader.open; onActivated: view.cycleMarks() }
+    Key { command: "reader.pages"; when: reader.open && !view.mapping; onActivated: view.cyclePages() }
     Key { command: "reader.select"; when: view.paging; onActivated: view.startSelecting() }
 
     // The kinds' colors are the graph's, from the theme.
@@ -283,6 +293,8 @@ Item {
     Binding { target: reader.marks; property: "background"; value: theme.background }
     // Links in the text take the accent.
     Binding { target: reader.format; property: "linkColor"; value: theme.accent }
+    // The room the text has, for how many pages stand side by side.
+    Binding { target: reader.format; property: "available"; value: contentLoader.width }
     // What the AI noted while reading is marked as soon as it is in.
     Connections {
         target: assistant
@@ -450,10 +462,11 @@ Item {
                 anchors.bottom: progress.top
                 anchors.topMargin: 4
                 transform: Translate { x: view.slide }
-                // A wide window is an open book: two pages. A tall one is a
-                // single page that scrolls.
-                readonly property bool wide: settings.spread === "always"
-                                             || (settings.spread !== "never" && width >= win.spreadFloor && width > height * 1.15)
+                // Room for more than one page at the measure is an open
+                // book of two or three pages that turn; otherwise a single
+                // page that scrolls (PageLayout::columns decides, from this
+                // width, which is what the panes beside the page leave).
+                readonly property bool wide: reader.format.columns > 1
                 sourceComponent: reader.kind === "flow" ? (wide ? spreadPages : flow) : reader.kind === "pages" ? pages : null
                 Component { id: flow; FlowReader { marking: view.marksOn } }
                 Component { id: spreadPages; SpreadReader { marking: view.marksOn } }

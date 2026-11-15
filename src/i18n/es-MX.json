@@ -646,7 +646,7 @@
   "{reader.contents} shows the chapters beside the page. {reader.find} finds words in the book.": "{reader.contents} muestra los capítulos junto a la página. {reader.find} busca palabras en el libro.",
   "{reader.expand} hides everything but the book, and {reader.back} goes back to the shelf. {global.help} has the rest.": "{reader.expand} oculta todo menos el libro, y {reader.back} vuelve al estante. {global.help} tiene lo demás.",
   "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.larger} and {reader.smaller} change the size of the type.": "{reader.page_down} pasa la página y sigue al capítulo siguiente; {reader.page_up} regresa. {reader.larger} y {reader.smaller} cambian el tamaño de la letra.",
-  "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. A wide window shows two pages side by side, a tall one a single page that scrolls.": "{reader.page_down} pasa la página y sigue al capítulo siguiente; {reader.page_up} regresa. {reader.next} y {reader.previous} saltan un capítulo, {reader.line_down} y {reader.line_up} desplazan unas líneas. Una ventana ancha muestra dos páginas lado a lado; una alta, una sola página que se desplaza.",
+  "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. Where the window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one page scrolls.": "{reader.page_down} pasa la página y sigue al capítulo siguiente; {reader.page_up} regresa. {reader.next} y {reader.previous} saltan un capítulo, {reader.line_down} y {reader.line_up} desplazan unas líneas. Donde la ventana tiene espacio, se ponen dos o tres páginas lado a lado y pasar la página las pasa todas; si no, una sola página se desplaza.",
   "Asked by %1": "Preguntado por %1",
   "The book changed, and can't be read as it is now: %1": "El libro cambió y no se puede leer como está ahora: %1",
   "%1 adds something by hand.": "%1 agrega algo a mano.",
@@ -1108,14 +1108,13 @@
   "Reset this book to the defaults": "Devolver este libro a los predeterminados",
   "Set the text your way": "El texto a tu manera",
   "Setting the text your way": "Componer el texto a tu manera",
-  "Show or hide how the text is set: the font, its size, the spacing, the margins and the alignment, for this book or every book": "Mostrar u ocultar cómo se compone el texto: la fuente, su tamaño, los espacios, los márgenes y la alineación, para este libro o para todos",
+  "Show or hide how the text is set: the font, its size, the longest line, the pages side by side, the spacing, the margins and the alignment, for this book or every book": "Mostrar u ocultar cómo se compone el texto: la fuente, su tamaño, la línea más larga, las páginas lado a lado, los espacios, los márgenes y la alineación, para este libro o para todos",
   "Start": "Inicio",
   "Start: lines against the side the text starts at": "Inicio: líneas contra el lado donde empieza el texto",
   "Text": "Texto",
   "The desktop's font": "La fuente del escritorio",
   "These pages are pictures, so their type can't be changed. What is set here is for books that flow.": "Estas páginas son imágenes, así que su letra no puede cambiar. Lo que se ajusta aquí es para los libros que fluyen.",
-  "Widest line": "Línea más ancha",
-  "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the widest line, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.": "{reader.format} abre el panel Aa junto a la página (Aa en la barra, con los dedos): la fuente, su tamaño, la línea más ancha, el espacio entre líneas y entre párrafos, una sangría de primera línea, los márgenes y la alineación: inicio, justificado (lleno hasta ambos bordes), centrado o final. Cada cambio se ve al instante y la página se queda donde estabas. Con Solo este libro activado, el cambio es solo para este libro; Restablecer devuelve lo que había al abrir el panel. Los predeterminados para todos los libros también están en la configuración ({global.settings}). Las páginas que son imágenes, como en un PDF o un cómic, no se pueden componer.",
+  "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.": "{reader.format} abre el panel Aa junto a la página (Aa en la barra, con los dedos): la fuente, su tamaño, la línea más larga en caracteres, las páginas lado a lado, el espacio entre líneas y entre párrafos, una sangría de primera línea, los márgenes y la alineación: inicio, justificado (lleno hasta ambos bordes), centrado o final. Cada cambio se ve al instante y la página se queda donde estabas. Con Solo este libro activado, el cambio es solo para este libro; Restablecer devuelve lo que había al abrir el panel. Los predeterminados para todos los libros también están en la configuración ({global.settings}). Las páginas que son imágenes, como en un PDF o un cómic, no se pueden componer.",
   "{reader.format} opens the Aa panel beside the page: the font and its size, the widest line, the spacing, an indent, the margins, and text justified, centred or to either side. For every book, or only this one.": "{reader.format} abre el panel Aa junto a la página: la fuente y su tamaño, la línea más ancha, los espacios, una sangría, los márgenes, y el texto justificado, centrado o hacia un lado. Para todos los libros, o solo para este.",
   "{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and nothing else, on the whole screen.": "{reader.larger} y {reader.smaller} cambian el tamaño de la letra. {reader.expand} muestra el libro y nada más, en toda la pantalla.",
   "Show my libraries in the file manager": "Mostrar mis bibliotecas en el administrador de archivos",
@@ -1125,5 +1124,40 @@
   "In the file manager": "En el administrador de archivos",
   "Folio, Omarchy's file manager, lists your libraries in its sidebar. Each opens as a folder with a file per book: open one to read it in Omabook, copy a book file in to add it, delete one to send its book to the trash, where Undo brings it back. The settings ({global.settings}) switch this off, and can make Omabook the app that opens ebooks.": "Folio, el administrador de archivos de Omarchy, muestra sus bibliotecas en la barra lateral. Cada una se abre como una carpeta con un archivo por libro: abra uno para leerlo en Omabook, copie un archivo de libro para agregarlo, borre uno para mandar su libro a la papelera, de donde Deshacer lo trae de vuelta. La configuración ({global.settings}) lo desactiva y puede hacer de Omabook la aplicación que abre los libros electrónicos.",
   "Your library as a folder": "Su biblioteca como carpeta",
-  "In Folio, the file manager, each library is a folder of its books: open one to read it here, copy a book in to add it, or delete one to send it to the trash.": "En Folio, el administrador de archivos, cada biblioteca es una carpeta de sus libros: abra uno para leerlo aquí, copie un libro para agregarlo o borre uno para mandarlo a la papelera."
+  "In Folio, the file manager, each library is a folder of its books: open one to read it here, copy a book in to add it, or delete one to send it to the trash.": "En Folio, el administrador de archivos, cada biblioteca es una carpeta de sus libros: abra uno para leerlo aquí, copie un libro para agregarlo o borre uno para mandarlo a la papelera.",
+  "%1 characters": "%1 caracteres",
+  "%1 px in this font at this size": "%1 px en esta fuente a este tamaño",
+  "%Ln pages": {
+    "many": "%Ln páginas",
+    "one": "%Ln página",
+    "other": "%Ln páginas"
+  },
+  "Only %Ln pages fit at this width with lines of at least %1 characters": {
+    "many": "A este ancho solo caben %Ln páginas con líneas de al menos %1 caracteres",
+    "one": "A este ancho solo cabe %Ln página con líneas de al menos %1 caracteres",
+    "other": "A este ancho solo caben %Ln páginas con líneas de al menos %1 caracteres"
+  },
+  "%Ln pages side by side": {
+    "many": "%Ln páginas lado a lado",
+    "one": "%Ln página",
+    "other": "%Ln páginas lado a lado"
+  },
+  "%Ln pages side by side where they fit": {
+    "many": "%Ln páginas lado a lado donde quepan",
+    "one": "%Ln página donde quepa",
+    "other": "%Ln páginas lado a lado donde quepan"
+  },
+  "Automatic: %Ln pages here": {
+    "many": "Automático: aquí %Ln páginas",
+    "one": "Automático: aquí %Ln página",
+    "other": "Automático: aquí %Ln páginas"
+  },
+  "Automatic: as many pages as the window has room for, up to three": "Automático: tantas páginas como quepan en la ventana, hasta tres",
+  "A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you read in. As many pages stand side by side as each keep most of that, up to three, and none with lines shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows the most that do. A pane beside the page leaves less room, as a narrower window does.": "Una línea es tan larga como se lee bien: 66 caracteres salvo que lo cambies, en la fuente y el tamaño en que lees. Se ponen lado a lado tantas páginas como conserven cada una casi todo eso, hasta tres, y ninguna con líneas de menos de 45 caracteres; una sola página no crece más allá, lo demás es margen. {reader.pages} va de tantas como quepan a una, dos o tres páginas y vuelve a empezar; una elección que no cabe muestra las que sí caben. Un panel junto a la página deja menos espacio, como una ventana más angosta.",
+  "How many pages": "Cuántas páginas",
+  "Lines are as long as read well, 66 characters in your font at your size, and the window shows as many pages side by side as it has room for, up to three. {reader.pages} chooses one, two or three yourself.": "Las líneas son tan largas como se leen bien, 66 caracteres en tu fuente y tu tamaño, y la ventana muestra tantas páginas lado a lado como quepan, hasta tres. Con {reader.pages} eliges tú una, dos o tres.",
+  "Longest line": "Línea más larga",
+  "One, two or three pages": "Una, dos o tres páginas",
+  "Pages side by side": "Páginas lado a lado",
+  "Pages side by side: as many as fit, one, two or three, and round again": "Páginas lado a lado: tantas como quepan, una, dos o tres, y otra vez"
 }

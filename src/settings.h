@@ -16,7 +16,7 @@ class Settings : public QObject {
     Q_PROPERTY(QStringList libraries READ libraries NOTIFY changed)
     Q_PROPERTY(int fontSize READ fontSize WRITE setFontSize NOTIFY changed)
     Q_PROPERTY(QString fontFamily READ fontFamily WRITE setFontFamily NOTIFY changed)
-    Q_PROPERTY(int lineWidth READ lineWidth WRITE setLineWidth NOTIFY changed)
+    Q_PROPERTY(int measure READ measure WRITE setMeasure NOTIFY changed)
     Q_PROPERTY(QString sort READ sort WRITE setSort NOTIFY changed)
     Q_PROPERTY(int coverSize READ coverSize NOTIFY changed)
     Q_PROPERTY(int lineHeight READ lineHeight WRITE setLineHeight NOTIFY changed)
@@ -29,7 +29,7 @@ class Settings : public QObject {
     // Whether Omabook shows its libraries, what is being read and "Add to
     // Library" in Folio, the file manager.
     Q_PROPERTY(bool folio READ folio WRITE setFolio NOTIFY changed)
-    Q_PROPERTY(QString spread READ spread NOTIFY changed)
+    Q_PROPERTY(int pages READ pages WRITE setPages NOTIFY changed)
     Q_PROPERTY(QVariantMap paneWidths READ paneWidths NOTIFY changed)
     Q_PROPERTY(QString syncTarget READ syncTarget WRITE setSyncTarget NOTIFY changed)
     Q_PROPERTY(QString aiProvider READ aiProvider WRITE setAiProvider NOTIFY changed)
@@ -51,7 +51,7 @@ public:
 
     // How the text of a book is set unless the book has its own (see
     // readingformat.h, which holds the bounds): the type size in pixels, its
-    // font ("" for the desktop's), the widest a line gets, line spacing in
+    // font ("" for the desktop's), the longest line in characters, line spacing in
     // percent, the space after a paragraph, the indent of a paragraph's
     // first line, the room around the text, and the alignment ("start",
     // "justify", "center" or "end"). A value out of bounds is held to them.
@@ -59,8 +59,8 @@ public:
     void setFontSize(int size) { setNumber(u"font_size", size); }
     QString fontFamily() const { return m_values.value("font_family").toString(); }
     void setFontFamily(const QString &family) { set("font_family", family.trimmed()); }
-    int lineWidth() const { return number(u"line_width"); }
-    void setLineWidth(int width) { setNumber(u"line_width", width); }
+    int measure() const { return number(u"measure"); }
+    void setMeasure(int characters) { setNumber(u"measure", characters); }
     int lineHeight() const { return number(u"line_height"); }
     void setLineHeight(int percent) { setNumber(u"line_height", percent); }
     int paragraphSpacing() const { return number(u"paragraph_spacing"); }
@@ -76,12 +76,15 @@ public:
     QJsonObject format() const;
 
     // How the shelf is set, for those who want it otherwise: the width of a
-    // book on the shelf, and when two pages show side by side ("auto" for
-    // wide windows, "always", "never").
+    // book on the shelf.
     int coverSize() const { return std::clamp(m_values.value("cover_size").toInt(176), 96, 480); }
     bool folio() const { return m_values.value("folio").toBool(true); }
     void setFolio(bool on) { set("folio", on); }
-    QString spread() const { return m_values.value("spread").toString("auto"); }
+    // How many pages of a flowing book stand side by side: 0 for as many as
+    // the window has room for (see PageLayout::columns), else 1, 2 or 3.
+    // In config.json, "pages": "auto", 1, 2 or 3.
+    int pages() const;
+    void setPages(int pages);
 
     // How wide each pane beside the shelf or the page was dragged, by its
     // name ("details", "contents", "assistant", "graph", "graph_details",
@@ -115,6 +118,7 @@ public:
 
     // Sets one of the settings that shape the look, by its name in
     // config.json; false for a name that isn't one or a value out of range.
+    // "pages" takes "auto", 1, 2 or 3.
     bool setOption(const QString &key, const QJsonValue &value);
     // Those settings as they are now.
     QJsonObject options() const;

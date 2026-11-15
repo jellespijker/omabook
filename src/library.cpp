@@ -367,6 +367,14 @@ bool Library::open(QString *error) {
          "CREATE TRIGGER book_format_insert_counted AFTER INSERT ON book_format BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'format'; END",
          "CREATE TRIGGER book_format_update_counted AFTER UPDATE ON book_format BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'format'; END",
          "CREATE TRIGGER book_format_delete_counted AFTER DELETE ON book_format BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'format'; END"},
+        // A book's longest line is a measure in characters ("measure"), no
+        // longer pixels ("line_width"): what it held at the book's own size
+        // of type (or the default 19), half the size to a character, as
+        // PageLayout::measureFromPixels counts it.
+        {"UPDATE book_format SET options = json_remove(json_insert(options, '$.measure', "
+         "MAX(40, MIN(90, CAST(ROUND(json_extract(options, '$.line_width') * 2.0 "
+         "/ MAX(1, COALESCE(json_extract(options, '$.font_size'), 19))) AS INTEGER)))), '$.line_width') "
+         "WHERE json_valid(options) AND json_type(options, '$.line_width') IN ('integer', 'real')"},
     };
 
     // Asked and done with before anything changes: a statement left open

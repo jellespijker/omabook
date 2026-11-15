@@ -629,7 +629,7 @@
   "{reader.contents} shows the chapters beside the page. {reader.find} finds words in the book.": "{reader.contents} toont de hoofdstukken naast de pagina. {reader.find} zoekt woorden in het boek.",
   "{reader.expand} hides everything but the book, and {reader.back} goes back to the shelf. {global.help} has the rest.": "{reader.expand} verbergt alles behalve het boek, en {reader.back} gaat terug naar de plank. {global.help} heeft de rest.",
   "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.larger} and {reader.smaller} change the size of the type.": "{reader.page_down} slaat de pagina om en gaat door in het volgende hoofdstuk; {reader.page_up} gaat terug. {reader.larger} en {reader.smaller} wijzigen de lettergrootte.",
-  "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. A wide window shows two pages side by side, a tall one a single page that scrolls.": "{reader.page_down} slaat de pagina om en gaat door in het volgende hoofdstuk; {reader.page_up} gaat terug. {reader.next} en {reader.previous} springen een hoofdstuk verder of terug, {reader.line_down} en {reader.line_up} scrollen een paar regels. Een breed venster toont twee pagina's naast elkaar, een hoog venster één pagina die scrolt.",
+  "{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. {reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few lines. Where the window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one page scrolls.": "{reader.page_down} slaat de pagina om en gaat door in het volgende hoofdstuk; {reader.page_up} gaat terug. {reader.next} en {reader.previous} springen een hoofdstuk verder of terug, {reader.line_down} en {reader.line_up} scrollen een paar regels. Waar het venster ruimte heeft, staan twee of drie pagina's naast elkaar en slaat een omslag ze allemaal om; anders scrolt één pagina.",
   "Asked by %1": "Gevraagd door %1",
   "The book changed, and can't be read as it is now: %1": "Het boek is veranderd en kan zoals het nu is niet gelezen worden: %1",
   "%1 adds something by hand.": "%1 voegt zelf iets toe.",
@@ -1071,14 +1071,13 @@
   "Reset this book to the defaults": "Dit boek terug naar de standaard",
   "Set the text your way": "Zet de tekst zoals jij wilt",
   "Setting the text your way": "De tekst zetten zoals jij wilt",
-  "Show or hide how the text is set: the font, its size, the spacing, the margins and the alignment, for this book or every book": "Toon of verberg hoe de tekst gezet is: het lettertype, de grootte, de afstanden, de marges en de uitlijning, voor dit boek of elk boek",
+  "Show or hide how the text is set: the font, its size, the longest line, the pages side by side, the spacing, the margins and the alignment, for this book or every book": "Toon of verberg hoe de tekst gezet is: het lettertype, de grootte, de langste regel, de pagina's naast elkaar, de afstanden, de marges en de uitlijning, voor dit boek of elk boek",
   "Start": "Begin",
   "Start: lines against the side the text starts at": "Begin: regels tegen de kant waar de tekst begint",
   "Text": "Tekst",
   "The desktop's font": "Het lettertype van het bureaublad",
   "These pages are pictures, so their type can't be changed. What is set here is for books that flow.": "Deze pagina’s zijn afbeeldingen, dus hun letters kunnen niet veranderen. Wat hier staat, geldt voor boeken die doorlopen.",
-  "Widest line": "Breedste regel",
-  "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the widest line, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.": "{reader.format} opent het Aa-paneel naast de pagina (Aa in de balk, met vingers): het lettertype, de grootte, de breedste regel, de ruimte tussen regels en tussen alinea’s, inspringen van de eerste regel, de marges en de uitlijning: begin, uitgevuld (tot aan beide kanten), gecentreerd of einde. Elke wijziging is meteen te zien en de pagina blijft waar je was. Met Alleen dit boek aan geldt de wijziging alleen voor dit boek; Herstellen zet terug wat er was toen het paneel openging. De standaard voor elk boek staat ook in de instellingen ({global.settings}). Pagina’s die afbeeldingen zijn, zoals in een pdf of een strip, kunnen niet gezet worden.",
+  "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line indent, the margins, and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at once and the page stays where you were. With Only this book on, the change is for this book alone; Reset puts back what there was when the panel opened. The defaults for every book are in the settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.": "{reader.format} opent het Aa-paneel naast de pagina (Aa in de balk, met vingers): het lettertype, de grootte, de langste regel in tekens, de pagina's naast elkaar, de ruimte tussen regels en tussen alinea’s, inspringen van de eerste regel, de marges en de uitlijning: begin, uitgevuld (tot aan beide kanten), gecentreerd of einde. Elke wijziging is meteen te zien en de pagina blijft waar je was. Met Alleen dit boek aan geldt de wijziging alleen voor dit boek; Herstellen zet terug wat er was toen het paneel openging. De standaard voor elk boek staat ook in de instellingen ({global.settings}). Pagina’s die afbeeldingen zijn, zoals in een pdf of een strip, kunnen niet gezet worden.",
   "{reader.format} opens the Aa panel beside the page: the font and its size, the widest line, the spacing, an indent, the margins, and text justified, centred or to either side. For every book, or only this one.": "{reader.format} opent het Aa-paneel naast de pagina: het lettertype en de grootte, de breedste regel, de afstanden, inspringen, de marges, en tekst uitgevuld, gecentreerd of naar een van beide kanten. Voor elk boek, of alleen dit.",
   "{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and nothing else, on the whole screen.": "{reader.larger} en {reader.smaller} veranderen de lettergrootte. {reader.expand} toont het boek en verder niets, op het hele scherm.",
   "Show my libraries in the file manager": "Mijn bibliotheken tonen in de bestandsbeheerder",
@@ -1088,5 +1087,35 @@
   "In the file manager": "In de bestandsbeheerder",
   "Folio, Omarchy's file manager, lists your libraries in its sidebar. Each opens as a folder with a file per book: open one to read it in Omabook, copy a book file in to add it, delete one to send its book to the trash, where Undo brings it back. The settings ({global.settings}) switch this off, and can make Omabook the app that opens ebooks.": "Folio, de bestandsbeheerder van Omarchy, toont je bibliotheken in de zijbalk. Elke bibliotheek opent als een map met een bestand per boek: open er een om het in Omabook te lezen, kopieer een boekbestand erin om het toe te voegen, verwijder er een om het boek naar de prullenbak te sturen, waar Ongedaan maken het terugbrengt. De instellingen ({global.settings}) zetten dit uit, en kunnen Omabook de app maken die e-boeken opent.",
   "Your library as a folder": "Je bibliotheek als map",
-  "In Folio, the file manager, each library is a folder of its books: open one to read it here, copy a book in to add it, or delete one to send it to the trash.": "In Folio, de bestandsbeheerder, is elke bibliotheek een map met haar boeken: open er een om het hier te lezen, kopieer er een boek in om het toe te voegen, of verwijder er een om het naar de prullenbak te sturen."
+  "In Folio, the file manager, each library is a folder of its books: open one to read it here, copy a book in to add it, or delete one to send it to the trash.": "In Folio, de bestandsbeheerder, is elke bibliotheek een map met haar boeken: open er een om het hier te lezen, kopieer er een boek in om het toe te voegen, of verwijder er een om het naar de prullenbak te sturen.",
+  "%1 characters": "%1 tekens",
+  "%1 px in this font at this size": "%1 px in dit lettertype op deze grootte",
+  "%Ln pages": {
+    "one": "%Ln pagina",
+    "other": "%Ln pagina's"
+  },
+  "Only %Ln pages fit at this width with lines of at least %1 characters": {
+    "one": "Op deze breedte past maar %Ln pagina met regels van minstens %1 tekens",
+    "other": "Op deze breedte passen maar %Ln pagina's met regels van minstens %1 tekens"
+  },
+  "%Ln pages side by side": {
+    "one": "%Ln pagina",
+    "other": "%Ln pagina's naast elkaar"
+  },
+  "%Ln pages side by side where they fit": {
+    "one": "%Ln pagina waar die past",
+    "other": "%Ln pagina's naast elkaar waar ze passen"
+  },
+  "Automatic: %Ln pages here": {
+    "one": "Automatisch: hier %Ln pagina",
+    "other": "Automatisch: hier %Ln pagina's"
+  },
+  "Automatic: as many pages as the window has room for, up to three": "Automatisch: zoveel pagina's als het venster ruimte heeft, tot drie",
+  "A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you read in. As many pages stand side by side as each keep most of that, up to three, and none with lines shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows the most that do. A pane beside the page leaves less room, as a narrower window does.": "Een regel is zo lang als prettig leest: 66 tekens, tenzij je het anders instelt, in het lettertype en de grootte waarin je leest. Er staan zoveel pagina's naast elkaar als er elk het grootste deel daarvan houden, tot drie, en geen met regels korter dan 45 tekens; een enkele pagina wordt niet breder, de rest is marge. {reader.pages} gaat van zoveel als er passen naar één, twee of drie pagina's en weer rond; een keuze die niet past toont zoveel als er passen. Een paneel naast de pagina laat minder ruimte, zoals een smaller venster.",
+  "How many pages": "Hoeveel pagina's",
+  "Lines are as long as read well, 66 characters in your font at your size, and the window shows as many pages side by side as it has room for, up to three. {reader.pages} chooses one, two or three yourself.": "Regels zijn zo lang als prettig leest, 66 tekens in jouw lettertype op jouw grootte, en het venster toont zoveel pagina's naast elkaar als er ruimte is, tot drie. Met {reader.pages} kies je zelf één, twee of drie.",
+  "Longest line": "Langste regel",
+  "One, two or three pages": "Eén, twee of drie pagina's",
+  "Pages side by side": "Pagina's naast elkaar",
+  "Pages side by side: as many as fit, one, two or three, and round again": "Pagina's naast elkaar: zoveel als er passen, één, twee of drie, en weer rond"
 }

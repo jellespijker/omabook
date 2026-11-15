@@ -3,6 +3,8 @@
 #include <QFontDatabase>
 #include <algorithm>
 
+using namespace Qt::StringLiterals;
+
 #include "library.h"
 #include "reader.h"
 #include "readingformat.h"
@@ -11,6 +13,8 @@
 PageFormat::PageFormat(Reader *reader, Settings *settings, QObject *parent)
     : QObject(parent), m_reader(reader), m_settings(settings) {
     connect(settings, &Settings::changed, this, &PageFormat::refresh);
+    // The setting of pages isn't part of the format.
+    connect(settings, &Settings::changed, this, &PageFormat::relayout);
     connect(reader, &Reader::bookChanged, this, &PageFormat::refresh);
     connect(reader, &Reader::htmlChanged, this, &PageFormat::restyle);
     refresh();
@@ -45,9 +49,38 @@ void PageFormat::refresh() {
     m_defaults = defaults;
     m_own = own;
     m_effective = ReadingFormat::over(defaults, own);
+    relayout();
     emit changed();
     m_html.clear();
     restyle();
+}
+
+void PageFormat::setAvailable(double width) {
+    if (qFuzzyCompare(width + 1, m_available + 1))
+        return;
+    m_available = width;
+    relayout();
+}
+
+void PageFormat::relayout() {
+    const auto number = [this](QLatin1StringView key) { return m_effective.value(key).toInt(ReadingFormat::range(key)->fallback); };
+    const int size = number("font_size"_L1);
+    PageLayout::Space space;
+    space.available = m_available;
+    space.characterWidth = PageLayout::characterWidth(PageLayout::bodyFont(m_effective.value("font_family").toString(), size));
+    space.measure = number("measure"_L1);
+    space.margin = number("margins"_L1) + 24;
+    space.gutter = PageLayout::gutter(size);
+    const PageLayout::Columns columns = PageLayout::columns(space, m_settings->pages(), m_columns.count);
+    if (qFuzzyCompare(space.characterWidth, m_space.characterWidth) && space.measure == m_space.measure
+        && qFuzzyCompare(space.margin + 1, m_space.margin + 1) && qFuzzyCompare(space.gutter, m_space.gutter)
+        && qFuzzyCompare(space.available + 1, m_space.available + 1) && columns.count == m_columns.count
+        && columns.automatic == m_columns.automatic && columns.most == m_columns.most
+        && qFuzzyCompare(columns.width + 1, m_columns.width + 1) && columns.honoured == m_columns.honoured)
+        return;
+    m_space = space;
+    m_columns = columns;
+    emit layoutChanged();
 }
 
 void PageFormat::restyle() {

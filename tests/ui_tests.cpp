@@ -37,6 +37,7 @@
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
+#include "pageformat.h"
 #include "reader.h"
 #include "readingsite.h"
 #include "settings.h"
@@ -1596,8 +1597,8 @@ private slots:
             QVERIFY(breaks.at(i).toDouble() - breaks.at(i - 1).toDouble() <= spread->property("pageHeight").toDouble() + 0.5);
         }
         // The right page carries on where the left one stops.
-        auto *left = qobject_cast<QQuickItem *>(desk.find("leftPage"));
-        auto *right = qobject_cast<QQuickItem *>(desk.find("rightPage"));
+        auto *left = qobject_cast<QQuickItem *>(desk.find("page0"));
+        auto *right = qobject_cast<QQuickItem *>(desk.find("page1"));
         QVERIFY(left && right);
         QVERIFY(right->x() > left->x() + left->width());
         QCOMPARE(right->property("index").toInt(), 1);
@@ -5839,15 +5840,298 @@ private slots:
         QMetaObject::invokeMethod(desk.window, "showSettings");
         QTRY_VERIFY(desk.value("settings", "opened").toBool());
         QVERIFY(desk.find("settingsFormat"));
-        const int width = desk.settings->lineWidth();
+        const int measure = desk.settings->measure();
         QTest::qWait(300);
-        QVERIFY(QMetaObject::invokeMethod(desk.find("settingsFormat_line_width_more"), "clicked"));
-        QTRY_COMPARE(desk.settings->lineWidth(), width + 40);
+        QVERIFY(QMetaObject::invokeMethod(desk.find("settingsFormat_measure_more"), "clicked"));
+        QTRY_COMPARE(desk.settings->measure(), measure + 2);
         QVERIFY(QMetaObject::invokeMethod(desk.find("settingsFormatAlign_justify"), "clicked"));
         QTRY_COMPARE(desk.settings->align(), QString("justify"));
         desk.shot("settings-format");
         desk.key(Qt::Key_Escape);
         QTRY_VERIFY(!desk.value("settings", "opened").toBool());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A long made-up chapter with headings, naming the story graph's
+    // people and places on every page, then a short one.
+    static bool longMarkedBook(const QString &file) {
+        Fixtures::Entries entries = Fixtures::epubEntries("Harbour of Glass");
+        const QStringList names{"Ilse Varga", "Aldo Brenn", "Glass Harbour", "Tamsin Roe", "Pell", "The Tide Guild"};
+        QString chapter = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>The Night Ferry</h1>";
+        for (int i = 0; i < 140; ++i) {
+            if (i % 12 == 11)
+                chapter += QString("<h2>Watch %1</h2>").arg(i / 12 + 1);
+            chapter += QString("<p>%1 rowed out past the sea wall at the turn of the tide, and the lamps of the docks went "
+                               "small behind; the oars knocked, the water talked under the hull, and %2 kept count of the "
+                               "bells from the shore until there were none left to count. Paragraph %3.</p>")
+                           .arg(names.at(i % names.size()), names.at((i + 3) % names.size()))
+                           .arg(i + 1);
+        }
+        chapter += "</body></html>";
+        for (auto &entry : entries) {
+            if (entry.first == "OEBPS/text/ch1.xhtml")
+                entry.second = chapter.toUtf8();
+            if (entry.first == "OEBPS/text/ch2.xhtml")
+                entry.second = "<html xmlns=\"http://www.w3.org/1999/xhtml\"><body><h1>Low Water</h1><p>The end.</p></body></html>";
+        }
+        return Fixtures::zip(file, entries);
+    }
+    // Until the pages stop being cut anew: the chapter is set again at a
+    // new width, and its pictures and fonts arrive, a moment after a resize.
+    static void settled(QObject *spread) {
+        QVariant before;
+        for (int calm = 0; calm < 3;) {
+            QTest::qWait(100);
+            const QVariant now = spread->property("breaks");
+            calm = now == before ? calm + 1 : 0;
+            before = now;
+        }
+    }
+    static QQuickItem *sheet(Desk &desk, int index) { return qobject_cast<QQuickItem *>(desk.find(QString("page%1").arg(index))); }
+    // The page that shows a position of the chapter, or -1.
+    static int sheetShowing(QObject *spread, int position) {
+        auto *first = spread->property("firstText").value<QQuickItem *>();
+        QRectF rect;
+        QMetaObject::invokeMethod(first, "positionToRectangle", Q_RETURN_ARG(QRectF, rect), Q_ARG(int, position));
+        const QVariantList breaks = spread->property("breaks").toList();
+        const int page = spread->property("page").toInt(), columns = spread->property("columns").toInt();
+        for (int i = 0; i < columns && page + i + 1 < breaks.size(); ++i)
+            if (rect.y() >= breaks.at(page + i).toDouble() - 0.5 && rect.y() < breaks.at(page + i + 1).toDouble() - 0.5)
+                return i;
+        return -1;
+    }
+
+private slots:
+    // As many pages side by side as the room has: one in a narrow window,
+    // two in a medium one, three on a wide screen; a choice of one, two or
+    // three where it fits, and the most that do where it doesn't; no
+    // flicker at the boundary; the place kept when the count changes.
+    void thePagesSideBySideAreAsManyAsTheRoomHas() {
+        Desk desk;
+        const QString file = desk.dir.filePath("long.epub");
+        QVERIFY(longMarkedBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        PageFormat *format = desk.reader->format();
+        desk.window->resize(800, 900);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QTRY_COMPARE(format->available(), 800.0);
+
+        // Narrow: one page that scrolls, no wider than the measure.
+        QTRY_VERIFY(desk.find("flowReader"));
+        QCOMPARE(format->columns(), 1);
+        QVERIFY(format->lineWidth() > 66 * 0.35 * 19 && format->lineWidth() < 66 * 0.7 * 19);
+        QVERIFY(desk.value("flowText", "width").toReal() <= format->lineWidth() + 0.5);
+        desk.shot("pages-narrow");
+
+        // Medium: two.
+        desk.window->resize(1300, 900);
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QCOMPARE(format->columns(), 2);
+        QVERIFY(!sheet(desk, 2)->isVisible());
+        desk.shot("pages-medium");
+
+        // Wide: three, side by side in reading order, each as wide as the
+        // measure allows and no narrower than the minimum.
+        desk.window->resize(2300, 1000);
+        QTRY_COMPARE(format->columns(), 3);
+        QObject *spread = desk.find("spreadReader");
+        QTRY_COMPARE(spread->property("columns").toInt(), 3);
+        QTRY_VERIFY(spread->property("pages").toInt() > 6);
+        QQuickItem *first = sheet(desk, 0), *second = sheet(desk, 1), *third = sheet(desk, 2);
+        QVERIFY(third->isVisible());
+        QVERIFY(second->x() > first->x() + first->width() && third->x() > second->x() + second->width());
+        QVERIFY(first->width() <= format->lineWidth() + 0.5);
+        QVERIFY(first->width() >= PageLayout::minimumMeasure * format->characterWidth() - 0.5);
+        QCOMPARE(second->property("index").toInt(), 1);
+        QCOMPARE(third->property("index").toInt(), 2);
+        desk.shot("pages-wide");
+        // A turn moves on by the whole spread; the place is the first page's.
+        settled(spread);
+        desk.key(Qt::Key_Space);
+        QCOMPARE(spread->property("page").toInt(), 3);
+        desk.key(Qt::Key_Space);
+        QCOMPARE(spread->property("page").toInt(), 6);
+        QCOMPARE(third->property("index").toInt(), 8);
+        const int place = spread->property("placeAt").toInt();
+        QVERIFY(place > 0);
+        QCOMPARE(sheetShowing(spread, place), 0);
+
+        // Two pages again: the words that began the spread are still in sight.
+        desk.window->resize(1300, 900);
+        QTRY_COMPARE(spread->property("columns").toInt(), 2);
+        QTRY_VERIFY(sheetShowing(spread, place) >= 0);
+        QCOMPARE(spread->property("page").toInt() % 2, 0);
+        // And one: the scrolling page is near the same place.
+        const double fraction = desk.reader->fraction();
+        desk.window->resize(800, 900);
+        QTRY_VERIFY(desk.find("flowReader"));
+        QTRY_VERIFY(qAbs(desk.reader->fraction() - fraction) < 0.1);
+
+        // A choice that fits is honoured where Automatic would show fewer ...
+        desk.window->resize(1600, 900);
+        QTRY_COMPARE(format->columns(), 2);
+        desk.settings->setPages(1);
+        QTRY_VERIFY(desk.find("flowReader"));
+        QCOMPARE(format->columns(), 1);
+        QVERIFY(format->pagesHonoured());
+        // (The panel beside the page leaves less room, as any pane does.)
+        desk.key(Qt::Key_A, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.find("formatPagesName"));
+        QTRY_COMPARE(format->available(), 1600.0 - qobject_cast<QQuickItem *>(desk.find("formatSide"))->width());
+        // ... and one that doesn't shows the most that do, and says so.
+        desk.settings->setPages(3);
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QCOMPARE(format->columns(), 2);
+        QVERIFY(!format->pagesHonoured());
+        QTRY_VERIFY(desk.value("formatPagesName", "text").toString().contains("45"));
+        QVERIFY(desk.value("format_measure_value", "text").toString().contains("66"));
+        QVERIFY(desk.value("formatPages_3", "checked").toBool());
+        desk.shot("pages-format");
+        // Automatic, from the panel, says what it gives here.
+        QVERIFY(QMetaObject::invokeMethod(desk.find("formatPages_0"), "clicked"));
+        QTRY_COMPARE(desk.settings->pages(), 0);
+        QTRY_COMPARE(desk.value("formatPagesName", "text").toString(), QString("Automatic: 2 pages here"));
+        desk.key(Qt::Key_Escape);
+        QTRY_VERIFY(!desk.find("formatPane"));
+        // Shift+P goes round the choices.
+        desk.key(Qt::Key_P, Qt::ShiftModifier);
+        QTRY_COMPARE(desk.settings->pages(), 1);
+        QTRY_VERIFY(desk.find("flowReader"));
+        for (int i = 0; i < 3; ++i)
+            desk.key(Qt::Key_P, Qt::ShiftModifier);
+        QTRY_COMPARE(desk.settings->pages(), 0);
+
+        // At the boundary between one page and two: two from where each
+        // page has 80% of the measure, and kept until each would lose three
+        // characters more, so a drag across it doesn't flicker.
+        const double character = format->characterWidth();
+        const int boundary = int(std::ceil(2 * std::round(66 * PageLayout::automaticShare) * character + 2 * format->margin() + format->gutter()));
+        desk.window->resize(boundary + 2, 900);
+        QTRY_COMPARE(format->columns(), 2);
+        desk.window->resize(boundary - int(2 * character), 900);
+        QTRY_COMPARE(format->available(), double(boundary - int(2 * character)));
+        QCOMPARE(format->columns(), 2);
+        desk.window->resize(boundary - int(10 * character), 900);
+        QTRY_COMPARE(format->columns(), 1);
+        desk.window->resize(boundary - int(2 * character), 900);
+        QTRY_COMPARE(format->available(), double(boundary - int(2 * character)));
+        QCOMPARE(format->columns(), 1);
+        // A pane beside the page takes from the room, as a narrower window does.
+        desk.window->resize(1300, 900);
+        QTRY_COMPARE(format->columns(), 2);
+        desk.find("readerView")->setProperty("showAssistant", true);
+        QTRY_COMPARE(format->columns(), 1);
+        QTRY_VERIFY(desk.find("flowReader"));
+        desk.find("readerView")->setProperty("showAssistant", false);
+        QTRY_COMPARE(format->columns(), 2);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // In every count of pages, the graph's marks, a selection and a found
+    // word land on the words they are about, on the page that shows them.
+    void marksSelectionsAndFindsLandOnEveryPage() {
+        Desk desk;
+        const QString file = desk.dir.filePath("long.epub");
+        QVERIFY(longMarkedBook(file));
+        const qint64 book = desk.add(file);
+        storyGraph(desk, book);
+        desk.settings->setMarks("always");
+        QVERIFY(desk.show());
+        desk.window->resize(2300, 1000);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        for (const int columns : {3, 2}) {
+            desk.settings->setPages(columns);
+            QTRY_VERIFY(desk.find("spreadReader"));
+            QObject *spread = desk.find("spreadReader");
+            QTRY_COMPARE(spread->property("columns").toInt(), columns);
+            settled(spread);
+            // Read to the end of the chapter, so everything named is met.
+            desk.reader->goTo(0, {}, true);
+            QTRY_COMPARE(spread->property("page").toInt(), spread->property("lastLeft").toInt());
+            QTRY_VERIFY(spread->property("pages").toInt() > columns);
+            // A spread with every page written on.
+            desk.key(Qt::Key_Space, Qt::ShiftModifier);
+            QTRY_VERIFY(sheet(desk, columns - 1)->property("there").toBool());
+            auto *first = spread->property("firstText").value<QQuickItem *>();
+            QTextDocument *document = first->property("textDocument").value<QQuickTextDocument *>()->textDocument();
+            const QString plain = document->toPlainText();
+            const QVariantList breaks = spread->property("breaks").toList();
+            const int page = spread->property("page").toInt();
+            for (int offset = 0; offset < columns; ++offset) {
+                QQuickItem *shown = sheet(desk, offset);
+                // The first "Ilse Varga" on this page.
+                QRectF rect;
+                int position = -1;
+                for (int at = int(plain.indexOf("Ilse Varga")); at >= 0; at = int(plain.indexOf("Ilse Varga", at + 1))) {
+                    QMetaObject::invokeMethod(first, "positionToRectangle", Q_RETURN_ARG(QRectF, rect), Q_ARG(int, at + 3));
+                    if (rect.y() >= breaks.at(page + offset).toDouble() && rect.bottom() <= breaks.at(page + offset + 1).toDouble()) {
+                        position = at;
+                        break;
+                    }
+                }
+                QVERIFY2(position >= 0, qPrintable(QString("no name on page %1 of %2").arg(offset).arg(columns)));
+                // Where it is on the screen, through this page's own text.
+                QQuickItem *own = nullptr;
+                for (QQuickItem *child : shown->childItems())
+                    for (QQuickItem *inner : child->childItems())
+                        if (inner->inherits("QQuickTextEdit"))
+                            own = inner;
+                QVERIFY(own);
+                QMetaObject::invokeMethod(own, "positionToRectangle", Q_RETURN_ARG(QRectF, rect), Q_ARG(int, position + 3));
+                const QPointF onSpread = own->mapToItem(qobject_cast<QQuickItem *>(spread), rect.center());
+                // The mark there is the name's.
+                QVariant found;
+                QTRY_VERIFY(QMetaObject::invokeMethod(spread, "thingAt", Q_RETURN_ARG(QVariant, found), Q_ARG(QVariant, onSpread.x()),
+                                                      Q_ARG(QVariant, onSpread.y()))
+                            && found.toMap().value("name").toString() == QString("Ilse Varga"));
+                const QRectF markRect = found.toMap().value("rect").toRectF();
+                QVERIFY2(markRect.contains(onSpread), qPrintable(QString("page %1 of %2").arg(offset).arg(columns)));
+                // A word selected there is that word, and its menu stands by it.
+                QVariant selected;
+                QVERIFY(QMetaObject::invokeMethod(spread, "selectAt", Q_RETURN_ARG(QVariant, selected), Q_ARG(QVariant, onSpread.x()),
+                                                  Q_ARG(QVariant, onSpread.y())));
+                QVERIFY(selected.toBool());
+                QVariant chosen;
+                QVERIFY(QMetaObject::invokeMethod(spread, "selection", Q_RETURN_ARG(QVariant, chosen)));
+                QCOMPARE(chosen.toMap().value("text").toString(), QString("Ilse"));
+                const QRectF chosenRect = chosen.toMap().value("rect").toRectF();
+                QVERIFY2(qAbs(chosenRect.center().y() - onSpread.y()) < rect.height() && chosenRect.left() <= onSpread.x() + 1
+                             && chosenRect.right() >= onSpread.x() - rect.width(),
+                         qPrintable(QString("page %1 of %2").arg(offset).arg(columns)));
+                QMetaObject::invokeMethod(spread, "clearSelection");
+            }
+            // A word found in the book is on the spread it goes to.
+            QVariantList results;
+            QVERIFY(QMetaObject::invokeMethod(desk.reader.operator->(), "find", Q_RETURN_ARG(QVariantList, results), Q_ARG(QString, "Paragraph 77.")));
+            QCOMPARE(results.size(), 1);
+            desk.reader->goToPlace(0, results.first().toMap().value("fraction").toDouble());
+            QTRY_VERIFY(sheetShowing(spread, int(plain.indexOf("Paragraph 77."))) >= 0);
+            desk.shot(QString("pages-marks-%1").arg(columns));
+        }
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Right to left, and on a light theme, the pages run the other way:
+    // the first on the right.
+    void thePagesRunRightToLeftOnALightTheme() {
+        const QByteArray light = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n";
+        Desk desk({}, "ar", light);
+        const QString file = desk.dir.filePath("long.epub");
+        QVERIFY(longMarkedBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.window->resize(2300, 1000);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QTRY_COMPARE(desk.find("spreadReader")->property("columns").toInt(), 3);
+        QQuickItem *first = sheet(desk, 0), *second = sheet(desk, 1), *third = sheet(desk, 2);
+        QTRY_VERIFY(first->x() > second->x() + second->width() && second->x() > third->x() + third->width());
+        QCOMPARE(desk.value("flowText", "color").value<QColor>(), QColor("#202020"));
+        desk.shot("pages-rtl-light");
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };

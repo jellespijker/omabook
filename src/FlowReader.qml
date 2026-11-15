@@ -2,7 +2,9 @@ import QtQuick
 import QtQuick.Controls
 
 // A flowing book: one chapter at a time, set in the reader's own font and
-// the desktop's colors, in a column no wider than reads comfortably.
+// the desktop's colors, in one column that scrolls, no wider than the
+// measure (its longest line, in characters of the font) and centred with
+// the room to spare as margins.
 Flickable {
     id: flick
     objectName: "flowReader"
@@ -179,7 +181,7 @@ Flickable {
         objectName: "flowText"
         y: flick.side + 8
         x: Math.round((flick.width - width) / 2)
-        width: Math.max(200, Math.min(flick.format.line_width, flick.width - 2 * flick.side))
+        width: Math.max(200, Math.min(reader.format.lineWidth, flick.width - 2 * flick.side))
         readOnly: true
         selectByMouse: true
         persistentSelection: true

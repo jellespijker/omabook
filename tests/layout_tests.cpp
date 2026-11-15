@@ -25,6 +25,7 @@
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
+#include "pageformat.h"
 #include "reader.h"
 #include "settings.h"
 #include "theme.h"
@@ -691,6 +692,40 @@ class LayoutTests : public QObject {
         for (const QSize &size : sizes()) {
             QVERIFY(desk.resize(size));
             look(desk, "reader");
+            // One, two and three pages asked for: what shows fits the
+            // window, each page of a spread keeps the minimum measure, and
+            // no page stands over another or past the reading area.
+            for (const int asked : {1, 2, 3}) {
+                desk.settings->setPages(asked);
+                desk.settle();
+                look(desk, QString("reader-pages-%1").arg(asked));
+                const PageFormat *format = desk.reader->format();
+                const QString where = QString("%1x%2 %3 pages").arg(size.width()).arg(size.height()).arg(asked);
+                if (format->columns() > asked || (format->pagesHonoured() && format->columns() != asked))
+                    found << where + QString(" — %1 show").arg(format->columns());
+                QQuickItem *area = desk.item("contentLoader");
+                const QRectF room = area->mapRectToScene(QRectF(0, 0, area->width(), area->height()));
+                QRectF before;
+                for (int index = 0; index < format->columns() && format->columns() > 1; ++index) {
+                    QQuickItem *page = desk.item(QString("page%1").arg(index));
+                    if (!page || !page->isVisible()) {
+                        found << where + QString(" — page %1 is not there").arg(index);
+                        continue;
+                    }
+                    const QRectF at = page->mapRectToScene(QRectF(0, 0, page->width(), page->height()));
+                    if (!room.adjusted(-0.5, -0.5, 0.5, 0.5).contains(at))
+                        found << where + QString(" — page %1 is outside the reading area").arg(index);
+                    if (at.width() < PageLayout::minimumMeasure * format->characterWidth() - 0.5)
+                        found << where + QString(" — page %1 is %2 wide, under the minimum measure").arg(index).arg(at.width());
+                    if (at.width() > format->lineWidth() + 0.5)
+                        found << where + QString(" — page %1 is wider than the measure").arg(index);
+                    if (index > 0 && before.intersects(at))
+                        found << where + QString(" — page %1 lies over the one before").arg(index);
+                    before = at;
+                }
+            }
+            desk.settings->setPages(0);
+            desk.settle();
             show("showBar", true);
             look(desk, "reader-bar");
             show("showBar", false);
@@ -1324,7 +1359,7 @@ private slots:
         const auto textWidth = [&] { return desk.find("flowReader")->findChild<QObject *>("flowText")->property("width").toReal(); };
         const qreal before = textWidth();
         desk.settings->setPaneWidth("assistant", 600);
-        QTRY_VERIFY(textWidth() < before - 100);
+        QTRY_VERIFY(textWidth() < before - 50);
         desk.settle();
         QVERIFY2(qAbs(through() - scrolled) < 0.02, QByteArray::number(through()));
         QVERIFY(qAbs(desk.reader->fraction() - scrolled) < 0.02);
