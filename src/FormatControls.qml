@@ -15,18 +15,22 @@ ColumnLayout {
     // book alone while `bookOnly` is on. Elsewhere: the defaults.
     property bool scoped: false
     property bool bookOnly: false
+    // Or to the book's collection (pageformat.h), while `forCollection` is on.
+    property bool forCollection: false
     // What the controls' objectNames begin with, so the panel's and the
     // settings' are told apart.
     property string prefix: "format"
     readonly property var values: scoped ? reader.format.effective : reader.format.defaults
-    readonly property var own: scoped ? reader.format.own : ({})
+    readonly property var own: !scoped ? ({}) : forCollection && !bookOnly ? reader.format.collectionOwn : reader.format.own
     // The first control, for the keyboard to start at.
     readonly property Item first: fontPicker
 
     spacing: 6
 
     function change(key, value) {
-        const why = reader.format.set(key, value, scoped && bookOnly && reader.format.hasBook)
+        const where = !scoped || !reader.format.hasBook ? "defaults" : bookOnly ? "book"
+                      : forCollection && reader.format.collectionId > 0 ? "collection" : "defaults"
+        const why = reader.format.setFor(key, value, where)
         if (why !== "") backend.say(why)
     }
     function shown(key, value) {

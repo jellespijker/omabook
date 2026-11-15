@@ -41,14 +41,45 @@ void PageFormat::setLinkColor(const QColor &color) {
     restyle();
 }
 
+void PageFormat::setPreferredCollection(qint64 id) {
+    if (id == m_preferred)
+        return;
+    m_preferred = id;
+    refresh();
+}
+
 void PageFormat::refresh() {
     const QJsonObject defaults = m_settings->format();
     const QJsonObject own = hasBook() ? m_reader->library()->bookFormat(m_reader->bookId()) : QJsonObject();
-    if (defaults == m_defaults && own == m_own && !m_effective.isEmpty())
+    // The book's collection: the one whose format is in force, else the one
+    // it would be given to.
+    std::optional<Collection> collection;
+    if (hasBook()) {
+        const Library &library = *m_reader->library();
+        collection = library.formatCollection(m_reader->bookId(), m_preferred);
+        if (!collection)
+            if (const auto book = library.book(m_reader->bookId())) {
+                const QList<Collection> in = library.collectionsOf(*book);
+                const auto preferred = std::ranges::find(in, m_preferred, &Collection::id);
+                if (preferred != in.end())
+                    collection = *preferred;
+                else if (!in.isEmpty())
+                    collection = in.first();
+            }
+    }
+    const QJsonObject collectionOwn = collection ? collection->format : QJsonObject();
+    const qint64 collectionId = collection ? collection->id : 0;
+    const QString collectionName = collection ? collection->name : QString();
+    if (defaults == m_defaults && own == m_own && collectionOwn == m_collectionOwn && collectionId == m_collectionId
+        && collectionName == m_collectionName && !m_effective.isEmpty())
         return;
     m_defaults = defaults;
     m_own = own;
-    m_effective = ReadingFormat::over(defaults, own);
+    m_collectionOwn = collectionOwn;
+    m_collectionId = collectionId;
+    m_collectionName = collectionName;
+    // The book's own over its collection's, over the defaults.
+    m_effective = ReadingFormat::over(ReadingFormat::over(defaults, collectionOwn), own);
     relayout();
     emit changed();
     m_html.clear();
@@ -93,12 +124,26 @@ void PageFormat::restyle() {
 }
 
 QString PageFormat::set(const QString &key, const QVariant &value, bool forBook) {
+    return setFor(key, value, forBook ? u"book"_s : u"defaults"_s);
+}
+
+QString PageFormat::setFor(const QString &key, const QVariant &value, const QString &where) {
     const QJsonValue json = QJsonValue::fromVariant(value);
     // A number from QML may come as a double that is a whole one.
     const QJsonValue given = json.isDouble() ? QJsonValue(qRound64(json.toDouble())) : json;
     if (const QString why = ReadingFormat::problem(key, given); !why.isEmpty())
         return why;
-    if (!forBook) {
+    if (where == "collection"_L1) {
+        if (!hasBook() || m_collectionId == 0)
+            return "The open book is in no collection to give it to.";
+        QJsonObject options = m_collectionOwn;
+        options.insert(key, given);
+        if (!m_reader->library()->setCollectionFormat(m_collectionId, options))
+            return "The library can't be written.";
+        refresh();
+        return {};
+    }
+    if (where != "book"_L1) {
         m_settings->setOption(key, given);
         return {};
     }
@@ -119,8 +164,16 @@ void PageFormat::resetBook() {
     refresh();
 }
 
+void PageFormat::resetCollection() {
+    if (!hasBook() || m_collectionId == 0 || m_collectionOwn.isEmpty())
+        return;
+    m_reader->library()->setCollectionFormat(m_collectionId, {});
+    refresh();
+}
+
 QVariantMap PageFormat::snapshot() const {
-    return {{"defaults", m_defaults.toVariantMap()}, {"own", m_own.toVariantMap()}, {"book", m_reader->bookId()}};
+    return {{"defaults", m_defaults.toVariantMap()}, {"own", m_own.toVariantMap()}, {"book", m_reader->bookId()},
+            {"collection", m_collectionId}, {"collectionOwn", m_collectionOwn.toVariantMap()}};
 }
 
 void PageFormat::restore(const QVariantMap &snapshot) {
@@ -129,11 +182,15 @@ void PageFormat::restore(const QVariantMap &snapshot) {
         m_settings->setOption(it.key(), it.value());
     if (hasBook() && snapshot.value("book").toLongLong() == m_reader->bookId())
         m_reader->library()->setBookFormat(m_reader->bookId(), QJsonObject::fromVariantMap(snapshot.value("own").toMap()));
+    if (hasBook() && snapshot.value("collection").toLongLong() > 0)
+        m_reader->library()->setCollectionFormat(snapshot.value("collection").toLongLong(),
+                                                 QJsonObject::fromVariantMap(snapshot.value("collectionOwn").toMap()));
     refresh();
 }
 
 void PageFormat::zoom(int steps) {
-    const bool forBook = m_own.contains("font_size");
+    // Where the size in force comes from: the book's own, its collection's, or the default.
+    const QString where = m_own.contains("font_size") ? u"book"_s : m_collectionOwn.contains("font_size") ? u"collection"_s : u"defaults"_s;
     const ReadingFormat::Range *size = ReadingFormat::range(u"font_size");
-    set("font_size", std::clamp(m_effective.value("font_size").toInt(size->fallback) + steps, size->low, size->high), forBook);
+    setFor("font_size", std::clamp(m_effective.value("font_size").toInt(size->fallback) + steps, size->low, size->high), where);
 }

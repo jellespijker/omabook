@@ -17,6 +17,7 @@ FocusScope {
     readonly property real wanted: column.implicitHeight + 32
     readonly property bool applies: reader.kind !== "pages"
     readonly property bool hasOwn: Object.keys(reader.format.own).length > 0
+    readonly property bool collectionHasOwn: Object.keys(reader.format.collectionOwn).length > 0
     signal done()
 
     function takeFocus() { controls.first.forceActiveFocus() }
@@ -82,6 +83,22 @@ FocusScope {
                 onToggled: {
                     if (!checked) reader.format.resetBook()
                     pane.host.formatBookOnly = checked
+                    if (checked) pane.host.formatForCollection = false
+                }
+            }
+            // The book's collection: novels justified, technical books with
+            // longer lines. It lies between the defaults and a book's own.
+            Switch {
+                objectName: "formatThisCollection"
+                Layout.fillWidth: true
+                Layout.minimumHeight: 40
+                visible: reader.format.hasBook && reader.format.collectionId > 0
+                text: qsTr("For this collection: %1").arg(reader.format.collectionName)
+                checked: pane.host.formatForCollection && !pane.host.formatBookOnly
+                Accessible.name: text
+                onToggled: {
+                    pane.host.formatForCollection = checked
+                    if (checked) pane.host.formatBookOnly = false
                 }
             }
             Label {
@@ -90,14 +107,27 @@ FocusScope {
                 color: theme.colors.muted
                 font.pixelSize: 12
                 text: pane.host.formatBookOnly ? qsTr("Changes are for this book alone; the others keep the defaults.")
-                                               : qsTr("Changes are the defaults, for every book without a way of its own.")
+                      : pane.host.formatForCollection && reader.format.collectionId > 0
+                        ? qsTr("Changes are for the books of %1 without a way of their own.").arg(reader.format.collectionName)
+                      : qsTr("Changes are the defaults, for every book without a way of its own.")
             }
             FormatControls {
                 id: controls
                 Layout.fillWidth: true
                 scoped: true
                 bookOnly: pane.host.formatBookOnly
+                forCollection: pane.host.formatForCollection
                 enabled: pane.applies
+            }
+            AppButton {
+                objectName: "formatResetCollection"
+                Layout.fillWidth: true
+                visible: pane.collectionHasOwn && reader.format.collectionId > 0
+                text: qsTr("Reset %1 to the defaults").arg(reader.format.collectionName)
+                onClicked: {
+                    reader.format.resetCollection()
+                    pane.host.formatForCollection = false
+                }
             }
             AppButton {
                 objectName: "formatResetBook"

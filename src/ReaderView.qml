@@ -27,6 +27,10 @@ Item {
     // changes go to this book alone.
     property var formatBefore: null
     property bool formatBookOnly: false
+    // Whether they go to the book's collection, between the defaults and the book.
+    property bool formatForCollection: false
+    // A book in several collections is set as the one it was opened from.
+    Binding { target: reader.format; property: "preferredCollection"; value: backend.collection }
     // While the panel has the keyboard, its keys are its own.
     readonly property bool formatting: showFormat && ((formatSide.visible && formatSide.loaded && formatSide.loaded.focused)
                                                       || (formatSheet.visible && formatSheet.loaded && formatSheet.loaded.focused))
@@ -113,6 +117,7 @@ Item {
         }
         formatBefore = reader.format.snapshot()
         formatBookOnly = Object.keys(reader.format.own).length > 0
+        formatForCollection = !formatBookOnly && Object.keys(reader.format.collectionOwn).length > 0
         // Under the page in a compact window, where the contents would lie over it.
         if (win.compact) showIndex = false
         showFormat = true
@@ -126,6 +131,7 @@ Item {
         if (!formatBefore) return
         reader.format.restore(formatBefore)
         formatBookOnly = Object.keys(reader.format.own).length > 0
+        formatForCollection = !formatBookOnly && Object.keys(reader.format.collectionOwn).length > 0
     }
     onShowFormatChanged: if (showFormat) { showAssistant = false; showGraph = false }
     onShowAssistantChanged: if (showAssistant) showFormat = false

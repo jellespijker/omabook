@@ -23,6 +23,16 @@ class PageFormat : public QObject {
     Q_PROPERTY(QVariantMap own READ own NOTIFY changed)
     // Whether a book is open for options of its own to be given to.
     Q_PROPERTY(bool hasBook READ hasBook NOTIFY changed)
+    // The collection (library.h) the open book is set with, or would be
+    // given options for: the one whose format is in force, else the one the
+    // book was opened from when it is in it (`preferredCollection`), else
+    // the first it is in. Its number, its name and its own options; 0 and
+    // empty for a book in no collection. Its options lie over the defaults,
+    // and the book's own over them.
+    Q_PROPERTY(qint64 collectionId READ collectionId NOTIFY changed)
+    Q_PROPERTY(QString collectionName READ collectionName NOTIFY changed)
+    Q_PROPERTY(QVariantMap collectionOwn READ collectionOwn NOTIFY changed)
+    Q_PROPERTY(qint64 preferredCollection READ preferredCollection WRITE setPreferredCollection NOTIFY changed)
     Q_PROPERTY(QVariantMap bounds READ bounds CONSTANT)
     Q_PROPERTY(QStringList fonts READ fonts CONSTANT)
     // The chapter in front of the reader, set with the options in force.
@@ -61,6 +71,11 @@ public:
     QVariantMap defaults() const { return m_defaults.toVariantMap(); }
     QVariantMap own() const { return m_own.toVariantMap(); }
     bool hasBook() const;
+    qint64 collectionId() const noexcept { return m_collectionId; }
+    QString collectionName() const noexcept { return m_collectionName; }
+    QVariantMap collectionOwn() const { return m_collectionOwn.toVariantMap(); }
+    qint64 preferredCollection() const noexcept { return m_preferred; }
+    void setPreferredCollection(qint64 id);
     QVariantMap bounds() const;
     // The fonts there are, by family, for the font picker.
     QStringList fonts() const;
@@ -84,8 +99,13 @@ public:
     // Changes one option, for the open book alone or for the defaults; what
     // is wrong with the value when it can't be, else empty.
     Q_INVOKABLE QString set(const QString &key, const QVariant &value, bool forBook);
+    // The same, for "book", "collection" (the book's collection, above) or
+    // "defaults".
+    Q_INVOKABLE QString setFor(const QString &key, const QVariant &value, const QString &where);
     // The open book follows the defaults again.
     Q_INVOKABLE void resetBook();
+    // The book's collection follows the defaults again.
+    Q_INVOKABLE void resetCollection();
     // The defaults and the book's own as they are, and back to that: what
     // the panel's Reset puts back.
     Q_INVOKABLE QVariantMap snapshot() const;
@@ -109,7 +129,9 @@ private:
 
     Reader *m_reader;
     Settings *m_settings;
-    QJsonObject m_defaults, m_own, m_effective;
+    QJsonObject m_defaults, m_own, m_effective, m_collectionOwn;
+    qint64 m_collectionId = 0, m_preferred = 0;
+    QString m_collectionName;
     QString m_html, m_chapter;
     QColor m_links{"#7aa2f7"};
     double m_available = 0;
