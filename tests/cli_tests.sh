@@ -51,7 +51,7 @@ echo '{"library": {"Space": "", "R": "read"}}' > "$XDG_CONFIG_HOME/omabook/keys.
 expect "the keys follow keys.json" 0 "  R                   Read the selected book" "$omabook" help keys
 expect "a help page follows keys.json" 0 "R opens the selected book" "$omabook" help start
 rm "$XDG_CONFIG_HOME/omabook/keys.json"
-expect "what is new" 0 "Set the text your way" "$omabook" help new
+expect "what is new" 0 "One, two or three pages" "$omabook" help new
 expect "what is new as JSON" 0 '"features"' "$omabook" help new --json
 expect "an unknown help topic fails" 1 "no help on" "$omabook" help nonsense
 expect "an empty library lists nothing" 0 "" "$omabook" list --library "$library"
@@ -311,6 +311,19 @@ expect "reset puts the book back to the defaults" 0 "(this book)" "$omabook" for
 expect "reset puts the book back to the defaults" 0 "align              justify" "$omabook" format "$book" --library "$library" --reset
 "$omabook" format "$book" --library "$library" | grep -qF "(this book)" && fail "the book still has its own after --reset"
 expect "reset without a book puts the defaults back" 0 "line_height        150%" "$omabook" format --library "$library" --reset
+# The longest line in characters, and the pages side by side.
+expect "the measure is in characters" 0 "measure            66 characters" "$omabook" format --library "$library"
+expect "the measure changes" 0 "measure            58 characters" "$omabook" format --library "$library" --measure 58
+expect "a measure out of bounds says what it may be" 1 "--measure is 40 to 90 (characters); 120 is not" "$omabook" format --library "$library" --measure 120
+expect "a book gets a measure of its own" 0 "measure            72 characters   (this book)" "$omabook" format "$book" --library "$library" --measure 72
+expect "the pages are automatic until chosen" 0 "pages              auto (as many as fit)" "$omabook" format --library "$library"
+expect "the pages are chosen" 0 '"pages": 3' "$omabook" format --library "$library" --pages 3 --json
+grep -q '"pages": 3' "$XDG_CONFIG_HOME/omabook/config.json" || fail "the pages are not in config.json"
+expect "pages that aren't a count say what they may be" 1 "--pages is auto, 1, 2 or 3; 4 is not" "$omabook" format --library "$library" --pages 4
+expect "pages are for every book" 1 "--pages is for every book" "$omabook" format "$book" --library "$library" --pages 2
+expect "pages go back to automatic" 0 '"pages": "auto"' "$omabook" format --library "$library" --pages auto --json
+"$omabook" format "$book" --library "$library" --reset >/dev/null
+"$omabook" format --library "$library" --reset >/dev/null
 
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill
 expect "the skill installs" 0 "Installed" "$omabook" skill install

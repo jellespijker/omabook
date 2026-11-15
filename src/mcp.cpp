@@ -1129,9 +1129,10 @@ QList<Tool> coreTools() {
                   "complete, with what should stay. customize_undo puts back what this replaced.",
                   schema({{"keys", object("The whole of keys.json: {\"reader\": {\"Space\": \"next\"}, \"library\": {...}, \"global\": {...}}.")},
                           {"style", object("The whole of style.json: {\"colors\": {\"accent\": \"#8a4b2a\"}, \"radius\": 8, \"font\": \"Inter\"}.")},
-                          {"settings", object("Look settings to change: cover_size, font_size, font_family, line_width, "
-                                              "line_height, paragraph_spacing, indent, margins, align (start, justify, "
-                                              "center or end), spread, sort. The reading format ones are the defaults; "
+                          {"settings", object("Look settings to change: cover_size, font_size, font_family, measure "
+                                              "(the longest line in characters, 40 to 90), line_height, paragraph_spacing, "
+                                              "indent, margins, align (start, justify, center or end), pages (\"auto\", 1, "
+                                              "2 or 3 side by side), sort. The reading format ones are the defaults; "
                                               "reading_format_set also sets one book's own.")}}),
                   Changes, [](const QJsonObject &arguments) {
                       Prompts::InterfaceChange change;

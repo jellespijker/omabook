@@ -386,10 +386,11 @@ int progress(const QStringList &arguments) {
 // How books are set on the page: the defaults every book follows, or one
 // book's own over them (readingformat.h).
 int format(const QStringList &arguments) {
-    Command command("format", "Show or change how books are set on the page: the type, the widest line, the spacing, the "
-                              "indent, the margins and the alignment. Without a book, the defaults every book follows; with "
-                              "one, that book's own, which lie over the defaults. Without options, what is in force and where "
-                              "each comes from. Pages that are pictures (PDF, comics) are not set and ignore it.");
+    Command command("format", "Show or change how books are set on the page: the type, the longest line (the measure, in "
+                              "characters), the pages side by side, the spacing, the indent, the margins and the alignment. "
+                              "Without a book, the defaults every book follows; with one, that book's own, which lie over the "
+                              "defaults. Without options, what is in force and where each comes from. Pages that are pictures "
+                              "(PDF, comics) are not set and ignore it.");
     command.parser.addPositionalArgument("book", "A book's number from omabook list, for its own; the defaults when not given.", "[book]");
     struct Flag {
         const char *name, *key, *what, *value;
@@ -397,7 +398,8 @@ int format(const QStringList &arguments) {
     static constexpr Flag flags[] = {
         {"font-size", "font_size", "The type size, in pixels", "N"},
         {"font", "font_family", "The font, by name; \"\" for the desktop's.", "font"},
-        {"line-width", "line_width", "The widest a line of text gets, in pixels", "N"},
+        {"measure", "measure", "The longest line, in characters of the font (66 reads best; the type's size and font "
+                               "decide its width in pixels)", "N"},
         {"line-height", "line_height", "Line spacing, in percent", "N"},
         {"paragraph-spacing", "paragraph_spacing", "The space after a paragraph, in pixels", "N"},
         {"indent", "indent", "The indent of a paragraph's first line, in pixels", "N"},
@@ -411,6 +413,9 @@ int format(const QStringList &arguments) {
             what += QString(": %1 to %2, %3 when not set.").arg(range->low).arg(range->high).arg(range->fallback);
         command.parser.addOption({flag.name, what, flag.value});
     }
+    command.parser.addOption({"pages", "How many pages stand side by side in the reader, for every book: auto (as many as the "
+                                       "window has room for, each with lines of at least 45 characters, up to three), 1, 2 or "
+                                       "3 (shown where each page keeps 45 characters; the most that do otherwise).", "auto|1|2|3"});
     command.parser.addOption({"reset", "With a book: it follows the defaults again. Without: the defaults go back to Omabook's own."});
     if (!command.parse(arguments, 0, 1))
         return 1;
@@ -450,8 +455,14 @@ int format(const QStringList &arguments) {
         changes.insert(key, value);
     }
     const bool reset = command.parser.isSet("reset");
-    if (reset && !changes.isEmpty())
+    const bool pages = command.parser.isSet("pages");
+    if (reset && (!changes.isEmpty() || pages))
         return fail("--reset goes alone: it puts everything back.");
+    const QString pageCount = command.parser.value("pages");
+    if (pages && pageCount != "auto" && pageCount != "1" && pageCount != "2" && pageCount != "3")
+        return fail(QString("--pages is auto, 1, 2 or 3; %1 is not.").arg(pageCount));
+    if (pages && id > 0)
+        return fail("--pages is for every book; give it without a book.");
 
     if (id > 0) {
         QJsonObject own = reset ? QJsonObject() : library->bookFormat(id);
@@ -464,9 +475,12 @@ int format(const QStringList &arguments) {
             settings.setOption(range.key, range.fallback);
         settings.setOption("font_family", "");
         settings.setOption("align", "start");
+        settings.setPages(0);
     } else {
         for (auto it = changes.begin(); it != changes.end(); ++it)
             settings.setOption(it.key(), it.value());
+        if (pages)
+            settings.setOption("pages", pageCount);
     }
 
     const QJsonObject defaults = settings.format();
@@ -474,7 +488,8 @@ int format(const QStringList &arguments) {
     const QJsonObject effective = ReadingFormat::over(defaults, own);
     if (command.json()) {
         QJsonObject result{{"effective", effective}, {"defaults", defaults}, {"bounds", ReadingFormat::bounds()},
-                           {"changed", reset || !changes.isEmpty()}};
+                           {"pages", settings.pages() == 0 ? QJsonValue("auto") : QJsonValue(settings.pages())},
+                           {"changed", reset || pages || !changes.isEmpty()}};
         if (id > 0) {
             result.insert("book", id);
             result.insert("title", library->book(id)->meta.title);
@@ -489,11 +504,13 @@ int format(const QStringList &arguments) {
     for (const QString &key : ReadingFormat::keys()) {
         const QJsonValue value = effective.value(key);
         const ReadingFormat::Range *range = ReadingFormat::range(key);
-        const QString shown = range ? QString::number(value.toInt()) + (range->unit == "%"_L1 ? "%" : " px")
+        const QString shown = range ? QString::number(value.toInt()) + (range->unit == "%"_L1 ? QString("%") : " " + QString(range->unit))
                               : key == "font_family" && value.toString().isEmpty() ? QString("the desktop's")
                                                                                    : value.toString();
         print(stdout, QString("  %1 %2%3").arg(key.leftJustified(18), shown, own.contains(key) ? "   (this book)" : ""));
     }
+    print(stdout, QString("  %1 %2").arg(QString("pages").leftJustified(18),
+                                         settings.pages() == 0 ? QString("auto (as many as fit)") : QString::number(settings.pages())));
     return 0;
 }
 

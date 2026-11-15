@@ -147,8 +147,9 @@ const bool registered = [] {
 
     // How books are set on the page: `omabook format`.
     registerTool({"reading_format_get", "How books are set on the page",
-                  "The reading format: font, type size, widest line, line spacing (percent), space between paragraphs, "
-                  "first-line indent, margins (pixels) and alignment. Without a book, the defaults every book follows; "
+                  "The reading format: font, type size, longest line (the measure, in characters), line spacing "
+                  "(percent), space between paragraphs, first-line indent, margins (pixels) and alignment, and how many "
+                  "pages stand side by side (pages: auto, 1, 2 or 3, for every book). Without a book, the defaults every book follows; "
                   "with one, what is in force for it, the defaults, and the options it has of its own (\"own\"). Also "
                   "the bounds of each. Pages that are pictures (PDF, comics) are not set.",
                   schema({{"book", integer("A book's id, for its own; the defaults when not given.")}}), ReadOnly,
@@ -167,7 +168,7 @@ const bool registered = [] {
                   schema({{"book", integer("A book's id, to change its own; the defaults when not given.")},
                           {"font_size", integer("The type size in pixels, 10 to 48.")},
                           {"font_family", string("A font's name; \"\" for the desktop's.")},
-                          {"line_width", integer("The widest a line gets, in pixels, 320 to 1600.")},
+                          {"measure", integer("The longest line, in characters of the font, 40 to 90; 66 reads best.")},
                           {"line_height", integer("Line spacing in percent, 100 to 300.")},
                           {"paragraph_spacing", integer("The space after a paragraph in pixels, 0 to 80.")},
                           {"indent", integer("The indent of a paragraph's first line in pixels, 0 to 64.")},
@@ -175,15 +176,19 @@ const bool registered = [] {
                           {"align", choice("Where a paragraph's lines go: start, justify (filled out to both sides), "
                                            "center or end. Start and end turn round in a right-to-left language.",
                                            {"start", "justify", "center", "end"})},
+                          {"pages", choice("How many pages stand side by side, for every book (not with book): auto (as "
+                                           "many as the window has room for, each with lines of at least 45 characters, "
+                                           "up to three), or 1, 2 or 3, shown where each page keeps 45 characters.",
+                                           {"auto", "1", "2", "3"})},
                           {"reset", boolean("Back to the defaults (for a book), or to Omabook's own (without one).")}}),
                   Changes, [](const QJsonObject &arguments) {
                       QStringList asked{"format"};
                       if (arguments.contains("book"))
                           asked << QString::number(arguments.value("book").toInteger());
                       static const QList<std::pair<const char *, const char *>> options{
-                          {"font_size", "--font-size"}, {"font_family", "--font"}, {"line_width", "--line-width"},
+                          {"font_size", "--font-size"}, {"font_family", "--font"}, {"measure", "--measure"},
                           {"line_height", "--line-height"}, {"paragraph_spacing", "--paragraph-spacing"},
-                          {"indent", "--indent"}, {"margins", "--margins"}, {"align", "--align"}};
+                          {"indent", "--indent"}, {"margins", "--margins"}, {"align", "--align"}, {"pages", "--pages"}};
                       for (const auto &[key, flag] : options)
                           if (arguments.contains(key)) {
                               const QJsonValue value = arguments.value(key);

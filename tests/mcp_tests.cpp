@@ -976,6 +976,14 @@ private slots:
         format = server.data("reading_format_set", {{"book", id}, {"reset", true}});
         QVERIFY(format.value("own").toObject().isEmpty());
         QCOMPARE(format.value("effective").toObject().value("align").toString(), QString("justify"));
+        // The longest line in characters, and the pages side by side.
+        QCOMPARE(server.data("reading_format_get").value("bounds").toObject().value("measure").toObject().value("default").toInt(), 66);
+        format = server.data("reading_format_set", {{"measure", 60}, {"pages", "2"}});
+        QCOMPARE(format.value("defaults").toObject().value("measure").toInt(), 60);
+        QCOMPARE(format.value("pages").toInt(), 2);
+        QCOMPARE(server.data("reading_format_set", {{"pages", "auto"}}).value("pages").toString(), QString("auto"));
+        QVERIFY(server.failure("reading_format_set", {{"measure", 30}}).contains("40 to 90"));
+        QVERIFY(server.failure("reading_format_set", {{"book", id}, {"pages", "3"}}).contains("every book"));
         QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
     }
 };
