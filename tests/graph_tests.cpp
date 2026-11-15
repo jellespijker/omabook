@@ -75,6 +75,19 @@ const char *const secondAnswer = R"json({"nodes": [
   {"from": "Corin Ash", "to": "The drowned bell", "relation": "seeks", "section": 1}
 ]})json";
 
+// What a model would answer for the third chapter: a reveal, quoted from
+// the text, and the bell's part in it quoted from further down.
+const char *const thirdAnswer = R"json({"nodes": [
+  {"kind": "character", "name": "Corin Ash", "aliases": ["Tobin's son"], "summary": "Captain of the Tidewardens, and Old Tobin's son.",
+   "section": 2, "quote": "Corin Ash was Old Tobin's son."},
+  {"kind": "item", "name": "The drowned bell", "summary": "Told Mara who Corin Ash is.", "section": 2,
+   "quote": "Mara learned it from   the bell itself"}
+],
+"edges": [
+  {"from": "Corin Ash", "to": "Old Tobin", "relation": "son of", "section": 2, "quote": "was Old Tobin's son"},
+  {"from": "The drowned bell", "to": "Mara Venn", "relation": "speaks to", "section": 2, "quote": "words nobody wrote"}
+]})json";
+
 // A library on a temp folder holding the story.
 struct Shelf {
     QTemporaryDir dir;
@@ -1287,6 +1300,223 @@ private slots:
         QCOMPARE(did.value("after").toArray(), QJsonArray{""});
         // What the plugin put in the general graph is there for everyone.
         QVERIFY(named(shelf.library, "item", "The Lamp").id > 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // When knowledge is revealed.
+
+    void whatIsLearnedIsKeptWithItsMoment() {
+        Shelf shelf;
+        const auto document = shelf.document(shelf.book);
+        const qint64 book = shelf.book;
+        const auto upTo = [&](int section) { return GraphPlace{book, section, 1.0}; };
+        QVERIFY(GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, std::nullopt, upTo(0)), firstAnswer).understood);
+        QVERIFY(GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(0), upTo(1)), secondAnswer).understood);
+        QVERIFY(GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(1), upTo(2)), thirdAnswer).understood);
+
+        const Graph graph(shelf.library);
+        const GraphNode corin = named(shelf.library, "character", "Corin Ash");
+        // The node itself says what is known now...
+        QCOMPARE(corin.summary, QString("Captain of the Tidewardens, and Old Tobin's son."));
+        QVERIFY(corin.aliases().contains("Tobin's son"));
+        // ...and every version is kept, each where it was revealed.
+        QList<GraphFact> summaries, names;
+        for (const GraphFact &fact : graph.facts(corin.id))
+            (fact.kind == "summary" ? summaries : names) << fact;
+        QCOMPARE(summaries.size(), 2);
+        QCOMPARE(summaries.at(0).value, QString("Captain of the Tidewardens, after the drowned bell."));
+        QCOMPARE(summaries.at(0).revealed.place.section, 1);
+        QCOMPARE(summaries.at(1).revealed.place.section, 2);
+        // At the words the model quoted, as the text has them.
+        const QString third = document->text(2);
+        QCOMPARE(summaries.at(1).revealed.anchor, QString("Corin Ash was Old Tobin's son."));
+        QVERIFY(qAbs(summaries.at(1).revealed.place.fraction - double(third.indexOf("Corin Ash was")) / third.size()) < 1e-9);
+        QCOMPARE(names.size(), 1);
+        QCOMPARE(names.first().value, QString("Tobin's son"));
+        QCOMPARE(names.first().revealed.place.section, 2);
+        QCOMPARE(names.first().revealed.anchor, QString("Tobin's son"));
+        // A quote with its spaces run together still finds its place, much
+        // further down than where the bell is named.
+        const GraphNode bell = named(shelf.library, "item", "The drowned bell");
+        const GraphFact told = graph.facts(bell.id).last();
+        QCOMPARE(told.revealed.anchor, QString("Mara learned it from the bell itself"));
+        QVERIFY(qAbs(told.revealed.place.fraction - double(third.indexOf("Mara learned it")) / third.size()) < 1e-9);
+        QVERIFY(told.revealed.place.fraction > summaries.at(1).revealed.place.fraction);
+        // Where it was met stays where its name first showed, with the words.
+        QCOMPARE(graph.firstMet(corin.id, book)->place.section, 1);
+        QCOMPARE(graph.firstMet(corin.id, book)->anchor, QString("Corin Ash"));
+
+        // A relation at the words quoted for it; one whose quote the text
+        // doesn't hold, once both its ends have shown.
+        GraphEdge son, speaks;
+        for (const GraphEdge &edge : graph.around(corin.id, 2).edges) {
+            if (edge.kind == "son of") son = edge;
+            if (edge.kind == "speaks to") speaks = edge;
+        }
+        QCOMPARE(son.anchor, QString("was Old Tobin's son"));
+        QCOMPARE(son.learned.section, 2);
+        QCOMPARE(speaks.learned.section, 2);
+        // (Neither end is named in that chapter as the graph knows it: at its
+        // end, with no words to find it by.)
+        QVERIFY(speaks.anchor.isEmpty());
+        QCOMPARE(speaks.learned.fraction, 1.0);
+
+        // The timeline, in the order a reader comes to it.
+        QStringList steps;
+        for (const GraphReveal &step : graph.timeline(corin.id, book))
+            steps << QString("%1:%2").arg(step.what).arg(step.revealed.place.section);
+        QCOMPARE(steps.first(), QString("met:1"));
+        QVERIFY(steps.indexOf("summary:1") < steps.indexOf("summary:2"));
+        QVERIFY(steps.contains("alias:2"));
+        QVERIFY(steps.contains("relation:2"));
+    }
+
+    void aPlaceKnowsOnlyWhatWasRevealedByThen() {
+        Shelf shelf;
+        const auto document = shelf.document(shelf.book);
+        const qint64 book = shelf.book;
+        const auto upTo = [&](int section) { return GraphPlace{book, section, 1.0}; };
+        GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, std::nullopt, upTo(0)), firstAnswer);
+        GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(0), upTo(1)), secondAnswer);
+        GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(1), upTo(2)), thirdAnswer);
+        const Graph graph(shelf.library);
+        const auto find = [](const GraphView &view, const QString &name) {
+            const auto found = std::ranges::find(view.nodes, name, &GraphNode::name);
+            return found == view.nodes.end() ? GraphNode() : *found;
+        };
+        const auto related = [](const GraphView &view, const QString &kind) {
+            return std::ranges::any_of(view.edges, [&](const GraphEdge &edge) { return edge.kind == kind; });
+        };
+
+        // At the end of the second chapter: the summary of then, without
+        // the name revealed later, and without the relation.
+        const GraphView second = graph.ofBook(book, upTo(1));
+        QCOMPARE(find(second, "Corin Ash").summary, QString("Captain of the Tidewardens, after the drowned bell."));
+        QVERIFY(!find(second, "Corin Ash").aliases().contains("Tobin's son"));
+        QVERIFY(!related(second, "son of"));
+        QVERIFY(!QString::fromUtf8(QJsonDocument(second.toJson()).toJson()).contains("Tobin's son"));
+        // Just before the words that reveal it: still not known.
+        GraphFact reveal;
+        for (const GraphFact &fact : graph.facts(find(second, "Corin Ash").id))
+            if (fact.kind == "summary")
+                reveal = fact;
+        const GraphView before = graph.ofBook(book, GraphPlace{book, 2, reveal.revealed.place.fraction - 0.001});
+        QCOMPARE(find(before, "Corin Ash").summary, QString("Captain of the Tidewardens, after the drowned bell."));
+        // From those words on, it is.
+        const GraphView third = graph.ofBook(book, upTo(2));
+        QCOMPARE(find(third, "Corin Ash").summary, QString("Captain of the Tidewardens, and Old Tobin's son."));
+        QVERIFY(find(third, "Corin Ash").aliases().contains("Tobin's son"));
+        QVERIFY(related(third, "son of"));
+        // A summary written by hand is the latest word, wherever the reader is.
+        QVERIFY(Graph(shelf.library).edit(find(third, "Mara Venn").id, "Mara Venn", "The keeper, in my own words."));
+        QCOMPARE(find(graph.ofBook(book, upTo(0)), "Mara Venn").summary, QString("The keeper, in my own words."));
+        // A node no fact was kept of (made before facts were) is as it is.
+        GraphNode old;
+        old.id = 424242;
+        old.summary = "As it always was.";
+        QCOMPARE(Graph::asKnown(old, {}, book, [](const GraphPlace &) { return false; }).summary, QString("As it always was."));
+        // A merge keeps the facts and their moments.
+        const qint64 extra = Graph(shelf.library).upsert({}, "character", "The Captain", "Leads them.", {}, GraphPlace{book, 1, 0.9});
+        QVERIFY(Graph(shelf.library).merge(find(third, "Corin Ash").id, extra));
+        QVERIFY(std::ranges::any_of(graph.facts(find(third, "Corin Ash").id), [](const GraphFact &fact) { return fact.value == "Leads them."; }));
+        const GraphNode captain = find(graph.ofBook(book, GraphPlace{book, 1, 0.5}), "Corin Ash");
+        QVERIFY(captain.id > 0);
+        QVERIFY(!captain.aliases().contains("The Captain"));
+        QVERIFY(!captain.aliases().contains("Tobin's son"));
+        QVERIFY(find(graph.ofBook(book, upTo(1)), "Corin Ash").aliases().contains("The Captain"));
+    }
+
+    void nothingLaterReachesTheModel() {
+        Shelf shelf;
+        const auto document = shelf.document(shelf.book);
+        const qint64 book = shelf.book;
+        const auto upTo = [&](int section) { return GraphPlace{book, section, 1.0}; };
+        GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, std::nullopt, upTo(0)), firstAnswer);
+        GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(0), upTo(1)), secondAnswer);
+        // The whole book was built (on request), but the reader is in the second chapter.
+        GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(1), upTo(2)), thirdAnswer);
+        shelf.library.setProgress(book, {.section = 1, .fraction = 0.9, .percent = 60, .updated = 0});
+        const GraphPlace here{book, 1, 0.9};
+
+        const QString question = GraphContext::forQuestion(shelf.library, book, here, "Who is Corin Ash, and what of the bell?");
+        QVERIFY(question.contains("Corin Ash"));
+        QVERIFY(question.contains("after the drowned bell"));
+        QVERIFY(!question.contains("Tobin's son"));
+        QVERIFY(!question.contains("son of"));
+        QVERIFY(!question.contains("Told Mara"));
+        const QString cast = GraphContext::digest(shelf.library, book, here, {"character", "item"});
+        QVERIFY(cast.contains("Corin Ash"));
+        QVERIFY(!cast.contains("Tobin's son"));
+        QVERIFY(!cast.contains("Told Mara"));
+        // A question of the whole library goes by how far each book was read.
+        const QString picture = GraphContext::picture(shelf.library, "What is Corin doing?");
+        QVERIFY(picture.contains("Corin Ash"));
+        QVERIFY(!picture.contains("Tobin's son"));
+        // And what the model is told when it notes the second chapter again.
+        const QString asked = GraphBuild::request(shelf.library, book, GraphBuild::passages(*document, upTo(0), upTo(1))).messages.first().text;
+        QVERIFY(asked.contains("Corin Ash"));
+        QVERIFY(!asked.contains("Tobin's son"));
+        QVERIFY(!asked.contains("Told Mara"));
+
+        // The furthest the book was read stands when the reader goes back.
+        shelf.library.setProgress(book, {.section = 0, .fraction = 0.1, .percent = 5, .updated = 0});
+        QCOMPARE(GraphContext::furthest(shelf.library, book).section, 1);
+        QCOMPARE(GraphContext::spoilersAfter(shelf.library, book)->section, 1);
+        QVERIFY(GraphContext::unspoiled(shelf.library)(GraphPlace{book, 1, 0.5}));
+        QVERIFY(!GraphContext::unspoiled(shelf.library)(GraphPlace{book, 2, 0.1}));
+        // A book marked as read has none.
+        QVERIFY(shelf.library.setReading(book, "read", 0, {}));
+        QVERIFY(!GraphContext::spoilersAfter(shelf.library, book));
+    }
+
+    void theTimelineFromTheCommandLineAndTheTools() {
+        const Machine machine;
+        QCOMPARE(machine.omabook({"add", machine.dir.filePath("story.txt")}).code, 0);
+        qint64 corin = 0;
+        {
+            Library library(machine.library);
+            QVERIFY(library.open());
+            QString error;
+            const auto document = BookOps::open(&library, "1", &error);
+            QVERIFY(document);
+            const auto upTo = [](int section) { return GraphPlace{1, section, 1.0}; };
+            GraphBuild::apply(library, 1, GraphBuild::passages(*document, std::nullopt, upTo(0)), firstAnswer);
+            GraphBuild::apply(library, 1, GraphBuild::passages(*document, upTo(0), upTo(1)), secondAnswer);
+            GraphBuild::apply(library, 1, GraphBuild::passages(*document, upTo(1), upTo(2)), thirdAnswer);
+            library.setProgress(1, {.section = 1, .fraction = 1.0, .percent = 60, .updated = 0});
+            corin = named(library, "character", "Corin Ash").id;
+        }
+        const QString id = QString::number(corin);
+        Machine::Ran ran = machine.omabook({"graph", "node", id, "--timeline", "--json"});
+        QVERIFY2(ran.code == 0, qPrintable(ran.errors));
+        const QJsonArray steps = ran.json().value("timeline").toArray();
+        QVERIFY(steps.size() >= 4);
+        bool reveal = false;
+        for (const QJsonValue &value : steps) {
+            const QJsonObject step = value.toObject();
+            if (step.value("what") == "summary" && step.value("text").toString().contains("Tobin's son")) {
+                reveal = true;
+                QCOMPARE(step.value("revealed").toObject().value("section").toInt(), 2);
+                QCOMPARE(step.value("revealed").toObject().value("anchor").toString(), QString("Corin Ash was Old Tobin's son."));
+                // Past the reader: said so.
+                QVERIFY(step.value("ahead").toBool());
+            }
+        }
+        QVERIFY(reveal);
+        // As a reader at the end of the second chapter knows it: nothing later.
+        ran = machine.omabook({"graph", "node", id, "--timeline", "--book", "1", "--upto", "1", "--json"});
+        QVERIFY2(ran.code == 0, qPrintable(ran.errors));
+        QVERIFY(!ran.output.contains("Tobin's son"));
+        QCOMPARE(ran.json().value("node").toObject().value("summary").toString(), QString("Captain of the Tidewardens, after the drowned bell."));
+        ran = machine.omabook({"graph", "node", id, "--timeline"});
+        QVERIFY(ran.output.contains("When it was revealed:"));
+        QVERIFY(ran.output.contains("section 2\tsummary"));
+        QVERIFY(ran.output.contains("(ahead of the reader)"));
+        // The same as a tool, with the same answer.
+        Server server(machine);
+        const QJsonObject tool = server.call("graph_node", {{"id", corin}, {"timeline", true}, {"book", 1}, {"up_to_section", 1}});
+        QVERIFY(!QJsonDocument(tool).toJson().contains("Tobin's son"));
+        QVERIFY(QJsonDocument(tool).toJson().contains("timeline"));
     }
 };
 

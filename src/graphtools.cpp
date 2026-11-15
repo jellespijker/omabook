@@ -8,10 +8,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <QSet>
 #include <cstdio>
 #include <memory>
 
 #include "bookops.h"
+#include "graphcontext.h"
 #include "graphlinks.h"
 #include "mcp.h"
 #include "settings.h"
@@ -97,21 +99,71 @@ QJsonObject GraphOps::find(const Library &library, const QString &words, const Q
     return {{"nodes", nodes}};
 }
 
-QJsonObject GraphOps::node(const Library &library, qint64 id, int depth) {
+QJsonObject GraphOps::node(const Library &library, qint64 id, int depth, bool timeline, qint64 bookId,
+                           const std::optional<GraphPlace> &upTo) {
     const Graph graph(library);
-    const auto found = graph.node(id);
+    auto found = graph.node(id);
     if (!found)
         return problem(QString("There is no node %1 in the graph.").arg(id));
+    if (bookId > 0 && !library.book(bookId))
+        return problem(QString("There is no book %1 in the library.").arg(bookId));
+    const bool bounded = bookId > 0 && upTo;
+    // As a reader at that place knows it, among what they have met.
+    GraphView around;
+    if (bounded) {
+        const GraphView book = graph.ofBook(bookId, upTo);
+        const auto self = std::ranges::find(book.nodes, id, &GraphNode::id);
+        if (self == book.nodes.end())
+            return problem(QString("Node %1 is not met in book %2 by that place.").arg(id).arg(bookId));
+        found = *self;
+        QSet<qint64> reached{id}, frontier{id};
+        for (int step = 0; step < qBound(0, depth, 6) && !frontier.isEmpty(); ++step) {
+            QSet<qint64> next;
+            for (const GraphEdge &edge : book.edges) {
+                if (frontier.contains(edge.source) && !reached.contains(edge.target)) next << edge.target;
+                if (frontier.contains(edge.target) && !reached.contains(edge.source)) next << edge.source;
+            }
+            reached += next;
+            frontier = next;
+        }
+        around.nodes.append(*found);
+        for (const GraphNode &node : book.nodes)
+            if (node.id != id && reached.contains(node.id))
+                around.nodes.append(node);
+        for (const GraphEdge &edge : book.edges)
+            if (reached.contains(edge.source) && reached.contains(edge.target))
+                around.edges.append(edge);
+    } else {
+        around = graph.around(id, depth);
+    }
     QJsonArray seen;
     for (const GraphPlace &place : graph.seen(id)) {
+        if (bounded && place.bookId == bookId && !place.notAfter(*upTo))
+            continue;
         QJsonObject at = placeJson(place);
         if (const auto book = library.book(place.bookId))
             at.insert("title", book->meta.title);
         seen << at;
     }
-    QJsonObject answer = graph.around(id, depth).toJson();
+    QJsonObject answer = around.toJson();
     answer.insert("node", found->toJson());
     answer.insert("seen", seen);
+    if (timeline) {
+        const GraphKnown unspoiled = GraphContext::unspoiled(library);
+        QJsonArray steps;
+        for (const GraphReveal &step : graph.timeline(id, bookId)) {
+            const GraphPlace &at = step.revealed.place;
+            if (bounded && at.bookId == bookId && !at.notAfter(*upTo))
+                continue;
+            QJsonObject object = step.toJson();
+            if (const auto book = at.bookId > 0 ? library.book(at.bookId) : std::nullopt)
+                object.insert("title", book->meta.title);
+            if (!unspoiled(at))
+                object.insert("ahead", true);
+            steps << object;
+        }
+        answer.insert("timeline", steps);
+    }
     return answer;
 }
 
@@ -321,7 +373,9 @@ constexpr auto usage =
     "topics they touch, the questions asked, and what was read when. It is never ahead of a book's reader.\n\n"
     "  show [book] [--upto section] [--scope s]   A book's graph (up to a place), or a whole scope\n"
     "  find <words> [--kind k] [--scope s|--everywhere]  Search names, other names and summaries\n"
-    "  node <id> [--depth n]                      One thing, where it was met, and what is around it\n"
+    "  node <id> [--depth n] [--timeline] [--book b [--upto section]]\n"
+    "                                             One thing, where it was met, and what is around it; with\n"
+    "                                             --timeline, when each thing known of it was revealed\n"
     "  add --kind k --name n [--summary s] [--alias a] [--book id [--section n]] [--scope s] [--data json]\n"
     "  link <a> <b> <relation> [--note text]      Relate two nodes: a \"mentor of\" b\n"
     "  unlink <edge>                              Remove a relation\n"
@@ -399,6 +453,7 @@ int runGraphCli(const QStringList &arguments) {
     parser.addOption({"section", "add, link: the section of that book.", "section"});
     parser.addOption({"note", "link: a remark on the relation.", "text"});
     parser.addOption({"depth", "node: how many relations away to go; 1 when not given.", "number"});
+    parser.addOption({"timeline", "node: also when each thing known of it was revealed, and where."});
     parser.addOption({"limit", "show, find: the most nodes to answer.", "number"});
     parser.addOption({"format", "export: json, graphml, dot or cypher.", "format"});
     parser.addOption({"output", "export: write to this file instead of printing.", "file"});
@@ -456,12 +511,29 @@ int runGraphCli(const QStringList &arguments) {
                                 parser.isSet("limit") ? parser.value("limit").toInt() : 50);
         plain = [&] { printView(answer); };
     } else if (sub == "node" && words.size() == 2) {
-        answer = GraphOps::node(library, first, parser.isSet("depth") ? parser.value("depth").toInt() : 1);
+        const qint64 inBook = parser.value("book").toLongLong();
+        answer = GraphOps::node(library, first, parser.isSet("depth") ? parser.value("depth").toInt() : 1, parser.isSet("timeline"),
+                                inBook, upTo(inBook));
         plain = [&] {
             for (const QJsonValue &value : answer.value("seen").toArray())
                 print(stdout, QString("met in %1, section %2").arg(value.toObject().value("title").toString())
                                   .arg(value.toObject().value("section").toInt()));
             printView(answer);
+            if (answer.contains("timeline"))
+                print(stdout, "\nWhen it was revealed:");
+            // "section 3\tsummary\tShe is the Regent's daughter.\t“the Regent's daughter”"
+            for (const QJsonValue &value : answer.value("timeline").toArray()) {
+                const QJsonObject step = value.toObject(), at = step.value("revealed").toObject();
+                const QString what = step.value("what").toString();
+                const QString text = what == "relation" ? (step.value("outgoing").toBool()
+                                                               ? step.value("text").toString() + " " + step.value("other_name").toString()
+                                                               : step.value("other_name").toString() + " " + step.value("text").toString())
+                                                        : step.value("text").toString();
+                print(stdout, QString("%1\t%2\t%3%4%5")
+                                  .arg(at.isEmpty() ? QString("by hand") : QString("section %1").arg(at.value("section").toInt()), what, text,
+                                       at.value("anchor").toString().isEmpty() ? QString() : "\t“" + at.value("anchor").toString() + "”",
+                                       step.value("ahead").toBool() ? QString("\t(ahead of the reader)") : QString()));
+            }
         };
     } else if (sub == "add") {
         QJsonObject thing{{"kind", parser.value("kind")}, {"name", parser.value("name")}, {"summary", parser.value("summary")},
@@ -700,11 +772,23 @@ const bool registered = [] {
 
     registerTool({"graph_node", "A node and what is around it",
                   "One thing of the knowledge graph: what is known of it, the books and places it was met at, and "
-                  "the things within a few relations of it with those relations.",
-                  schema({{"id", nodeNumber}, {"depth", integer("How many relations away to go; 1 when not given.", 0)}}, {"id"}),
+                  "the things within a few relations of it with those relations. With timeline, also when each "
+                  "thing known of it was revealed: every summary it had, every other name it was given, where it "
+                  "was met and each relation, each with its book, section and fraction and a few words of the text "
+                  "there (\"anchor\") to find the very spot; what lies past the reader's furthest place in its book "
+                  "is marked \"ahead\" and gives away what happens. With book and up_to_section, the node as a "
+                  "reader at that place knows it, and nothing later.",
+                  schema({{"id", nodeNumber}, {"depth", integer("How many relations away to go; 1 when not given.", 0)},
+                          {"timeline", boolean("Also when each thing known of it was revealed, and where.")},
+                          {"book", integer("Only what this book revealed, by its number.", 1)},
+                          {"up_to_section", integer("With book: as known up to and including this section.", 0)},
+                          {"up_to_fraction", Mcp::number("How far into that section, from 0 to 1; all of it when not given.", 0, 1)}},
+                         {"id"}),
                   ReadOnly, [](const QJsonObject &arguments) {
                       QStringList asked{"graph", "node", numberOf(arguments, "id")};
                       if (arguments.contains("depth")) asked << "--depth" << numberOf(arguments, "depth");
+                      if (arguments.value("timeline").toBool()) asked << "--timeline";
+                      if (arguments.contains("book")) asked << "--book" << numberOf(arguments, "book") << upToArguments(arguments);
                       return command(asked);
                   }});
 

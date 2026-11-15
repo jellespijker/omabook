@@ -41,8 +41,14 @@ QJsonObject connect(Library &library, qint64 bookId, const GraphBuild::Asker &as
 QJsonObject find(const Library &library, const QString &words, const QString &kind = {}, const QString &scope = {},
                  bool everywhere = false, int limit = 50);
 // {"node", "seen", "nodes", "edges"}: one thing, the places it was met at,
-// and what is within `depth` relations of it.
-QJsonObject node(const Library &library, qint64 id, int depth = 1);
+// and what is within `depth` relations of it. With a book and a place, as a
+// reader there knows it: its summary and names then, and only what was met
+// by then around it. With `timeline`, also "timeline": when each thing known
+// of it was revealed ({what, text, revealed: {book, section, fraction,
+// anchor}}), up to that place when one is given, each past its reader's
+// furthest place in its book marked "ahead".
+QJsonObject node(const Library &library, qint64 id, int depth = 1, bool timeline = false, qint64 bookId = 0,
+                 const std::optional<GraphPlace> &upTo = std::nullopt);
 // Adds a thing, or brings the one of that name up to date: {"kind", "name",
 // "summary", "aliases", "data", "scope", "book", "section", "fraction"}.
 // With a book and no section it is placed where the book was read to.
