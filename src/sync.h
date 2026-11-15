@@ -60,6 +60,8 @@ struct SyncSummary {
     int sent = 0;               // books that went to it
     int placesTaken = 0;        // reading places that were newer there
     int placesSent = 0;         // reading places that were newer here
+    int collectionsTaken = 0;   // collections that changed there last, brought here
+    int collectionsSent = 0;    // collections that changed here last, brought there
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all
 };

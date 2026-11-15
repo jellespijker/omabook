@@ -12,6 +12,7 @@
 #include <QSet>
 #include <QTemporaryDir>
 
+#include "collections.h"
 #include "formats.h"
 
 namespace {
@@ -110,8 +111,9 @@ QJsonObject libraryManifest(const Library &library) {
         object.insert("progress", toJson(library.progress(book.id)));
         books << object;
     }
+    // An Omabook from before collections reads past them.
     return {{"version", manifestVersion}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books},
-            {"removed", QJsonArray::fromStringList(library.removedHashes())}};
+            {"removed", QJsonArray::fromStringList(library.removedHashes())}, {"collections", Collections::manifest(library)}};
 }
 
 SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress) {
@@ -260,6 +262,30 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (const Progress place = library.progress(book.id); place.updated > 0)
             remote.omabook(progressArguments(theirId, place));
         ++summary.sent;
+    }
+    // The collections, once both sides have every book: theirs taken in here
+    // where they changed last, and this library's handed to them to do the
+    // same. An Omabook from before collections has none to give, and can't
+    // take any; the books are in step all the same.
+    if (manifest.contains("collections")) {
+        summary.collectionsTaken = Collections::take(library, manifest.value("collections").toArray());
+        const QJsonArray mine = Collections::manifest(library);
+        const QString file = scratch.filePath("collections.json");
+        QFile json(file);
+        if (!mine.isEmpty() && json.open(QIODevice::WriteOnly) && json.write(QJsonDocument(mine).toJson(QJsonDocument::Compact)) > 0) {
+            json.close();
+            const QString folder = QString::fromUtf8(remote.run("mktemp -d").output).trimmed();
+            if (!folder.isEmpty()) {
+                const auto cleanup = qScopeGuard([&] { remote.run("rm -rf " + Remote::quote(folder)); });
+                const Remote::Result taken = remote.send(file, folder + "/collections.json")
+                                                 ? remote.omabook({"collections", "take", folder + "/collections.json", "--json"})
+                                                 : Remote::Result();
+                if (taken.ok())
+                    summary.collectionsSent = int(QJsonDocument::fromJson(taken.output).object().value("changed").toInt());
+                else
+                    summary.problems << "The collections could not be sent to " + remote.host() + ".";
+            }
+        }
     }
     qCInfo(lcSync).noquote() << "with" << remote.host() << ":" << summary.received << "received," << summary.sent << "sent,"
                              << summary.placesTaken + summary.placesSent << "reading places," << summary.problems.size() << "problems";

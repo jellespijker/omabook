@@ -26,6 +26,7 @@
 #include "bookops.h"
 #include "calibreplugin.h"
 #include "catalog.h"
+#include "collections.h"
 #include "converter.h"
 #include "curation.h"
 #include "customization.h"
@@ -170,13 +171,20 @@ std::unique_ptr<Document> openTarget(const Command &command, const QString &word
 int list(const QStringList &arguments) {
     Command command("list", "List the library's books, or those matching a search.");
     command.parser.addPositionalArgument("search", "Words to look for; author:, title:, series:, tag:, format: and lang: look in one field.", "[search...]");
+    command.parser.addOption({"collection", "Only the books of this collection (omabook collections lists them).", "name"});
     if (!command.parse(arguments, 0))
         return 1;
     QString error;
     const auto library = command.library(&error);
     if (!library)
         return fail(error);
-    const QList<Book> books = library->books(command.parser.positionalArguments().join(' '));
+    QList<Book> books = library->books(command.parser.positionalArguments().join(' '));
+    if (command.parser.isSet("collection")) {
+        const auto collection = library->collectionNamed(command.parser.value("collection"));
+        if (!collection)
+            return fail("There is no collection called " + command.parser.value("collection") + ". omabook collections lists them.");
+        books = collection->of(books);
+    }
     if (command.json()) {
         QJsonArray array;
         for (const Book &book : books)
@@ -1618,6 +1626,7 @@ int suggest(const QStringList &arguments) {
                                "from a reading site alike. Each suggestion is then looked up on Goodreads and Open "
                                "Library: that it exists, what readers rate it, and whether it is already yours.");
     command.parser.addOption({"no-check", "Don't look the suggestions up."});
+    command.parser.addOption({"collection", "Go only by the books of this collection, by its path or name.", "name"});
     if (!command.parse(arguments, 0, 0))
         return 1;
     QString error;
@@ -1625,8 +1634,15 @@ int suggest(const QStringList &arguments) {
     if (!library)
         return fail(error);
     const QList<Book> held = library->books();
+    QList<Book> goneBy = held;
+    if (command.parser.isSet("collection")) {
+        const auto collection = library->collectionNamed(command.parser.value("collection"));
+        if (!collection)
+            return fail("There is no collection called " + command.parser.value("collection") + ". omabook collections lists them.");
+        goneBy = collection->of(held);
+    }
     QList<Curation::BookNotes> books;
-    for (const Book &book : held)
+    for (const Book &book : goneBy)
         books.append({book, library->notes(book.id, "recap").text});
     // What the knowledge graph holds across the books goes along, unless it is off.
     const auto answer = askAi(Curation::suggestionRequest(books, Settings().graph() != "off" ? GraphContext::picture(*library) : QString()));
@@ -1690,8 +1706,12 @@ int change(const QStringList &arguments) {
         return 1;
     Customization custom;
     Settings settings;
+    // The library, for a change that makes a collection; a change to the
+    // look needs none.
+    QString libraryError;
+    const auto library = command.library(&libraryError);
     if (command.parser.isSet("undo")) {
-        if (!InterfaceChanges::undo(custom, settings))
+        if (!InterfaceChanges::undo(custom, settings, library.get()))
             return fail("There is no change to undo.");
         print(stdout, "Put back as it was.");
         return 0;
@@ -1703,15 +1723,16 @@ int change(const QStringList &arguments) {
     Theme theme;
     ThemeChoice choice(&custom, ThemePlaces::here(custom.folder()));
     const Look look(&theme, &choice, &custom);
-    const auto answer = askAi(Prompts::change(InterfaceChanges::state(custom, settings, look.colors()), wish));
+    const auto answer = askAi(Prompts::change(InterfaceChanges::state(custom, settings, look.colors(), library.get()), wish));
     if (!answer)
         return fail(answer.error());
     const Prompts::InterfaceChange asked = Prompts::parseChange(*answer);
-    const QString problem = InterfaceChanges::apply(custom, settings, asked);
+    const QString problem = InterfaceChanges::apply(custom, settings, asked, library.get());
     if (!problem.isEmpty())
         return fail("Nothing was changed: " + problem);
     if (command.json())
-        printJson(QJsonObject{{"say", asked.say}, {"keys", asked.hasKeys}, {"style", asked.hasStyle}, {"settings", asked.settings}});
+        printJson(QJsonObject{{"say", asked.say}, {"keys", asked.hasKeys}, {"style", asked.hasStyle}, {"settings", asked.settings},
+                              {"collections", asked.collections}});
     else
         print(stdout, asked.say.isEmpty() ? "Changed." : asked.say);
     return 0;
@@ -1788,6 +1809,7 @@ int ask(const QStringList &arguments) {
     command.parser.addPositionalArgument("book", "A book's number in the library, a book file, or \"all\" to ask about the library as a whole.");
     command.parser.addPositionalArgument("question", "What to ask.", "<question...>");
     command.parser.addOption({"upto", "Send the text only up to and including this section, so later ones stay unread.", "number"});
+    command.parser.addOption({"collection", "With all: ask only about the books of this collection.", "name"});
     if (!command.parse(arguments, 2))
         return 1;
     QString error;
@@ -1796,8 +1818,15 @@ int ask(const QStringList &arguments) {
         const auto library = command.library(&error);
         if (!library)
             return fail(error);
+        QList<Book> asked = library->books();
+        if (command.parser.isSet("collection")) {
+            const auto collection = library->collectionNamed(command.parser.value("collection"));
+            if (!collection)
+                return fail("There is no collection called " + command.parser.value("collection") + ". omabook collections lists them.");
+            asked = collection->of(asked);
+        }
         QList<Curation::BookNotes> books;
-        for (const Book &book : library->books())
+        for (const Book &book : asked)
             books.append({book, library->notes(book.id, "recap").text});
         // The knowledge graph's picture of what was read goes along, and the
         // question joins the graph once it is answered; neither with it off.
@@ -2021,6 +2050,7 @@ constexpr std::array cliCommands{
     CliCommand{"plugin"_L1, runPluginCli},
     CliCommand{"calibre"_L1, calibre},
     CliCommand{"catalog"_L1, catalog},
+    CliCommand{"collections"_L1, Collections::run},
     CliCommand{"customize"_L1, customize},
     CliCommand{"theme"_L1, runThemeCli},
     CliCommand{"tidy"_L1, tidy},
@@ -2044,7 +2074,8 @@ constexpr std::array cliCommands{
 QString cliSummary() {
     return "Commands:\n"
            "  open [book]                     Open the window, and a book file or library number in it\n"
-           "  list [search]                   List the library's books\n"
+           "  list [search] [--collection c]  List the library's books, or one collection's\n"
+           "  collections [add|rule|move|sort|...]  Named parts of the library, nested as you like\n"
            "  show <id>                       Show one book's details and files\n"
            "  add <file|folder>...            Copy books into the library; a Calibre library comes with its details\n"
            "  remove <id>                     Move a book to the trash\n"

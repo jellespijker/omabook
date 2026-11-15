@@ -7,6 +7,7 @@
 namespace {
 
 using namespace Mcp;
+using namespace Qt::StringLiterals;
 
 const QStringList sites{"goodreads", "openlibrary"};
 const QStringList allSites{"goodreads", "openlibrary", "hardcover"};
@@ -214,6 +215,128 @@ const bool registered = [] {
                   "Colors the user set in style.json still win. It doesn't change the desktop's theme.",
                   schema({{"theme", string("The theme, as themes_list names it.")}}, {"theme"}), Changes,
                   [](const QJsonObject &arguments) { return command({"theme", "use", arguments.value("theme").toString()}); }});
+    // --- Collections -----------------------------------------------------------
+    registerTool({"collections_list", "The collections",
+                  "The library's collections as a tree: named parts of the library, named as the user likes, each filled "
+                  "by its rule (a search, as books_search takes it) and by books put in or taken out by hand, with how "
+                  "many books each holds now. A book can be in several; nothing is copied or moved.",
+                  schema(), ReadOnly, [](const QJsonObject &) { return command({"collections", "list"}); }});
+
+    registerTool({"collection_get", "A collection and its books",
+                  "One collection: its rule, the books put in and taken out by hand, its own view and reading format, "
+                  "and every book in it.",
+                  schema({{"name", string("The collection's name, or its number.")}}, {"name"}), ReadOnly,
+                  [](const QJsonObject &arguments) { return command({"collections", "show", arguments.value("name").toString()}); }});
+
+    registerTool({"collection_add", "Make a collection",
+                  "Makes a collection, named as the user likes. A name with \"/\" is a path: Studie/Python is Python inside "
+                  "Studie, and the collections a path goes through are made too; a collection holds what those inside it hold. Its rule is a search: bare words, author:, title:, series:, tag:, genre: "
+                  "(fiction, nonfiction, or a tag), format:, lang:, publisher:, about: (the description), status:, is: "
+                  "and rating:; \"quotes\" keep words together, -word leaves out, OR joins alternatives. A new book "
+                  "lands in every collection whose rule finds it. Without a rule it holds only books put in by hand.",
+                  schema({{"name", string("What it is called, or its path inside others.")},
+                          {"rule", string("The search that fills it, such as tag:history OR series:Dune.")},
+                          {"parent", string("The collection to make it inside, by its path.")}},
+                         {"name"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      QStringList asked{"collections", "add", arguments.value("name").toString()};
+                      if (!arguments.value("parent").toString().trimmed().isEmpty())
+                          asked << "--parent" << arguments.value("parent").toString();
+                      if (!arguments.value("rule").toString().trimmed().isEmpty())
+                          asked << "--rule" << arguments.value("rule").toString();
+                      return command(asked);
+                  }});
+
+    registerTool({"collection_set_rule", "Change a collection's rule",
+                  "Changes the search that fills a collection; an empty rule leaves only the books put in by hand. "
+                  "Books put in or taken out by hand stay so.",
+                  schema({{"name", string("The collection's name, or its number.")}, {"rule", string("The new search.")}},
+                         {"name", "rule"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command({"collections", "rule", arguments.value("name").toString(), arguments.value("rule").toString()});
+                  }});
+
+    registerTool({"collection_rename", "Rename or move a collection",
+                  "Gives a collection another name, or with a path (\"Werk/Hydraulica\") moves it there too; the "
+                  "collections inside it go along.",
+                  schema({{"name", string("The collection's path, name, or number.")}, {"new_name", string("Its new name or path.")}},
+                         {"name", "new_name"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command({"collections", "rename", arguments.value("name").toString(), arguments.value("new_name").toString()});
+                  }});
+
+    registerTool({"collection_put", "Put books in a collection or take them out",
+                  "Puts books in a collection by hand (\"include\"), takes them out (\"exclude\"), whatever its "
+                  "rule says, or lets the rule decide for them again (\"rule\"). The books stay in the library either way.",
+                  schema({{"name", string("The collection's name, or its number.")},
+                          {"books", list("The books, by their ids from books_search.", integer("A book's id.", 1))},
+                          {"how", choice("Put in, take out, or follow the rule again.", {"include", "exclude", "rule"})}},
+                         {"name", "books", "how"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      const QString how = arguments.value("how").toString();
+                      QStringList asked{"collections", how == "rule" ? u"follow"_s : how, arguments.value("name").toString()};
+                      for (const QJsonValue &book : arguments.value("books").toArray())
+                          asked << QString::number(book.toInteger());
+                      return command(asked);
+                  }});
+
+    registerTool({"collection_remove", "Remove a collection",
+                  "Takes a collection away. Its books stay in the library and in any other collection; only the "
+                  "collection, its rule and its choices made by hand go.",
+                  schema({{"name", string("The collection's name, or its number.")}}, {"name"}), Destructive,
+                  [](const QJsonObject &arguments) { return command({"collections", "remove", arguments.value("name").toString()}); }});
+
+    registerTool({"collection_format", "A collection's reading format",
+                  "Shows or sets how a collection's books are set on the page, such as justified text for novels or "
+                  "longer lines for technical books. It lies over the library's defaults, and a book's own options "
+                  "lie over it. Options are those of reading_format_get: font_size, font_family, measure, "
+                  "line_height, paragraph_spacing, indent, margins and align.",
+                  schema({{"name", string("The collection's name, or its number.")},
+                          {"options", object("Options to set, such as {\"align\": \"justify\", \"measure\": 72}.")},
+                          {"reset", boolean("Let the collection follow the defaults again.")}},
+                         {"name"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      QStringList asked{"collections", "format", arguments.value("name").toString()};
+                      if (arguments.value("reset").toBool())
+                          asked << "--reset";
+                      const QJsonObject options = arguments.value("options").toObject();
+                      for (auto it = options.begin(); it != options.end(); ++it)
+                          asked << "--set" << it.key() + "=" + (it->isDouble() ? QString::number(it->toInteger()) : it->toString());
+                      return command(asked);
+                  }});
+
+    registerTool({"collection_move", "Put a collection inside another",
+                  "Puts a collection inside another one, or at the top with an empty parent. What is inside it goes along.",
+                  schema({{"name", string("The collection's path, name, or number.")},
+                          {"parent", string("The collection to put it in, by its path; empty for the top.")}},
+                         {"name", "parent"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command({"collections", "move", arguments.value("name").toString(), arguments.value("parent").toString()});
+                  }});
+
+    registerTool({"collections_sort", "Propose where books belong",
+                  "Has Omabook's quick model propose, for each book not yet in a collection with none inside it, "
+                  "a collection there is or a new one anywhere in the tree (named in the style and language of the "
+                  "user's own), from the books' titles, authors, tags and the start of their descriptions, a batch "
+                  "at a time. Books it can't place with confidence come back in \"to_decide\", for the user. Nothing "
+                  "changes: show the numbered proposals to the user, then apply the ones they pick with "
+                  "collections_sort_apply, which takes them from this list without asking the model again.",
+                  schema(), ReadOnly, [](const QJsonObject &) { return command({"collections", "sort"}); }, true});
+
+    registerTool({"collections_sort_apply", "Apply picked collection proposals",
+                  "Applies proposals from the list collections_sort last gave, by their numbers; a proposal can be "
+                  "given another path (a new collection is made for it). The model is not asked again.",
+                  schema({{"pick", list("The proposals, as their numbers, or \"3=Some/Path\" for another path.", string("A number."))},
+                          {"all", boolean("Apply every proposal on the list.")}}),
+                  Changes, [](const QJsonObject &arguments) {
+                      QStringList picked;
+                      for (const QJsonValue &value : arguments.value("pick").toArray())
+                          picked << (value.isDouble() ? QString::number(value.toInteger()) : value.toString());
+                      if (picked.isEmpty() && !arguments.value("all").toBool())
+                          return Result::fail("Pick proposals by their numbers, or give all.");
+                      return command(picked.isEmpty() ? QStringList{"collections", "sort", "--apply"}
+                                                      : QStringList{"collections", "sort", "--pick", picked.join(',')});
+                  }});
     return true;
 }();
 

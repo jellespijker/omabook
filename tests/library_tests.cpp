@@ -15,6 +15,7 @@
 #include "bookops.h"
 #include "calibre.h"
 #include "catalog.h"
+#include "collections.h"
 #include "curation.h"
 #include "fixtures.h"
 #include "importer.h"
@@ -937,7 +938,7 @@ private slots:
             model.setDatabaseName(dir.filePath("fresh/omabook.db"));
             QVERIFY(model.open());
             QSqlQuery tables(model);
-            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND type != 'trigger'");
+            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND name NOT LIKE 'collection%' AND type != 'trigger'");
             while (tables.next())
                 QVERIFY(QSqlQuery(database).exec(tables.value(0).toString()));
             // The columns that came later are not there yet either.
@@ -1721,14 +1722,246 @@ private slots:
             QCOMPARE(library.notes(1, "furthest").section, 1);
             library.setProgress(1, {.section = 2, .fraction = 0.1, .percent = 80, .updated = 0});
             QCOMPARE(library.notes(1, "furthest").section, 2);
+            // From 0.1.4, collections, one inside another: a 0.1.4 library
+            // keeps them; an older one has none and can be given some.
+            if (format >= 11) {
+                const auto stories = library.collectionNamed("Stories");
+                const auto coast = library.collectionNamed("Stories/The Coast");
+                QVERIFY2(stories && coast, qPrintable(dump));
+                QCOMPARE(coast->parent, stories->id);
+                QCOMPARE(stories->of(library.books()).size(), 2);
+                QCOMPARE(coast->of(library.books()).size(), 1);
+                QCOMPARE(stories->format.value("align").toString(), QString("justify"));
+            } else {
+                QVERIFY(library.collections().isEmpty());
+            }
+            QVERIFY(library.addCollection("Later/Inside", "tag:sea"));
+            QCOMPARE(library.collectionNamed("Later")->of(library.books()).size(), 1);
         }
+    }
+
+    // The search language collections are filled by: quotes, -word, OR,
+    // genre: and the other fields, and a rule that can't be read said so.
+    void aRuleIsASearch() {
+        Book book;
+        book.id = 1;
+        book.meta.title = "The Brass Seedling";
+        book.meta.authors = QStringList{"Tobias Lindqvist"};
+        book.meta.tags = QStringList{"Science Fiction", "Clockwork"};
+        book.meta.publisher = "Harbour Press";
+        book.meta.description = "A garden that keeps time.";
+        book.formats = QStringList{"epub"};
+        QVERIFY(book.matches("tag:\"science fiction\""));
+        QVERIFY(!book.matches("tag:\"science fact\""));
+        QVERIFY(book.matches("genre:fiction"));
+        QVERIFY(!book.matches("genre:nonfiction"));
+        QVERIFY(book.matches("-tag:poetry brass"));
+        QVERIFY(!book.matches("-tag:clockwork"));
+        QVERIFY(book.matches("tag:poetry OR author:lindqvist"));
+        QVERIFY(!book.matches("tag:poetry OR author:okafor"));
+        QVERIFY(book.matches("publisher:harbour about:garden format:epub"));
+        QVERIFY(book.matches(""));
+        Book essay;
+        essay.id = 2;
+        essay.meta.title = "Notes on Slow Rivers";
+        essay.meta.tags = QStringList{"Nature", "Essays"};
+        QVERIFY(essay.matches("genre:nonfiction"));
+        QVERIFY(!essay.matches("genre:fiction"));
+        Book history;
+        history.meta.tags = QStringList{"Historical Fiction"};
+        QVERIFY(history.matches("genre:fiction"));
+        QVERIFY(!history.matches("genre:nonfiction"));
+        QVERIFY(Book::searchProblem("auther:x").contains("auther:"));
+        QVERIFY(Book::searchProblem("tag:\"open").contains("quote"));
+        QVERIFY(Book::searchProblem("Dune -tag:x OR genre:fiction").isEmpty());
+    }
+
+    // A collection: its rule, the books put in and taken out by hand (which
+    // win), books that arrive later, names of any kind and language, and
+    // collections inside collections.
+    void collectionsHoldWhatTheirRulesAndHandsSay() {
+        QTemporaryDir dir;
+        Library library(dir.path());
+        QVERIFY(library.open());
+        const auto add = [&](const QString &title, const QStringList &tags) {
+            BookMeta meta;
+            meta.title = title;
+            meta.tags = tags;
+            return library.addEntry(meta, true).id;
+        };
+        const qint64 pipes = add("Pipe Networks", {"Hydraulics"});
+        const qint64 soil = add("Soil Mechanics", {"Engineering"});
+        const qint64 novel = add("De Zeemuur", {"Roman"});
+        const auto study = library.addCollection("Studie/Hydraulica", "tag:hydraulics");
+        QVERIFY(study);
+        const auto werk = library.collectionNamed("Studie");
+        QVERIFY(werk);
+        QCOMPARE(library.collection(*study)->parent, werk->id);
+        QCOMPARE(library.collection(*study)->path, QString("Studie/Hydraulica"));
+        // Unique among neighbours only; "/" is no name.
+        QVERIFY(!library.addCollection("Hydraulica", {}, werk->id));
+        QVERIFY(library.addCollection("Plezier/Hydraulica"));
+        QVERIFY(!library.addCollection("Studie/"));
+        QVERIFY(!library.renameCollection(*study, "a/b"));
+        QVERIFY(!library.collectionNamed("Hydraulica")); // two have that name
+        QVERIFY(!library.addCollection("Bad", "auther:x"));
+
+        // The parent holds what is inside it.
+        const QList<Book> books = library.books();
+        QCOMPARE(library.collection(werk->id)->of(books).size(), 1);
+        // By hand: in, and out, whatever the rule.
+        QVERIFY(library.putInCollection(*study, soil, true));
+        QVERIFY(library.collection(*study)->included.contains(soil));
+        QVERIFY(library.putInCollection(*study, pipes, false));
+        QVERIFY(library.collection(*study)->excluded.contains(pipes));
+        QVERIFY(!library.collection(*study)->contains(*library.book(pipes)));
+        // Taken back in, it follows the rule again: nothing is kept for it.
+        QVERIFY(library.putInCollection(*study, pipes, true));
+        QVERIFY(!library.collection(*study)->excluded.contains(pipes) && !library.collection(*study)->included.contains(pipes));
+        // A parent's own "out" wins over what is inside it.
+        QVERIFY(library.putInCollection(werk->id, soil, false));
+        QVERIFY(!library.collection(werk->id)->contains(*library.book(soil)));
+        QVERIFY(library.collection(*study)->contains(*library.book(soil)));
+        // A new book lands in every collection whose rule finds it.
+        const qint64 later = add("Open Channel Flow", {"Hydraulics"});
+        QVERIFY(library.collection(*study)->contains(*library.book(later)));
+        QVERIFY(library.collection(werk->id)->contains(*library.book(later)));
+        QVERIFY(!library.collection(*study)->contains(*library.book(novel)));
+        QCOMPARE(library.collectionsOf(*library.book(later)).size(), 2);
+
+        // Renaming a parent takes what is inside it along; moving can't make a loop.
+        QVERIFY(library.renameCollection(werk->id, "Werk"));
+        QVERIFY(library.collectionNamed("Werk/Hydraulica"));
+        QVERIFY(!library.setCollectionParent(werk->id, *study));
+        QVERIFY(library.setCollectionParent(*study, 0));
+        QCOMPARE(library.collection(*study)->depth, 0);
+        QVERIFY(library.setCollectionParent(*study, werk->id));
+        // Removing a parent keeps the books and moves what was inside it up.
+        QVERIFY(library.removeCollection(werk->id));
+        QVERIFY(!library.collection(werk->id));
+        QCOMPARE(library.collection(*study)->parent, 0);
+        QCOMPARE(library.books().size(), 4);
+        // A removed name can be made again, empty.
+        const auto again = library.addCollection("Werk");
+        QVERIFY(again);
+        QCOMPARE(*again, werk->id);
+        QVERIFY(library.collection(*again)->excluded.isEmpty());
+        // A book removed from the library leaves its collections too.
+        QVERIFY(library.putInCollection(*again, novel, true));
+        QVERIFY(library.remove(novel));
+        QVERIFY(library.collection(*again)->included.isEmpty());
+    }
+
+    // The AI's sorting, from a stand-in's answer: a collection there is, a
+    // new one anywhere in the tree, and books left for the person; only
+    // books that were asked about, and nothing changed until applied.
+    void theAiProposesCollectionsNewOnesAndWhatIsYoursToDecide() {
+        QTemporaryDir dir;
+        Library library(dir.path());
+        QVERIFY(library.open());
+        const auto add = [&](const QString &title, const QString &tag) {
+            BookMeta meta;
+            meta.title = title;
+            meta.tags = QStringList{tag};
+            return library.addEntry(meta, true).id;
+        };
+        const qint64 kalman = add("Kalman Filtering", "Control");
+        const qint64 pipes = add("Pipe Networks", "Hydraulics");
+        const qint64 pop = add("A Short History of Nearly Everything", "Science");
+        const qint64 placed = add("Learning Python", "Programming");
+        const qint64 werk = *library.addCollection("Werk");
+        const qint64 python = *library.addCollection("Werk/Python", "tag:programming");
+        QList<Collection> collections = library.collections();
+        // Placed books aren't asked about; one in a collection with others inside it is.
+        QVERIFY(library.putInCollection(werk, kalman, true));
+        collections = library.collections();
+        const QList<QList<Book>> batches = Curation::uncollected(library.books(), collections, 2);
+        QCOMPARE(batches.size(), 2);
+        QStringList asked;
+        for (const QList<Book> &batch : batches)
+            for (const Book &book : batch)
+                asked << book.meta.title;
+        QVERIFY(asked.contains("Kalman Filtering"));
+        QVERIFY(!asked.contains("Learning Python"));
+        const QList<Book> books = library.books();
+        const AiRequest request = Curation::collectionsRequest(books, collections, books, {"Werk/Regeltechniek"});
+        QCOMPARE(request.tier, AiRequest::Quick);
+        QVERIFY(request.messages.first().text.contains("Werk/Python"));
+        QVERIFY(request.messages.first().text.contains("Werk/Regeltechniek"));
+        QVERIFY(!request.system.contains("Fiction") && !request.system.contains("Knowledge"));
+
+        const QString answer = QString("Here: [{\"id\": %1, \"collection\": \"Werk/Regeltechniek\", \"new\": true, \"why\": \"control\"},"
+                                       " {\"id\": %2, \"collection\": \"werk/python\"},"
+                                       " {\"id\": %3, \"undecided\": true, \"why\": \"popular science\"},"
+                                       " {\"id\": %4, \"collection\": \"Werk/Hydraulica\", \"new\": true},"
+                                       " {\"id\": 999, \"collection\": \"Werk\"}]")
+                                   .arg(kalman).arg(placed).arg(pop).arg(pipes);
+        const QList<Proposal> proposals = Curation::collectionsFrom(answer, books, collections);
+        QStringList kinds;
+        for (const Proposal &proposal : proposals)
+            kinds << proposal.kind + ":" + proposal.collection;
+        // Learning Python is in Werk/Python already: nothing to propose.
+        QCOMPARE(kinds, (QStringList{"collection:Werk/Regeltechniek", "undecided:", "collection:Werk/Hydraulica"}));
+        QCOMPARE(proposals.first().collectionId, 0);
+        QVERIFY(!library.collectionNamed("Werk/Regeltechniek"));
+        // Applied, a new one is made where it was proposed, once.
+        QVERIFY(Curation::apply(library, proposals.at(0)));
+        QVERIFY(Curation::apply(library, proposals.at(0)));
+        QVERIFY(Curation::apply(library, proposals.at(1)));
+        const auto control = library.collectionNamed("Werk/Regeltechniek");
+        QVERIFY(control);
+        QCOMPARE(control->parent, werk);
+        QVERIFY(control->included.contains(kalman));
+        QCOMPARE(library.collections().size(), 3);
+        Q_UNUSED(python);
+    }
+
+    // Collections travel in a sync: by path and by the books' file hashes,
+    // the one changed last winning, a removal too.
+    void collectionsTravelBetweenLibraries() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("a.epub"), "Shared Book"));
+        Library here(dir.filePath("here")), there(dir.filePath("there"));
+        QVERIFY(here.open() && there.open());
+        const qint64 mine = here.add(dir.filePath("a.epub")).id, theirs = there.add(dir.filePath("a.epub")).id;
+        QVERIFY(mine > 0 && theirs > 0);
+        const qint64 inner = *here.addCollection("Leesvoer/Zomer");
+        QVERIFY(here.putInCollection(inner, mine, true));
+        QVERIFY(here.setCollectionFormat(inner, {{"align", "justify"}}));
+        QCOMPARE(Collections::take(there, Collections::manifest(here)), 2);
+        const auto zomer = there.collectionNamed("Leesvoer/Zomer");
+        QVERIFY(zomer);
+        QVERIFY(zomer->included.contains(theirs));
+        QCOMPARE(zomer->format.value("align").toString(), QString("justify"));
+        // Nothing newer: nothing changes.
+        QCOMPARE(Collections::take(there, Collections::manifest(here)), 0);
+        // Removed there later, it goes here too.
+        QTest::qWait(1100);
+        QVERIFY(there.removeCollection(zomer->id));
+        QCOMPARE(Collections::take(here, Collections::manifest(there)), 1);
+        QVERIFY(!here.collectionNamed("Leesvoer/Zomer"));
+        QVERIFY(here.collectionNamed("Leesvoer"));
+    }
+
+    // A merge carries what the folded book was put in by hand.
+    void aMergedBookKeepsItsCollections() {
+        QTemporaryDir dir;
+        Library library(dir.path());
+        QVERIFY(library.open());
+        BookMeta meta;
+        meta.title = "Twice";
+        const qint64 keep = library.addEntry(meta, true).id, other = library.addEntry(meta, false).id;
+        const qint64 shelf = *library.addCollection("Shelf");
+        QVERIFY(library.putInCollection(shelf, other, true));
+        QVERIFY(library.merge(keep, other));
+        QVERIFY(library.collection(shelf)->included.contains(keep));
     }
 
     void theLayersPointOneWay() {
         // The architecture's one rule, kept by a test: formats and the library
         // know nothing of the window, so the command line, the tests and any
         // future front end can use them alone. Only these files may see QML.
-        const QStringList presentation{"backend.h", "backend.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
+        const QStringList presentation{"backend.h", "backend.cpp", "backendcollections.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp",
                                        "readingmarks.h", "readingmarks.cpp", "pageformat.h", "pageformat.cpp",

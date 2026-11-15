@@ -397,6 +397,33 @@ QT_QPA_PLATFORM=offscreen timeout 120 "$omabook" open --library "$elsewhere" --s
   || fail "the window didn't open on another library"
 cmp -s "$work/config.before" "$config" || fail "opening the window on another library changed config.json: $(diff "$work/config.before" "$config")"
 
+# Collections: nested, named as the user likes, filled by a rule and by
+# hand, listed as a tree, and narrowing list, ask and suggest.
+shelf="$work/Collections"
+"$omabook" add "$work/Sea Story - Ann Sailor.txt" "$work/command.epub" --library "$shelf" > /dev/null 2>&1 || fail "no books for the collections"
+expect "no collections yet" 0 "no collections yet" "$omabook" collections --library "$shelf"
+expect "a nested collection, its parents made too" 0 "Werk/Hydraulica" "$omabook" collections add "Werk/Hydraulica" --rule "title:sea" --library "$shelf"
+expect "a collection with --parent" 0 "Werk/Plezier" "$omabook" collections add Plezier --parent Werk --library "$shelf"
+expect "a name that two collections share is refused" 1 "already" "$omabook" collections add Hydraulica --parent Werk --library "$shelf"
+expect "a rule it can't read is refused" 1 "auther:" "$omabook" collections rule Werk/Plezier "auther:x" --library "$shelf"
+expect "a book put in by hand" 0 "Werk/Plezier" "$omabook" collections include Werk/Plezier 2 --library "$shelf"
+expect "the tree, indented" 0 "  Hydraulica" "$omabook" collections --library "$shelf"
+expect "a parent holds what is inside it" 0 '"count": 2' "$omabook" collections show Werk --json --library "$shelf"
+expect "list keeps to a collection" 0 "Command Book" "$omabook" list --collection Werk/Plezier --library "$shelf"
+"$omabook" list --collection Werk/Hydraulica --library "$shelf" | grep -q "Command Book" && fail "list --collection showed a book outside it"
+expect "list names a collection that isn't there" 1 "no collection called" "$omabook" list --collection Nowhere --library "$shelf"
+expect "a collection renamed with a path moves, what is inside along" 0 "Studie" "$omabook" collections rename Werk Studie --library "$shelf"
+expect "found by its new path" 0 "Hydraulica" "$omabook" collections show Studie/Hydraulica --json --library "$shelf"
+expect "moved to the top" 0 "Plezier" "$omabook" collections move Studie/Plezier "" --library "$shelf"
+expect "a collection's own reading format" 0 "justify" "$omabook" collections format Plezier --set align=justify --library "$shelf"
+expect "a format value out of bounds is refused" 1 "40 to 90" "$omabook" collections format Plezier --set measure=10 --library "$shelf"
+expect "taken out by hand" 0 "0 books" "$omabook" collections exclude Plezier 2 --library "$shelf"
+expect "sorting needs the AI, and says so" 1 "" "$omabook" collections sort --library "$shelf"
+expect "asking about one collection needs the AI too" 1 "" "$omabook" ask all "Which?" --collection Plezier --library "$shelf"
+expect "removed, its books stay" 0 "stay in the library" "$omabook" collections remove Studie --library "$shelf"
+expect "what was inside it moved up" 0 "Hydraulica" "$omabook" collections --library "$shelf"
+expect "every book is still there" 0 "Command Book" "$omabook" list --library "$shelf"
+
 expect "the skill is bundled" 0 "omabook list --json" "$omabook" skill
 expect "the skill installs" 0 "Installed" "$omabook" skill install
 [ -f "$HOME/.agents/skills/omabook/SKILL.md" ] && [ -L "$HOME/.claude/skills/omabook" ] || fail "skill install left no skill"

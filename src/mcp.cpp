@@ -400,12 +400,19 @@ QList<Tool> coreTools() {
                   "reading state. Every word must match. Returns each book's id for the other tools.",
                   schema({{"query", string("The search; empty or missing lists every book.")},
                           {"limit", integer("How many books to return at most; 50 when not given, 200 at most.", 1)},
-                          {"offset", integer("How many matching books to skip, to get the next page; 0 when not given.", 0)}}),
+                          {"offset", integer("How many matching books to skip, to get the next page; 0 when not given.", 0)},
+                          {"collection", string("Only the books of this collection (collections_list names them).")}}),
                   ReadOnly, [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments, false);
                       if (!at)
                           return Result::fail(at.error);
-                      const QList<Book> books = at.library->books(arguments.value("query").toString());
+                      QList<Book> books = at.library->books(arguments.value("query").toString());
+                      if (arguments.contains("collection")) {
+                          const auto collection = at.library->collectionNamed(arguments.value("collection").toString());
+                          if (!collection)
+                              return Result::fail("There is no collection called " + arguments.value("collection").toString() + ".");
+                          books = collection->of(books);
+                      }
                       const int offset = arguments.value("offset").toInt(0);
                       const int limit = qMin(arguments.value("limit").toInt(50), 200);
                       QJsonArray page;
@@ -960,7 +967,10 @@ QList<Tool> coreTools() {
     tools << Tool{"ask_library", "Ask Omabook's AI about the library",
                   "Has the model Omabook is set up with answer a question about the library as a whole: what it "
                   "holds, what each book is about, how far each was read and the notes kept on them.",
-                  schema({{"question", string("What to ask.")}, {"model", string(modelIs)}}, {"question"}), ReadOnly,
+                  schema({{"question", string("What to ask.")}, {"model", string(modelIs)},
+                          {"collection", string("Ask only about the books of this collection.")}},
+                         {"question"}),
+                  ReadOnly,
                   [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments, false);
                       if (!at)
@@ -968,7 +978,14 @@ QList<Tool> coreTools() {
                       const Ai::ModelOverride forThisCall(arguments.value("model").toString());
                       QString answer, error;
                       const QString question = arguments.value("question").toString();
-                      if (!BookOps::ask(Curation::libraryQuestion(BookOps::booksWithNotes(*at.library), question,
+                      QList<Curation::BookNotes> books = BookOps::booksWithNotes(*at.library);
+                      if (arguments.contains("collection")) {
+                          const auto collection = at.library->collectionNamed(arguments.value("collection").toString());
+                          if (!collection)
+                              return Result::fail("There is no collection called " + arguments.value("collection").toString() + ".");
+                          books.removeIf([&](const Curation::BookNotes &entry) { return !collection->contains(entry.book); });
+                      }
+                      if (!BookOps::ask(Curation::libraryQuestion(books, question,
                                                                   GraphContext::picture(*at.library, question)),
                                         &answer, &error))
                           return Result::fail(error);
@@ -982,7 +999,8 @@ QList<Tool> coreTools() {
                   "up on the reading sites: whether it exists, what readers rate it, and whether it is already owned "
                   "or on the to-read list.",
                   schema({{"check", boolean("Look each suggestion up on the reading sites. True when not given.")},
-                          {"model", string(modelIs)}}),
+                          {"model", string(modelIs)},
+                          {"collection", string("Go only by the books of this collection, by its path or name.")}}),
                   ReadOnly,
                   [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments, false);
@@ -994,6 +1012,8 @@ QList<Tool> coreTools() {
                       // The command is another process, so the model goes along as its option.
                       if (!arguments.value("model").toString().trimmed().isEmpty())
                           asked << "--model" << arguments.value("model").toString().trimmed();
+                      if (!arguments.value("collection").toString().trimmed().isEmpty())
+                          asked << "--collection" << arguments.value("collection").toString().trimmed();
                       return command(asked);
                   },
                   true};

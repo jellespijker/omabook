@@ -256,6 +256,10 @@ private slots:
             {"graph_copy_scope", "graph"}, {"graph_remove_scope", "graph"}, {"graph_reading_log", "graph"}, {"graph_connect", "graph"},
             {"themes_list", "theme"}, {"theme_use", "theme"},
             {"reading_format_get", "format"}, {"reading_format_set", "format"},
+            {"collections_list", "collections"}, {"collection_get", "collections"}, {"collection_add", "collections"},
+            {"collection_set_rule", "collections"}, {"collection_rename", "collections"}, {"collection_move", "collections"},
+            {"collection_put", "collections"}, {"collection_remove", "collections"}, {"collection_format", "collections"},
+            {"collections_sort", "collections"}, {"collections_sort_apply", "collections"},
         };
         const Machine machine;
         Server server(machine);
@@ -984,6 +988,46 @@ private slots:
         QCOMPARE(server.data("reading_format_set", {{"pages", "auto"}}).value("pages").toString(), QString("auto"));
         QVERIFY(server.failure("reading_format_set", {{"measure", 30}}).contains("40 to 90"));
         QVERIFY(server.failure("reading_format_set", {{"book", id}, {"pages", "3"}}).contains("every book"));
+        QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
+    }
+    // An agent keeps collections, nested and named as the user likes, and
+    // searches, asks and suggests within one.
+    void anAgentKeepsCollections() {
+        const Machine machine;
+        QVERIFY(Fixtures::epub(machine.dir.filePath("pipes.epub"), "Pipe Networks"));
+        QVERIFY(Fixtures::epub(machine.dir.filePath("sea.epub"), "The Sea Wall"));
+        Server server(machine);
+        const QJsonArray added = server.data("book_add", {{"paths", QJsonArray{machine.dir.filePath("pipes.epub"),
+                                                                                 machine.dir.filePath("sea.epub")}}})
+                                     .value("added").toArray();
+        const qint64 pipes = added.at(0).toObject().value("id").toInteger(), sea = added.at(1).toObject().value("id").toInteger();
+        QVERIFY(pipes > 0 && sea > 0);
+        server.data("collection_add", {{"name", "Werk/Hydraulica"}, {"rule", "title:pipe"}});
+        server.data("collection_add", {{"name", "Plezier"}});
+        server.data("collection_put", {{"name", "Plezier"}, {"books", QJsonArray{sea}}, {"how", "include"}});
+        // The tree, read from the top.
+        QStringList paths;
+        for (const QJsonValue &value : server.data("collections_list").value("result").toArray())
+            paths << value.toObject().value("path").toString();
+        QCOMPARE(paths, (QStringList{"Werk", "Werk/Hydraulica", "Plezier"}));
+        const QJsonObject werk = server.data("collection_get", {{"name", "Werk"}});
+        QCOMPARE(werk.value("count").toInt(), 1);
+        QCOMPARE(werk.value("books").toArray().first().toObject().value("id").toInteger(), pipes);
+        // A search within one collection.
+        QCOMPARE(server.data("books_search", {{"collection", "Plezier"}}).value("total").toInt(), 1);
+        QVERIFY(server.failure("books_search", {{"collection", "Nowhere"}}).contains("Nowhere"));
+        // Moved and renamed with a path, what is inside goes along.
+        server.data("collection_rename", {{"name", "Werk"}, {"new_name", "Studie"}});
+        QCOMPARE(server.data("collection_get", {{"name", "Studie/Hydraulica"}}).value("count").toInt(), 1);
+        server.data("collection_move", {{"name", "Plezier"}, {"parent", "Studie"}});
+        QCOMPARE(server.data("collection_get", {{"name", "Studie"}}).value("count").toInt(), 2);
+        // Its own reading format.
+        const QJsonObject format = server.data("collection_format", {{"name", "Studie"}, {"options", QJsonObject{{"measure", 80}}}});
+        QCOMPARE(format.value("format").toObject().value("measure").toInt(), 80);
+        server.data("collection_put", {{"name", "Studie/Plezier"}, {"books", QJsonArray{sea}}, {"how", "rule"}});
+        QCOMPARE(server.data("collection_get", {{"name", "Studie/Plezier"}}).value("count").toInt(), 0);
+        server.data("collection_remove", {{"name", "Studie/Hydraulica"}});
+        QVERIFY(server.failure("collection_get", {{"name", "Studie/Hydraulica"}}).contains("no collection"));
         QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
     }
 };
