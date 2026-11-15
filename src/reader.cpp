@@ -13,6 +13,7 @@
 #include "backend.h"
 #include "formatreaders.h"
 #include "formats.h"
+#include "pagelayout.h"
 
 void BookImageProvider::setDocument(std::shared_ptr<const Document> document) {
     QMutexLocker locker(&m_lock);
@@ -360,32 +361,12 @@ void Reader::goToPlace(int section, double fraction) {
 }
 
 QVariantList Reader::pageBreaks(QQuickTextDocument *chapter, double height) const {
-    QVariantList breaks{0.0};
-    if (!chapter || !chapter->textDocument() || height <= 0)
-        return breaks << 0.0;
-    QTextDocument *document = chapter->textDocument();
-    QAbstractTextDocumentLayout *layout = document->documentLayout();
-    double pageTop = 0;
-    for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
-        const QRectF bounds = layout->blockBoundingRect(block);
-        const QTextLayout *lines = block.layout();
-        for (int index = 0; index < lines->lineCount(); ++index) {
-            const QTextLine line = lines->lineAt(index);
-            const double top = bounds.top() + line.y();
-            // A line that would cross the foot of the page starts the next
-            // one. One taller than a page (a picture) gets a page to itself
-            // and is cut, which beats never showing its lower half.
-            if (top + line.height() - pageTop > height && top > pageTop) {
-                breaks << top;
-                pageTop = top;
-            }
-            while (top + line.height() - pageTop > height) {
-                pageTop += height;
-                breaks << pageTop;
-            }
-        }
-    }
-    return breaks << qMax(pageTop + 1, layout->documentSize().height());
+    if (!chapter || !chapter->textDocument())
+        return {0.0, 0.0};
+    QVariantList breaks;
+    for (const double at : PageLayout::pageBreaks(*chapter->textDocument(), height))
+        breaks << at;
+    return breaks;
 }
 
 int Reader::anchorPosition(QQuickTextDocument *chapter, const QString &anchor) const {

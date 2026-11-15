@@ -1,4 +1,8 @@
+#include <QAbstractTextDocumentLayout>
 #include <QElapsedTimer>
+#include <QFontMetricsF>
+#include <QTextBlock>
+#include <QTextLayout>
 #include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QTextDocument>
@@ -11,6 +15,7 @@
 #include "fixtures.h"
 #include "graph.h"
 #include "graphbuilder.h"
+#include "pagelayout.h"
 #include "prompts.h"
 #include "reader.h"
 #include "readingmarks.h"
@@ -413,6 +418,200 @@ private slots:
         // Generous, so a busy machine doesn't fail it; it runs off the
         // window's thread anyway.
         QVERIFY2(matched < 1500'000'000, qPrintable(QString::number(matched / 1e6)));
+    }
+
+    // How many pages stand side by side, from the room the text has: as
+    // many as each keep most of the measure, never one under the minimum,
+    // never more than three, and not flickering at the boundary.
+    void thePagesSideBySideFollowTheRoom() {
+        PageLayout::Space space;
+        space.characterWidth = 9;
+        space.measure = 66;
+        space.margin = 56;
+        space.gutter = 57;
+        const auto at = [&space](double width, int wanted = 0, int previous = 0) {
+            PageLayout::Space room = space;
+            room.available = width;
+            return PageLayout::columns(room, wanted, previous);
+        };
+        // Automatic, across every width from a narrow tile to a wide screen.
+        int before = 1;
+        for (double width = 360; width <= 3200; width += 10) {
+            const PageLayout::Columns shown = at(width);
+            QVERIFY2(shown.count >= before, qPrintable(QString::number(width)));
+            QVERIFY(shown.count >= 1 && shown.count <= PageLayout::mostColumns);
+            QCOMPARE(shown.count, shown.automatic);
+            // No page wider than the measure; none of a spread under the minimum.
+            QVERIFY(shown.width <= 66 * 9 + 1e-6);
+            if (shown.count > 1)
+                QVERIFY2(shown.width >= 53 * 9 - 1e-6, qPrintable(QString::number(width)));
+            before = shown.count;
+        }
+        // Two pages from where each gets 53 characters (80% of 66), three
+        // from where each of three does.
+        QCOMPARE(at(1120).count, 1);
+        QCOMPARE(at(1130).count, 2);
+        QCOMPARE(at(1650).count, 2);
+        QCOMPARE(at(1660).count, 3);
+        // A single page with room to spare keeps its measure: the rest is margin.
+        QCOMPARE(at(1000).width, 66.0 * 9);
+        // A narrow window: one page, as wide as there is room for.
+        QCOMPARE(at(500).width, 500.0 - 2 * 56);
+        // Once two, two until each page would lose three characters more.
+        QCOMPARE(at(1110, 0, 2).count, 2);
+        QCOMPARE(at(1080, 0, 2).count, 2);
+        QCOMPARE(at(1060, 0, 2).count, 1);
+        QCOMPARE(at(1110, 0, 1).count, 1);
+        QCOMPARE(at(1640, 0, 3).count, 3);
+        QCOMPARE(at(1600, 0, 3).count, 3);
+        QCOMPARE(at(1570, 0, 3).count, 2);
+        // A pane beside the page takes from the room, as a narrower window does.
+        QCOMPARE(at(1500).count, 2);
+        QCOMPARE(at(1500 - 400).count, 1);
+        QCOMPARE(at(2000).count, 3);
+        QCOMPARE(at(2000 - 480).count, 2);
+        // A choice is shown when each page keeps the minimum (45), even
+        // where Automatic would show fewer ...
+        QCOMPARE(at(1000, 2).count, 2);
+        QVERIFY(at(1000, 2).honoured);
+        QCOMPARE(at(1000, 2).automatic, 1);
+        QCOMPARE(at(2600, 1).count, 1);
+        QCOMPARE(at(2600, 1).width, 66.0 * 9);
+        // ... and otherwise the most that do, which says so.
+        const PageLayout::Columns three = at(1300, 3);
+        QCOMPARE(three.count, 2);
+        QCOMPARE(three.most, 2);
+        QVERIFY(!three.honoured);
+        QCOMPARE(at(900, 2).count, 1);
+        QVERIFY(!at(900, 2).honoured);
+        QCOMPARE(at(1500, 3).count, 3);
+        QVERIFY(at(1500, 3).width >= 45 * 9);
+        // Lines asked to be long aren't cut short for another page: at 90
+        // characters a page needs 72 before there are two.
+        space.measure = 90;
+        QCOMPARE(at(1450).count, 1);
+        QCOMPARE(at(1480).count, 2);
+        QVERIFY(at(1480).width >= 72 * 9);
+        // Lines asked to be shorter than the minimum are the minimum.
+        space.measure = 40;
+        QCOMPARE(at(1000).count, 2);
+        QCOMPARE(at(1000).width, 40.0 * 9);
+        // A width of nothing yet is one page of nothing.
+        QCOMPARE(at(0).count, 1);
+        QCOMPARE(at(0).width, 0.0);
+    }
+
+    // The measure is characters of the font: a line of it holds about as
+    // many characters of prose, at any size and in any font.
+    void theMeasureIsCharactersOfTheFont() {
+        const QString prose = "The ferry left the harbour at dawn, and by the time the fog lifted the island was only a grey "
+                              "line behind them, low and quiet, with the lighthouse standing over it like a pin in a map.";
+        const QStringList families{QString(), "Liberation Serif", "Liberation Sans"};
+        for (const QString &family : families) {
+            double previous = 0;
+            for (const int size : {12, 16, 19, 24, 32, 48}) {
+                const QFont font = PageLayout::bodyFont(family, size);
+                const double character = PageLayout::characterWidth(font);
+                // Near half an em, as book faces are, and growing with the size.
+                QVERIFY2(character > size * 0.35 && character < size * 0.7, qPrintable(QString("%1 %2: %3").arg(family).arg(size).arg(character)));
+                QVERIFY(character > previous);
+                previous = character;
+                // A line of 66 characters of prose is as wide as the measure
+                // says, within a few percent.
+                const double measured = QFontMetricsF(font).horizontalAdvance(prose) / prose.size();
+                QVERIFY2(qAbs(measured / character - 1) < 0.08, qPrintable(QString("%1 %2: %3 vs %4").arg(family).arg(size).arg(measured).arg(character)));
+            }
+        }
+        // A size twice as large is a character twice as wide.
+        const double small = PageLayout::characterWidth(PageLayout::bodyFont({}, 16));
+        const double large = PageLayout::characterWidth(PageLayout::bodyFont({}, 32));
+        QVERIFY(qAbs(large / small - 2) < 0.1);
+        // The gutter grows with the type, within bounds.
+        QCOMPARE(PageLayout::gutter(19), 57.0);
+        QCOMPARE(PageLayout::gutter(10), 40.0);
+        QCOMPARE(PageLayout::gutter(48), 120.0);
+        // An older width in pixels, as characters: half the size to one.
+        QCOMPARE(PageLayout::measureFromPixels(720, 19), 76);
+        QCOMPARE(PageLayout::measureFromPixels(560, 20), 56);
+        QCOMPARE(PageLayout::measureFromPixels(320, 19), 40);
+        QCOMPARE(PageLayout::measureFromPixels(1600, 19), 90);
+    }
+
+    // Pages are cut between lines, never through one; a paragraph leaves
+    // no line alone at the foot or the head of a page; a heading goes over
+    // with what follows it.
+    void pagesAreCutBetweenLinesAndKeepHeadingsWithTheirText() {
+        QString html;
+        const QStringList words{"harbour", "lantern", "a", "quiet", "the", "salt", "rope", "of", "morning", "and", "gull", "over"};
+        for (int i = 0; i < 80; ++i) {
+            if (i % 9 == 4)
+                html += QString("<h2>Part %1</h2>").arg(i);
+            QString paragraph;
+            // Paragraphs of one line to a dozen.
+            for (int w = 0; w < 6 + (i * 37) % 110; ++w)
+                paragraph += words.at((i + w * 5) % words.size()) + " ";
+            html += "<p>" + paragraph + "</p>";
+        }
+        QTextDocument document;
+        QFont font = PageLayout::bodyFont({}, 16);
+        document.setDefaultFont(font);
+        document.setHtml(html);
+        document.setTextWidth(320);
+        QAbstractTextDocumentLayout *layout = document.documentLayout();
+        layout->documentSize();
+        struct Line { double top, bottom; int index, count; bool heading; };
+        QList<Line> lines;
+        for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+            const double top = layout->blockBoundingRect(block).top();
+            for (int i = 0; i < block.layout()->lineCount(); ++i) {
+                const QTextLine line = block.layout()->lineAt(i);
+                lines.append({top + line.y(), top + line.y() + line.height(), i, block.layout()->lineCount(), block.blockFormat().headingLevel() > 0});
+            }
+        }
+        QVERIFY(lines.size() > 200);
+        int shortened = 0;
+        for (double height = 160; height <= 700; height += 23) {
+            const QList<double> breaks = PageLayout::pageBreaks(document, height);
+            QVERIFY(breaks.size() > 2);
+            QCOMPARE(breaks.first(), 0.0);
+            for (qsizetype page = 1; page + 1 < breaks.size(); ++page) {
+                const double cut = breaks.at(page);
+                QVERIFY(cut > breaks.at(page - 1));
+                // The cut is where a line starts.
+                const auto first = std::ranges::find_if(lines, [cut](const Line &line) { return qAbs(line.top - cut) < 0.01; });
+                QVERIFY2(first != lines.end(), qPrintable(QString("%1 at %2").arg(height).arg(cut)));
+                const qsizetype at = first - lines.begin();
+                QVERIFY(at > 0);
+                const Line &last = lines.at(at - 1);
+                // Every line of the page fits on it.
+                QVERIFY(last.bottom - breaks.at(page - 1) <= height + 0.01);
+                // No heading at the foot of a page.
+                QVERIFY2(!last.heading, qPrintable(QString("%1 at %2").arg(height).arg(cut)));
+                // No paragraph cut to leave a line alone on either side.
+                if (first->index > 0) {
+                    QVERIFY2(first->index >= 2, qPrintable(QString("orphan: %1 at %2").arg(height).arg(cut)));
+                    QVERIFY2(first->count - first->index >= 2, qPrintable(QString("widow: %1 at %2").arg(height).arg(cut)));
+                }
+                // The page is shorter than it could be only to keep those.
+                if (lines.at(at).bottom - breaks.at(page - 1) <= height)
+                    ++shortened;
+            }
+        }
+        // The rules did move cuts (the text is made to need them).
+        QVERIFY(shortened > 0);
+        // A picture taller than a page is cut through, a page at a time.
+        QTextDocument tall;
+        tall.setHtml("<p>Before.</p><img src=\"data:,\" width=\"200\" height=\"900\"><p>After.</p>");
+        tall.setTextWidth(320);
+        const QList<double> cut = PageLayout::pageBreaks(tall, 300);
+        QVERIFY(cut.size() >= 5);
+        for (qsizetype i = 1; i < cut.size(); ++i)
+            QVERIFY(cut.at(i) - cut.at(i - 1) <= 300 + 0.01);
+        // A paragraph that asks for a page of its own starts one.
+        QTextDocument forced;
+        forced.setHtml("<p>One.</p><p style=\"page-break-before: always\">Two.</p>");
+        forced.setTextWidth(320);
+        QCOMPARE(PageLayout::pageBreaks(forced, 600).size(), 3);
     }
 };
 
