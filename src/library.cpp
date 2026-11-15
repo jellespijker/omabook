@@ -375,6 +375,40 @@ bool Library::open(QString *error) {
          "MAX(40, MIN(90, CAST(ROUND(json_extract(options, '$.line_width') * 2.0 "
          "/ MAX(1, COALESCE(json_extract(options, '$.font_size'), 19))) AS INTEGER)))), '$.line_width') "
          "WHERE json_valid(options) AND json_type(options, '$.line_width') IN ('integer', 'real')"},
+        // When each thing of the knowledge graph was revealed (graph.h):
+        // every summary a thing had and every other name it was given, each
+        // with its place in the book (none for one put in by hand) and a few
+        // words of the text there to find the spot by, and those words for
+        // where a thing was met and a relation learned too. What the graph
+        // held before counts as known from where each thing was first met.
+        // And the furthest each book was ever read, which the database keeps
+        // itself as the reading place moves: going back to an earlier page
+        // doesn't make what was read since a surprise again.
+        {"CREATE TABLE graph_facts (id INTEGER PRIMARY KEY AUTOINCREMENT, "
+         "node_id INTEGER NOT NULL REFERENCES graph_nodes(id) ON DELETE CASCADE, kind TEXT NOT NULL, value TEXT NOT NULL, "
+         "book_id INTEGER REFERENCES books(id) ON DELETE CASCADE, section INTEGER NOT NULL DEFAULT 0, "
+         "fraction REAL NOT NULL DEFAULT 0, anchor TEXT NOT NULL DEFAULT '')",
+         "CREATE INDEX graph_facts_node ON graph_facts(node_id)",
+         "ALTER TABLE graph_edges ADD COLUMN anchor TEXT NOT NULL DEFAULT ''",
+         "ALTER TABLE graph_seen ADD COLUMN anchor TEXT NOT NULL DEFAULT ''",
+         "INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction) SELECT n.id, 'summary', n.summary, "
+         "s.book_id, s.section, s.fraction FROM graph_nodes AS n JOIN graph_seen AS s ON s.node_id = n.id WHERE n.summary <> ''",
+         "INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction) SELECT n.id, 'alias', a.value, "
+         "s.book_id, s.section, s.fraction FROM graph_nodes AS n JOIN graph_seen AS s ON s.node_id = n.id, "
+         "json_each(CASE WHEN json_valid(n.data) THEN n.data ELSE '{}' END, '$.aliases') AS a WHERE a.type = 'text'",
+         "CREATE TRIGGER graph_facts_insert_counted AFTER INSERT ON graph_facts BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_facts_update_counted AFTER UPDATE ON graph_facts BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "CREATE TRIGGER graph_facts_delete_counted AFTER DELETE ON graph_facts BEGIN UPDATE library_state SET value = value + 1 WHERE key = 'graph'; END",
+         "INSERT OR REPLACE INTO notes (book_id, kind, section, fraction, text, updated) "
+         "SELECT book_id, 'furthest', section, fraction, '', updated FROM progress",
+         "CREATE TRIGGER progress_furthest_insert AFTER INSERT ON progress BEGIN "
+         "INSERT OR REPLACE INTO notes (book_id, kind, section, fraction, text, updated) "
+         "SELECT NEW.book_id, 'furthest', NEW.section, NEW.fraction, '', NEW.updated WHERE NOT EXISTS (SELECT 1 FROM notes "
+         "WHERE book_id = NEW.book_id AND kind = 'furthest' AND (section > NEW.section OR (section = NEW.section AND fraction >= NEW.fraction))); END",
+         "CREATE TRIGGER progress_furthest_update AFTER UPDATE ON progress BEGIN "
+         "INSERT OR REPLACE INTO notes (book_id, kind, section, fraction, text, updated) "
+         "SELECT NEW.book_id, 'furthest', NEW.section, NEW.fraction, '', NEW.updated WHERE NOT EXISTS (SELECT 1 FROM notes "
+         "WHERE book_id = NEW.book_id AND kind = 'furthest' AND (section > NEW.section OR (section = NEW.section AND fraction >= NEW.fraction))); END"},
     };
 
     // Asked and done with before anything changes: a statement left open
@@ -786,6 +820,7 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
             exec("DELETE FROM graph_seen WHERE book_id = ? AND node_id IN (SELECT node_id FROM graph_seen WHERE book_id = ?)", both);
         exec("UPDATE OR IGNORE graph_seen SET book_id = ? WHERE book_id = ?", both);
         exec("UPDATE graph_edges SET book_id = ? WHERE book_id = ?", both);
+        exec("UPDATE graph_facts SET book_id = ? WHERE book_id = ?", both);
         exec("UPDATE reading_log SET from_percent = MIN(from_percent, (SELECT o.from_percent FROM reading_log AS o WHERE o.book_id = ? "
              "AND o.day = reading_log.day)), to_percent = MAX(to_percent, (SELECT o.to_percent FROM reading_log AS o WHERE "
              "o.book_id = ? AND o.day = reading_log.day)) WHERE book_id = ? AND day IN (SELECT day FROM reading_log WHERE book_id = ?)",
@@ -810,6 +845,7 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
             exec("UPDATE OR IGNORE graph_edges SET source = ? WHERE source = ?", nodes);
             exec("UPDATE OR IGNORE graph_edges SET target = ? WHERE target = ?", nodes);
             exec("UPDATE OR IGNORE graph_seen SET node_id = ? WHERE node_id = ?", nodes);
+            exec("UPDATE graph_facts SET node_id = ? WHERE node_id = ?", nodes);
             exec("UPDATE graph_nodes SET summary = (SELECT summary FROM graph_nodes WHERE id = ?) WHERE id = ? AND summary = ''",
                  {node, keptNode});
             // What is left of it (edges both nodes had) goes with it.

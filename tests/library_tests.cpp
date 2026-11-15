@@ -1628,6 +1628,35 @@ private slots:
                 QVERIFY(library.bookFormat(1).isEmpty());
             QVERIFY(library.setBookFormat(2, {{"line_height", 180}}));
             QCOMPARE(library.bookFormat(2).value("line_height").toInt(), 180);
+            // From 0.1.4, what was learned of each thing is kept with the
+            // moment it was revealed: in an older library, from where the
+            // thing was first met. And how far each book was ever read.
+            const auto summaryOf = [&](const GraphPlace &at) {
+                for (const GraphNode &node : graph.ofBook(1, at).nodes)
+                    if (node.id == ann)
+                        return node.summary;
+                return QString();
+            };
+            const QList<GraphFact> facts = graph.facts(ann);
+            QVERIFY2(std::ranges::any_of(facts, [](const GraphFact &fact) {
+                         return fact.kind == "summary" && fact.value == "Walks the sea wall." && fact.revealed.place.bookId == 1
+                                && fact.revealed.place.section == 1;
+                     }), qPrintable(dump));
+            QCOMPARE(summaryOf({1, 1, 0.5}), QString("Walks the sea wall."));
+            QCOMPARE(library.notes(1, "furthest").section, 1);
+            // A later summary is known from where it was revealed, and not before.
+            if (format >= 10) {
+                const qint64 later = graph.named({}, "character", "Ann");
+                QVERIFY(std::ranges::any_of(graph.facts(later), [](const GraphFact &fact) { return !fact.revealed.anchor.isEmpty(); }));
+            }
+            Graph(library).learn(ann, "summary", "Walks the sea wall, and keeps the lamps.", GraphMoment{{1, 1, 0.8}, "The lamps"});
+            QCOMPARE(summaryOf({1, 1, 0.6}), QString("Walks the sea wall."));
+            QCOMPARE(summaryOf({1, 1, 0.9}), QString("Walks the sea wall, and keeps the lamps."));
+            // Going back to an earlier page leaves the furthest place where it was.
+            library.setProgress(1, {.section = 0, .fraction = 0.2, .percent = 10, .updated = 0});
+            QCOMPARE(library.notes(1, "furthest").section, 1);
+            library.setProgress(1, {.section = 2, .fraction = 0.1, .percent = 80, .updated = 0});
+            QCOMPARE(library.notes(1, "furthest").section, 2);
         }
     }
 

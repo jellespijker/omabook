@@ -1,9 +1,11 @@
 #pragma once
 
+#include <QHash>
 #include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -16,8 +18,11 @@
 // that they touch. Nodes are things, edges say how two things relate.
 //
 // Every fact remembers where it was learned: which book, and how far into
-// it. The graph of a book is therefore never ahead of its reader, and asking
-// for it "up to" a place leaves out what comes after.
+// it, with a few words of the text there to find the spot again. That goes
+// for what is said of a thing too: each summary it had, and each name it was
+// given, is kept with the moment it was revealed. The graph of a book is
+// therefore never ahead of its reader, and asking for it "up to" a place
+// leaves out what comes after, down to a summary that changed later.
 //
 // A scope is a graph of its own. The empty scope is the general graph, of
 // everything read. A made-up world (a story being written) keeps its own
@@ -33,6 +38,29 @@ struct GraphPlace {
     constexpr bool notAfter(const GraphPlace &other) const noexcept {
         return std::pair{section, fraction} <= std::pair{other.section, other.fraction};
     }
+};
+
+// A moment of a book: a place, and a few words of the text there (the
+// sentence a fact came from, cut short) that find the very spot again.
+// Only the words needed to find it are kept, never more of the text.
+struct GraphMoment {
+    GraphPlace place;
+    QString anchor;
+};
+
+// One thing learned of a node, with the moment it was revealed: what is
+// said of it ("summary"), or another name it goes by ("alias"). A node's
+// summary changes as its book goes on, and each version is kept here, so
+// what was known at any place is known later too. A fact of no book (put
+// in by hand, or from another source) has a place whose bookId is 0.
+struct GraphFact {
+    qint64 id = 0;
+    qint64 node = 0;
+    QString kind;   // "summary" or "alias"
+    QString value;
+    GraphMoment revealed;
+
+    QJsonObject toJson() const;
 };
 
 struct GraphNode {
@@ -62,6 +90,7 @@ struct GraphEdge {
     QString kind;
     QString note;
     GraphPlace learned; // bookId 0 when it comes from no book
+    QString anchor;     // a few words of the text where it was learned, if known
 
     // A connection across books: between a thing of one book and a thing of
     // another (or a real-world work both point at), noticed while reading
@@ -74,6 +103,26 @@ struct GraphEdge {
 
     QJsonObject toJson() const;
 };
+
+// One step of a node's timeline: something revealed of it, and where.
+struct GraphReveal {
+    // "met" (where it first shows in a book), "summary", "alias" or "relation".
+    QString what;
+    // The summary or the name; for a relation, how it reads from the node
+    // ("mentor of", with `other` at its far end, or `other` first when the
+    // relation points at the node).
+    QString text;
+    GraphMoment revealed;
+    qint64 edge = 0, other = 0;
+    QString otherName;
+    bool outgoing = true;
+
+    QJsonObject toJson() const;
+};
+
+// Whether what was revealed at a place is known to whoever asks: a reader
+// at some place of a book, say, knows what came before it.
+using GraphKnown = std::function<bool(const GraphPlace &)>;
 
 // Some nodes and the edges among them.
 struct GraphView {
@@ -103,13 +152,22 @@ public:
     // Adds a thing, or brings the one already known by that name (or one of
     // its aliases) in the same scope and of the same kind up to date: a
     // summary given replaces the old, data is merged, aliases are added to.
-    // `seen` is where it was met; the earliest place per book is kept.
+    // `seen` is where it was met, with `anchor` the words there that name it;
+    // the earliest place per book is kept. The summary and the names new to
+    // it are kept as facts (see facts()) revealed at `revealed`, or where it
+    // was met when that isn't given.
     qint64 upsert(const QString &scope, const QString &kind, const QString &name, const QString &summary = {},
-                  const QJsonObject &data = {}, const std::optional<GraphPlace> &seen = std::nullopt);
+                  const QJsonObject &data = {}, const std::optional<GraphPlace> &seen = std::nullopt,
+                  const QString &anchor = {}, const std::optional<GraphMoment> &revealed = std::nullopt);
     // Relates two things; saying the same again only updates the note, and
-    // keeps the earlier place it was learned at.
+    // keeps the earlier place it was learned at (with its anchor).
     qint64 link(qint64 source, qint64 target, const QString &kind, const QString &note = {},
-                const std::optional<GraphPlace> &learned = std::nullopt);
+                const std::optional<GraphPlace> &learned = std::nullopt, const QString &anchor = {});
+    // Keeps a fact of a node: a summary (which becomes its summary now) or
+    // another name (which it goes by from now on), revealed at a moment, or
+    // at none. The same fact revealed again in the same book keeps the
+    // earlier moment. Answers the fact's id, 0 when nothing was kept.
+    qint64 learn(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed = std::nullopt);
     bool remove(qint64 node);
     bool unlink(qint64 edge);
     // Folds one node into another: its edges, places and aliases move over.
@@ -123,6 +181,27 @@ public:
     std::optional<GraphNode> node(qint64 id) const;
     // Where a node was met: its earliest place in each book it is in.
     QList<GraphPlace> seen(qint64 node) const;
+    // The same in one book, with the words there that name it.
+    std::optional<GraphMoment> firstMet(qint64 node, qint64 bookId) const;
+
+    // What was learned of a node over time, in the order of its books and
+    // places, the facts of no book last.
+    QList<GraphFact> facts(qint64 node) const;
+    // The facts of many nodes at once, by node.
+    QHash<qint64, QList<GraphFact>> factsOf(const QList<qint64> &nodes) const;
+    // A node as it is known to whoever `known` says knows a place: its
+    // summary the latest it had by then, and only the names it was known by
+    // by then. The facts of `bookId` come first, by place; a fact of no book
+    // put in after them, or failing them what other books said, stands for
+    // the summary otherwise. A node of which no fact was kept is as it is.
+    static GraphNode asKnown(GraphNode node, const QList<GraphFact> &facts, qint64 bookId, const GraphKnown &known);
+    // A node as a reader of a book at a place knows it (see ofBook).
+    GraphNode asOf(const GraphNode &node, qint64 bookId, const std::optional<GraphPlace> &upTo) const;
+    // A node's timeline: where it was met in each book, each summary it had
+    // and each name it was given, and the relations it was given, each with
+    // its moment, in the order a reader comes to them. With a book, only
+    // what that book revealed and what no book did.
+    QList<GraphReveal> timeline(qint64 node, qint64 bookId = 0) const;
     // The node known by a name or alias; 0 when there is none.
     qint64 named(const QString &scope, const QString &kind, const QString &name) const;
     // Nodes whose name, aliases or summary hold every word; `kind` and
@@ -133,7 +212,8 @@ public:
     // A node and what is within `depth` edges of it.
     GraphView around(qint64 node, int depth = 1, int limit = 200) const;
     // What a book's reader has met: the nodes seen in it and the edges learned
-    // in it, with `upTo` only those at or before that place. It is the
+    // in it, with `upTo` only those at or before that place, and each node as
+    // it was known there (asOf): never a summary or a name from later. It is the
     // general graph's unless a scope is named: a world copied from what the
     // books say keeps where its things were met, and is not the book's graph.
     GraphView ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo = std::nullopt, const QString &scope = {}) const;
@@ -173,6 +253,8 @@ public:
     QList<ReadingDay> readingLog(qint64 bookId = 0) const;
 
 private:
+    // Keeps a fact as learn() does, without touching the node itself.
+    qint64 recordFact(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed);
     [[nodiscard]] GraphView collect(const QString &nodesWhere, const QVariantList &values, int limit) const;
     [[nodiscard]] QList<GraphEdge> edgesAmong(const QList<GraphNode> &nodes) const;
 
