@@ -6,6 +6,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
+#include <memory>
 
 #include "prompts.h"
 
@@ -96,8 +97,47 @@ GraphContext::Reach GraphContext::reachOf(const Library &library, qint64 bookId)
     const Progress read = library.progress(bookId);
     reach.all = book->status() == "read";
     reach.any = reach.all || read.percent > 0;
-    reach.place = {bookId, read.section, read.fraction};
+    reach.place = furthest(library, bookId);
     return reach;
+}
+
+GraphPlace GraphContext::furthest(const Library &library, qint64 bookId) {
+    const Progress read = library.progress(bookId);
+    const GraphPlace here{bookId, read.section, read.fraction};
+    // Kept by the database as the reading place moves (Library::open).
+    const Recap most = library.notes(bookId, "furthest");
+    const GraphPlace ever{bookId, most.section, most.fraction};
+    return most.updated > 0 && here.notAfter(ever) ? ever : here;
+}
+
+std::optional<GraphPlace> GraphContext::spoilersAfter(const Library &library, qint64 bookId) {
+    const auto book = library.book(bookId);
+    if (!book || book->status() == "read" || book->percent <= 0)
+        return std::nullopt;
+    return furthest(library, bookId);
+}
+
+GraphKnown GraphContext::readerKnows(const Library &library) {
+    auto reaches = std::make_shared<QHash<qint64, Reach>>();
+    return [&library, reaches](const GraphPlace &at) {
+        if (at.bookId == 0)
+            return true;
+        if (!reaches->contains(at.bookId))
+            reaches->insert(at.bookId, reachOf(library, at.bookId));
+        return reaches->value(at.bookId).covers(at);
+    };
+}
+
+GraphKnown GraphContext::unspoiled(const Library &library) {
+    auto bounds = std::make_shared<QHash<qint64, std::optional<GraphPlace>>>();
+    return [&library, bounds](const GraphPlace &at) {
+        if (at.bookId == 0)
+            return true;
+        if (!bounds->contains(at.bookId))
+            bounds->insert(at.bookId, spoilersAfter(library, at.bookId));
+        const std::optional<GraphPlace> bound = bounds->value(at.bookId);
+        return !bound || at.notAfter(*bound);
+    };
 }
 
 GraphView GraphContext::story(const Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo) {
@@ -286,6 +326,7 @@ QString GraphContext::picture(const Library &library, const QString &question, q
     // What the question's own words name in the graph, with what is known.
     QStringList touched;
     QSet<qint64> shown;
+    const GraphKnown knows = readerKnows(library);
     const QStringList words = question.toLower().split(QRegularExpression("[^\\p{L}\\p{N}]+"), Qt::SkipEmptyParts);
     for (const QString &word : words) {
         if (word.size() < 4 || touched.size() >= 15)
@@ -295,7 +336,9 @@ QString GraphContext::picture(const Library &library, const QString &question, q
                 continue;
             shown << node.id;
             const QString in = metIn(node, 3).second;
-            touched << line(node) + (in.isEmpty() ? QString() : " [in: " + in + "]");
+            // As far as the reader got in each book: never a summary or a
+            // name from past their page.
+            touched << line(Graph::asKnown(node, graph.facts(node.id), 0, knows)) + (in.isEmpty() ? QString() : " [in: " + in + "]");
         }
     }
     if (!touched.isEmpty())

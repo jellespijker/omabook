@@ -31,6 +31,21 @@ struct Reach {
 };
 Reach reachOf(const Library &library, qint64 bookId);
 
+// The furthest a book was ever read: where its reader is, or further on
+// when they went back to an earlier page.
+GraphPlace furthest(const Library &library, qint64 bookId);
+// Past where, in a book, what is known of it gives away what happens: the
+// furthest its reader got. Nothing for a book marked as read, or never
+// opened here (read elsewhere, its graph built whole on request), which has
+// no spoilers.
+std::optional<GraphPlace> spoilersAfter(const Library &library, qint64 bookId);
+// Whether a place is behind the reader of its book, as far as they ever
+// read it; a place of no book always is. readerKnows goes by reachOf, what
+// the AI may be told (nothing of a book not begun); unspoiled goes by
+// spoilersAfter, what may be shown without a warning.
+GraphKnown readerKnows(const Library &library);
+GraphKnown unspoiled(const Library &library);
+
 // A book's graph up to a place without what isn't of the story: the
 // questions asked there, and the book itself.
 GraphView story(const Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo = std::nullopt);
