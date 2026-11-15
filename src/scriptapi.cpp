@@ -173,8 +173,9 @@ const QList<Entry> &entries() {
         {"settings.set", "settings.set(key, value)", "", "Keeps a value: anything JSON can hold."},
         {"settings.all", "settings.all()", "", "Everything the plugin kept, as one object."},
         {"settings.option", "settings.option(key)", "", "One of Omabook's own look settings (`cover_size`, `font_size`, "
-                                                        "`line_width`, `line_height`, `paragraph_spacing`, `justify`, "
-                                                        "`font_family`, `spread`, `sort`)."},
+                                                        "`line_width`, `line_height`, `paragraph_spacing`, `indent`, "
+                                                        "`margins`, `align`, `font_family`, `spread`, `sort`). These are "
+                                                        "the defaults; a book can have its own (`omabook format`)."},
         {"settings.setOption", "settings.setOption(key, value)", "", "Changes one of those; false when the value doesn't fit."},
 
         {"ai.available", "ai.available()", "", "Whether a model is set up to ask."},
