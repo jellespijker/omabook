@@ -525,26 +525,12 @@ AppPopup {
                 columnSpacing: 24
                 rowSpacing: 8
                 Repeater {
-                    model: [
-                        { keys: "Up  Down  J  K", action: qsTr("Move through the plugins") },
-                        { keys: "Space", action: qsTr("Switch it on or off") },
-                        { keys: "Enter", action: qsTr("Show its details") },
-                        { keys: "/  Ctrl+F", action: qsTr("Find a plugin by name, kind or state") },
-                        { keys: "N", action: qsTr("Start a plugin from a template") },
-                        { keys: "I", action: qsTr("Install a plugin from a .zip or a folder") },
-                        { keys: "T", action: qsTr("Try a look-up against a source") },
-                        { keys: "Alt+Up  Alt+Down", action: qsTr("Ask a source earlier or later") },
-                        { keys: "A", action: qsTr("Show the next plugin that needs attention") },
-                        { keys: "U", action: qsTr("Check every plugin from GitHub for updates") },
-                        { keys: "Shift+U", action: qsTr("Update this plugin from where it came from") },
-                        { keys: "<  >", action: qsTr("Make the list narrower or wider") },
-                        { keys: "O", action: qsTr("Open its folder, or the plugin folder") },
-                        { keys: "R", action: qsTr("Read the plugin folder again, and ask Calibre again") },
-                        { keys: "Shift+R", action: qsTr("Load this script again") },
-                        { keys: "D  Delete", action: qsTr("Remove a plugin of your own (asks first)") },
-                        { keys: "?", action: qsTr("Show or hide these keys") },
-                        { keys: "Escape", action: qsTr("Back a step, then close") }
-                    ]
+                    // The same list the help shows, from panelkeys.cpp.
+                    model: {
+                        translator.language
+                        const own = manual.panelKeys.find(panel => panel.id === "plugins")
+                        return own ? own.keys : []
+                    }
                     delegate: RowLayout {
                         id: entry
                         required property var modelData
@@ -559,7 +545,7 @@ AppPopup {
                         }
                         Label {
                             Layout.fillWidth: true
-                            text: entry.modelData.action
+                            text: entry.modelData.text
                             wrapMode: Text.Wrap
                         }
                     }
@@ -588,6 +574,13 @@ AppPopup {
                 color: dialog.quiet
                 font.pixelSize: 12
                 elide: Text.ElideRight
+                // A click shows every key, as ? does; the help (?) lists them too.
+                HoverHandler { enabled: !win.touch; cursorShape: Qt.PointingHandCursor }
+                TapHandler {
+                    enabled: !win.touch
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onTapped: dialog.keysShown = !dialog.keysShown
+                }
             }
             AppButton {
                 objectName: "pluginsCheckAll"

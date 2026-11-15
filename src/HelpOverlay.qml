@@ -38,6 +38,11 @@ AppPopup {
         translator.language
         return manual.commands
     }
+    // The keys of one panel or dialog each, which work while it has the keyboard.
+    readonly property var panels: {
+        translator.language
+        return manual.panelKeys
+    }
     readonly property var topics: {
         translator.language
         return manual.topics
@@ -57,7 +62,24 @@ AppPopup {
 
     function selectable(row) { return row.type === "command" || row.type === "topic" || row.type === "action" }
     function commandRow(command) {
-        return { type: "command", id: command.id, keys: command.keys, text: command.text, place: command.place }
+        return { type: "command", id: command.id, keys: command.keys, text: command.text, place: command.place,
+                 where: command.where || command.place, note: command.place === "plugins" ? whereName(command.where) : "" }
+    }
+    // Where a plugin's command works, said beside it.
+    function whereName(where) {
+        return where === "reader" ? qsTr("While reading") : where === "library" ? qsTr("On the shelf") : qsTr("Anywhere")
+    }
+    // A key of a panel's own, shown as a command is but not run from here.
+    function panelRow(panel, key) {
+        return { type: "command", id: panel.id + ":" + key.keys, keys: key.keys, text: key.text, place: "panel", note: "",
+                 panelTitle: panel.title }
+    }
+    // The plugins with commands, by name, in the order they come.
+    function pluginNames() {
+        const names = []
+        for (const command of popup.commands)
+            if (command.place === "plugins" && !names.includes(command.plugin)) names.push(command.plugin)
+        return names
     }
     function placeName(place) {
         return place === "reader" ? qsTr("Reading") : place === "library" ? qsTr("Library") : place === "graph" ? qsTr("Graph")
@@ -82,6 +104,10 @@ AppPopup {
                                .map((command, at) => [rank(command), at, command])
                                .sort((a, b) => a[0] - b[0] || a[1] - b[1]).map(ranked => ranked[2])
             const doing = popup.actions.filter(action => hit((action.text + " " + action.note).toLowerCase()))
+            const local = []
+            for (const panel of popup.panels)
+                for (const key of panel.keys)
+                    if (hit((key.text + " " + key.keys + " " + panel.title).toLowerCase())) local.push(panelRow(panel, key))
             const reading = popup.topics.filter(topic => hit(topic.search))
             if (found.length + doing.length > 0)
                 rows.push({ type: "heading", text: qsTr("Keys") })
@@ -89,6 +115,10 @@ AppPopup {
                 rows.push(commandRow(command))
             for (const action of doing)
                 rows.push(action)
+            if (local.length > 0)
+                rows.push({ type: "heading", text: qsTr("In panels and dialogs") })
+            for (const row of local)
+                rows.push(Object.assign({}, row, { note: row.panelTitle }))
             if (reading.length > 0)
                 rows.push({ type: "heading", text: qsTr("Pages") })
             for (const topic of reading)
@@ -98,7 +128,7 @@ AppPopup {
             return rows
         }
         if (popup.page === "keys") {
-            const places = popup.reading ? ["reader", "graph", "global", "library", "plugins"] : ["library", "graph", "global", "reader", "plugins"]
+            const places = popup.reading ? ["reader", "graph", "global", "library"] : ["library", "graph", "global", "reader"]
             for (const place of places) {
                 const here = popup.commands.filter(command => command.place === place)
                 if (here.length === 0)
@@ -106,6 +136,18 @@ AppPopup {
                 rows.push({ type: "heading", text: placeName(place) })
                 for (const command of here)
                     rows.push(commandRow(command))
+            }
+            // Each plugin's commands under its own name, saying where they work.
+            for (const name of pluginNames()) {
+                rows.push({ type: "heading", text: qsTr("Plugin: %1").arg(name) })
+                for (const command of popup.commands.filter(command => command.place === "plugins" && command.plugin === name))
+                    rows.push(commandRow(command))
+            }
+            // Then the keys a panel or dialog has of its own.
+            for (const panel of popup.panels) {
+                rows.push({ type: "heading", text: panel.title })
+                for (const key of panel.keys)
+                    rows.push(panelRow(panel, key))
             }
             return rows
         }
@@ -192,9 +234,10 @@ AppPopup {
             close()
         } else {
             current = index
-            note = row.place === "reader" ? qsTr("That one works while a book is open.")
-                 : row.place === "library" ? qsTr("That one works on the shelf.")
-                 : row.place === "graph" ? qsTr("That one works in the graph.")
+            note = row.place === "panel" ? qsTr("That one works in its panel or dialog: %1.").arg(row.panelTitle)
+                 : row.where === "reader" ? qsTr("That one works while a book is open.")
+                 : row.where === "library" ? qsTr("That one works on the shelf.")
+                 : row.where === "graph" ? qsTr("That one works in the graph.")
                  : qsTr("That can't be done right now.")
         }
     }
@@ -430,6 +473,16 @@ AppPopup {
                                             Layout.fillWidth: true
                                             text: row.modelData.text
                                             wrapMode: Text.Wrap
+                                        }
+                                        // Where a plugin's command works, or whose a panel's key is.
+                                        Label {
+                                            objectName: "helpRowNote"
+                                            visible: !!row.modelData.note
+                                            Layout.maximumWidth: popup.wide ? 180 : 110
+                                            text: row.modelData.note || ""
+                                            color: theme.colors.muted
+                                            font.pixelSize: 12
+                                            elide: Text.ElideRight
                                         }
                                         // Enter, for a finger or a mouse. A tap on the
                                         // row itself only selects: a list that is being

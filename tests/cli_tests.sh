@@ -51,6 +51,19 @@ echo '{"library": {"Space": "", "R": "read"}}' > "$XDG_CONFIG_HOME/omabook/keys.
 expect "the keys follow keys.json" 0 "  R                   Read the selected book" "$omabook" help keys
 expect "a help page follows keys.json" 0 "R opens the selected book" "$omabook" help start
 rm "$XDG_CONFIG_HOME/omabook/keys.json"
+# A plugin's keys are among them, under its name and saying where they work;
+# switched off, they are gone. The keys of a panel of its own are there too.
+mkdir -p "$XDG_CONFIG_HOME/omabook/plugins/shelver"
+echo '{"name": "Shelver", "script": "main.js"}' > "$XDG_CONFIG_HOME/omabook/plugins/shelver/plugin.json"
+echo 'omabook.commands.register({id: "shelve", title: "Shelve it", place: "reader", key: "Ctrl+R", run: function () {}});' \
+  > "$XDG_CONFIG_HOME/omabook/plugins/shelver/main.js"
+expect "a plugin's keys are listed under its name" 0 "Plugin: Shelver" "$omabook" help keys
+expect "a plugin's key says where it works" 0 "Shelve it (while reading)" "$omabook" help keys
+expect "a plugin's key as JSON" 0 '"plugin": "Shelver"' "$omabook" help keys --json
+expect "the keys of a panel" 0 "Remove the selected bookmark" "$omabook" help keys
+expect "a plugin switched off" 0 "off" "$omabook" plugins disable folder:shelver
+"$omabook" help keys | grep -q "Shelver" && fail "a plugin switched off still has its keys listed"
+rm -rf "$XDG_CONFIG_HOME/omabook/plugins/shelver"
 expect "what is new" 0 "One, two or three pages" "$omabook" help new
 expect "what is new as JSON" 0 '"features"' "$omabook" help new --json
 expect "an unknown help topic fails" 1 "no help on" "$omabook" help nonsense

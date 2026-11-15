@@ -23,9 +23,18 @@ class Settings;
 class Manual : public QObject {
     Q_OBJECT
     // Every command with its keys as they are bound now, each
-    // {id, place, keys, key, text}: place is "global", "library", "reader" or
-    // "plugins", keys all of them ("Space  PgDown") and key the first.
+    // {id, place, keys, key, text, short}: place is "global", "library",
+    // "reader", "graph" or "plugins", keys all of them ("Space  PgDown"),
+    // key the first, and short the text up to its first colon, semicolon
+    // or bracket, for a menu. A plugin's command also has `plugin`, the
+    // plugin's name, and `where`, the place it works in ("global",
+    // "library", "reader").
     Q_PROPERTY(QVariantList commands READ commands NOTIFY changed)
+    // The keys that belong to one panel or dialog and only work there (the
+    // menu beside selected words, the contents, the Aa panel, the plugin
+    // manager...), which keys.json doesn't change: each
+    // {id, title, keys: [{keys, text}]}. Defined in panelkeys.cpp.
+    Q_PROPERTY(QVariantList panelKeys READ panelKeys NOTIFY changed)
     // The pages, each {id, title, summary, sections: [{heading, html}],
     // commands: [ids the page names], search: its words in lower case}.
     Q_PROPERTY(QVariantList topics READ topics NOTIFY changed)
@@ -67,6 +76,17 @@ public:
     // The text itself, in the language in use. Defined in helptopics.cpp,
     // tour.cpp and whatsnew.cpp.
     static QList<Topic> topicList();
+    // A panel or dialog and the keys of its own, as `panelKeys` gives them.
+    struct PanelKey {
+        QString keys;
+        QString text;
+    };
+    struct Panel {
+        QString id;
+        QString title;
+        QList<PanelKey> keys;
+    };
+    static QList<Panel> panelList();
     static QList<Step> tourSteps();
     static QList<Step> features();
 
@@ -75,6 +95,7 @@ public:
     Manual(Settings *settings, Customization *custom, const QString &version = {}, QObject *parent = nullptr);
 
     QVariantList commands() const;
+    QVariantList panelKeys() const;
     QVariantList topics() const;
     QString version() const noexcept { return m_version; }
     bool tourOffered() const;

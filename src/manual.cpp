@@ -4,6 +4,7 @@
 #include <QJsonArray>
 #include <QRegularExpression>
 #include <QVersionNumber>
+#include <algorithm>
 
 #include "customization.h"
 #include "settings.h"
@@ -81,21 +82,48 @@ QString Manual::html(const QString &text) const {
     return result;
 }
 
+// What a menu calls a command: its words up to the first colon, semicolon
+// or bracket, which is where the table says what it does in more detail.
+// "Add a folder: of books, ..." is "Add a folder" in a menu.
+[[nodiscard]] static QString shortened(const QString &text) {
+    qsizetype cut = text.size();
+    for (const QString &mark : {QStringLiteral(": "), QStringLiteral("; "), QStringLiteral(" ("), QStringLiteral("\uff1a")})
+        if (const qsizetype at = text.indexOf(mark); at > 0)
+            cut = std::min(cut, at);
+    return text.left(cut).trimmed();
+}
+
 QVariantList Manual::commands() const {
     QVariantList list;
     const QVariantMap keys = m_custom->keyText();
     for (const Customization::Command &command : Customization::commands()) {
         const QString all = keys.value(command.id).toString();
         // The table is in English, for the guide; here it is shown.
+        const QString text = QCoreApplication::translate("Customization", command.what.toUtf8().constData());
         list << QVariantMap{{"id", command.id}, {"place", placeOf(command.id)}, {"keys", all}, {"key", all.section("  ", 0, 0)},
-                            {"text", QCoreApplication::translate("Customization", command.what.toUtf8().constData())}};
+                            {"text", text}, {"short", shortened(text)}};
     }
+    // A plugin's commands are the plugin's: listed under its name, saying
+    // where each works, for as long as the plugin is on.
     for (const QVariant &value : m_custom->pluginCommands()) {
         const QVariantMap plugin = value.toMap();
         const QString id = plugin.value("id").toString();
         const QString all = keys.value(id).toString();
-        list << QVariantMap{{"id", id}, {"place", "plugins"}, {"keys", all}, {"key", all.section("  ", 0, 0)},
-                            {"text", plugin.value("title").toString()}};
+        const QString title = plugin.value("title").toString();
+        list << QVariantMap{{"id", id}, {"place", "plugins"}, {"keys", all}, {"key", all.section("  ", 0, 0)}, {"text", title},
+                            {"short", title}, {"plugin", plugin.value("plugin").toString()},
+                            {"where", plugin.value("place").toString()}};
+    }
+    return list;
+}
+
+QVariantList Manual::panelKeys() const {
+    QVariantList list;
+    for (const Panel &panel : panelList()) {
+        QVariantList keys;
+        for (const PanelKey &key : panel.keys)
+            keys << QVariantMap{{"keys", key.keys}, {"text", key.text}};
+        list << QVariantMap{{"id", panel.id}, {"title", panel.title}, {"keys", keys}};
     }
     return list;
 }
@@ -252,16 +280,30 @@ QJsonObject Manual::overviewJson() const {
     return {{"version", m_version}, {"topics", topics}};
 }
 
+// Where a plugin's command works, said after it.
+[[nodiscard]] static QString whereText(const QString &where) {
+    return where == "reader" ? "while reading" : where == "library" ? "on the shelf" : "anywhere";
+}
+
 QString Manual::keysText() const {
-    QString text, place;
-    const QHash<QString, QString> headings{{"global", "Everywhere"}, {"library", "On the shelf"}, {"reader", "While reading"}, {"graph", "In the graph"}, {"plugins", "Plugins"}};
+    QString text, heading;
+    const QHash<QString, QString> headings{{"global", "Everywhere"}, {"library", "On the shelf"}, {"reader", "While reading"}, {"graph", "In the graph"}};
     for (const QVariant &value : commands()) {
         const QVariantMap command = value.toMap();
-        if (command.value("place").toString() != place) {
-            place = command.value("place").toString();
-            text += (text.isEmpty() ? "" : "\n") + headings.value(place) + "\n";
+        const bool plugin = command.value("place").toString() == "plugins";
+        const QString here = plugin ? "Plugin: " + command.value("plugin").toString() : headings.value(command.value("place").toString());
+        if (here != heading) {
+            heading = here;
+            text += (text.isEmpty() ? "" : "\n") + heading + "\n";
         }
-        text += QString("  %1  %2\n").arg(command.value("keys").toString().leftJustified(18), command.value("text").toString());
+        const QString what = command.value("text").toString() + (plugin ? " (" + whereText(command.value("where").toString()) + ")" : "");
+        text += QString("  %1  %2\n").arg(command.value("keys").toString().leftJustified(18), what);
+    }
+    text += "\nIn panels and dialogs, while they have the keyboard\n";
+    for (const Panel &panel : panelList()) {
+        text += "\n  " + panel.title + "\n";
+        for (const PanelKey &key : panel.keys)
+            text += QString("    %1  %2\n").arg(key.keys.leftJustified(16), key.text);
     }
     return text.trimmed();
 }
@@ -270,8 +312,20 @@ QJsonObject Manual::keysJson() const {
     QJsonArray keys;
     for (const QVariant &value : commands()) {
         const QVariantMap command = value.toMap();
-        keys << QJsonObject{{"command", command.value("id").toString()}, {"place", command.value("place").toString()},
-                            {"keys", command.value("keys").toString()}, {"what", command.value("text").toString()}};
+        QJsonObject entry{{"command", command.value("id").toString()}, {"place", command.value("place").toString()},
+                          {"keys", command.value("keys").toString()}, {"what", command.value("text").toString()}};
+        if (command.contains("plugin")) {
+            entry.insert("plugin", command.value("plugin").toString());
+            entry.insert("where", command.value("where").toString());
+        }
+        keys << entry;
     }
-    return {{"keys", keys}};
+    QJsonArray panels;
+    for (const Panel &panel : panelList()) {
+        QJsonArray own;
+        for (const PanelKey &key : panel.keys)
+            own << QJsonObject{{"keys", key.keys}, {"what", key.text}};
+        panels << QJsonObject{{"id", panel.id}, {"title", panel.title}, {"keys", own}};
+    }
+    return {{"keys", keys}, {"panels", panels}};
 }
