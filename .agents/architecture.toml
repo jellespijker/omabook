@@ -14,7 +14,7 @@
 summary = "Settings, logging, theme and interface files, text cleaning, the script API table: no knowledge of books."
 uses = []
 modules = [
-  "bookmeta", "customization", "filepicker", "graphlayout", "htmlclean", "log", "pagelayout",
+  "bookmeta", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
   "readingformat", "scriptapi", "scriptform", "secretstore", "settings", "theme", "themechoice",
   "translator",
 ]
