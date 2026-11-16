@@ -123,7 +123,7 @@ void Settings::setGraph(const QString &mode) {
 
 QString Settings::marks() const {
     const QString mode = m_values.value("marks").toString();
-    return std::ranges::contains(markModes, mode) ? mode : QString("map");
+    return std::ranges::contains(markModes, mode) ? mode : QString("always");
 }
 
 void Settings::setMarks(const QString &mode) {

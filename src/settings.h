@@ -194,8 +194,9 @@ public:
     // say, study and leisure keeps the two apart.
     bool graphAcrossCollections() const { return m_values.value("graph_across_collections").toBool(false); }
     void setGraphAcrossCollections(bool on) { set("graph_across_collections", on); }
-    // When the things of the graph are marked in the text: "map" (while the
-    // map of the book is beside the page), "always" or "never".
+    // When the things of the graph are marked in the text: "always" (the
+    // default), "map" (only while the map of the book is beside the page)
+    // or "never". Kept in config.json, so a choice lasts.
     QString marks() const;
     void setMarks(const QString &mode);
 

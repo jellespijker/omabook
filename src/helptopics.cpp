@@ -43,8 +43,9 @@ QList<Manual::Topic> Manual::topicList() {
               tr("{reader.contents} shows the chapters beside the page, and {reader.find} finds words in the book. "
                  "{reader.bookmark} keeps a bookmark. Your place is remembered when you leave with {reader.back}.")},
              {tr("The graph in the text"),
-              tr("With the map beside the page ({reader.graph}), the people, places and things it knows so far are marked "
-                 "in the text in the colors they have in the map; {reader.marks} marks them always, or never. Point at "
+              tr("The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors "
+                 "they have there, always, unless you switch it off: {reader.marks} marks them only while the map is "
+                 "beside the page, or never, and the choice is kept. Point at "
                  "one, or tap it, for what is known of it. Select words (drag, double-click, press and hold, or "
                  "{reader.select} and the arrow keys) for a menu: ask about them, who or what they are, show them in the "
                  "map, find them in the book, or a question worth asking.")},

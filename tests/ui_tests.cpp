@@ -5050,9 +5050,15 @@ private slots:
         QTRY_COMPARE(desk.reader->fraction(), 1.0);
         PageText page = pageText(desk);
         QVERIFY(page.document);
-        // Nothing is marked while the map is closed (the setting is "map").
-        QTest::qWait(100);
-        QVERIFY(!page.formatOf("Ilse Varga").hasProperty(QTextFormat::TextUnderlineColor));
+        // The names are marked from the start, with the map closed: marking
+        // is on unless it was switched off.
+        QCOMPARE(desk.settings->marks(), QString("always"));
+        QTRY_VERIFY(page.formatOf("Ilse Varga").hasProperty(QTextFormat::TextUnderlineColor));
+        // Asked to mark only while the map is open, nothing is marked while
+        // it is closed, and that is remembered for the next start.
+        desk.settings->setMarks("map");
+        QTRY_VERIFY(!page.formatOf("Ilse Varga").hasProperty(QTextFormat::TextUnderlineColor));
+        QCOMPARE(Settings(desk.dir.filePath("config.json")).marks(), QString("map"));
 
         // With the map open, the names are marked in their kind's color, the
         // same as the graph's discs.
