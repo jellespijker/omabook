@@ -43,8 +43,11 @@ be ignored `[[nodiscard]]`.
   changes. Spell the type where `auto` would hide a conversion that matters.
 - **Initialise everything, with `{}`** where it rejects narrowing (ES.20, ES.23).
 - **Named casts only**: `static_cast`, `qobject_cast` for QObjects, `std::bit_cast`.
-  No C-style casts (ES.48, ES.49); `(void)` to discard a result is fine.
-  `const_cast` is a design error; `reinterpret_cast` needs a comment.
+  No C-style casts (ES.48, ES.49), including `(void)`: use the result, call a
+  form that returns nothing, or write `std::ignore = f();` with a comment saying
+  why a value must be dropped; leave an unused parameter unnamed or mark it
+  `[[maybe_unused]]`. `const_cast` is a design error; `reinterpret_cast` needs a
+  comment.
 - `nullptr`, never `NULL` or `0` (ES.47). `enum class` (Enum.3). `using`, not
   `typedef` (T.43). `constexpr` for anything known at compile time (Con.5).
 - Strong types over comments: `std::chrono` durations, not `int timeoutMs`.

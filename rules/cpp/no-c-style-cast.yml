@@ -1,13 +1,12 @@
 id: no-c-style-cast
 language: cpp
 severity: error
-message: A C-style cast; use static_cast, qobject_cast, or a value of the right type ({} rejects narrowing).
+message: A C-style cast (including `(void)`); use static_cast, qobject_cast, {} construction, or std::ignore = f() / [[maybe_unused]] instead of `(void)`.
 note: |
   A C-style cast does whatever it takes (static, const or reinterpret) and says
-  none of it (C++ Core Guidelines ES.48, ES.49). `(void)` to discard a result is fine.
+  none of it (C++ Core Guidelines ES.48, ES.49). To drop a value: use the
+  result, call a form of the function that returns nothing, or write
+  `std::ignore = f();` with a comment saying why the value is dropped; for an
+  unused parameter, leave it unnamed or mark it `[[maybe_unused]]`.
 rule:
   kind: cast_expression
-  not:
-    has:
-      field: type
-      regex: ^void$

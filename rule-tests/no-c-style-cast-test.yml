@@ -1,7 +1,9 @@
 id: no-c-style-cast
 valid:
-  - "void f() { (void)run(); }"
   - "int f(double d) { return static_cast<int>(d); }"
+  - "void g() { std::ignore = f(); }"
+  - "void f([[maybe_unused]] int x) {}"
 invalid:
+  - "void f() { (void)run(); }"
   - "int f(double d) { return (int)d; }"
   - "auto *w = (QWidget *)object;"
