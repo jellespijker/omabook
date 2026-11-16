@@ -578,12 +578,15 @@ private slots:
             for (qsizetype page = 1; page + 1 < breaks.size(); ++page) {
                 const double cut = breaks.at(page);
                 QVERIFY(cut > breaks.at(page - 1));
-                // The cut is where a line starts.
-                const auto first = std::ranges::find_if(lines, [cut](const Line &line) { return qAbs(line.top - cut) < 0.01; });
+                // The cut is a whole pixel between two lines: below the
+                // whole of the one before, above the whole of the next.
+                QCOMPARE(cut, std::floor(cut));
+                const auto first = std::ranges::find_if(lines, [cut](const Line &line) { return line.top >= cut - 0.5; });
                 QVERIFY2(first != lines.end(), qPrintable(QString("%1 at %2").arg(height).arg(cut)));
                 const qsizetype at = first - lines.begin();
                 QVERIFY(at > 0);
                 const Line &last = lines.at(at - 1);
+                QVERIFY2(last.bottom <= cut + 0.5, qPrintable(QString("%1 at %2").arg(height).arg(cut)));
                 // Every line of the page fits on it.
                 QVERIFY(last.bottom - breaks.at(page - 1) <= height + 0.01);
                 // No heading at the foot of a page.
@@ -613,6 +616,83 @@ private slots:
         forced.setHtml("<p>One.</p><p style=\"page-break-before: always\">Two.</p>");
         forced.setTextWidth(320);
         QCOMPARE(PageLayout::pageBreaks(forced, 600).size(), 3);
+    }
+
+    // However the lines are spaced, no line shows on two pages, none is
+    // cut off at a page's foot, and no page is left with nothing on it;
+    // and a screen's step forward or back shows no line again.
+    void noLineShowsOnTwoPagesAndAScreenStepShowsNothingTwice() {
+        for (const int spacing : {100, 115, 150, 190}) {
+            QString html = "<h1>The Tide Tables</h1>";
+            for (int i = 0; i < 60; ++i)
+                html += QString("<p style=\"line-height: %1%\">Paragraph %2 of the tables, the harbour at the turn of the "
+                                "tide and the boats that wait on it, %3.</p>")
+                            .arg(spacing).arg(i + 1).arg(QString("and on ").repeated(i % 7));
+            // Empty paragraphs at the end are nothing to see.
+            html += "<p>The last line.</p><p></p><p>&nbsp;</p><p></p>";
+            QTextDocument document;
+            document.setDefaultFont(PageLayout::bodyFont({}, 17));
+            document.setHtml(html);
+            document.setTextWidth(347.5);
+            QAbstractTextDocumentLayout *layout = document.documentLayout();
+            struct Line { double top, bottom; bool blank; };
+            QList<Line> lines;
+            for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+                const double top = layout->blockBoundingRect(block).top();
+                for (int i = 0; i < block.layout()->lineCount(); ++i) {
+                    const QTextLine line = block.layout()->lineAt(i);
+                    lines.append({top + line.y(), top + line.y() + line.height(),
+                                  block.text().mid(line.textStart(), line.textLength()).trimmed().isEmpty()});
+                }
+            }
+            for (double height = 211.5; height <= 640; height += 37.25) {
+                const QString where = QString("%1% at %2").arg(spacing).arg(height);
+                const QList<double> breaks = PageLayout::pageBreaks(document, height);
+                for (qsizetype page = 0; page + 1 < breaks.size(); ++page) {
+                    // What the page shows: from its start, a page's height at most.
+                    const double top = breaks.at(page), bottom = std::min(breaks.at(page + 1), top + std::floor(height));
+                    QCOMPARE(top, std::floor(top));
+                    bool inked = false;
+                    for (const Line &line : lines) {
+                        const bool on = line.bottom > top + 0.01 && line.top < breaks.at(page + 1) - 0.01;
+                        // (Empty lines past the last there is to see may be cut off.)
+                        if (!on || line.blank)
+                            continue;
+                        // Wholly on this page: not cut at its foot, nor shown at the next one's head.
+                        QVERIFY2(line.top >= top - 0.01 && line.bottom <= bottom + 0.01,
+                                 qPrintable(where + QString(", the line at %1 on the page from %2").arg(line.top).arg(top)));
+                        inked = inked || !line.blank;
+                    }
+                    QVERIFY2(inked, qPrintable(where + QString(", the page from %1 is blank").arg(top)));
+                }
+                // A screen's step, from the top of the chapter to its end and back.
+                double at = 0;
+                int steps = 0;
+                while (at < lines.last().top && steps++ < 400) {
+                    const double next = PageLayout::screenStep(document, at, height, true);
+                    QVERIFY2(next > at, qPrintable(where));
+                    // The first line not wholly seen is the first one shown next.
+                    const auto unseen = std::ranges::find_if(lines, [&](const Line &line) { return line.bottom > at + height + 0.5; });
+                    if (unseen != lines.end())
+                        QVERIFY2(qAbs(unseen->top - next) < 0.01, qPrintable(where));
+                    // Nothing seen before shows again: every line above the step was wholly in sight.
+                    for (const Line &line : lines)
+                        if (line.top < next - 0.01 && line.bottom > at + 0.01)
+                            QVERIFY2(line.bottom <= at + height + 0.51, qPrintable(where));
+                    at = next;
+                }
+                while (at > 0 && steps++ < 800) {
+                    const double back = PageLayout::screenStep(document, at, height, false);
+                    QVERIFY2(back < at, qPrintable(where));
+                    // The window back ends with the line that was cut off above.
+                    for (const Line &line : lines)
+                        if (line.top >= back - 0.01 && line.top < at - 0.5)
+                            QVERIFY2(line.bottom <= back + height + 0.51 || line.bottom - line.top > height, qPrintable(where));
+                    at = back;
+                }
+                QCOMPARE(at, 0.0);
+            }
+        }
     }
 
     void theCardKnowsOnlyWhatWasRevealedByThePage() {

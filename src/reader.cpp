@@ -377,6 +377,12 @@ QVariantList Reader::pageBreaks(QQuickTextDocument *chapter, double height) cons
     return breaks;
 }
 
+double Reader::screenStep(QQuickTextDocument *chapter, double top, double height, bool forward) const {
+    if (!chapter || !chapter->textDocument())
+        return forward ? top + height : std::max(0.0, top - height);
+    return PageLayout::screenStep(*chapter->textDocument(), top, height, forward);
+}
+
 int Reader::anchorPosition(QQuickTextDocument *chapter, const QString &anchor) const {
     if (!chapter || !chapter->textDocument() || anchor.isEmpty())
         return -1;
@@ -413,13 +419,19 @@ double Reader::percent() const {
     return 100.0 * (m_section + m_fraction) / m_document->count();
 }
 
-QString Reader::sectionTitle() const {
+QString Reader::sectionTitle() const { return titleOf(m_section); }
+
+QString Reader::nextTitle() const {
+    return m_document && m_section + 1 < m_document->count() ? titleOf(m_section + 1) : QString();
+}
+
+QString Reader::titleOf(int section) const {
     // The first entry of the nearest chapter at or before this one: a file
     // holding several entries is named by the one it opens with.
     QString title;
     int best = -1;
     for (const TocEntry &entry : m_document ? m_document->toc() : QList<TocEntry>()) {
-        if (entry.section <= m_section && entry.section > best) {
+        if (entry.section <= section && entry.section > best) {
             best = entry.section;
             title = entry.title;
         }

@@ -106,6 +106,22 @@ struct Columns {
 //
 // A line taller than a page (a picture) gets a page of its own and is cut,
 // which beats never showing its lower half.
+//
+// The cuts are whole pixels, each below the whole of the line before it and
+// above the whole of the line after, so no line shows on two pages and none
+// is cut off at a page's foot. A page starts at its first line, not at the
+// space above it; so the space between two pages can be more than a page
+// shows, and a page is shown from its top for `height` at most. Pages after the last line with anything on it
+// to see (empty paragraphs) are left out: a chapter's last page holds what
+// is left of it, and is never followed by a blank one.
 [[nodiscard]] QList<double> pageBreaks(QTextDocument &document, double height);
+
+// Where a window `height` tall onto a laid-out chapter, now showing it from
+// `top`, shows it from after a screen's step forward or back, without
+// showing again what was seen: forward, from the first line that wasn't
+// wholly in sight; back, so that the last line that wasn't wholly in sight
+// above is the last line wholly in sight. A line taller than the window is
+// stepped through a window at a time.
+[[nodiscard]] double screenStep(QTextDocument &document, double top, double height, bool forward);
 
 } // namespace PageLayout

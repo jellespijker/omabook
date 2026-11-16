@@ -54,6 +54,9 @@ class Reader : public QObject {
     Q_PROPERTY(QString imagePrefix READ imagePrefix NOTIFY bookChanged)
     Q_PROPERTY(int section READ section WRITE setSection NOTIFY sectionChanged)
     Q_PROPERTY(QString sectionTitle READ sectionTitle NOTIFY sectionChanged)
+    // What the chapter after this one is called, for the line at this one's
+    // end; empty at the last.
+    Q_PROPERTY(QString nextTitle READ nextTitle NOTIFY sectionChanged)
     Q_PROPERTY(QString html READ html NOTIFY htmlChanged)
     Q_PROPERTY(int pageWidth READ pageWidth WRITE setPageWidth NOTIFY htmlChanged)
     Q_PROPERTY(double fraction READ fraction WRITE setFraction NOTIFY fractionChanged)
@@ -89,6 +92,7 @@ public:
     int section() const noexcept { return m_section; }
     void setSection(int section);
     QString sectionTitle() const;
+    QString nextTitle() const;
     QString html() const noexcept { return m_html; }
     int pageWidth() const noexcept { return m_pageWidth; }
     void setPageWidth(int width);
@@ -115,6 +119,9 @@ public:
     // the last one ends: pages `height` tall at most that never cut a line
     // of text in two.
     Q_INVOKABLE QVariantList pageBreaks(QQuickTextDocument *chapter, double height) const;
+    // Where a window onto a laid-out chapter starts after a screen's step
+    // forward or back, showing nothing again (PageLayout::screenStep).
+    Q_INVOKABLE double screenStep(QQuickTextDocument *chapter, double top, double height, bool forward) const;
     // Where a named place is in a laid-out chapter, as a character position, or -1.
     Q_INVOKABLE int anchorPosition(QQuickTextDocument *chapter, const QString &anchor) const;
     // Follows a link in the text; true when it led somewhere in the book.
@@ -170,6 +177,8 @@ private:
     void saveProgress();
     QJsonObject whereabouts() const;
     QString textFrom(int section, double fraction, bool withFirstPage) const;
+    // The title of a section: the contents' entry for it, else the nearest before it.
+    QString titleOf(int section) const;
 
     Backend *m_backend;
     Converter m_converter;

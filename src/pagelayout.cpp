@@ -89,34 +89,54 @@ Columns columns(const Space &space, int wanted, int previous) {
     return result;
 }
 
-QList<double> pageBreaks(QTextDocument &document, double height) {
-    if (height <= 0)
-        return {0.0, 0.0};
-    // Every line of the chapter, in order, with what the cut needs to know
-    // of the paragraph it is in.
-    struct Line {
-        double top, height;
-        int index;       // which of its lines
-        int count;       // how many it has
-        bool heading;    // the paragraph is a heading
-        bool together;   // its lines are to be kept together
-        bool before;     // it starts a page
-        bool after;      // it ends one
-    };
+namespace {
+
+// One line of a laid-out chapter, with what a cut needs to know of the
+// paragraph it is in.
+struct Line {
+    double top, height;
+    int index;       // which of its lines
+    int count;       // how many it has
+    bool heading;    // the paragraph is a heading
+    bool together;   // its lines are to be kept together
+    bool before;     // it starts a page
+    bool after;      // it ends one
+    bool blank;      // nothing on it is seen: spaces, or nothing at all
+    [[nodiscard]] double bottom() const noexcept { return top + height; }
+};
+
+// Every line of the chapter, top to bottom.
+std::vector<Line> laidLines(QTextDocument &document) {
     std::vector<Line> lines;
     QAbstractTextDocumentLayout *layout = document.documentLayout();
     for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
         const QRectF bounds = layout->blockBoundingRect(block);
         const QTextBlockFormat format = block.blockFormat();
         const QTextLayout *laid = block.layout();
+        const QString text = block.text();
         for (int index = 0; index < laid->lineCount(); ++index) {
             const QTextLine line = laid->lineAt(index);
+            // A picture is a character of its own, which is not a space.
+            const bool blank = QStringView(text).mid(line.textStart(), line.textLength()).trimmed().isEmpty();
             lines.push_back({bounds.top() + line.y(), line.height(), index, laid->lineCount(), format.headingLevel() > 0,
                              format.nonBreakableLines(), bool(format.pageBreakPolicy() & QTextFormat::PageBreak_AlwaysBefore),
-                             bool(format.pageBreakPolicy() & QTextFormat::PageBreak_AlwaysAfter)});
+                             bool(format.pageBreakPolicy() & QTextFormat::PageBreak_AlwaysAfter), blank});
         }
     }
-    const double end = layout->documentSize().height();
+    return lines;
+}
+
+} // namespace
+
+QList<double> pageBreaks(QTextDocument &document, double height) {
+    // Whole pixels: a page shown from a fraction of one is drawn a little
+    // off where the next page's top was measured, and a sliver of a line
+    // shows twice.
+    height = std::floor(height);
+    if (height <= 0)
+        return {0.0, 0.0};
+    const std::vector<Line> lines = laidLines(document);
+    const double end = std::ceil(document.documentLayout()->documentSize().height());
     QList<double> breaks{0.0};
     if (lines.empty())
         return breaks << std::max(1.0, end);
@@ -147,6 +167,20 @@ QList<double> pageBreaks(QTextDocument &document, double height) {
         // Never at the cost of the whole page.
         return cut > start ? cut : over;
     };
+    // The pixel row a page starts at, when line `cut` starts it: the last
+    // at or above the line's top that is below the whole of the line
+    // before, so that line is all on the page before and none of it on
+    // this one, this line is all on this one, and the space between
+    // paragraphs isn't carried over to the head of the page.
+    // (The space between the two can be more than what is left of the
+    // page before, after a picture set with the lines' spacing: the page
+    // shows no more than `height` of it, and the next starts at its line.)
+    const auto edge = [&lines](std::size_t cut) {
+        const double top = lines[cut].top, before = lines[cut - 1].bottom();
+        if (std::floor(top) >= before)
+            return std::floor(top);
+        return std::ceil(before) <= top ? std::ceil(before) : std::round(top);
+    };
 
     std::size_t start = 0;
     double pageTop = 0;
@@ -155,22 +189,49 @@ QList<double> pageBreaks(QTextDocument &document, double height) {
         // A paragraph that asks for a page of its own begins one.
         const bool forced = at > start && line.index == 0
                             && (line.before || (lines[at - 1].after && lines[at - 1].index == lines[at - 1].count - 1));
-        if (forced || line.top + line.height - pageTop > height) {
+        if (forced || line.bottom() - pageTop > height) {
             if (at > start) {
                 const std::size_t cut = forced ? at : bestCut(start, at);
-                pageTop = lines[cut].top;
+                pageTop = edge(cut);
                 breaks << pageTop;
                 start = cut;
                 at = cut;
             }
             // A line taller than a page: cut through it, a page at a time.
-            while (lines[at].top + lines[at].height - pageTop > height) {
+            while (lines[at].bottom() - pageTop > height) {
                 pageTop += height;
                 breaks << pageTop;
             }
         }
     }
-    return breaks << std::max(pageTop + 1, end);
+    // Pages with nothing on them to see, after the last that has (empty
+    // paragraphs at a chapter's end), are no pages: the chapter's last
+    // page holds what is left, and the next chapter starts on the next.
+    const auto inked = std::ranges::find_if(lines.rbegin(), lines.rend(), [](const Line &line) { return !line.blank; });
+    if (inked != lines.rend())
+        while (breaks.size() > 1 && breaks.last() >= inked->bottom())
+            breaks.removeLast();
+    return breaks << std::min(breaks.last() + height, std::max(breaks.last() + 1, end));
+}
+
+double screenStep(QTextDocument &document, double top, double height, bool forward) {
+    const std::vector<Line> lines = laidLines(document);
+    const double fallback = forward ? top + height : std::max(0.0, top - height);
+    if (lines.empty() || height <= 0)
+        return fallback;
+    if (forward) {
+        // The first line that isn't wholly in sight at the foot of the window.
+        const auto cut = std::ranges::find_if(lines, [&](const Line &line) { return line.bottom() > top + height + 0.5; });
+        return cut != lines.end() && cut->top > top + 0.5 ? cut->top : fallback;
+    }
+    // The last line that isn't wholly in sight at the head of the window
+    // ends the window before, which starts at the first line that fits.
+    const auto above = std::ranges::find_if(lines.rbegin(), lines.rend(), [&](const Line &line) { return line.top < top - 0.5; });
+    if (above == lines.rend())
+        return 0;
+    const double bottom = above->bottom();
+    const auto first = std::ranges::find_if(lines, [&](const Line &line) { return line.top >= bottom - height - 0.5; });
+    return first != lines.end() && first->top < top - 0.5 ? std::max(0.0, first->top) : fallback;
 }
 
 } // namespace PageLayout
