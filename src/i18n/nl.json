@@ -1214,6 +1214,7 @@
   "Changes are for the books of %1 without a way of their own.": "Wijzigingen gelden voor de boeken van %1 zonder eigen instellingen.",
   "Collection": "Collectie",
   "Collections": "Collecties",
+  "Collections and the knowledge graph": "Collecties en de kennisgraaf",
   "Every book in the library": "Elk boek in de bibliotheek",
   "Every book is in a collection, or none of them fits the collections there are.": "Elk boek staat in een collectie, of geen enkel past bij de collecties die er zijn.",
   "For this collection: %1": "Voor deze collectie: %1",
@@ -1246,6 +1247,7 @@
   "Sort with AI": "Sorteren met AI",
   "Sorting books into collections: %1 of %2…": "Boeken in collecties sorteren: %1 van %2…",
   "Take it out of %1": "Uit %1 halen",
+  "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” in the settings ({global.settings}).": "De kennisgraaf verbindt een boek alleen met boeken in dezelfde hoofdcollectie van de bibliotheek, of in een collectie daarbinnen: een studieboek en een roman in verschillende hoofdcollecties worden nooit verbonden, en de AI hoort, gevraagd naar het ene, niets over het andere. Boeken in geen enkele collectie zijn met elkaar verbonden, en een boek in twee hoofdcollecties met beide. Er verdwijnt niets, en een boek dat naar een andere collectie gaat, neemt zijn verbindingen mee. Om de hele bibliotheek weer te verbinden, vink je in de instellingen ({global.settings}) „Kennisgraaf: verbindt boeken over de hoofdcollecties heen” aan.",
   "The rule finds %Ln books.": {
     "one": "De regel vindt %Ln boek.",
     "other": "De regel vindt %Ln boeken."

@@ -1268,6 +1268,7 @@
   "Changes are for the books of %1 without a way of their own.": "Los cambios valen para los libros de %1 sin ajustes propios.",
   "Collection": "Colección",
   "Collections": "Colecciones",
+  "Collections and the knowledge graph": "Las colecciones y el grafo de conocimiento",
   "Every book in the library": "Todos los libros de la biblioteca",
   "Every book is in a collection, or none of them fits the collections there are.": "Cada libro está en una colección, o ninguno encaja en las colecciones que hay.",
   "For this collection: %1": "Para esta colección: %1",
@@ -1300,6 +1301,7 @@
   "Sort with AI": "Ordenar con IA",
   "Sorting books into collections: %1 of %2…": "Ordenando libros en colecciones: %1 de %2…",
   "Take it out of %1": "Quitarlo de %1",
+  "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” in the settings ({global.settings}).": "El grafo de conocimiento enlaza un libro solo con libros de la misma colección principal de la biblioteca, o de una que esté dentro de ella: un libro de estudio y una novela guardados en colecciones principales distintas nunca se enlazan, y a la IA, al preguntarle por uno, no se le dice nada del otro. Los libros que no están en ninguna colección se enlazan entre sí, y un libro en dos colecciones principales, con ambas. No se quita nada, y un libro que pasa a otra colección se lleva sus enlaces. Para enlazar de nuevo toda la biblioteca, marque “Grafo de conocimiento: enlaza libros entre colecciones principales” en la configuración ({global.settings}).",
   "The rule finds %Ln books.": {
     "one": "La regla encuentra %Ln libro.",
     "other": "La regla encuentra %Ln libros.",

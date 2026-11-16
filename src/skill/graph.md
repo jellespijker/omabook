@@ -42,4 +42,6 @@ Only what the user has read counts: nothing from past their furthest page, nothi
 
 A relation whose kind starts with `across: ` (`across: echoes`, `"across": true` in JSON) is a connection between things of two books, noticed while reading, not a fact either book states.
 
+Books in different collections at the top of the library are never linked: `graph connect`, `--beyond`, `graph show` and what the AI is told keep a book to the books on its side (the top collections it is in, through any collection inside them; books in no collection link only with each other; a book in two top collections links with both). A connection made before the split stays stored and shows again once the books share a top collection. Shared things such as a theme stay one node. The user turns this off with `"graph_across_collections": true` in `config.json`; do not link across top collections yourself (`graph link` with an `across:` kind) unless they did.
+
 Kinds: `character`, `place`, `group`, `concept`, `item`, `event`, `thread`, `theme`, `topic`, `question`, `book`, `author`, `series`, `tag`. Adding a node of a name that exists (in the same scope, of the same kind) brings that node up to date. Write what you make up into a scope of its own (`--scope world:<name>`), not into the general graph, which is what the books say.

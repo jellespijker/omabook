@@ -112,6 +112,13 @@ QList<Manual::Topic> Manual::topicList() {
                  "above the shelf. Each is filled by a rule, a search, and by the books you put in or take out with "
                  "{library.collection_book}, which win over the rule. Each keeps its own view, order and reading format, "
                  "and the AI can propose where books belong, as changes to tick in the tidy ({library.tidy}).")},
+             {tr("Collections and the knowledge graph"),
+              tr("The knowledge graph links a book only with books in the same collection at the top of the library, or in "
+                 "one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, "
+                 "asked about one, is told nothing of the other. Books in no collection link with each other, and a book in "
+                 "two top collections with both. Nothing is removed, and a book moved to another collection takes its links "
+                 "along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” "
+                 "in the settings ({global.settings}).")},
              {tr("Search"),
               tr("{library.search} looks everywhere. Start a word with `author:`, `title:`, `series:`, `tag:`, `genre:`, "
                  "`format:`, `lang:`, `publisher:` or `about:` to look in one field, and type `is:paper` or `is:wishlist` "
