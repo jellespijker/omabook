@@ -1,9 +1,14 @@
 #!/usr/bin/env python3
-"""clang-format, on the lines a change adds or modifies.
+"""clang-format: a new file is formatted whole; in an old file, the changed lines are a suggestion.
 
-Most of the code was formatted by hand before .clang-format existed, so the
-whole files are not checked: only what a change writes. `git clang-format`
-formats exactly those lines.
+Most of the code was formatted by hand before .clang-format existed, in a
+style clang-format comes near but can't reproduce: it puts each element of a
+nested braced list on a line of its own where the code packs them, so a
+changed `QJsonObject{{...}, {...}}` would grow by a line an element and run
+into the file-size ratchet. So in a file that existed, the formatting of the
+changed lines is shown as a diff to consider (`git clang-format` applies it)
+and does not fail; match the code around it. A new file has no style of its
+own yet, and must be clang-formatted (`clang-format -i <file>`).
 """
 
 from __future__ import annotations
@@ -51,10 +56,12 @@ def main(argv: list[str]) -> int:
         return 0 if scope.mode == "changed" else 1
     new = [path for path in files if scope.before(path) is None]
     old = [path for path in files if path not in new]
-    findings = changed_lines(scope, old) if old else []
-    for path in new:
-        findings += whole_file(scope, path)
-    return report("clang-format", findings, "run `git clang-format` (changed lines) or `clang-format -i <new file>`")
+    if old and (suggested := changed_lines(scope, old)):
+        report(
+            "clang-format (a suggestion, not blocking)", suggested, "match the code around it; `git clang-format` applies the diff above"
+        )
+    findings = [finding for path in new for finding in whole_file(scope, path)]
+    return report("clang-format", findings, "run `clang-format -i <new file>`")
 
 
 if __name__ == "__main__":

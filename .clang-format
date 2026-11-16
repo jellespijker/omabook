@@ -1,7 +1,9 @@
+# The style the code was written in by hand, as near as clang-format comes
+# (it differs on under a tenth of the lines). Only changed lines are checked:
+# `git clang-format` formats exactly those.
 BasedOnStyle: LLVM
 IndentWidth: 4
+# Access specifiers at the class's own indent: `public:` in column 0.
+AccessModifierOffset: -4
 ColumnLimit: 140
 BreakBeforeBinaryOperators: NonAssignment
-LambdaBodyIndentation: OuterScope
-PenaltyBreakAssignment: 200
-PenaltyExcessCharacter: 10

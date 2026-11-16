@@ -128,6 +128,14 @@ class AstGrep(HarnessTest):
 
 
 class Format(HarnessTest):
+    def test_changed_lines_of_an_old_file_are_a_suggestion(self) -> None:
+        self.repo.write("src/old.cpp", "int answer() { return 42; }\n")
+        self.repo.commit()
+        self.repo.write("src/old.cpp", "int answer() { return 42; }\nint  other( ) {return 1;}\n")
+        result = self.repo.run("check_format.py", "--changed", "src/old.cpp")
+        self.assertQuiet(result)
+        self.assertIn("a suggestion", result.stderr)
+
     def test_a_new_file_is_formatted(self) -> None:
         self.repo.write("src/fresh.cpp", "int  answer( ) {return 42;}\n")
         self.assertFires(self.repo.run("check_format.py", "--changed", "src/fresh.cpp"), "not formatted")

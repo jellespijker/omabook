@@ -4,17 +4,18 @@
 #include "fixtures.h"
 
 #include <QBuffer>
-#include <QDir>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QByteArray>
+#include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QImage>
 #include <QList>
 #include <QPageSize>
 #include <QPainter>
 #include <QPair>
 #include <QPdfWriter>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QString>
 #include <QtEndian>
 #include <archive.h>
@@ -466,6 +467,26 @@ bool calibreConfig(const QString &folder, const QStringList &libraries) {
                      "    name = 'Pocket Reader'\n"
                      "    author = 'D. River'\n"
                      "    version = (2, 0, 0)\n");
+}
+
+QString script(const QString &path, const QByteArray &body) {
+    write(path, "#!/bin/bash\n" + body);
+    QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
+    return path;
+}
+
+QString standInSsh(const QString &folder, const QString &binary) {
+    // With a trash, which the system only moves things to when it is there.
+    QDir(folder).mkpath("there-home/.local/share/Trash/files");
+    QDir(folder).mkpath("there-home/.local/share/Trash/info");
+    const QByteArray home = folder.toUtf8() + "/there-home";
+    const QByteArray path = QFileInfo(binary).absolutePath().toUtf8();
+    return script(folder + "/ssh", "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
+                                   "export HOME='" + home + "' XDG_DATA_HOME='" + home + "/.local/share' XDG_CONFIG_HOME='" + home
+                                       + "/.config' XDG_STATE_HOME='" + home + "/.local/state' XDG_CACHE_HOME='" + home
+                                       + "/.cache' QT_QPA_PLATFORM=offscreen\n"
+                                   "export PATH=\"" + path + ":$PATH\"\n"
+                                   "exec sh -c \"$1\"\n");
 }
 
 } // namespace Fixtures

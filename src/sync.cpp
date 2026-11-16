@@ -7,7 +7,6 @@
 #include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QProcess>
 #include <QScopeGuard>
 #include <QSet>
 #include <QTemporaryDir>
@@ -16,6 +15,7 @@
 
 #include "collections.h"
 #include "formats.h"
+#include "graphsync.h"
 
 namespace {
 
@@ -151,69 +151,6 @@ void note(int &count, QStringList &titles, const QString &title) {
 
 } // namespace
 
-Remote::Remote(const QString &target, const QStringList &ssh)
-    : m_host(target.section(':', 0, 0).trimmed()),
-      m_folder(target.contains(':') ? target.section(':', 1).trimmed() : QString()),
-      // Never a password prompt nobody can see, and no wait on a computer that is off.
-      m_ssh(ssh.isEmpty() ? QStringList{"ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10"} : ssh) {}
-
-QString Remote::quote(const QString &argument) { return "'" + QString(argument).replace("'", "'\\''") + "'"; }
-
-Remote::Result Remote::run(const QString &command, const QString &inputFile, const QString &outputFile) const {
-    Result result;
-    QProcess process;
-    if (!inputFile.isEmpty())
-        process.setStandardInputFile(inputFile);
-    if (!outputFile.isEmpty())
-        process.setStandardOutputFile(outputFile);
-    // "--" ends ssh's own options, so a host can never be read as one.
-    process.start(m_ssh.first(), m_ssh.mid(1) + QStringList{"--", m_host, command});
-    if (!process.waitForStarted(5000)) {
-        result.error = "ssh can't be started.";
-        return result;
-    }
-    if (inputFile.isEmpty())
-        process.closeWriteChannel();
-    // A large book over a slow link takes a while; an hour is a hung link.
-    if (!process.waitForFinished(3600 * 1000)) {
-        process.kill();
-        process.waitForFinished(2000);
-        result.error = "The connection to " + m_host + " stopped answering.";
-        return result;
-    }
-    result.code = process.exitStatus() == QProcess::NormalExit ? process.exitCode() : -1;
-    result.output = process.readAllStandardOutput();
-    result.error = QString::fromUtf8(process.readAllStandardError()).trimmed();
-    return result;
-}
-
-Remote::Result Remote::omabook(const QStringList &arguments) const {
-    // An ssh command doesn't get a login shell's PATH, and ~/.local/bin is
-    // where a build of one's own lives.
-    QString command = "PATH=\"$HOME/.local/bin:$PATH\" omabook";
-    for (const QString &argument : arguments)
-        command += " " + quote(argument);
-    if (!m_folder.isEmpty())
-        command += " --library " + quote(m_folder);
-    return run(command);
-}
-
-bool Remote::fetch(const QString &remoteFile, const QString &localFile) const {
-    return run("cat " + quote(remoteFile), {}, localFile).ok();
-}
-
-bool Remote::send(const QString &localFile, const QString &remoteFile, QString *error) const {
-    if (!QFileInfo(localFile).isReadable()) {
-        if (error)
-            *error = QFileInfo(localFile).fileName() + " can't be read here";
-        return false;
-    }
-    const Result sent = run("cat > " + quote(remoteFile), localFile);
-    if (!sent.ok() && error)
-        *error = sent.error.isEmpty() ? QString("copying %1 stopped").arg(QFileInfo(localFile).fileName()) : sent.error.section('\n', -1);
-    return sent.ok();
-}
-
 // The shape of the manifest two computers exchange. It goes up when a change
 // would make an older Omabook misread a newer one's; an older Omabook then
 // refuses to sync and says to update, instead of acting on what it misread.
@@ -241,13 +178,13 @@ QJsonObject libraryManifest(const Library &library) {
     // Each removal with its time, so the other side removes what didn't
     // change since; "removed" is the same without times, for an Omabook
     // from before, which only leaves those alone. An Omabook from before
-    // collections reads past them.
+    // collections, or the graph, reads past them.
     QJsonArray removals;
     for (const Library::Removal &removal : library.removals())
         removals << QJsonObject{{"key", removal.key}, {"at", removal.at}};
     return {{"version", manifestVersion}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books},
             {"removed", QJsonArray::fromStringList(library.removedHashes())}, {"removals", removals},
-            {"collections", Collections::manifest(library)}};
+            {"collections", Collections::manifest(library)}, {"graph", GraphSync::bundle(library)}};
 }
 
 QJsonObject SyncSummary::toJson() const {
@@ -255,7 +192,9 @@ QJsonObject SyncSummary::toJson() const {
     QJsonObject result{{"received", received}, {"sent", sent}, {"places_taken", placesTaken}, {"places_sent", placesSent},
                        {"details_taken", detailsTaken}, {"details_sent", detailsSent}, {"reading_taken", readingTaken},
                        {"reading_sent", readingSent}, {"removed_here", removedHere}, {"removed_there", removedThere},
-                       {"details_undecided", detailsUndecided}, {"dry_run", dryRun}, {"problems", list(problems)}};
+                       {"details_undecided", detailsUndecided}, {"collections_taken", collectionsTaken},
+                       {"collections_sent", collectionsSent}, {"graph_taken", graphTaken}, {"graph_sent", graphSent},
+                       {"dry_run", dryRun}, {"problems", list(problems)}};
     QJsonObject named{{"details_undecided", list(titles.detailsUndecided)}};
     if (dryRun)
         named = QJsonObject{{"received", list(titles.received)}, {"sent", list(titles.sent)},
@@ -583,15 +522,17 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         QString why;
         for (const FormatFile &file : files) {
             const QString target = folder + "/book." + file.format;
-            if (why.isEmpty() && !remote.send(file.path, target, &why))
-                why = file.format.toUpper() + ": " + why;
+            if (why.isEmpty())
+                if (const auto sent = remote.send(file.path, target); !sent)
+                    why = file.format.toUpper() + ": " + sent.error();
             sentFiles << target;
         }
         const QString details = why.isEmpty() ? writeJson(QJsonDocument(book.meta.toJson())) : QString();
         if (why.isEmpty() && details.isEmpty())
             why = "its details can't be written here";
         if (why.isEmpty())
-            remote.send(details, folder + "/details.json", &why);
+            if (const auto sent = remote.send(details, folder + "/details.json"); !sent)
+                why = sent.error();
         // A book without a file is added as one, then given its reading.
         QStringList add = files.isEmpty() ? QStringList{"add", book.paper ? "--paper" : "--wish"} : QStringList{"add", sentFiles.value(0)};
         add << "--meta" << folder + "/details.json" << "--json";
@@ -622,29 +563,25 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         remote.omabook(readingArguments(theirId, book, current ? std::optional<qint64>(book.detailsAt) : std::nullopt));
         note(summary.sent, summary.titles.sent, book.meta.title);
     }
-    // The collections, once both sides have every book: theirs taken in here
-    // where they changed last, and this library's handed to them to do the
-    // same. An Omabook from before collections has none to give, and can't
-    // take any; the books are in step all the same. A dry run leaves them be.
+    // The collections and the knowledge graph, once both sides have every book: theirs taken in
+    // here (a collection where it changed last, the graph merged), and this library's handed to
+    // them to do the same. An Omabook from before them has none to give and can't take any, and
+    // a dry run leaves them be.
     if (manifest.contains("collections") && !dryRun) {
         summary.collectionsTaken = Collections::take(library, manifest.value("collections").toArray());
-        const QJsonArray mine = Collections::manifest(library);
-        const QString file = scratch.filePath("collections.json");
-        QFile json(file);
-        if (!mine.isEmpty() && json.open(QIODevice::WriteOnly) && json.write(QJsonDocument(mine).toJson(QJsonDocument::Compact)) > 0) {
-            json.close();
-            const QString folder = QString::fromUtf8(remote.run("mktemp -d").output).trimmed();
-            if (!folder.isEmpty()) {
-                const auto cleanup = qScopeGuard([&] { remote.run("rm -rf " + Remote::quote(folder)); });
-                const Remote::Result taken = remote.send(file, folder + "/collections.json")
-                                                 ? remote.omabook({"collections", "take", folder + "/collections.json", "--json"})
-                                                 : Remote::Result();
-                if (taken.ok())
-                    summary.collectionsSent = int(QJsonDocument::fromJson(taken.output).object().value("changed").toInt());
-                else
-                    summary.problems << "The collections could not be sent to " + remote.host() + ".";
-            }
+        if (const QJsonArray mine = Collections::manifest(library); !mine.isEmpty()) {
+            if (const auto sent = remote.handOver(QJsonDocument(mine), {"collections", "take", "--json"}))
+                summary.collectionsSent = *sent;
+            else
+                summary.problems << "The collections could not be sent to " + remote.host() + ".";
         }
+    }
+    if (manifest.contains("graph") && !dryRun) {
+        summary.graphTaken = GraphSync::take(library, manifest.value("graph").toObject());
+        if (const auto sent = remote.handOver(QJsonDocument(GraphSync::bundle(library)), {"graph", "take", "--json"}))
+            summary.graphSent = *sent;
+        else
+            summary.problems << "The knowledge graph could not be sent to " + remote.host() + ": " + sent.error();
     }
     qCInfo(lcSync).noquote() << (dryRun ? "dry run with" : "with") << remote.host() << ":" << summary.received << "received,"
                              << summary.sent << "sent," << summary.placesTaken + summary.placesSent << "reading places,"

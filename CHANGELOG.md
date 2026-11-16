@@ -12,11 +12,17 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- A sync carries the knowledge graph: what was noted while reading a book on
+  one computer is on the other too, merged with what is known there, each
+  fact at the moment it was revealed (#30).
+
 ### Added
 
 - A harness that checks every change the same way, whoever makes it: modern
   C++23 (clang-tidy, ast-grep rules), the layers of `src/`, file-size and
-  function-complexity budgets, formatting of changed lines, secret scanning
+  function-complexity budgets, formatting, secret scanning
   (Talisman) and an issue number in every commit message. It runs in the
   agents' edit hooks, on commit, and in CI (#29).
 

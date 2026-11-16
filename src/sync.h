@@ -7,6 +7,7 @@
 #include <functional>
 
 #include "library.h"
+#include "remote.h"
 
 // Keeping the libraries of several computers in step.
 //
@@ -21,38 +22,8 @@
 // A book is the same book on two computers when they hold a file with the
 // same content. Of a book both have, the newer details win (Book::detailsAt).
 // A book removed on one computer is not fetched back to it, and is removed
-// on the other too, to the trash, unless it changed there since.
-
-// Another computer's Omabook, reached by running commands there.
-class Remote {
-public:
-    // `target` is "computer" or "computer:library folder"; `ssh` is the
-    // program and its first arguments, which tests replace with a stand-in.
-    explicit Remote(const QString &target, const QStringList &ssh = {});
-
-    QString host() const { return m_host; }
-
-    struct Result {
-        int code = -1;
-        QByteArray output;
-        QString error;      // what the command wrote to standard error
-        bool ok() const { return code == 0; }
-    };
-    // Runs `omabook <arguments>` there, on its library.
-    Result omabook(const QStringList &arguments) const;
-    // Runs a shell command there; a file here can be its input or take its output.
-    Result run(const QString &command, const QString &inputFile = {}, const QString &outputFile = {}) const;
-    bool fetch(const QString &remoteFile, const QString &localFile) const;
-    // Copies a file there; `error`, when given, says why it could not.
-    bool send(const QString &localFile, const QString &remoteFile, QString *error = nullptr) const;
-
-    // One argument, quoted for the shell on the other side.
-    static QString quote(const QString &argument);
-
-private:
-    QString m_host, m_folder;
-    QStringList m_ssh;
-};
+// on the other too, to the trash, unless it changed there since. The
+// collections and the knowledge graph (graphsync.h) travel too.
 
 // Everything a library holds, as the other side of a sync needs to see it.
 QJsonObject libraryManifest(const Library &library);
@@ -81,6 +52,8 @@ struct SyncSummary {
     int detailsUndecided = 0;   // books whose details differ with no time to say which are newer
     int collectionsTaken = 0;   // collections that changed there last, brought here
     int collectionsSent = 0;    // collections that changed here last, brought there
+    int graphTaken = 0;         // things, facts and relations of the knowledge graph new here
+    int graphSent = 0;          // the same, new there
     bool dryRun = false;        // nothing was changed; the counts are what would be
     // The titles each count is of, for showing on a terminal (never logged).
     struct Titles {

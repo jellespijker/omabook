@@ -18,7 +18,7 @@ hand: `bin/check` (it compares the working tree with `main`).
 
 | Check | Rule file | Tool |
 |---|---|---|
-| Formatting of changed lines | `.clang-format` | clang-format |
+| Formatting: new files whole; changed lines in old files as a suggestion | `.clang-format` | clang-format |
 | Modern C++23 and the guidelines | [20-modern-cpp.md](20-modern-cpp.md), `.clang-tidy` | clang-tidy (needs `bin/build`) |
 | Project rules the compiler can't see | [20-modern-cpp.md](20-modern-cpp.md), `rules/cpp/*.yml` | ast-grep |
 | Layers and dependencies | [10-architecture.md](10-architecture.md), `.agents/architecture.toml` | `check_architecture.py` |

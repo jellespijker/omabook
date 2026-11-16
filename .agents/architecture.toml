@@ -31,7 +31,7 @@ modules = [
 summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
 uses = ["formats", "foundation"]
 modules = [
-  "booksides", "catalog", "graph", "graphcontext", "knowledgesearch", "libraries", "library",
+  "booksides", "catalog", "graph", "graphcontext", "graphsync", "knowledgesearch", "libraries", "library",
   "textmarks",
 ]
 
@@ -41,14 +41,14 @@ uses = ["library", "formats", "foundation"]
 modules = [
   "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
-  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts",
+  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts", "remote",
   "readingsite", "scriptplugin", "scriptplugins", "sitedesk", "tour", "whatsnew",
 ]
 
 [layers.operations]
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
-modules = ["bookops", "collections", "graphbatch", "graphtools", "plugintools", "scripttools", "sync"]
+modules = ["bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "plugintools", "scripttools", "sync"]
 
 # The two front ends are peers: neither includes the other. What both need
 # belongs in operations or below.

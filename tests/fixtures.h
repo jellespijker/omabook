@@ -54,4 +54,13 @@ bool calibreChange(const QString &folder, const QStringList &statements);
 // type plugin that is switched off in Calibre, and a device driver).
 bool calibreConfig(const QString &folder, const QStringList &libraries);
 
+// A program for the tests to run: a shell script at `path`.
+QString script(const QString &path, const QByteArray &body);
+// A stand-in for ssh that runs the command on this computer, with the
+// omabook at `binary`, as another computer whose home is "there-home" in
+// `folder` (its trash too). Every folder of its own, never this computer's:
+// an omabook command reads the settings in XDG_CONFIG_HOME and, on its way
+// out, looks at every library they name, which would open the user's own.
+QString standInSsh(const QString &folder, const QString &binary);
+
 } // namespace Fixtures

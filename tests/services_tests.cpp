@@ -33,31 +33,9 @@
 
 namespace {
 
-// A program for the tests to run: a shell script in a temp folder.
-QString script(const QString &path, const QByteArray &body) {
-    Fixtures::write(path, "#!/bin/bash\n" + body);
-    QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
-    return path;
-}
+using Fixtures::script;
 
-// A stand-in for ssh that runs the command on this computer, with this
-// build's omabook, as another computer whose home is "there-home" in `dir`
-// (its trash too).
-QString standInSsh(const QTemporaryDir &dir) {
-    // With a trash, which the system only moves things to when it is there.
-    QDir(dir.path()).mkpath("there-home/.local/share/Trash/files");
-    QDir(dir.path()).mkpath("there-home/.local/share/Trash/info");
-    // Every folder of its own, never this computer's: an omabook command
-    // reads the settings in XDG_CONFIG_HOME and, on its way out, looks at
-    // every library they name, which would open the user's own.
-    const QByteArray home = dir.path().toUtf8() + "/there-home";
-    return script(dir.filePath("ssh"), "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
-                                       "export HOME='" + home + "' XDG_DATA_HOME='" + home + "/.local/share' XDG_CONFIG_HOME='" + home
-                                           + "/.config' XDG_STATE_HOME='" + home + "/.local/state' XDG_CACHE_HOME='" + home
-                                           + "/.cache' QT_QPA_PLATFORM=offscreen\n"
-                                       "export PATH=\"" + QFileInfo(OMABOOK_BINARY).absolutePath().toUtf8() + ":$PATH\"\n"
-                                       "exec sh -c \"$1\"\n");
-}
+QString standInSsh(const QTemporaryDir &dir) { return Fixtures::standInSsh(dir.path(), OMABOOK_BINARY); }
 
 // This computer's home, and so its trash, in a test's folder for as long as
 // it lives.
