@@ -1,0 +1,56 @@
+#pragma once
+
+#include <QString>
+#include <QStringList>
+#include <QtTypes>
+#include <optional>
+
+class Library;
+
+// Owned spaces and content-derived global ids (ADR 0001).
+//
+// Each library has one device id of its own and a personal space, plus a
+// space for each story world ("world:…"). Every row that travels is named by
+// a global id in `global_ids`, derived from what the thing is so two
+// computers that make the id of the same thing independently make the same
+// one.
+class Spaces {
+public:
+    // This library's device id (one per library, created on first ask).
+    [[nodiscard]] static QString deviceId(const Library &library);
+
+    // Ensures this library's personal space exists and answers its id.
+    [[nodiscard]] static QString personalSpace(const Library &library);
+    // The space a graph scope belongs to: the personal space for "", and a
+    // story-world space for "world:…".
+    [[nodiscard]] static QString spaceForScope(const Library &library, const QString &scope);
+
+    // The library's persistent hybrid logical clock in `library_state`.
+    [[nodiscard]] static qint64 lastHlc(const Library &library);
+    [[nodiscard]] static qint64 tickHlc(const Library &library, std::optional<qint64> wallSeconds = std::nullopt);
+    [[nodiscard]] static qint64 observeHlc(const Library &library, qint64 remote);
+
+    // Pure content-derived global-id rules.
+    [[nodiscard]] static QString bookGlobalId(const QStringList &fileHashes, const QStringList &entryKeys, qint64 fallbackId = 0);
+    [[nodiscard]] static QString collectionGlobalId(const QString &path);
+    [[nodiscard]] static QString nodeGlobalId(const QString &scope, const QString &kind, const QString &name);
+    [[nodiscard]] static QString edgeGlobalId(const QString &sourceGlobalId, const QString &targetGlobalId, const QString &kind);
+    [[nodiscard]] static QString factGlobalId(const QString &nodeGlobalId, const QString &kind, const QString &value,
+                                              const QString &bookGlobalId = {});
+    [[nodiscard]] static QString removalGlobalId(const QString &removalKey);
+
+    // Looks up or records global ids in `global_ids`.
+    [[nodiscard]] static QString globalId(const Library &library, const QString &entity, qint64 localId);
+    [[nodiscard]] static qint64 localId(const Library &library, const QString &entity, const QString &globalId);
+    static void setGlobalId(const Library &library, const QString &entity, qint64 localId, const QString &globalId);
+
+    // Ensures a row has its global id in `global_ids` and answers it.
+    [[nodiscard]] static QString bookId(const Library &library, qint64 localId);
+    [[nodiscard]] static QString collectionId(const Library &library, qint64 localId);
+    [[nodiscard]] static QString nodeId(const Library &library, qint64 localId);
+    [[nodiscard]] static QString edgeId(const Library &library, qint64 localId);
+    [[nodiscard]] static QString factId(const Library &library, qint64 localId);
+
+    // Gives every existing row in the library its global id.
+    static void assignAll(const Library &library);
+};

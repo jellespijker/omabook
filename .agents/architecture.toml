@@ -32,7 +32,7 @@ summary = "The library and the knowledge graph: storage, books, their sides and 
 uses = ["formats", "foundation"]
 modules = [
   "booksides", "catalog", "graph", "graphcontext", "graphsync", "knowledgesearch", "libraries", "library",
-  "textmarks",
+  "librarymigrations", "spaces", "textmarks",
 ]
 
 [layers.services]

@@ -354,8 +354,12 @@ public:
     };
 
 private:
-    // The knowledge graph is kept in the same database.
+    // The knowledge graph, schema history and spaces live in the same database.
     friend class Graph;
+    friend class LibraryMigrations;
+    friend class Spaces;
+    friend class ChangeLog;
+    friend class SpaceReplay;
     mutable int m_batches = 0;
     QString bookFolder(qint64 id) const;
     // Keeps a copy of the database as it is, or says why it couldn't.

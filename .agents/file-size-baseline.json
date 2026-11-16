@@ -31,7 +31,7 @@
     "src/graphtools.cpp": 899,
     "src/hardcover.cpp": 564,
     "src/librarian.cpp": 558,
-    "src/library.cpp": 1514,
+    "src/library.cpp": 1328,
     "src/mcp.cpp": 1773,
     "src/openlibrarylog.cpp": 520,
     "src/pluginfinder.cpp": 553,
