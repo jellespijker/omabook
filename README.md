@@ -591,8 +591,8 @@ The server speaks protocol revision `2026-07-28` (no handshake: every request ca
 Each release has a ready-built package for Arch and Omarchy (x86_64), built and tested in a clean container:
 
 ```bash
-curl -LO https://github.com/jellespijker/omabook/releases/download/v0.1.5/omabook-0.1.5-1-x86_64.pkg.tar.zst
-sudo pacman -U omabook-0.1.5-1-x86_64.pkg.tar.zst
+curl -LO https://github.com/jellespijker/omabook/releases/download/v0.1.5.1/omabook-0.1.5.1-1-x86_64.pkg.tar.zst
+sudo pacman -U omabook-0.1.5.1-1-x86_64.pkg.tar.zst
 ```
 
 The package is downloaded first because pacman asks for a signature file next to a package it fetches from a link, and these packages are not signed; the release page lists each file's SHA-256 to check it against (`sha256sum omabook-*.pkg.tar.zst`). Pick the newest release on the [releases page](https://github.com/jellespijker/omabook/releases); installed this way, a newer version is installed the same way. Omabook then appears in the app launcher (`Super + Space`).

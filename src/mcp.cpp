@@ -1126,16 +1126,18 @@ QList<Tool> coreTools() {
 
     tools << Tool{"plugin_set_enabled", "Turn a plugin on or off",
                   "Switches a plugin on or off, by its id from plugins_list. Only those marked switchable can be.",
-                  schema({{"id", string("The plugin's id, such as builtin:Crossref.")},
+                  schema({{"id", string("The plugin's id, such as builtin:Crossref, or its name.")},
                           {"enabled", boolean("True to turn it on, false to turn it off.")}},
                          {"id", "enabled"}),
                   Changes, [](const QJsonObject &arguments) {
                       Settings settings;
                       Plugins registry(&settings);
-                      registry.list();
-                      const QString id = arguments.value("id").toString();
-                      if (!registry.setEnabled(id, arguments.value("enabled").toBool()))
-                          return Result::fail("There is no plugin " + id + " that can be turned on or off; see plugins_list.");
+                      QStringList could;
+                      const QString given = arguments.value("id").toString();
+                      const QString id = registry.idFor(given, &could);
+                      if (id.isEmpty() || !registry.setEnabled(id, arguments.value("enabled").toBool()))
+                          return Result::fail("There is no plugin " + given + " that can be turned on or off, or more than one"
+                                              + (could.isEmpty() ? QString() : " (could be: " + could.join(", ") + ")") + "; see plugins_list.");
                       for (const PluginInfo &plugin : registry.list())
                           if (plugin.id == id)
                               return Result::ok(pluginJson(plugin));

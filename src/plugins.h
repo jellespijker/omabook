@@ -70,6 +70,11 @@ public:
     // Without asking Calibre: what is known so far. For the GUI thread.
     QList<PluginInfo> known() const;
     bool setEnabled(const QString &id, bool enabled);
+    // The id a person or an agent means: the id itself, the part after its
+    // origin ("storyteller" for "folder:storyteller"), or the plugin's name,
+    // case aside. Empty when it means none or more than one; `candidates`
+    // then holds the ids it could mean, or the closest ones.
+    QString idFor(const QString &given, QStringList *candidates = nullptr) const;
     // The sources of book details are asked in a set order, which the user
     // can change: the ids of every metadata plugin as they are asked now,
     // one of them moved earlier (`by` below zero) or later, or all of them

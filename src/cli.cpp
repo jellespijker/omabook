@@ -1120,15 +1120,20 @@ int plugins(const QStringList &arguments) {
                                "metadata plugins (run inside Calibre), and programs in the plugin folder. Or turn a "
                                "metadata plugin on or off.");
     command.parser.addPositionalArgument("action", "Nothing to list, or enable or disable.", "[enable|disable]");
-    command.parser.addPositionalArgument("id", "The plugin's id, as the list prints it.", "[id]");
+    command.parser.addPositionalArgument("id", "The plugin: its id as the list prints it, or its name.", "[id]");
     if (!command.parse(arguments, 0, 2))
         return 1;
     Settings settings;
     Plugins registry(&settings);
     const QString action = command.argument(0);
     if (action == "enable" || action == "disable") {
-        registry.list();
-        if (!registry.setEnabled(command.argument(1), action == "enable"))
+        QStringList could;
+        const QString id = registry.idFor(command.argument(1), &could);
+        if (id.isEmpty())
+            return fail(could.size() > 1 ? "\"" + command.argument(1) + "\" could be any of: " + could.join(", ") + "; give its id."
+                        : "There is no plugin " + command.argument(1) + " that can be turned on or off."
+                              + (could.isEmpty() ? QString() : " Did you mean " + could.join(", ") + "?"));
+        if (!registry.setEnabled(id, action == "enable"))
             return fail("There is no plugin " + command.argument(1) + " that can be turned on or off.");
     } else if (!action.isEmpty()) {
         return fail("Use omabook plugins, omabook plugins enable <id> or omabook plugins disable <id>.");

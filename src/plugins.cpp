@@ -245,6 +245,33 @@ bool Plugins::setOrder(const QStringList &ids) {
     return true;
 }
 
+QString Plugins::idFor(const QString &given, QStringList *candidates) const {
+    const QString wanted = given.trimmed();
+    const QList<PluginInfo> all = list();
+    for (const PluginInfo &plugin : all)
+        if (plugin.id == wanted)
+            return plugin.id;
+    QStringList matching;
+    for (const PluginInfo &plugin : all) {
+        const QString bare = plugin.id.contains(':') ? plugin.id.section(':', 1) : plugin.id;
+        if (bare.compare(wanted, Qt::CaseInsensitive) == 0 || plugin.id.compare(wanted, Qt::CaseInsensitive) == 0
+            || plugin.name.compare(wanted, Qt::CaseInsensitive) == 0)
+            matching << plugin.id;
+    }
+    matching.removeDuplicates();
+    if (matching.size() == 1)
+        return matching.first();
+    if (candidates) {
+        *candidates = matching;
+        // Nothing alike: the ones whose id or name hold what was given.
+        if (matching.isEmpty())
+            for (const PluginInfo &plugin : all)
+                if (!wanted.isEmpty() && (plugin.id.contains(wanted, Qt::CaseInsensitive) || plugin.name.contains(wanted, Qt::CaseInsensitive)))
+                    *candidates << plugin.id;
+    }
+    return {};
+}
+
 bool Plugins::setEnabled(const QString &id, bool enabled) {
     for (const PluginInfo &plugin : known()) {
         if (plugin.id == id && plugin.switchable) {

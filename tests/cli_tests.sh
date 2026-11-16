@@ -125,6 +125,9 @@ expect "the plugins are listed" 0 "builtin:Open Library" "$omabook" plugins
 expect "the plugins say what they bring" 0 '"fields"' "$omabook" plugins --json
 expect "a source is switched off" 0 "off	metadata	builtin:Crossref" "$omabook" plugins disable builtin:Crossref
 expect "and on again" 0 "on	metadata	builtin:Crossref" "$omabook" plugins enable builtin:Crossref
+expect "a plugin by its plain name" 0 "off	metadata	builtin:Crossref" "$omabook" plugins disable crossref
+expect "and by its id again" 0 "on	metadata	builtin:Crossref" "$omabook" plugins enable builtin:Crossref
+expect "a name that is no plugin says what it may mean" 1 "Did you mean builtin:Crossref" "$omabook" plugins enable Cross
 expect "what Omabook is made of can't be switched" 1 "no plugin format:EPUB" "$omabook" plugins disable format:EPUB
 # The Calibre plugin, in a home that has no Calibre library.
 expect "Calibre's libraries are listed, here none" 0 "[" "$omabook" calibre libraries --json
