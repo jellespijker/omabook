@@ -152,6 +152,8 @@ QString Spaces::bookId(const Library &library, qint64 localId) {
         hashes << query.value(0).toString();
     if (!hashes.isEmpty()) {
         QString derived = bookGlobalId(hashes, {}, localId);
+        if (!existing.isEmpty() && existing != derived)
+            library.exec("UPDATE ops SET id = ? WHERE entity = 'book' AND id = ?", {derived, existing});
         setGlobalId(library, u"book"_s, localId, derived);
         return derived;
     }
@@ -168,14 +170,20 @@ QString Spaces::bookId(const Library &library, qint64 localId) {
 QString Spaces::collectionId(const Library &library, qint64 localId) {
     if (localId <= 0)
         return {};
+    QString existing = globalId(library, u"collection"_s, localId);
     for (const Collection &collection : library.collections(true)) {
         if (collection.id == localId) {
             QString derived = collectionGlobalId(collection.path);
+            if (!existing.isEmpty() && existing != derived) {
+                library.exec("UPDATE ops SET id = ? WHERE entity = 'collection' AND id = ?", {derived, existing});
+                library.exec("UPDATE ops SET value = ? WHERE entity = 'collection' AND field = 'parent' AND value = ?",
+                             {derived, existing});
+            }
             setGlobalId(library, u"collection"_s, localId, derived);
             return derived;
         }
     }
-    return globalId(library, u"collection"_s, localId);
+    return existing;
 }
 
 QString Spaces::nodeId(const Library &library, qint64 localId) {

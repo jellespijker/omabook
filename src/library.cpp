@@ -18,14 +18,16 @@
 #include <QVariant>
 #include <algorithm>
 #include <array>
-#include <functional>
 #include <atomic>
+#include <functional>
 #include <ranges>
 #include <span>
 
 #include "booksides.h"
+#include "changelog.h"
 #include "formats.h"
 #include "graph.h"
+#include "hlc.h"
 #include "librarymigrations.h"
 #include "log.h"
 #include "readingformat.h"
@@ -52,8 +54,7 @@ namespace {
 }
 
 [[nodiscard]] QString folderFor(const BookMeta &meta, qint64 id) {
-    return fileName(meta.authors.value(0), "Unknown") + "/" + fileName(meta.title, "Untitled")
-           + QString(" (%1)").arg(id);
+    return fileName(meta.authors.value(0), "Unknown") + "/" + fileName(meta.title, "Untitled") + QString(" (%1)").arg(id);
 }
 
 [[nodiscard]] Book bookFrom(const QSqlQuery &query) {
@@ -87,13 +88,11 @@ namespace {
 // The details as the books table keeps them, to tell whether a change
 // changes anything.
 [[nodiscard]] QVariantList storedDetails(const BookMeta &meta) {
-    return {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
-            meta.isbn, meta.published, meta.description, meta.tags.join(", ")};
+    return {meta.title,    meta.authorText(), meta.series,    meta.seriesIndex, meta.publisher,
+            meta.language, meta.isbn,         meta.published, meta.description, meta.tags.join(", ")};
 }
 
-[[nodiscard]] QString compact(const QJsonObject &object) {
-    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
-}
+[[nodiscard]] QString compact(const QJsonObject &object) { return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact)); }
 
 // A null QString binds as SQL NULL, which the NOT NULL columns refuse; a book
 // with no series has the empty string for one.
@@ -120,28 +119,6 @@ bool failed(QString *error, const QString &why) {
     return false;
 }
 
-// A transaction that is rolled back unless it was committed, however the
-// function that began it ends.
-class Transaction {
-public:
-    explicit Transaction(QSqlDatabase &database) : m_database(database) { m_database.transaction(); }
-    ~Transaction() {
-        if (!m_committed)
-            m_database.rollback();
-    }
-    Transaction(const Transaction &) = delete;
-    Transaction &operator=(const Transaction &) = delete;
-
-    void commit() {
-        m_committed = true;
-        m_database.commit();
-    }
-
-private:
-    QSqlDatabase &m_database;
-    bool m_committed = false;
-};
-
 } // namespace
 
 QString Book::status() const {
@@ -157,8 +134,8 @@ QString Book::held() const {
 namespace {
 
 // The fields a search can look in one at a time, as "key:value".
-constexpr std::array searchKeys{"author"_L1, "title"_L1, "series"_L1, "tag"_L1, "genre"_L1, "format"_L1, "lang"_L1,
-                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1, "rating"_L1, "knows"_L1};
+constexpr std::array searchKeys{"author"_L1,    "title"_L1, "series"_L1, "tag"_L1, "genre"_L1,  "format"_L1, "lang"_L1,
+                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1,  "rating"_L1, "knows"_L1};
 
 // The words of a search, a quoted phrase as one: `tag:"science fiction"`
 // is one word, and so is `"the hobbit"`.
@@ -185,16 +162,15 @@ constexpr std::array searchKeys{"author"_L1, "title"_L1, "series"_L1, "tag"_L1, 
 
 // What tags say a book is a story, and what tags say it is about the world.
 // A tag that is both ("Historical Fiction", "Science Fiction") is a story.
-constexpr std::array storyWords{"fiction"_L1, "novel"_L1, "fantasy"_L1, "sci-fi"_L1, "mystery"_L1, "mysteries"_L1,
-                                "thriller"_L1, "romance"_L1, "horror"_L1, "crime"_L1, "adventure"_L1, "short stories"_L1,
-                                "fairy tale"_L1, "dystopia"_L1, "fables"_L1, "graphic novel"_L1, "detective"_L1};
-constexpr std::array worldWords{"nonfiction"_L1, "non-fiction"_L1, "history"_L1, "biography"_L1, "memoir"_L1,
-                                "science"_L1, "programming"_L1, "computer"_L1, "software"_L1, "technology"_L1,
-                                "philosophy"_L1, "business"_L1, "economics"_L1, "reference"_L1, "textbook"_L1,
-                                "self-help"_L1, "psychology"_L1, "mathematics"_L1, "politics"_L1, "essays"_L1,
-                                "travel"_L1, "cooking"_L1, "health"_L1, "education"_L1, "engineering"_L1,
-                                "management"_L1, "design"_L1, "language"_L1, "religion"_L1, "law"_L1,
-                                "nature"_L1, "cookbook"_L1, "parenting"_L1, "medicine"_L1};
+constexpr std::array storyWords{"fiction"_L1,    "novel"_L1,    "fantasy"_L1, "sci-fi"_L1,        "mystery"_L1,   "mysteries"_L1,
+                                "thriller"_L1,   "romance"_L1,  "horror"_L1,  "crime"_L1,         "adventure"_L1, "short stories"_L1,
+                                "fairy tale"_L1, "dystopia"_L1, "fables"_L1,  "graphic novel"_L1, "detective"_L1};
+constexpr std::array worldWords{"nonfiction"_L1,  "non-fiction"_L1, "history"_L1,   "biography"_L1,  "memoir"_L1,     "science"_L1,
+                                "programming"_L1, "computer"_L1,    "software"_L1,  "technology"_L1, "philosophy"_L1, "business"_L1,
+                                "economics"_L1,   "reference"_L1,   "textbook"_L1,  "self-help"_L1,  "psychology"_L1, "mathematics"_L1,
+                                "politics"_L1,    "essays"_L1,      "travel"_L1,    "cooking"_L1,    "health"_L1,     "education"_L1,
+                                "engineering"_L1, "management"_L1,  "design"_L1,    "language"_L1,   "religion"_L1,   "law"_L1,
+                                "nature"_L1,      "cookbook"_L1,    "parenting"_L1, "medicine"_L1};
 
 [[nodiscard]] bool tagHas(const QString &tag, std::span<const QLatin1StringView> words) {
     return std::ranges::any_of(words, [&tag](QLatin1StringView word) { return tag.contains(word, Qt::CaseInsensitive); });
@@ -316,8 +292,15 @@ QJsonObject Collection::toJson() const {
             array << id;
         return array;
     };
-    return {{"id", id}, {"name", name}, {"path", path}, {"parent", parent}, {"rule", rule}, {"included", ids(included)},
-            {"excluded", ids(excluded)}, {"shelf", shelf}, {"format", format}};
+    return {{"id", id},
+            {"name", name},
+            {"path", path},
+            {"parent", parent},
+            {"rule", rule},
+            {"included", ids(included)},
+            {"excluded", ids(excluded)},
+            {"shelf", shelf},
+            {"format", format}};
 }
 
 QJsonObject Book::toJson() const {
@@ -372,6 +355,8 @@ Library::Batch::Batch(const Library &library) : m_library(library) {
 }
 
 Library::Batch::~Batch() {
+    if (m_library.m_batches == 1)
+        ChangeLog::afterWrite(m_library);
     if (--m_library.m_batches == 0)
         QSqlDatabase::database(m_library.m_connection).commit();
 }
@@ -385,26 +370,13 @@ int Library::formatVersion() const {
     return version.next() ? version.value(0).toInt() : 0;
 }
 
-std::expected<void, QString> Library::backUp(int schema) const {
-    const QString folder = backupFolder();
-    const QString file = QString("%1/omabook-format-%2-%3.db")
-                             .arg(folder).arg(schema).arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
-    if (!QDir().mkpath(folder))
-        return std::unexpected(folder + " can't be made.");
-    // SQLite writes the copy itself, whole and consistent, also while the
-    // write-ahead log holds changes the main file doesn't have yet.
-    QSqlQuery copy(QSqlDatabase::database(m_connection));
-    QFile::remove(file);
-    if (!copy.exec(QString("VACUUM INTO '%1'").arg(QString(file).replace('\'', "''"))))
-        return std::unexpected(copy.lastError().text());
-    // The last five are kept; older ones go.
-    const QFileInfoList kept = QDir(folder).entryInfoList({"omabook-format-*.db"}, QDir::Files, QDir::Time);
-    for (const QFileInfo &old : kept | std::views::drop(5))
-        QFile::remove(old.filePath());
-    return {};
+bool Library::exec(const QString &sql, const QVariantList &values) const {
+    if (!statement(m_connection, sql, values).exec())
+        return false;
+    if (m_batches == 0)
+        ChangeLog::afterWrite(*this);
+    return true;
 }
-
-bool Library::exec(const QString &sql, const QVariantList &values) const { return statement(m_connection, sql, values).exec(); }
 
 QSqlQuery Library::query(const QString &sql, const QVariantList &values) const {
     QSqlQuery query(QSqlDatabase::database(m_connection));
@@ -420,7 +392,10 @@ std::expected<qint64, QString> Library::insert(const QString &sql, const QVarian
     QSqlQuery insert = statement(m_connection, sql, values);
     if (!insert.exec())
         return std::unexpected(insert.lastError().text());
-    return insert.lastInsertId().toLongLong();
+    const qint64 id = insert.lastInsertId().toLongLong();
+    if (m_batches == 0)
+        ChangeLog::afterWrite(*this);
+    return id;
 }
 
 bool Library::open(QString *error) {
@@ -439,8 +414,8 @@ bool Library::open(QString *error) {
     // The write-ahead log needs memory shared between processes, which a
     // folder on another machine (sshfs, NFS, SMB) can't give; there the
     // older rollback journal is the one that works.
-    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4", "cifs",
-                                                          "smb3", "smbfs", "9p", "fuse.rclone"};
+    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4",       "cifs",
+                                                          "smb3",       "smbfs", "9p",  "fuse.rclone"};
     const QByteArray fileSystem = QStorageInfo(m_root).fileSystemType();
     const bool local = !std::ranges::contains(remote, QByteArrayView(fileSystem));
     exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
@@ -449,7 +424,7 @@ bool Library::open(QString *error) {
     if (const auto migrated = LibraryMigrations::migrate(*this); !migrated)
         return fail(migrated.error());
     if (!m_keepFormat)
-        Spaces::assignAll(*this);
+        ChangeLog::open(*this);
     return true;
 }
 
@@ -473,20 +448,22 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
     BookMeta meta = known ? *known : Formats::readMeta(file);
     if (meta.title.isEmpty())
         meta.title = Formats::metaFromFileName(file).title;
-    QSqlDatabase database = QSqlDatabase::database(m_connection);
-    Transaction transaction(database);
-    const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
-                           "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
-                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
-                            QDateTime::currentSecsSinceEpoch(), QDateTime::currentSecsSinceEpoch()});
-    if (!id)
-        return {.error = "The library can't be written: " + id.error()};
-    const QString folder = folderFor(meta, *id);
-    exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
-    transaction.commit();
+    std::expected<qint64, QString> id;
+    QString folder;
+    {
+        const ChangeLog::Scope guard;
+        id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
+                    "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language, meta.isbn, meta.published,
+                     meta.description, meta.tags.join(", "), QDateTime::currentSecsSinceEpoch(), QDateTime::currentSecsSinceEpoch()});
+        if (!id)
+            return {.error = "The library can't be written: " + id.error()};
+        folder = folderFor(meta, *id);
+        exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
+    }
 
     if (QString error; !addFormat(*id, file, &error)) {
+        const ChangeLog::Scope guard;
         exec("DELETE FROM books WHERE id = ?", {*id});
         QDir(m_root + "/" + folder).removeRecursively();
         return {.error = error};
@@ -509,8 +486,8 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
         return fail("The book's folder can't be created: " + folder);
 
     const QString name = fileName(book->meta.title, "Untitled")
-                         + (book->meta.authors.isEmpty() ? QString() : " - " + fileName(book->meta.authors.first(), "Unknown"))
-                         + "." + format;
+                         + (book->meta.authors.isEmpty() ? QString() : " - " + fileName(book->meta.authors.first(), "Unknown")) + "."
+                         + format;
     const QString target = folder + "/" + name;
     const QString hash = hashFile(file);
     // The very file is this book's already: there is nothing to copy.
@@ -550,11 +527,12 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
 Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
     if (meta.title.trimmed().isEmpty())
         return {.error = "A book needs a title."};
-    const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
-                           "description, tags, added, paper, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
-                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
-                            QDateTime::currentSecsSinceEpoch(), paper, QDateTime::currentSecsSinceEpoch()});
+    const Batch batch(*this);
+    const auto id =
+        insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
+               "description, tags, added, paper, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+               {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language, meta.isbn, meta.published,
+                meta.description, meta.tags.join(", "), QDateTime::currentSecsSinceEpoch(), paper, QDateTime::currentSecsSinceEpoch()});
     if (!id)
         return {.error = "The library can't be written: " + id.error()};
     // The folder is made when there is something to put in it: a cover, or
@@ -583,7 +561,7 @@ bool Library::setPaper(qint64 id, bool paper) {
                 {paper, paper, QDateTime::currentSecsSinceEpoch(), id});
 }
 
-bool Library::setDetailsAt(qint64 id, qint64 at) { return exec("UPDATE books SET details_at = ? WHERE id = ?", {at, id}); }
+bool Library::setDetailsAt(qint64 id, qint64 at) { return ChangeLog::setDetailsAt(*this, id, at); }
 
 QJsonObject Library::bookFormat(qint64 id) const {
     QSqlQuery found = query("SELECT options FROM book_format WHERE book_id = ?", {id});
@@ -614,12 +592,13 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
         identifiers.insert(scheme, value);
     if (identifiers == found->identifiers)
         return true;
+    if (at && *at > 0)
+        (void)Spaces::observeHlc(*this, *at);
     return exec("UPDATE books SET identifiers = ?, details_at = ? WHERE id = ?",
-                {compact(identifiers), at.value_or(QDateTime::currentSecsSinceEpoch()), id});
+                {compact(identifiers), at ? Hlc::seconds(*at) : QDateTime::currentSecsSinceEpoch(), id});
 }
 
-QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title,
-                               const QStringList &authors) {
+QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title, const QStringList &authors) {
     static const QRegularExpression other(R"([^\p{L}\p{N}]+)");
     const auto fold = [](QString text) { return text.toCaseFolded().remove(other); };
     QStringList keys;
@@ -639,15 +618,14 @@ QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &is
     return keys;
 }
 
-QStringList Library::entryKeys(const Book &book) {
-    return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors);
-}
+QStringList Library::entryKeys(const Book &book) { return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors); }
 
 qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) const {
     if (value.isEmpty())
         return 0;
     const QList<Book> all = books();
-    const auto called = std::ranges::find_if(all, [&scheme, &value](const Book &book) { return book.identifiers.value(scheme).toString() == value; });
+    const auto called =
+        std::ranges::find_if(all, [&scheme, &value](const Book &book) { return book.identifiers.value(scheme).toString() == value; });
     return called != all.end() ? called->id : 0;
 }
 
@@ -655,6 +633,7 @@ bool Library::remove(qint64 id, QString *error) {
     const QString folder = bookFolder(id);
     if (folder.isEmpty())
         return failed(error, QString("There is no book %1.").arg(id));
+    const Batch batch(*this);
     const QList<FormatFile> formats = formatFiles(id);
     // A file another book holds too (the one a merge kept took it over)
     // is still in the library, so a sync mustn't take it for removed.
@@ -703,13 +682,17 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
     const auto before = book(id);
     if (!before)
         return failed(error, QString("There is no book %1.").arg(id));
+    const Batch batch(*this);
+    if (at && *at > 0)
+        (void)Spaces::observeHlc(*this, *at);
     BookMeta kept = meta;
     if (kept.title.isEmpty())
         kept.title = before->meta.title;
     QVariantList values = storedDetails(kept);
     // Stamped when something changed, or with the time it is given.
     const bool changed = values != storedDetails(before->meta);
-    values << (at ? *at : changed ? QDateTime::currentSecsSinceEpoch() : before->detailsAt) << id;
+    const qint64 stamp = changed ? QDateTime::currentSecsSinceEpoch() : before->detailsAt;
+    values << (at ? Hlc::seconds(*at) : stamp) << id;
     if (!exec("UPDATE books SET title = ?, authors = ?, series = ?, series_index = ?, publisher = ?, language = ?, "
               "isbn = ?, published = ?, description = ?, tags = ?, details_at = ? WHERE id = ?",
               values))
@@ -740,8 +723,11 @@ bool Library::setCover(qint64 id, const QImage &cover, std::optional<qint64> at)
     if (!scaled.convertToFormat(QImage::Format_RGB32).save(file, "JPG", 88))
         return false;
     // The same picture again is no change to the details.
+    if (at && *at > 0)
+        (void)Spaces::observeHlc(*this, *at);
     if (at || hashFile(file) != before)
-        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?", {at.value_or(QDateTime::currentSecsSinceEpoch()), id});
+        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?",
+                    {at ? Hlc::seconds(*at) : QDateTime::currentSecsSinceEpoch(), id});
     return exec("UPDATE books SET has_cover = 1 WHERE id = ?", {id});
 }
 
@@ -787,11 +773,7 @@ Progress Library::progress(qint64 id) const {
             .updated = found.value(3).toLongLong()};
 }
 
-void Library::setProgress(qint64 id, const Progress &progress) {
-    exec("INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
-         {id, progress.section, progress.fraction, progress.percent,
-          progress.updated > 0 ? progress.updated : QDateTime::currentSecsSinceEpoch()});
-}
+void Library::setProgress(qint64 id, const Progress &progress) { ChangeLog::setProgress(*this, id, progress); }
 
 QList<FormatFile> Library::formatFiles(qint64 id) const {
     const QString folder = bookFolder(id);
@@ -1006,9 +988,7 @@ namespace {
     return {};
 }
 
-[[nodiscard]] QJsonObject objectFrom(const QVariant &text) {
-    return QJsonDocument::fromJson(text.toString().toUtf8()).object();
-}
+[[nodiscard]] QJsonObject objectFrom(const QVariant &text) { return QJsonDocument::fromJson(text.toString().toUtf8()).object(); }
 
 [[nodiscard]] QStringList pathParts(const QString &path) {
     QStringList parts;
@@ -1051,19 +1031,19 @@ QList<Collection> Library::collections(bool withRemoved) const {
             collection.parent = 0;
     // The tree, read from the top: each one, then those inside it.
     QList<Collection> tree;
-    const std::function<void(qint64, const QString &, int, QSet<qint64> &)> visit =
-        [&](qint64 parent, const QString &above, int depth, QSet<qint64> &seen) {
-            for (const Collection &collection : std::as_const(flat)) {
-                if (collection.parent != parent || seen.contains(collection.id))
-                    continue;
-                seen.insert(collection.id);
-                Collection placed = collection;
-                placed.path = above.isEmpty() ? collection.name : above + "/" + collection.name;
-                placed.depth = depth;
-                tree << placed;
-                visit(collection.id, placed.path, depth + 1, seen);
-            }
-        };
+    const std::function<void(qint64, const QString &, int, QSet<qint64> &)> visit = [&](qint64 parent, const QString &above, int depth,
+                                                                                        QSet<qint64> &seen) {
+        for (const Collection &collection : std::as_const(flat)) {
+            if (collection.parent != parent || seen.contains(collection.id))
+                continue;
+            seen.insert(collection.id);
+            Collection placed = collection;
+            placed.path = above.isEmpty() ? collection.name : above + "/" + collection.name;
+            placed.depth = depth;
+            tree << placed;
+            visit(collection.id, placed.path, depth + 1, seen);
+        }
+    };
     QSet<qint64> seen;
     visit(0, {}, 0, seen);
     // What each holds of those inside it, at every depth.
@@ -1174,8 +1154,8 @@ bool Library::renameCollection(qint64 id, const QString &name, QString *error) {
         return failed(error, QString("There is no collection %1.").arg(id));
     if (now->name == named)
         return true;
-    QSqlQuery other = query("SELECT id, removed FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE AND id <> ?",
-                            {now->parent, named, id});
+    QSqlQuery other =
+        query("SELECT id, removed FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE AND id <> ?", {now->parent, named, id});
     if (other.next() && !other.value(1).toBool())
         return failed(error, QString("There is a collection called %1 there already.").arg(named));
     other.finish();
@@ -1206,8 +1186,7 @@ bool Library::setCollectionParent(qint64 id, qint64 parent, QString *error) {
         if (into == all.end())
             return failed(error, QString("There is no collection %1 to put it in.").arg(parent));
         // Not inside itself, nor inside one of those inside it.
-        if (into->path.compare(moved->path, Qt::CaseInsensitive) == 0
-            || into->path.startsWith(moved->path + "/", Qt::CaseInsensitive))
+        if (into->path.compare(moved->path, Qt::CaseInsensitive) == 0 || into->path.startsWith(moved->path + "/", Qt::CaseInsensitive))
             return failed(error, QString("%1 can't go inside itself.").arg(moved->name));
     }
     if (std::ranges::any_of(all, [&](const Collection &c) {

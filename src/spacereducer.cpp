@@ -1,0 +1,173 @@
+#include "spacereducer.h"
+
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <algorithm>
+#include <tuple>
+
+using namespace Qt::StringLiterals;
+
+namespace {
+
+[[nodiscard]] QJsonObject parseObject(const QString &text) { return QJsonDocument::fromJson(text.toUtf8()).object(); }
+
+void takeMax(SpaceStamp &target, const SpaceStamp &candidate) {
+    if (candidate > target)
+        target = candidate;
+}
+
+void foldCollection(ReducedCollection &col, const SpaceOperation &op) {
+    if (op.field == "removed"_L1) {
+        if (op.value == "1"_L1)
+            takeMax(col.removed, {op.hlc, op.device, 0, op.value});
+        else
+            takeMax(col.alive, {op.hlc, op.device, 1, op.value});
+        return;
+    }
+    takeMax(col.alive, {op.hlc, op.device, 1, op.value});
+    if (op.field.startsWith("book:"_L1)) {
+        const QString bookGid = op.field.mid(5);
+        int prio = 0;
+        if (op.value == "in"_L1)
+            prio = 2;
+        else if (op.value == "out"_L1)
+            prio = 1;
+        takeMax(col.books[bookGid], {op.hlc, op.device, prio, op.value});
+        return;
+    }
+    takeMax(col.fields[op.field], {op.hlc, op.device, 1, op.value});
+}
+
+void foldNode(ReducedNode &node, const SpaceOperation &op) {
+    if (op.field == "removed"_L1) {
+        if (op.value == "1"_L1)
+            takeMax(node.removed, {op.hlc, op.device, 0, op.value});
+        else
+            takeMax(node.alive, {op.hlc, op.device, 1, op.value});
+        return;
+    }
+    takeMax(node.alive, {op.hlc, op.device, 1, op.value});
+    if (op.field.startsWith("seen:"_L1)) {
+        const QString bookGid = op.field.mid(5);
+        const QJsonObject obj = parseObject(op.value);
+        const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
+        if (!node.seen.contains(bookGid) || candidate.earlierThan(node.seen.value(bookGid)))
+            node.seen.insert(bookGid, candidate);
+        return;
+    }
+    if (op.field.startsWith("alias:"_L1)) {
+        const QString alias = op.field.mid(6).trimmed();
+        const int prio = (op.value != "0"_L1 && !op.value.isEmpty()) ? 2 : 0;
+        if (!alias.isEmpty())
+            takeMax(node.aliases[alias], {op.hlc, op.device, prio, prio > 0 ? u"1"_s : u"0"_s});
+        return;
+    }
+    takeMax(node.fields[op.field], {op.hlc, op.device, 1, op.value});
+}
+
+void foldFact(ReducedFact &fact, const SpaceOperation &op) {
+    if (op.field == "removed"_L1 && op.value == "1"_L1) {
+        takeMax(fact.removed, {op.hlc, op.device, 0, op.value});
+        return;
+    }
+    if (op.field != "revealed"_L1)
+        return;
+    takeMax(fact.alive, {op.hlc, op.device, 1, op.value});
+    const QJsonObject obj = parseObject(op.value);
+    fact.nodeGid = obj.value("node").toString();
+    fact.kind = obj.value("kind").toString();
+    fact.value = obj.value("value").toString();
+    fact.bookGid = obj.value("book").toString();
+    const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
+    if (!fact.hasMoment || (!fact.bookGid.isEmpty() && candidate.earlierThan(fact.moment))) {
+        fact.moment = candidate;
+        fact.hasMoment = true;
+    }
+}
+
+void foldEdge(ReducedEdge &edge, const SpaceOperation &op) {
+    if (op.field == "removed"_L1 && op.value == "1"_L1) {
+        takeMax(edge.removed, {op.hlc, op.device, 0, op.value});
+        return;
+    }
+    if (op.field != "link"_L1)
+        return;
+    takeMax(edge.alive, {op.hlc, op.device, 1, op.value});
+    const QJsonObject obj = parseObject(op.value);
+    edge.sourceGid = obj.value("source").toString();
+    edge.targetGid = obj.value("target").toString();
+    edge.kind = obj.value("kind").toString();
+    if (const QString note = obj.value("note").toString(); !note.isEmpty() || edge.note.hlc < 0)
+        takeMax(edge.note, {op.hlc, op.device, note.isEmpty() ? 0 : 1, note});
+    const QString bookGid = obj.value("book").toString();
+    const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
+    if (!bookGid.isEmpty() && (!edge.hasLearned || edge.bookGid.isEmpty() || candidate.earlierThan(edge.learned))) {
+        edge.bookGid = bookGid;
+        edge.learned = candidate;
+        edge.hasLearned = true;
+    }
+}
+
+void foldDay(ReducedDay &day, const SpaceOperation &op) {
+    if (op.field != "range"_L1)
+        return;
+    const QJsonObject obj = parseObject(op.value);
+    day.bookGid = obj.value("book").toString();
+    day.day = obj.value("day").toString();
+    day.from = std::min(day.from, obj.value("from").toDouble());
+    day.to = std::max(day.to, obj.value("to").toDouble());
+    day.valid = !day.bookGid.isEmpty() && !day.day.isEmpty();
+}
+
+} // namespace
+
+bool SpaceMoment::earlierThan(const SpaceMoment &other) const noexcept {
+    return std::tie(section, fraction) < std::tie(other.section, other.fraction)
+           || (std::tie(section, fraction) == std::tie(other.section, other.fraction) && anchor > other.anchor);
+}
+
+bool SpaceReducer::isRemoved(const SpaceStamp &alive, const SpaceStamp &removed) noexcept {
+    if (removed.hlc < 0)
+        return false;
+    if (alive.hlc < 0)
+        return true;
+    return std::tie(removed.hlc, removed.device) > std::tie(alive.hlc, alive.device);
+}
+
+void SpaceReducer::foldBook(ReducedBook &book, const SpaceOperation &op) {
+    if (op.field == "removed"_L1) {
+        if (op.value != "0"_L1 && !op.value.isEmpty())
+            takeMax(book.removed, {op.hlc, op.device, 0, op.value});
+        else
+            takeMax(book.alive, {op.hlc, op.device, 1, op.value});
+        return;
+    }
+    takeMax(book.alive, {op.hlc, op.device, 1, op.value});
+    if (op.field.startsWith("tag:"_L1)) {
+        const QString tag = op.field.mid(4).trimmed();
+        const int prio = (op.value != "0"_L1 && !op.value.isEmpty()) ? 2 : 0;
+        if (!tag.isEmpty())
+            takeMax(book.tagSet[tag], {op.hlc, op.device, prio, prio > 0 ? u"1"_s : u"0"_s});
+        return;
+    }
+    takeMax(book.fields[op.field], {op.hlc, op.device, 1, op.value});
+}
+
+ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) {
+    ReducedState state;
+    for (const SpaceOperation &op : ops) {
+        if (op.entity == "book"_L1)
+            foldBook(state.books[op.id], op);
+        else if (op.entity == "collection"_L1)
+            foldCollection(state.collections[op.id], op);
+        else if (op.entity == "node"_L1)
+            foldNode(state.nodes[op.id], op);
+        else if (op.entity == "fact"_L1)
+            foldFact(state.facts[op.id], op);
+        else if (op.entity == "edge"_L1)
+            foldEdge(state.edges[op.id], op);
+        else if (op.entity == "reading_log"_L1)
+            foldDay(state.days[op.id], op);
+    }
+    return state;
+}

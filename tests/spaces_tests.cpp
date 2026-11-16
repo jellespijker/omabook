@@ -12,11 +12,13 @@
 #include <QUuid>
 #include <QtTest>
 
+#include "changelog.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "hlc.h"
 #include "library.h"
 #include "librarymigrations.h"
+#include "spacereplay.h"
 #include "spaces.h"
 
 namespace {
@@ -226,7 +228,156 @@ private slots:
             const QString factGid = Spaces::factId(library, facts.first().id);
             QVERIFY(factGid.startsWith("f:"));
             QCOMPARE(Spaces::localId(library, "fact", factGid), facts.first().id);
+
+            // Step 4: opening wrote the initial baseline into `ops` once, timed
+            // by each row's existing timestamp (0 when 0). Re-opening is a no-op.
+            const QList<SpaceOperation> initialOps = SpaceReplay::operations(library);
+            QVERIFY(!initialOps.isEmpty());
+            bool sawWorldSpaceOp = false;
+            bool sawZeroTimestampBookField = false;
+            for (const SpaceOperation &op : initialOps) {
+                if (op.space == "world:1")
+                    sawWorldSpaceOp = true;
+                if (op.entity == "book" && op.id == book2Gid && op.field == "title")
+                    sawZeroTimestampBookField = (op.hlc == 0);
+            }
+            QVERIFY(sawWorldSpaceOp);
+            QVERIFY(sawZeroTimestampBookField);
+
+            Library reopened(dir.path());
+            QVERIFY(reopened.open());
+            QCOMPARE(SpaceReplay::operations(reopened).size(), initialOps.size());
         }
+    }
+
+    void everyTravellingWriteAppendsToChangeLogInOnePath() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("book.epub"), "A Voyage"));
+        Library library(dir.filePath("Lib"));
+        QVERIFY(library.open());
+
+        const qint64 bookId = library.add(dir.filePath("book.epub")).id;
+        QVERIFY(bookId > 0);
+        const QString bookGid = Spaces::bookId(library, bookId);
+        int countAfterAdd = SpaceReplay::operations(library).size();
+        QVERIFY(countAfterAdd > 0);
+
+        // 1. Reading place (`setProgress`).
+        library.setProgress(bookId, Progress{.section = 2, .fraction = 0.42, .percent = 42.0, .updated = 1794860100});
+        QList<SpaceOperation> ops = SpaceReplay::operations(library);
+        QVERIFY(ops.size() > countAfterAdd);
+        QCOMPARE(ops.last().entity, QString("book"));
+        QCOMPARE(ops.last().id, bookGid);
+        QCOMPARE(ops.last().field, QString("progress"));
+        QCOMPARE(Hlc::seconds(ops.last().hlc), qint64(1794860100));
+        countAfterAdd = ops.size();
+
+        // 2. Reading shelf and paper edition (`setReading`, `setPaper`).
+        QVERIFY(library.setReading(bookId, "read", 5, "2026-11-16"));
+        QVERIFY(library.setPaper(bookId, true));
+        ops = SpaceReplay::operations(library);
+        QVERIFY(ops.size() > countAfterAdd);
+        countAfterAdd = ops.size();
+
+        // 3. Book details (`setMeta`, `setIdentifier`, `setDetailsAt`).
+        BookMeta meta = library.book(bookId)->meta;
+        meta.publisher = "Noordzee Pers";
+        meta.tags = QStringList{"zeilen", "kust"};
+        QVERIFY(library.setMeta(bookId, meta));
+        QVERIFY(library.setIdentifier(bookId, "isbn", "9789000000002"));
+        QVERIFY(library.setDetailsAt(bookId, 1794860300));
+        ops = SpaceReplay::operations(library);
+        QVERIFY(ops.size() > countAfterAdd);
+        const QHash<QString, qint64> fieldHlcs = SpaceReplay::bookFieldHlcs(library, bookId);
+        QVERIFY(fieldHlcs.value("publisher") > 0);
+        QVERIFY(fieldHlcs.value("isbn") > 0);
+        QVERIFY(fieldHlcs.value("tags") > 0);
+        countAfterAdd = ops.size();
+
+        // 4. Collections (`addCollection`, `putInCollection`, `removeCollection`).
+        const auto colId = library.addCollection("Zee", "");
+        QVERIFY(colId.has_value());
+        QVERIFY(library.putInCollection(*colId, bookId, true));
+        ops = SpaceReplay::operations(library);
+        QVERIFY(ops.size() > countAfterAdd);
+        countAfterAdd = ops.size();
+
+        // 5. Graph (`upsert`, `learn`, `link`, `logReading`).
+        Graph graph(library);
+        const qint64 ship = graph.upsert({}, "thing", "De Stern", "Een tweemaster.", {}, GraphPlace{bookId, 1, 0.25});
+        const qint64 port = graph.upsert({}, "place", "Harlingen", "Havenstad.");
+        QVERIFY(ship > 0 && port > 0);
+        QVERIFY(graph.learn(ship, "summary", "Gebouwd in 1912.", GraphMoment{GraphPlace{bookId, 2, 0.5}, {}}) > 0);
+        QVERIFY(graph.link(ship, port, "thuishaven", "Sinds 1920", GraphPlace{bookId, 2, 0.6}) > 0);
+        graph.logReading(bookId, 20.0, 42.0, "2026-11-16");
+        ops = SpaceReplay::operations(library);
+        QVERIFY(ops.size() > countAfterAdd);
+        countAfterAdd = ops.size();
+
+        // 6. Removals (`removeCollection`, `remove`).
+        QVERIFY(library.removeCollection(*colId));
+        QVERIFY(library.remove(bookId));
+        ops = SpaceReplay::operations(library);
+        QVERIFY(ops.size() > countAfterAdd);
+        QVERIFY(std::ranges::any_of(ops.mid(countAfterAdd), [&](const SpaceOperation &op) {
+            return op.entity == "book" && op.id == bookGid && op.field == "removed";
+        }));
+    }
+
+    void reconcileOnOpenCatchesDirectSqlWritesThatBypassedTheLog() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("book.epub"), "Bypass Test"));
+        const QString libPath = dir.filePath("Lib");
+        QString bookGid;
+        qint64 bookId = 0;
+        int opsBeforeBypass = 0;
+
+        {
+            Library library(libPath);
+            QVERIFY(library.open());
+            bookId = library.add(dir.filePath("book.epub")).id;
+            QVERIFY(bookId > 0);
+            bookGid = Spaces::bookId(library, bookId);
+            opsBeforeBypass = SpaceReplay::operations(library).size();
+        }
+
+        // Simulate a write path or external sqlite3 edit that mutated tables
+        // directly (triggering `library_state` counters) without calling ChangeLog.
+        const QString conn = "bypass-" + QUuid::createUuid().toString(QUuid::Id128);
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn);
+            db.setDatabaseName(QDir(libPath).filePath("omabook.db"));
+            QVERIFY(db.open());
+            QSqlQuery query(db);
+            QVERIFY(query.exec("UPDATE books SET publisher = 'Stille Drukker', details_at = 1794870000 WHERE id = 1"));
+            QVERIFY(query.exec("INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) "
+                               "VALUES (1, 3, 0.75, 75.0, 1794870010)"));
+            db.close();
+        }
+        QSqlDatabase::removeDatabase(conn);
+
+        // Re-opening runs `ChangeLog::reconcile` and appends the missing ops.
+        Library reopened(libPath);
+        QVERIFY(reopened.open());
+        const QList<SpaceOperation> opsAfterReconcile = SpaceReplay::operations(reopened);
+        QVERIFY(opsAfterReconcile.size() > opsBeforeBypass);
+
+        bool foundBypassedPublisher = false;
+        bool foundBypassedProgress = false;
+        for (const SpaceOperation &op : opsAfterReconcile.mid(opsBeforeBypass)) {
+            if (op.entity == "book" && op.id == bookGid && op.field == "publisher" && op.value == "Stille Drukker")
+                foundBypassedPublisher = true;
+            if (op.entity == "book" && op.id == bookGid && op.field == "progress")
+                foundBypassedProgress = true;
+        }
+        QVERIFY(foundBypassedPublisher);
+        QVERIFY(foundBypassedProgress);
+
+        // Opening once more after reconciliation appends nothing new.
+        const int countAfterReconcile = opsAfterReconcile.size();
+        Library thirdOpen(libPath);
+        QVERIFY(thirdOpen.open());
+        QCOMPARE(SpaceReplay::operations(thirdOpen).size(), countAfterReconcile);
     }
 
     void twoComputersDeriveIdenticalGlobalIdsAndRetainBookIdAcrossFormats() {
