@@ -1164,7 +1164,8 @@ QList<Tool> coreTools() {
                           {"style", object("The whole of style.json: {\"colors\": {\"accent\": \"#8a4b2a\"}, \"radius\": 8, \"font\": \"Inter\"}.")},
                           {"settings", object("Look settings to change: cover_size, font_size, font_family, measure "
                                               "(the longest line in characters, 40 to 90), line_height, paragraph_spacing, "
-                                              "indent, margins, align (start, justify, center or end), pages (\"auto\", 1, "
+                                              "indent, margins, align (start, justify, center or end), layout (auto, pages "
+                                              "or scroll), first_page (auto, alone or paired), pages (\"auto\", 1, "
                                               "2 or 3 side by side), sort. The reading format ones are the defaults; "
                                               "reading_format_set also sets one book's own.")}}),
                   Changes, [](const QJsonObject &arguments) {

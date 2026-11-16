@@ -5,6 +5,7 @@
 #include <QString>
 #include <QStringList>
 #include <array>
+#include <span>
 
 // How the text of a flowing book is set on the page: the type, the measure,
 // the spacing and the alignment. The library's defaults are in config.json
@@ -49,8 +50,38 @@ inline constexpr std::array ranges{
 // direction of the text, paragraph by paragraph.
 inline constexpr std::array alignments{"start"_L1, "justify"_L1, "center"_L1, "end"_L1};
 
+// How a book is laid out to be read through. "pages": cut into pages that
+// turn, one or a spread of two or three, each chapter starting on a page of
+// its own; "scroll": one column that runs on from one chapter into the next;
+// "auto": pages where the window has room for more than one side by side,
+// else a column that scrolls (and pages that are pictures scroll). It
+// applies to pages that are pictures too: in "pages" each is shown whole.
+inline constexpr std::array layouts{"auto"_L1, "pages"_L1, "scroll"_L1};
+// Pages that are pictures, two side by side: whether the first stands alone
+// ("alone", as a printed book opens, so its left and right pages are where
+// print put them: 1, 2|3, 4|5), or pairs from the start ("paired": 1|2,
+// 3|4). "auto" is alone for a PDF whose first page is taller than it is
+// wide, as a book's or a paper's is, and paired for slides, which are
+// wider, and for comics: their archives most often hold a spread drawn
+// across two pages as one wide picture already, and many begin without a
+// cover of their own, so pairing from the first shows the most.
+inline constexpr std::array firstPages{"auto"_L1, "alone"_L1, "paired"_L1};
+
+// A setting that is one of a few words.
+struct Choice {
+    QLatin1StringView key;
+    std::span<const QLatin1StringView> words;
+    QLatin1StringView fallback;
+};
+inline constexpr std::array choices{
+    Choice{"align"_L1, alignments, "start"_L1},
+    Choice{"layout"_L1, layouts, "auto"_L1},
+    Choice{"first_page"_L1, firstPages, "auto"_L1},
+};
+[[nodiscard]] const Choice *choice(QAnyStringView key);
+
 // Every option by its key: the numbers above, then "font_family" (a font's
-// name, empty for the desktop's) and "align".
+// name, empty for the desktop's), "align", "layout" and "first_page".
 [[nodiscard]] QStringList keys();
 [[nodiscard]] const Range *range(QAnyStringView key);
 // Why a value can't be given to an option, in English, with what it may be;
@@ -63,7 +94,7 @@ inline constexpr std::array alignments{"start"_L1, "justify"_L1, "center"_L1, "e
 [[nodiscard]] QJsonObject over(const QJsonObject &defaults, const QJsonObject &own);
 // What each number may be, for a window or a tool to show:
 // {"font_size": {"low": 10, "high": 48, "default": 19, "step": 1, "unit": "px"}, ...,
-//  "align": {"choices": [...], "default": "start"}}.
+//  "align": {"choices": [...], "default": "start"}, "layout": ..., "first_page": ...}.
 [[nodiscard]] QJsonObject bounds();
 // A chapter's cleaned HTML (see htmlclean.h) set with these options: the
 // style sheet in front of it, and its paragraphs given what a style sheet

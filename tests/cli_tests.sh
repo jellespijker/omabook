@@ -338,6 +338,16 @@ grep -q '"pages": 3' "$XDG_CONFIG_HOME/omabook/config.json" || fail "the pages a
 expect "pages that aren't a count say what they may be" 1 "--pages is auto, 1, 2 or 3; 4 is not" "$omabook" format --library "$library" --pages 4
 expect "pages are for every book" 1 "--pages is for every book" "$omabook" format "$book" --library "$library" --pages 2
 expect "pages go back to automatic" 0 '"pages": "auto"' "$omabook" format --library "$library" --pages auto --json
+# Pages or a scrolling column, per book or for every book, and the first page of two side by side.
+expect "the layout is automatic until chosen" 0 "layout             auto" "$omabook" format --library "$library"
+expect "every book scrolls" 0 '"layout": "scroll"' "$omabook" format --library "$library" --layout scroll --json
+grep -q '"layout": "scroll"' "$XDG_CONFIG_HOME/omabook/config.json" || fail "the layout is not in config.json"
+expect "a book turns pages of its own" 0 "layout             pages   (this book)" "$omabook" format "$book" --library "$library" --layout pages
+expect "the rest still scroll" 0 "layout             scroll" "$omabook" format --library "$library"
+expect "a layout that isn't one says the three" 1 "--layout is auto, pages or scroll; columns is not" "$omabook" format --library "$library" --layout columns
+expect "the first page pairs" 0 '"first_page": "paired"' "$omabook" format --library "$library" --first-page paired --json
+expect "a first page that isn't one says what it may be" 1 "--first-page is auto, alone or paired" "$omabook" format --library "$library" --first-page left
+expect "reset puts the layout back" 0 "layout             auto" "$omabook" format --library "$library" --reset
 "$omabook" format "$book" --library "$library" --reset >/dev/null
 "$omabook" format --library "$library" --reset >/dev/null
 

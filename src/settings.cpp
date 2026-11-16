@@ -191,6 +191,12 @@ QJsonObject Settings::format() const {
         format.insert(range.key, number(range.key));
     format.insert("font_family", fontFamily());
     format.insert("align", align());
+    // The other choices, as config.json has them, or their defaults.
+    for (const ReadingFormat::Choice &choice : ReadingFormat::choices)
+        if (choice.key != "align"_L1) {
+            const QString word = m_values.value(choice.key).toString();
+            format.insert(choice.key, std::ranges::contains(choice.words, word) ? word : QString(choice.fallback));
+        }
     return format;
 }
 

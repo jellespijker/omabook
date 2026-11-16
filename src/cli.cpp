@@ -502,10 +502,11 @@ int progress(const QStringList &arguments) {
 // book's own over them (readingformat.h).
 int format(const QStringList &arguments) {
     Command command("format", "Show or change how books are set on the page: the type, the longest line (the measure, in "
-                              "characters), the pages side by side, the spacing, the indent, the margins and the alignment. "
+                              "characters), the pages side by side, the spacing, the indent, the margins, the alignment, and "
+                              "whether a book is read as pages or as one scrolling column. "
                               "Without a book, the defaults every book follows; with one, that book's own, which lie over the "
                               "defaults. Without options, what is in force and where each comes from. Pages that are pictures "
-                              "(PDF, comics) are not set and ignore it.");
+                              "(PDF, comics) are not set and ignore it, but for the layout and the first page.");
     command.parser.addPositionalArgument("book", "A book's number from omabook list, for its own; the defaults when not given.", "[book]");
     struct Flag {
         const char *name, *key, *what, *value;
@@ -521,6 +522,13 @@ int format(const QStringList &arguments) {
         {"margins", "margins", "The room around the text, in pixels", "N"},
         {"align", "align", "start, justify (filled out to both sides), center or end. Start and end turn round in a "
                            "right-to-left language.", "how"},
+        {"layout", "layout", "How the book is read through: pages (cut into pages that turn, a chapter starting on a page "
+                             "of its own; a PDF's page shown whole), scroll (one column that runs on into the next "
+                             "chapter) or auto (pages where two or more fit side by side, else a column that scrolls). "
+                             "auto when not set.", "how"},
+        {"first-page", "first_page", "Pages that are pictures, two side by side: alone (the first page on its own, then "
+                                     "2|3, as a printed book opens), paired (1|2, 3|4) or auto (alone when the first page "
+                                     "is taller than wide, paired for slides). auto when not set.", "how"},
     };
     for (const Flag &flag : flags) {
         QString what = flag.what;
@@ -589,7 +597,8 @@ int format(const QStringList &arguments) {
         for (const ReadingFormat::Range &range : ReadingFormat::ranges)
             settings.setOption(range.key, range.fallback);
         settings.setOption("font_family", "");
-        settings.setOption("align", "start");
+        for (const ReadingFormat::Choice &choice : ReadingFormat::choices)
+            settings.setOption(choice.key, QString(choice.fallback));
         settings.setPages(0);
     } else {
         for (auto it = changes.begin(); it != changes.end(); ++it)

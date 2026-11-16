@@ -11,7 +11,15 @@ namespace ReadingFormat {
 QStringList keys() {
     QStringList keys = ranges | std::views::transform([](const Range &range) { return QString(range.key); })
                        | std::ranges::to<QStringList>();
-    return keys << "font_family" << "align";
+    keys << "font_family";
+    for (const Choice &choice : choices)
+        keys << QString(choice.key);
+    return keys;
+}
+
+const Choice *choice(QAnyStringView key) {
+    const auto found = std::ranges::find_if(choices, [key](const Choice &choice) { return QAnyStringView::equal(key, choice.key); });
+    return found == choices.end() ? nullptr : &*found;
 }
 
 const Range *range(QAnyStringView key) {
@@ -33,9 +41,14 @@ QString problem(const QString &key, const QJsonValue &value) {
     }
     if (key == "font_family")
         return value.isString() && value.toString().size() <= 200 ? QString() : QString("font_family is the name of a font, or \"\" for the desktop's.");
-    if (key == "align")
-        return std::ranges::contains(alignments, value.toString()) ? QString()
-                                                                   : QString("align is start, justify, center or end; %1 is not.").arg(value.toVariant().toString());
+    if (const Choice *words = choice(key)) {
+        if (value.isString() && std::ranges::contains(words->words, value.toString()))
+            return {};
+        QStringList named = words->words | std::views::transform([](QLatin1StringView word) { return QString(word); })
+                            | std::ranges::to<QStringList>();
+        const QString last = named.takeLast();
+        return QString("%1 is %2 or %3; %4 is not.").arg(key, named.join(", "), last, value.toVariant().toString());
+    }
     return QString("%1 isn't a reading format option; they are %2.").arg(key, keys().join(", "));
 }
 
@@ -59,7 +72,12 @@ QJsonObject bounds() {
     for (const Range &range : ranges)
         bounds.insert(range.key, QJsonObject{{"low", range.low}, {"high", range.high}, {"default", range.fallback},
                                              {"step", range.step}, {"unit", QString(range.unit)}});
-    bounds.insert("align", QJsonObject{{"choices", QJsonArray{"start", "justify", "center", "end"}}, {"default", "start"}});
+    for (const Choice &choice : choices) {
+        QJsonArray words;
+        for (const QLatin1StringView word : choice.words)
+            words << QString(word);
+        bounds.insert(choice.key, QJsonObject{{"choices", words}, {"default", QString(choice.fallback)}});
+    }
     bounds.insert("font_family", QJsonObject{{"default", ""}});
     return bounds;
 }

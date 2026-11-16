@@ -102,7 +102,9 @@ void PageFormat::relayout() {
     space.measure = number("measure"_L1);
     space.margin = number("margins"_L1) + 24;
     space.gutter = PageLayout::gutter(size);
-    const PageLayout::Columns columns = PageLayout::columns(space, m_settings->pages(), m_columns.count);
+    // A book that scrolls is one column at any width.
+    const bool scrolls = m_effective.value("layout").toString() == "scroll"_L1;
+    const PageLayout::Columns columns = PageLayout::columns(space, scrolls ? 1 : m_settings->pages(), m_columns.count);
     if (qFuzzyCompare(space.characterWidth, m_space.characterWidth) && space.measure == m_space.measure
         && qFuzzyCompare(space.margin + 1, m_space.margin + 1) && qFuzzyCompare(space.gutter, m_space.gutter)
         && qFuzzyCompare(space.available + 1, m_space.available + 1) && columns.count == m_columns.count
@@ -188,9 +190,19 @@ void PageFormat::restore(const QVariantMap &snapshot) {
     refresh();
 }
 
+QString PageFormat::from(const QString &key) const {
+    return m_own.contains(key) ? u"book"_s : m_collectionOwn.contains(key) ? u"collection"_s : u"defaults"_s;
+}
+
 void PageFormat::zoom(int steps) {
-    // Where the size in force comes from: the book's own, its collection's, or the default.
-    const QString where = m_own.contains("font_size") ? u"book"_s : m_collectionOwn.contains("font_size") ? u"collection"_s : u"defaults"_s;
     const ReadingFormat::Range *size = ReadingFormat::range(u"font_size");
-    setFor("font_size", std::clamp(m_effective.value("font_size").toInt(size->fallback) + steps, size->low, size->high), where);
+    setFor("font_size", std::clamp(m_effective.value("font_size").toInt(size->fallback) + steps, size->low, size->high), from("font_size"));
+}
+
+QString PageFormat::nextLayout() {
+    const auto &layouts = ReadingFormat::layouts;
+    const auto now = std::ranges::find(layouts, m_effective.value("layout").toString());
+    const QString next = now == layouts.end() || now + 1 == layouts.end() ? QString(layouts.front()) : QString(*(now + 1));
+    setFor("layout", next, from("layout"));
+    return next;
 }

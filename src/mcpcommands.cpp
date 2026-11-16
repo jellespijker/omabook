@@ -149,10 +149,11 @@ const bool registered = [] {
     // How books are set on the page: `omabook format`.
     registerTool({"reading_format_get", "How books are set on the page",
                   "The reading format: font, type size, longest line (the measure, in characters), line spacing "
-                  "(percent), space between paragraphs, first-line indent, margins (pixels) and alignment, and how many "
+                  "(percent), space between paragraphs, first-line indent, margins (pixels), alignment, the layout "
+                  "(pages, scroll or auto) and the first page of a two-up PDF (alone, paired or auto), and how many "
                   "pages stand side by side (pages: auto, 1, 2 or 3, for every book). Without a book, the defaults every book follows; "
                   "with one, what is in force for it, the defaults, and the options it has of its own (\"own\"). Also "
-                  "the bounds of each. Pages that are pictures (PDF, comics) are not set.",
+                  "the bounds of each. Pages that are pictures (PDF, comics) are not set, but for the layout and the first page.",
                   schema({{"book", integer("A book's id, for its own; the defaults when not given.")}}), ReadOnly,
                   [](const QJsonObject &arguments) {
                       QStringList asked{"format"};
@@ -177,6 +178,15 @@ const bool registered = [] {
                           {"align", choice("Where a paragraph's lines go: start, justify (filled out to both sides), "
                                            "center or end. Start and end turn round in a right-to-left language.",
                                            {"start", "justify", "center", "end"})},
+                          {"layout", choice("How the book is read through: pages (cut into pages that turn, each chapter "
+                                            "starting on a page of its own; a PDF's page shown whole), scroll (one column "
+                                            "that runs on into the next chapter) or auto (pages where two or more fit side "
+                                            "by side, else a column that scrolls).",
+                                            {"auto", "pages", "scroll"})},
+                          {"first_page", choice("Pages that are pictures, two side by side: alone (the first on its own, "
+                                                "then 2|3, as a printed book opens), paired (1|2, 3|4) or auto (alone when "
+                                                "the first page is taller than wide, paired for slides).",
+                                                {"auto", "alone", "paired"})},
                           {"pages", choice("How many pages stand side by side, for every book (not with book): auto (as "
                                            "many as the window has room for, each with lines of at least 45 characters, "
                                            "up to three), or 1, 2 or 3, shown where each page keeps 45 characters.",
@@ -189,7 +199,8 @@ const bool registered = [] {
                       static const QList<std::pair<const char *, const char *>> options{
                           {"font_size", "--font-size"}, {"font_family", "--font"}, {"measure", "--measure"},
                           {"line_height", "--line-height"}, {"paragraph_spacing", "--paragraph-spacing"},
-                          {"indent", "--indent"}, {"margins", "--margins"}, {"align", "--align"}, {"pages", "--pages"}};
+                          {"indent", "--indent"}, {"margins", "--margins"}, {"align", "--align"}, {"layout", "--layout"},
+                          {"first_page", "--first-page"}, {"pages", "--pages"}};
                       for (const auto &[key, flag] : options)
                           if (arguments.contains(key)) {
                               const QJsonValue value = arguments.value(key);

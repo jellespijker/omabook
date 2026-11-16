@@ -53,7 +53,7 @@ class PageFormat : public QObject {
     // The room at the spread's outer edges, and between two of its pages.
     Q_PROPERTY(double margin READ margin NOTIFY layoutChanged)
     Q_PROPERTY(double gutter READ gutter NOTIFY layoutChanged)
-    // The pages side by side; what Automatic gives here; the most that keep
+    // The pages side by side (one for a book that scrolls); what Automatic gives here; the most that keep
     // the minimum measure; each page's width; and whether a choice of 1, 2
     // or 3 is what shows.
     Q_PROPERTY(int columns READ columns NOTIFY layoutChanged)
@@ -113,6 +113,9 @@ public:
     // Larger or smaller type, where the size is: the book's own size when
     // it has one, else the default.
     Q_INVOKABLE void zoom(int steps);
+    // The next layout (readingformat.h: auto, pages, scroll, and round
+    // again), where the layout in force comes from; the one it is now.
+    Q_INVOKABLE QString nextLayout();
 
     // Reads the defaults and the open book's own again.
     void refresh();
@@ -124,6 +127,8 @@ signals:
 
 private:
     void restyle();
+    // Where the option in force comes from: "book", "collection" or "defaults".
+    QString from(const QString &key) const;
     // Works the layout out again from the room, the format and the setting.
     void relayout();
 
