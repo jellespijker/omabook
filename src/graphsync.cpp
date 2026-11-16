@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <limits>
 #include <optional>
+#include <tuple>
 
 #include "graph.h"
 
@@ -170,35 +171,88 @@ void nameBooks(Taking &taking, const Library &library, const QJsonObject &named)
     }
 }
 
-// Every thing here that matches theirs: by its name, or by any of its other
-// names. When more than one local thing matches, they are the same thing and
-// fold into one now, before this library's bundle goes back.
-QList<qint64> knownAll(const Taking &taking, const QJsonObject &node) {
-    const QString kind = node.value("kind").toString();
-    QList<qint64> ids;
-    const auto add = [&](const QString &name) {
-        if (name.isEmpty())
-            return;
-        if (const qint64 id = taking.graph.named({}, kind, name); id > 0 && !ids.contains(id))
-            ids << id;
-    };
-    add(node.value("name").toString());
-    for (const auto &alias : node.value("aliases").toArray())
-        add(alias.toString());
-    return ids;
+struct NodeNames {
+    qint64 id = 0;
+    QString kind;
+    QString own;
+    QSet<QString> aliases;
+    QSet<QString> all;
+};
+
+struct NodeMatch {
+    int remote = 0;
+    qint64 local = 0;
+    int tier = 0;
+    int common = 0;
+};
+
+NodeNames namesOf(qint64 id, const QString &kind, const QString &name, const QStringList &aliases) {
+    NodeNames out{id, kind, name.simplified().toLower(), {}, {}};
+    if (!out.own.isEmpty())
+        out.all.insert(out.own);
+    for (const QString &alias : aliases) {
+        const QString clean = alias.simplified().toLower();
+        if (clean.isEmpty() || clean == out.own)
+            continue;
+        out.aliases.insert(clean);
+        out.all.insert(clean);
+    }
+    return out;
 }
 
-qint64 foldMatches(Taking &taking, const QList<qint64> &found) {
-    const qint64 id = found.first();
-    for (const qint64 other : found.mid(1)) {
-        if (!taking.graph.merge(id, other))
+NodeNames remoteNames(const QJsonObject &node) {
+    QStringList aliases;
+    for (const auto &alias : node.value("aliases").toArray())
+        aliases << alias.toString();
+    return namesOf(node.value("id").toInteger(), node.value("kind").toString(), node.value("name").toString(), aliases);
+}
+
+int matchTier(const NodeNames &mine, const NodeNames &theirs) {
+    if (mine.kind != theirs.kind)
+        return 0;
+    if (!mine.own.isEmpty() && mine.own == theirs.own)
+        return 1;
+    if (!mine.own.isEmpty() && theirs.aliases.contains(mine.own))
+        return 2;
+    if (!theirs.own.isEmpty() && mine.aliases.contains(theirs.own))
+        return 3;
+    if (std::ranges::any_of(mine.aliases, [&](const QString &alias) { return theirs.aliases.contains(alias); }))
+        return 4;
+    return 0;
+}
+
+int commonNames(const NodeNames &mine, const NodeNames &theirs) {
+    return static_cast<int>(std::ranges::count_if(mine.all, [&](const QString &name) { return theirs.all.contains(name); }));
+}
+
+// Match each incoming thing to at most one local thing, preferring an own-name
+// match over an ambiguous other-name match, and never merging two local things.
+QList<qint64> matchNodes(const Graph &graph, const QJsonArray &nodes) {
+    QHash<QString, QList<NodeNames>> byKind;
+    for (const GraphNode &local : graph.whole({}, std::numeric_limits<int>::max()).nodes)
+        byKind[local.kind] << namesOf(local.id, local.kind, local.name, local.aliases());
+    QList<NodeMatch> candidates;
+    for (int i = 0; i < nodes.size(); ++i) {
+        const NodeNames theirs = remoteNames(nodes.at(i).toObject());
+        const auto localIt = byKind.constFind(theirs.kind);
+        if (localIt == byKind.cend())
             continue;
-        ++taking.changed;
-        for (auto &mapped : taking.nodes)
-            if (mapped == other)
-                mapped = id;
+        for (const NodeNames &mine : *localIt)
+            if (const int tier = matchTier(mine, theirs); tier > 0)
+                candidates << NodeMatch{i, mine.id, tier, commonNames(mine, theirs)};
     }
-    return id;
+    std::ranges::sort(candidates, [](const NodeMatch &a, const NodeMatch &b) {
+        return std::tuple{a.tier, -a.common, a.local, a.remote} < std::tuple{b.tier, -b.common, b.local, b.remote};
+    });
+    QList<qint64> matched(nodes.size(), 0);
+    QSet<qint64> taken;
+    for (const NodeMatch &candidate : candidates) {
+        if (matched.at(candidate.remote) != 0 || taken.contains(candidate.local))
+            continue;
+        matched[candidate.remote] = candidate.local;
+        taken.insert(candidate.local);
+    }
+    return matched;
 }
 
 // What it holds that this one doesn't (never its other names: those come
@@ -300,18 +354,15 @@ void settleSummary(Taking &taking, qint64 id, const GraphNode &before, const QJs
         }
 }
 
-void takeNode(Taking &taking, const QJsonObject &theirs) {
+void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
     const QString kind = theirs.value("kind").toString();
     const QJsonObject data = theirs.value("data").toObject();
-    const QList<qint64> found = knownAll(taking, theirs);
-    const qint64 id = found.isEmpty()
-                          ? taking.graph.upsert({}, kind, theirs.value("name").toString(), {}, missingData({}, data))
-                          : foldMatches(taking, found);
-    const std::optional<GraphNode> before = found.isEmpty() ? std::nullopt : taking.graph.node(id);
+    const std::optional<GraphNode> before = matched > 0 ? taking.graph.node(matched) : std::nullopt;
+    const qint64 id = before ? before->id : taking.graph.upsert({}, kind, theirs.value("name").toString(), {}, missingData({}, data));
     const std::optional<GraphNode> node = taking.graph.node(id);
     if (!node)
         return;
-    if (found.isEmpty()) {
+    if (!before) {
         ++taking.changed;
     } else if (const QJsonObject missing = missingData(*before, data); !missing.isEmpty()) {
         taking.graph.upsert({}, kind, before->name, {}, missing);
@@ -401,8 +452,10 @@ int GraphSync::take(Library &library, const QJsonObject &bundle) {
     const Library::Batch batch(library);
     Taking taking(library);
     nameBooks(taking, library, bundle.value("books").toObject());
-    for (const auto &node : bundle.value("nodes").toArray())
-        takeNode(taking, node.toObject());
+    const QJsonArray nodes = bundle.value("nodes").toArray();
+    const QList<qint64> matched = matchNodes(taking.graph, nodes);
+    for (int i = 0; i < nodes.size(); ++i)
+        takeNode(taking, nodes.at(i).toObject(), matched.at(i));
     takeEdges(taking, bundle.value("edges").toArray(), bundle.value("ends").toObject());
     takeLog(taking, bundle.value("log").toArray());
     return taking.changed;

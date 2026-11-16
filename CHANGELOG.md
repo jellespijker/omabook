@@ -16,7 +16,7 @@ moves those lines under its version.
 
 - No `QSqlDatabase requires a QCoreApplication` warning after library commands (#31).
 - `omabook sync`, the window's sync status and the sync log now report knowledge graph changes taken and sent (#31).
-- Knowledge graph sync now merges things known under another name in a single sync instead of needing a second round to settle (#31).
+- Knowledge graph sync now settles in a single sync when two libraries call the same thing by different names, without merging separate local things that share another name (#31).
 
 ## [0.1.5.2] - 2026-11-16
 

@@ -146,37 +146,85 @@ private slots:
                 QCOMPARE(node.summary, QString("A street urchin."));
     }
 
-    void aThingKnownUnderAnotherNameOnEachSideSettlesInOneSync() {
+    void ambiguousOtherNamesNeverMergeSeparateThings() {
         TwoComputers two;
         QVERIFY(two.open());
         {
             Graph here(two.here);
-            here.upsert({}, "character", "Vin", "A street urchin.", {}, GraphPlace{two.bookHere, 1, 0.2});
-            const qint64 valette =
-                here.upsert({}, "character", "Valette Renoux", "A noblewoman at court.", {}, GraphPlace{two.bookHere, 2, 0.4});
-            const qint64 luthadel = here.upsert({}, "place", "Luthadel", {}, {}, GraphPlace{two.bookHere, 1, 0.1});
-            here.link(valette, luthadel, "lives in", "at Keep Renoux", GraphPlace{two.bookHere, 2, 0.5});
+            const qint64 straff = here.upsert({}, "character", "Straff", {}, {}, GraphPlace{two.bookHere, 1, 0.2});
+            here.learn(straff, "alias", "Lord Venture", GraphMoment{{two.bookHere, 2, 0.1}, "Lord Venture"});
+            const qint64 elend = here.upsert({}, "character", "Elend", {}, {}, GraphPlace{two.bookHere, 1, 0.5});
+            here.learn(elend, "alias", "Lord Venture", GraphMoment{{two.bookHere, 3, 0.3}, "Lord Venture"});
 
             Graph there(two.there);
-            const qint64 vin = there.upsert({}, "character", "Vin", {}, {}, GraphPlace{two.bookThere, 1, 0.1});
-            there.learn(vin, "alias", "Valette Renoux", GraphMoment{{two.bookThere, 2, 0.1}, "Lady Valette Renoux"});
+            const qint64 venture = there.upsert({}, "character", "Straff Venture", {}, {}, GraphPlace{two.bookThere, 1, 0.1});
+            there.learn(venture, "alias", "Lord Venture", GraphMoment{{two.bookThere, 2, 0.1}, "Lord Venture"});
+            there.learn(venture, "alias", "Straff", GraphMoment{{two.bookThere, 1, 0.1}, "Straff"});
         }
         const SyncSummary first = two.sync();
         QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
         QVERIFY(first.graphTaken > 0 && first.graphSent > 0);
-        for (Library *library : {&two.here, &two.there}) {
-            const Graph graph(*library);
-            const qint64 book = library == &two.here ? two.bookHere : two.bookThere;
-            const GraphNode vin = named(graph, "character", "Vin");
-            QCOMPARE(graph.named({}, "character", "Valette Renoux"), vin.id);
-            QVERIFY(vin.aliases().contains("Valette Renoux"));
-            QCOMPARE(graph.firstMet(vin.id, book)->place.fraction, 0.1);
-            QVERIFY(!graph.around(vin.id, 1).edges.isEmpty());
+        {
+            const Graph here(two.here);
+            const GraphNode straff = named(here, "character", "Straff");
+            const GraphNode elend = named(here, "character", "Elend");
+            QVERIFY(straff.id > 0 && elend.id > 0 && straff.id != elend.id);
+            QVERIFY(straff.aliases().contains("Straff Venture"));
+            QVERIFY(!straff.aliases().contains("Elend"));
+            QCOMPARE(elend.name, QString("Elend"));
+            QVERIFY(elend.aliases().contains("Lord Venture"));
+            QVERIFY(!elend.aliases().contains("Straff"));
+
+            const Graph there(two.there);
+            const GraphNode straffThere = named(there, "character", "Straff Venture");
+            const GraphNode elendThere = named(there, "character", "Elend");
+            QVERIFY(straffThere.id > 0 && elendThere.id > 0 && straffThere.id != elendThere.id);
         }
         const SyncSummary again = two.sync();
         QVERIFY2(again.problems.isEmpty(), qPrintable(again.problems.join('\n')));
         QCOMPARE(again.graphTaken, 0);
         QCOMPARE(again.graphSent, 0);
+    }
+
+    void pickingOneMatchPrefersOwnNameAndMostNamesInCommon() {
+        TwoComputers two;
+        QVERIFY(two.open());
+        // Own name matching their other name beats their name among our other names,
+        // and ties break by the most names in common, then lowest id.
+        {
+            Graph here(two.here);
+            const qint64 first = here.upsert({}, "character", "Lord Renoux", {}, {});
+            here.learn(first, "alias", "Valette");
+            here.learn(first, "alias", "The Lady");
+            const qint64 second = here.upsert({}, "character", "Mist", {}, {});
+            here.learn(second, "alias", "The Lady");
+
+            const QJsonObject bundle{
+                {"version", 1},
+                {"nodes", QJsonArray{QJsonObject{
+                              {"id", 10}, {"kind", "character"}, {"name", "Valette"}, {"aliases", QJsonArray{"The Lady", "Mist"}}}}}};
+            QVERIFY(GraphSync::take(two.here, bundle) > 0);
+            // "Mist" (id 2, own name in theirs.aliases -> tier 2) beats "Lord Renoux" (id 1, tier 3).
+            QVERIFY(named(here, "character", "Mist").aliases().contains("Valette"));
+            QVERIFY(!named(here, "character", "Lord Renoux").aliases().contains("Mist"));
+        }
+        // When both share only other names, the one with more names in common wins.
+        {
+            Graph there(two.there);
+            const qint64 oneCommon = there.upsert({}, "character", "Alpha", {}, {});
+            there.learn(oneCommon, "alias", "Title");
+            const qint64 twoCommon = there.upsert({}, "character", "Beta", {}, {});
+            there.learn(twoCommon, "alias", "Title");
+            there.learn(twoCommon, "alias", "Epithet");
+
+            const QJsonObject bundle{
+                {"version", 1},
+                {"nodes", QJsonArray{QJsonObject{
+                              {"id", 11}, {"kind", "character"}, {"name", "Gamma"}, {"aliases", QJsonArray{"Title", "Epithet"}}}}}};
+            QVERIFY(GraphSync::take(two.there, bundle) > 0);
+            QVERIFY(named(there, "character", "Beta").aliases().contains("Gamma"));
+            QVERIFY(!named(there, "character", "Alpha").aliases().contains("Gamma"));
+        }
     }
 
     void aThingKnownByAnotherNameLearnsBothNamesInOneSync() {
@@ -236,9 +284,8 @@ private slots:
         const auto restoreLog = qScopeGuard([] { qInstallMessageHandler(previous); });
         const SyncSummary logged = two.sync();
         QVERIFY2(logged.problems.isEmpty(), qPrintable(logged.problems.join('\n')));
-        QVERIFY(std::ranges::any_of(syncLogs, [](const QString &line) {
-            return line.contains("graph taken") && line.contains("graph sent");
-        }));
+        QVERIFY(
+            std::ranges::any_of(syncLogs, [](const QString &line) { return line.contains("graph taken") && line.contains("graph sent"); }));
 
         // 2. The plain summary of `omabook sync` on the command line.
         Graph(two.here).upsert({}, "character", "Vin", {}, {}, GraphPlace{two.bookHere, 1, 0.3});
@@ -257,8 +304,7 @@ private slots:
         QVERIFY(cli.waitForFinished(30000));
         QCOMPARE(cli.exitCode(), 0);
         const QString stdoutText = QString::fromUtf8(cli.readAllStandardOutput());
-        QVERIFY2(stdoutText.contains("2 graph changes taken") && stdoutText.contains("2 graph changes sent"),
-                 qPrintable(stdoutText));
+        QVERIFY2(stdoutText.contains("2 graph changes taken") && stdoutText.contains("2 graph changes sent"), qPrintable(stdoutText));
 
         // 3. The window's sync status in Backend::sync().
         Graph(two.here).upsert({}, "character", "Elend", {}, {}, GraphPlace{two.bookHere, 1, 0.5});
@@ -267,8 +313,8 @@ private slots:
         settings.setLibraryPath(two.here.root());
         settings.setSyncTarget("laptop:" + two.dir.filePath("There"));
         NullPicker picker;
-        Backend backend(&settings, &picker, nullptr, {}, [](QObject *) { return QList<MetadataSource *>(); },
-                        two.dir.filePath("plugins"), "-");
+        Backend backend(
+            &settings, &picker, nullptr, {}, [](QObject *) { return QList<MetadataSource *>(); }, two.dir.filePath("plugins"), "-");
         backend.setSsh({two.ssh});
         QSignalSpy messaged(&backend, &Backend::messageChanged);
         backend.sync();
