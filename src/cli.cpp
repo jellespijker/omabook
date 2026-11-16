@@ -13,6 +13,7 @@
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QSaveFile>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <array>
@@ -57,7 +58,7 @@
 #include "secretstore.h"
 #include "settings.h"
 #include "sitedesk.h"
-#include "sync.h"
+#include "synccommands.h"
 #include "theme.h"
 #include "themechoice.h"
 
@@ -448,19 +449,6 @@ int add(const QStringList &arguments) {
     return summary.problems.isEmpty() ? 0 : 1;
 }
 
-int manifest(const QStringList &arguments) {
-    Command command("manifest", "Print everything the library holds as JSON: each book's details, files with their "
-                                "hashes, cover and reading place. This is what omabook sync reads from the other computer.");
-    if (!command.parse(arguments, 0, 0))
-        return 1;
-    QString error;
-    const auto library = command.library(&error);
-    if (!library)
-        return fail(error);
-    printJson(libraryManifest(*library));
-    return 0;
-}
-
 int progress(const QStringList &arguments) {
     Command command("progress", "Show how far a book has been read, or set it.");
     command.parser.addPositionalArgument("id", "The book's number.");
@@ -636,97 +624,6 @@ int format(const QStringList &arguments) {
     print(stdout, QString("  %1 %2").arg(QString("pages").leftJustified(18),
                                          settings.pages() == 0 ? QString("auto (as many as fit)") : QString::number(settings.pages())));
     return 0;
-}
-
-int sync(const QStringList &arguments) {
-    Command command("sync", "Bring this library and another computer's in step over ssh: each gets the books it lacks, "
-                            "the newer details and the newer reading place win, and a book removed on one side is removed "
-                            "on the other too (to the trash), unless it changed there since. Omabook must be installed on both.");
-    command.parser.addPositionalArgument("computer", "The other computer as ssh knows it (a Tailscale name works), optionally "
-                                                     "with its library folder: laptop or laptop:Books.", "<computer[:folder]>");
-    command.parser.addOption({"status", "Only say whether syncing is set up, and with which computer."});
-    command.parser.addOption({"details", "For books whose details differ and no time says which are newer (books from before "
-                                         "Omabook kept that time): take this computer's (mine) or the other's (theirs).",
-                              "mine|theirs"});
-    command.parser.addOption({"dry-run", "Change nothing on either side; list what would be received, sent, updated and "
-                                         "removed on each."});
-    if (!command.parse(arguments, 0, 1))
-        return 1;
-    SyncOptions options;
-    options.dryRun = command.parser.isSet("dry-run");
-    if (const QString details = command.parser.value("details").toLower(); details == "mine")
-        options.details = SyncOptions::Details::Mine;
-    else if (details == "theirs")
-        options.details = SyncOptions::Details::Theirs;
-    else if (command.parser.isSet("details"))
-        return fail("--details is mine or theirs.");
-    QString error;
-    const auto library = command.library(&error);
-    if (!library)
-        return fail(error);
-    const QString computer = command.argument(0).isEmpty() ? Settings().syncTarget() : command.argument(0);
-    if (command.parser.isSet("status")) {
-        const bool ssh = !QStandardPaths::findExecutable("ssh").isEmpty();
-        if (command.json())
-            printJson(QJsonObject{{"computer", computer}, {"configured", !computer.isEmpty()}, {"ssh_installed", ssh},
-                                  {"library", library->root()}, {"books", library->books().size()}});
-        else
-            print(stdout, computer.isEmpty() ? QString("No computer to sync with is named in the settings.")
-                                             : QString("Syncs with %1%2").arg(computer, ssh ? "" : " (ssh is not installed)"));
-        return 0;
-    }
-    if (computer.isEmpty())
-        return fail("Name the computer to sync with, or set one in the settings.");
-    const SyncSummary summary = syncLibrary(*library, Remote(computer), [&](const QString &title) {
-        if (!command.json())
-            print(stderr, title);
-    }, options);
-    if (!summary.error.isEmpty())
-        return fail(summary.error);
-    const QString host = Remote(computer).host();
-    const SyncSummary::Titles &titles = summary.titles;
-    if (command.json()) {
-        printJson(summary.toJson());
-    } else if (summary.dryRun) {
-        print(stdout, QString("A dry run: nothing was changed, here or on %1. A sync would do this:").arg(host));
-        const auto section = [](const QString &what, const QStringList &titles) {
-            if (titles.isEmpty())
-                return;
-            print(stdout, QString("%1 (%2):").arg(what).arg(titles.size()));
-            for (const QString &title : titles)
-                print(stdout, "  " + title);
-        };
-        section("Received here", titles.received);
-        section("Sent to " + host, titles.sent);
-        section("Details taken here", titles.detailsTaken);
-        section("Details given to " + host, titles.detailsSent);
-        section("Reading places taken here", titles.placesTaken);
-        section("Reading places given to " + host, titles.placesSent);
-        section("Shelf, stars or finished day taken here", titles.readingTaken);
-        section("Shelf, stars or finished day given to " + host, titles.readingSent);
-        section("Removed here, to the trash", titles.removedHere);
-        section("Removed on " + host + ", to the trash", titles.removedThere);
-        section("Details that differ, with no time to say which are newer", titles.detailsUndecided);
-        const int total = summary.received + summary.sent + summary.detailsTaken + summary.detailsSent + summary.placesTaken
-                          + summary.placesSent + summary.readingTaken + summary.readingSent + summary.removedHere
-                          + summary.removedThere + summary.detailsUndecided;
-        if (total == 0)
-            print(stdout, "Nothing: both libraries are in step.");
-    } else {
-        print(stdout, QString("%1 received, %2 sent, %3 reading places updated, %4 details updated, %5 removed here, %6 removed on %7")
-                          .arg(summary.received).arg(summary.sent).arg(summary.placesTaken + summary.placesSent)
-                          .arg(summary.detailsTaken + summary.detailsSent).arg(summary.removedHere).arg(summary.removedThere)
-                          .arg(host));
-    }
-    if (summary.detailsUndecided > 0 && !command.json())
-        print(stdout, QString("%1 other details on %2, and neither side knows which are newer, so they were left "
-                              "as they are. To settle them: omabook sync %3 --details mine (keep this computer's) or "
-                              "--details theirs (take %2's); add --dry-run to see first.")
-                          .arg(summary.detailsUndecided == 1 ? QString("1 book has") : QString("%1 books have").arg(summary.detailsUndecided))
-                          .arg(host, computer));
-    for (const QString &problem : summary.problems)
-        print(stderr, problem);
-    return summary.problems.isEmpty() ? 0 : 1;
 }
 
 int remove(const QStringList &arguments) {
@@ -2268,8 +2165,8 @@ constexpr std::array cliCommands{
     CliCommand{"graph"_L1, runGraphCli},
     CliCommand{"progress"_L1, progress},
     CliCommand{"format"_L1, format},
-    CliCommand{"sync"_L1, sync},
-    CliCommand{"manifest"_L1, manifest},
+    CliCommand{"sync"_L1, runSyncCli},
+    CliCommand{"manifest"_L1, runManifestCli},
     CliCommand{"plugins"_L1, plugins},
     CliCommand{"plugin"_L1, runPluginCli},
     CliCommand{"calibre"_L1, calibre},
@@ -2381,6 +2278,7 @@ int runCli(const QStringList &given) {
     // MCP server and the file manager's helper; the plugins are loaded only
     // when a format Omabook doesn't read itself is asked about.
     ScriptFormats::loadOnDemand();
+    const auto unloadScripts = qScopeGuard([] { ScriptFormats::unload(); });
     if (const auto command = cliCommand(arguments.value(1)); command != cliCommands.end()) {
         const int code = command->run(arguments);
         // What a command changed in a library shows in its view in the file

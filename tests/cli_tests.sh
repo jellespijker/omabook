@@ -220,6 +220,8 @@ longway="$("$omabook" list --library "$library" title:Long | cut -f1)"
 expect "a script's format has contents" 0 "On the Road" "$omabook" toc "$longway" --library "$library"
 expect "a script's format is read" 0 "Nobody waved." "$omabook" text "$longway" --library "$library" --section 0
 expect "a script's format is searched" 0 "road went on" "$omabook" find "$longway" --library "$library" road
+expect "a library command emits no Qt warnings on exit" 0 "Sea Story" env QT_FATAL_WARNINGS=1 "$omabook" list --library "$library"
+expect "manifest emits no Qt warnings on exit" 0 '"books"' env QT_FATAL_WARNINGS=1 "$omabook" manifest --library "$library"
 "$omabook" remove "$longway" --library "$library" >/dev/null
 "$omabook" plugin disable textbook >/dev/null
 

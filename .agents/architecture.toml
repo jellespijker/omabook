@@ -48,20 +48,20 @@ modules = [
 [layers.operations]
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
-modules = ["bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "plugintools", "scripttools", "sync"]
+modules = ["bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "plugintools", "scripttools", "sync", "syncmanifest"]
 
 # The two front ends are peers: neither includes the other. What both need
 # belongs in operations or below.
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["cli", "mcp", "mcpcommands"]
+modules = ["cli", "mcp", "mcpcommands", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
-  "assistant", "backend", "backendcollections", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
+  "assistant", "backend", "backendcollections", "backendlookup", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "interface", "librarian", "librarianfind", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks",
 ]
 
