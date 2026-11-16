@@ -1073,11 +1073,18 @@ QList<Tool> coreTools() {
                   }};
 
     tools << Tool{"sync_run", "Sync with another computer",
-                  "Brings this library and another computer's in step over ssh: each gets the books it lacks and "
-                  "the newer reading place wins. Omabook must be installed on both and ssh must log in without "
-                  "asking. It can take minutes for a large library.",
+                  "Brings this library and another computer's in step over ssh: each gets the books it lacks, the "
+                  "newer details and the newer reading place win, and a book removed on one side is removed on the "
+                  "other too (to the trash) unless it changed there since. Omabook must be installed on both and ssh "
+                  "must log in without asking. It can take minutes for a large library. Run it with dry_run first to "
+                  "show the user what it would change.",
                   schema({{"computer", string("The other computer as ssh knows it, optionally with its library folder "
-                                              "(laptop or laptop:Books); the one in the settings when not given.")}}),
+                                              "(laptop or laptop:Books); the one in the settings when not given.")},
+                          {"dry_run", boolean("Change nothing on either side, and list by title what would be received, "
+                                              "sent, updated and removed on each. False when not given.")},
+                          {"details", choice("For books whose details differ and no time says which are newer: take this "
+                                             "computer's (mine) or the other's (theirs). Left as they are when not given.",
+                                             {"mine", "theirs"})}}),
                   Changes,
                   [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments, false);
@@ -1087,12 +1094,18 @@ QList<Tool> coreTools() {
                                                                             : Settings().syncTarget();
                       if (target.isEmpty())
                           return Result::fail("No computer to sync with is set; name one in \"computer\".");
-                      const SyncSummary summary = syncLibrary(*at.library, Remote(target));
+                      SyncOptions options;
+                      options.dryRun = arguments.value("dry_run").toBool();
+                      const QString details = arguments.value("details").toString();
+                      if (!details.isEmpty() && details != "mine" && details != "theirs")
+                          return Result::fail("\"details\" is mine or theirs.");
+                      options.details = details == "mine"     ? SyncOptions::Details::Mine
+                                        : details == "theirs" ? SyncOptions::Details::Theirs
+                                                              : SyncOptions::Details::Undecided;
+                      const SyncSummary summary = syncLibrary(*at.library, Remote(target), {}, options);
                       if (!summary.error.isEmpty())
                           return Result::fail(summary.error);
-                      return Result::ok({{"received", summary.received}, {"sent", summary.sent},
-                                         {"places_taken", summary.placesTaken}, {"places_sent", summary.placesSent},
-                                         {"problems", QJsonArray::fromStringList(summary.problems)}});
+                      return Result::ok(summary.toJson());
                   },
                   true};
 

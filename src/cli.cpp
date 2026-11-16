@@ -631,12 +631,26 @@ int format(const QStringList &arguments) {
 
 int sync(const QStringList &arguments) {
     Command command("sync", "Bring this library and another computer's in step over ssh: each gets the books it lacks, "
-                            "and the newer reading place wins. Omabook must be installed on both.");
+                            "the newer details and the newer reading place win, and a book removed on one side is removed "
+                            "on the other too (to the trash), unless it changed there since. Omabook must be installed on both.");
     command.parser.addPositionalArgument("computer", "The other computer as ssh knows it (a Tailscale name works), optionally "
                                                      "with its library folder: laptop or laptop:Books.", "<computer[:folder]>");
     command.parser.addOption({"status", "Only say whether syncing is set up, and with which computer."});
+    command.parser.addOption({"details", "For books whose details differ and no time says which are newer (books from before "
+                                         "Omabook kept that time): take this computer's (mine) or the other's (theirs).",
+                              "mine|theirs"});
+    command.parser.addOption({"dry-run", "Change nothing on either side; list what would be received, sent, updated and "
+                                         "removed on each."});
     if (!command.parse(arguments, 0, 1))
         return 1;
+    SyncOptions options;
+    options.dryRun = command.parser.isSet("dry-run");
+    if (const QString details = command.parser.value("details").toLower(); details == "mine")
+        options.details = SyncOptions::Details::Mine;
+    else if (details == "theirs")
+        options.details = SyncOptions::Details::Theirs;
+    else if (command.parser.isSet("details"))
+        return fail("--details is mine or theirs.");
     QString error;
     const auto library = command.library(&error);
     if (!library)
@@ -657,15 +671,50 @@ int sync(const QStringList &arguments) {
     const SyncSummary summary = syncLibrary(*library, Remote(computer), [&](const QString &title) {
         if (!command.json())
             print(stderr, title);
-    });
+    }, options);
     if (!summary.error.isEmpty())
         return fail(summary.error);
-    if (command.json())
-        printJson(QJsonObject{{"received", summary.received}, {"sent", summary.sent}, {"places_taken", summary.placesTaken},
-                              {"places_sent", summary.placesSent}, {"problems", QJsonArray::fromStringList(summary.problems)}});
-    else
-        print(stdout, QString("%1 received, %2 sent, %3 reading places updated")
-                          .arg(summary.received).arg(summary.sent).arg(summary.placesTaken + summary.placesSent));
+    const QString host = Remote(computer).host();
+    const SyncSummary::Titles &titles = summary.titles;
+    if (command.json()) {
+        printJson(summary.toJson());
+    } else if (summary.dryRun) {
+        print(stdout, QString("A dry run: nothing was changed, here or on %1. A sync would do this:").arg(host));
+        const auto section = [](const QString &what, const QStringList &titles) {
+            if (titles.isEmpty())
+                return;
+            print(stdout, QString("%1 (%2):").arg(what).arg(titles.size()));
+            for (const QString &title : titles)
+                print(stdout, "  " + title);
+        };
+        section("Received here", titles.received);
+        section("Sent to " + host, titles.sent);
+        section("Details taken here", titles.detailsTaken);
+        section("Details given to " + host, titles.detailsSent);
+        section("Reading places taken here", titles.placesTaken);
+        section("Reading places given to " + host, titles.placesSent);
+        section("Shelf, stars or finished day taken here", titles.readingTaken);
+        section("Shelf, stars or finished day given to " + host, titles.readingSent);
+        section("Removed here, to the trash", titles.removedHere);
+        section("Removed on " + host + ", to the trash", titles.removedThere);
+        section("Details that differ, with no time to say which are newer", titles.detailsUndecided);
+        const int total = summary.received + summary.sent + summary.detailsTaken + summary.detailsSent + summary.placesTaken
+                          + summary.placesSent + summary.readingTaken + summary.readingSent + summary.removedHere
+                          + summary.removedThere + summary.detailsUndecided;
+        if (total == 0)
+            print(stdout, "Nothing: both libraries are in step.");
+    } else {
+        print(stdout, QString("%1 received, %2 sent, %3 reading places updated, %4 details updated, %5 removed here, %6 removed on %7")
+                          .arg(summary.received).arg(summary.sent).arg(summary.placesTaken + summary.placesSent)
+                          .arg(summary.detailsTaken + summary.detailsSent).arg(summary.removedHere).arg(summary.removedThere)
+                          .arg(host));
+    }
+    if (summary.detailsUndecided > 0 && !command.json())
+        print(stdout, QString("%1 other details on %2, and neither side knows which are newer, so they were left "
+                              "as they are. To settle them: omabook sync %3 --details mine (keep this computer's) or "
+                              "--details theirs (take %2's); add --dry-run to see first.")
+                          .arg(summary.detailsUndecided == 1 ? QString("1 book has") : QString("%1 books have").arg(summary.detailsUndecided))
+                          .arg(host, computer));
     for (const QString &problem : summary.problems)
         print(stderr, problem);
     return summary.problems.isEmpty() ? 0 : 1;
@@ -702,8 +751,20 @@ int set(const QStringList &arguments) {
     command.parser.addOption({"paper", "Whether there is a copy on a real shelf: yes or no.", "yes|no"});
     command.parser.addOption({"identifier", "What the book is called elsewhere, as scheme=value (goodreads=4671); scheme= "
                                             "with nothing after it forgets it. Give it once per scheme.", "scheme=value"});
+    command.parser.addOption({"meta", "Take every detail from this JSON file (as omabook show --json prints them); the "
+                                      "options above still win over it.", "file"});
+    command.parser.addOption({"details-at", "Stamp the details with this time, in seconds since 1970, instead of now: what "
+                                            "omabook sync gives a book, so the details keep the time they had where they "
+                                            "came from.", "seconds"});
     if (!command.parse(arguments, 1, 1))
         return 1;
+    std::optional<qint64> detailsAt;
+    if (command.parser.isSet("details-at")) {
+        bool number = false;
+        detailsAt = command.parser.value("details-at").toLongLong(&number);
+        if (!number || *detailsAt < 0)
+            return fail("--details-at is a time in seconds since 1970, such as 1767225600.");
+    }
     QList<QPair<QString, QString>> identifiers;
     for (const QString &given : command.parser.values("identifier")) {
         if (!given.contains('='))
@@ -720,6 +781,15 @@ int set(const QStringList &arguments) {
         return fail("There is no book " + command.argument(0) + " in the library.");
     BookMeta meta = book->meta;
     const QCommandLineParser &options = command.parser;
+    if (options.isSet("meta")) {
+        QFile details(options.value("meta"));
+        if (!details.open(QIODevice::ReadOnly))
+            return fail("The details can't be read: " + options.value("meta"));
+        const QJsonDocument read = QJsonDocument::fromJson(details.readAll());
+        if (!read.isObject())
+            return fail("The details aren't a JSON object: " + options.value("meta"));
+        meta = BookMeta::fromJson(read.object());
+    }
     if (options.isSet("title")) meta.title = options.value("title").simplified();
     if (options.isSet("authors")) meta.authors = BookMeta::splitAuthors(options.value("authors"));
     if (options.isSet("series")) meta.series = options.value("series").simplified();
@@ -742,7 +812,7 @@ int set(const QStringList &arguments) {
     // First, since they are all or nothing: a scheme refused changes nothing.
     if (!identifiers.isEmpty() && !BookOps::setIdentifiers(*library, id, identifiers, &error))
         return fail(error);
-    if (!library->setMeta(id, meta, &error))
+    if (!library->setMeta(id, meta, &error, detailsAt))
         return fail(error);
     if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {
         const QString status = options.isSet("status") ? options.value("status").toLower() : book->shelf;

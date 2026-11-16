@@ -5,10 +5,16 @@
 #include <QJsonObject>
 #include <QRegularExpression>
 #include <QSignalSpy>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QStorageInfo>
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QTemporaryDir>
+#include <QUrl>
+#include <QUuid>
 #include <QtTest>
+#include <unistd.h>
 
 #include "ai.h"
 #include "bookops.h"
@@ -32,6 +38,87 @@ QString script(const QString &path, const QByteArray &body) {
     Fixtures::write(path, "#!/bin/bash\n" + body);
     QFile::setPermissions(path, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
     return path;
+}
+
+// A stand-in for ssh that runs the command on this computer, with this
+// build's omabook, as another computer whose home is "there-home" in `dir`
+// (its trash too).
+QString standInSsh(const QTemporaryDir &dir) {
+    // With a trash, which the system only moves things to when it is there.
+    QDir(dir.path()).mkpath("there-home/.local/share/Trash/files");
+    QDir(dir.path()).mkpath("there-home/.local/share/Trash/info");
+    const QByteArray home = dir.path().toUtf8() + "/there-home";
+    return script(dir.filePath("ssh"), "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
+                                       "export HOME='" + home + "' XDG_DATA_HOME='" + home + "/.local/share' QT_QPA_PLATFORM=offscreen\n"
+                                       "export PATH=\"" + QFileInfo(OMABOOK_BINARY).absolutePath().toUtf8() + ":$PATH\"\n"
+                                       "exec sh -c \"$1\"\n");
+}
+
+// This computer's home, and so its trash, in a test's folder for as long as
+// it lives.
+class HomeIn {
+public:
+    explicit HomeIn(const QString &path) : m_home(qgetenv("HOME")), m_data(qgetenv("XDG_DATA_HOME")) {
+        QDir().mkpath(path + "/.local/share/Trash/files");
+        QDir().mkpath(path + "/.local/share/Trash/info");
+        qputenv("HOME", path.toUtf8());
+        qputenv("XDG_DATA_HOME", (path + "/.local/share").toUtf8());
+    }
+    ~HomeIn() {
+        qputenv("HOME", m_home);
+        m_data.isEmpty() ? qunsetenv("XDG_DATA_HOME") : qputenv("XDG_DATA_HOME", m_data);
+    }
+    HomeIn(const HomeIn &) = delete;
+    HomeIn &operator=(const HomeIn &) = delete;
+
+private:
+    QByteArray m_home, m_data;
+};
+
+// Runs a statement on a library's database as it is: for the times a test
+// must set, which nothing in Omabook sets by hand.
+bool direct(const Library &library, const QString &sql) {
+    const QString name = "direct-" + QUuid::createUuid().toString(QUuid::Id128);
+    bool done = false;
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", name);
+        database.setDatabaseName(library.databasePath());
+        database.setConnectOptions("QSQLITE_BUSY_TIMEOUT=10000");
+        done = database.open() && QSqlQuery(database).exec(sql);
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(name);
+    return done;
+}
+
+// What a library holds, to tell that nothing changed.
+QByteArray snapshot(const Library &library) { return QJsonDocument(libraryManifest(library)).toJson(); }
+
+// Where what was under `folder` went to the trash, as each trash entry
+// says it was ("Path=" in its .trashinfo): in the trash of one of `homes`,
+// or the one at the top of the folder's disk, as the system chose.
+QStringList trashedFrom(const QString &folder, const QStringList &homes) {
+    QStringList trashes;
+    for (const QString &home : homes)
+        trashes << home + "/.local/share/Trash";
+    const QString top = QStorageInfo(folder).rootPath();
+    trashes << QString("%1/.Trash-%2").arg(top).arg(getuid()) << QString("%1/.Trash/%2").arg(top).arg(getuid());
+    // A trash at the top of a disk keeps the path from that top.
+    const QStringList from{folder + "/", QDir(top).relativeFilePath(folder) + "/"};
+    QStringList found;
+    for (const QString &trash : trashes)
+        for (const QFileInfo &info : QDir(trash + "/info").entryInfoList({"*.trashinfo"}, QDir::Files)) {
+            QFile file(info.filePath());
+            if (!file.open(QIODevice::ReadOnly))
+                continue;
+            for (const QString &line : QString::fromUtf8(file.readAll()).split('\n')) {
+                const QString path = QUrl::fromPercentEncoding(line.mid(5).toUtf8());
+                for (const QString &start : from)
+                    if (line.startsWith("Path=") && path.startsWith(start))
+                        found << path.mid(start.size());
+            }
+        }
+    return found;
 }
 
 // An HTTP server that answers every request with one canned response and
@@ -1379,6 +1466,8 @@ private slots:
             QVERIFY(there.add(dir.filePath("theirs.epub")).error.isEmpty());
             QVERIFY(there.add(dir.filePath("gone.epub")).error.isEmpty());
         }
+        // Removed long before it was added there: there it stays.
+        QVERIFY(direct(here, "UPDATE removed SET removed_at = 500"));
 
         QStringList carried;
         const SyncSummary summary = syncLibrary(here, remote, [&](const QString &title) { carried << title; });
@@ -1468,6 +1557,8 @@ private slots:
             QVERIFY(there.setReading(entry(there, "same name twice", "Bo  Writer", false), "", 3, {}));
             QVERIFY(there.setReading(entry(there, "Thrown Away", "Cy Gone", false), "read", 2, {}));
         }
+        // Removed here long before it was shelved there: there it stays.
+        QVERIFY(direct(here, "UPDATE removed SET removed_at = 500"));
 
         const SyncSummary summary = syncLibrary(here, remote);
         QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
@@ -1512,6 +1603,311 @@ private slots:
         QCOMPARE(settled.received + settled.sent, 0);
         QCOMPARE(here.books().size(), 4);
         QCOMPARE(there.books().size(), 5);
+    }
+
+    // Of a book both computers have, the newer details win, either way, with
+    // the cover when it is another picture. What is taken or given keeps the
+    // time it had, so the next sync finds both alike and does nothing.
+    void theNewerDetailsWinEitherWay() {
+        QTemporaryDir dir;
+        const Remote remote("laptop:" + dir.filePath("There"), {standInSsh(dir)});
+        QVERIFY(Fixtures::epub(dir.filePath("a.epub"), "Changed Here"));
+        QVERIFY(Fixtures::epub(dir.filePath("b.epub"), "Changed There"));
+        Library here(dir.filePath("Here")), there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 a = here.add(dir.filePath("a.epub")).id, b = here.add(dir.filePath("b.epub")).id;
+        const qint64 aThere = there.add(dir.filePath("a.epub")).id, bThere = there.add(dir.filePath("b.epub")).id;
+        QVERIFY(direct(here, "UPDATE books SET details_at = 1000") && direct(there, "UPDATE books SET details_at = 1000"));
+
+        BookMeta mine = here.book(a)->meta;
+        mine.title = "Changed Here, Looked Up";
+        mine.series = "The Cycle";
+        mine.seriesIndex = 2;
+        mine.tags = QStringList{"fantasy", "maps"};
+        mine.description = "Looked up again.";
+        QVERIFY(here.setMeta(a, mine, nullptr, 2000));
+        BookMeta theirs = there.book(bThere)->meta;
+        theirs.description = "Written there.";
+        theirs.tags = QStringList{"history"};
+        theirs.cover = QImage(50, 70, QImage::Format_RGB32);
+        theirs.cover.fill(Qt::darkGreen);
+        QVERIFY(there.setMeta(bThere, theirs, nullptr, 3000));
+
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.detailsSent, 1);
+        QCOMPARE(summary.detailsTaken, 1);
+        QCOMPARE(summary.detailsUndecided, 0);
+        QCOMPARE(summary.received + summary.sent + summary.removedHere + summary.removedThere, 0);
+
+        // There: this side's newer details, with the time they had here.
+        const Book given = *there.book(aThere);
+        QCOMPARE(given.meta.title, QString("Changed Here, Looked Up"));
+        QCOMPARE(given.meta.series, QString("The Cycle"));
+        QCOMPARE(given.meta.seriesIndex, 2.0);
+        QCOMPARE(given.meta.tags, (QStringList{"fantasy", "maps"}));
+        QCOMPARE(given.meta.description, QString("Looked up again."));
+        QCOMPARE(given.detailsAt, qint64(2000));
+        // Here: theirs, cover and all.
+        const Book taken = *here.book(b);
+        QCOMPARE(taken.meta.description, QString("Written there."));
+        QCOMPARE(taken.meta.tags, QStringList{"history"});
+        QCOMPARE(taken.detailsAt, qint64(3000));
+        QCOMPARE(QImage(here.coverPath(b)).size(), QSize(50, 70));
+
+        // In step: nothing goes back and forth.
+        const SyncSummary again = syncLibrary(here, remote);
+        QVERIFY2(again.problems.isEmpty(), qPrintable(again.problems.join('\n')));
+        QCOMPARE(again.detailsTaken + again.detailsSent + again.detailsUndecided + again.readingTaken + again.readingSent, 0);
+        QCOMPARE(here.book(b)->detailsAt, qint64(3000));
+        QCOMPARE(there.book(aThere)->detailsAt, qint64(2000));
+    }
+
+    // Books from before a library kept when its details changed are 0 on
+    // both sides: where they differ nothing decides, so they are counted and
+    // left alone, until the user says whose to take.
+    void detailsNoTimeDecidesWaitForAChoice() {
+        QTemporaryDir dir;
+        const Remote remote("laptop:" + dir.filePath("There"), {standInSsh(dir)});
+        QVERIFY(Fixtures::epub(dir.filePath("a.epub"), "First Book"));
+        QVERIFY(Fixtures::epub(dir.filePath("b.epub"), "Second Book"));
+        Library here(dir.filePath("Here")), there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 a = here.add(dir.filePath("a.epub")).id, b = here.add(dir.filePath("b.epub")).id;
+        const qint64 aThere = there.add(dir.filePath("a.epub")).id, bThere = there.add(dir.filePath("b.epub")).id;
+        const auto describe = [](Library &library, qint64 id, const QString &description) {
+            BookMeta meta = library.book(id)->meta;
+            meta.description = description;
+            return library.setMeta(id, meta, nullptr, 0);
+        };
+        QVERIFY(describe(here, a, "Mine.") && describe(here, b, "Mine too."));
+        QVERIFY(describe(there, aThere, "Theirs.") && describe(there, bThere, "Theirs too."));
+
+        const SyncSummary unknown = syncLibrary(here, remote);
+        QVERIFY2(unknown.problems.isEmpty(), qPrintable(unknown.problems.join('\n')));
+        QCOMPARE(unknown.detailsUndecided, 2);
+        QCOMPARE(unknown.titles.detailsUndecided, (QStringList{"First Book", "Second Book"}));
+        QCOMPARE(unknown.detailsTaken + unknown.detailsSent, 0);
+        QCOMPARE(here.book(a)->meta.description, QString("Mine."));
+        QCOMPARE(there.book(aThere)->meta.description, QString("Theirs."));
+
+        // --details mine: this side's go there.
+        const SyncSummary mine = syncLibrary(here, remote, {}, SyncOptions{.details = SyncOptions::Details::Mine});
+        QVERIFY2(mine.problems.isEmpty(), qPrintable(mine.problems.join('\n')));
+        QCOMPARE(mine.detailsSent, 2);
+        QCOMPARE(mine.detailsUndecided, 0);
+        QCOMPARE(there.book(aThere)->meta.description, QString("Mine."));
+        QCOMPARE(there.book(bThere)->meta.description, QString("Mine too."));
+        QCOMPARE(syncLibrary(here, remote).detailsUndecided, 0);
+
+        // --details theirs: the other side's come here.
+        QVERIFY(describe(there, aThere, "Theirs, after all."));
+        const SyncSummary theirs = syncLibrary(here, remote, {}, SyncOptions{.details = SyncOptions::Details::Theirs});
+        QVERIFY2(theirs.problems.isEmpty(), qPrintable(theirs.problems.join('\n')));
+        QCOMPARE(theirs.detailsTaken, 1);
+        QCOMPARE(theirs.detailsSent, 0);
+        QCOMPARE(here.book(a)->meta.description, QString("Theirs, after all."));
+        QCOMPARE(here.book(b)->meta.description, QString("Mine too."));
+        const SyncSummary settled = syncLibrary(here, remote);
+        QCOMPARE(settled.detailsUndecided + settled.detailsTaken + settled.detailsSent, 0);
+    }
+
+    // A book removed on one computer is removed on the other at the next
+    // sync, to the trash there, either way; a book without a file too.
+    void aRemovalTravelsEitherWayToTheTrash() {
+        QTemporaryDir dir;
+        const Remote remote("laptop:" + dir.filePath("There"), {standInSsh(dir)});
+        const HomeIn home(dir.filePath("here-home"));
+
+        QVERIFY(Fixtures::epub(dir.filePath("x.epub"), "Removed Here"));
+        QVERIFY(Fixtures::epub(dir.filePath("y.epub"), "Removed There"));
+        QVERIFY(Fixtures::epub(dir.filePath("z.epub"), "Kept By Both"));
+        Library here(dir.filePath("Here")), there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        BookMeta wish;
+        wish.title = "Wished Away";
+        wish.authors = QStringList{"Di Dreamer"};
+        QHash<QString, qint64> mine, theirs;
+        for (const char *file : {"x", "y", "z"}) {
+            mine.insert(file, here.add(dir.filePath(QString(file) + ".epub")).id);
+            theirs.insert(file, there.add(dir.filePath(QString(file) + ".epub")).id);
+        }
+        const qint64 wishHere = here.addEntry(wish, false).id;
+        QVERIFY(there.addEntry(wish, false).error.isEmpty());
+        // Both had them long before either removed one.
+        for (const Library *library : {&here, &there})
+            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+        QVERIFY(here.remove(mine.value("x")) && here.remove(wishHere));
+        QVERIFY(there.remove(theirs.value("y")));
+
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.removedHere, 1);
+        QCOMPARE(summary.titles.removedHere, QStringList{"Removed There"});
+        QCOMPARE(summary.removedThere, 2);
+        QCOMPARE(summary.titles.removedThere, (QStringList{"Removed Here", "Wished Away"}));
+        QCOMPARE(summary.received + summary.sent, 0);
+
+        // Both hold the one book neither removed, and the rest is in each trash.
+        QCOMPARE(here.books().size(), 1);
+        QCOMPARE(there.books().size(), 1);
+        QCOMPARE(here.books().first().meta.title, QString("Kept By Both"));
+        QCOMPARE(there.books().first().meta.title, QString("Kept By Both"));
+        const QStringList trashedThere = trashedFrom(dir.filePath("There"), {dir.filePath("there-home")});
+        const QStringList trashedHere = trashedFrom(dir.filePath("Here"), {dir.filePath("here-home")});
+        QVERIFY2(trashedThere.filter("Removed Here").size() == 1, qPrintable(trashedThere.join(", ")));
+        QVERIFY2(trashedHere.filter("Removed There").size() == 1, qPrintable(trashedHere.join(", ")));
+        // Removed on both sides now, and nothing more to do.
+        QVERIFY(here.wasRemoved(Library::hashFile(dir.filePath("y.epub"))));
+        const SyncSummary settled = syncLibrary(here, remote);
+        QCOMPARE(settled.removedHere + settled.removedThere + settled.received + settled.sent, 0);
+    }
+
+    // A book read, changed or shelved after the other computer removed it
+    // is kept where it changed, and not brought back to where it was removed.
+    void aBookChangedSinceItWasRemovedIsKept() {
+        QTemporaryDir dir;
+        const HomeIn home(dir.filePath("here-home"));
+        const Remote remote("laptop:" + dir.filePath("There"), {standInSsh(dir)});
+        QVERIFY(Fixtures::epub(dir.filePath("read.epub"), "Read Since"));
+        QVERIFY(Fixtures::epub(dir.filePath("edited.epub"), "Edited Since"));
+        QVERIFY(Fixtures::epub(dir.filePath("shelved.epub"), "Shelved Since"));
+        Library here(dir.filePath("Here")), there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        QHash<QString, qint64> mine, theirs;
+        for (const char *file : {"read", "edited", "shelved"}) {
+            mine.insert(file, here.add(dir.filePath(QString(file) + ".epub")).id);
+            theirs.insert(file, there.add(dir.filePath(QString(file) + ".epub")).id);
+        }
+        for (const Library *library : {&here, &there})
+            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+        QVERIFY(here.remove(mine.value("read")) && here.remove(mine.value("edited")));
+        QVERIFY(there.remove(theirs.value("shelved")));
+        for (const Library *library : {&here, &there})
+            QVERIFY(direct(*library, "UPDATE removed SET removed_at = 1500"));
+        // Since then: read on there, its details changed there, and put on a shelf here.
+        there.setProgress(theirs.value("read"), {.section = 1, .fraction = 0.5, .percent = 40, .updated = 2000});
+        QVERIFY(there.setDetailsAt(theirs.value("edited"), 2000));
+        QVERIFY(direct(here, QString("UPDATE books SET reading_at = 2000 WHERE id = %1").arg(mine.value("shelved"))));
+
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.removedHere + summary.removedThere, 0);
+        QCOMPARE(summary.received + summary.sent, 0);
+        QVERIFY(there.book(theirs.value("read")) && there.book(theirs.value("edited")));
+        QVERIFY(here.book(mine.value("shelved")));
+        QVERIFY(here.books("read since").isEmpty() && here.books("edited since").isEmpty());
+        QVERIFY(there.books("shelved since").isEmpty());
+    }
+
+    // A merge (tidy) folds a duplicate into the book kept and removes the
+    // duplicate, which the other computer then removes too. But a file the
+    // kept book took over from it is still in the library: a book that holds
+    // it on the other side is that same book, and is never removed, in
+    // either direction.
+    void aMergeRemovesTheDuplicateAndNeverTheBookKept() {
+        QTemporaryDir dir;
+        const HomeIn home(dir.filePath("here-home"));
+        const QString ssh = standInSsh(dir);
+        QVERIFY(Fixtures::epub(dir.filePath("kept.epub"), "Kept Copy"));
+        QVERIFY(Fixtures::epub(dir.filePath("duplicate.epub"), "Duplicate Copy"));
+        QVERIFY(Fixtures::write(dir.filePath("other.txt"), "Kept Copy, as text.\n"));
+        Library here(dir.filePath("Here")), there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        QHash<QString, qint64> mine, theirs;
+        for (const char *file : {"kept.epub", "duplicate.epub", "other.txt"}) {
+            mine.insert(file, here.add(dir.filePath(file)).id);
+            theirs.insert(file, there.add(dir.filePath(file)).id);
+        }
+        for (const Library *library : {&here, &there})
+            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+        const qint64 kept = mine.value("kept.epub");
+        // The kept book has an EPUB already, so the duplicate's goes with it;
+        // the text is a format it lacks, so it takes that over.
+        QVERIFY(here.merge(kept, mine.value("duplicate.epub")));
+        QVERIFY(here.merge(kept, mine.value("other.txt")));
+        QCOMPARE(here.book(kept)->formats, (QStringList{"epub", "txt"}));
+        // As an Omabook before 0.1.5 remembered it: the file the kept book took
+        // over counted as removed too.
+        const QString text = Library::hashFile(dir.filePath("other.txt"));
+        QVERIFY(direct(here, QString("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES ('%1', %2)")
+                                 .arg(text).arg(QDateTime::currentSecsSinceEpoch())));
+
+        const SyncSummary summary = syncLibrary(here, Remote("laptop:" + dir.filePath("There"), {ssh}));
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.removedThere, 1);
+        QCOMPARE(summary.titles.removedThere, QStringList{"Duplicate Copy"});
+        QCOMPARE(summary.removedHere, 0);
+        QVERIFY(!there.book(theirs.value("duplicate.epub")));
+        QVERIFY(there.book(theirs.value("kept.epub")));
+        QVERIFY(there.book(theirs.value("other.txt")));
+
+        // And from the other computer's side, with this one as the other.
+        const SyncSummary back = syncLibrary(there, Remote("desk:" + dir.filePath("Here"), {ssh}));
+        QVERIFY2(back.problems.isEmpty(), qPrintable(back.problems.join('\n')));
+        QCOMPARE(back.removedHere + back.removedThere, 0);
+        QVERIFY(there.book(theirs.value("kept.epub")) && there.book(theirs.value("other.txt")));
+        QCOMPARE(here.book(kept)->formats, (QStringList{"epub", "txt"}));
+        QCOMPARE(here.books().size(), 1);
+    }
+
+    // A dry run changes nothing on either side, and says, book by book, what
+    // a sync would do; the sync then does just that.
+    void aDryRunChangesNothing() {
+        QTemporaryDir dir;
+        const HomeIn home(dir.filePath("here-home"));
+        const Remote remote("laptop:" + dir.filePath("There"), {standInSsh(dir)});
+        QVERIFY(Fixtures::epub(dir.filePath("mine.epub"), "Only Here"));
+        QVERIFY(Fixtures::epub(dir.filePath("theirs.epub"), "Only There"));
+        QVERIFY(Fixtures::epub(dir.filePath("both.epub"), "On Both"));
+        QVERIFY(Fixtures::epub(dir.filePath("gone.epub"), "Removed Here"));
+        Library here(dir.filePath("Here")), there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        QVERIFY(here.add(dir.filePath("mine.epub")).error.isEmpty());
+        QVERIFY(there.add(dir.filePath("theirs.epub")).error.isEmpty());
+        const qint64 both = here.add(dir.filePath("both.epub")).id, bothThere = there.add(dir.filePath("both.epub")).id;
+        const qint64 gone = here.add(dir.filePath("gone.epub")).id;
+        QVERIFY(there.add(dir.filePath("gone.epub")).error.isEmpty());
+        for (const Library *library : {&here, &there})
+            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+        BookMeta newer = here.book(both)->meta;
+        newer.description = "Newer here.";
+        QVERIFY(here.setMeta(both, newer, nullptr, 2000));
+        QVERIFY(here.setReading(both, "reading", 4, {}));
+        there.setProgress(bothThere, {.section = 1, .fraction = 0.5, .percent = 50, .updated = 3000});
+        QVERIFY(here.remove(gone));
+        const QByteArray before = snapshot(here), beforeThere = snapshot(there);
+
+        const SyncSummary dry = syncLibrary(here, remote, {}, SyncOptions{.dryRun = true});
+        QVERIFY2(dry.error.isEmpty(), qPrintable(dry.error));
+        QVERIFY2(dry.problems.isEmpty(), qPrintable(dry.problems.join('\n')));
+        QVERIFY(dry.dryRun);
+        QCOMPARE(dry.titles.received, QStringList{"Only There"});
+        QCOMPARE(dry.titles.sent, QStringList{"Only Here"});
+        QCOMPARE(dry.titles.detailsSent, QStringList{"On Both"});
+        QCOMPARE(dry.titles.placesTaken, QStringList{"On Both"});
+        QCOMPARE(dry.titles.readingSent, QStringList{"On Both"});
+        QCOMPARE(dry.titles.removedThere, QStringList{"Removed Here"});
+        QVERIFY(dry.titles.removedHere.isEmpty() && dry.titles.detailsTaken.isEmpty());
+        QCOMPARE(snapshot(here), before);
+        QCOMPARE(snapshot(there), beforeThere);
+        QCOMPARE(here.books().size(), 2);
+        QCOMPARE(there.books().size(), 3);
+
+        // The sync itself does what the dry run said.
+        const SyncSummary done = syncLibrary(here, remote);
+        QVERIFY2(done.problems.isEmpty(), qPrintable(done.problems.join('\n')));
+        QCOMPARE(done.titles.received, dry.titles.received);
+        QCOMPARE(done.titles.sent, dry.titles.sent);
+        QCOMPARE(done.titles.detailsSent, dry.titles.detailsSent);
+        QCOMPARE(done.titles.placesTaken, dry.titles.placesTaken);
+        QCOMPARE(done.titles.readingSent, dry.titles.readingSent);
+        QCOMPARE(done.titles.removedThere, dry.titles.removedThere);
+        QCOMPARE(there.book(bothThere)->meta.description, QString("Newer here."));
+        QCOMPARE(here.progress(both).updated, qint64(3000));
+        QVERIFY(there.books("removed here").isEmpty());
     }
 
     void aComputerThatCannotBeReachedSaysSo() {

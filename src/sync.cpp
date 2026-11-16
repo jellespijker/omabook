@@ -12,6 +12,7 @@
 #include <QSet>
 #include <QTemporaryDir>
 #include <algorithm>
+#include <optional>
 
 #include "collections.h"
 #include "formats.h"
@@ -46,7 +47,10 @@ QStringList entryKeysOf(const QJsonObject &theirs) {
 
 // `omabook set` arguments that give the other side this book's reading and
 // its names elsewhere: the shelf, stars, finished day and paper copy.
-QStringList readingArguments(qint64 id, const Book &book) {
+// With `detailsAt` (for an Omabook there that keeps it), the time its
+// details are stamped with there: the names elsewhere are part of the
+// details, and what a sync brings keeps the time it had.
+QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt) {
     QStringList arguments{"set", QString::number(id), "--status", book.shelf.isEmpty() ? QStringLiteral("none") : book.shelf,
                           "--rating", QString::number(book.rating), "--paper", book.paper ? QStringLiteral("yes") : QStringLiteral("no")};
     if (!book.finished.isEmpty())
@@ -54,27 +58,43 @@ QStringList readingArguments(qint64 id, const Book &book) {
     for (auto it = book.identifiers.begin(); it != book.identifiers.end(); ++it)
         if (const QString value = it.value().toVariant().toString(); !value.isEmpty())
             arguments << "--identifier" << it.key() + "=" + value;
+    if (detailsAt)
+        arguments << "--details-at" << QString::number(*detailsAt);
     return arguments;
 }
 
 // Takes in what the other side says of a book's reading where this side
 // says nothing: an empty shelf, no stars, no finished day; a paper copy
-// either side has is had.
-void fillReading(Library &library, qint64 id, const QJsonObject &theirs) {
+// either side has is had. Whether that changes anything; with `dryRun`
+// only that.
+bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun) {
     const std::optional<Book> mine = library.book(id);
     if (!mine)
-        return;
+        return false;
+    bool changed = false;
     const QString shelf = mine->shelf.isEmpty() ? theirs.value("shelf").toString() : mine->shelf;
     const int rating = mine->rating > 0 ? mine->rating : theirs.value("rating").toInt();
     const QString finished = mine->finished.isEmpty() ? theirs.value("finished").toString() : mine->finished;
-    if (shelf != mine->shelf || rating != mine->rating || finished != mine->finished)
-        library.setReading(id, shelf, rating, finished);
-    if (!mine->paper && theirs.value("paper").toBool())
-        library.setPaper(id, true);
+    if (shelf != mine->shelf || rating != mine->rating || finished != mine->finished) {
+        changed = true;
+        if (!dryRun)
+            library.setReading(id, shelf, rating, finished);
+    }
+    if (!mine->paper && theirs.value("paper").toBool()) {
+        changed = true;
+        if (!dryRun)
+            library.setPaper(id, true);
+    }
+    // Names that came by sync keep the details' time, so they are no
+    // reason to send the details back.
     const QJsonObject identifiers = theirs.value("identifiers").toObject();
     for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (!mine->identifiers.contains(it.key()))
-            library.setIdentifier(id, it.key(), it.value().toVariant().toString());
+        if (!mine->identifiers.contains(it.key())) {
+            changed = true;
+            if (!dryRun)
+                library.setIdentifier(id, it.key(), it.value().toVariant().toString(), mine->detailsAt);
+        }
+    return changed;
 }
 
 // Whether the other side says less of a book's reading than this one does
@@ -85,6 +105,41 @@ bool saysLess(const QJsonObject &theirs, const Book &mine) {
         return true;
     const QJsonObject identifiers = theirs.value("identifiers").toObject();
     return std::ranges::any_of(mine.identifiers.keys(), [&](const QString &scheme) { return !identifiers.contains(scheme); });
+}
+
+// A book's details as both sides keep them, to compare.
+QJsonObject detailsOf(const BookMeta &meta) { return BookMeta::fromJson(meta.toJson()).toJson(); }
+
+// The last time a book changed in a way a removal elsewhere must not
+// overlook: when it was added, read, its details or its reading.
+qint64 lastChange(const Book &book) { return std::max({book.added, book.lastRead, book.detailsAt, book.readingAt}); }
+
+qint64 lastChange(const QJsonObject &theirs) {
+    return std::max({theirs.value("added_at").toInteger(), theirs.value("progress").toObject().value("updated").toInteger(),
+                     theirs.value("details_at").toInteger(), theirs.value("reading_at").toInteger()});
+}
+
+// When a book was removed on a side. One with files was when every one of
+// them was removed there, and it is the earliest of those times, so a change
+// after any of them keeps the book; one without a file was when one of its
+// names was, the earliest of those. None when it wasn't.
+std::optional<qint64> removedWhen(const QStringList &hashes, const QStringList &keys,
+                                  const std::function<std::optional<qint64>(const QString &)> &at) {
+    std::optional<qint64> earliest;
+    for (const QString &key : hashes.isEmpty() ? keys : hashes) {
+        const std::optional<qint64> when = at(key);
+        if (!when && !hashes.isEmpty())
+            return std::nullopt;
+        if (when)
+            earliest = std::min(earliest.value_or(*when), *when);
+    }
+    return earliest;
+}
+
+// Counts one book in a summary, with its title for a terminal.
+void note(int &count, QStringList &titles, const QString &title) {
+    ++count;
+    titles << title;
 }
 
 } // namespace
@@ -165,20 +220,52 @@ QJsonObject libraryManifest(const Library &library) {
         for (const FormatFile &file : library.formatFiles(book.id))
             files << QJsonObject{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
         object.insert("files", files);
-        object.insert("cover", library.coverPath(book.id));
+        const QString cover = library.coverPath(book.id);
+        object.insert("cover", cover);
+        // So a cover is only carried when it is another picture.
+        object.insert("cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover));
+        object.insert("added_at", book.added);
         object.insert("progress", toJson(library.progress(book.id)));
         // What is said of its reading, which a book without a file is all of.
         object.insert("shelf", book.shelf);
         object.insert("paper", book.paper);
         books << object;
     }
-    // An Omabook from before collections reads past them.
+    // Each removal with its time, so the other side removes what didn't
+    // change since; "removed" is the same without times, for an Omabook
+    // from before, which only leaves those alone. An Omabook from before
+    // collections reads past them.
+    QJsonArray removals;
+    for (const Library::Removal &removal : library.removals())
+        removals << QJsonObject{{"key", removal.key}, {"at", removal.at}};
     return {{"version", manifestVersion}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books},
-            {"removed", QJsonArray::fromStringList(library.removedHashes())}, {"collections", Collections::manifest(library)}};
+            {"removed", QJsonArray::fromStringList(library.removedHashes())}, {"removals", removals},
+            {"collections", Collections::manifest(library)}};
 }
 
-SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress) {
+QJsonObject SyncSummary::toJson() const {
+    const auto list = [](const QStringList &titles) { return QJsonArray::fromStringList(titles); };
+    QJsonObject result{{"received", received}, {"sent", sent}, {"places_taken", placesTaken}, {"places_sent", placesSent},
+                       {"details_taken", detailsTaken}, {"details_sent", detailsSent}, {"reading_taken", readingTaken},
+                       {"reading_sent", readingSent}, {"removed_here", removedHere}, {"removed_there", removedThere},
+                       {"details_undecided", detailsUndecided}, {"dry_run", dryRun}, {"problems", list(problems)}};
+    QJsonObject named{{"details_undecided", list(titles.detailsUndecided)}};
+    if (dryRun)
+        named = QJsonObject{{"received", list(titles.received)}, {"sent", list(titles.sent)},
+                            {"places_taken", list(titles.placesTaken)}, {"places_sent", list(titles.placesSent)},
+                            {"details_taken", list(titles.detailsTaken)}, {"details_sent", list(titles.detailsSent)},
+                            {"reading_taken", list(titles.readingTaken)}, {"reading_sent", list(titles.readingSent)},
+                            {"removed_here", list(titles.removedHere)}, {"removed_there", list(titles.removedThere)},
+                            {"details_undecided", list(titles.detailsUndecided)}};
+    result.insert("titles", named);
+    return result;
+}
+
+SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
+                        const SyncOptions &options) {
     SyncSummary summary;
+    summary.dryRun = options.dryRun;
+    const bool dryRun = options.dryRun;
     const Remote::Result listed = remote.omabook({"manifest"});
     const QJsonObject manifest = QJsonDocument::fromJson(listed.output).object();
     if (!listed.ok() || !manifest.contains("books")) {
@@ -196,6 +283,10 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                             .arg(remote.host(), manifest.value("omabook").toString("unknown"), QStringLiteral(OMABOOK_VERSION));
         return summary;
     }
+    // An Omabook there that keeps when details changed and when books were
+    // removed, which can take details and be asked to remove a book. With
+    // an older one the books and reading travel as they always did.
+    const bool current = manifest.contains("removals");
     QTemporaryDir scratch;
     int counter = 0;
     QSet<QString> theirHashes;
@@ -207,17 +298,37 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             myKeys.insert(key, book.id);
     QSet<QString> theirKeys;
 
+    // One folder there for the details and covers sent, made when first needed.
+    QString folderThere;
+    const auto dropFolder = qScopeGuard([&] {
+        if (!folderThere.isEmpty())
+            remote.run("rm -rf " + Remote::quote(folderThere));
+    });
+    const auto scratchThere = [&]() -> QString {
+        if (folderThere.isEmpty())
+            folderThere = QString::fromUtf8(remote.run("mktemp -d").output).trimmed();
+        return folderThere;
+    };
+    const auto writeJson = [&](const QJsonDocument &document) -> QString {
+        const QString file = scratch.filePath(QString("details-%1.json").arg(++counter));
+        QFile json(file);
+        return json.open(QIODevice::WriteOnly) && json.write(document.toJson()) > 0 ? file : QString();
+    };
+
     // What they have: fetch the books this library lacks, and for the ones
-    // both have, the formats it lacks and the newer reading place.
+    // both have, the formats it lacks, the newer details and reading place.
     for (const QJsonValue &value : manifest.value("books").toArray()) {
         const QJsonObject theirs = value.toObject();
         const qint64 theirId = theirs.value("id").toInteger();
+        const QString title = theirs.value("title").toString();
         const QJsonArray files = theirs.value("files").toArray();
         const Progress theirPlace = progressFrom(theirs.value("progress").toObject());
         qint64 mine = 0;
         bool removedHere = false;
+        QStringList hashes;
         for (const QJsonValue &file : files) {
             const QString hash = file.toObject().value("hash").toString();
+            hashes << hash;
             theirHashes << hash;
             if (!mine)
                 mine = library.bookWithHash(hash);
@@ -233,21 +344,44 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 removedHere = removedHere || library.wasRemoved(key);
             }
         }
-        if (!mine && removedHere)
+        // Removed here, so never fetched back; and removed there too, when
+        // all of it was removed here and it didn't change there since. One
+        // with a file this library still holds is a book here (`mine`), as
+        // the one a merge kept is, and is never removed.
+        if (!mine && removedHere) {
+            const std::optional<qint64> when = removedWhen(hashes, keys, [&](const QString &key) { return library.removedAt(key); });
+            if (current && when && lastChange(theirs) <= *when) {
+                const Remote::Result removed = dryRun ? Remote::Result{.code = 0, .output = {}, .error = {}}
+                                                      : remote.omabook({"remove", QString::number(theirId)});
+                if (removed.ok()) {
+                    note(summary.removedThere, summary.titles.removedThere, title);
+                    if (!dryRun)
+                        qCInfo(lcSync).noquote() << "book" << theirId << "removed on" << remote.host() << "as it was here";
+                } else {
+                    summary.problems << title + " could not be removed on " + remote.host() + ": " + removed.error.section('\n', -1);
+                }
+            }
             continue;
+        }
+        if (!mine && dryRun) {
+            note(summary.received, summary.titles.received, title);
+            continue;
+        }
         if (progress && !mine)
-            progress(theirs.value("title").toString());
+            progress(title);
 
         auto fetched = [&](const QJsonObject &file) -> QString {
             const QString local = scratch.filePath(QString("%1.%2").arg(++counter).arg(file.value("format").toString()));
             if (!remote.fetch(file.value("path").toString(), local)
                 || Library::hashFile(local) != file.value("hash").toString()) {
-                summary.problems << theirs.value("title").toString() + " did not arrive whole from " + remote.host() + ".";
+                summary.problems << title + " did not arrive whole from " + remote.host() + ".";
                 QFile::remove(local);
                 return {};
             }
             return local;
         };
+        // What arrives keeps the time its details had there.
+        const qint64 theirDetailsAt = theirs.value("details_at").toInteger();
 
         if (!mine && files.isEmpty()) {
             BookMeta meta = BookMeta::fromJson(theirs);
@@ -259,14 +393,17 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 summary.problems << added.error;
                 continue;
             }
-            fillReading(library, added.id, theirs);
+            fillReading(library, added.id, theirs, false);
+            if (current)
+                library.setDetailsAt(added.id, theirDetailsAt);
             if (const std::optional<Book> made = library.book(added.id))
                 for (const QString &key : Library::entryKeys(*made))
                     myKeys.insert(key, added.id);
-            ++summary.received;
+            note(summary.received, summary.titles.received, title);
             continue;
         }
-        if (!mine) {
+        const bool arrived = !mine;
+        if (arrived) {
             const QString first = fetched(files.first().toObject());
             if (first.isEmpty())
                 continue;
@@ -281,17 +418,82 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 continue;
             }
             mine = added.id;
-            ++summary.received;
+            if (current)
+                library.setDetailsAt(mine, theirDetailsAt);
+            note(summary.received, summary.titles.received, title);
         }
-        fillReading(library, mine, theirs);
+
+        // The details: the newer side's win, with the cover when it is
+        // another picture. Taken or given, they keep the time they had, so
+        // the next sync finds both alike and does nothing. Where no time
+        // says which are newer (both from before times were kept) only
+        // the words are compared, and they are left as they are unless the
+        // user chose a side.
+        std::optional<qint64> detailsThere = current ? std::optional<qint64>(theirDetailsAt) : std::nullopt;
+        if (!arrived) {
+            const Book here = *library.book(mine);
+            const qint64 myAt = here.detailsAt;
+            const bool wordsDiffer = detailsOf(BookMeta::fromJson(theirs)) != detailsOf(here.meta);
+            const QString theirCover = theirs.value("cover_hash").toString();
+            const QString myCoverFile = library.coverPath(mine);
+            const QString myCover = myCoverFile.isEmpty() ? QString() : Library::hashFile(myCoverFile);
+            const bool coverDiffers = current && theirCover != myCover;
+            enum class Way { None, Take, Send, Undecided } way = Way::None;
+            if (theirDetailsAt != myAt && (wordsDiffer || coverDiffers))
+                way = theirDetailsAt > myAt ? Way::Take : Way::Send;
+            else if (theirDetailsAt == myAt && wordsDiffer)
+                way = options.details == SyncOptions::Details::Mine     ? Way::Send
+                      : options.details == SyncOptions::Details::Theirs ? Way::Take
+                                                                        : Way::Undecided;
+            // An Omabook from before can't be given details.
+            if (way == Way::Send && !current)
+                way = Way::None;
+            if (way == Way::Undecided) {
+                note(summary.detailsUndecided, summary.titles.detailsUndecided, title);
+            } else if (way == Way::Take) {
+                BookMeta meta = BookMeta::fromJson(theirs);
+                const QString cover = theirs.value("cover").toString();
+                const QString picture = scratch.filePath(QString("cover-%1.jpg").arg(++counter));
+                if (!dryRun && coverDiffers && !theirCover.isEmpty() && !cover.isEmpty() && remote.fetch(cover, picture))
+                    meta.cover = QImageReader(picture).read();
+                QString error;
+                if (dryRun || library.setMeta(mine, meta, &error, theirDetailsAt))
+                    note(summary.detailsTaken, summary.titles.detailsTaken, title);
+                else
+                    summary.problems << title + ": " + error;
+            } else if (way == Way::Send) {
+                bool given = dryRun;
+                if (!dryRun) {
+                    const QString folder = scratchThere();
+                    const QString details = writeJson(QJsonDocument(here.meta.toJson()));
+                    QStringList set{"set", QString::number(theirId), "--meta", folder + "/details.json", "--details-at",
+                                    QString::number(myAt)};
+                    if (coverDiffers && !myCoverFile.isEmpty() && remote.send(myCoverFile, folder + "/cover.jpg"))
+                        set << "--cover" << folder + "/cover.jpg";
+                    given = !folder.isEmpty() && !details.isEmpty() && remote.send(details, folder + "/details.json")
+                            && remote.omabook(set).ok();
+                }
+                if (given) {
+                    note(summary.detailsSent, summary.titles.detailsSent, title);
+                    detailsThere = myAt;
+                } else {
+                    summary.problems << title + ": its details could not be given to " + remote.host() + ".";
+                }
+            }
+        }
+
+        if (fillReading(library, mine, theirs, dryRun) && !arrived)
+            note(summary.readingTaken, summary.titles.readingTaken, title);
         // Older Omabooks don't say "shelf"; they are given nothing they can't keep.
-        if (const std::optional<Book> merged = library.book(mine); merged && theirs.contains("shelf") && saysLess(theirs, *merged))
-            remote.omabook(readingArguments(theirId, *merged));
+        if (const std::optional<Book> merged = library.book(mine); merged && theirs.contains("shelf") && saysLess(theirs, *merged)) {
+            if (dryRun || remote.omabook(readingArguments(theirId, *merged, detailsThere)).ok())
+                note(summary.readingSent, summary.titles.readingSent, title);
+        }
         if (files.isEmpty())
             continue;
         const QStringList have = library.book(mine)->formats;
         for (const QJsonValue &file : files) {
-            if (have.contains(file.toObject().value("format").toString()))
+            if (dryRun || have.contains(file.toObject().value("format").toString()))
                 continue;
             const QString local = fetched(file.toObject());
             QString error;
@@ -302,32 +504,63 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
 
         const Progress myPlace = library.progress(mine);
         if (theirPlace.updated > myPlace.updated) {
-            library.setProgress(mine, theirPlace);
-            ++summary.placesTaken;
+            if (!dryRun)
+                library.setProgress(mine, theirPlace);
+            note(summary.placesTaken, summary.titles.placesTaken, title);
         } else if (myPlace.updated > theirPlace.updated) {
-            if (remote.omabook(progressArguments(theirId, myPlace)).ok())
-                ++summary.placesSent;
+            if (dryRun || remote.omabook(progressArguments(theirId, myPlace)).ok())
+                note(summary.placesSent, summary.titles.placesSent, title);
         }
     }
 
-    // What they lack: send it, unless they removed it themselves.
+    // What they lack: send it, unless they removed it themselves; and when
+    // they removed all of it and it didn't change here since, remove it here.
     QSet<QString> removedThere;
     for (const QJsonValue &hash : manifest.value("removed").toArray())
         removedThere << hash.toString();
+    QHash<QString, qint64> removalsThere;
+    for (const QJsonValue &removal : manifest.value("removals").toArray()) {
+        const QString key = removal.toObject().value("key").toString();
+        removalsThere.insert(key, removal.toObject().value("at").toInteger());
+        removedThere << key;
+    }
     for (const Book &book : library.books()) {
         const QList<FormatFile> files = library.formatFiles(book.id);
         bool known = false, removed = false;
+        QStringList hashes, keys;
         for (const FormatFile &file : files) {
+            hashes << file.hash;
             known = known || theirHashes.contains(file.hash);
             removed = removed || removedThere.contains(file.hash);
         }
         if (files.isEmpty())
             for (const QString &key : Library::entryKeys(book)) {
+                keys << key;
                 known = known || theirKeys.contains(key);
                 removed = removed || removedThere.contains(key);
             }
-        if (known || removed)
+        if (known)
             continue;
+        if (removed) {
+            const std::optional<qint64> when = removedWhen(hashes, keys, [&](const QString &key) {
+                return removalsThere.contains(key) ? std::optional<qint64>(removalsThere.value(key)) : std::nullopt;
+            });
+            if (current && when && lastChange(book) <= *when) {
+                QString error;
+                if (dryRun || library.remove(book.id, &error)) {
+                    note(summary.removedHere, summary.titles.removedHere, book.meta.title);
+                    if (!dryRun)
+                        qCInfo(lcSync).noquote() << "book" << book.id << "removed here, as it was on" << remote.host();
+                } else {
+                    summary.problems << book.meta.title + " could not be removed here: " + error;
+                }
+            }
+            continue;
+        }
+        if (dryRun) {
+            note(summary.sent, summary.titles.sent, book.meta.title);
+            continue;
+        }
         if (progress)
             progress(book.meta.title);
 
@@ -347,11 +580,9 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 why = file.format.toUpper() + ": " + why;
             sentFiles << target;
         }
-        const QString details = scratch.filePath("details.json");
-        QFile json(details);
-        if (why.isEmpty() && !(json.open(QIODevice::WriteOnly) && json.write(QJsonDocument(book.meta.toJson()).toJson()) > 0))
+        const QString details = why.isEmpty() ? writeJson(QJsonDocument(book.meta.toJson())) : QString();
+        if (why.isEmpty() && details.isEmpty())
             why = "its details can't be written here";
-        json.close();
         if (why.isEmpty())
             remote.send(details, folder + "/details.json", &why);
         // A book without a file is added as one, then given its reading.
@@ -380,14 +611,15 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             remote.omabook({"add", file, "--to", QString::number(theirId)});
         if (const Progress place = library.progress(book.id); place.updated > 0)
             remote.omabook(progressArguments(theirId, place));
-        remote.omabook(readingArguments(theirId, book));
-        ++summary.sent;
+        // Its details there keep the time they have here.
+        remote.omabook(readingArguments(theirId, book, current ? std::optional<qint64>(book.detailsAt) : std::nullopt));
+        note(summary.sent, summary.titles.sent, book.meta.title);
     }
     // The collections, once both sides have every book: theirs taken in here
     // where they changed last, and this library's handed to them to do the
     // same. An Omabook from before collections has none to give, and can't
-    // take any; the books are in step all the same.
-    if (manifest.contains("collections")) {
+    // take any; the books are in step all the same. A dry run leaves them be.
+    if (manifest.contains("collections") && !dryRun) {
         summary.collectionsTaken = Collections::take(library, manifest.value("collections").toArray());
         const QJsonArray mine = Collections::manifest(library);
         const QString file = scratch.filePath("collections.json");
@@ -407,7 +639,10 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             }
         }
     }
-    qCInfo(lcSync).noquote() << "with" << remote.host() << ":" << summary.received << "received," << summary.sent << "sent,"
-                             << summary.placesTaken + summary.placesSent << "reading places," << summary.problems.size() << "problems";
+    qCInfo(lcSync).noquote() << (dryRun ? "dry run with" : "with") << remote.host() << ":" << summary.received << "received,"
+                             << summary.sent << "sent," << summary.placesTaken + summary.placesSent << "reading places,"
+                             << summary.detailsTaken << "details taken," << summary.detailsSent << "details sent,"
+                             << summary.detailsUndecided << "details undecided," << summary.removedHere << "removed here,"
+                             << summary.removedThere << "removed there," << summary.problems.size() << "problems";
     return summary;
 }
