@@ -1,0 +1,80 @@
+# clang-tidy: the C++ Core Guidelines, modern C++23 and the common bug patterns.
+# The harness (.agents/hooks/check_clang_tidy.py) reports what a change adds;
+# `run-clang-tidy -p build` shows everything.
+#
+# Off, and why:
+#   easily-swappable-parameters    most Qt-style APIs take several QStrings
+#   *-magic-numbers                layout and timing constants read better in place
+#   owning-memory                  a QObject is owned by its Qt parent, not a gsl::owner
+#   array-to-pointer-decay,        Qt's macros (Q_OBJECT, qPrintable, qDebug)
+#     pro-type-vararg
+#   non-private-member-variables   plain structs of data are fine (C.2)
+#   include-cleaner                Qt's umbrella headers make it wrong more often than right
+#   no-recursion                   tree walks (the graph, the contents) are recursive
+#   use-trailing-return-type,      style, not safety
+#     use-nodiscard, trailing-comma, uppercase-literal-suffix, math-missing-parentheses,
+#     braces-around-statements, redundant-access-specifiers (Qt's `signals:`), identifier-length
+#   implicit-bool-conversion       `if (!book)` on an optional or a pointer is idiomatic
+#   cognitive-complexity,          measured by lizard instead (check_complexity.py)
+#     function-size
+#   convert-member-functions-to-static   Q_INVOKABLE and slots are called through the object
+#   use-designated-initializers    brace-initialised Qt values (QJsonObject{{...}}) would all be flagged
+#   enum-size                      not worth a std::uint8_t on every enum
+#   override-with-different-visibility   Qt slots and event handlers
+#   avoid-unchecked-container-access     QList::operator[] after a bounds check is the Qt idiom
+Checks: >
+  -*,
+  bugprone-*,
+  concurrency-*,
+  cppcoreguidelines-*,
+  misc-*,
+  modernize-*,
+  performance-*,
+  readability-*,
+  -bugprone-easily-swappable-parameters,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -misc-non-private-member-variables-in-classes,
+  -misc-include-cleaner,
+  -misc-no-recursion,
+  -modernize-use-trailing-return-type,
+  -modernize-use-nodiscard,
+  -readability-braces-around-statements,
+  -readability-function-cognitive-complexity,
+  -readability-function-size,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-magic-numbers,
+  -readability-math-missing-parentheses,
+  -readability-redundant-access-specifiers,
+  -readability-uppercase-literal-suffix,
+  -readability-convert-member-functions-to-static,
+  -readability-trailing-comma,
+  -modernize-use-designated-initializers,
+  -performance-enum-size,
+  -misc-override-with-different-visibility,
+  -cppcoreguidelines-pro-bounds-avoid-unchecked-container-access
+WarningsAsErrors: ''
+HeaderFilterRegex: '.*/src/[^/]+\.h$'
+FormatStyle: none
+CheckOptions:
+  readability-identifier-naming.ClassCase: CamelCase
+  readability-identifier-naming.StructCase: CamelCase
+  readability-identifier-naming.EnumCase: CamelCase
+  readability-identifier-naming.NamespaceCase: CamelCase
+  readability-identifier-naming.FunctionCase: camelBack
+  readability-identifier-naming.MethodCase: camelBack
+  readability-identifier-naming.ParameterCase: camelBack
+  readability-identifier-naming.VariableCase: camelBack
+  readability-identifier-naming.PrivateMemberPrefix: m_
+  readability-identifier-naming.PrivateMemberCase: camelBack
+  readability-identifier-naming.ProtectedMemberPrefix: m_
+  readability-identifier-naming.ProtectedMemberCase: camelBack
+  readability-identifier-naming.MacroDefinitionCase: UPPER_CASE
+  cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor: true
+  cppcoreguidelines-rvalue-reference-param-not-moved.AllowPartialMove: true
+  performance-unnecessary-value-param.AllowedTypes: 'Q.*'
+  readability-function-size.LineThreshold: 80

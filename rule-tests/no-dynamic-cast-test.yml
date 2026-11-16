@@ -1,0 +1,5 @@
+id: no-dynamic-cast
+valid:
+  - "auto *s = qobject_cast<Source *>(object);"
+invalid:
+  - "auto *s = dynamic_cast<Source *>(object);"

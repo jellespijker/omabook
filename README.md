@@ -705,6 +705,18 @@ For whoever changes the format: add a step to the list in `Library::open` (never
 - Errors that come from the lower layers (a file that can't be read, a catalog that can't be reached) are shown in English whatever the desktop's language.
 - The window ships in English, Dutch, German, French and Spanish; other Omarchy languages show English until someone adds a catalog under `src/i18n/` (`bin/i18n` regenerates `en.json` from the sources).
 
+## Development
+
+Omabook is developed in the [omabook-workspace](https://github.com/jellespijker/omabook-workspace),
+the main workspace for Omabook and its plugins. It holds the shared Kanban board, the labels
+and the milestones; see its README and `AGENTS.md`.
+
+Every change is checked by the harness in `.agents/`: modern C++23 (clang-tidy and
+ast-grep), the layers of `src/`, file-size and complexity budgets, formatting, secrets
+and an issue number in each commit. Set it up once with `uvx pre-commit install`; run it
+on a branch with `bin/check`. The rules are in `.agents/rules/`, and what changed
+between releases in [CHANGELOG.md](CHANGELOG.md).
+
 ## License
 
 MIT. The theme, translator, build scripts and portal file picker come from the Omarchy apps by David Heinemeier Hansson, under the same license.

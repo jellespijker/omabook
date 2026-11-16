@@ -1,0 +1,5 @@
+id: no-reinterpret-cast
+valid:
+  - "auto bytes = std::as_bytes(std::span(values));"
+invalid:
+  - "auto *p = reinterpret_cast<const char *>(data);"

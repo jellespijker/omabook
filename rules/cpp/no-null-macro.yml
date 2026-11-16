@@ -1,0 +1,9 @@
+id: no-null-macro
+language: cpp
+severity: error
+message: NULL is an integer; use nullptr.
+note: nullptr has its own type, so it never picks an int overload (ES.47).
+rule:
+  kind: "null"
+  regex: ^NULL$
+fix: nullptr

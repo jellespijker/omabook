@@ -1,0 +1,7 @@
+id: no-const-cast
+language: cpp
+severity: error
+message: const_cast; fix the constness at its source (a mutable member, or a non-const overload).
+note: ES.50. Writing through a const_cast to an object that is really const is undefined behaviour.
+rule:
+  pattern: const_cast<$T>($E)

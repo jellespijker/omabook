@@ -1,0 +1,5 @@
+id: no-std-endl
+valid:
+  - "void f() { std::cout << 1 << '\\n'; }"
+invalid:
+  - "void f() { std::cout << 1 << std::endl; }"

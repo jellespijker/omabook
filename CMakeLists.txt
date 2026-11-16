@@ -3,6 +3,9 @@ project(omabook VERSION 0.1.5.1 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+# clang-tidy, clangd and the harness's checks read the compile flags from here.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 if(NOT CMAKE_BUILD_TYPE)

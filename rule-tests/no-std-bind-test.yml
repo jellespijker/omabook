@@ -1,0 +1,5 @@
+id: no-std-bind
+valid:
+  - "auto f = [this] { run(); };"
+invalid:
+  - "auto f = std::bind(&Thing::run, this);"

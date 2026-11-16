@@ -1,0 +1,7 @@
+BasedOnStyle: LLVM
+IndentWidth: 4
+ColumnLimit: 140
+BreakBeforeBinaryOperators: NonAssignment
+LambdaBodyIndentation: OuterScope
+PenaltyBreakAssignment: 200
+PenaltyExcessCharacter: 10

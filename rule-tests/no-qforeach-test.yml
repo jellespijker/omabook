@@ -1,0 +1,5 @@
+id: no-qforeach
+valid:
+  - "void f(const QStringList &l) { for (const QString &s : l) use(s); }"
+invalid:
+  - "void f(const QStringList &l) { foreach (const QString &s, l) use(s); }"

@@ -1,0 +1,7 @@
+id: no-typedef
+language: cpp
+severity: error
+message: typedef; write `using Name = Type;`.
+note: T.43. An alias declaration reads left to right and works for templates too.
+rule:
+  kind: type_definition

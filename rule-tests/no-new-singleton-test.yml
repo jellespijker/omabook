@@ -1,0 +1,11 @@
+id: no-new-singleton
+valid:
+  - "class Feed { public: explicit Feed(Library &library); };"
+invalid:
+  - |
+    class Feed : public QObject {
+        Q_OBJECT
+    public:
+        static Feed *instance();
+    };
+  - "class Feed { public: static Feed *instance(); };"

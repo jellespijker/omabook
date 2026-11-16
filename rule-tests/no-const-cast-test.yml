@@ -1,0 +1,5 @@
+id: no-const-cast
+valid:
+  - "const Book &b = book;"
+invalid:
+  - "Book &b = const_cast<Book &>(book);"

@@ -1,0 +1,13 @@
+id: prefer-expected-over-error-out-param
+language: cpp
+severity: error
+message: A new `QString *error` out-parameter; return std::expected<T, QString> (or std::optional when no reason is needed).
+note: |
+  F.20, F.21: return what a function makes. std::expected puts the value and
+  the reason it failed in the return type, and the caller cannot forget either.
+  Existing functions keep their signature until they are touched for a reason.
+rule:
+  any:
+    - kind: parameter_declaration
+    - kind: optional_parameter_declaration
+  regex: ^QString\s*\*\s*\w*[eE]rror\b

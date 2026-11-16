@@ -1,0 +1,77 @@
+# The layers of src/, and which layers each may use (include).
+#
+# A module is a file stem: `library` is library.h and library.cpp. Every module
+# in src/ belongs to exactly one layer; a new file is placed here before it is
+# committed. A layer may include its own modules and those of the layers in its
+# `uses`, never the other way round. `.agents/rules/10-architecture.md` says
+# what each layer is for and how to resolve a violation.
+#
+# Checked by .agents/hooks/check_architecture.py. Includes that broke these rules
+# before the check existed are listed in .agents/architecture-baseline.json;
+# they may be removed, never added to.
+
+[layers.foundation]
+summary = "Settings, logging, theme and interface files, text cleaning, the script API table: no knowledge of books."
+uses = []
+modules = [
+  "bookmeta", "customization", "filepicker", "graphlayout", "htmlclean", "log", "pagelayout",
+  "readingformat", "scriptapi", "scriptform", "secretstore", "settings", "theme", "themechoice",
+  "translator",
+]
+
+[layers.formats]
+summary = "Opening and reading book files: archives, EPUB, PDF, comics, FictionBook, text, conversion."
+uses = ["foundation"]
+modules = [
+  "bookarchive", "booksource", "comic", "converter", "describeddocument", "document", "epub", "fb2",
+  "formatprovider", "formatreaders", "formats", "markdownbook", "mobi", "pdfdoc", "textdoc",
+]
+
+[layers.library]
+summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
+uses = ["formats", "foundation"]
+modules = [
+  "booksides", "catalog", "graph", "graphcontext", "knowledgesearch", "libraries", "library",
+  "textmarks",
+]
+
+[layers.services]
+summary = "What talks to the outside or to a model: AI, metadata sources, reading sites, Calibre, plugins, the help's content."
+uses = ["library", "formats", "foundation"]
+modules = [
+  "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "goodreads",
+  "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
+  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts",
+  "readingsite", "scriptplugin", "scriptplugins", "sitedesk", "tour", "whatsnew",
+]
+
+[layers.operations]
+summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
+uses = ["services", "library", "formats", "foundation"]
+modules = ["bookops", "collections", "graphbatch", "graphtools", "plugintools", "scripttools", "sync"]
+
+# The two front ends are peers: neither includes the other. What both need
+# belongs in operations or below.
+[layers.commands]
+summary = "The command line and the MCP server."
+uses = ["operations", "services", "library", "formats", "foundation"]
+modules = ["cli", "mcp", "mcpcommands"]
+
+[layers.window]
+summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
+uses = ["operations", "services", "library", "formats", "foundation"]
+modules = [
+  "assistant", "backend", "backendcollections", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
+  "interface", "librarian", "librarianfind", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks",
+]
+
+[layers.app]
+summary = "main(): wires everything together."
+uses = ["window", "commands", "operations", "services", "library", "formats", "foundation"]
+modules = ["main"]
+
+[qt]
+# Qt Quick and QML belong to the window: a library or a format that includes
+# them can't be used without one. QJSEngine (script plugins) is not QML.
+window_only = ["QQuick", "QQml"]
+allowed_in = ["window", "app"]

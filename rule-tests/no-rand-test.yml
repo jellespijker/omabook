@@ -1,0 +1,6 @@
+id: no-rand
+valid:
+  - "auto n = QRandomGenerator::global()->bounded(6);"
+invalid:
+  - "int n = rand() % 6;"
+  - "void f() { std::srand(1); }"

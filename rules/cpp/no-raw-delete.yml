@@ -1,0 +1,10 @@
+id: no-raw-delete
+language: cpp
+severity: error
+message: A delete in application code; let an owner release it (std::unique_ptr, a Qt parent, or deleteLater()).
+note: |
+  Who deletes an object should be visible in its type, not in a statement that
+  an early return skips (R.11, R.20). For a QObject, give it a parent or call
+  deleteLater(); for anything else, hold it in a std::unique_ptr.
+rule:
+  kind: delete_expression

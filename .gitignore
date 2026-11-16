@@ -1,3 +1,6 @@
 /build/
 /build-*/
-/.claude/
+# Each person's own Claude Code settings stay local; the harness's are shared.
+/.claude/*
+!/.claude/settings.json
+__pycache__/

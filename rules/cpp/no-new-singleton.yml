@@ -1,0 +1,22 @@
+id: no-new-singleton
+language: cpp
+severity: error
+message: A new instance() accessor; pass the object to whoever needs it instead (constructor or function parameter).
+note: I.3. A singleton is a global with a constructor; it hides who depends on it and makes it hard to test.
+files:
+  - "**/*.h"
+# The declaration of a member named instance. Q_OBJECT confuses the parser, so
+# after it a member can come out as a plain identifier in an error node; calls
+# through a class or an object (`Feed::instance()`, `feed->instance()`) and
+# definitions outside the class are qualified and are not matched.
+rule:
+  any:
+    - kind: field_identifier
+    - kind: identifier
+  regex: ^instance$
+  not:
+    any:
+      - inside:
+          kind: qualified_identifier
+      - inside:
+          kind: field_expression

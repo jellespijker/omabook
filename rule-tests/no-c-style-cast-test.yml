@@ -1,0 +1,7 @@
+id: no-c-style-cast
+valid:
+  - "void f() { (void)run(); }"
+  - "int f(double d) { return static_cast<int>(d); }"
+invalid:
+  - "int f(double d) { return (int)d; }"
+  - "auto *w = (QWidget *)object;"

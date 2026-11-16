@@ -1,0 +1,6 @@
+id: no-c-allocation
+valid:
+  - "void f() { std::vector<char> buffer(64); }"
+invalid:
+  - "void f() { char *b = static_cast<char *>(malloc(64)); }"
+  - "void f(void *p) { free(p); }"

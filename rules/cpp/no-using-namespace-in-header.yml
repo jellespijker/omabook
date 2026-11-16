@@ -1,0 +1,12 @@
+id: no-using-namespace-in-header
+language: cpp
+severity: error
+message: using namespace in a header changes every file that includes it; qualify the names, or move it into a .cpp.
+note: SF.7. Qt's string literal namespaces (`using namespace Qt::StringLiterals`) are the exception.
+files:
+  - "**/*.h"
+rule:
+  kind: using_declaration
+  regex: ^using\s+namespace\b
+  not:
+    regex: Qt::(Literals::)?StringLiterals

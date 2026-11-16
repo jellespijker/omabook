@@ -1,0 +1,13 @@
+{
+  "comment": "Includes that broke the layers in .agents/architecture.toml when the check was introduced. Remove entries by fixing them (then run --update); never add one by hand.",
+  "violations": [
+    "src/graphcontext.cpp: library includes prompts.h (services)",
+    "src/graphtools.cpp: operations includes mcp.h (commands)",
+    "src/pluginfinder.cpp: services includes mcp.h (commands)",
+    "src/pluginsources.cpp: services includes mcp.h (commands)",
+    "src/pluginsources.h: services includes plugintools.h (operations)",
+    "src/plugintools.cpp: operations includes mcp.h (commands)",
+    "src/scriptplugin.cpp: services includes graphtools.h (operations)",
+    "src/scripttools.cpp: operations includes mcp.h (commands)"
+  ]
+}

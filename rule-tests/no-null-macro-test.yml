@@ -1,0 +1,6 @@
+id: no-null-macro
+valid:
+  - "int *p = nullptr;"
+  - 'auto sql = "NOT NULL";'
+invalid:
+  - "int *p = NULL;"

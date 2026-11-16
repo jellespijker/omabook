@@ -1,0 +1,10 @@
+# ast-grep: the project's structural rules, for what neither the compiler nor
+# clang-tidy says. Each rule has cases in rule-tests/ (`ast-grep test`).
+# The harness applies them to the lines a change adds; see .agents/rules/.
+ruleDirs:
+  - rules/cpp
+testConfigs:
+  - testDir: rule-tests
+languageGlobs:
+  cpp:
+    - "*.h"

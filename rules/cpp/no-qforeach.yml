@@ -1,0 +1,7 @@
+id: no-qforeach
+language: cpp
+severity: error
+message: Q_FOREACH/foreach copies the container; use a range-for (with std::as_const on a Qt container).
+rule:
+  kind: identifier
+  regex: ^(Q_FOREACH|foreach)$

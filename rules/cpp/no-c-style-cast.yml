@@ -1,0 +1,13 @@
+id: no-c-style-cast
+language: cpp
+severity: error
+message: A C-style cast; use static_cast, qobject_cast, or a value of the right type ({} rejects narrowing).
+note: |
+  A C-style cast does whatever it takes (static, const or reinterpret) and says
+  none of it (C++ Core Guidelines ES.48, ES.49). `(void)` to discard a result is fine.
+rule:
+  kind: cast_expression
+  not:
+    has:
+      field: type
+      regex: ^void$

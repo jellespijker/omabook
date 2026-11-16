@@ -1,0 +1,10 @@
+id: no-shared-ptr-by-reference
+language: cpp
+severity: error
+message: A function that only uses an object takes `T&` or `const T&`, not a shared_ptr by reference.
+note: F.7, R.36. A smart pointer parameter says the function takes part in ownership; a reference to one says it does not.
+rule:
+  any:
+    - kind: parameter_declaration
+    - kind: optional_parameter_declaration
+  regex: ^const\s+(std::)?shared_ptr<.*>\s*&

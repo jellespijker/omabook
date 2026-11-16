@@ -1,0 +1,5 @@
+id: no-typedef
+valid:
+  - "using Ids = QList<qint64>;"
+invalid:
+  - "typedef QList<qint64> Ids;"

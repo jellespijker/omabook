@@ -1,0 +1,7 @@
+id: no-reinterpret-cast
+language: cpp
+severity: warning
+message: reinterpret_cast; prefer std::bit_cast, std::as_bytes, or a QByteArray view. Say why in a comment if it must stay.
+note: Type.1.
+rule:
+  pattern: reinterpret_cast<$T>($E)

@@ -1,0 +1,9 @@
+id: no-rand
+language: cpp
+severity: error
+message: rand() and srand() are poor and shared; use QRandomGenerator or <random>.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: ^(std::)?s?rand$

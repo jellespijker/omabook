@@ -1,0 +1,6 @@
+id: prefer-expected-over-error-out-param
+valid:
+  - "std::expected<Book, QString> load(qint64 id);"
+invalid:
+  - "bool load(qint64 id, QString *error);"
+  - "bool load(qint64 id, QString *error = nullptr);"

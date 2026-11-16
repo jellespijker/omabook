@@ -1,0 +1,22 @@
+id: no-old-qt-connect
+language: cpp
+severity: error
+message: SIGNAL()/SLOT() connect by string, unchecked; connect with member function pointers or a lambda.
+note: D-Bus connections (QDBusConnection::connect), which only take SLOT(), are left alone.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: ^(SIGNAL|SLOT)$
+  # QDBusConnection::connect names its signal in strings and takes its slot
+  # only as SLOT(); a call that passes strings is that one, and is fine.
+  not:
+    inside:
+      kind: argument_list
+      has:
+        any:
+          - kind: string_literal
+          - kind: call_expression
+            has:
+              field: function
+              regex: ^QStringLiteral$

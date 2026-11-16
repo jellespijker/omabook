@@ -1,0 +1,10 @@
+id: no-c-allocation
+language: cpp
+severity: error
+message: malloc, calloc, realloc and free leak on every path that forgets them; use a container or std::unique_ptr with a deleter.
+note: R.10. A C library that hands out memory gets a std::unique_ptr with its free function as the deleter.
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: ^(std::)?(malloc|calloc|realloc|free)$

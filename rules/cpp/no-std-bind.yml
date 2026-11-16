@@ -1,0 +1,10 @@
+id: no-std-bind
+language: cpp
+severity: error
+message: std::bind; write a lambda.
+note: A lambda says what it captures and is easier for the compiler to inline (F.50 and Effective Modern C++, item 34).
+rule:
+  kind: call_expression
+  has:
+    field: function
+    regex: ^std::bind$

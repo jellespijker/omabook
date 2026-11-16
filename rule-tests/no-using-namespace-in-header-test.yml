@@ -1,0 +1,6 @@
+id: no-using-namespace-in-header
+valid:
+  - "using namespace Qt::StringLiterals;"
+  - "using Reader = std::unique_ptr<archive>;"
+invalid:
+  - "using namespace std;"

@@ -1,0 +1,6 @@
+id: no-shared-ptr-by-reference
+valid:
+  - "void show(const Book &book);"
+  - "void keep(std::shared_ptr<Book> book);"
+invalid:
+  - "void show(const std::shared_ptr<Book> &book);"

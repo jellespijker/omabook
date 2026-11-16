@@ -1,0 +1,8 @@
+id: no-std-endl
+language: cpp
+severity: error
+message: std::endl flushes on every line; write '\n'.
+note: SL.io.50.
+rule:
+  kind: qualified_identifier
+  regex: ^std::endl$

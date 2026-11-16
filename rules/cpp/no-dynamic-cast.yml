@@ -1,0 +1,6 @@
+id: no-dynamic-cast
+language: cpp
+severity: warning
+message: dynamic_cast; for a QObject use qobject_cast, and for a closed set of types consider std::variant.
+rule:
+  pattern: dynamic_cast<$T>($E)

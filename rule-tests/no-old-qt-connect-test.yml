@@ -1,0 +1,6 @@
+id: no-old-qt-connect
+valid:
+  - "void f() { connect(a, &A::done, this, &B::finish); }"
+  - 'void f() { bus.connect(QStringLiteral("org.x"), path, iface, QStringLiteral("Response"), this, SLOT(done(uint))); }'
+invalid:
+  - "void f() { connect(a, SIGNAL(done()), this, SLOT(finish())); }"

@@ -1,0 +1,6 @@
+id: no-raw-delete
+valid:
+  - "void f(QObject *o) { o->deleteLater(); }"
+invalid:
+  - "void f(Widget *w) { delete w; }"
+  - "void f(int *a) { delete[] a; }"
