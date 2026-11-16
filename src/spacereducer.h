@@ -5,6 +5,7 @@
 #include <QString>
 #include <QtTypes>
 #include <span>
+#include <tuple>
 
 #include "spacereplay.h"
 
@@ -20,7 +21,11 @@ struct SpaceStamp {
     int priority = 0;
     QString value;
 
-    constexpr auto operator<=>(const SpaceStamp &) const = default;
+    bool operator<(const SpaceStamp &other) const noexcept {
+        return std::tie(hlc, priority, device, value) < std::tie(other.hlc, other.priority, other.device, other.value);
+    }
+    bool operator>(const SpaceStamp &other) const noexcept { return other < *this; }
+    bool operator==(const SpaceStamp &) const = default;
 };
 
 struct SpaceMoment {

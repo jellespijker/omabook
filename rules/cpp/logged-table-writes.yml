@@ -1,0 +1,27 @@
+id: logged-table-writes
+language: cpp
+severity: error
+message: Direct SQL write to a logged library table outside ChangeLog or SpaceReplay; route writes through the change log (ADR 0001).
+note: |
+  Every table whose rows travel between computers (books, formats, progress,
+  removed, collections, collection_books, graph_nodes, graph_edges,
+  graph_facts, graph_seen, reading_log) is written alongside the change log
+  (`ops`). Direct SQL INSERT, UPDATE or DELETE statements on those tables belong
+  in ChangeLog, SpaceReplay or schema migrations.
+ignores:
+  - "src/changelog.cpp"
+  - "src/spacereplay.cpp"
+  - "src/librarymigrations.cpp"
+  - "src/library.cpp"
+  - "src/graph.cpp"
+  - "tests/**"
+rule:
+  kind: string_literal
+  regex: '(?i)\b(INSERT\s+(OR\s+\w+\s+)?INTO|REPLACE\s+INTO|UPDATE(\s+OR\s+\w+)?|DELETE\s+FROM)\s+(books|formats|progress|removed|collections|collection_books|graph_nodes|graph_edges|graph_facts|graph_seen|reading_log)\b'
+  not:
+    inside:
+      kind: function_definition
+      stopBy: end
+      has:
+        field: declarator
+        regex: '^(ChangeLog|SpaceReplay|LibraryMigrations)::'

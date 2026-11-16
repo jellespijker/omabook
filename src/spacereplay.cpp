@@ -371,7 +371,7 @@ bool SpaceReplay::apply(Library &library, std::span<const SpaceOperation> ops) {
                         "ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq), "
                         "hlc = MAX(hlc, excluded.hlc)",
                         {space, op.device, op.seq, Hlc::normalize(op.hlc)});
-        (void)Spaces::observeHlc(library, op.hlc);
+        Spaces::observeHlc(library, op.hlc);
     }
     return replay(library);
 }

@@ -3,14 +3,17 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QRandomGenerator>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QUuid>
 #include <QtTest>
+#include <algorithm>
 
 #include "changelog.h"
 #include "fixtures.h"
@@ -63,6 +66,136 @@ QStringList tableNames(const QString &dbPath) {
     }
     QSqlDatabase::removeDatabase(connection);
     return names;
+}
+
+QJsonObject librarySnapshot(const Library &library) {
+    QJsonArray books;
+    for (const Book &book : library.books()) {
+        const Progress prog = library.progress(book.id);
+        books << QJsonObject{{"gid", Spaces::bookId(library, book.id)},
+                             {"title", book.meta.title},
+                             {"authors", book.meta.authorText()},
+                             {"series", book.meta.series},
+                             {"series_index", book.meta.seriesIndex},
+                             {"publisher", book.meta.publisher},
+                             {"isbn", book.meta.isbn},
+                             {"tags", QJsonArray::fromStringList(book.meta.tags)},
+                             {"shelf", book.shelf},
+                             {"rating", book.rating},
+                             {"finished", book.finished},
+                             {"paper", book.paper},
+                             {"details_at", book.detailsAt},
+                             {"reading_at", book.readingAt},
+                             {"section", prog.section},
+                             {"fraction", prog.fraction},
+                             {"percent", prog.percent},
+                             {"progress_updated", prog.updated}};
+    }
+    QList<Collection> sortedCols = library.collections(true);
+    std::ranges::sort(sortedCols, {}, &Collection::path);
+    QJsonArray collections;
+    for (const Collection &col : sortedCols) {
+        QStringList included;
+        for (const qint64 bid : col.included)
+            included << Spaces::bookId(library, bid);
+        included.sort();
+        collections << QJsonObject{{"gid", Spaces::collectionId(library, col.id)},
+                                   {"path", col.path},
+                                   {"rule", col.rule},
+                                   {"removed", col.removed},
+                                   {"updated", col.updated},
+                                   {"included", QJsonArray::fromStringList(included)}};
+    }
+    QJsonArray removals;
+    for (const Library::Removal &rem : library.removals())
+        removals << QJsonObject{{"key", rem.key}, {"at", rem.at}};
+
+    const Graph graph(library);
+    QList<QJsonObject> nodeList;
+    for (const QString &scope : graph.scopes()) {
+        const GraphView view = graph.whole(scope);
+        for (const GraphNode &node : view.nodes) {
+            QStringList aliases = node.aliases();
+            aliases.sort();
+            nodeList << QJsonObject{{"gid", Spaces::nodeId(library, node.id)},
+                                    {"scope", node.scope},
+                                    {"kind", node.kind},
+                                    {"name", node.name},
+                                    {"summary", node.summary},
+                                    {"aliases", QJsonArray::fromStringList(aliases)},
+                                    {"facts", int(graph.facts(node.id).size())},
+                                    {"seen", int(graph.seen(node.id).size())}};
+        }
+    }
+    std::ranges::sort(nodeList, {}, [](const QJsonObject &obj) { return obj.value("gid").toString(); });
+    QJsonArray nodes;
+    for (const QJsonObject &obj : nodeList)
+        nodes << obj;
+    QJsonArray days;
+    for (const ReadingDay &day : graph.readingLog())
+        days << QJsonObject{{"book", Spaces::bookId(library, day.bookId)}, {"day", day.day}, {"from", day.from}, {"to", day.to}};
+
+    return {{"books", books}, {"collections", collections}, {"removals", removals}, {"nodes", nodes}, {"days", days}};
+}
+
+QList<SpaceOperation> sampleOperations() {
+    const QString space = "personal:shared";
+    const QString b1 = "b:1111111111111111111111111111111111111111111111111111111111111111";
+    const QString b2 = "e:entry:title=secondbook|author";
+    const QString b3 = "b:3333333333333333333333333333333333333333333333333333333333333333";
+    const QString col = "c:Favourites";
+    const QString n1 = Spaces::nodeGlobalId({}, "character", "Mara");
+    const QString n2 = Spaces::nodeGlobalId({}, "place", "Harlingen");
+    const QString f1 = Spaces::factGlobalId(n1, "summary", "Ferry pilot.", b1);
+    const QString e1 = Spaces::edgeGlobalId(n1, n2, "sails from");
+
+    const qint64 t1 = Hlc::pack(1794860000, 1);
+    const qint64 t2 = Hlc::pack(1794860010, 0);
+    const qint64 t3 = Hlc::pack(1794860020, 2);
+
+    return {
+        {space, "dev-a", 1, t1, "dev-a", "book", b1, "title", "Early Title"},
+        {space, "dev-a", 2, t2, "dev-a", "book", b1, "title", "Title From A"},
+        {space, "dev-b", 1, t2, "dev-b", "book", b1, "title", "Title From B"},
+        {space, "dev-a", 3, t2, "dev-a", "book", b1, "publisher", "Press A"},
+        {space, "dev-b", 2, t3, "dev-b", "book", b1, "publisher", "Press B Later"},
+        {space, "dev-a", 4, t1, "dev-a", "book", b1, "tags", "classic"},
+        {space, "dev-b", 3, t2, "dev-b", "book", b1, "tag:sea", "0"},
+        {space, "dev-a", 5, t2, "dev-a", "book", b1, "tag:sea", "1"},
+        {space, "dev-a", 6, t1, "dev-a", "book", b1, "progress", R"({"section":1,"fraction":0.2,"percent":20})"},
+        {space, "dev-b", 4, t3, "dev-b", "book", b1, "progress", R"({"section":3,"fraction":0.8,"percent":75})"},
+        {space, "dev-a", 7, t1, "dev-a", "book", b2, "title", "Revived Book"},
+        {space, "dev-b", 5, t1, "dev-b", "book", b2, "removed", "entry:title=secondbook|author"},
+        {space, "dev-a", 8, t2, "dev-a", "book", b2, "shelf", "reading"},
+        {space, "dev-a", 9, t1, "dev-a", "book", b3, "title", "Removed Book"},
+        {space, "dev-b", 6, t3, "dev-b", "book", b3, "removed", b3.mid(2)},
+        {space, "dev-a", 10, t1, "dev-a", "collection", col, "name", "Favourites"},
+        {space, "dev-a", 11, t1, "dev-a", "collection", col, "rule", "tag:sea"},
+        {space, "dev-b", 7, t2, "dev-b", "collection", col, "book:" + b1, "out"},
+        {space, "dev-a", 12, t2, "dev-a", "collection", col, "book:" + b1, "in"},
+        {space, "dev-a", 13, t1, "dev-a", "node", n1, "kind", "character"},
+        {space, "dev-a", 14, t1, "dev-a", "node", n1, "name", "Mara"},
+        {space, "dev-a", 15, t1, "dev-a", "node", n1, "summary", "Ferry pilot."},
+        {space, "dev-b", 8, t3, "dev-b", "node", n1, "seen:" + b1, R"({"section":4,"fraction":0.5,"anchor":"late"})"},
+        {space, "dev-a", 16, t1, "dev-a", "node", n1, "seen:" + b1, R"({"section":1,"fraction":0.2,"anchor":"early"})"},
+        {space, "dev-b", 9, t2, "dev-b", "node", n1, "alias:The Pilot", "0"},
+        {space, "dev-a", 17, t2, "dev-a", "node", n1, "alias:The Pilot", "1"},
+        {space, "dev-a", 18, t1, "dev-a", "node", n2, "kind", "place"},
+        {space, "dev-a", 19, t1, "dev-a", "node", n2, "name", "Harlingen"},
+        {space, "dev-b", 10, t3, "dev-b", "fact", f1, "revealed",
+         QString(R"({"node":"%1","kind":"summary","value":"Ferry pilot.","book":"%2","section":5,"fraction":0.4,"anchor":"ch5"})")
+             .arg(n1, b1)},
+        {space, "dev-a", 20, t1, "dev-a", "fact", f1, "revealed",
+         QString(R"({"node":"%1","kind":"summary","value":"Ferry pilot.","book":"%2","section":1,"fraction":0.2,"anchor":"ch1"})")
+             .arg(n1, b1)},
+        {space, "dev-a", 21, t2, "dev-a", "edge", e1, "link",
+         QString(R"({"source":"%1","target":"%2","kind":"sails from","note":"Daily","book":"%3","section":2,"fraction":0.1,"anchor":""})")
+             .arg(n1, n2, b1)},
+        {space, "dev-a", 22, t1, "dev-a", "reading_log", b1 + ":2026-11-16", "range",
+         QString(R"({"book":"%1","day":"2026-11-16","from":20,"to":45})").arg(b1)},
+        {space, "dev-b", 11, t2, "dev-b", "reading_log", b1 + ":2026-11-16", "range",
+         QString(R"({"book":"%1","day":"2026-11-16","from":10,"to":80})").arg(b1)},
+    };
 }
 
 } // namespace
@@ -438,6 +571,112 @@ private slots:
         const qint64 factHere = graphHere.facts(gedHere).first().id;
         const qint64 factThere = graphThere.facts(gedThere).first().id;
         QCOMPARE(Spaces::factId(here, factHere), Spaces::factId(there, factThere));
+
+        // Two id-less books (neither a file hash nor an entry key) get random
+        // "u:<uuid>" ids stored once in global_ids and never share an id.
+        const QString random1 = Spaces::bookGlobalId({}, {});
+        const QString random2 = Spaces::bookGlobalId({}, {});
+        QVERIFY(random1.startsWith("u:") && random2.startsWith("u:") && random1 != random2);
+        const auto idlessHere = ChangeLog::insert(here, "INSERT INTO books (title, authors, path, added) VALUES ('', '', '', 0)");
+        const auto idlessThere = ChangeLog::insert(there, "INSERT INTO books (title, authors, path, added) VALUES ('', '', '', 0)");
+        QVERIFY(idlessHere && idlessThere);
+        const QString idlessGidHere = Spaces::bookId(here, *idlessHere);
+        const QString idlessGidThere = Spaces::bookId(there, *idlessThere);
+        QVERIFY(idlessGidHere.startsWith("u:") && idlessGidThere.startsWith("u:"));
+        QVERIFY(idlessGidHere != idlessGidThere);
+        QCOMPARE(Spaces::bookId(here, *idlessHere), idlessGidHere);
+    }
+
+    void replayingTheLogRebuildsEveryTravellingRow() {
+        QTemporaryDir dir;
+        int oldFormat = 0;
+        QDir().mkpath(dir.filePath("Source"));
+        loadSqlDump(QFINDTESTDATA("data/library-0.1.5.sql"), dir.filePath("Source/omabook.db"), oldFormat);
+
+        Library source(dir.filePath("Source"));
+        QVERIFY(source.open());
+        // Add further mutations on top of the migrated library.
+        source.setProgress(1, {.section = 2, .fraction = 0.75, .percent = 85.0, .updated = 1794880000});
+        const auto extraCol = source.addCollection("Stories/Favourites", "rating:4");
+        QVERIFY(extraCol.has_value());
+        QVERIFY(source.putInCollection(*extraCol, 3, true));
+        Graph(source).logReading(1, 60.0, 85.0, "2026-11-16");
+
+        const QJsonObject expected = librarySnapshot(source);
+        const QList<SpaceOperation> ops = SpaceReplay::operations(source);
+        QVERIFY(!ops.isEmpty());
+
+        // 1. Applying the log to a brand-new empty library rebuilds every row.
+        Library rebuilt(dir.filePath("Rebuilt"));
+        QVERIFY(rebuilt.open());
+        ChangeLog::exec(rebuilt, "DELETE FROM ops");
+        ChangeLog::exec(rebuilt, "DELETE FROM seen");
+        QVERIFY(SpaceReplay::apply(rebuilt, ops));
+        QCOMPARE(librarySnapshot(rebuilt), expected);
+
+        // 2. Wiping the travelling tables in `source` and replaying its `ops`
+        //    restores the rows identically.
+        {
+            const ChangeLog::Scope guard;
+            for (const char *table : {"reading_log", "graph_facts", "graph_edges", "graph_seen", "graph_nodes", "collection_books",
+                                      "collections", "progress", "formats", "removed", "books"})
+                ChangeLog::exec(source, QString("DELETE FROM %1").arg(table));
+        }
+        QCOMPARE(source.books().size(), 0);
+        QVERIFY(SpaceReplay::replay(source));
+        QCOMPARE(librarySnapshot(source), expected);
+    }
+
+    void randomOperationsInRandomOrdersConvergeToTheSameState() {
+        const QList<SpaceOperation> baseOps = sampleOperations();
+        QTemporaryDir dir;
+
+        Library canonical(dir.filePath("Canonical"));
+        QVERIFY(canonical.open());
+        ChangeLog::exec(canonical, "DELETE FROM ops");
+        QVERIFY(SpaceReplay::apply(canonical, baseOps));
+        const QJsonObject expected = librarySnapshot(canonical);
+
+        // Verify the expected CRDT winners on the canonical state.
+        QCOMPARE(canonical.books().size(), 2); // b1 and revived b2; b3 is removed
+        const qint64 b1Local = Spaces::localId(canonical, "book", "b:1111111111111111111111111111111111111111111111111111111111111111");
+        QVERIFY(b1Local > 0);
+        const Book book1 = *canonical.book(b1Local);
+        QCOMPARE(book1.meta.title, QString("Title From B"));      // device tie-break at t2
+        QCOMPARE(book1.meta.publisher, QString("Press B Later")); // later HLC t3
+        QVERIFY(book1.meta.tags.contains("sea"));                 // add wins over concurrent remove at t2
+        QCOMPARE(canonical.progress(b1Local).section, 3);         // later progress at t3
+        QVERIFY(canonical.wasRemoved("3333333333333333333333333333333333333333333333333333333333333333"));
+        QVERIFY(canonical.collectionNamed("Favourites")->included.contains(b1Local));
+
+        const Graph graph(canonical);
+        const qint64 mara = graph.named({}, "character", "Mara");
+        QVERIFY(mara > 0);
+        QVERIFY(graph.node(mara)->aliases().contains("The Pilot"));
+        QCOMPARE(graph.firstMet(mara, b1Local)->place.section, 1); // earliest sighting wins
+        QCOMPARE(graph.facts(mara).first().revealed.place.section, 1);
+        QCOMPARE(graph.readingLog(b1Local).first().from, 10.0);
+        QCOMPARE(graph.readingLog(b1Local).first().to, 80.0);
+
+        // Apply 8 random permutations (including reversed and duplicated ops)
+        // to independent libraries and verify identical state.
+        QRandomGenerator rng(0xC0FFEEU);
+        for (int run = 0; run < 8; ++run) {
+            QList<SpaceOperation> shuffled = baseOps;
+            if (run == 0) {
+                std::ranges::reverse(shuffled);
+            } else {
+                for (qsizetype i = shuffled.size() - 1; i > 0; --i)
+                    shuffled.swapItemsAt(i, rng.bounded(int(i + 1)));
+                if (run % 2 == 1)
+                    shuffled.append(baseOps.mid(0, 10)); // idempotence under duplicate delivery
+            }
+            Library replica(dir.filePath(QString("Replica-%1").arg(run)));
+            QVERIFY(replica.open());
+            ChangeLog::exec(replica, "DELETE FROM ops");
+            QVERIFY(SpaceReplay::apply(replica, shuffled));
+            QCOMPARE(librarySnapshot(replica), expected);
+        }
     }
 };
 

@@ -1,0 +1,10 @@
+id: logged-table-writes
+valid:
+  - 'auto q = query("SELECT id, title FROM books WHERE id = ?");'
+  - 'exec("INSERT INTO annotations (book_id, kind) VALUES (?, ?)");'
+  - 'void ChangeLog::setProgress(Library &l, qint64 id, const Progress &p) { exec(l, "INSERT OR REPLACE INTO progress (book_id) VALUES (?)"); }'
+  - 'bool SpaceReplay::replay(Library &l) { return exec(l, "DELETE FROM graph_facts"); }'
+invalid:
+  - 'void bypass(Library &l) { l.exec("UPDATE books SET title = ?"); }'
+  - 'void dropPlace(Library &l) { l.exec("DELETE FROM progress WHERE book_id = 1"); }'
+  - 'void writeNode(Library &l) { l.exec("INSERT OR REPLACE INTO graph_nodes (kind, name) VALUES (?, ?)"); }'

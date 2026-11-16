@@ -448,22 +448,20 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
     BookMeta meta = known ? *known : Formats::readMeta(file);
     if (meta.title.isEmpty())
         meta.title = Formats::metaFromFileName(file).title;
-    std::expected<qint64, QString> id;
-    QString folder;
-    {
-        const ChangeLog::Scope guard;
-        id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
-                    "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language, meta.isbn, meta.published,
-                     meta.description, meta.tags.join(", "), QDateTime::currentSecsSinceEpoch(), QDateTime::currentSecsSinceEpoch()});
-        if (!id)
-            return {.error = "The library can't be written: " + id.error()};
-        folder = folderFor(meta, *id);
-        exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
-    }
+    std::optional<ChangeLog::Scope> guard(std::in_place);
+    const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
+                           "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
+                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
+                            QDateTime::currentSecsSinceEpoch(), QDateTime::currentSecsSinceEpoch()});
+    if (!id)
+        return {.error = "The library can't be written: " + id.error()};
+    const QString folder = folderFor(meta, *id);
+    exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
+    guard.reset();
 
     if (QString error; !addFormat(*id, file, &error)) {
-        const ChangeLog::Scope guard;
+        const ChangeLog::Scope cleanupGuard;
         exec("DELETE FROM books WHERE id = ?", {*id});
         QDir(m_root + "/" + folder).removeRecursively();
         return {.error = error};
@@ -520,7 +518,7 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
     if (!exec("INSERT OR REPLACE INTO formats (book_id, format, file, size, hash) VALUES (?, ?, ?, ?, ?)",
               {id, format, name, QFileInfo(target).size(), hash}))
         return fail("The library can't be written.");
-    (void)Spaces::bookId(*this, id);
+    Spaces::ensureBookId(*this, id);
     return true;
 }
 
@@ -528,11 +526,11 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
     if (meta.title.trimmed().isEmpty())
         return {.error = "A book needs a title."};
     const Batch batch(*this);
-    const auto id =
-        insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
-               "description, tags, added, paper, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-               {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language, meta.isbn, meta.published,
-                meta.description, meta.tags.join(", "), QDateTime::currentSecsSinceEpoch(), paper, QDateTime::currentSecsSinceEpoch()});
+    const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
+                           "description, tags, added, paper, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
+                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
+                            QDateTime::currentSecsSinceEpoch(), paper, QDateTime::currentSecsSinceEpoch()});
     if (!id)
         return {.error = "The library can't be written: " + id.error()};
     // The folder is made when there is something to put in it: a cover, or
@@ -540,7 +538,7 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
     exec("UPDATE books SET path = ? WHERE id = ?", {folderFor(meta, *id), *id});
     if (!meta.cover.isNull())
         setCover(*id, meta.cover);
-    (void)Spaces::bookId(*this, *id);
+    Spaces::ensureBookId(*this, *id);
     return {.id = *id, .duplicate = false, .error = {}};
 }
 
@@ -593,7 +591,7 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
     if (identifiers == found->identifiers)
         return true;
     if (at && *at > 0)
-        (void)Spaces::observeHlc(*this, *at);
+        Spaces::observeHlc(*this, *at);
     return exec("UPDATE books SET identifiers = ?, details_at = ? WHERE id = ?",
                 {compact(identifiers), at ? Hlc::seconds(*at) : QDateTime::currentSecsSinceEpoch(), id});
 }
@@ -684,7 +682,7 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
         return failed(error, QString("There is no book %1.").arg(id));
     const Batch batch(*this);
     if (at && *at > 0)
-        (void)Spaces::observeHlc(*this, *at);
+        Spaces::observeHlc(*this, *at);
     BookMeta kept = meta;
     if (kept.title.isEmpty())
         kept.title = before->meta.title;
@@ -723,11 +721,12 @@ bool Library::setCover(qint64 id, const QImage &cover, std::optional<qint64> at)
     if (!scaled.convertToFormat(QImage::Format_RGB32).save(file, "JPG", 88))
         return false;
     // The same picture again is no change to the details.
-    if (at && *at > 0)
-        (void)Spaces::observeHlc(*this, *at);
+    if (at && *at > 0) {
+        Spaces::observeHlc(*this, *at);
+        at = Hlc::seconds(*at);
+    }
     if (at || hashFile(file) != before)
-        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?",
-                    {at ? Hlc::seconds(*at) : QDateTime::currentSecsSinceEpoch(), id});
+        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?", {at.value_or(QDateTime::currentSecsSinceEpoch()), id});
     return exec("UPDATE books SET has_cover = 1 WHERE id = ?", {id});
 }
 
@@ -1133,7 +1132,7 @@ std::expected<qint64, QString> Library::addCollection(const QString &name, const
                   "WHERE id = ?",
                   {named, rule.trimmed(), position, now, id}))
             return std::unexpected(QString("The library can't be written."));
-        (void)Spaces::collectionId(*this, id);
+        Spaces::ensureCollectionId(*this, id);
         return id;
     }
     same.finish();
@@ -1141,7 +1140,7 @@ std::expected<qint64, QString> Library::addCollection(const QString &name, const
                            {named, rule.trimmed(), position, now, parent});
     if (!id)
         return std::unexpected("The library can't be written: " + id.error());
-    (void)Spaces::collectionId(*this, *id);
+    Spaces::ensureCollectionId(*this, *id);
     return *id;
 }
 
@@ -1280,7 +1279,7 @@ bool Library::storeCollection(const Collection &given) {
             exec("INSERT OR REPLACE INTO collection_books (collection_id, book_id, included) "
                  "SELECT ?, id, ? FROM books WHERE id = ?",
                  {id, in, book});
-    (void)Spaces::collectionId(*this, id);
+    Spaces::ensureCollectionId(*this, id);
     return true;
 }
 

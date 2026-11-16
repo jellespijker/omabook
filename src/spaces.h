@@ -20,18 +20,20 @@ public:
     [[nodiscard]] static QString deviceId(const Library &library);
 
     // Ensures this library's personal space exists and answers its id.
+    static void ensurePersonalSpace(const Library &library);
     [[nodiscard]] static QString personalSpace(const Library &library);
     // The space a graph scope belongs to: the personal space for "", and a
     // story-world space for "world:…".
+    static void ensureSpaceForScope(const Library &library, const QString &scope);
     [[nodiscard]] static QString spaceForScope(const Library &library, const QString &scope);
 
     // The library's persistent hybrid logical clock in `library_state`.
     [[nodiscard]] static qint64 lastHlc(const Library &library);
     [[nodiscard]] static qint64 tickHlc(const Library &library, std::optional<qint64> wallSeconds = std::nullopt);
-    [[nodiscard]] static qint64 observeHlc(const Library &library, qint64 remote);
+    static void observeHlc(const Library &library, qint64 remote);
 
     // Pure content-derived global-id rules.
-    [[nodiscard]] static QString bookGlobalId(const QStringList &fileHashes, const QStringList &entryKeys, qint64 fallbackId = 0);
+    [[nodiscard]] static QString bookGlobalId(const QStringList &fileHashes, const QStringList &entryKeys);
     [[nodiscard]] static QString collectionGlobalId(const QString &path);
     [[nodiscard]] static QString nodeGlobalId(const QString &scope, const QString &kind, const QString &name);
     [[nodiscard]] static QString edgeGlobalId(const QString &sourceGlobalId, const QString &targetGlobalId, const QString &kind);
@@ -45,6 +47,11 @@ public:
     static void setGlobalId(const Library &library, const QString &entity, qint64 localId, const QString &globalId);
 
     // Ensures a row has its global id in `global_ids` and answers it.
+    static void ensureBookId(const Library &library, qint64 localId);
+    static void ensureCollectionId(const Library &library, qint64 localId);
+    static void ensureNodeId(const Library &library, qint64 localId);
+    static void ensureEdgeId(const Library &library, qint64 localId);
+    static void ensureFactId(const Library &library, qint64 localId);
     [[nodiscard]] static QString bookId(const Library &library, qint64 localId);
     [[nodiscard]] static QString collectionId(const Library &library, qint64 localId);
     [[nodiscard]] static QString nodeId(const Library &library, qint64 localId);

@@ -49,7 +49,7 @@ public:
 
     // Appends one operation in `entry` (ticking the library's HLC when
     // `entry.hlc` is not given) and updates `seen`.
-    static qint64 append(const Library &library, const Entry &entry);
+    static void append(const Library &library, const Entry &entry);
 
     // Records the current `library_state` counters as seen by the log.
     static void markLogged(const Library &library);
