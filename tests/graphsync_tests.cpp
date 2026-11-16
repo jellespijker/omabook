@@ -253,9 +253,12 @@ private slots:
         QCOMPARE(again.graphSent, 0);
     }
 
-    void separateDuplicateNamedForAnAliasSettlesByTheThirdSync() {
+    void separateDuplicateNamedForAnAliasSettlesInOneSync() {
         TwoComputers two;
         QVERIFY(two.open());
+        const qint64 otherThere = two.there.books().first().id;
+        const qint64 otherHere = two.here.add(two.dir.filePath("other.epub")).id;
+        QVERIFY(otherHere > 0 && otherThere > 0 && otherHere != otherThere);
         // Side A (there) has a leftover separate node for an alias ("Stormblessed") before
         // the canonical node ("Kaladin") that lists it as an alias; Side B (here) has only "Kaladin".
         {
@@ -267,19 +270,26 @@ private slots:
             const qint64 kaladin = there.upsert({}, "character", "Kaladin", "A bridgeman.", {}, GraphPlace{two.bookThere, 1, 0.1});
             there.learn(kaladin, "alias", "Stormblessed", GraphMoment{{two.bookThere, 2, 0.1}, "Stormblessed"});
 
+            // And a character known under another primary name in a second book seen only here so far.
+            const qint64 king = there.upsert({}, "character", "The King", {}, {}, GraphPlace{two.bookThere, 1, 0.2});
+            there.upsert({}, "character", "The King", {}, {}, GraphPlace{otherThere, 8, 0.4});
+            there.learn(king, "alias", "Gavilar", GraphMoment{{otherThere, 9, 0.1}, "Gavilar"});
+
             Graph here(two.here);
             const qint64 local = here.upsert({}, "character", "Kaladin", "A bridgeman.", {}, GraphPlace{two.bookHere, 1, 0.1});
             here.learn(local, "alias", "Stormblessed", GraphMoment{{two.bookHere, 2, 0.1}, "Stormblessed"});
             here.upsert({}, "group", "Bridge Four", {}, {}, GraphPlace{two.bookHere, 1, 0.2});
+
+            const qint64 gavilar = here.upsert({}, "character", "Gavilar", {}, {}, GraphPlace{two.bookHere, 1, 0.2});
+            here.learn(gavilar, "alias", "The King", GraphMoment{{two.bookHere, 2, 0.2}, "The King"});
         }
         const SyncSummary first = two.sync();
         QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
+        QVERIFY(first.graphTaken > 0 && first.graphSent > 0);
         const SyncSummary second = two.sync();
         QVERIFY2(second.problems.isEmpty(), qPrintable(second.problems.join('\n')));
-        const SyncSummary third = two.sync();
-        QVERIFY2(third.problems.isEmpty(), qPrintable(third.problems.join('\n')));
-        QCOMPARE(third.graphTaken, 0);
-        QCOMPARE(third.graphSent, 0);
+        QCOMPARE(second.graphTaken, 0);
+        QCOMPARE(second.graphSent, 0);
         QCOMPARE(named(Graph(two.here), "character", "Kaladin").summary, QString("A bridgeman."));
     }
 

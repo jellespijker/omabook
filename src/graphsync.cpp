@@ -288,30 +288,27 @@ bool alreadyKnown(const QList<GraphFact> &mine, const QString &kind, const QStri
 
 // When the other side calls this thing by another primary name, keep that
 // name as one of its other names here too (at the earliest moment met in each
-// shared book, so both sides agree in one sync).
+// book this library knows it in, so both sides agree in one sync).
 void takeTheirName(Taking &taking, qint64 id, const GraphNode &now, const QList<GraphFact> &mine, const QJsonObject &node) {
     const QString called = node.value("name").toString().simplified();
     if (called.isEmpty() || now.name.compare(called, Qt::CaseInsensitive) == 0)
         return;
-    const QJsonArray seen = node.value("seen").toArray();
+    const QList<GraphPlace> seen = taking.graph.seen(id);
     if (seen.isEmpty()) {
         if (!alreadyKnown(mine, "alias", called, std::nullopt) && taking.graph.learn(id, "alias", called))
             ++taking.changed;
         return;
     }
-    QSet<qint64> handled;
-    for (const auto &value : seen) {
-        const std::optional<GraphPlace> place = taking.place(value.toObject());
-        if (!place || place->bookId == 0 || handled.contains(place->bookId))
+    for (const GraphPlace &place : seen) {
+        if (place.bookId == 0)
             continue;
-        handled.insert(place->bookId);
-        const std::optional<GraphMoment> met = taking.graph.firstMet(id, place->bookId);
+        const std::optional<GraphMoment> met = taking.graph.firstMet(id, place.bookId);
         if (met && !alreadyKnown(mine, "alias", called, met) && taking.graph.learn(id, "alias", called, met))
             ++taking.changed;
     }
 }
 
-void takeFacts(Taking &taking, qint64 id, const QJsonObject &node) {
+void takeFacts(Taking &taking, qint64 id, const QJsonObject &node, bool primary) {
     const QList<GraphFact> mine = taking.graph.facts(id);
     QStringList placedNames;
     for (const auto &value : node.value("facts").toArray()) {
@@ -335,7 +332,8 @@ void takeFacts(Taking &taking, qint64 id, const QJsonObject &node) {
         if (!placedNames.contains(alias.toString()) && !now->aliases().contains(alias.toString(), Qt::CaseInsensitive)
             && taking.graph.learn(id, "alias", alias.toString()))
             ++taking.changed;
-    takeTheirName(taking, id, *now, mine, node);
+    if (primary)
+        takeTheirName(taking, id, *now, mine, node);
 }
 
 // What is said of it now: theirs when it changed there last, or when this
@@ -370,10 +368,11 @@ void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
         taking.graph.upsert({}, kind, before->name, {}, missing);
         ++taking.changed;
     }
+    const bool primary = matched > 0 || !before;
     taking.nodes.insert(theirs.value("id").toInteger(), id);
     takeSeen(taking, id, *node, theirs.value("seen").toArray());
-    takeFacts(taking, id, theirs);
-    settleSummary(taking, id, before.value_or(GraphNode{}), theirs, matched > 0 || !before);
+    takeFacts(taking, id, theirs, primary);
+    settleSummary(taking, id, before.value_or(GraphNode{}), theirs, primary);
 }
 
 // Their end of a relation here: a thing taken in, or one this library makes itself.
