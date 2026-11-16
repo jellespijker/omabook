@@ -78,3 +78,5 @@ CheckOptions:
   cppcoreguidelines-rvalue-reference-param-not-moved.AllowPartialMove: true
   performance-unnecessary-value-param.AllowedTypes: 'Q.*'
   readability-function-size.LineThreshold: 80
+  # QFuture is not [[nodiscard]] in Qt 6; catch dropped QtConcurrent::run() results.
+  bugprone-unused-return-value.CheckedReturnTypes: '^::std::error_code$;^::std::error_condition$;^::std::errc$;^::std::expected$;^::boost::system::error_code$;^::QFuture$'
