@@ -53,7 +53,8 @@
 namespace {
 
 // The reading font's character width (PageLayout::characterWidth) on the
-// machines the window tests were measured on; a wider font scales them.
+// machines the window tests were measured on; a wider or narrower font
+// scales them.
 constexpr double referenceCharacterWidth = 9.04;
 
 class NoPicker : public FilePicker {
@@ -1418,10 +1419,10 @@ private slots:
         QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
         // The widths below are in characters of the reading font, so the test
         // asks the same of a machine whose font is wider (DejaVu, the only
-        // one in a package build): whether two pages fit is a matter of
-        // characters, not pixels.
-        const double wider = std::max(1.0, PageLayout::characterWidth(PageLayout::bodyFont(QString(), desk.settings->fontSize()))
-                                               / referenceCharacterWidth);
+        // one in a package build) or narrower: whether two pages fit is a
+        // matter of characters, not pixels.
+        const double wider = PageLayout::characterWidth(PageLayout::bodyFont(QString(), desk.settings->fontSize()))
+                             / referenceCharacterWidth;
         const auto across = [&](int pixels) { return int(std::lround(pixels * wider)); };
         QVERIFY(desk.resize(QSize(across(1180), 780)));
         desk.reader->openBook(ids.first());

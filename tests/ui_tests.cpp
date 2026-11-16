@@ -54,6 +54,11 @@
 
 namespace {
 
+// The reading font's character width (PageLayout::characterWidth) on the
+// machine the window tests were measured on; the widths of a test that
+// counts pages scale by the font's against it, wider or narrower.
+constexpr double referenceCharacterWidth = 9.04;
+
 bool write(const QString &path, const QByteArray &contents) {
     QFile file(path);
     return file.open(QIODevice::WriteOnly) && file.write(contents) == contents.size();
@@ -6039,10 +6044,15 @@ private slots:
         const qint64 book = desk.add(file);
         QVERIFY(desk.show());
         PageFormat *format = desk.reader->format();
-        desk.window->resize(800, 900);
+        // The widths below are in characters of the reading font, so a
+        // machine whose font is wider or narrower is asked the same: how
+        // many pages fit is a matter of characters, not pixels.
+        const double scale = PageLayout::characterWidth(PageLayout::bodyFont({}, desk.settings->fontSize())) / referenceCharacterWidth;
+        const auto across = [scale](int pixels) { return int(std::lround(pixels * scale)); };
+        desk.window->resize(across(800), 900);
         desk.reader->openBook(book);
         QTRY_VERIFY(desk.reader->isOpen());
-        QTRY_COMPARE(format->available(), 800.0);
+        QTRY_COMPARE(format->available(), double(across(800)));
 
         // Narrow: one page that scrolls, no wider than the measure.
         QTRY_VERIFY(desk.find("flowReader"));
@@ -6052,7 +6062,7 @@ private slots:
         desk.shot("pages-narrow");
 
         // Medium: two.
-        desk.window->resize(1300, 900);
+        desk.window->resize(across(1300), 900);
         QTRY_VERIFY(desk.find("spreadReader"));
         QCOMPARE(format->columns(), 2);
         QVERIFY(!sheet(desk, 2)->isVisible());
@@ -6060,7 +6070,7 @@ private slots:
 
         // Wide: three, side by side in reading order, each as wide as the
         // measure allows and no narrower than the minimum.
-        desk.window->resize(2300, 1000);
+        desk.window->resize(across(2300), 1000);
         QTRY_COMPARE(format->columns(), 3);
         QObject *spread = desk.find("spreadReader");
         QTRY_COMPARE(spread->property("columns").toInt(), 3);
@@ -6085,18 +6095,18 @@ private slots:
         QCOMPARE(sheetShowing(spread, place), 0);
 
         // Two pages again: the words that began the spread are still in sight.
-        desk.window->resize(1300, 900);
+        desk.window->resize(across(1300), 900);
         QTRY_COMPARE(spread->property("columns").toInt(), 2);
         QTRY_VERIFY(sheetShowing(spread, place) >= 0);
         QCOMPARE(spread->property("page").toInt() % 2, 0);
         // And one: the scrolling page is near the same place.
         const double fraction = desk.reader->fraction();
-        desk.window->resize(800, 900);
+        desk.window->resize(across(800), 900);
         QTRY_VERIFY(desk.find("flowReader"));
         QTRY_VERIFY(qAbs(desk.reader->fraction() - fraction) < 0.1);
 
         // A choice that fits is honoured where Automatic would show fewer ...
-        desk.window->resize(1600, 900);
+        desk.window->resize(across(1600), 900);
         QTRY_COMPARE(format->columns(), 2);
         desk.settings->setPages(1);
         QTRY_VERIFY(desk.find("flowReader"));
@@ -6105,7 +6115,7 @@ private slots:
         // (The panel beside the page leaves less room, as any pane does.)
         desk.key(Qt::Key_A, Qt::ShiftModifier);
         QTRY_VERIFY(desk.find("formatPagesName"));
-        QTRY_COMPARE(format->available(), 1600.0 - qobject_cast<QQuickItem *>(desk.find("formatSide"))->width());
+        QTRY_COMPARE(format->available(), across(1600) - qobject_cast<QQuickItem *>(desk.find("formatSide"))->width());
         // ... and one that doesn't shows the most that do, and says so.
         desk.settings->setPages(3);
         QTRY_VERIFY(desk.find("spreadReader"));
@@ -6145,7 +6155,7 @@ private slots:
         QTRY_COMPARE(format->available(), double(boundary - int(2 * character)));
         QCOMPARE(format->columns(), 1);
         // A pane beside the page takes from the room, as a narrower window does.
-        desk.window->resize(1300, 900);
+        desk.window->resize(across(1300), 900);
         QTRY_COMPARE(format->columns(), 2);
         desk.find("readerView")->setProperty("showAssistant", true);
         QTRY_COMPARE(format->columns(), 1);

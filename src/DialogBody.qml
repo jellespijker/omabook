@@ -39,18 +39,21 @@ ColumnLayout {
         Layout.fillHeight: true
         implicitWidth: column.implicitWidth
         // A little above the column: a Material field's label stands
-        // astride its top edge, and would be cut by the clip.
-        topMargin: 8
-        implicitHeight: column.implicitHeight + topMargin
+        // astride its top edge, and would be cut by the clip. It is part of
+        // what scrolls, so a column a few pixels too tall for the dialog
+        // says so by its height and scrolls, rather than being cut.
+        readonly property real above: 8
+        implicitHeight: column.implicitHeight + above
         contentWidth: width
-        contentHeight: column.implicitHeight
+        contentHeight: column.implicitHeight + above
         clip: true
         boundsBehavior: Flickable.StopAtBounds
-        interactive: contentHeight + topMargin > height + 1
+        interactive: contentHeight > height + 1
         ScrollBar.vertical: ScrollBar {}
 
         ColumnLayout {
             id: column
+            y: flick.above
             // The full width whether it scrolls or not: a column that made
             // room for a scroll bar would wrap its text differently with
             // one than without, and so never settle on either.
@@ -66,9 +69,9 @@ ColumnLayout {
             for (let up = item; up; up = up.parent) {
                 if (up !== column)
                     continue
-                const top = item.mapToItem(column, 0, 0).y
+                const top = item.mapToItem(column, 0, 0).y + column.y
                 if (top < contentY)
-                    contentY = Math.max(-topMargin, top - 8)
+                    contentY = Math.max(0, top - 8)
                 else if (top + item.height > contentY + height)
                     contentY = Math.min(contentHeight - height, top + item.height - height + 8)
                 return
