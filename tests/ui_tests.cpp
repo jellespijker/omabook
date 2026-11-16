@@ -7379,6 +7379,36 @@ private slots:
     // own, its last page holds what is left, and turning on from it opens
     // the next chapter's first page, and back from the first the last page
     // of the one before. Two and three side by side the same.
+    // A picture taller than a page is made to fit on one: laid out as it
+    // came, it could only be cut across two. In a low window, every
+    // chapter's pages are whole, the picture's included, and in Scroll the
+    // picture is seen whole in the window.
+    void aPictureIsNeverCutAcrossTwoPages() {
+        Desk desk;
+        const QString file = desk.dir.filePath("harbour.epub");
+        QVERIFY(chapteredBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.settings->setOption("layout", "pages");
+        desk.window->resize(700, 620);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        for (int section = 0; section < desk.reader->count(); ++section) {
+            desk.reader->goTo(section);
+            QObject *spread = spreadSettled(desk);
+            QVERIFY(spread);
+            QVERIFY2(pagesProblem(spread).isEmpty(), qPrintable(QString("chapter %1: %2").arg(section).arg(pagesProblem(spread))));
+        }
+        desk.reader->goTo(2);
+        QTRY_VERIFY(desk.reader->html().contains("<img"));
+        static const QRegularExpression tall(R"re(height="(\d+)")re");
+        const int most = desk.reader->pageHeight();
+        QVERIFY(most > 0 && most < 620);
+        for (auto it = tall.globalMatch(desk.reader->html()); it.hasNext();)
+            QVERIFY(it.next().captured(1).toInt() <= most);
+        desk.shot("picture-fits-a-page");
+    }
+
     void aBookOfPagesTurnsWholePagesAndEachChapterStartsAfresh() {
         Desk desk;
         const QString file = desk.dir.filePath("harbour.epub");

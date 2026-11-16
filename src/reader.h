@@ -59,6 +59,9 @@ class Reader : public QObject {
     Q_PROPERTY(QString nextTitle READ nextTitle NOTIFY sectionChanged)
     Q_PROPERTY(QString html READ html NOTIFY htmlChanged)
     Q_PROPERTY(int pageWidth READ pageWidth WRITE setPageWidth NOTIFY htmlChanged)
+    // The tallest a picture may be: the page's height, so a picture is never
+    // cut across two pages. 0 for no limit.
+    Q_PROPERTY(int pageHeight READ pageHeight WRITE setPageHeight NOTIFY htmlChanged)
     Q_PROPERTY(double fraction READ fraction WRITE setFraction NOTIFY fractionChanged)
     Q_PROPERTY(double percent READ percent NOTIFY fractionChanged)
     Q_PROPERTY(QVariantList bookmarks READ bookmarks NOTIFY bookmarksChanged)
@@ -96,6 +99,8 @@ public:
     QString html() const noexcept { return m_html; }
     int pageWidth() const noexcept { return m_pageWidth; }
     void setPageWidth(int width);
+    int pageHeight() const noexcept { return m_pageHeight; }
+    void setPageHeight(int height);
     double fraction() const noexcept { return m_fraction; }
     void setFraction(double fraction);
     double percent() const;
@@ -198,6 +203,7 @@ private:
     int m_generation = 0;
     int m_section = 0;
     int m_pageWidth = 0;
+    int m_pageHeight = 0;
     double m_fraction = 0;
     // How far the book had been read when that was last written to the reading log.
     double m_loggedPercent = 0;

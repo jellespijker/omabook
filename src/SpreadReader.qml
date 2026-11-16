@@ -298,10 +298,15 @@ Item {
         function onTextChanged() { later.restart() }
     }
     onColumnWidthChanged: reader.pageWidth = Math.round(columnWidth)
+    // A picture fits on a page: no taller than the page less a line, with
+    // the line spacing it is set in taken off.
+    readonly property int pictureHeight: Math.floor((pageHeight - format.font_size * 2) * 100 / Math.max(100, format.line_height))
+    onPictureHeightChanged: reader.pageHeight = pictureHeight
     Component.onCompleted: {
         // Where the reader was, taken once: this view leads from here on.
         wanted = reader.fraction
         reader.pageWidth = Math.round(columnWidth)
+        reader.pageHeight = pictureHeight
         later.restart()
     }
 }

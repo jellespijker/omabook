@@ -56,6 +56,9 @@ Flickable {
     readonly property var format: reader.format.effective
     readonly property real side: Math.min(format.margins, Math.max(8, (width - 280) / 2))
 
+    // A picture is seen whole in the window, less a line above and below.
+    readonly property int pictureHeight: Math.floor((height - 2 * side - format.font_size * 3) * 100 / Math.max(100, format.line_height))
+    onPictureHeightChanged: if (ready) reader.pageHeight = pictureHeight
     contentWidth: width
     contentHeight: page.height + 2 * side + 32 + (chapterEnd.visible ? chapterEnd.height + 32 : 0)
     // Running on, a finger may pull past either end, which is how it turns
@@ -274,6 +277,7 @@ Flickable {
             flick.held = reader.fraction
             flick.ready = true
             reader.pageWidth = Math.round(width)
+            reader.pageHeight = flick.pictureHeight
             flick.settle()
             settleSoon.restart()
         }

@@ -3,6 +3,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QMutexLocker>
+#include <QRegularExpression>
 #include <QAbstractTextDocumentLayout>
 #include <QStandardPaths>
 #include <QTextLayout>
@@ -324,9 +325,32 @@ void Reader::close() {
     emit htmlChanged();
 }
 
+namespace {
+// Pictures no taller than `most`, their width shrunk with them: a picture
+// laid out taller than a page can only be cut across two.
+QString fitPictures(QString html, int most) {
+    if (most <= 0)
+        return html;
+    static const QRegularExpression sized(R"re((<img [^>]*?)width="(\d+)" height="(\d+)")re");
+    QString fitted;
+    qsizetype from = 0;
+    for (auto it = sized.globalMatch(html); it.hasNext();) {
+        const QRegularExpressionMatch match = it.next();
+        const int width = match.captured(2).toInt(), height = match.captured(3).toInt();
+        fitted += QStringView(html).mid(from, match.capturedStart() - from);
+        if (height > most && height > 0)
+            fitted += QString(R"re(%1width="%2" height="%3")re").arg(match.captured(1)).arg(std::max(1, width * most / height)).arg(most);
+        else
+            fitted += match.captured(0);
+        from = match.capturedEnd();
+    }
+    return fitted + QStringView(html).mid(from);
+}
+} // namespace
+
 void Reader::refreshHtml() {
     const QString html = m_document && m_document->kind() == Document::Flow
-                             ? m_document->html(m_section, m_pageWidth).replace("image://book/", imagePrefix())
+                             ? fitPictures(m_document->html(m_section, m_pageWidth).replace("image://book/", imagePrefix()), m_pageHeight)
                              : QString();
     if (html != m_html) {
         m_html = html;
@@ -338,6 +362,13 @@ void Reader::setPageWidth(int width) {
     if (width == m_pageWidth || width <= 0)
         return;
     m_pageWidth = width;
+    refreshHtml();
+}
+
+void Reader::setPageHeight(int height) {
+    if (height == m_pageHeight || height < 0)
+        return;
+    m_pageHeight = height;
     refreshHtml();
 }
 
