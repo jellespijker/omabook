@@ -41,11 +41,17 @@ target_link_libraries(omabook PRIVATE "$<LINK_LIBRARY:WHOLE_ARCHIVE,omabook_core
 # The tests load the real Main.qml, so they carry the resources too. One
 # binary per layer: a broken format reader fails without the window.
 enable_testing()
+# Every test runs in a home of its own: a test, or a command one runs, that
+# opens "the library in use" finds this folder's config, never the
+# developer's own library.
+set(omabook_test_home "${CMAKE_BINARY_DIR}/test-home")
+file(MAKE_DIRECTORY "${omabook_test_home}/.config" "${omabook_test_home}/.local/share" "${omabook_test_home}/.cache")
+set(omabook_test_environment "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state;HOME=${omabook_test_home};XDG_CONFIG_HOME=${omabook_test_home}/.config;XDG_DATA_HOME=${omabook_test_home}/.local/share;XDG_CACHE_HOME=${omabook_test_home}/.cache")
 foreach(test formats library services ui mcp calibre folio readingsites scripting pluginmanager graphview graph reading layout)
   add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)
-  set_tests_properties(${test}_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state")
+  set_tests_properties(${test}_tests PROPERTIES ENVIRONMENT "${omabook_test_environment}")
 endforeach()
 
 # Syncing runs the other computer's omabook over ssh; the test's "other
@@ -70,7 +76,7 @@ target_compile_definitions(graph_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:oma
 
 # The commands agents use, driven through the real binary with no display.
 add_test(NAME cli_tests COMMAND ${CMAKE_SOURCE_DIR}/tests/cli_tests.sh $<TARGET_FILE:omabook>)
-set_tests_properties(cli_tests PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state")
+set_tests_properties(cli_tests PROPERTIES ENVIRONMENT "${omabook_test_environment}")
 
 # `cmake --install build --prefix ~/.local` puts the app in the launcher
 # before it is packaged; a package installs the same files under /usr.

@@ -47,9 +47,14 @@ QString standInSsh(const QTemporaryDir &dir) {
     // With a trash, which the system only moves things to when it is there.
     QDir(dir.path()).mkpath("there-home/.local/share/Trash/files");
     QDir(dir.path()).mkpath("there-home/.local/share/Trash/info");
+    // Every folder of its own, never this computer's: an omabook command
+    // reads the settings in XDG_CONFIG_HOME and, on its way out, looks at
+    // every library they name, which would open the user's own.
     const QByteArray home = dir.path().toUtf8() + "/there-home";
     return script(dir.filePath("ssh"), "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
-                                       "export HOME='" + home + "' XDG_DATA_HOME='" + home + "/.local/share' QT_QPA_PLATFORM=offscreen\n"
+                                       "export HOME='" + home + "' XDG_DATA_HOME='" + home + "/.local/share' XDG_CONFIG_HOME='" + home
+                                           + "/.config' XDG_STATE_HOME='" + home + "/.local/state' XDG_CACHE_HOME='" + home
+                                           + "/.cache' QT_QPA_PLATFORM=offscreen\n"
                                        "export PATH=\"" + QFileInfo(OMABOOK_BINARY).absolutePath().toUtf8() + ":$PATH\"\n"
                                        "exec sh -c \"$1\"\n");
 }
@@ -1429,12 +1434,7 @@ private slots:
         // "There" is another library folder, reached through a stand-in ssh
         // that runs the command here with this build's omabook.
         QTemporaryDir dir;
-        const QString ssh = script(dir.filePath("ssh"),
-                                   "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
-                                   "export HOME='" + dir.path().toUtf8() + "/there-home' QT_QPA_PLATFORM=offscreen\n"
-                                   "export PATH=\"" + QFileInfo(OMABOOK_BINARY).absolutePath().toUtf8() + ":$PATH\"\n"
-                                   "exec sh -c \"$1\"\n");
-        QVERIFY(QDir(dir.path()).mkpath("there-home"));
+        const QString ssh = standInSsh(dir);
         const Remote remote("laptop:" + dir.filePath("There's Library"), {ssh});
 
         QVERIFY(Fixtures::epub(dir.filePath("both.epub"), "On Both"));
@@ -1522,12 +1522,7 @@ private slots:
     // book with a file brings its reading along too.
     void booksWithoutAFileAreSyncedByWhatTheyAreCalled() {
         QTemporaryDir dir;
-        const QString ssh = script(dir.filePath("ssh"),
-                                   "while [ \"$1\" != \"--\" ]; do shift; done\nshift; shift\n"
-                                   "export HOME='" + dir.path().toUtf8() + "/there-home' QT_QPA_PLATFORM=offscreen\n"
-                                   "export PATH=\"" + QFileInfo(OMABOOK_BINARY).absolutePath().toUtf8() + ":$PATH\"\n"
-                                   "exec sh -c \"$1\"\n");
-        QVERIFY(QDir(dir.path()).mkpath("there-home"));
+        const QString ssh = standInSsh(dir);
         const Remote remote("laptop:" + dir.filePath("There"), {ssh});
         const auto entry = [](Library &library, const QString &title, const QString &author, bool paper) {
             BookMeta meta;

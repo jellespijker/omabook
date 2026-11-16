@@ -603,6 +603,9 @@ bool Library::open(QString *error) {
     // Asked and done with before anything changes: a statement left open
     // would keep a migration from dropping a table.
     const int schema = formatVersion();
+    if (m_keepFormat && schema > 0 && schema != migrations.size())
+        return fail(QString("This library is in format %1, and is opened here only as it is (this Omabook's is %2).")
+                        .arg(schema).arg(migrations.size()));
     if (schema > migrations.size())
         return fail(QString("This library was last opened by a newer Omabook (its format is %1; this Omabook knows up to %2). "
                             "Update Omabook on this computer, or restore a copy from before that from %3.")

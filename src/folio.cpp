@@ -755,6 +755,9 @@ bool syncCollection(Library &library, const QString &view, ViewState::Folder &fo
 Folio::Synced syncLocked(const QString &root, const QString &view, Folio::Imports imports) {
     Folio::Synced result;
     Library library(root);
+    // Upkeep never changes a library's format: one in another format waits
+    // until the window or a command opens it on purpose.
+    library.keepFormat();
     if (!library.open())
         return result;
     ViewState state = loadState(view).value_or(ViewState{});

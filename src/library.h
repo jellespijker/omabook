@@ -169,6 +169,11 @@ public:
 
     // Creates the folder and the database when they don't exist yet.
     bool open(QString *error = nullptr);
+    // Opened only as it is: a library in another format than this Omabook's
+    // is left alone rather than brought up to date. For upkeep that runs on
+    // every library the user named (Folio's folders after each command),
+    // which must never change a library's format in passing.
+    void keepFormat() noexcept { m_keepFormat = true; }
     QString root() const noexcept { return m_root; }
     QString databasePath() const;
     // Where copies of the database are kept: one is made each time an
@@ -362,5 +367,6 @@ private:
     [[nodiscard]] std::expected<qint64, QString> insert(const QString &sql, const QVariantList &values) const;
 
     QString m_root;
+    bool m_keepFormat = false;
     QString m_connection;
 };

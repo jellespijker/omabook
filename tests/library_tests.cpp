@@ -1696,6 +1696,47 @@ private slots:
         QVERIFY2(error.contains("Update Omabook") && error.contains(".backups"), qPrintable(error));
     }
 
+    // Upkeep that runs on every library the user named (Folio's folders,
+    // after each command) opens one only as it is: a library in another
+    // format is left in it, with no copy made, until it is opened on purpose.
+    void upkeepNeverChangesALibrarysFormat() {
+        QTemporaryDir dir;
+        {
+            Library library(dir.path());
+            QVERIFY(library.open());
+        }
+        const auto versionNow = [&] {
+            QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", "peek");
+            database.setDatabaseName(dir.filePath("omabook.db"));
+            int version = -1;
+            if (database.open()) {
+                QSqlQuery query(database);
+                if (query.exec("PRAGMA user_version") && query.next())
+                    version = query.value(0).toInt();
+            }
+            database.close();
+            return version;
+        };
+        {
+            QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", "older");
+            database.setDatabaseName(dir.filePath("omabook.db"));
+            QVERIFY(database.open());
+            QVERIFY(QSqlQuery(database).exec("PRAGMA user_version = 5"));
+            database.close();
+        }
+        QSqlDatabase::removeDatabase("older");
+        {
+            Library library(dir.path());
+            library.keepFormat();
+            QString error;
+            QVERIFY(!library.open(&error));
+            QVERIFY2(error.contains("format 5"), qPrintable(error));
+        }
+        QCOMPARE(versionNow(), 5);
+        QSqlDatabase::removeDatabase("peek");
+        QVERIFY(!QDir(dir.filePath(".backups")).exists() || QDir(dir.filePath(".backups")).isEmpty());
+    }
+
     void everyReleasedLibraryStillOpens() {
         // A library as each release left it, kept as a dump of its database
         // (tests/data/library-<version>.sql). Every one must still open, be
