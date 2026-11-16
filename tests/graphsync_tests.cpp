@@ -253,6 +253,36 @@ private slots:
         QCOMPARE(again.graphSent, 0);
     }
 
+    void separateDuplicateNamedForAnAliasSettlesByTheThirdSync() {
+        TwoComputers two;
+        QVERIFY(two.open());
+        // Side A (there) has a leftover separate node for an alias ("Stormblessed") before
+        // the canonical node ("Kaladin") that lists it as an alias; Side B (here) has only "Kaladin".
+        {
+            Graph there(two.there);
+            const qint64 storm =
+                there.upsert({}, "character", "Stormblessed", "Legend of the plains.", {}, GraphPlace{two.bookThere, 2, 0.3});
+            const qint64 bridge = there.upsert({}, "group", "Bridge Four", {}, {}, GraphPlace{two.bookThere, 1, 0.2});
+            there.link(storm, bridge, "leads", "", GraphPlace{two.bookThere, 2, 0.3});
+            const qint64 kaladin = there.upsert({}, "character", "Kaladin", "A bridgeman.", {}, GraphPlace{two.bookThere, 1, 0.1});
+            there.learn(kaladin, "alias", "Stormblessed", GraphMoment{{two.bookThere, 2, 0.1}, "Stormblessed"});
+
+            Graph here(two.here);
+            const qint64 local = here.upsert({}, "character", "Kaladin", "A bridgeman.", {}, GraphPlace{two.bookHere, 1, 0.1});
+            here.learn(local, "alias", "Stormblessed", GraphMoment{{two.bookHere, 2, 0.1}, "Stormblessed"});
+            here.upsert({}, "group", "Bridge Four", {}, {}, GraphPlace{two.bookHere, 1, 0.2});
+        }
+        const SyncSummary first = two.sync();
+        QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
+        const SyncSummary second = two.sync();
+        QVERIFY2(second.problems.isEmpty(), qPrintable(second.problems.join('\n')));
+        const SyncSummary third = two.sync();
+        QVERIFY2(third.problems.isEmpty(), qPrintable(third.problems.join('\n')));
+        QCOMPARE(third.graphTaken, 0);
+        QCOMPARE(third.graphSent, 0);
+        QCOMPARE(named(Graph(two.here), "character", "Kaladin").summary, QString("A bridgeman."));
+    }
+
     void aBundleNamesBooksByTheirFiles() {
         TwoComputers two;
         QVERIFY(two.open());

@@ -340,9 +340,10 @@ void takeFacts(Taking &taking, qint64 id, const QJsonObject &node) {
 
 // What is said of it now: theirs when it changed there last, or when this
 // one says nothing; each with the moment it was revealed, never a new one.
-void settleSummary(Taking &taking, qint64 id, const GraphNode &before, const QJsonObject &theirs) {
+void settleSummary(Taking &taking, qint64 id, const GraphNode &before, const QJsonObject &theirs, bool allowTheirs) {
     const QString said = theirs.value("summary").toString();
-    const bool takeTheirs = !said.isEmpty() && (before.summary.isEmpty() || theirs.value("updated").toInteger() > before.updated);
+    const bool takeTheirs =
+        allowTheirs && !said.isEmpty() && (before.summary.isEmpty() || theirs.value("updated").toInteger() > before.updated);
     const QString wanted = takeTheirs ? said : before.summary;
     const std::optional<GraphNode> now = taking.graph.node(id);
     if (wanted.isEmpty() || !now || now->summary == wanted)
@@ -357,7 +358,8 @@ void settleSummary(Taking &taking, qint64 id, const GraphNode &before, const QJs
 void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
     const QString kind = theirs.value("kind").toString();
     const QJsonObject data = theirs.value("data").toObject();
-    const std::optional<GraphNode> before = matched > 0 ? taking.graph.node(matched) : std::nullopt;
+    const qint64 known = matched > 0 ? matched : taking.graph.named({}, kind, theirs.value("name").toString());
+    const std::optional<GraphNode> before = known > 0 ? taking.graph.node(known) : std::nullopt;
     const qint64 id = before ? before->id : taking.graph.upsert({}, kind, theirs.value("name").toString(), {}, missingData({}, data));
     const std::optional<GraphNode> node = taking.graph.node(id);
     if (!node)
@@ -371,7 +373,7 @@ void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
     taking.nodes.insert(theirs.value("id").toInteger(), id);
     takeSeen(taking, id, *node, theirs.value("seen").toArray());
     takeFacts(taking, id, theirs);
-    settleSummary(taking, id, before.value_or(GraphNode{}), theirs);
+    settleSummary(taking, id, before.value_or(GraphNode{}), theirs, matched > 0 || !before);
 }
 
 // Their end of a relation here: a thing taken in, or one this library makes itself.
