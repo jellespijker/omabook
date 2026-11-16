@@ -890,7 +890,7 @@ class LayoutTests : public QObject {
             dialog(desk, "tidy", [&] {
                 desk.call("showTidy");
                 // With what it found: the same book twice, an author spelled two ways.
-                (void)QTest::qWaitFor([&] { return !desk.librarian->busy() && desk.find("tidyList") && desk.find("tidyList")->property("count").toInt() > 0; }, 3000);
+                QVERIFY(QTest::qWaitFor([&] { return !desk.librarian->busy() && desk.find("tidyList") && desk.find("tidyList")->property("count").toInt() > 0; }, 3000));
             });
             dialog(desk, "sites", [&] { desk.call("showReadingSites"); });
             dialog(desk, "graph-build", [&] { desk.call("showGraphBuild", book); });
@@ -900,7 +900,7 @@ class LayoutTests : public QObject {
             dialog(desk, "new", [&] { desk.call("newBook"); });
             dialog(desk, "lookup", [&] {
                 desk.call("lookUpBook", book);
-                (void)QTest::qWaitFor([&] { return desk.find("lookupList") && desk.find("lookupList")->property("count").toInt() > 0; }, 3000);
+                QVERIFY(QTest::qWaitFor([&] { return desk.find("lookupList") && desk.find("lookupList")->property("count").toInt() > 0; }, 3000));
             });
             dialog(desk, "remove", [&] { desk.call("removeBook", book); });
             // What a plugin asks, drawn by Omabook; and its entry on the shelf, taken off.

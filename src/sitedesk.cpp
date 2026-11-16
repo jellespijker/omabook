@@ -9,7 +9,7 @@
 #include <QFileInfo>
 #include <QPointer>
 #include <QStandardPaths>
-#include <QtConcurrent>
+#include <QThreadPool>
 #include <algorithm>
 
 #include "goodreads.h"
@@ -383,7 +383,7 @@ void SiteDesk::bringIn(const QString &scheme, const QList<SiteEntry> &entries, c
     how.writeBack = !fromFile && site && site->writes() && m_settings->site(scheme).value("write").toBool();
     const QString root = m_root();
     QPointer<SiteDesk> self(this);
-    (void)QtConcurrent::run([self, root, entries, scheme, how, options, fromFile] {
+    QThreadPool::globalInstance()->start([self, root, entries, scheme, how, options, fromFile] {
         QEventLoopLocker locker;
         ReadingSites::Summary summary;
         Library library(root);

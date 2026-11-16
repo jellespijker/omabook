@@ -3,6 +3,7 @@
 #include <QEventLoop>
 #include <QEventLoopLocker>
 #include <QPointer>
+#include <QThreadPool>
 #include <QtConcurrent>
 
 #include "backend.h"
@@ -72,7 +73,7 @@ void GraphJobs::consider(const QString &which, qint64 selectedId, bool whole) {
     const int asked = ++m_asked;
     const QString root = library->root();
     const QPointer<GraphJobs> self(this);
-    (void)QtConcurrent::run([self, asked, root, choice] {
+    QThreadPool::globalInstance()->start([self, asked, root, choice] {
         Library own(root);
         const GraphBatch::Plan planned = own.open() ? GraphBatch::plan(own, choice) : GraphBatch::Plan();
         QVariantList skipped;

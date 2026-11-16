@@ -4,7 +4,7 @@
 
 #include <QCoreApplication>
 #include <QLocale>
-#include <QtConcurrent>
+#include <QThreadPool>
 
 #include "backend.h"
 #include "booklistmodel.h"
@@ -70,7 +70,7 @@ void Librarian::find(const QString &question) {
     const int asking = ++m_findAsked;
     const QString root = library->root();
     const QPointer<Librarian> self(this);
-    (void)QtConcurrent::run([self, root, asking, books, key] {
+    QThreadPool::globalInstance()->start([self, root, asking, books, key] {
         Library own(root);
         auto known = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::build(own) : KnowledgeIndex());
         QMetaObject::invokeMethod(qApp, [self, asking, known, books, key] {

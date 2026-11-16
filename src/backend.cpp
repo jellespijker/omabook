@@ -6,12 +6,12 @@
 #include "log.h"
 
 #include <QDir>
-#include <QDirIterator>
 #include <QElapsedTimer>
 #include <QEventLoopLocker>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QPointer>
+#include <QThreadPool>
 #include <QtConcurrent>
 #include <algorithm>
 
@@ -309,7 +309,7 @@ void Backend::readKnowledge() {
     m_knowing = true;
     const QString root = m_library->root();
     const QPointer<Backend> self(this);
-    (void)QtConcurrent::run([self, root] {
+    QThreadPool::globalInstance()->start([self, root] {
         QElapsedTimer took;
         took.start();
         Library own(root);
@@ -480,7 +480,7 @@ void Backend::addUrls(const QList<QUrl> &urls) {
         return QFileInfo(path + "/metadata.db").isFile();
     });
     QPointer<Backend> self(this);
-    (void)QtConcurrent::run([self, root, paths, options, calibreLeftOut] {
+    QThreadPool::globalInstance()->start([self, root, paths, options, calibreLeftOut] {
         QEventLoopLocker locker;
         ImportSummary summary;
         Library library(root);
@@ -553,7 +553,7 @@ void Backend::sync() {
     const QString root = m_library->root();
     const QStringList ssh = m_ssh;
     QPointer<Backend> self(this);
-    (void)QtConcurrent::run([self, root, target, ssh] {
+    QThreadPool::globalInstance()->start([self, root, target, ssh] {
         QEventLoopLocker locker;
         SyncSummary summary;
         Library library(root);
