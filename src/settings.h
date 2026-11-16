@@ -36,6 +36,7 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiCommand READ aiCommand WRITE setAiCommand NOTIFY changed)
     Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY changed)
     Q_PROPERTY(QString graph READ graph WRITE setGraph NOTIFY changed)
+    Q_PROPERTY(bool graphAcrossCollections READ graphAcrossCollections WRITE setGraphAcrossCollections NOTIFY changed)
     Q_PROPERTY(QString marks READ marks WRITE setMarks NOTIFY changed)
     Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
     Q_PROPERTY(QString goodreadsUser READ goodreadsUser WRITE setGoodreadsUser NOTIFY changed)
@@ -43,6 +44,8 @@ class Settings : public QObject {
 
 public:
     explicit Settings(const QString &file = {}, QObject *parent = nullptr);
+    // Where config.json is when no file is given.
+    static QString defaultFile();
 
     // The library in use, and every library that has been. Setting it makes
     // it the one in use from now on, for the window, the command line and
@@ -186,6 +189,11 @@ public:
     // "off" (no graph is kept or used while reading).
     QString graph() const;
     void setGraph(const QString &mode);
+    // Whether the graph links books across the collections at the top of
+    // the library (see BookSides). Off by default: a library split into,
+    // say, study and leisure keeps the two apart.
+    bool graphAcrossCollections() const { return m_values.value("graph_across_collections").toBool(false); }
+    void setGraphAcrossCollections(bool on) { set("graph_across_collections", on); }
     // When the things of the graph are marked in the text: "map" (while the
     // map of the book is beside the page), "always" or "never".
     QString marks() const;

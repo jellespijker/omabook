@@ -567,8 +567,11 @@ void GraphBrowser::setOnlyAcross(bool only) {
 QPair<qint64, QString> GraphBrowser::bookOf(const GraphNode &node) const {
     if (!library() || node.kind == "book")
         return {};
-    for (const GraphPlace &place : Graph(*library()).seen(node.id))
-        if (place.bookId != (m_what == What::Book ? m_bookId : 0))
+    const Graph graph(*library());
+    // Of a book, the other book on its side.
+    const qint64 here = m_what == What::Book ? m_bookId : 0;
+    for (const GraphPlace &place : graph.seen(node.id))
+        if (place.bookId != here && (here == 0 || graph.sides().together(here, place.bookId)))
             if (const auto book = library()->book(place.bookId))
                 return {book->id, book->meta.title};
     return {};

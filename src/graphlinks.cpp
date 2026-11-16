@@ -114,14 +114,16 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
 
     // The other books that have a graph their reader has reached, the
     // nearest to this one first: the same author or series, shared tags,
-    // and failing that the ones read last.
+    // and failing that the ones read last. Only those on its side of the
+    // library: a book on another is not even shown to the model.
     struct Near {
         Book book;
         int score = 0;
     };
     QList<Near> near;
     for (const Book &other : library.books()) {
-        if (other.id == bookId || !GraphBuild::builtTo(library, other.id) || !GraphContext::reachOf(library, other.id).any)
+        if (other.id == bookId || !graph.sides().together(bookId, other.id) || !GraphBuild::builtTo(library, other.id)
+            || !GraphContext::reachOf(library, other.id).any)
             continue;
         int score = 0;
         for (const QString &author : other.meta.authors)
@@ -286,8 +288,10 @@ bool GraphLinks::due(const Library &library, qint64 bookId) {
 }
 
 bool GraphLinks::company(const Library &library, qint64 bookId) {
+    const BookSides sides = BookSides::of(library);
     for (const Book &other : library.books())
-        if (other.id != bookId && GraphBuild::builtTo(library, other.id) && GraphContext::reachOf(library, other.id).any)
+        if (other.id != bookId && sides.together(bookId, other.id) && GraphBuild::builtTo(library, other.id)
+            && GraphContext::reachOf(library, other.id).any)
             return true;
     return false;
 }
@@ -301,8 +305,10 @@ GraphLinks::Connected GraphLinks::connect(Library &library, qint64 bookId, const
     }
     const Offer made = offer(library, bookId, *at);
     if (made.empty()) {
-        connected.skipped = made.own.isEmpty() ? QString("Its graph holds no themes, ideas, threads or characters to connect yet.")
-                                               : QString("No other book has a graph, as far as it was read, to connect it with.");
+        connected.skipped = made.own.isEmpty()                ? QString("Its graph holds no themes, ideas, threads or characters to connect yet.")
+                            : BookSides::of(library).apart() ? QString("No other book in its top collection has a graph, as far as it was "
+                                                                       "read, to connect it with.")
+                                                             : QString("No other book has a graph, as far as it was read, to connect it with.");
         return connected;
     }
     if (!again && library.notes(bookId, linksNote).text == made.mark()) {

@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QtTest>
@@ -12,6 +13,7 @@
 #include "assistant.h"
 #include "backend.h"
 #include "bookops.h"
+#include "booksides.h"
 #include "cli.h"
 #include "curation.h"
 #include "fixtures.h"
@@ -1049,6 +1051,140 @@ private slots:
         for (const AiRequest &asked : std::as_const(batch.asked))
             connecting += asked.system.contains("well-read friend") ? 1 : 0;
         QCOMPARE(connecting, 1);
+    }
+
+    void topCollectionsKeepTheirBooksApart() {
+        Shelf shelf;
+        Graph graph(shelf.library);
+        // Without collections every book is on one side, as it always was.
+        QVERIFY(!BookSides::of(shelf.library).apart());
+        QVERIFY(BookSides::of(shelf.library).together(shelf.book, 999));
+
+        // A library split in two at the top, with a part inside one of them,
+        // named as its owner likes.
+        const qint64 novel = shelf.book, paper = shelf.add("Wave Mechanics"), textbook = shelf.add("Fluid Dynamics");
+        const qint64 loose = shelf.add("Loose Leaves"), stray = shelf.add("Stray Pages");
+        const qint64 work = *shelf.library.addCollection("Werk");
+        const qint64 inner = *shelf.library.addCollection("Werk/Golven");
+        const qint64 play = *shelf.library.addCollection("Spel");
+        QVERIFY(shelf.library.putInCollection(play, novel, true));
+        QVERIFY(shelf.library.putInCollection(inner, paper, true));
+        QVERIFY(shelf.library.putInCollection(work, textbook, true));
+        BookSides sides = BookSides::of(shelf.library);
+        QVERIFY(sides.apart());
+        QCOMPARE(sides.side(paper), (BookSides::Side{work}));
+        QVERIFY(!sides.together(novel, paper));
+        // A part inside a top collection is on its side.
+        QVERIFY(sides.together(paper, textbook));
+        // Books in no collection are on a side of their own.
+        QCOMPARE(sides.side(loose), (BookSides::Side{BookSides::none}));
+        QVERIFY(sides.together(loose, stray) && !sides.together(loose, novel) && !sides.together(loose, paper));
+
+        // Each book read, with a graph. The novel and the paper share an
+        // idea, which stays one thing with both books.
+        const auto first = shelf.document(novel);
+        GraphBuild::apply(shelf.library, novel, GraphBuild::passages(*first, std::nullopt, {novel, 0, 1.0}), firstAnswer);
+        for (const qint64 book : {novel, paper, textbook}) {
+            GraphBuild::setBuiltTo(shelf.library, book, {book, 2, 1.0});
+            shelf.library.setReading(book, "read", 0, {});
+        }
+        const qint64 tide = named(shelf.library, "concept", "Tide-binding").id;
+        QCOMPARE(graph.upsert({}, "concept", "Tide-binding", {}, {}, GraphPlace{paper, 0, 0.0}), tide);
+        const qint64 waves = graph.upsert({}, "concept", "Standing waves", "Waves that hold their place.", {}, GraphPlace{paper, 0, 0.0});
+        const qint64 flow = graph.upsert({}, "concept", "Viscosity", "How thick a flow is.", {}, GraphPlace{textbook, 0, 0.0});
+        const qint64 mara = named(shelf.library, "character", "Mara Venn").id;
+        const qint64 inheritance = named(shelf.library, "theme", "Inheritance").id;
+
+        // What is put side by side never holds a thing of the other side.
+        const GraphLinks::Offer offer = GraphLinks::offer(shelf.library, paper, {paper, 2, 1.0});
+        QSet<qint64> others;
+        for (const GraphNode &node : offer.others)
+            others << node.id;
+        QVERIFY(others.contains(flow));
+        QVERIFY(!others.contains(mara) && !others.contains(inheritance));
+        const QString prompt = GraphLinks::request(shelf.library, paper, offer).messages.first().text;
+        QVERIFY(prompt.contains("Viscosity") && !prompt.contains("The Keeper of Saltmere") && !prompt.contains("Mara Venn"));
+        // Nor what a build is shown of the other books.
+        const auto third = shelf.document(paper);
+        const QString shown = GraphBuild::elsewhere(shelf.library, paper, GraphBuild::passages(*third, std::nullopt, {paper, 0, 1.0}));
+        QVERIFY2(shown.contains("Viscosity") && !shown.contains("Inheritance") && !shown.contains("The Keeper of Saltmere"), qPrintable(shown));
+        // Asked to link across anyway, the model's answer adds nothing there.
+        const QString answer = QString(R"({"links": [{"from": %1, "to": %2, "relation": "echoes", "note": "Across the library."},
+                                                     {"from": %1, "to": %3, "relation": "same idea as", "note": "Within one part."}]})")
+                                   .arg(waves).arg(mara).arg(flow);
+        const GraphLinks::Applied applied = GraphLinks::apply(shelf.library, paper, {paper, 2, 1.0}, offer, answer);
+        QCOMPARE(applied.links, 1);
+
+        // A connection between the two sides from before is kept, and not shown.
+        QVERIFY(graph.link(waves, mara, GraphEdge::acrossMark() + "echoes", "From before the library was split.", GraphPlace{paper, 1, 0.0}) > 0);
+        const auto edgeTo = [](const GraphView &view, qint64 a, qint64 b) {
+            return std::ranges::any_of(view.edges, [&](const GraphEdge &edge) {
+                return edge.across() && ((edge.source == a && edge.target == b) || (edge.source == b && edge.target == a));
+            });
+        };
+        const auto check = [&](bool split) {
+            const Graph now(shelf.library);
+            const GraphView beyond = now.beyond(paper);
+            QCOMPARE(has(beyond, "Viscosity"), true);
+            QCOMPARE(has(beyond, "Mara Venn"), !split);
+            // The idea both share is one thing, but the other side's book is not beyond.
+            QCOMPARE(has(beyond, "The Keeper of Saltmere"), !split);
+            QCOMPARE(edgeTo(now.acrossBooks(), waves, mara), !split);
+            QVERIFY(edgeTo(now.acrossBooks(), waves, flow));
+            const GraphView whole = now.whole({}, 100000);
+            QCOMPARE(edgeTo(whole, waves, mara), !split);
+            QVERIFY(edgeTo(whole, waves, flow) && has(whole, "Tide-binding") && has(whole, "Mara Venn"));
+            QCOMPARE(std::ranges::count(whole.nodes, tide, &GraphNode::id), 1);
+            QCOMPARE(has(now.around(waves, 1), "Mara Venn"), !split);
+            // The AI is told only of its own side.
+            const QString slice = GraphContext::forQuestion(shelf.library, paper, {paper, 2, 1.0}, "What are standing waves?");
+            QVERIFY2(slice.contains("Viscosity"), qPrintable(slice));
+            QCOMPARE(slice.contains("Mara Venn"), !split);
+            QCOMPARE(GraphContext::forQuestion(shelf.library, novel, {novel, 2, 1.0}, "Who is Mara Venn?").contains("Standing waves"), !split);
+        };
+        check(true);
+
+        // A series isn't carried across either.
+        const auto inSeries = [&](qint64 id, double index) {
+            BookMeta meta = shelf.library.book(id)->meta;
+            meta.series = "Saltmere";
+            meta.seriesIndex = index;
+            QVERIFY(shelf.library.setMeta(id, meta));
+        };
+        inSeries(novel, 1);
+        inSeries(paper, 2);
+        QVERIFY(shelf.library.earlierInSeries(paper).isEmpty());
+
+        // Moved to the other side, the book's links move with it, and none is lost.
+        QVERIFY(shelf.library.putInCollection(inner, paper, false));
+        QVERIFY(shelf.library.putInCollection(play, paper, true));
+        QCOMPARE(BookSides::of(shelf.library).side(paper), (BookSides::Side{play}));
+        {
+            const Graph now(shelf.library);
+            QVERIFY(has(now.beyond(paper), "Mara Venn") && !has(now.beyond(paper), "Viscosity"));
+            QVERIFY(edgeTo(now.acrossBooks(), waves, mara) && !edgeTo(now.acrossBooks(), waves, flow));
+            QCOMPARE(shelf.library.earlierInSeries(paper).size(), 1);
+        }
+        // In both, it is on both sides and links with either.
+        QVERIFY(shelf.library.putInCollection(work, paper, true));
+        QCOMPARE(BookSides::of(shelf.library).side(paper), (BookSides::Side{work, play}));
+        QVERIFY(has(Graph(shelf.library).beyond(paper), "Mara Venn") && has(Graph(shelf.library).beyond(paper), "Viscosity"));
+        // And back where it was, as before.
+        QVERIFY(shelf.library.putInCollection(play, paper, false));
+        QVERIFY(shelf.library.putInCollection(work, paper, false));
+        QVERIFY(shelf.library.putInCollection(inner, paper, true));
+        check(true);
+
+        // Turned off, the graph links across the whole library again.
+        Settings settings;
+        settings.setGraphAcrossCollections(true);
+        const auto restore = qScopeGuard([&settings] { settings.setGraphAcrossCollections(false); });
+        QVERIFY(!BookSides::of(shelf.library).apart());
+        check(false);
+        QCOMPARE(shelf.library.earlierInSeries(paper).size(), 1);
+        QVERIFY(GraphLinks::offer(shelf.library, paper, {paper, 2, 1.0}).titles.values().contains("The Keeper of Saltmere"));
+        settings.setGraphAcrossCollections(false);
+        check(true);
     }
 
     void theWindowComparesOnceASession() {

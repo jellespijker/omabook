@@ -9,6 +9,7 @@
 #include <optional>
 #include <utility>
 
+#include "booksides.h"
 #include "library.h"
 
 // What is known, as a graph kept in the library's own database: the people,
@@ -237,6 +238,13 @@ public:
     // with that place. What a reader at some place has met is therefore the
     // front of this list, up to the first thing met after it.
     QList<std::pair<GraphNode, GraphPlace>> metIn(qint64 bookId, const QString &scope = {}) const;
+    // Links between books keep to the library's sides (BookSides): a
+    // connection across books whose two ends are of books on sides that
+    // don't meet is kept but never answered by what follows (ofBook,
+    // around, beyond, acrossBooks, whole), and beyond leaves out the books
+    // on another side than the book's. The sides are read once per Graph.
+    [[nodiscard]] const BookSides &sides() const;
+
     // What a book connects to elsewhere: the things of other books that a
     // connection across books (see GraphEdge::across) ties to this book's
     // things, and the other books that a thing of this book is also in (a
@@ -273,6 +281,12 @@ private:
     qint64 recordFact(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed);
     [[nodiscard]] GraphView collect(const QString &nodesWhere, const QVariantList &values, int limit) const;
     [[nodiscard]] QList<GraphEdge> edgesAmong(const QList<GraphNode> &nodes) const;
+    // The sides of these nodes: of the books each was met in, and for a
+    // book's own node of its book. A node of no book has no side.
+    [[nodiscard]] QHash<qint64, BookSides::Side> sidesOf(const QSet<qint64> &nodes) const;
+    // The edges without the connections across books between two sides.
+    [[nodiscard]] QList<GraphEdge> withinSides(QList<GraphEdge> edges) const;
 
     const Library *m_library;
+    mutable std::optional<BookSides> m_sides;
 };

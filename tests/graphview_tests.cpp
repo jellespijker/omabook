@@ -751,6 +751,23 @@ private slots:
         QVERIFY(said);
         browser.setOnlyAcross(false);
         QVERIFY(names(browser).contains("Mara"));
+
+        // In two collections at the top, the two books are kept apart:
+        // nothing joins them in the library, and nothing is beyond.
+        const qint64 sea = *story.library.addCollection("Zee"), land = *story.library.addCollection("Land");
+        QVERIFY(story.library.putInCollection(sea, story.first, true) && story.library.putInCollection(land, clock, true));
+        browser.setOnlyAcross(true);
+        QCOMPARE(browser.edgeCount(), 0);
+        browser.setOnlyAcross(false);
+        QVERIFY(names(browser).contains("Tide-binding"));
+        browser.showBookUpTo(story.first, 9, 0);
+        QCOMPARE(browser.beyondCount(), 0);
+        QVERIFY(!names(browser).contains("Tide-binding"));
+        // Put in the same one, they meet again: nothing was lost.
+        QVERIFY(story.library.putInCollection(sea, clock, true));
+        browser.refresh();
+        QCOMPARE(browser.beyondCount(), 1);
+        QVERIFY(names(browser).contains("Tide-binding"));
     }
 
     // --- The picture ---

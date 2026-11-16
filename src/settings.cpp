@@ -29,12 +29,15 @@ constexpr std::array sorts{"recent"_L1, "title"_L1,  "author"_L1,    "series"_L1
 
 Settings::Settings(const QString &file, QObject *parent)
     : QObject(parent),
-      m_file(file.isEmpty() ? QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/omabook/config.json"
-                            : file) {
+      m_file(file.isEmpty() ? defaultFile() : file) {
     read();
     connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { read(); });
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { read(); });
     watch();
+}
+
+QString Settings::defaultFile() {
+    return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/omabook/config.json";
 }
 
 void Settings::read() {

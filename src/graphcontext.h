@@ -47,7 +47,8 @@ GraphKnown readerKnows(const Library &library);
 GraphKnown unspoiled(const Library &library);
 
 // A book's graph up to a place without what isn't of the story: the
-// questions asked there, and the book itself.
+// questions asked there, the book itself, and the relations learned in a
+// book on another side of the library (BookSides).
 GraphView story(const Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo = std::nullopt);
 
 // The part of a book's graph a question touches, up to a place and no

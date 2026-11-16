@@ -76,10 +76,10 @@ QString brief(const QString &text, qsizetype room) {
 constexpr int mostConnections = 6;
 
 // The book a thing is from, for a reader of another book: the latest read
-// of the books it was met in, other than that one.
+// of the books it was met in, other than that one, and on its side.
 QString titleOf(const Library &library, const Graph &graph, qint64 node, qint64 notBook) {
     for (const GraphPlace &place : graph.seen(node))
-        if (place.bookId != notBook)
+        if (place.bookId != notBook && (notBook == 0 || graph.sides().together(notBook, place.bookId)))
             if (const auto book = library.book(place.bookId))
                 return book->meta.title;
     return {};
@@ -141,12 +141,16 @@ GraphKnown GraphContext::unspoiled(const Library &library) {
 }
 
 GraphView GraphContext::story(const Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo) {
-    GraphView view = Graph(library).ofBook(bookId, upTo);
+    const Graph graph(library);
+    GraphView view = graph.ofBook(bookId, upTo);
     view.nodes.removeIf([](const GraphNode &node) { return !Prompts::graphKinds().contains(node.kind); });
     QSet<qint64> kept;
     for (const GraphNode &node : std::as_const(view.nodes))
         kept << node.id;
-    view.edges.removeIf([&](const GraphEdge &edge) { return !kept.contains(edge.source) || !kept.contains(edge.target); });
+    // What a book on another side said of the same things is not drawn on.
+    view.edges.removeIf([&](const GraphEdge &edge) {
+        return !kept.contains(edge.source) || !kept.contains(edge.target) || !graph.sides().together(bookId, edge.learned.bookId);
+    });
     return view;
 }
 

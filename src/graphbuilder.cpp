@@ -153,8 +153,8 @@ const QStringList shareable{"theme", "topic", "concept", "group", "place"};
 
 // The thing of another book a model said this one is the same as: by its
 // name as it was listed, of the kind given or another shareable one, and
-// met in a book that is not this one or of its series.
-std::optional<GraphNode> sharedNode(const Graph &graph, const Scene &scene, const QString &kind, const QString &name) {
+// met in a book that is not this one or of its series, on this one's side.
+std::optional<GraphNode> sharedNode(const Graph &graph, const Scene &scene, qint64 bookId, const QString &kind, const QString &name) {
     QStringList kinds{kind};
     for (const QString &other : shareable)
         if (other != kind)
@@ -164,7 +164,9 @@ std::optional<GraphNode> sharedNode(const Graph &graph, const Scene &scene, cons
         if (id == 0)
             continue;
         const QList<GraphPlace> met = graph.seen(id);
-        if (std::ranges::any_of(met, [&](const GraphPlace &at) { return !scene.books.contains(at.bookId); }))
+        if (std::ranges::any_of(met, [&](const GraphPlace &at) {
+                return !scene.books.contains(at.bookId) && graph.sides().together(bookId, at.bookId);
+            }))
             return graph.node(id);
     }
     return std::nullopt;
@@ -409,7 +411,8 @@ QString GraphBuild::elsewhere(const Library &library, qint64 bookId, const QList
             if (taken >= most)
                 break;
             for (const GraphPlace &at : graph.seen(candidate.node.id)) {
-                if (scene.books.contains(at.bookId))
+                // Nor of a book on another side of the library.
+                if (scene.books.contains(at.bookId) || !graph.sides().together(bookId, at.bookId))
                     continue;
                 if (!reaches.contains(at.bookId))
                     reaches.insert(at.bookId, GraphContext::reachOf(library, at.bookId));
@@ -492,7 +495,7 @@ GraphBuild::Applied GraphBuild::apply(Library &library, qint64 bookId, const QLi
                 aliases << name;
             called = existing->name;
             kind = existing->kind;
-        } else if (const auto same = sameAs.isEmpty() ? std::nullopt : sharedNode(graph, scene, kind, sameAs)) {
+        } else if (const auto same = sameAs.isEmpty() ? std::nullopt : sharedNode(graph, scene, bookId, kind, sameAs)) {
             if (same->name.compare(name, Qt::CaseInsensitive) != 0)
                 aliases << name;
             called = same->name;

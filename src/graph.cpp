@@ -684,6 +684,47 @@ QList<GraphEdge> Graph::edgesAmong(const QList<GraphNode> &nodes) const {
             if (ids.contains(query.value(2).toLongLong()))
                 edges << edgeFrom(query);
     }
+    return withinSides(std::move(edges));
+}
+
+const BookSides &Graph::sides() const {
+    if (!m_sides)
+        m_sides = BookSides::of(*m_library);
+    return *m_sides;
+}
+
+QHash<qint64, BookSides::Side> Graph::sidesOf(const QSet<qint64> &nodes) const {
+    QHash<qint64, QSet<qint64>> books;
+    const QList<qint64> all = nodes.values();
+    for (const auto batch : all | std::views::chunk(500)) {
+        const QVariantList ids = batch | std::ranges::to<QVariantList>();
+        for (QSqlQuery query = m_library->query(QString("SELECT node_id, book_id FROM graph_seen WHERE node_id IN (%1) UNION "
+                                                        "SELECT id, book_id FROM graph_nodes WHERE kind = 'book' AND book_id IS NOT NULL "
+                                                        "AND id IN (%1)")
+                                                    .arg(marks(ids.size())),
+                                                ids + ids);
+             query.next();)
+            books[query.value(0).toLongLong()] << query.value(1).toLongLong();
+    }
+    QHash<qint64, BookSides::Side> found;
+    for (auto it = books.cbegin(); it != books.cend(); ++it)
+        found.insert(it.key(), sides().sideOf(*it));
+    return found;
+}
+
+QList<GraphEdge> Graph::withinSides(QList<GraphEdge> edges) const {
+    // Only a connection across books ties two books; read the sides only
+    // when there is one to judge.
+    if (std::ranges::none_of(edges, &GraphEdge::across) || !sides().apart())
+        return edges;
+    QSet<qint64> ends;
+    for (const GraphEdge &edge : std::as_const(edges))
+        if (edge.across())
+            ends << edge.source << edge.target;
+    const QHash<qint64, BookSides::Side> of = sidesOf(ends);
+    edges.removeIf([&of](const GraphEdge &edge) {
+        return edge.across() && !BookSides::meet(of.value(edge.source), of.value(edge.target));
+    });
     return edges;
 }
 
@@ -694,9 +735,15 @@ GraphView Graph::around(qint64 start, int depth, int limit) const {
     for (int step = 0; step < std::clamp(depth, 0, 6) && !frontier.isEmpty() && seen.size() < limit; ++step) {
         QList<qint64> next;
         for (const qint64 id : std::as_const(frontier)) {
-            QSqlQuery query = m_library->query("SELECT source, target FROM graph_edges WHERE source = ? OR target = ?", {id, id});
+            QSqlQuery query = m_library->query("SELECT source, target, kind FROM graph_edges WHERE source = ? OR target = ?", {id, id});
             while (query.next() && seen.size() < limit) {
                 const qint64 other = query.value(0).toLongLong() == id ? query.value(1).toLongLong() : query.value(0).toLongLong();
+                if (!seen.contains(other) && query.value(2).toString().startsWith(GraphEdge::acrossMark()) && sides().apart()) {
+                    // Not on to another side through a connection between the two.
+                    const auto of = sidesOf({id, other});
+                    if (!BookSides::meet(of.value(id), of.value(other)))
+                        continue;
+                }
                 if (!seen.contains(other)) {
                     seen << other;
                     next << other;
@@ -750,10 +797,9 @@ GraphView Graph::ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo, co
 }
 
 GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) const {
-    GraphView view;
-    QSet<qint64> taken;
     const auto own = ofBook(bookId, upTo).nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QSet<qint64>>();
     const QList<qint64> all = own.values();
+    QList<std::pair<GraphEdge, GraphNode>> ties;
     for (const auto batch : all | std::views::chunk(400)) {
         // Once for the sources and once for the targets.
         const QVariantList ids = batch | std::ranges::to<QVariantList>();
@@ -776,11 +822,23 @@ GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) co
             } else if (other->kind != "book" || other->bookId == bookId) {
                 continue; // a tie to this very book, not to another
             }
-            view.edges << edge;
-            if (!taken.contains(other->id)) {
-                taken << other->id;
-                view.nodes << *other;
-            }
+            ties.append({edge, *other});
+        }
+    }
+    // Only what is of books on this book's side, or of no book.
+    if (sides().apart()) {
+        const BookSides::Side here = sides().side(bookId);
+        const auto others = ties | std::views::transform([](const auto &tie) { return tie.second.id; }) | std::ranges::to<QSet<qint64>>();
+        const QHash<qint64, BookSides::Side> of = sidesOf(others);
+        ties.removeIf([&](const auto &tie) { return !BookSides::meet(here, of.value(tie.second.id)); });
+    }
+    GraphView view;
+    QSet<qint64> taken;
+    for (const auto &[edge, other] : std::as_const(ties)) {
+        view.edges << edge;
+        if (!taken.contains(other.id)) {
+            taken << other.id;
+            view.nodes << other;
         }
     }
     return view;
@@ -789,10 +847,15 @@ GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) co
 GraphView Graph::acrossBooks(int limit) const {
     GraphView view;
     QSet<qint64> taken;
-    QSqlQuery query = m_library->query(
-        QString("SELECT %1 FROM graph_edges WHERE kind LIKE 'across: %' ORDER BY id DESC LIMIT %2").arg(edgeColumns).arg(std::max(1, limit)));
-    while (query.next()) {
-        const GraphEdge edge = edgeFrom(query);
+    // All of them when some may be between two sides, which aren't answered.
+    const bool apart = sides().apart();
+    QList<GraphEdge> edges;
+    for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_edges WHERE kind LIKE 'across: %' ORDER BY id DESC%2")
+                                                .arg(edgeColumns, apart ? QString() : QString(" LIMIT %1").arg(std::max(1, limit))));
+         query.next();)
+        edges << edgeFrom(query);
+    edges = withinSides(std::move(edges)).mid(0, std::max(1, limit));
+    for (const GraphEdge &edge : std::as_const(edges)) {
         view.edges << edge;
         for (const qint64 id : {edge.source, edge.target})
             if (const auto end = taken.contains(id) ? std::nullopt : node(id)) {

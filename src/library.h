@@ -265,7 +265,8 @@ public:
     // "cast" (who is who), each up to the place it was written at.
     Recap notes(qint64 id, const QString &kind) const;
     void setNotes(qint64 id, const QString &kind, const Recap &notes);
-    // The books that come before this one in its series, in reading order.
+    // The books that come before this one in its series, in reading order,
+    // of those on its side of the library (BookSides).
     QList<Book> earlierInSeries(qint64 id) const;
     // What is known of those books: notes of this kind, or of any kind
     // where there are none, and failing that what the book is about (a

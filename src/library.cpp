@@ -23,6 +23,7 @@
 #include <ranges>
 #include <span>
 
+#include "booksides.h"
 #include "formats.h"
 #include "graph.h"
 #include "log.h"
@@ -1014,9 +1015,12 @@ QList<Book> Library::earlierInSeries(qint64 id) const {
     const QString series = current ? current->meta.series.trimmed() : QString();
     if (series.isEmpty())
         return {};
-    const auto comesBefore = [id, &current, &series](const Book &other) {
+    // Only those on its side of the library (BookSides): a series is not
+    // carried from one top collection into another.
+    const BookSides sides = BookSides::of(*this);
+    const auto comesBefore = [id, &current, &series, &sides](const Book &other) {
         return other.id != id && other.meta.seriesIndex < current->meta.seriesIndex
-               && other.meta.series.trimmed().compare(series, Qt::CaseInsensitive) == 0;
+               && other.meta.series.trimmed().compare(series, Qt::CaseInsensitive) == 0 && sides.together(id, other.id);
     };
     const QList<Book> all = books();
     QList<Book> earlier = all | std::views::filter(comesBefore) | std::ranges::to<QList<Book>>();

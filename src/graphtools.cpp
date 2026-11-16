@@ -40,15 +40,15 @@ void syncWhenBooksChanged(Library &library) {
 
 namespace {
 
-// What a book connects to elsewhere, with the books each thing is in.
-QJsonObject beyondJson(const Library &library, const GraphView &view) {
+// What a book connects to elsewhere, with the books on its side each thing is in.
+QJsonObject beyondJson(const Library &library, qint64 bookId, const GraphView &view) {
     const Graph graph(library);
     QJsonArray nodes;
     for (const GraphNode &node : view.nodes) {
         QJsonObject object = node.toJson();
         QJsonArray in;
         for (const GraphPlace &place : graph.seen(node.id))
-            if (const auto book = library.book(place.bookId))
+            if (const auto book = graph.sides().together(bookId, place.bookId) ? library.book(place.bookId) : std::nullopt)
                 in << QJsonObject{{"book", book->id}, {"title", book->meta.title}};
         if (!in.isEmpty())
             object.insert("in", in);
@@ -84,7 +84,7 @@ QJsonObject GraphOps::show(Library &library, qint64 bookId, const QString &scope
         if (const auto built = GraphBuild::builtTo(library, bookId))
             answer.insert("built_to", placeJson(*built));
         if (beyond)
-            answer.insert("beyond", beyondJson(library, graph.beyond(bookId, upTo)));
+            answer.insert("beyond", beyondJson(library, bookId, graph.beyond(bookId, upTo)));
     } else {
         answer.insert("scope", scope);
     }
@@ -281,7 +281,8 @@ QJsonObject GraphOps::connect(Library &library, qint64 bookId, const GraphBuild:
         object.insert("to", ends.value(edge.target).name);
         for (const qint64 end : {edge.source, edge.target})
             for (const GraphPlace &place : graph.seen(end))
-                if (place.bookId != bookId && library.book(place.bookId) && !object.contains("other_book"))
+                if (place.bookId != bookId && graph.sides().together(bookId, place.bookId) && library.book(place.bookId)
+                    && !object.contains("other_book"))
                     object.insert("other_book", library.book(place.bookId)->meta.title);
         connections << object;
     }
