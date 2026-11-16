@@ -28,11 +28,6 @@ Progress progressFrom(const QJsonObject &object) {
     return progress;
 }
 
-QJsonObject toJson(const Progress &progress) {
-    return {{"section", progress.section}, {"fraction", progress.fraction}, {"percent", progress.percent},
-            {"updated", progress.updated}};
-}
-
 QStringList progressArguments(qint64 id, const Progress &progress) {
     return {"progress", QString::number(id), "--section", QString::number(progress.section), "--fraction",
             QString::number(progress.fraction, 'g', 12), "--percent", QString::number(progress.percent, 'g', 12),
@@ -149,43 +144,35 @@ void note(int &count, QStringList &titles, const QString &title) {
     titles << title;
 }
 
-} // namespace
-
-// The shape of the manifest two computers exchange. It goes up when a change
-// would make an older Omabook misread a newer one's; an older Omabook then
-// refuses to sync and says to update, instead of acting on what it misread.
-constexpr int manifestVersion = 1;
-
-QJsonObject libraryManifest(const Library &library) {
-    QJsonArray books;
-    for (const Book &book : library.books()) {
-        QJsonObject object = book.toJson();
-        QJsonArray files;
-        for (const FormatFile &file : library.formatFiles(book.id))
-            files << QJsonObject{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
-        object.insert("files", files);
-        const QString cover = library.coverPath(book.id);
-        object.insert("cover", cover);
-        // So a cover is only carried when it is another picture.
-        object.insert("cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover));
-        object.insert("added_at", book.added);
-        object.insert("progress", toJson(library.progress(book.id)));
-        // What is said of its reading, which a book without a file is all of.
-        object.insert("shelf", book.shelf);
-        object.insert("paper", book.paper);
-        books << object;
+void syncCollectionsAndGraph(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary) {
+    if (manifest.contains("collections")) {
+        summary.collectionsTaken = Collections::take(library, manifest.value("collections").toArray());
+        if (const QJsonArray mine = Collections::manifest(library); !mine.isEmpty()) {
+            if (const auto sent = remote.handOver(QJsonDocument(mine), {"collections", "take", "--json"}))
+                summary.collectionsSent = *sent;
+            else
+                summary.problems << "The collections could not be sent to " + remote.host() + ".";
+        }
     }
-    // Each removal with its time, so the other side removes what didn't
-    // change since; "removed" is the same without times, for an Omabook
-    // from before, which only leaves those alone. An Omabook from before
-    // collections, or the graph, reads past them.
-    QJsonArray removals;
-    for (const Library::Removal &removal : library.removals())
-        removals << QJsonObject{{"key", removal.key}, {"at", removal.at}};
-    return {{"version", manifestVersion}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books},
-            {"removed", QJsonArray::fromStringList(library.removedHashes())}, {"removals", removals},
-            {"collections", Collections::manifest(library)}, {"graph", GraphSync::bundle(library)}};
+    if (manifest.contains("graph")) {
+        summary.graphTaken = GraphSync::take(library, manifest.value("graph").toObject());
+        if (const auto sent = remote.handOver(QJsonDocument(GraphSync::bundle(library)), {"graph", "take", "--json"}))
+            summary.graphSent = *sent;
+        else
+            summary.problems << "The knowledge graph could not be sent to " + remote.host() + ": " + sent.error();
+    }
 }
+
+void logSyncSummary(const SyncSummary &summary, const QString &host) {
+    qCInfo(lcSync).noquote() << (summary.dryRun ? "dry run with" : "with") << host << ":" << summary.received << "received,"
+                             << summary.sent << "sent," << summary.placesTaken + summary.placesSent << "reading places,"
+                             << summary.detailsTaken << "details taken," << summary.detailsSent << "details sent,"
+                             << summary.detailsUndecided << "details undecided," << summary.removedHere << "removed here,"
+                             << summary.removedThere << "removed there," << summary.graphTaken << "graph taken,"
+                             << summary.graphSent << "graph sent," << summary.problems.size() << "problems";
+}
+
+} // namespace
 
 QJsonObject SyncSummary::toJson() const {
     const auto list = [](const QStringList &titles) { return QJsonArray::fromStringList(titles); };
@@ -567,26 +554,8 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // here (a collection where it changed last, the graph merged), and this library's handed to
     // them to do the same. An Omabook from before them has none to give and can't take any, and
     // a dry run leaves them be.
-    if (manifest.contains("collections") && !dryRun) {
-        summary.collectionsTaken = Collections::take(library, manifest.value("collections").toArray());
-        if (const QJsonArray mine = Collections::manifest(library); !mine.isEmpty()) {
-            if (const auto sent = remote.handOver(QJsonDocument(mine), {"collections", "take", "--json"}))
-                summary.collectionsSent = *sent;
-            else
-                summary.problems << "The collections could not be sent to " + remote.host() + ".";
-        }
-    }
-    if (manifest.contains("graph") && !dryRun) {
-        summary.graphTaken = GraphSync::take(library, manifest.value("graph").toObject());
-        if (const auto sent = remote.handOver(QJsonDocument(GraphSync::bundle(library)), {"graph", "take", "--json"}))
-            summary.graphSent = *sent;
-        else
-            summary.problems << "The knowledge graph could not be sent to " + remote.host() + ": " + sent.error();
-    }
-    qCInfo(lcSync).noquote() << (dryRun ? "dry run with" : "with") << remote.host() << ":" << summary.received << "received,"
-                             << summary.sent << "sent," << summary.placesTaken + summary.placesSent << "reading places,"
-                             << summary.detailsTaken << "details taken," << summary.detailsSent << "details sent,"
-                             << summary.detailsUndecided << "details undecided," << summary.removedHere << "removed here,"
-                             << summary.removedThere << "removed there," << summary.problems.size() << "problems";
+    if (!dryRun)
+        syncCollectionsAndGraph(library, remote, manifest, summary);
+    logSyncSummary(summary, remote.host());
     return summary;
 }

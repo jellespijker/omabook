@@ -130,6 +130,14 @@
     "one": "%Ln day ago",
     "other": "%Ln days ago"
   },
+  "%Ln graph changes sent": {
+    "one": "%Ln graph change sent",
+    "other": "%Ln graph changes sent"
+  },
+  "%Ln graph changes taken": {
+    "one": "%Ln graph change taken",
+    "other": "%Ln graph changes taken"
+  },
   "%Ln months ago": {
     "one": "%Ln month ago",
     "other": "%Ln months ago"

@@ -25,6 +25,11 @@
 // on the other too, to the trash, unless it changed there since. The
 // collections and the knowledge graph (graphsync.h) travel too.
 
+// The shape of the manifest two computers exchange. It goes up when a change
+// would make an older Omabook misread a newer one's; an older Omabook then
+// refuses to sync and says to update, instead of acting on what it misread.
+inline constexpr int manifestVersion = 1;
+
 // Everything a library holds, as the other side of a sync needs to see it.
 QJsonObject libraryManifest(const Library &library);
 
