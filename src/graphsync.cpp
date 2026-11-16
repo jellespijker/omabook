@@ -170,15 +170,35 @@ void nameBooks(Taking &taking, const Library &library, const QJsonObject &named)
     }
 }
 
-// The thing here that is theirs: by its name, or by one of its other names.
-qint64 known(const Taking &taking, const QJsonObject &node) {
+// Every thing here that matches theirs: by its name, or by any of its other
+// names. When more than one local thing matches, they are the same thing and
+// fold into one now, before this library's bundle goes back.
+QList<qint64> knownAll(const Taking &taking, const QJsonObject &node) {
     const QString kind = node.value("kind").toString();
-    if (const qint64 id = taking.graph.named({}, kind, node.value("name").toString()))
-        return id;
+    QList<qint64> ids;
+    const auto add = [&](const QString &name) {
+        if (name.isEmpty())
+            return;
+        if (const qint64 id = taking.graph.named({}, kind, name); id > 0 && !ids.contains(id))
+            ids << id;
+    };
+    add(node.value("name").toString());
     for (const auto &alias : node.value("aliases").toArray())
-        if (const qint64 id = taking.graph.named({}, kind, alias.toString()))
-            return id;
-    return 0;
+        add(alias.toString());
+    return ids;
+}
+
+qint64 foldMatches(Taking &taking, const QList<qint64> &found) {
+    const qint64 id = found.first();
+    for (const qint64 other : found.mid(1)) {
+        if (!taking.graph.merge(id, other))
+            continue;
+        ++taking.changed;
+        for (auto &mapped : taking.nodes)
+            if (mapped == other)
+                mapped = id;
+    }
+    return id;
 }
 
 // What it holds that this one doesn't (never its other names: those come
@@ -212,6 +232,31 @@ bool alreadyKnown(const QList<GraphFact> &mine, const QString &kind, const QStri
     });
 }
 
+// When the other side calls this thing by another primary name, keep that
+// name as one of its other names here too (at the earliest moment met in each
+// shared book, so both sides agree in one sync).
+void takeTheirName(Taking &taking, qint64 id, const GraphNode &now, const QList<GraphFact> &mine, const QJsonObject &node) {
+    const QString called = node.value("name").toString().simplified();
+    if (called.isEmpty() || now.name.compare(called, Qt::CaseInsensitive) == 0)
+        return;
+    const QJsonArray seen = node.value("seen").toArray();
+    if (seen.isEmpty()) {
+        if (!alreadyKnown(mine, "alias", called, std::nullopt) && taking.graph.learn(id, "alias", called))
+            ++taking.changed;
+        return;
+    }
+    QSet<qint64> handled;
+    for (const auto &value : seen) {
+        const std::optional<GraphPlace> place = taking.place(value.toObject());
+        if (!place || place->bookId == 0 || handled.contains(place->bookId))
+            continue;
+        handled.insert(place->bookId);
+        const std::optional<GraphMoment> met = taking.graph.firstMet(id, place->bookId);
+        if (met && !alreadyKnown(mine, "alias", called, met) && taking.graph.learn(id, "alias", called, met))
+            ++taking.changed;
+    }
+}
+
 void takeFacts(Taking &taking, qint64 id, const QJsonObject &node) {
     const QList<GraphFact> mine = taking.graph.facts(id);
     QStringList placedNames;
@@ -236,6 +281,7 @@ void takeFacts(Taking &taking, qint64 id, const QJsonObject &node) {
         if (!placedNames.contains(alias.toString()) && !now->aliases().contains(alias.toString(), Qt::CaseInsensitive)
             && taking.graph.learn(id, "alias", alias.toString()))
             ++taking.changed;
+    takeTheirName(taking, id, *now, mine, node);
 }
 
 // What is said of it now: theirs when it changed there last, or when this
@@ -257,13 +303,15 @@ void settleSummary(Taking &taking, qint64 id, const GraphNode &before, const QJs
 void takeNode(Taking &taking, const QJsonObject &theirs) {
     const QString kind = theirs.value("kind").toString();
     const QJsonObject data = theirs.value("data").toObject();
-    const qint64 found = known(taking, theirs);
-    const std::optional<GraphNode> before = found ? taking.graph.node(found) : std::nullopt;
-    const qint64 id = before ? before->id : taking.graph.upsert({}, kind, theirs.value("name").toString(), {}, missingData({}, data));
+    const QList<qint64> found = knownAll(taking, theirs);
+    const qint64 id = found.isEmpty()
+                          ? taking.graph.upsert({}, kind, theirs.value("name").toString(), {}, missingData({}, data))
+                          : foldMatches(taking, found);
+    const std::optional<GraphNode> before = found.isEmpty() ? std::nullopt : taking.graph.node(id);
     const std::optional<GraphNode> node = taking.graph.node(id);
     if (!node)
         return;
-    if (!before) {
+    if (found.isEmpty()) {
         ++taking.changed;
     } else if (const QJsonObject missing = missingData(*before, data); !missing.isEmpty()) {
         taking.graph.upsert({}, kind, before->name, {}, missing);

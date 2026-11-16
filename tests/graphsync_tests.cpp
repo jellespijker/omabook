@@ -1,13 +1,21 @@
 // The knowledge graph between two computers: what a sync carries of it,
 // merged on each side, never ahead of the reader (graphsync.h).
 
+#include <QDir>
+#include <QProcess>
+#include <QProcessEnvironment>
+#include <QScopeGuard>
+#include <QSignalSpy>
 #include <QTemporaryDir>
 #include <QtTest>
 
+#include "backend.h"
+#include "filepicker.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "graphsync.h"
 #include "library.h"
+#include "settings.h"
 #include "sync.h"
 
 namespace {
@@ -17,6 +25,10 @@ bool has(const GraphView &view, const QString &name) {
 }
 
 GraphNode named(const Graph &graph, const QString &kind, const QString &name) { return *graph.node(graph.named({}, kind, name)); }
+
+struct NullPicker final : FilePicker {
+    void pick(Purpose, const QString &) override {}
+};
 
 // Two libraries, "Here" and "There", of the same book, and the stand-in ssh
 // that makes There another computer. There holds another book first, so the
@@ -134,6 +146,65 @@ private slots:
                 QCOMPARE(node.summary, QString("A street urchin."));
     }
 
+    void aThingKnownUnderAnotherNameOnEachSideSettlesInOneSync() {
+        TwoComputers two;
+        QVERIFY(two.open());
+        {
+            Graph here(two.here);
+            here.upsert({}, "character", "Vin", "A street urchin.", {}, GraphPlace{two.bookHere, 1, 0.2});
+            const qint64 valette =
+                here.upsert({}, "character", "Valette Renoux", "A noblewoman at court.", {}, GraphPlace{two.bookHere, 2, 0.4});
+            const qint64 luthadel = here.upsert({}, "place", "Luthadel", {}, {}, GraphPlace{two.bookHere, 1, 0.1});
+            here.link(valette, luthadel, "lives in", "at Keep Renoux", GraphPlace{two.bookHere, 2, 0.5});
+
+            Graph there(two.there);
+            const qint64 vin = there.upsert({}, "character", "Vin", {}, {}, GraphPlace{two.bookThere, 1, 0.1});
+            there.learn(vin, "alias", "Valette Renoux", GraphMoment{{two.bookThere, 2, 0.1}, "Lady Valette Renoux"});
+        }
+        const SyncSummary first = two.sync();
+        QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
+        QVERIFY(first.graphTaken > 0 && first.graphSent > 0);
+        for (Library *library : {&two.here, &two.there}) {
+            const Graph graph(*library);
+            const qint64 book = library == &two.here ? two.bookHere : two.bookThere;
+            const GraphNode vin = named(graph, "character", "Vin");
+            QCOMPARE(graph.named({}, "character", "Valette Renoux"), vin.id);
+            QVERIFY(vin.aliases().contains("Valette Renoux"));
+            QCOMPARE(graph.firstMet(vin.id, book)->place.fraction, 0.1);
+            QVERIFY(!graph.around(vin.id, 1).edges.isEmpty());
+        }
+        const SyncSummary again = two.sync();
+        QVERIFY2(again.problems.isEmpty(), qPrintable(again.problems.join('\n')));
+        QCOMPARE(again.graphTaken, 0);
+        QCOMPARE(again.graphSent, 0);
+    }
+
+    void aThingKnownByAnotherNameLearnsBothNamesInOneSync() {
+        TwoComputers two;
+        QVERIFY(two.open());
+        {
+            Graph here(two.here);
+            here.upsert({}, "character", "Valette Renoux", "A noblewoman at court.", {}, GraphPlace{two.bookHere, 2, 0.4});
+            Graph there(two.there);
+            const qint64 vin = there.upsert({}, "character", "Vin", {}, {}, GraphPlace{two.bookThere, 1, 0.2});
+            there.learn(vin, "alias", "Valette Renoux", GraphMoment{{two.bookThere, 2, 0.1}, "Valette"});
+        }
+        const SyncSummary first = two.sync();
+        QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
+        QVERIFY(first.graphTaken > 0 && first.graphSent > 0);
+        for (Library *library : {&two.here, &two.there}) {
+            const Graph graph(*library);
+            const qint64 byVin = graph.named({}, "character", "Vin");
+            const qint64 byValette = graph.named({}, "character", "Valette Renoux");
+            QVERIFY(byVin > 0);
+            QCOMPARE(byValette, byVin);
+        }
+        const SyncSummary again = two.sync();
+        QVERIFY2(again.problems.isEmpty(), qPrintable(again.problems.join('\n')));
+        QCOMPARE(again.graphTaken, 0);
+        QCOMPARE(again.graphSent, 0);
+    }
+
     void aBundleNamesBooksByTheirFiles() {
         TwoComputers two;
         QVERIFY(two.open());
@@ -144,6 +215,67 @@ private slots:
         // A bundle of another shape is left alone.
         QCOMPARE(GraphSync::take(two.there, QJsonObject{{"version", 2}, {"nodes", bundle.value("nodes")}}), 0);
         QCOMPARE(Graph(two.there).named({}, "character", "Kelsier"), 0);
+    }
+
+    void theSummaryStatusAndLogSayWhatTheGraphDid() {
+        TwoComputers two;
+        QVERIFY(two.open());
+        Graph(two.here).upsert({}, "character", "Kelsier", {}, {}, GraphPlace{two.bookHere, 1, 0.2});
+        Graph(two.there).upsert({}, "place", "Luthadel", {}, {}, GraphPlace{two.bookThere, 1, 0.1});
+
+        // 1. The log line at the end of syncLibrary.
+        static QStringList syncLogs;
+        syncLogs.clear();
+        static QtMessageHandler previous = nullptr;
+        previous = qInstallMessageHandler([](QtMsgType type, const QMessageLogContext &context, const QString &message) {
+            if (qstrcmp(context.category, "omabook.sync") == 0)
+                syncLogs << message;
+            if (previous)
+                previous(type, context, message);
+        });
+        const auto restoreLog = qScopeGuard([] { qInstallMessageHandler(previous); });
+        const SyncSummary logged = two.sync();
+        QVERIFY2(logged.problems.isEmpty(), qPrintable(logged.problems.join('\n')));
+        QVERIFY(std::ranges::any_of(syncLogs, [](const QString &line) {
+            return line.contains("graph taken") && line.contains("graph sent");
+        }));
+
+        // 2. The plain summary of `omabook sync` on the command line.
+        Graph(two.here).upsert({}, "character", "Vin", {}, {}, GraphPlace{two.bookHere, 1, 0.3});
+        Graph(two.there).upsert({}, "place", "Keep Venture", {}, {}, GraphPlace{two.bookThere, 1, 0.4});
+        QVERIFY(QDir(two.dir.path()).mkpath("bin"));
+        QFile::link(two.ssh, two.dir.filePath("bin/ssh"));
+        QProcess cli;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert("HOME", two.dir.filePath("cli-home"));
+        env.insert("XDG_CONFIG_HOME", two.dir.filePath("cli-home/.config"));
+        env.insert("XDG_DATA_HOME", two.dir.filePath("cli-home/.local/share"));
+        env.insert("XDG_STATE_HOME", two.dir.filePath("cli-home/.local/state"));
+        env.insert("PATH", two.dir.filePath("bin") + ":" + env.value("PATH"));
+        cli.setProcessEnvironment(env);
+        cli.start(OMABOOK_BINARY, {"sync", "laptop:" + two.dir.filePath("There"), "--library", two.here.root()});
+        QVERIFY(cli.waitForFinished(30000));
+        QCOMPARE(cli.exitCode(), 0);
+        const QString stdoutText = QString::fromUtf8(cli.readAllStandardOutput());
+        QVERIFY2(stdoutText.contains("2 graph changes taken") && stdoutText.contains("2 graph changes sent"),
+                 qPrintable(stdoutText));
+
+        // 3. The window's sync status in Backend::sync().
+        Graph(two.here).upsert({}, "character", "Elend", {}, {}, GraphPlace{two.bookHere, 1, 0.5});
+        Graph(two.there).upsert({}, "place", "Urteau", {}, {}, GraphPlace{two.bookThere, 1, 0.6});
+        Settings settings(two.dir.filePath("window.json"));
+        settings.setLibraryPath(two.here.root());
+        settings.setSyncTarget("laptop:" + two.dir.filePath("There"));
+        NullPicker picker;
+        Backend backend(&settings, &picker, nullptr, {}, [](QObject *) { return QList<MetadataSource *>(); },
+                        two.dir.filePath("plugins"), "-");
+        backend.setSsh({two.ssh});
+        QSignalSpy messaged(&backend, &Backend::messageChanged);
+        backend.sync();
+        QTRY_VERIFY_WITH_TIMEOUT(!messaged.isEmpty(), 30000);
+        const QString statusMessage = backend.message();
+        QVERIFY2(statusMessage.contains("graph change") && statusMessage.contains("taken") && statusMessage.contains("sent"),
+                 qPrintable(statusMessage));
     }
 };
 
