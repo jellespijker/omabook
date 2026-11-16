@@ -1,5 +1,7 @@
 #include "graph.h"
 
+#include "booksides.h"
+
 #include <QCryptographicHash>
 #include <QDate>
 #include <QDateTime>
@@ -778,20 +780,27 @@ QList<std::pair<GraphNode, GraphPlace>> Graph::metIn(qint64 bookId, const QStrin
 
 GraphView Graph::ofBook(qint64 bookId, const std::optional<GraphPlace> &upTo, const QString &scope) const {
     GraphView view;
+    const BookSides sides = BookSides::of(*m_library);
     for (const auto &[node, place] : metIn(bookId, scope))
         if (!upTo || place.notAfter(*upTo))
             view.nodes << node;
     // Each as it was known there: its summary then, and the names it had.
     if (upTo) {
         const auto facts = factsOf(view.nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QList<qint64>>());
-        const GraphKnown known = [bookId, place = *upTo](const GraphPlace &at) { return at.bookId != bookId || at.notAfter(place); };
+        // What a book on the other side of the library's top collections
+        // taught is not this book's to say (booksides.h).
+        const GraphKnown known = [bookId, place = *upTo, &sides](const GraphPlace &at) {
+            return at.bookId != bookId ? sides.together(at.bookId, bookId) : at.notAfter(place);
+        };
         for (GraphNode &node : view.nodes)
             node = asKnown(std::move(node), facts.value(node.id), bookId, known);
     }
-    // What another book taught about the same things is part of the
-    // picture; what this book teaches later is not, yet.
-    std::ranges::copy_if(edgesAmong(view.nodes), std::back_inserter(view.edges), [bookId, &upTo](const GraphEdge &edge) {
-        return edge.learned.bookId != bookId || !upTo || edge.learned.notAfter(*upTo);
+    // What another book on its side taught about the same things is part
+    // of the picture; what this book teaches later is not, yet.
+    std::ranges::copy_if(edgesAmong(view.nodes), std::back_inserter(view.edges), [bookId, &upTo, &sides](const GraphEdge &edge) {
+        if (edge.learned.bookId != bookId)
+            return edge.learned.bookId == 0 || sides.together(edge.learned.bookId, bookId);
+        return !upTo || edge.learned.notAfter(*upTo);
     });
     return view;
 }

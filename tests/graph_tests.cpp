@@ -1053,6 +1053,31 @@ private slots:
         QCOMPARE(connecting, 1);
     }
 
+    // A thing met in a book, but described only by a book on the other side
+    // of the top collections: looking at the first book, its card says
+    // nothing of what the other taught. With one side, it does, as before.
+    void aBooksCardSaysNothingTheOtherSideTaught() {
+        Shelf shelf;
+        Graph graph(shelf.library);
+        const qint64 novel = shelf.book, paper = shelf.add("Wave Mechanics");
+        for (const qint64 book : {novel, paper})
+            shelf.library.setReading(book, "read", 0, {});
+        const qint64 thing = graph.upsert({}, "concept", "Lantern-work", {}, {}, GraphPlace{novel, 0, 0.0});
+        QCOMPARE(graph.upsert({}, "concept", "Lantern-work", "Light bent along a wire.", {}, GraphPlace{paper, 0, 0.0}), thing);
+        const auto summaryIn = [&](qint64 book) {
+            for (const GraphNode &node : graph.ofBook(book, GraphPlace{book, 2, 1.0}).nodes)
+                if (node.id == thing)
+                    return node.summary;
+            return QString("(not shown)");
+        };
+        QCOMPARE(summaryIn(novel), QString("Light bent along a wire."));
+        const qint64 play = *shelf.library.addCollection("Spel"), work = *shelf.library.addCollection("Werk");
+        QVERIFY(shelf.library.putInCollection(play, novel, true));
+        QVERIFY(shelf.library.putInCollection(work, paper, true));
+        QCOMPARE(summaryIn(novel), QString());
+        QCOMPARE(summaryIn(paper), QString("Light bent along a wire."));
+    }
+
     void topCollectionsKeepTheirBooksApart() {
         Shelf shelf;
         Graph graph(shelf.library);

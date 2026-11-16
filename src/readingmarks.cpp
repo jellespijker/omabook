@@ -1,5 +1,7 @@
 #include "readingmarks.h"
 
+#include "booksides.h"
+
 #include <QRegularExpression>
 #include <QTextBlock>
 #include <QTextCursor>
@@ -150,7 +152,12 @@ void ReadingMarks::rebuild(bool force) {
     // Each thing as it was known here: a name revealed further on is not
     // marked, and its card says only what was known by now.
     QList<std::pair<GraphNode, GraphPlace>> met = m_met;
-    const GraphKnown known = [book = m_book, place](const GraphPlace &at) { return at.bookId != book || at.notAfter(place); };
+    // What a book on the other side of the library's top collections taught
+    // is not this book's to say (booksides.h).
+    const BookSides sides = m_reader->isOpen() && m_reader->library() ? BookSides::of(*m_reader->library()) : BookSides();
+    const GraphKnown known = [book = m_book, place, &sides](const GraphPlace &at) {
+        return at.bookId != book ? sides.together(at.bookId, book) : at.notAfter(place);
+    };
     for (auto &[node, at] : met)
         node = Graph::asKnown(std::move(node), m_facts.value(node.id), m_book, known);
     const QList<TextMarks::Thing> things = TextMarks::known(met, place);
