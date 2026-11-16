@@ -33,6 +33,14 @@ struct Book {
     QString finished;       // the day it was finished, as an ISO date, when known
     // What the book is called elsewhere: {"goodreads": "4671", "calibre": "12"}.
     QJsonObject identifiers;
+    // When its details (the fields of `meta`, its cover and identifiers)
+    // last changed, and when what is said of its reading (shelf, stars,
+    // finished day, paper) did, in seconds since the epoch; 0 when not
+    // known, as for every book of a library from before these were kept.
+    // A sync takes the newer details, and leaves a book alone that changed
+    // after the other computer removed it.
+    qint64 detailsAt = 0;
+    qint64 readingAt = 0;
 
     // "to-read", "reading" or "read": the shelf when there is one, else how
     // far the book was read here; empty for a book nothing is known of.
@@ -182,17 +190,25 @@ public:
     Added addEntry(const BookMeta &meta, bool paper);
     // Adds another format of a book already here, replacing one of the same kind.
     bool addFormat(qint64 id, const QString &file, QString *error = nullptr);
-    // Moves the book's folder to the trash and forgets it.
+    // Moves the book's folder to the trash and forgets it. Its files are
+    // remembered as removed (wasRemoved), but for one another book here
+    // still holds, as the book kept by a merge does.
     bool remove(qint64 id, QString *error = nullptr);
 
     QList<Book> books(const QString &query = {}) const;
     std::optional<Book> book(qint64 id) const;
 
     // Replaces the book's details; a cover in `meta` replaces the cover too.
-    bool setMeta(qint64 id, const BookMeta &meta, QString *error = nullptr);
-    bool setCover(qint64 id, const QImage &cover);
+    // When something changed, the details are stamped with now; given `at`
+    // (details another computer had at that time), they are stamped with
+    // `at` whether or not anything changed, so a sync doesn't send them back.
+    bool setMeta(qint64 id, const BookMeta &meta, QString *error = nullptr, std::optional<qint64> at = std::nullopt);
+    bool setCover(qint64 id, const QImage &cover, std::optional<qint64> at = std::nullopt);
+    // Stamps the book's details with this time and changes nothing else.
+    bool setDetailsAt(qint64 id, qint64 at);
     // What is said of the book's reading: its shelf ("" to leave it to how
-    // far it was read here), stars and the day it was finished.
+    // far it was read here), stars and the day it was finished. A change is
+    // stamped with now (Book::readingAt).
     bool setReading(qint64 id, const QString &shelf, int rating, const QString &finished);
     bool setPaper(qint64 id, bool paper);
     // How the book is set on the page where it isn't as the defaults are:
@@ -201,8 +217,9 @@ public:
     // with nothing in it that is an option, puts it back to the defaults.
     QJsonObject bookFormat(qint64 id) const;
     bool setBookFormat(qint64 id, const QJsonObject &options);
-    // What the book is called on a site; an empty value forgets it.
-    bool setIdentifier(qint64 id, const QString &scheme, const QString &value);
+    // What the book is called on a site; an empty value forgets it. A
+    // change stamps the details with now, or with `at` when given.
+    bool setIdentifier(qint64 id, const QString &scheme, const QString &value, std::optional<qint64> at = std::nullopt);
     // The book a site calls this, or 0.
     qint64 bookWithIdentifier(const QString &scheme, const QString &value) const;
     QString coverPath(qint64 id) const;
@@ -224,7 +241,15 @@ public:
     // entryKeys, was removed from this library, so a sync doesn't bring back
     // what the user threw away.
     bool wasRemoved(const QString &hash) const;
+    // When it was removed, in seconds since the epoch; none when it wasn't.
+    std::optional<qint64> removedAt(const QString &hash) const;
     QStringList removedHashes() const;
+    // Every removal, with its time.
+    struct Removal {
+        QString key;        // a file's hash, or an entry key
+        qint64 at = 0;
+    };
+    QList<Removal> removals() const;
     static QString hashFile(const QString &path);
 
     Progress progress(qint64 id) const;

@@ -923,6 +923,83 @@ private slots:
         QVERIFY(!library.wasRemoved(hash));
     }
 
+    // When a book's details and its reading last changed, which a sync goes
+    // by: stamped when something changes, never when nothing does, and with
+    // the time given when the change came from another computer.
+    void changesAreStampedWithTheirTime() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("a.epub")));
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const qint64 id = library.add(dir.filePath("a.epub")).id;
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        QVERIFY(library.book(id)->detailsAt >= now - 5);
+        QCOMPARE(library.book(id)->readingAt, qint64(0));
+        QCOMPARE(library.book(id)->toJson().value("details_at").toInteger(), library.book(id)->detailsAt);
+
+        // The same details again, the same picture again, the same name
+        // again and the same reading again change no time.
+        QVERIFY(library.setDetailsAt(id, 100));
+        QVERIFY(library.setMeta(id, library.book(id)->meta));
+        QImage cover(30, 40, QImage::Format_RGB32);
+        cover.fill(Qt::red);
+        QVERIFY(library.setCover(id, cover, 100));
+        QVERIFY(library.setCover(id, cover));
+        QVERIFY(library.setIdentifier(id, "goodreads", "1", 100));
+        QVERIFY(library.setIdentifier(id, "goodreads", "1"));
+        QCOMPARE(library.book(id)->detailsAt, qint64(100));
+        QVERIFY(library.setReading(id, "read", 3, "2026-01-02"));
+        const qint64 read = library.book(id)->readingAt;
+        QVERIFY(read >= now - 5);
+        QVERIFY(library.setReading(id, "read", 3, "2026-01-02"));
+        QVERIFY(library.setPaper(id, false));
+        library.setProgress(id, {.section = 1, .fraction = 0.5, .percent = 20, .updated = 0});
+        QCOMPARE(library.book(id)->readingAt, read);
+        QCOMPARE(library.book(id)->detailsAt, qint64(100));
+
+        // A change is stamped with now, or with the time it came with.
+        BookMeta meta = library.book(id)->meta;
+        meta.description = "Changed.";
+        QVERIFY(library.setMeta(id, meta));
+        QVERIFY(library.book(id)->detailsAt >= now - 5);
+        meta.description = "Changed elsewhere.";
+        QVERIFY(library.setMeta(id, meta, nullptr, 200));
+        QCOMPARE(library.book(id)->detailsAt, qint64(200));
+        QVERIFY(library.setIdentifier(id, "goodreads", "2", 300));
+        QCOMPARE(library.book(id)->detailsAt, qint64(300));
+        QVERIFY(library.setIdentifier(id, "goodreads", ""));
+        QVERIFY(library.book(id)->detailsAt >= now - 5);
+        QVERIFY(library.setDetailsAt(id, 100));
+        cover.fill(Qt::blue);
+        QVERIFY(library.setCover(id, cover));
+        QVERIFY(library.book(id)->detailsAt >= now - 5);
+    }
+
+    // A removal is remembered with its time; a file another book still
+    // holds, as the book a merge kept does, is not taken for removed.
+    void aRemovalKeepsItsTimeAndSparesWhatIsStillHere() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("a.epub"), "Kept"));
+        QVERIFY(Fixtures::write(dir.filePath("b.txt"), "The other one.\n"));
+        QVERIFY(Fixtures::epub(dir.filePath("c.epub"), "Gone"));
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const qint64 kept = library.add(dir.filePath("a.epub")).id;
+        const qint64 other = library.add(dir.filePath("b.txt")).id;
+        const qint64 gone = library.add(dir.filePath("c.epub")).id;
+        QVERIFY(library.merge(kept, other));
+        QCOMPARE(library.book(kept)->formats, (QStringList{"epub", "txt"}));
+        QVERIFY(!library.wasRemoved(Library::hashFile(dir.filePath("b.txt"))));
+        QVERIFY(!library.removedAt(Library::hashFile(dir.filePath("b.txt"))));
+        QVERIFY(library.remove(gone));
+        const QString hash = Library::hashFile(dir.filePath("c.epub"));
+        const std::optional<qint64> at = library.removedAt(hash);
+        QVERIFY(at && *at >= QDateTime::currentSecsSinceEpoch() - 5);
+        QCOMPARE(library.removals().size(), 1);
+        QCOMPARE(library.removals().first().key, hash);
+        QCOMPARE(library.removals().first().at, *at);
+    }
+
     void anOlderLibraryIsBroughtUpToDate() {
         // A library from before removals were remembered (schema 1).
         QTemporaryDir dir;
@@ -942,7 +1019,7 @@ private slots:
             while (tables.next())
                 QVERIFY(QSqlQuery(database).exec(tables.value(0).toString()));
             // The columns that came later are not there yet either.
-            for (const char *column : {"paper", "shelf", "rating", "finished", "identifiers"})
+            for (const char *column : {"paper", "shelf", "rating", "finished", "identifiers", "details_at", "reading_at"})
                 QVERIFY(QSqlQuery(database).exec(QString("ALTER TABLE books DROP COLUMN %1").arg(column)));
             QVERIFY(QSqlQuery(database).exec("INSERT INTO books (title, added) VALUES ('Kept', 1)"));
             QVERIFY(QSqlQuery(database).exec("PRAGMA user_version = 1"));
@@ -1737,6 +1814,16 @@ private slots:
             }
             QVERIFY(library.addCollection("Later/Inside", "tag:sea"));
             QCOMPARE(library.collectionNamed("Later")->of(library.books()).size(), 1);
+            // From format 12, when the details and the reading last changed:
+            // not known for any book of an older library, and kept from now on.
+            if (format < 12) {
+                QCOMPARE(wall.detailsAt, qint64(0));
+                QCOMPARE(paper.readingAt, qint64(0));
+            }
+            BookMeta changed = wall.meta;
+            changed.description = "Along the sea wall.";
+            QVERIFY(library.setMeta(1, changed));
+            QVERIFY(library.book(1)->detailsAt > 0);
         }
     }
 
