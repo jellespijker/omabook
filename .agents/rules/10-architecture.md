@@ -69,3 +69,11 @@ rules when the check came in. They may only disappear. The main one:
 
 After fixing one, run `python3 .agents/hooks/check_architecture.py --update`
 and commit the smaller baseline.
+
+## Decisions
+
+Decisions that shape more than one module are recorded in `docs/adr/`, numbered, with their context,
+what was decided, the alternatives and what follows from it. Read the ones that touch your change
+before you start; write one when your change decides something the next person would otherwise ask.
+
+- [0001: Owned spaces, replicated as change logs, in place of state sync](../../docs/adr/0001-owned-spaces-and-replicated-logs.md)
