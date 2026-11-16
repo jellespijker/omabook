@@ -12,6 +12,8 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.5.2] - 2026-11-16
+
 ### Fixed
 
 - A sync carries the knowledge graph: what was noted while reading a book on
@@ -25,6 +27,18 @@ moves those lines under its version.
   function-complexity budgets, formatting, secret scanning
   (Talisman) and an issue number in every commit message. It runs in the
   agents' edit hooks, on commit, and in CI (#29).
+
+## [0.1.5.1] - 2026-11-16
+
+### Changed
+
+- `omabook plugins enable` and `disable` take a plugin's plain name, and say
+  what a name could mean when it is unclear (#27).
+
+### Fixed
+
+- A plugin's mark stays out of a sync, so a story's names arrive and the
+  sync settles.
 
 ## [0.1.5] - 2026-11-16
 
@@ -108,7 +122,9 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.5...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...HEAD
+[0.1.5.2]: https://github.com/jellespijker/omabook/compare/v0.1.5.1...v0.1.5.2
+[0.1.5.1]: https://github.com/jellespijker/omabook/compare/v0.1.5...v0.1.5.1
 [0.1.5]: https://github.com/jellespijker/omabook/compare/v0.1.4.3...v0.1.5
 [0.1.4.3]: https://github.com/jellespijker/omabook/compare/v0.1.4.2...v0.1.4.3
 [0.1.4.2]: https://github.com/jellespijker/omabook/compare/v0.1.4.1...v0.1.4.2
