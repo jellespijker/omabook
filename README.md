@@ -369,15 +369,18 @@ Each computer keeps its own whole library. A sync brings two of them in step ove
 
 ```bash
 omabook sync laptop              # or laptop:Books/Fiction for a library other than its current one
+omabook sync laptop --dry-run    # what a sync would do on each side, book by book; nothing changes
 ```
 
-or name the computer once under Settings and press `Y`. Each side gets the books it lacks, with their details, covers and formats, and books without a file too (paper copies, wishes, books read elsewhere), known by their identifiers or else by title and authors. Shelves, stars and finished days travel with every book, filled in where a side says nothing; for books both have, the more recent reading place wins. A book you removed on one computer is not brought back to it (and is left alone on the other). Omabook must be installed on both, and ssh must log in without asking for a password (Tailscale SSH or a key).
+or name the computer once under Settings and press `Y`. Each side gets the books it lacks, with their details, covers and formats, and books without a file too (paper copies, wishes, books read elsewhere), known by their identifiers or else by title and authors. Shelves, stars and finished days travel with every book, filled in where a side says nothing; for books both have, the more recent reading place wins, and so do the details changed last (title, authors, series, tags, description and the rest, with the cover): each library keeps when a book's details last changed, and details a sync brings keep the time they had, so they never go back and forth. A book you remove on one computer is removed on the other at the next sync too, to its trash, unless it was added, read, changed or shelved there since you removed it; then it stays there, and isn't brought back to where you removed it. A file that a merge (Tidy) gave to the book it kept is still in the library, so that book is never removed elsewhere. Omabook must be installed on both, and ssh must log in without asking for a password (Tailscale SSH or a key).
+
+Books from before Omabook kept when their details changed have no such time on either computer, so where their details differ a sync can't tell which are newer: it leaves them as they are and says how many. `omabook sync laptop --details mine` settles them with this computer's, `--details theirs` with the other's; details with a time still go by it. `--dry-run` changes nothing on either side and lists, by title, what a sync would receive, send, update (details, reading places, shelves and stars) and remove on each, which is worth a look before the first sync that removes books.
 
 Why not one library on a shared folder (sshfs, NFS, Syncthing)? Because a library is a live database: two computers writing it through a network filesystem can corrupt it, a file syncer can split it in two, and none of them work on a train. With a sync, each database is only ever written by its own computer, a dropped connection leaves both whole, and every computer reads offline. A library folder on a network mount does still open (Omabook switches the database to the journal mode that works there); just don't open it from two computers at once.
 
 A sync carries the collections too: the books each holds by hand, its rule, its view and its reading format, and a removal. Of a collection both computers have, the one changed last wins whole. A computer with an Omabook from before collections still syncs its books, and gets no collections.
 
-What a sync doesn't carry yet: bookmarks, and edits to the details of a book both computers already have.
+What a sync doesn't carry yet: bookmarks.
 
 ## In the file manager
 

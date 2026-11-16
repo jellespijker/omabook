@@ -75,9 +75,11 @@ omabook format 12 --align justify --line-height 170  # one book's own, over the 
 omabook format 12 --reset                        # the book follows the defaults again
 omabook sync laptop                              # exchange books and reading places with another computer over ssh
 omabook sync laptop:Books/Fiction                # ...with a named library folder there
+omabook sync laptop --dry-run                    # what a sync would receive, send, update and remove on each side; changes nothing
+omabook sync laptop --details mine               # where details differ and no time says which are newer: keep this side's (or theirs)
 ```
 
-`sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks, books without a file included (matched by identifiers, else title and authors), with their shelf, stars and finished day, and the newer reading place wins; a book removed on one side is not brought back to it.
+`sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks, books without a file included (matched by identifiers, else title and authors), with their shelf, stars and finished day, and the newer reading place and the newer details win; a book removed on one side is removed on the other too (to the trash) unless it was read or changed there since. Run `--dry-run` first and show the user what would be removed. Books from before details had a time are counted when their details differ, and only `--details mine|theirs` settles them: ask the user which side is right.
 
 ## Plugins
 

@@ -193,7 +193,14 @@ QList<Manual::Topic> Manual::topicList() {
              {tr("Sync"),
               tr("Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries "
                  "in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place "
-                 "wins. `omabook sync laptop` does the same from a terminal.")},
+                 "wins, and so do the details changed last. `omabook sync laptop` does the same from a terminal.")},
+             {tr("Removed books"),
+              tr("A book removed on one computer is removed on the other at the next sync too, to its trash, unless it "
+                 "was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.")},
+             {tr("Before the first sync"),
+              tr("`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each side, and "
+                 "changes nothing. Books from before Omabook kept when their details changed can't say whose are newer: "
+                 "where they differ, `--details mine` keeps this computer's and `--details theirs` takes the other's.")},
              {tr("What it needs"),
               tr("Omabook on both computers, and ssh that logs in without asking for a password. Tailscale makes that "
                  "work from anywhere.")},

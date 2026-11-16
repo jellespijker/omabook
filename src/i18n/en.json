@@ -70,9 +70,21 @@
     "one": "%Ln book added",
     "other": "%Ln books added"
   },
+  "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.": {
+    "one": "%Ln book has other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.",
+    "other": "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them."
+  },
   "%Ln books received": {
     "one": "%Ln book received",
     "other": "%Ln books received"
+  },
+  "%Ln books removed here, to the trash": {
+    "one": "%Ln book removed here, to the trash",
+    "other": "%Ln books removed here, to the trash"
+  },
+  "%Ln books removed on the other computer, to the trash": {
+    "one": "%Ln book removed on the other computer, to the trash",
+    "other": "%Ln books removed on the other computer, to the trash"
   },
   "%Ln books sent": {
     "one": "%Ln book sent",
@@ -81,6 +93,10 @@
   "%Ln books written to %1. Upload the file at goodreads.com/review/import to bring Goodreads in step.": {
     "one": "%Ln book written to %1. Upload the file at goodreads.com/review/import to bring Goodreads in step.",
     "other": "%Ln books written to %1. Upload the file at goodreads.com/review/import to bring Goodreads in step."
+  },
+  "%Ln books' details updated": {
+    "one": "%Ln book's details updated",
+    "other": "%Ln books' details updated"
   },
   "%Ln books, in %1 requests to the AI: about %2 tokens.": {
     "one": "%Ln book, in %1 requests to the AI: about %2 tokens.",
@@ -200,6 +216,7 @@
   "A book format: %1": "A book format: %1",
   "A book format: %1 (%2)": "A book format: %1 (%2)",
   "A book is removed from the library, on the shelf.": "A book is removed from the library, on the shelf.",
+  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.": "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.",
   "A book without a file": "A book without a file",
   "A book's details, by hand": "A book's details, by hand",
   "A catalog format: %1": "A catalog format: %1",
@@ -317,6 +334,7 @@
   "Back to the graph": "Back to the graph",
   "Back to the moment, without spoilers": "Back to the moment, without spoilers",
   "Back to the picture": "Back to the picture",
+  "Before the first sync": "Before the first sync",
   "Between books": "Between books",
   "Between paragraphs": "Between paragraphs",
   "Book": "Book",
@@ -713,7 +731,7 @@
   "Move to Trash": "Move to Trash",
   "Name": "Name",
   "Name the computer to sync with in the settings first.": "Name the computer to sync with in the settings first.",
-  "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins. `omabook sync laptop` does the same from a terminal.": "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins. `omabook sync laptop` does the same from a terminal.",
+  "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins, and so do the details changed last. `omabook sync laptop` does the same from a terminal.": "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins, and so do the details changed last. `omabook sync laptop` does the same from a terminal.",
   "Narrows the list": "Narrows the list",
   "Needs attention": "Needs attention",
   "Needs something": "Needs something",
@@ -897,6 +915,7 @@
   "Remove this relation?": "Remove this relation?",
   "Remove “%1” from the graph?": "Remove “%1” from the graph?",
   "Remove “%1” from the library?": "Remove “%1” from the library?",
+  "Removed books": "Removed books",
   "Remove…": "Remove…",
   "Rename the selected thing, or rewrite what is said of it": "Rename the selected thing, or rewrite what is said of it",
   "Reset": "Reset",
@@ -1236,6 +1255,7 @@
   "Zoom out of the graph": "Zoom out of the graph",
   "`omabook mcp install` connects a coding agent to the library as tools: search, read, fix details, track reading, tidy up. `omabook mcp --tools` lists them.": "`omabook mcp install` connects a coding agent to the library as tools: search, read, fix details, track reading, tidy up. `omabook mcp --tools` lists them.",
   "`omabook skill install` teaches your coding agents the commands.": "`omabook skill install` teaches your coding agents the commands.",
+  "`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each side, and changes nothing. Books from before Omabook kept when their details changed can't say whose are newer: where they differ, `--details mine` keeps this computer's and `--details theirs` takes the other's.": "`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each side, and changes nothing. Books from before Omabook kept when their details changed can't say whose are newer: where they differ, `--details mine` keeps this computer's and `--details theirs` takes the other's.",
   "`omabook theme list` shows the themes, `omabook theme use nord` picks one, and `omabook theme use ~/colors.toml` takes any colors.toml. `omabook theme import <name>` makes a theme of your own from an Aether blueprint.": "`omabook theme list` shows the themes, `omabook theme use nord` picks one, and `omabook theme use ~/colors.toml` takes any colors.toml. `omabook theme import <name>` makes a theme of your own from an Aether blueprint.",
   "a book format": "a book format",
   "a book is added": "a book is added",

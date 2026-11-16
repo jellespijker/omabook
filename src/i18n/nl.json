@@ -40,9 +40,21 @@
     "one": "%Ln boek toegevoegd",
     "other": "%Ln boeken toegevoegd"
   },
+  "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.": {
+    "one": "%Ln boek heeft andere gegevens op de andere computer, en geen van beide kanten weet welke nieuwer zijn. omabook sync --details mine of --details theirs beslist.",
+    "other": "%Ln boeken hebben andere gegevens op de andere computer, en geen van beide kanten weet welke nieuwer zijn. omabook sync --details mine of --details theirs beslist."
+  },
   "%Ln books received": {
     "one": "%Ln boek ontvangen",
     "other": "%Ln boeken ontvangen"
+  },
+  "%Ln books removed here, to the trash": {
+    "one": "%Ln boek hier verwijderd, naar de prullenbak",
+    "other": "%Ln boeken hier verwijderd, naar de prullenbak"
+  },
+  "%Ln books removed on the other computer, to the trash": {
+    "one": "%Ln boek op de andere computer verwijderd, naar de prullenbak",
+    "other": "%Ln boeken op de andere computer verwijderd, naar de prullenbak"
   },
   "%Ln books sent": {
     "one": "%Ln boek verstuurd",
@@ -51,6 +63,10 @@
   "%Ln books written to %1. Upload the file at goodreads.com/review/import to bring Goodreads in step.": {
     "one": "%Ln boek geschreven naar %1. Upload het bestand op goodreads.com/review/import om Goodreads bij te werken.",
     "other": "%Ln boeken geschreven naar %1. Upload het bestand op goodreads.com/review/import om Goodreads bij te werken."
+  },
+  "%Ln books' details updated": {
+    "one": "Gegevens van %Ln boek bijgewerkt",
+    "other": "Gegevens van %Ln boeken bijgewerkt"
   },
   "%Ln changes made": {
     "one": "%Ln wijziging doorgevoerd",
@@ -80,6 +96,7 @@
   "A book format Omabook doesn't read by itself": "Een boekformaat dat Omabook zelf niet leest",
   "A book format: %1": "Een boekformaat: %1",
   "A book format: %1 (%2)": "Een boekformaat: %1 (%2)",
+  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.": "Een boek dat op de ene computer is verwijderd, wordt bij de volgende synchronisatie ook op de andere verwijderd, naar de prullenbak, tenzij het daar sindsdien is gelezen of gewijzigd. Een bestand dat een samenvoeging aan het behouden boek gaf, blijft, en dat boek ook.",
   "A book without a file": "Een boek zonder bestand",
   "A catalog format: %1": "Een catalogusformaat: %1",
   "A command": "Een opdracht",
@@ -139,6 +156,7 @@
   "Back": "Terug",
   "Back a step, then close": "Een stap terug, daarna sluiten",
   "Back to the Library": "Terug naar de bibliotheek",
+  "Before the first sync": "Voor de eerste synchronisatie",
   "Book details": "Boekgegevens",
   "Bookmark": "Bladwijzer",
   "Bookmark this place": "Bladwijzer op deze plek zetten",
@@ -318,7 +336,7 @@
   "Move through the plugins": "Door de plug-ins lopen",
   "Move to Trash": "Naar prullenbak",
   "Name the computer to sync with in the settings first.": "Vul eerst in de instellingen in met welke computer je wilt synchroniseren.",
-  "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins. `omabook sync laptop` does the same from a terminal.": "Vul in de instellingen ({global.settings}) de andere computer in, en {library.sync} brengt de twee bibliotheken gelijk via ssh. Elke kant krijgt de boeken die er ontbreken, en bij een boek dat beide hebben, wint de laatste leespositie. `omabook sync laptop` doet hetzelfde vanuit een terminal.",
+  "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins, and so do the details changed last. `omabook sync laptop` does the same from a terminal.": "Vul in de instellingen ({global.settings}) de andere computer in, en {library.sync} brengt de twee bibliotheken gelijk via ssh. Elke kant krijgt de boeken die er ontbreken, en bij een boek dat beide hebben, wint de laatste leespositie, en ook de gegevens die het laatst zijn gewijzigd. `omabook sync laptop` doet hetzelfde vanuit een terminal.",
   "Needs something": "Heeft iets nodig",
   "Never": "Nooit",
   "New here? A one-minute tour shows where everything is.": "Nieuw hier? Een rondleiding van een minuut laat zien waar alles zit.",
@@ -407,6 +425,7 @@
   "Remove the plugin “%1”?": "De plug-in ‘%1’ verwijderen?",
   "Remove the selected book (asks first)": "Het geselecteerde boek verwijderen (vraagt eerst)",
   "Remove “%1” from the library?": "“%1” uit de bibliotheek verwijderen?",
+  "Removed books": "Verwijderde boeken",
   "Remove…": "Verwijderen…",
   "Reverse the order": "De volgorde omkeren",
   "Run": "Uitvoeren",
@@ -564,6 +583,7 @@
   "Yours": "Van jou",
   "`omabook mcp install` connects a coding agent to the library as tools: search, read, fix details, track reading, tidy up. `omabook mcp --tools` lists them.": "`omabook mcp install` koppelt een codeeragent aan de bibliotheek via tools: zoeken, lezen, gegevens verbeteren, bijhouden wat je leest, opruimen. `omabook mcp --tools` somt ze op.",
   "`omabook skill install` teaches your coding agents the commands.": "`omabook skill install` leert je codeeragents de opdrachten.",
+  "`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each side, and changes nothing. Books from before Omabook kept when their details changed can't say whose are newer: where they differ, `--details mine` keeps this computer's and `--details theirs` takes the other's.": "`omabook sync laptop --dry-run` toont wat een synchronisatie aan elke kant zou ophalen, versturen, bijwerken en verwijderen, en verandert niets. Boeken van voordat Omabook bijhield wanneer hun gegevens veranderden, kunnen niet zeggen wiens gegevens nieuwer zijn: waar ze verschillen, houdt `--details mine` die van deze computer en neemt `--details theirs` die van de andere.",
   "a book is added": "een boek wordt toegevoegd",
   "a book is closed": "een boek wordt gesloten",
   "a book is opened": "een boek wordt geopend",

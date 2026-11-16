@@ -548,6 +548,16 @@ void Backend::sync() {
                     lines << Backend::tr("%Ln books sent", "", summary.sent);
                 if (summary.placesTaken + summary.placesSent > 0)
                     lines << Backend::tr("%Ln reading places updated", "", summary.placesTaken + summary.placesSent);
+                if (summary.detailsTaken + summary.detailsSent > 0)
+                    lines << Backend::tr("%Ln books' details updated", "", summary.detailsTaken + summary.detailsSent);
+                if (summary.removedHere > 0)
+                    lines << Backend::tr("%Ln books removed here, to the trash", "", summary.removedHere);
+                if (summary.removedThere > 0)
+                    lines << Backend::tr("%Ln books removed on the other computer, to the trash", "", summary.removedThere);
+                if (summary.detailsUndecided > 0)
+                    lines << Backend::tr("%Ln books have other details on the other computer, and neither side knows which "
+                                         "are newer. omabook sync --details mine or --details theirs settles them.",
+                                         "", summary.detailsUndecided);
                 if (lines.isEmpty() && summary.problems.isEmpty())
                     lines << Backend::tr("Both libraries were already in step.");
                 lines << summary.problems.mid(0, 3);

@@ -45,10 +45,25 @@
     "one": "%Ln libro agregado",
     "other": "%Ln libros agregados"
   },
+  "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.": {
+    "many": "%Ln libros tienen otros datos en la otra computadora, y ningún lado sabe cuáles son más recientes. omabook sync --details mine o --details theirs lo decide.",
+    "one": "%Ln libro tiene otros datos en la otra computadora, y ningún lado sabe cuáles son más recientes. omabook sync --details mine o --details theirs lo decide.",
+    "other": "%Ln libros tienen otros datos en la otra computadora, y ningún lado sabe cuáles son más recientes. omabook sync --details mine o --details theirs lo decide."
+  },
   "%Ln books received": {
     "many": "%Ln libros recibidos",
     "one": "%Ln libro recibido",
     "other": "%Ln libros recibidos"
+  },
+  "%Ln books removed here, to the trash": {
+    "many": "%Ln libros eliminados aquí, a la papelera",
+    "one": "%Ln libro eliminado aquí, a la papelera",
+    "other": "%Ln libros eliminados aquí, a la papelera"
+  },
+  "%Ln books removed on the other computer, to the trash": {
+    "many": "%Ln libros eliminados en la otra computadora, a la papelera",
+    "one": "%Ln libro eliminado en la otra computadora, a la papelera",
+    "other": "%Ln libros eliminados en la otra computadora, a la papelera"
   },
   "%Ln books sent": {
     "many": "%Ln libros enviados",
@@ -59,6 +74,11 @@
     "many": "%Ln libros escritos en %1. Sube el archivo en goodreads.com/review/import para poner Goodreads al día.",
     "one": "%Ln libro escrito en %1. Sube el archivo en goodreads.com/review/import para poner Goodreads al día.",
     "other": "%Ln libros escritos en %1. Sube el archivo en goodreads.com/review/import para poner Goodreads al día."
+  },
+  "%Ln books' details updated": {
+    "many": "Datos de %Ln libros actualizados",
+    "one": "Datos de %Ln libro actualizados",
+    "other": "Datos de %Ln libros actualizados"
   },
   "%Ln changes made": {
     "many": "%Ln cambios realizados",
@@ -94,6 +114,7 @@
   "A book format Omabook doesn't read by itself": "Un formato de libro que Omabook no lee por sí mismo",
   "A book format: %1": "Un formato de libro: %1",
   "A book format: %1 (%2)": "Un formato de libro: %1 (%2)",
+  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.": "Un libro eliminado en una computadora se elimina también en la otra en la siguiente sincronización, a la papelera, a menos que se haya leído o cambiado allí desde entonces. Un archivo que una fusión le dio al libro conservado se queda, y ese libro también.",
   "A book without a file": "Un libro sin archivo",
   "A catalog format: %1": "Un formato de catálogo: %1",
   "A command": "Un comando",
@@ -153,6 +174,7 @@
   "Back": "Atrás",
   "Back a step, then close": "Un paso atrás, luego cerrar",
   "Back to the Library": "Volver a la biblioteca",
+  "Before the first sync": "Antes de la primera sincronización",
   "Book details": "Datos del libro",
   "Bookmark": "Marcador",
   "Bookmark this place": "Poner un marcador aquí",
@@ -334,7 +356,7 @@
   "Move through the plugins": "Moverse por los complementos",
   "Move to Trash": "Mover a la papelera",
   "Name the computer to sync with in the settings first.": "Indique primero en la configuración con qué computadora sincronizar.",
-  "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins. `omabook sync laptop` does the same from a terminal.": "Indique la otra computadora en la configuración ({global.settings}) y {library.sync} pone al día las dos bibliotecas por ssh. Cada lado recibe los libros que le faltan y, si las dos tienen un libro, gana el punto de lectura más reciente. `omabook sync laptop` hace lo mismo desde una terminal.",
+  "Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place wins, and so do the details changed last. `omabook sync laptop` does the same from a terminal.": "Indique la otra computadora en la configuración ({global.settings}) y {library.sync} pone al día las dos bibliotecas por ssh. Cada lado recibe los libros que le faltan y, si las dos tienen un libro, gana el punto de lectura más reciente, y también los datos cambiados por última vez. `omabook sync laptop` hace lo mismo desde una terminal.",
   "Needs something": "Necesita algo",
   "Never": "Nunca",
   "New here? A one-minute tour shows where everything is.": "¿Primera vez aquí? Un recorrido de un minuto muestra dónde está todo.",
@@ -423,6 +445,7 @@
   "Remove the plugin “%1”?": "¿Quitar el complemento «%1»?",
   "Remove the selected book (asks first)": "Quitar el libro seleccionado (pregunta antes)",
   "Remove “%1” from the library?": "¿Quitar “%1” de la biblioteca?",
+  "Removed books": "Libros eliminados",
   "Remove…": "Quitar…",
   "Reverse the order": "Invertir el orden",
   "Run": "Ejecutar",
@@ -581,6 +604,7 @@
   "Yours": "Tuyo",
   "`omabook mcp install` connects a coding agent to the library as tools: search, read, fix details, track reading, tidy up. `omabook mcp --tools` lists them.": "`omabook mcp install` conecta un agente de programación a la biblioteca en forma de herramientas: buscar, leer, corregir datos, llevar el registro de lectura, ordenar. `omabook mcp --tools` las lista.",
   "`omabook skill install` teaches your coding agents the commands.": "`omabook skill install` enseña los comandos a sus agentes de programación.",
+  "`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each side, and changes nothing. Books from before Omabook kept when their details changed can't say whose are newer: where they differ, `--details mine` keeps this computer's and `--details theirs` takes the other's.": "`omabook sync laptop --dry-run` muestra lo que una sincronización recibiría, enviaría, actualizaría y eliminaría en cada lado, y no cambia nada. Los libros de antes de que Omabook guardara cuándo cambiaron sus datos no pueden decir cuáles son más recientes: donde difieren, `--details mine` conserva los de esta computadora y `--details theirs` toma los de la otra.",
   "a book is added": "se agrega un libro",
   "a book is closed": "se cierra un libro",
   "a book is opened": "se abre un libro",
