@@ -68,7 +68,7 @@ FocusScope {
                 visible: !pane.applies
                 wrapMode: Text.Wrap
                 color: theme.colors.muted
-                text: qsTr("These pages are pictures, so their type can't be changed. What is set here is for books that flow.")
+                text: qsTr("These pages are pictures, so their type can't be changed; the layout can. What else is set here is for books that flow.")
             }
             Switch {
                 objectName: "formatThisBook"
@@ -117,7 +117,7 @@ FocusScope {
                 scoped: true
                 bookOnly: pane.host.formatBookOnly
                 forCollection: pane.host.formatForCollection
-                enabled: pane.applies
+                picturesOnly: !pane.applies
             }
             AppButton {
                 objectName: "formatResetCollection"

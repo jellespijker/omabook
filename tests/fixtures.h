@@ -22,6 +22,17 @@ Entries epubEntries(const QString &title = "The Test Book");
 bool epub(const QString &path, const QString &title = "The Test Book");
 QByteArray fb2();
 bool pdf(const QString &path, const QString &title, const QStringList &pages);
+// A book of chapters, each a title and its body (XHTML inside <body>), with
+// the contents listing each; a picture named "images/plate.png" (a tall
+// one, 600 by 800) is there for a body to show.
+struct Chapter {
+    QString title, body;
+};
+bool chapteredEpub(const QString &path, const QString &title, const QList<Chapter> &chapters);
+// A PDF of `pages` portrait pages (A5), each saying its number large and
+// with lines of text under it, and an outline of chapters by the page each
+// starts on (from 0), so it reads like a book.
+bool outlinedPdf(const QString &path, const QString &title, int pages, const QList<QPair<QString, int>> &chapters);
 QByteArray be32(quint32 value);
 // A Kindle file with only what carries the metadata.
 QByteArray mobi();

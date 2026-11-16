@@ -49,6 +49,10 @@ Item {
     // Whether the keys that move through the book are the book's right now.
     readonly property bool paging: win.inReader && !!content && !index.focused && !mapping && !formatting
     readonly property var content: contentLoader.item
+    // A page made anew (a book opened, the layout or the window changed) has
+    // the keyboard, unless something else of the reader has it, such as a
+    // pane's field: the shelf behind it never keeps it.
+    onContentChanged: if (content && win.inReader && !win.within(view, win.activeFocusItem)) content.forceActiveFocus()
 
     // Turning a page by hand: the page follows the finger sideways, and past
     // a point it slides away while the next one slides in from the other
@@ -263,6 +267,13 @@ Item {
                   : qsTr("Only %Ln pages fit at this width with lines of at least %1 characters", "", reader.format.columns)
                         .arg(reader.format.minimumMeasure.toLocaleString(Qt.locale(), 'f', 0)))
     }
+    // Shift+L: pages, one scrolling column, automatic, and round again.
+    function cycleLayout() {
+        const next = reader.format.nextLayout()
+        backend.say(next === "pages" ? qsTr("Pages that turn, each chapter starting on a page of its own")
+                  : next === "scroll" ? qsTr("One column that scrolls on through the chapters")
+                  : qsTr("Automatic: pages where two fit side by side, else a column that scrolls"))
+    }
     function bookmark() {
         if (!content) return
         reader.addBookmark(content.placeText())
@@ -270,8 +281,10 @@ Item {
     }
 
     Key { command: "reader.back"; when: win.inReader && !view.mapping; onActivated: view.back() }
-    Key { command: "reader.page_down"; when: view.paging; onActivated: view.content.pageDown() }
-    Key { command: "reader.page_up"; when: view.paging; onActivated: view.content.pageUp() }
+    // Left and Right follow the reading direction: forward is leftwards in
+    // a right-to-left language, as a finger's swipe is.
+    Key { command: "reader.page_down"; mirrored: win.rightToLeft; when: view.paging; onActivated: view.content.pageDown() }
+    Key { command: "reader.page_up"; mirrored: win.rightToLeft; when: view.paging; onActivated: view.content.pageUp() }
     Key { command: "reader.line_down"; when: view.paging; onActivated: view.content.lineDown() }
     Key { command: "reader.line_up"; when: view.paging; onActivated: view.content.lineUp() }
     Key { command: "reader.next"; when: view.paging; onActivated: view.content.next() }
@@ -291,6 +304,7 @@ Item {
     Key { command: "reader.graph"; when: reader.open; onActivated: view.toggleGraph() }
     Key { command: "reader.marks"; when: reader.open; onActivated: view.cycleMarks() }
     Key { command: "reader.pages"; when: reader.open && !view.mapping; onActivated: view.cyclePages() }
+    Key { command: "reader.layout"; when: reader.open && !view.mapping; onActivated: view.cycleLayout() }
     Key { command: "reader.select"; when: view.paging; onActivated: view.startSelecting() }
 
     // The kinds' colors are the graph's, from the theme.
@@ -420,6 +434,9 @@ Item {
                             return
                         }
                         if (view.tappedAt(point.position.x, point.position.y)) return
+                        // What the page has to tap on itself: the line at a chapter's end.
+                        const on = touchArea.mapToItem(view.content, point.position.x, point.position.y)
+                        if (typeof view.content.activateAt === "function" && view.content.activateAt(on.x, on.y)) return
                         const x = win.rightToLeft ? touchArea.width - point.position.x : point.position.x
                         if (x < touchArea.width * 0.25) view.turn(false)
                         else if (x > touchArea.width * 0.75) view.turn(true)
@@ -428,6 +445,7 @@ Item {
                 }
                 DragHandler {
                     id: swipe
+                    objectName: "pageSwipe"
                     acceptedDevices: PointerDevice.TouchScreen
                     target: null
                     yAxis.enabled: false
@@ -458,22 +476,55 @@ Item {
                         travelled = 0
                     }
                 }
+                // A finger on the page: while it is down, the text doesn't
+                // select under it, so it scrolls the page instead (a press
+                // and hold still selects a word, see pressedLongAt).
+                PointHandler {
+                    id: finger
+                    acceptedDevices: PointerDevice.TouchScreen
+                }
                 PinchHandler {
                     acceptedDevices: PointerDevice.TouchScreen
                     target: null
                     onScaleChanged: (delta) => { if (view.content) view.content.pinch(delta) }
                 }
-                // Pages side by side don't scroll, so the wheel turns them: a
+                // Pages that turn don't scroll, so the wheel turns them: a
                 // notch of a mouse wheel, or as much from a touchpad.
                 WheelHandler {
+                    objectName: "pageWheel"
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    enabled: !!view.content && view.content.objectName === "spreadReader"
+                    enabled: !!view.content && (view.content.objectName === "spreadReader" || view.content.turnsPages === true)
                     property real gathered: 0
                     onWheel: (event) => {
                         gathered += event.angleDelta.y
                         if (Math.abs(gathered) < 120) return
                         view.turn(gathered < 0)
                         gathered = 0
+                    }
+                }
+                // A column that runs on: the wheel scrolls it as always, and
+                // turned on two notches past a chapter's end (or back past
+                // its start), it goes on into the next chapter (or back to
+                // the end of the one before); one notch is only resistance. The column below
+                // still takes every turn of the wheel.
+                WheelHandler {
+                    objectName: "runOnWheel"
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    enabled: !!view.content && view.content.objectName === "flowReader" && view.content.runsOn
+                    blocking: false
+                    property real gathered: 0
+                    onWheel: (event) => {
+                        const down = event.angleDelta.y < 0
+                        const there = down ? view.content.atEnd() : view.content.atStart()
+                        if (!there || (gathered !== 0 && (gathered < 0) !== down)) {
+                            gathered = 0
+                            if (!there) return
+                        }
+                        gathered += event.angleDelta.y
+                        if (Math.abs(gathered) < 240) return
+                        gathered = 0
+                        if (down) view.content.next()
+                        else view.content.backToEnd()
                     }
                 }
             }
@@ -487,15 +538,19 @@ Item {
                 anchors.bottom: progress.top
                 anchors.topMargin: 4
                 transform: Translate { x: view.slide }
-                // Room for more than one page at the measure is an open
-                // book of two or three pages that turn; otherwise a single
-                // page that scrolls (PageLayout::columns decides, from this
-                // width, which is what the panes beside the page leave).
-                readonly property bool wide: reader.format.columns > 1
-                sourceComponent: reader.kind === "flow" ? (wide ? spreadPages : flow) : reader.kind === "pages" ? pages : null
-                Component { id: flow; FlowReader { marking: view.marksOn } }
+                // The layout (readingformat.h): pages that turn, one to
+                // three side by side; or one column that scrolls and runs
+                // on into the next chapter. Automatic: room for more than
+                // one page at the measure is an open book of two or three
+                // pages that turn, otherwise a single page that scrolls
+                // (PageLayout::columns decides, from this width, which is
+                // what the panes beside the page leave).
+                readonly property string layout: reader.format.effective.layout || "auto"
+                readonly property bool paged: layout === "pages" || (layout === "auto" && reader.format.columns > 1)
+                sourceComponent: reader.kind === "flow" ? (paged ? spreadPages : flow) : reader.kind === "pages" ? pages : null
+                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: finger.active } }
                 Component { id: spreadPages; SpreadReader { marking: view.marksOn } }
-                Component { id: pages; PageReader {} }
+                Component { id: pages; PageReader { layout: contentLoader.layout } }
             }
 
             // Opening, or the reason it can't be opened.

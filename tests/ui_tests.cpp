@@ -19,6 +19,8 @@
 #include <QTemporaryDir>
 #include <QTimer>
 #include <QVersionNumber>
+#include <QWheelEvent>
+#include <QAbstractTextDocumentLayout>
 #include <QtTest>
 #include <atomic>
 #include <cmath>
@@ -1760,9 +1762,9 @@ private slots:
         write(desk.dir.filePath("custom/keys.json"),
               "{\"library\": {\"Z\": \"read\", \"Space\": \"\"}, \"reader\": {\"Space\": \"next\", \"Ctrl+B\": \"back\"}}");
         QTRY_COMPARE(desk.custom->plainKeys().value("library.read").toStringList(), QStringList{"Z"});
-        QCOMPARE(desk.custom->keyText().value("reader.next").toString(), QString("L  Right  N  Space"));
+        QCOMPARE(desk.custom->keyText().value("reader.next").toString(), QString("PgDown  L  N  Space"));
         // Space left the command that had it in the reader.
-        QCOMPARE(desk.custom->plainKeys().value("reader.page_down").toStringList(), QStringList{"PgDown"});
+        QCOMPARE(desk.custom->plainKeys().value("reader.page_down").toStringList(), QStringList{"Right"});
         // A key with Ctrl is one that works while typing.
         QCOMPARE(desk.custom->chordKeys().value("reader.back").toStringList(), QStringList{"Ctrl+B"});
         desk.key(Qt::Key_Space);
@@ -4975,6 +4977,23 @@ private:
     static void clickItem(Desk &desk, const QString &name) {
         QQuickItem *item = nullptr;
         QTRY_VERIFY((item = qobject_cast<QQuickItem *>(desk.find(name))) && item->isVisible());
+        // Scrolled into sight, in a panel taller than the window, once the
+        // panel has laid out what it just showed.
+        const auto inSight = [&] {
+            const QPointF middle = item->mapToScene(QPointF(item->width() / 2, item->height() / 2));
+            return middle.x() >= 0 && middle.y() >= 0 && middle.x() < desk.window->width() && middle.y() < desk.window->height();
+        };
+        for (int tries = 0; tries < 40 && !inSight(); ++tries) {
+            for (QQuickItem *up = item->parentItem(); up; up = up->parentItem())
+                if (up->inherits("QQuickFlickable")) {
+                    const double top = item->mapToItem(up->property("contentItem").value<QQuickItem *>(), QPointF(0, 0)).y();
+                    const double room = up->height(), y = up->property("contentY").toReal();
+                    if (top < y || top + item->height() > y + room)
+                        up->setProperty("contentY", std::clamp(top - room / 3, 0.0, std::max(0.0, up->property("contentHeight").toReal() - room)));
+                    break;
+                }
+            QTest::qWait(50);
+        }
         QTest::qWait(100);
         QTest::mouseClick(desk.window, Qt::LeftButton, {}, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
     }
@@ -6896,7 +6915,7 @@ private slots:
         const qint64 novels = *library->addCollection("Novels", "\"A Made-Up Novel\"");
         desk.backend->reload();
         QVERIFY(desk.show());
-        desk.window->resize(1400, 860);
+        desk.window->resize(1400, 1000);
         desk.reader->openBook(book);
         QTRY_VERIFY(desk.reader->isOpen());
         desk.key(Qt::Key_A, Qt::ShiftModifier);
@@ -7218,6 +7237,628 @@ private slots:
             desk.key(Qt::Key_Escape);
             QVERIFY2(desk.warnings.isEmpty(), qPrintable(language + ": " + desk.warnings.join('\n')));
         }
+    }
+
+private:
+    // A made-up book that reads like one: a long chapter, one shorter than
+    // a page, one with a picture and a heading inside it, one of entries a
+    // line each (`entries` of them), and a last one.
+    static bool chapteredBook(const QString &file, int entries = 60) {
+        QString harbour = "<h1>The Harbour</h1>";
+        for (int i = 1; i <= 26; ++i)
+            harbour += QString("<p>Harbour paragraph %1. The boats came in on the evening tide, low with herring, and the "
+                               "women on the wall counted them as they rounded the light; the last was always the Merrow's, "
+                               "and nobody went home until it was in and tied and its lamps were out.</p>").arg(i);
+        QString lighthouse = "<h1>The Lighthouse</h1><p>Lighthouse paragraph 1. The keeper climbed the stair at dusk.</p>"
+                             "<p><img src=\"../images/plate.png\" alt=\"the light\"/></p>";
+        for (int i = 2; i <= 14; ++i) {
+            if (i == 8)
+                lighthouse += "<h2>The Lamp Room</h2>";
+            lighthouse += QString("<p>Lighthouse paragraph %1. The lens turned on its bath of mercury, and the beam went out "
+                                  "over the water a mile at a sweep, and came back, and went out again.</p>").arg(i);
+        }
+        QString list = "<h1>The Tide Table</h1>";
+        for (int i = 1; i <= entries; ++i)
+            list += QString("<p>Entry %1.</p>").arg(i);
+        QString last = "<h1>Low Water</h1>";
+        for (int i = 1; i <= 8; ++i)
+            last += QString("<p>Low water paragraph %1, when the harbour floor shows its ribs and the gulls walk on it.</p>").arg(i);
+        return Fixtures::chapteredEpub(file, "The Harbour Book",
+                                       {{"The Harbour", harbour},
+                                        {"A Short Note", "<h1>A Short Note</h1><p>Only this: the light was lit.</p>"},
+                                        {"The Lighthouse", lighthouse},
+                                        {"The Tide Table", list},
+                                        {"Low Water", last}});
+    }
+    // A made-up PDF that reads like a book: twelve pages, and chapters that
+    // start on odd and on even pages (1, 4, 7, 10).
+    static bool outlinedBook(const QString &file) {
+        return Fixtures::outlinedPdf(file, "The Harbour Papers", 12,
+                                     {{"Opening", 0}, {"The Second Part", 3}, {"The Third Part", 6}, {"The Last Part", 9}});
+    }
+    // The laid-out lines of a page's text, top to bottom, and whether each has anything to see.
+    struct LaidLine {
+        double top, bottom;
+        bool blank;
+        QString text;
+    };
+    static QList<LaidLine> laidLines(QQuickItem *text) {
+        QList<LaidLine> lines;
+        auto *quick = text ? text->property("textDocument").value<QQuickTextDocument *>() : nullptr;
+        if (!quick)
+            return lines;
+        QTextDocument *document = quick->textDocument();
+        for (QTextBlock block = document->begin(); block.isValid(); block = block.next()) {
+            const double top = document->documentLayout()->blockBoundingRect(block).top();
+            for (int i = 0; i < block.layout()->lineCount(); ++i) {
+                const QTextLine line = block.layout()->lineAt(i);
+                const QString words = block.text().mid(line.textStart(), line.textLength());
+                lines.append({top + line.y(), top + line.y() + line.height(), words.trimmed().isEmpty(), words});
+            }
+        }
+        return lines;
+    }
+    // What is wrong with how a chapter is cut into pages, or nothing: each
+    // line wholly on one page (none shown twice, none cut off at a page's
+    // foot), no page with nothing on it to see, and every page within its
+    // height and starting on a whole pixel.
+    static QString pagesProblem(QObject *spread) {
+        const QList<LaidLine> lines = laidLines(spread->property("firstText").value<QQuickItem *>());
+        const QVariantList breaks = spread->property("breaks").toList();
+        const double height = spread->property("pageHeight").toDouble();
+        if (lines.isEmpty() || breaks.size() < 2)
+            return "nothing is laid out";
+        for (qsizetype page = 0; page + 1 < breaks.size(); ++page) {
+            // What the page shows: from its start, a page's height at most.
+            const double top = breaks.at(page).toDouble(), bottom = std::min(breaks.at(page + 1).toDouble(), top + height);
+            if (top != std::floor(top))
+                return QString("page %1 starts at %2, between pixels").arg(page).arg(top);
+            bool inked = false;
+            for (const LaidLine &line : lines) {
+                if (line.blank || line.bottom <= top + 0.01 || line.top >= breaks.at(page + 1).toDouble() - 0.01)
+                    continue;
+                if (line.top < top - 0.01 || line.bottom > bottom + 0.01)
+                    return QString("\"%1\" is cut across pages %2 and %3").arg(line.text.left(40)).arg(page - (line.top < top)).arg(page + (line.bottom > bottom));
+                inked = true;
+            }
+            if (!inked)
+                return QString("page %1 of %2 is blank").arg(page).arg(breaks.size() - 1);
+        }
+        return {};
+    }
+    // A turn of a mouse wheel over the page: a notch is 120, down is negative.
+    static void wheel(Desk &desk, int delta, int notches = 1) {
+        auto *area = qobject_cast<QQuickItem *>(desk.find("touchArea"));
+        const QPointF at = area->mapToScene(QPointF(area->width() / 2, area->height() / 2));
+        for (int i = 0; i < notches; ++i) {
+            QWheelEvent event(at, desk.window->mapToGlobal(at), QPoint(), QPoint(0, delta), Qt::NoButton, Qt::NoModifier,
+                              Qt::NoScrollPhase, false);
+            QCoreApplication::sendEvent(desk.window, &event);
+            QTest::qWait(30);
+        }
+    }
+    // A finger: a tap, and a drag from one point to another over a few frames.
+    struct Finger {
+        Desk &desk;
+        QPointingDevice *device = QTest::createTouchDevice();
+        void tap(const QPointF &at) {
+            QTest::touchEvent(desk.window, device).press(0, at.toPoint(), desk.window);
+            QTest::touchEvent(desk.window, device).release(0, at.toPoint(), desk.window);
+        }
+        void drag(const QPointF &from, const QPointF &to, int steps = 8) {
+            QTest::touchEvent(desk.window, device).press(0, from.toPoint(), desk.window);
+            for (int step = 1; step <= steps; ++step) {
+                QTest::touchEvent(desk.window, device).move(0, (from + (to - from) * step / double(steps)).toPoint(), desk.window);
+                QTest::qWait(20);
+            }
+            QTest::touchEvent(desk.window, device).release(0, to.toPoint(), desk.window);
+        }
+        // A point on the page, as parts of its width and height.
+        QPointF on(double across, double down) const {
+            auto *area = qobject_cast<QQuickItem *>(desk.find("touchArea"));
+            return area->mapToScene(QPointF(area->width() * across, area->height() * down));
+        }
+    };
+    static void turned(Desk &desk) {
+        QTRY_VERIFY(!desk.find("readerView")->property("turningPage").toBool());
+        QCOMPARE(desk.find("readerView")->property("slide").toReal(), 0.0);
+    }
+    static int page(Desk &desk) { return desk.find("spreadReader")->property("page").toInt(); }
+    // Until a chapter's pages are cut and stay cut.
+    static QObject *spreadSettled(Desk &desk) {
+        QObject *spread = nullptr;
+        [&] { QTRY_VERIFY((spread = desk.find("spreadReader"))); }();
+        if (spread)
+            settled(spread);
+        return spread;
+    }
+
+private slots:
+    // As pages, one column too is cut into pages: a turn is a whole page
+    // by the keys, the wheel and a finger; a chapter starts on a page of its
+    // own, its last page holds what is left, and turning on from it opens
+    // the next chapter's first page, and back from the first the last page
+    // of the one before. Two and three side by side the same.
+    void aBookOfPagesTurnsWholePagesAndEachChapterStartsAfresh() {
+        Desk desk;
+        const QString file = desk.dir.filePath("harbour.epub");
+        QVERIFY(chapteredBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.settings->setMeasure(54);
+        desk.settings->setOption("layout", "pages");
+        desk.window->resize(700, 900);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QObject *spread = spreadSettled(desk);
+        QVERIFY(spread);
+        QVERIFY(!desk.find("flowReader"));
+        QCOMPARE(spread->property("columns").toInt(), 1);
+        QVERIFY(!sheet(desk, 1)->isVisible());
+        QTRY_VERIFY(spread->property("pages").toInt() > 3);
+        QVERIFY2(pagesProblem(spread).isEmpty(), qPrintable(pagesProblem(spread)));
+        desk.shot("layout-pages-1-start");
+
+        // The keys: Right and Space a page on, Left a page back.
+        desk.key(Qt::Key_Right);
+        QCOMPARE(page(desk), 1);
+        desk.key(Qt::Key_Space);
+        QCOMPARE(page(desk), 2);
+        desk.key(Qt::Key_Left);
+        QCOMPARE(page(desk), 1);
+        desk.shot("layout-pages-1-second");
+        // The chapter's last page, then on: the next chapter's first page.
+        desk.key(Qt::Key_End);
+        QCOMPARE(page(desk), spread->property("lastLeft").toInt());
+        desk.shot("layout-pages-1-chapter-end");
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        spread = spreadSettled(desk);
+        QCOMPARE(page(desk), 0);
+        // A chapter shorter than a page is one page, and nothing else.
+        QCOMPARE(spread->property("pages").toInt(), 1);
+        QVERIFY2(pagesProblem(spread).isEmpty(), qPrintable(pagesProblem(spread)));
+        desk.shot("layout-pages-1-short-chapter");
+        // Back from it: the last page of the chapter before.
+        desk.key(Qt::Key_Left);
+        QTRY_COMPARE(desk.reader->section(), 0);
+        spread = spreadSettled(desk);
+        QTRY_COMPARE(page(desk), spread->property("lastLeft").toInt());
+
+        // Page Down: the next chapter's start; Page Up: this chapter's
+        // start, and from there the one before.
+        desk.key(Qt::Key_PageDown);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        desk.key(Qt::Key_PageDown);
+        QTRY_COMPARE(desk.reader->section(), 2);
+        spread = spreadSettled(desk);
+        QCOMPARE(page(desk), 0);
+        QVERIFY2(pagesProblem(spread).isEmpty(), qPrintable(pagesProblem(spread)));
+        desk.shot("layout-pages-1-picture-chapter");
+        desk.key(Qt::Key_Right);
+        desk.key(Qt::Key_Right);
+        QCOMPARE(page(desk), 2);
+        desk.shot("layout-pages-1-picture-chapter-3");
+        desk.key(Qt::Key_PageUp);
+        QCOMPARE(desk.reader->section(), 2);
+        QCOMPARE(page(desk), 0);
+        desk.key(Qt::Key_PageUp);
+        QTRY_COMPARE(desk.reader->section(), 1);
+
+        // The wheel turns a page a notch.
+        desk.reader->goTo(2);
+        spread = spreadSettled(desk);
+        wheel(desk, -120);
+        QTRY_COMPARE(page(desk), 1);
+        turned(desk);
+        wheel(desk, 120);
+        QTRY_COMPARE(page(desk), 0);
+        turned(desk);
+        // Back from a chapter's first page, the last of the one before.
+        wheel(desk, 120);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        turned(desk);
+        // A finger: a tap at the right edge turns on, a swipe leftwards too,
+        // and one rightwards turns back.
+        desk.reader->goTo(2);
+        spreadSettled(desk);
+        Finger finger{desk};
+        finger.tap(finger.on(0.9, 0.5));
+        turned(desk);
+        QTRY_COMPARE(page(desk), 1);
+        finger.drag(finger.on(0.85, 0.5), finger.on(0.15, 0.5));
+        turned(desk);
+        QTRY_COMPARE(page(desk), 2);
+        finger.drag(finger.on(0.15, 0.5), finger.on(0.85, 0.5));
+        turned(desk);
+        QTRY_COMPARE(page(desk), 1);
+        finger.tap(finger.on(0.1, 0.5));
+        turned(desk);
+        QTRY_COMPARE(page(desk), 0);
+
+        // Two side by side, and three: the same rules, a spread at a time.
+        // (Asked for, in a window wide enough for three with any font.)
+        desk.window->resize(2300, 900);
+        for (const int columns : {2, 3}) {
+            desk.settings->setPages(columns);
+            QTRY_COMPARE(desk.reader->format()->columns(), columns);
+            for (const int chapter : {0, 2, 3}) {
+                desk.reader->goTo(chapter);
+                spread = spreadSettled(desk);
+                QTRY_COMPARE(spread->property("columns").toInt(), columns);
+                QCOMPARE(page(desk), 0);
+                QVERIFY2(pagesProblem(spread).isEmpty(), qPrintable(QString("%1 pages, chapter %2: ").arg(columns).arg(chapter) + pagesProblem(spread)));
+                desk.shot(QString("layout-pages-%1-chapter-%2-start").arg(columns).arg(chapter));
+                desk.key(Qt::Key_End);
+                desk.shot(QString("layout-pages-%1-chapter-%2-end").arg(columns).arg(chapter));
+                desk.key(Qt::Key_Right);
+                QTRY_COMPARE(desk.reader->section(), chapter + 1);
+                QTRY_COMPARE(desk.find("spreadReader")->property("page").toInt(), 0);
+            }
+        }
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A chapter whose lines fill its last page to the foot is followed by
+    // the next chapter's first page, never by a blank one.
+    void aChapterThatFillsItsLastPageIsFollowedByNoBlankOne() {
+        Desk desk;
+        QVERIFY(desk.show());
+        desk.settings->setOption("layout", "pages");
+        desk.window->resize(700, 900);
+        // How many entries the first three pages hold, from a longer list.
+        const QString longer = desk.dir.filePath("longer.epub");
+        QVERIFY(chapteredBook(longer, 200));
+        desk.reader->openBook(desk.add(longer));
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.reader->goTo(3);
+        QObject *spread = spreadSettled(desk);
+        QTRY_VERIFY(spread->property("pages").toInt() > 4);
+        const double third = spread->property("breaks").toList().at(3).toDouble();
+        int held = 0;
+        for (const LaidLine &line : laidLines(spread->property("firstText").value<QQuickItem *>()))
+            if (line.text.startsWith("Entry") && line.bottom <= third)
+                ++held;
+        QVERIFY(held > 10);
+        desk.reader->close();
+        QTRY_VERIFY(!desk.reader->isOpen());
+
+        // A list of exactly that many is three pages, the last full.
+        const QString exact = desk.dir.filePath("exact.epub");
+        QVERIFY(chapteredBook(exact, held));
+        desk.reader->openBook(desk.add(exact));
+        QTRY_VERIFY(desk.reader->isOpen());
+        desk.reader->goTo(3);
+        spread = spreadSettled(desk);
+        QTRY_COMPARE(spread->property("pages").toInt(), 3);
+        QVERIFY2(pagesProblem(spread).isEmpty(), qPrintable(pagesProblem(spread)));
+        desk.key(Qt::Key_End);
+        QCOMPARE(page(desk), 2);
+        desk.shot("layout-pages-full-last-page");
+        // On from it: the next chapter's first page.
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 4);
+        QTRY_COMPARE(desk.find("spreadReader")->property("page").toInt(), 0);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // To scroll is one column, whatever the width, that runs on: a quiet
+    // line at a chapter's end says what is next and goes there, and the
+    // wheel, a finger pulling past the end and a step at the end go on into
+    // the next chapter at its top; back past the top, the end of the one
+    // before. A screen's step shows nothing twice.
+    void aBookThatScrollsRunsOnIntoTheNextChapter() {
+        Desk desk;
+        const QString file = desk.dir.filePath("harbour.epub");
+        QVERIFY(chapteredBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.settings->setMeasure(54);
+        desk.settings->setOption("layout", "scroll");
+        desk.window->resize(1400, 900);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QTRY_VERIFY(desk.find("flowReader"));
+        QVERIFY(!desk.find("spreadReader"));
+        // Wide, one column in the middle, no wider than the measure.
+        QCOMPARE(desk.reader->format()->columns(), 1);
+        auto *text = qobject_cast<QQuickItem *>(desk.find("flowText"));
+        auto *flow = qobject_cast<QQuickItem *>(desk.find("flowReader"));
+        QVERIFY(text->width() <= desk.reader->format()->lineWidth() + 0.5);
+        QVERIFY(qAbs(text->x() + text->width() / 2 - flow->width() / 2) <= 1);
+        QCOMPARE(desk.value("chapterEndText", "text").toString(), QString("End of chapter · next: A Short Note"));
+        desk.shot("layout-scroll-start");
+
+        // A screen's step goes on from the first line that wasn't wholly in sight.
+        const QList<LaidLine> lines = laidLines(text);
+        for (int step = 0; step < 3; ++step) {
+            const double from = flow->property("contentY").toReal() - text->y();
+            const auto unseen = std::ranges::find_if(lines, [&](const LaidLine &line) { return line.bottom > from + flow->height() + 0.5; });
+            QVERIFY(unseen != lines.end());
+            desk.key(step == 1 ? Qt::Key_Space : Qt::Key_Right);
+            QTRY_VERIFY2(qAbs(flow->property("contentY").toReal() - text->y() - unseen->top) < 0.5,
+                         qPrintable(QString("step %1: %2, not %3").arg(step).arg(flow->property("contentY").toReal() - text->y()).arg(unseen->top)));
+        }
+        // And back: the line cut off above is the last one wholly shown.
+        const double before = flow->property("contentY").toReal();
+        desk.key(Qt::Key_Left);
+        QTRY_VERIFY(flow->property("contentY").toReal() < before);
+        QVERIFY(flow->property("contentY").toReal() > before - flow->height() - 0.5);
+
+        // At the end, the line says what is next.
+        desk.key(Qt::Key_End);
+        QTRY_VERIFY(flow->property("contentY").toReal() > 0);
+        auto *end = qobject_cast<QQuickItem *>(desk.find("chapterEnd"));
+        QVERIFY(end && end->isVisible());
+        const QPointF endAt = end->mapToScene(QPointF(end->width() / 2, end->height() - 8));
+        QVERIFY(endAt.y() > 0 && endAt.y() < desk.window->height());
+        desk.shot("layout-scroll-chapter-end");
+        // The wheel at the end: a notch more is still this chapter, a little more goes on.
+        wheel(desk, -120);
+        QCOMPARE(desk.reader->section(), 0);
+        wheel(desk, -120, 2);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        QCOMPARE(desk.reader->fraction(), 0.0);
+        desk.shot("layout-scroll-next-chapter");
+        // Back up past the top: the end of the chapter before.
+        wheel(desk, 120, 3);
+        QTRY_COMPARE(desk.reader->section(), 0);
+        QTRY_COMPARE(desk.reader->fraction(), 1.0);
+        // A step at the end goes on too.
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        desk.key(Qt::Key_Left);
+        QTRY_COMPARE(desk.reader->section(), 0);
+        // A click on the line goes on.
+        desk.key(Qt::Key_End);
+        flow = qobject_cast<QQuickItem *>(desk.find("flowReader"));
+        end = qobject_cast<QQuickItem *>(desk.find("chapterEnd"));
+        QTRY_VERIFY(end->mapToScene(QPointF(0, end->height())).y() < desk.window->height());
+        QTest::qWait(100);
+        QTest::mouseClick(desk.window, Qt::LeftButton, {}, end->mapToScene(QPointF(end->width() / 2, end->height() - 8)).toPoint());
+        QTRY_COMPARE(desk.reader->section(), 1);
+
+        // A finger pulling past the end goes on, and past the top goes back.
+        Finger finger{desk};
+        desk.reader->goTo(2, {}, true);
+        QTRY_VERIFY(desk.find("flowReader")->property("contentY").toReal() > 0);
+        QTest::qWait(100);
+        finger.drag(finger.on(0.5, 0.8), finger.on(0.5, 0.2));
+        QTRY_COMPARE(desk.reader->section(), 3);
+        QTRY_COMPARE(desk.reader->fraction(), 0.0);
+        QTest::qWait(300);
+        finger.drag(finger.on(0.5, 0.2), finger.on(0.5, 0.8));
+        QTRY_COMPARE(desk.reader->section(), 2);
+        QTRY_COMPARE(desk.reader->fraction(), 1.0);
+        // A short pull only bounces.
+        QTest::qWait(300);
+        finger.drag(finger.on(0.5, 0.5), finger.on(0.5, 0.45), 3);
+        QTest::qWait(300);
+        QCOMPARE(desk.reader->section(), 2);
+        // A tap on the line goes on.
+        QTest::qWait(300);
+        end = qobject_cast<QQuickItem *>(desk.find("chapterEnd"));
+        finger.tap(end->mapToScene(QPointF(end->width() / 2, end->height() - 8)));
+        QTRY_COMPARE(desk.reader->section(), 3);
+
+        // The last chapter's end is the book's.
+        desk.reader->goTo(4, {}, true);
+        QTRY_COMPARE(desk.value("chapterEndText", "text").toString(), QString("End of the book"));
+        desk.shot("layout-scroll-book-end");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // The place is kept from one layout to the next, and Shift+L goes round them.
+    void thePlaceIsKeptWhenTheLayoutChanges() {
+        Desk desk;
+        const QString file = desk.dir.filePath("harbour.epub");
+        QVERIFY(chapteredBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.window->resize(700, 900);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QTRY_VERIFY(desk.find("flowReader"));
+        desk.reader->goToPlace(0, 0.6);
+        QTRY_VERIFY(qAbs(through(desk) - 0.6) < 0.02);
+        // Automatic, then pages.
+        desk.key(Qt::Key_L, Qt::ShiftModifier);
+        QTRY_COMPARE(desk.settings->format().value("layout").toString(), QString("pages"));
+        QCOMPARE(desk.value("toastText", "text").toString(), QString("Pages that turn, each chapter starting on a page of its own"));
+        QObject *spread = spreadSettled(desk);
+        QVERIFY(spread);
+        QCOMPARE(desk.reader->section(), 0);
+        QTRY_VERIFY2(qAbs(double(page(desk)) / spread->property("lastLeft").toInt() - 0.6) < 0.15, QByteArray::number(page(desk)));
+        QVERIFY(qAbs(desk.reader->fraction() - 0.6) < 0.15);
+        const double paged = desk.reader->fraction();
+        // Then a column that scrolls, at the same place.
+        desk.key(Qt::Key_L, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.find("flowReader"));
+        QCOMPARE(desk.settings->format().value("layout").toString(), QString("scroll"));
+        QCOMPARE(desk.reader->section(), 0);
+        QTRY_VERIFY(qAbs(desk.reader->fraction() - paged) < 0.1);
+        QTRY_VERIFY(qAbs(through(desk) - paged) < 0.1);
+        // And automatic again.
+        desk.key(Qt::Key_L, Qt::ShiftModifier);
+        QTRY_COMPARE(desk.settings->format().value("layout").toString(), QString("auto"));
+        QVERIFY(qAbs(desk.reader->fraction() - paged) < 0.1);
+        // A book of its own, from the panel: the defaults stay automatic.
+        desk.key(Qt::Key_A, Qt::ShiftModifier);
+        QTRY_VERIFY(desk.value("formatSide", "visible").toBool() || desk.value("formatSheet", "visible").toBool());
+        clickItem(desk, "formatThisBook");
+        clickItem(desk, "formatLayout_pages");
+        QTRY_COMPARE(desk.backend->library()->bookFormat(book).value("layout").toString(), QString("pages"));
+        QCOMPARE(desk.settings->format().value("layout").toString(), QString("auto"));
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QTRY_VERIFY(qAbs(desk.reader->fraction() - paged) < 0.15);
+        desk.shot("layout-format-panel");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Right to left, Left turns on and Right back, as a finger's swipe does.
+    void leftAndRightFollowTheReadingDirection() {
+        Desk desk({}, "ar");
+        const QString file = desk.dir.filePath("harbour.epub");
+        QVERIFY(chapteredBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.settings->setOption("layout", "pages");
+        desk.window->resize(700, 900);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        spreadSettled(desk);
+        desk.key(Qt::Key_Left);
+        QCOMPARE(page(desk), 1);
+        desk.key(Qt::Key_Left);
+        QCOMPARE(page(desk), 2);
+        desk.key(Qt::Key_Right);
+        QCOMPARE(page(desk), 1);
+        desk.shot("layout-pages-rtl");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A PDF as pages: each page whole in the window, a turn exactly the
+    // next page by the keys, the wheel and a finger; Page Down and Page Up
+    // go by its chapters. Two side by side, page 1 alone and then 2|3, or
+    // paired from the start when asked. Scrolling, a screen's step lines up
+    // with the next page's top.
+    void aPdfAsPagesShowsEachWholeAndTwoStartAlone() {
+        Desk desk;
+        const QString file = desk.dir.filePath("papers.pdf");
+        QVERIFY(outlinedBook(file));
+        const qint64 book = desk.add(file);
+        QVERIFY(desk.show());
+        desk.settings->setOption("layout", "pages");
+        desk.window->resize(760, 1000);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QCOMPARE(desk.reader->count(), 12);
+        QCOMPARE(desk.reader->toc().size(), 4);
+        QTRY_VERIFY(desk.find("pageReader"));
+        auto *view = qobject_cast<QQuickItem *>(desk.find("pageReader"));
+        QVERIFY(view->property("turnsPages").toBool());
+        QVERIFY(!view->property("twoUp").toBool());
+        // The page that shows is whole, inside the window.
+        const auto whole = [&](int number) {
+            auto *page = qobject_cast<QQuickItem *>(desk.find(QString("pdfPage%1").arg(number)));
+            if (!page || !page->isVisible())
+                return false;
+            const QRectF at = page->mapRectToItem(view, QRectF(0, 0, page->width(), page->height()));
+            return at.top() >= -0.5 && at.bottom() <= view->height() + 0.5 && at.left() >= -0.5 && at.right() <= view->width() + 0.5;
+        };
+        QTRY_VERIFY(whole(0));
+        // The page has the keyboard, not the shelf behind it.
+        QTRY_VERIFY(view->hasActiveFocus());
+        desk.shot("layout-pdf-pages-1");
+        // A turn is exactly the next page, by every way there is.
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        QTRY_VERIFY(whole(1));
+        desk.key(Qt::Key_Space);
+        QTRY_COMPARE(desk.reader->section(), 2);
+        wheel(desk, -120);
+        QTRY_COMPARE(desk.reader->section(), 3);
+        turned(desk);
+        QTRY_VERIFY(whole(3));
+        desk.shot("layout-pdf-pages-chapter-2");
+        Finger finger{desk};
+        finger.tap(finger.on(0.9, 0.5));
+        turned(desk);
+        QTRY_COMPARE(desk.reader->section(), 4);
+        finger.drag(finger.on(0.85, 0.5), finger.on(0.15, 0.5));
+        turned(desk);
+        QTRY_COMPARE(desk.reader->section(), 5);
+        finger.drag(finger.on(0.15, 0.5), finger.on(0.85, 0.5));
+        turned(desk);
+        QTRY_COMPARE(desk.reader->section(), 4);
+        desk.key(Qt::Key_Left);
+        QTRY_COMPARE(desk.reader->section(), 3);
+        wheel(desk, 120);
+        QTRY_COMPARE(desk.reader->section(), 2);
+        turned(desk);
+        QTRY_VERIFY(whole(2));
+        // Page Down: the next chapter (page 4); Page Up from inside one:
+        // its start, then the chapter before.
+        desk.key(Qt::Key_PageDown);
+        QTRY_COMPARE(desk.reader->section(), 3);
+        desk.key(Qt::Key_PageDown);
+        QTRY_COMPARE(desk.reader->section(), 6);
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 7);
+        desk.key(Qt::Key_PageUp);
+        QTRY_COMPARE(desk.reader->section(), 6);
+        desk.key(Qt::Key_PageUp);
+        QTRY_COMPARE(desk.reader->section(), 3);
+        desk.key(Qt::Key_End);
+        QTRY_COMPARE(desk.reader->section(), 11);
+        QTRY_VERIFY(whole(11));
+        QCOMPARE(desk.reader->percent(), 100.0);
+
+        // Two side by side: page 1 alone, then 2|3, 4|5.
+        desk.window->resize(1700, 900);
+        QTRY_VERIFY(view->property("twoUp").toBool());
+        QVERIFY(view->property("firstAlone").toBool());
+        QTRY_COMPARE(view->property("count").toInt(), 7);
+        QTRY_VERIFY(view->property("settled").toBool());
+        desk.key(Qt::Key_Home);
+        QTRY_COMPARE(desk.reader->section(), 0);
+        QTRY_VERIFY(whole(0));
+        QVERIFY(!desk.find("pdfPage1") || !whole(1));
+        desk.shot("layout-pdf-pages-2-first-alone");
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 1);
+        QTRY_VERIFY(whole(1) && whole(2));
+        const auto side = [&](int number) {
+            auto *page = qobject_cast<QQuickItem *>(desk.find(QString("pdfPage%1").arg(number)));
+            return page->mapToItem(view, QPointF(0, 0));
+        };
+        QVERIFY(side(1).x() < side(2).x());
+        QCOMPARE(side(1).y(), side(2).y());
+        desk.shot("layout-pdf-pages-2-pair");
+        desk.key(Qt::Key_Right);
+        QTRY_COMPARE(desk.reader->section(), 3);
+        QTRY_VERIFY(whole(3) && whole(4));
+        // Paired from the start, when asked: 1|2, 3|4.
+        desk.settings->setOption("first_page", "paired");
+        QTRY_VERIFY(!view->property("firstAlone").toBool());
+        QTRY_COMPARE(view->property("count").toInt(), 6);
+        // (Once the page in sight has its new row.)
+        QTRY_VERIFY(view->property("settled").toBool());
+        desk.key(Qt::Key_Home);
+        QTRY_VERIFY(whole(0) && whole(1));
+        desk.shot("layout-pdf-pages-2-paired");
+        desk.settings->setOption("first_page", "auto");
+
+        // Scrolling, one under another: a screen's step lines up with the
+        // next page's top when it is in sight, and is never more than a window.
+        desk.settings->setOption("layout", "scroll");
+        desk.window->resize(760, 700);
+        QTRY_VERIFY(!view->property("twoUp").toBool());
+        QTRY_VERIFY(!view->property("turnsPages").toBool());
+        desk.key(Qt::Key_Home);
+        QTRY_COMPARE(view->property("contentY").toReal(), view->property("originY").toReal());
+        int lined = 0;
+        for (int step = 0; step < 12; ++step) {
+            const double from = view->property("contentY").toReal();
+            double nextTop = -1;
+            for (int row = 0; row < 12 && nextTop < 0; ++row) {
+                QQuickItem *item = nullptr;
+                QMetaObject::invokeMethod(view, "itemAtIndex", Q_RETURN_ARG(QQuickItem *, item), Q_ARG(int, row));
+                if (item && item->y() > from + 1 && item->y() <= from + view->height())
+                    nextTop = item->y();
+            }
+            desk.key(Qt::Key_Right);
+            QTest::qWait(30);
+            const double to = view->property("contentY").toReal();
+            QVERIFY2(to - from <= view->height() + 0.5, qPrintable(QString("step %1 went %2").arg(step).arg(to - from)));
+            if (nextTop >= 0) {
+                QCOMPARE(to, nextTop);
+                ++lined;
+            }
+        }
+        QVERIFY(lined >= 3);
+        desk.shot("layout-pdf-scroll");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };
 

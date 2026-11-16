@@ -1651,6 +1651,55 @@ private slots:
         verdict();
     }
 
+    // A book read as pages and as one column that runs on, and a PDF the
+    // same, at every size, in a long language and right to left: nothing
+    // spills or stands over anything, at a chapter's start and at its end,
+    // where the column says what comes next.
+    void theLayoutsAtEverySizeInGermanAndRightToLeft() {
+        for (const QByteArray language : {QByteArray("de"), QByteArray("ar")}) {
+            Desk desk(language, language == "ar" ? lightTheme : QByteArray(), false);
+            QString chapter;
+            for (int i = 1; i <= 30; ++i)
+                chapter += QString("<p>Absatz %1: Die Laternenwärterin ging am Abend die Hafenmauer entlang und zählte die "
+                                   "Glocken vom Ufer, bis keine mehr zu zählen waren.</p>").arg(i);
+            const QString epub = desk.dir.filePath("kapitel.epub"), pdf = desk.dir.filePath("seiten.pdf");
+            QVERIFY(Fixtures::chapteredEpub(epub, "Die Hafenchronik",
+                                            {{"Erstes Kapitel: Eine ungewöhnlich lange Überschrift über den Hafen", "<h1>Erstes Kapitel</h1>" + chapter},
+                                             {"Zweites Kapitel", "<h1>Zweites Kapitel</h1><p>Kurz.</p>"},
+                                             {"Drittes Kapitel", "<h1>Drittes Kapitel</h1>" + chapter}}));
+            QVERIFY(Fixtures::outlinedPdf(pdf, "Seiten", 6, {{"Eins", 0}, {"Zwei", 3}}));
+            const qint64 book = desk.backend->library()->add(epub).id, paper = desk.backend->library()->add(pdf).id;
+            QVERIFY(book > 0 && paper > 0);
+            desk.backend->reload();
+            QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            for (const qint64 id : {book, paper}) {
+                desk.reader->openBook(id);
+                QTRY_VERIFY(desk.reader->isOpen());
+                QTRY_VERIFY(desk.find("readerView"));
+                for (const QString layout : {"pages", "scroll"}) {
+                    desk.settings->setOption("layout", layout);
+                    for (const QSize &size : sizes()) {
+                        QVERIFY(desk.resize(size));
+                        desk.reader->goTo(0);
+                        look(desk, "layout-" + layout + (id == paper ? "-pdf" : ""));
+                        if (id == book) {
+                            // The end of the chapter, and the start of the next.
+                            desk.reader->goTo(0, {}, true);
+                            look(desk, "layout-" + layout + "-end");
+                            desk.reader->goTo(1);
+                            look(desk, "layout-" + layout + "-next");
+                        }
+                    }
+                }
+                desk.settings->setOption("layout", "auto");
+                desk.reader->close();
+                QTRY_VERIFY(!desk.reader->isOpen());
+            }
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+        verdict();
+    }
+
     // Omabook is the keyboard's first, and nothing is the keyboard's
     // alone: every command in the commands table, and every command a
     // plugin adds, has a control a mouse can click and a finger can tap,

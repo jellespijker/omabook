@@ -138,6 +138,16 @@ ApplicationWindow {
     // since the version last seen, "allnews" for the newest again).
     readonly property bool touring: tour.running
     function startTour(what) { return tour.start(what) }
+    // The shelf behind the page never keeps the keyboard while a book is
+    // read: a window resized lays the shelf out anew, which can hand the
+    // keyboard back to it, and the page's keys would stop answering.
+    onActiveFocusItemChanged: if (inReader && within(library, activeFocusItem)) Qt.callLater(restoreFocus)
+    // Whether an item is this one or inside it.
+    function within(outer, item) {
+        for (let at = item; at; at = at.parent)
+            if (at === outer) return true
+        return false
+    }
     // The keyboard, back with the shelf or the page.
     function restoreFocus() {
         if (win.inReader && readerLoader.item && readerLoader.item.content) readerLoader.item.content.forceActiveFocus()

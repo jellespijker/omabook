@@ -1,12 +1,13 @@
 import QtQuick
 import QtQuick.Controls
 
-// A flowing book in a wide window: two or three pages side by side, like
+// A flowing book as pages that turn: one, or two or three side by side like
 // the book lying open (how many is PageLayout::columns' to say, through
 // reader.format). The chapter is laid out once per page as a column and cut
 // into pages where its lines allow; the first page shows one, the next the
-// one after, and a turn moves on by the whole spread. Where the reader is,
-// is the start of the first page.
+// one after, and a turn moves on by the whole spread. A chapter starts on a
+// spread of its own and its last holds what is left of it. Where the reader
+// is, is the start of the first page.
 Item {
     id: spread
     objectName: "spreadReader"
@@ -28,7 +29,7 @@ Item {
     // measure allows; the margins are the room at the outer edges and above
     // and below.
     readonly property var format: reader.format.effective
-    readonly property int columns: Math.max(2, Math.min(3, reader.format.columns))
+    readonly property int columns: Math.max(1, Math.min(3, reader.format.columns))
     readonly property real gutter: reader.format.gutter
     readonly property real above: format.margins + 4
     readonly property real columnWidth: Math.max(200, reader.format.columnWidth)
@@ -100,7 +101,11 @@ Item {
     function lineDown() { pageDown() }
     function lineUp() { pageUp() }
     function next() { reader.goTo(reader.section + 1) }
-    function previous() { reader.goTo(reader.section - 1) }
+    // To the chapter's start, and from there to the one before.
+    function previous() {
+        if (page > 0) turnTo(0)
+        else reader.goTo(reader.section - 1)
+    }
     function toStart() { turnTo(0) }
     function toEnd() { turnTo(lastLeft) }
     function zoom(steps) { reader.format.zoom(steps) }
@@ -224,7 +229,9 @@ Item {
 
         Item {
             width: parent.width
-            height: sheet.there ? Math.max(0, spread.breaks[sheet.index + 1] - spread.breaks[sheet.index]) : 0
+            // At most a page: what lies between the end of its lines and
+            // the start of the next page's is only space.
+            height: sheet.there ? Math.max(0, Math.min(spread.pageHeight, spread.breaks[sheet.index + 1] - spread.breaks[sheet.index])) : 0
             clip: true
 
             TextEdit {

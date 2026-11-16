@@ -3,9 +3,9 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 
-// The reading format as controls: the font, its size, the measure, the
-// pages side by side, the spacing, the indent, the margins and the
-// alignment (readingformat.h, pagelayout.h). Each
+// The reading format as controls: the layout (pages or a scrolling column),
+// the font, its size, the measure, the pages side by side, the spacing, the
+// indent, the margins and the alignment (readingformat.h, pagelayout.h). Each
 // change shows on the page at once. The same controls are in the reader's
 // "Aa" panel, for the open book or the defaults (`scoped`), and in the
 // settings, for the defaults.
@@ -22,8 +22,10 @@ ColumnLayout {
     property string prefix: "format"
     readonly property var values: scoped ? reader.format.effective : reader.format.defaults
     readonly property var own: !scoped ? ({}) : forCollection && !bookOnly ? reader.format.collectionOwn : reader.format.own
+    // Pages that are pictures: only the layout and the first page apply.
+    property bool picturesOnly: false
     // The first control, for the keyboard to start at.
-    readonly property Item first: fontPicker
+    readonly property Item first: layoutAuto
 
     spacing: 6
 
@@ -128,6 +130,104 @@ ColumnLayout {
         }
     }
 
+    // A layout, as one of a row of buttons that says which is chosen.
+    component Segment: AbstractButton {
+        id: segment
+        required property string word
+        required property string name
+        readonly property bool chosen: (controls.values.layout || "auto") === word
+        objectName: controls.prefix + "Layout_" + word
+        onClicked: {
+            checked = Qt.binding(() => chosen)
+            controls.change("layout", word)
+        }
+        Layout.fillWidth: true
+        implicitWidth: Math.max(44, label.implicitWidth + 16)
+        implicitHeight: 36
+        focusPolicy: Qt.StrongFocus
+        checkable: true
+        checked: chosen
+        Accessible.role: Accessible.RadioButton
+        Accessible.name: name
+        Accessible.checked: chosen
+        Keys.onReturnPressed: clicked()
+        Keys.onEnterPressed: clicked()
+        background: Rectangle {
+            radius: theme.radius
+            color: segment.chosen ? theme.accent : segment.down || segment.hovered ? theme.colors.selection : "transparent"
+            border.width: segment.visualFocus ? 2 : 1
+            border.color: segment.visualFocus ? theme.foreground : segment.chosen ? theme.accent : theme.colors.selection
+        }
+        contentItem: Label {
+            id: label
+            text: segment.name
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            color: segment.chosen ? theme.accentForeground : theme.foreground
+        }
+    }
+
+    // How the book is read through: pages that turn, or one column that
+    // scrolls on through the chapters, or each as the room has it.
+    Label {
+        text: qsTr("Layout")
+        color: controls.own.layout !== undefined ? theme.accent : theme.colors.muted
+        font.pixelSize: 12
+    }
+    RowLayout {
+        id: layoutRow
+        objectName: controls.prefix + "Layout"
+        Layout.fillWidth: true
+        spacing: 4
+        Segment { id: layoutAuto; word: "auto"; name: qsTr("Automatic") }
+        Segment { word: "pages"; name: qsTr("Pages") }
+        Segment { word: "scroll"; name: qsTr("Scroll") }
+    }
+    Label {
+        objectName: controls.prefix + "LayoutName"
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: theme.colors.muted
+        font.pixelSize: 12
+        text: controls.values.layout === "pages" ? qsTr("Pages that turn; each chapter starts on a page of its own, and a picture page is shown whole")
+              : controls.values.layout === "scroll" ? qsTr("One column that scrolls on from one chapter into the next")
+              : qsTr("Automatic: pages where two fit side by side, else a column that scrolls")
+    }
+    // Two pictures of pages side by side: the first alone, as a printed
+    // book opens, or paired from the start.
+    Switch {
+        id: firstAlone
+        objectName: controls.prefix + "FirstPage"
+        Layout.fillWidth: true
+        Layout.minimumHeight: 40
+        visible: !controls.scoped || reader.kind === "pages"
+        readonly property string word: controls.values.first_page || "auto"
+        // What Automatic gives: alone for a book's first page, which is
+        // taller than wide; paired for slides and comics.
+        readonly property bool automatic: !controls.scoped || reader.pageAspect(0) > 1
+        text: qsTr("First page alone")
+        checked: word === "alone" || (word === "auto" && automatic)
+        Accessible.name: text
+        onToggled: controls.change("first_page", checked ? "alone" : "paired")
+    }
+    Label {
+        objectName: controls.prefix + "FirstPageName"
+        visible: firstAlone.visible
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: theme.colors.muted
+        font.pixelSize: 12
+        text: firstAlone.checked ? qsTr("Two side by side: page 1 alone, then 2 and 3, as a printed book opens")
+                                 : qsTr("Two side by side: 1 and 2, then 3 and 4, as slides and comics read")
+    }
+
+    ColumnLayout {
+        id: typeControls
+        Layout.fillWidth: true
+        spacing: controls.spacing
+        enabled: !controls.picturesOnly
+
     Label {
         text: qsTr("Font")
         color: controls.own.font_family !== undefined ? theme.accent : theme.colors.muted
@@ -180,6 +280,8 @@ ColumnLayout {
         objectName: controls.prefix + "Pages"
         Layout.fillWidth: true
         spacing: 4
+        // A book that scrolls is one column.
+        enabled: controls.values.layout !== "scroll"
         Repeater {
             model: [0, 1, 2, 3]
             delegate: AbstractButton {
@@ -230,6 +332,8 @@ ColumnLayout {
         text: {
             translator.language
             const shown = reader.format.columns
+            if (controls.values.layout === "scroll")
+                return qsTr("Scrolling: one column, whatever the width")
             if (!reader.open)
                 return settings.pages === 0 ? qsTr("Automatic: as many pages as the window has room for, up to three")
                                             : qsTr("%Ln pages side by side where they fit", "", settings.pages)
@@ -316,5 +420,6 @@ ColumnLayout {
               : controls.values.align === "center" ? qsTr("Centred: each line in the middle")
               : controls.values.align === "end" ? qsTr("End: lines against the side the text ends at")
               : qsTr("Start: lines against the side the text starts at")
+    }
     }
 }

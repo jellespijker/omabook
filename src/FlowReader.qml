@@ -4,13 +4,24 @@ import QtQuick.Controls
 // A flowing book: one chapter at a time, set in the reader's own font and
 // the desktop's colors, in one column that scrolls, no wider than the
 // measure (its longest line, in characters of the font) and centred with
-// the room to spare as margins.
+// the room to spare as margins. A screen's step shows nothing again: it
+// goes on from the first line that wasn't wholly in sight.
+//
+// When it runs on (the layout "scroll", readingformat.h), the chapter ends
+// in a quiet line naming the next one, and scrolling on past it, by the
+// wheel, a finger pulling past the end or a step at the end, goes on into
+// the next chapter at its top; back past the top goes to the end of the one
+// before.
 Flickable {
     id: flick
     objectName: "flowReader"
     readonly property string selectedText: page.selectedText
     // Whether the graph's things are marked in the text.
     property bool marking: false
+    // Whether reading runs on from one chapter into the next.
+    property bool runsOn: false
+    // A finger is on the page: it scrolls, rather than selecting words.
+    property bool fingerDown: false
     // The thing under the pointer changed (null for none), and a selection
     // was made with the mouse.
     signal pointed(var thing)
@@ -46,8 +57,10 @@ Flickable {
     readonly property real side: Math.min(format.margins, Math.max(8, (width - 280) / 2))
 
     contentWidth: width
-    contentHeight: page.height + 2 * side + 32
-    boundsBehavior: Flickable.StopAtBounds
+    contentHeight: page.height + 2 * side + 32 + (chapterEnd.visible ? chapterEnd.height + 32 : 0)
+    // Running on, a finger may pull past either end, which is how it turns
+    // to the next chapter or back (see onDraggingChanged).
+    boundsBehavior: runsOn ? Flickable.DragOverBounds : Flickable.StopAtBounds
     clip: true
     focus: true
     ScrollBar.vertical: ScrollBar {}
@@ -75,19 +88,49 @@ Flickable {
         wanted = -1
         place(contentY + distance)
     }
+    function atEnd() { return contentY >= span() - 1 }
+    function atStart() { return contentY <= 1 }
+    // A screen on or back, from the first line that wasn't wholly in sight
+    // (PageLayout::screenStep), in the column's own terms and back.
+    function screen(forward) {
+        const top = reader.screenStep(page.textDocument, contentY - page.y, height, forward)
+        wanted = -1
+        place(top <= 0.5 && !forward ? 0 : page.y + top)
+    }
     // A page down at the end of a chapter turns to the next one.
     function pageDown() {
-        if (contentY >= range - 1) next()
-        else scrollBy(height - page.font.pixelSize * 3)
+        if (atEnd()) next()
+        else screen(true)
     }
     function pageUp() {
-        if (contentY <= 1) { if (reader.section > 0) reader.goTo(reader.section - 1, "", true) }
-        else scrollBy(-(height - page.font.pixelSize * 3))
+        if (atStart()) backToEnd()
+        else screen(false)
     }
-    function lineDown() { scrollBy(page.font.pixelSize * 4) }
-    function lineUp() { scrollBy(-page.font.pixelSize * 4) }
+    // Running on, a line past the end is the next chapter too.
+    function lineDown() {
+        if (runsOn && atEnd()) next()
+        else scrollBy(page.font.pixelSize * 4)
+    }
+    function lineUp() {
+        if (runsOn && atStart()) backToEnd()
+        else scrollBy(-page.font.pixelSize * 4)
+    }
     function next() { reader.goTo(reader.section + 1) }
-    function previous() { reader.goTo(reader.section - 1) }
+    // The end of the chapter before.
+    function backToEnd() { if (reader.section > 0) reader.goTo(reader.section - 1, "", true) }
+    // To the chapter's start, and from there to the one before.
+    function previous() {
+        if (!atStart()) toStart()
+        else reader.goTo(reader.section - 1)
+    }
+    // A finger's tap on the line at the chapter's end goes on.
+    function activateAt(x, y) {
+        if (!chapterEnd.visible || chapterEnd.last) return false
+        const at = chapterEnd.mapFromItem(flick, x, y)
+        if (at.x < 0 || at.y < 0 || at.x > chapterEnd.width || at.y > chapterEnd.height) return false
+        next()
+        return true
+    }
     function toStart() { scrollBy(-contentY) }
     function toEnd() { scrollBy(range) }
     function zoom(steps) { reader.format.zoom(steps) }
@@ -159,6 +202,34 @@ Flickable {
         else if (span() > 0) place(held * span())
     }
     onContentHeightChanged: relaid()
+    // Pulled past the end by a finger, on into the next chapter; past the
+    // top, back to the end of the one before. A short pull only bounces.
+    readonly property real pull: Math.min(120, height / 6)
+    // The furthest the finger pulled past an end while it was down: the
+    // view springs back as it lifts.
+    property real pulled: 0
+    onVerticalOvershootChanged: if (dragging && Math.abs(verticalOvershoot) > Math.abs(pulled)) pulled = verticalOvershoot
+    onDraggingChanged: {
+        const far = pulled
+        pulled = 0
+        if (dragging || !runsOn) return
+        if (far > pull && reader.section + 1 < reader.count) pulledTo.going = 1
+        else if (far < -pull && reader.section > 0) pulledTo.going = -1
+        else return
+        pulledTo.restart()
+    }
+    // Once the finger has let go: the flick it started is stopped, so the
+    // chapter it leads to opens at its top (or the one before at its end).
+    Timer {
+        id: pulledTo
+        interval: 0
+        property int going: 0
+        onTriggered: {
+            flick.cancelFlick()
+            if (going > 0) flick.next()
+            else flick.backToEnd()
+        }
+    }
     onHeightChanged: relaid()
     // Once more when everything has its size. A page made for a book that
     // is already open (the window went from two pages to one) may be laid
@@ -183,7 +254,7 @@ Flickable {
         x: Math.round((flick.width - width) / 2)
         width: Math.max(200, Math.min(reader.format.lineWidth, flick.width - 2 * flick.side))
         readOnly: true
-        selectByMouse: true
+        selectByMouse: !flick.fingerDown
         persistentSelection: true
         activeFocusOnPress: false
         textFormat: TextEdit.RichText
@@ -215,6 +286,51 @@ Flickable {
             on: flick.marking
             onHoveredChanged: flick.pointed(hovered ? Object.assign({}, hovered, { rect: flick.fromPage(hovered.rect) }) : null)
             onReleased: flick.selected()
+        }
+    }
+
+    // The chapter's end, when reading runs on: a quiet line saying so, and
+    // what comes next, which a click or a tap goes on to.
+    Item {
+        id: chapterEnd
+        objectName: "chapterEnd"
+        visible: flick.runsOn && reader.open
+        readonly property bool last: reader.section + 1 >= reader.count
+        x: page.x
+        y: page.y + page.height + 32
+        width: page.width
+        height: endWords.implicitHeight + 28
+        Accessible.role: last ? Accessible.StaticText : Accessible.Button
+        Accessible.name: endWords.text
+
+        Rectangle {
+            anchors.horizontalCenter: parent.horizontalCenter
+            width: Math.min(parent.width, 160)
+            height: 1
+            color: theme.colors.selection
+        }
+        Label {
+            id: endWords
+            objectName: "chapterEndText"
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.Wrap
+            font.pixelSize: 13
+            color: endHover.hovered && !chapterEnd.last ? theme.foreground : theme.colors.muted
+            text: {
+                translator.language
+                if (chapterEnd.last) return qsTr("End of the book")
+                return reader.nextTitle !== "" ? qsTr("End of chapter · next: %1").arg(reader.nextTitle)
+                                               : qsTr("End of chapter · on to the next")
+            }
+        }
+        HoverHandler { id: endHover; cursorShape: chapterEnd.last ? Qt.ArrowCursor : Qt.PointingHandCursor }
+        TapHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
+            enabled: !chapterEnd.last
+            onTapped: flick.next()
         }
     }
 }

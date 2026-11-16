@@ -126,5 +126,9 @@ QList<Manual::Step> Manual::features() {
             "click on a book lists what can be done with it. {global.help} shows the keys a plugin adds under its "
             "name, and the keys of each panel."),
          "libraryMore|touchBar", "global.help", "library", ""},
+        {"layout", "0.1.5", tr("Pages or scroll"),
+         tr("{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, "
+            "or as one column that runs on from chapter to chapter. A turn never shows a line twice."),
+         "", "reader.layout", "reader", ""},
     };
 }

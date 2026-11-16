@@ -29,10 +29,19 @@ QList<Manual::Topic> Manual::topicList() {
         {"reading", tr("Reading"), tr("Turn pages, find your place, and make the page comfortable."),
          {
              {tr("Turning pages"),
-              tr("{reader.page_down} turns the page and carries on into the next chapter; {reader.page_up} goes back. "
-                 "{reader.next} and {reader.previous} jump a chapter, {reader.line_down} and {reader.line_up} scroll a few "
-                 "lines. Where the window has room, two or three pages stand side by side and a turn moves on by all of "
-                 "them; otherwise one page scrolls.")},
+              tr("{reader.page_down} turns the page, or scrolls a screen on, and carries on into the next chapter; "
+                 "{reader.page_up} goes back. Nothing is shown twice: the next screen starts at the first line that wasn't "
+                 "wholly in sight. {reader.next} goes to the next chapter; {reader.previous} to the start of this one, and "
+                 "from there to the one before. {reader.line_down} and {reader.line_up} scroll a few lines. Where the "
+                 "window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one "
+                 "page scrolls.")},
+             {tr("Pages or scroll"),
+              tr("{reader.layout} chooses how a book is read through, also under Layout in the Aa panel. Pages: even one "
+                 "column is cut into pages, each chapter starts on a page of its own, and turning on from its last page "
+                 "opens the next chapter; a PDF or comic page is shown whole, and two side by side open as a book does, "
+                 "page 1 alone (First page alone). Scroll: one column that runs on, with a line at each chapter's end "
+                 "saying what is next; scroll on past it, or tap it, to go on. Automatic: pages where two fit side by "
+                 "side, else a column that scrolls. Your place stays where it is when you change.")},
              {tr("How many pages"),
               tr("A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you "
                  "read in. As many pages stand side by side as each keep most of that, up to three, and none with lines "
@@ -64,7 +73,7 @@ QList<Manual::Topic> Manual::topicList() {
                  "and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at "
                  "once and the page stays where you were. With Only this book on, the change is for this book alone; "
                  "Reset puts back what there was when the panel opened. The defaults for every book are in the "
-                 "settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set.")},
+                 "settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set. Their layout can.")},
              {tr("With fingers"),
               tr("Swipe sideways or tap the left or right edge to turn the page, pinch to resize, and tap the middle of "
                  "the page for buttons to everything else.")},

@@ -73,11 +73,16 @@ omabook progress 12 --section 4 --fraction 0.2   # set it
 omabook format --json                            # how every book is set: font, size, line width, spacing, indent, margins, alignment, with their bounds
 omabook format 12 --align justify --line-height 170  # one book's own, over the defaults; without the id, the defaults
 omabook format 12 --reset                        # the book follows the defaults again
+omabook format --layout scroll                   # every book one column that runs on through the chapters; pages: turned pages; auto: pages where two fit
+omabook format 12 --layout pages                 # this book as pages: each chapter starts on a page of its own, a PDF page shown whole
+omabook format --first-page paired               # two PDF pages side by side as 1|2 instead of a book's 1, 2|3 (alone; auto by the first page's shape)
 omabook sync laptop                              # exchange books and reading places with another computer over ssh
 omabook sync laptop:Books/Fiction                # ...with a named library folder there
 omabook sync laptop --dry-run                    # what a sync would receive, send, update and remove on each side; changes nothing
 omabook sync laptop --details mine               # where details differ and no time says which are newer: keep this side's (or theirs)
 ```
+
+The layout and the first page are reading-format options like the rest: a book's own lies over its collection's, which lies over the defaults, and the reading place (section and how far through it) is kept when the layout changes. In the window `Shift+L` goes round auto, pages and scroll.
 
 `sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks, books without a file included (matched by identifiers, else title and authors), with their shelf, stars and finished day, and the newer reading place and the newer details win; a book removed on one side is removed on the other too (to the trash) unless it was read or changed there since. Run `--dry-run` first and show the user what would be removed. Books from before details had a time are counted when their details differ, and only `--details mine|theirs` settles them: ask the user which side is right.
 

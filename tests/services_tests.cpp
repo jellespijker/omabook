@@ -1010,7 +1010,7 @@ private slots:
         QVERIFY(state.style.isEmpty());
         QCOMPARE(state.settings.value("cover_size").toInt(), 176);
         QCOMPARE(state.colors.value("accent").toString(), QString("#ffd60a"));
-        QVERIFY(state.commands.contains("reader.page_down (Space, PgDown)"));
+        QVERIFY(state.commands.contains("reader.page_down (Space, Right)"));
         const AiRequest request = Prompts::change(state, "make it warmer");
         QVERIFY(request.messages.first().text.endsWith("make it warmer"));
         QVERIFY(request.messages.first().text.contains("<style.json>(there is none)</style.json>"));
@@ -1046,7 +1046,7 @@ private slots:
         QVERIFY2(problem.contains("cover_size") && problem.contains("reader.fly"), qPrintable(problem));
         QVERIFY(custom.style().isEmpty());
         QCOMPARE(custom.plainKeys().value("library.read").toStringList(), (QStringList{"Space", "R"}));
-        QCOMPARE(custom.plainKeys().value("reader.page_down").toStringList(), (QStringList{"Space", "PgDown"}));
+        QCOMPARE(custom.plainKeys().value("reader.page_down").toStringList(), (QStringList{"Space", "Right"}));
         QVERIFY(!QFile::exists(dir.filePath("custom/keys.error")));
         // And what isn't an answer at all changes nothing.
         QVERIFY(!InterfaceChanges::apply(custom, settings, Prompts::parseChange("I can't do that.")).isEmpty());

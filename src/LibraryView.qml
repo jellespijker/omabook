@@ -637,7 +637,8 @@ Item {
                         item.show(row >= 0 ? row : 0)
                         view.selectedId = backend.books.idAt(item.currentRow)
                         item.focus = true
-                        if (!win.typing)
+                        // Not from under the page of a book being read.
+                        if (!win.typing && !win.inReader)
                             item.forceActiveFocus()
                     }
                     Keys.onReturnPressed: view.openSelected()

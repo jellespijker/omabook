@@ -164,6 +164,89 @@ bool pdf(const QString &path, const QString &title, const QStringList &pages) {
     return painter.end();
 }
 
+bool chapteredEpub(const QString &path, const QString &title, const QList<Chapter> &chapters) {
+    QString manifest, spine, points;
+    Entries entries{{"mimetype", "application/epub+zip"},
+                    {"META-INF/container.xml",
+                     R"(<?xml version="1.0"?><container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+<rootfiles><rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/></rootfiles></container>)"}};
+    for (int i = 0; i < chapters.size(); ++i) {
+        const QString id = QString("c%1").arg(i + 1), file = QString("text/%1.xhtml").arg(id);
+        manifest += QString(R"(<item id="%1" href="%2" media-type="application/xhtml+xml"/>)").arg(id, file);
+        spine += QString(R"(<itemref idref="%1"/>)").arg(id);
+        points += QString(R"(<navPoint id="n%1"><navLabel><text>%2</text></navLabel><content src="%3"/></navPoint>)")
+                      .arg(i + 1).arg(chapters.at(i).title, file);
+        entries.append({"OEBPS/" + file, QString(R"(<?xml version="1.0" encoding="utf-8"?>
+<html xmlns="http://www.w3.org/1999/xhtml"><head><title>%1</title></head><body>%2</body></html>)")
+                                             .arg(chapters.at(i).title, chapters.at(i).body).toUtf8()});
+    }
+    entries.append({"OEBPS/content.opf", QString(R"(<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="2.0" unique-identifier="id">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:opf="http://www.idpf.org/2007/opf">
+    <dc:title>%1</dc:title><dc:creator opf:role="aut">Ann Author</dc:creator><dc:language>en</dc:language>
+    <dc:identifier id="id">urn:uuid:%2</dc:identifier>
+  </metadata>
+  <manifest><item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
+    <item id="plate" href="images/plate.png" media-type="image/png"/>%3</manifest>
+  <spine toc="ncx">%4</spine>
+</package>)").arg(title, QString::number(qHash(title)), manifest, spine).toUtf8()});
+    entries.append({"OEBPS/toc.ncx", QString(R"(<?xml version="1.0"?>
+<ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1"><navMap>%1</navMap></ncx>)").arg(points).toUtf8()});
+    entries.append({"OEBPS/images/plate.png", picture(600, 800, QColor("#3a6b8c"))});
+    return zip(path, entries);
+}
+
+bool outlinedPdf(const QString &path, const QString &title, int pages, const QList<QPair<QString, int>> &chapters) {
+    // Objects: 1 the catalog, 2 the pages, 3 the outline, 4 the font, then
+    // each page and its contents, then each chapter of the outline.
+    QList<QByteArray> objects(4 + 2 * pages + chapters.size());
+    const auto pageObject = [](int page) { return 5 + 2 * page; };
+    const auto chapterObject = [pages](int chapter) { return 5 + 2 * pages + chapter; };
+    QByteArray kids;
+    for (int page = 0; page < pages; ++page) {
+        kids += QByteArray::number(pageObject(page)) + " 0 R ";
+        QByteArray text = "BT /F1 40 Tf 60 500 Td (" + QByteArray::number(page + 1) + ") Tj ET\n";
+        for (const auto &[name, start] : chapters)
+            if (start == page)
+                text += "BT /F1 18 Tf 60 440 Td (" + name.toLatin1() + ") Tj ET\n";
+        for (int line = 0; line < 14; ++line)
+            text += "BT /F1 10 Tf 60 " + QByteArray::number(400 - line * 22) + " Td (Line " + QByteArray::number(line + 1)
+                    + " of page " + QByteArray::number(page + 1) + ", set as a book is.) Tj ET\n";
+        objects[pageObject(page) - 1] = "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 420 595] /Resources << /Font << /F1 4 0 R >> >> "
+                                        "/Contents " + QByteArray::number(pageObject(page) + 1) + " 0 R >>";
+        objects[pageObject(page)] = "<< /Length " + QByteArray::number(text.size()) + " >>\nstream\n" + text + "endstream";
+    }
+    objects[0] = "<< /Type /Catalog /Pages 2 0 R /Outlines 3 0 R /PageMode /UseOutlines >>";
+    objects[1] = "<< /Type /Pages /Kids [" + kids + "] /Count " + QByteArray::number(pages) + " >>";
+    objects[2] = chapters.isEmpty() ? QByteArray("<< /Type /Outlines /Count 0 >>")
+                                    : "<< /Type /Outlines /First " + QByteArray::number(chapterObject(0)) + " 0 R /Last "
+                                          + QByteArray::number(chapterObject(chapters.size() - 1)) + " 0 R /Count "
+                                          + QByteArray::number(chapters.size()) + " >>";
+    objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>";
+    for (int i = 0; i < chapters.size(); ++i) {
+        QByteArray item = "<< /Title (" + chapters.at(i).first.toLatin1() + ") /Parent 3 0 R /Dest ["
+                          + QByteArray::number(pageObject(chapters.at(i).second)) + " 0 R /XYZ 0 595 0]";
+        if (i > 0)
+            item += " /Prev " + QByteArray::number(chapterObject(i - 1)) + " 0 R";
+        if (i + 1 < chapters.size())
+            item += " /Next " + QByteArray::number(chapterObject(i + 1)) + " 0 R";
+        objects[chapterObject(i) - 1] = item + " >>";
+    }
+    QByteArray file = "%PDF-1.4\n";
+    QList<qsizetype> offsets;
+    for (int i = 0; i < objects.size(); ++i) {
+        offsets << file.size();
+        file += QByteArray::number(i + 1) + " 0 obj\n" + objects.at(i) + "\nendobj\n";
+    }
+    const qsizetype table = file.size();
+    file += "xref\n0 " + QByteArray::number(objects.size() + 1) + "\n0000000000 65535 f \n";
+    for (const qsizetype offset : offsets)
+        file += QByteArray::number(offset).rightJustified(10, '0') + " 00000 n \n";
+    file += "trailer\n<< /Size " + QByteArray::number(objects.size() + 1) + " /Root 1 0 R /Info << /Title (" + title.toLatin1()
+            + ") >> >>\nstartxref\n" + QByteArray::number(table) + "\n%%EOF\n";
+    return write(path, file);
+}
+
 QByteArray be32(quint32 value) {
     QByteArray bytes(4, '\0');
     qToBigEndian(value, bytes.data());

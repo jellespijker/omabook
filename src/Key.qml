@@ -8,15 +8,22 @@ Item {
     property string command
     // Whether this is the place the command belongs to right now.
     property bool when: true
+    // Left and Right the other way round, for a command that goes with the
+    // reading direction in a right-to-left language.
+    property bool mirrored: false
     signal activated()
+    function turned(keys) {
+        if (!mirrored || !keys) return keys || []
+        return keys.map(k => k.replace(/\b(Left|Right)\b/g, (side) => side === "Left" ? "Right" : "Left"))
+    }
 
     Shortcut {
-        sequences: custom.plainKeys[key.command] || []
+        sequences: key.turned(custom.plainKeys[key.command])
         enabled: key.when && win.keys
         onActivated: key.activated()
     }
     Shortcut {
-        sequences: custom.chordKeys[key.command] || []
+        sequences: key.turned(custom.chordKeys[key.command])
         enabled: key.when && !win.dialogOpen
         onActivated: key.activated()
     }
