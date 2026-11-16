@@ -1520,6 +1520,42 @@ private slots:
     // travel both ways with their shelf, stars and finished day, a book of
     // the same name isn't made twice, and one removed here stays away. A
     // book with a file brings its reading along too.
+    // A book a plugin made carries its names elsewhere to the other
+    // computer, but never the plugin's mark ("generated"): only the plugin
+    // that made a book sets that. The other side takes the rest, and a
+    // second sync has nothing left to give.
+    void aPluginsMarkNeverTravelsAndTheSyncSettles() {
+        QTemporaryDir dir;
+        const Remote remote("laptop:" + dir.filePath("There"), {standInSsh(dir)});
+        Library here(dir.filePath("Here"));
+        QVERIFY(here.open());
+        QVERIFY(Fixtures::epub(dir.filePath("story.epub"), "A Told Story"));
+        const qint64 story = here.add(dir.filePath("story.epub")).id;
+        QVERIFY(here.setIdentifier(story, "generated", "teller"));
+        QVERIFY(here.setIdentifier(story, "teller", "s123"));
+        {
+            Library there(dir.filePath("There"));
+            QVERIFY(there.open());
+        }
+        const SyncSummary first = syncLibrary(here, remote);
+        QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
+        QCOMPARE(first.sent, 1);
+        Library there(dir.filePath("There"));
+        QVERIFY(there.open());
+        const QList<Book> arrived = there.books("told story");
+        QCOMPARE(arrived.size(), 1);
+        QCOMPARE(arrived.first().identifiers.value("teller").toString(), QString("s123"));
+        QVERIFY(!arrived.first().identifiers.contains("generated"));
+        // Nothing to give the second time.
+        const SyncSummary again = syncLibrary(here, remote);
+        QVERIFY2(again.problems.isEmpty(), qPrintable(again.problems.join('\n')));
+        QCOMPARE(again.sent + again.readingSent + again.detailsSent + again.placesSent, 0);
+        // And a mark said there is never taken in here.
+        QVERIFY(there.setIdentifier(there.books("told story").first().id, "generated", "other"));
+        syncLibrary(here, remote);
+        QCOMPARE(here.book(story)->identifiers.value("generated").toString(), QString("teller"));
+    }
+
     void booksWithoutAFileAreSyncedByWhatTheyAreCalled() {
         QTemporaryDir dir;
         const QString ssh = standInSsh(dir);

@@ -50,13 +50,20 @@ QStringList entryKeysOf(const QJsonObject &theirs) {
 // With `detailsAt` (for an Omabook there that keeps it), the time its
 // details are stamped with there: the names elsewhere are part of the
 // details, and what a sync brings keeps the time it had.
+//
+// "generated" (which plugin made a book) never travels: only that plugin
+// marks a book as its own, and the mark is what lets it fork and branch a
+// story, which must never reach a book by a human author. A sync neither
+// sends it nor takes it in.
+bool travels(const QString &scheme) { return scheme.compare(QStringLiteral("generated"), Qt::CaseInsensitive) != 0; }
+
 QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt) {
     QStringList arguments{"set", QString::number(id), "--status", book.shelf.isEmpty() ? QStringLiteral("none") : book.shelf,
                           "--rating", QString::number(book.rating), "--paper", book.paper ? QStringLiteral("yes") : QStringLiteral("no")};
     if (!book.finished.isEmpty())
         arguments << "--finished" << book.finished;
     for (auto it = book.identifiers.begin(); it != book.identifiers.end(); ++it)
-        if (const QString value = it.value().toVariant().toString(); !value.isEmpty())
+        if (const QString value = it.value().toVariant().toString(); !value.isEmpty() && travels(it.key()))
             arguments << "--identifier" << it.key() + "=" + value;
     if (detailsAt)
         arguments << "--details-at" << QString::number(*detailsAt);
@@ -89,7 +96,7 @@ bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dr
     // reason to send the details back.
     const QJsonObject identifiers = theirs.value("identifiers").toObject();
     for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (!mine->identifiers.contains(it.key())) {
+        if (travels(it.key()) && !mine->identifiers.contains(it.key())) {
             changed = true;
             if (!dryRun)
                 library.setIdentifier(id, it.key(), it.value().toVariant().toString(), mine->detailsAt);
@@ -104,7 +111,7 @@ bool saysLess(const QJsonObject &theirs, const Book &mine) {
         || (theirs.value("finished").toString().isEmpty() && !mine.finished.isEmpty()) || (!theirs.value("paper").toBool() && mine.paper))
         return true;
     const QJsonObject identifiers = theirs.value("identifiers").toObject();
-    return std::ranges::any_of(mine.identifiers.keys(), [&](const QString &scheme) { return !identifiers.contains(scheme); });
+    return std::ranges::any_of(mine.identifiers.keys(), [&](const QString &scheme) { return travels(scheme) && !identifiers.contains(scheme); });
 }
 
 // A book's details as both sides keep them, to compare.
