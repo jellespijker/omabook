@@ -341,6 +341,15 @@ const QList<QStringList> migrations{
      "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
      "AND o.space NOT IN (SELECT id FROM log_ids WHERE name >= 'published:' AND name < 'published;')"},
+    // A collection published as a space (#3): which collection, with which
+    // parts, and the space's own log, numbered once and for good, so that one
+    // who has its operations up to a number is sent only those after it.
+    // Apart from `ops`: what is read to make this library's own rows reads
+    // all of `ops`, and must never take a published space's word for a book.
+    {"CREATE TABLE IF NOT EXISTS published (space TEXT PRIMARY KEY, collection TEXT NOT NULL, parts TEXT NOT NULL DEFAULT '')",
+     "CREATE TABLE IF NOT EXISTS published_ops (space TEXT NOT NULL, device TEXT NOT NULL, seq INTEGER NOT NULL, hlc INTEGER NOT NULL, "
+     "author TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL, field TEXT NOT NULL DEFAULT '', value TEXT NOT NULL DEFAULT '', "
+     "PRIMARY KEY (space, device, seq)) WITHOUT ROWID"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
