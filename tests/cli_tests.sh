@@ -120,6 +120,11 @@ printf 'Another text.\n' > "$work/other.txt"
 expect "add with given details" 0 '"id": 3' "$omabook" add --library "$library" "$work/other.txt" --meta "$work/details.json" --json
 expect "the given details are used" 0 '"title": "Described"' "$omabook" show 3 --library "$library" --json
 expect "sync needs a computer" 1 "computer" "$omabook" sync --library "$library"
+expect "identity makes a key pair and prints its id" 0 "Fingerprint:" "$omabook" identity --library "$library"
+[ "$(stat -c %a "$library/omabook-person.key")" = 600 ] || fail "the key file can be read by others"
+id="$("$omabook" identity --export --library "$library")"
+expect "identity keeps the same id" 0 "\"id\": \"$id\"" "$omabook" identity --json --library "$library"
+expect "identity is in the help" 0 "identity [--export]" "$omabook" help
 
 expect "the plugins are listed" 0 "builtin:Open Library" "$omabook" plugins
 expect "the plugins say what they bring" 0 '"fields"' "$omabook" plugins --json

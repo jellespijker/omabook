@@ -14,8 +14,8 @@
 summary = "Settings, logging, theme and interface files, text cleaning, the script API table: no knowledge of books."
 uses = []
 modules = [
-  "bookmeta", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
-  "readingformat", "scriptapi", "scriptform", "secretstore", "settings", "theme", "themechoice",
+  "bookmeta", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
+  "person", "readingformat", "scriptapi", "scriptform", "secretstore", "settings", "spacekey", "theme", "themechoice",
   "translator",
 ]
 
@@ -32,7 +32,7 @@ summary = "The library and the knowledge graph: storage, books, their sides and 
 uses = ["formats", "foundation"]
 modules = [
   "booksides", "catalog", "changelog", "changeloggraph", "graph", "graphcontext", "graphsync", "knowledgesearch", "libraries",
-  "library", "librarymigrations", "replication", "spacereducer", "spacereplay", "spaces", "textmarks",
+  "library", "librarymigrations", "replication", "signedops", "spacereducer", "spacereplay", "spaces", "textmarks",
 ]
 
 [layers.services]
@@ -58,7 +58,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["cli", "mcp", "mcpcommands", "synccommands"]
+modules = ["cli", "identitycommands", "mcp", "mcpcommands", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Added
+
+- `omabook identity` prints your id and its fingerprint: the public half of a key pair made the first time it is asked for and kept beside the library, readable only by you, which will sign what you write in a space shared with others (#47).
+
 ### Changed
 
 - Each library keeps global ids, a hybrid logical clock and a change log alongside its tables; `omabook sync` uses the clock across computers whose wall clocks differ and merges book details field by field (#35).

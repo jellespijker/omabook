@@ -2,19 +2,16 @@
 
 #include <QCommandLineParser>
 #include <QDir>
-#include <QDirIterator>
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QStandardPaths>
 #include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QSaveFile>
 #include <QScopeGuard>
-#include <QTemporaryDir>
 #include <algorithm>
 #include <array>
 #include <cstdio>
@@ -40,6 +37,7 @@
 #include "graph.h"
 #include "graphcontext.h"
 #include "graphtools.h"
+#include "identitycommands.h"
 #include "importer.h"
 #include "interfacechange.h"
 #include "knowledgesearch.h"
@@ -2167,6 +2165,7 @@ constexpr std::array cliCommands{
     CliCommand{"format"_L1, format},
     CliCommand{"sync"_L1, runSyncCli},
     CliCommand{"manifest"_L1, runManifestCli},
+    CliCommand{"identity"_L1, runIdentityCli},
     CliCommand{"plugins"_L1, plugins},
     CliCommand{"plugin"_L1, runPluginCli},
     CliCommand{"calibre"_L1, calibre},
@@ -2231,6 +2230,7 @@ QString cliSummary() {
            "  format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment\n"
            "  sync <computer[:folder]>        Bring this library and another computer's in step over ssh\n"
            "  manifest                        Print the whole library as JSON, as sync reads it\n"
+           "  identity [--export]             Print your id and its fingerprint, to share spaces with others\n"
            "  help [topic]                    Print the help the window shows: getting started, reading, keys, ...\n"
            "  skill [install]                 Print the skill for coding agents, or install it\n"
            "  mcp [install [agent]]           Run as an MCP server for agents, or register it with one\n\n"
