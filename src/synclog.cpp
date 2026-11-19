@@ -51,12 +51,20 @@ namespace {
     return held;
 }
 
-// The operations of `incoming` the computer `peer` may give, and those it
-// may not counted in `summary` and said there as `refusal` (with the count
-// and why) says it, for whoever started the sync (Replication::admit).
-[[nodiscard]] QList<SpaceOperation> admitted(const Library &library, const QList<SpaceOperation> &incoming, const QString &peer,
+// The operations of `incoming` the computer that `theirs` (its manifest or
+// request) introduces may give, and those it may not counted in `summary` and
+// said there as `refusal` (with the count and why) says it, for whoever
+// started the sync (Replication::admit).
+//
+// A dry run pairs nothing, but a sync pairs with another personal space before
+// it takes anything (Spaces::pair), and from then on its device is one of
+// one's own computers: so a dry run admits from such a peer what a sync
+// would, as from this computer, and says no refusal a sync wouldn't make.
+[[nodiscard]] QList<SpaceOperation> admitted(const Library &library, const QList<SpaceOperation> &incoming, const QJsonObject &theirs,
                                              const QString &refusal, SyncSummary &summary) {
-    Replication::Admitted taken = Replication::admit(library, incoming, peer);
+    const QString peer = theirs.value("device").toString();
+    const bool wouldPair = summary.dryRun && theirs.value("space").toString().startsWith(QLatin1StringView("personal:")) && !peer.isEmpty();
+    Replication::Admitted taken = Replication::admit(library, incoming, wouldPair ? Spaces::deviceId(library) : peer);
     if (taken.refused > 0) {
         summary.refused += taken.refused;
         summary.problems << refusal.arg(taken.refused)
@@ -162,7 +170,7 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
         summary.problems << "The change log could not be carried between here and " + remote.host() + ": " + answer.error();
         return {.manifest = holding(library, manifest), .gone = {}};
     }
-    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), theirDevice,
+    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), manifest,
                                                     "%1 operations from " + remote.host() + " were refused and not taken in: %2.", summary);
     // They hold what they held, and now what was sent them.
     if (!dryRun)
@@ -175,6 +183,11 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     summary.placesSent += answer->value("changed").toInt();
     for (const auto &title : answer->value("titles").toArray())
         summary.titles.placesSent << title.toString();
+    // Each take finds every book still undecided, so the last one of a sync
+    // says which they are: run again at its end (finish()), the same books
+    // are not counted twice (#59).
+    summary.detailsUndecided = 0;
+    summary.titles.detailsUndecided.clear();
     SyncTake::Taken described = SyncTake::take(library, incoming,
                                                {.device = theirDevice,
                                                 .details = options.details,
@@ -191,8 +204,10 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
         takePerson(library, *answer, summary);
         takeCarried(library, *answer, summary);
     }
-    qCInfo(lcSync).noquote() << "the log with" << remote.host() << ":" << lacking.size() << "operations sent," << incoming.size()
-                             << "taken";
+    // A dry run shows the other side what it lacks, to say what it would take, and neither side keeps any of it.
+    qCInfo(lcSync).noquote() << (dryRun ? "dry run of the log with" : "the log with") << remote.host() << ":" << lacking.size()
+                             << (dryRun ? "operations would be sent," : "operations sent,") << incoming.size()
+                             << (dryRun ? "would be taken" : "taken");
     QJsonObject now = holding(library, manifest);
     now.insert("books", described.books);
     // Who they are now, once a pairing has made both one person (#51).
@@ -217,7 +232,7 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     }
     SyncSummary taken;
     taken.dryRun = dryRun;
-    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(request.value("ops").toArray()), theirDevice,
+    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(request.value("ops").toArray()), request,
                                                     "%1 operations sent from here were refused there and not taken in: %2.", taken);
     // What they held when they asked: whether the answer reaches them, this side can't know.
     if (!dryRun)

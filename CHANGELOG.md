@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- `omabook sync --dry-run` between two computers that keep the change log says what a sync would do and keeps nothing on either side: its journal says how many operations *would* be sent and taken, and before the two computers ever synced it no longer reports every operation as refused, which a sync, pairing them first, takes. The details left undecided are counted once per book, not again at the end of a sync that moved books, and only where the words differ: a cover saved apart on each computer, with no time to say which is newer, no longer makes a book undecided, as before 0.1.6; `--details mine` or `theirs` still settles those that differ, cover and all (#59).
+
 ## [0.1.6] - 2026-11-19
 
 ### Added

@@ -93,7 +93,15 @@ void decideField(SyncManifest::MergedBookDetails &out, qint64 myHlc, qint64 thei
     return theirCover != myCover;
 }
 
+// Where no time says which cover is newer, two files of a cover are no reason
+// to call a book undecided: the same picture saved on two computers (as a sync
+// before the log saved what it fetched) is seldom the same bytes (#59). As
+// before times were kept, only the words are compared then, and the cover goes
+// with words settled by `--details mine` or `--details theirs`.
 void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qint64 theirCoverAt, SyncOptions::Details choice) {
+    const bool settled = out.takeFields || out.sendFields;
+    if (std::is_eq(Hlc::compare(myCoverAt, theirCoverAt)) && (choice == SyncOptions::Details::Undecided || !settled))
+        return;
     decideField(out, myCoverAt, theirCoverAt, true, choice, [&] { out.takeCover = true; });
     if (!out.takeCover && out.sendFields && std::is_gteq(Hlc::compare(myCoverAt, theirCoverAt)))
         out.sendCover = true;
