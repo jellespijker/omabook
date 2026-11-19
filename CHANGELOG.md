@@ -12,6 +12,8 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.6.1] - 2026-11-19
+
 ### Fixed
 
 - `omabook sync --dry-run` between two computers that keep the change log says what a sync would do and keeps nothing on either side: its journal says how many operations *would* be sent and taken, and before the two computers ever synced it no longer reports every operation as refused, which a sync, pairing them first, takes. The details left undecided are counted once per book, not again at the end of a sync that moved books, and only where the words differ: a cover saved apart on each computer, with no time to say which is newer, no longer makes a book undecided, as before 0.1.6; `--details mine` or `theirs` still settles those that differ, cover and all (#59).
@@ -172,7 +174,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.6...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...HEAD
+[0.1.6.1]: https://github.com/jellespijker/omabook/compare/v0.1.6...v0.1.6.1
 [0.1.6]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...v0.1.6
 [0.1.5.2]: https://github.com/jellespijker/omabook/compare/v0.1.5.1...v0.1.5.2
 [0.1.5.1]: https://github.com/jellespijker/omabook/compare/v0.1.5...v0.1.5.1
