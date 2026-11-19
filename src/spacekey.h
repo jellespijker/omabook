@@ -10,6 +10,7 @@
 #include <span>
 
 #include "crypto.h"
+#include "secretfile.h"
 
 // A space's key (ADR 0001, *People and keys* and *Transports are adapters*):
 // what a shared space's members hold, so that the stores the operations
@@ -32,14 +33,19 @@ public:
     // The key's bytes, for giving it to a member: they never leave the
     // computer otherwise.
     [[nodiscard]] std::span<const std::byte, size> bytes() const noexcept { return m_key.span(); }
+    // A name for the key that gives nothing of it away (a BLAKE2b hash of it
+    // and a purpose), the same wherever it is held: what a key rotation names
+    // the key it hands out by (KeyRotation, #49).
+    [[nodiscard]] QString id() const;
 
     // Where the key of `space` is kept in `folder`: one file per space, named
     // by its id, so that only the key's owner holds it (the user's Omabook
     // data folder, never a library folder that may be synced elsewhere).
     [[nodiscard]] static QString fileFor(const QString &folder, QStringView space);
-    // Keeps the key in `file`, for its owner alone (SecretFile), in place of
-    // any kept there.
-    [[nodiscard]] std::expected<void, QString> keepIn(const QString &file) const;
+    // Keeps the key in `file`, for its owner alone (SecretFile): in place of
+    // any kept there, or, with KeepWhatIsThere, never over one.
+    [[nodiscard]] std::expected<void, QString> keepIn(const QString &file,
+                                                      SecretFile::Placing placing = SecretFile::Placing::Replace) const;
     // The key kept in `file` (keepIn).
     [[nodiscard]] static std::expected<SpaceKey, QString> load(const QString &file);
 

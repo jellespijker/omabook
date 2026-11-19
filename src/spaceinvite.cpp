@@ -7,35 +7,54 @@
 #include <cstddef>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace {
 
 using namespace Qt::StringLiterals;
 
-constexpr auto format = "1.0";
-constexpr std::string_view signedMagic{"omabook-invite\x01", 15};
+constexpr auto format = "2.0";
+constexpr std::string_view signedMagic{"omabook-invite\x02", 15};
+constexpr qsizetype signatureSize = crypto_sign_BYTES;
+constexpr qsizetype keySize = SpaceKey::size;
+constexpr std::size_t mostKeys = 255; // their count is one byte
 constexpr auto base64 = QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals;
 
-// Bytes that held a secret, wiped when they go.
-class Wiped {
-public:
-    explicit Wiped(QByteArray bytes) noexcept : m_bytes(std::move(bytes)) {}
-    ~Wiped() { sodium_memzero(m_bytes.data(), static_cast<std::size_t>(m_bytes.size())); }
-    Wiped(const Wiped &) = delete;
-    Wiped &operator=(const Wiped &) = delete;
-    Wiped(Wiped &&) = delete;
-    Wiped &operator=(Wiped &&) = delete;
+using Wiped = Crypto::WipedBytes;
 
-    [[nodiscard]] const QByteArray &bytes() const noexcept { return m_bytes; }
-    [[nodiscard]] QByteArray &bytes() noexcept { return m_bytes; }
+// What the inviter signs: the name and version, the keys (their count, then
+// each), then the invite.
+[[nodiscard]] QByteArray signedBytes(QByteArrayView keys, QByteArrayView payload) {
+    return QByteArray(signedMagic.data(), signedMagic.size()) + keys + payload;
+}
 
-private:
-    QByteArray m_bytes;
-};
+// The keys' part of what is sealed: their count, then each key's bytes.
+[[nodiscard]] QByteArray keysPart(std::span<const SpaceKey> keys) {
+    QByteArray part(1, static_cast<char>(keys.size()));
+    part.reserve(1 + (static_cast<qsizetype>(keys.size()) * keySize)); // grown in place: no copy of a key left behind
+    for (const SpaceKey &key : keys) {
+        const Wiped bytes(Crypto::toByteArray(key.bytes()));
+        part += bytes.bytes();
+    }
+    return part;
+}
 
-// What the inviter signs: the name and version, the key, then the invite.
-[[nodiscard]] QByteArray signedBytes(QByteArrayView key, QByteArrayView payload) {
-    return QByteArray(signedMagic.data(), signedMagic.size()) + key + payload;
+// The keys `all` starts with (keysPart), and how many bytes they take.
+[[nodiscard]] std::expected<std::pair<std::vector<SpaceKey>, qsizetype>, QString> keysFrom(QByteArrayView all) {
+    if (all.isEmpty())
+        return std::unexpected(u"This invite is cut short."_s);
+    const qsizetype count = static_cast<unsigned char>(all.front());
+    const qsizetype size = 1 + (count * keySize);
+    if (count == 0 || all.size() < size)
+        return std::unexpected(u"This invite is cut short."_s);
+    std::vector<SpaceKey> keys;
+    for (qsizetype at = 1; at < size; at += keySize) {
+        auto key = SpaceKey::fromBytes(Crypto::bytes(all.sliced(at, keySize)));
+        if (!key)
+            return std::unexpected(key.error());
+        keys.push_back(std::move(*key));
+    }
+    return std::pair{std::move(keys), size};
 }
 
 [[nodiscard]] std::expected<SpaceInvite, QString> inviteFrom(const QJsonObject &payload) {
@@ -51,17 +70,19 @@ private:
 
 } // namespace
 
-std::expected<QByteArray, QString> SpaceInvites::write(const Person &from, const SpaceInvite &invite, const SpaceKey &key) {
+std::expected<QByteArray, QString> SpaceInvites::write(const Person &from, const SpaceInvite &invite, std::span<const SpaceKey> keys) {
     const auto to = Person::publicKeyFrom(invite.to);
     if (!to)
         return std::unexpected(to.error());
-    // Inside the seal: the signature, the key's bytes, then the invite as
-    // JSON, so the key is never text the program can't wipe.
+    if (keys.empty() || keys.size() > mostKeys)
+        return std::unexpected(u"An invite hands over from one to %1 keys of a space, not %2."_s.arg(mostKeys).arg(keys.size()));
+    // Inside the seal: the signature, the keys' bytes, then the invite as
+    // JSON, so a key is never text the program can't wipe.
     const QByteArray payload =
         QJsonDocument(
             QJsonObject{{"space", invite.space}, {"name", invite.name}, {"role", invite.role}, {"from", from.id()}, {"to", invite.to}})
             .toJson(QJsonDocument::Compact);
-    const Wiped keyBytes(Crypto::toByteArray(key.bytes()));
+    const Wiped keyBytes(keysPart(keys));
     const Wiped signedPart(signedBytes(keyBytes.bytes(), payload));
     const Person::Signature signature = from.sign(Crypto::bytes(signedPart.bytes()));
     const Wiped inner(Crypto::toByteArray(signature) + keyBytes.bytes() + payload);
@@ -78,7 +99,9 @@ std::expected<SpaceInvites::Opened, QString> SpaceInvites::open(const Person &me
     const QJsonObject outer = QJsonDocument::fromJson(file.toByteArray(), &error).object();
     if (error.error != QJsonParseError::NoError || !outer.contains("omabook-invite"))
         return std::unexpected(u"This is not an Omabook invite."_s);
-    if (!outer.value("omabook-invite").toString().startsWith("1."_L1))
+    if (outer.value("omabook-invite").toString().startsWith("1."_L1))
+        return std::unexpected(u"This invite was written by an Omabook from before a space's key could change; ask for a new one."_s);
+    if (!outer.value("omabook-invite").toString().startsWith("2."_L1))
         return std::unexpected(u"This invite is of a newer kind (%1) than this Omabook knows; update Omabook."_s.arg(
             outer.value("omabook-invite").toString()));
     if (outer.value("to").toString() != me.id())
@@ -89,14 +112,15 @@ std::expected<SpaceInvites::Opened, QString> SpaceInvites::open(const Person &me
     // Moved, not copied: a copy would share the bytes, and wiping it would wipe a detached copy.
     const Wiped inner(std::move(*opened));
     const QByteArrayView all(inner.bytes());
-    constexpr qsizetype signatureSize = crypto_sign_BYTES;
-    constexpr qsizetype keySize = SpaceKey::size;
-    if (all.size() < signatureSize + keySize)
+    if (all.size() < signatureSize)
         return std::unexpected(u"This invite is cut short."_s);
     Person::Signature signature{};
     std::ranges::copy(Crypto::bytes(all.first(signatureSize)), signature.begin());
-    const QByteArrayView keyBytes = all.sliced(signatureSize, keySize);
-    const QByteArrayView payloadBytes = all.sliced(signatureSize + keySize);
+    auto keys = keysFrom(all.sliced(signatureSize));
+    if (!keys)
+        return std::unexpected(keys.error());
+    const QByteArrayView keyBytes = all.sliced(signatureSize, keys->second);
+    const QByteArrayView payloadBytes = all.sliced(signatureSize + keys->second);
     auto invite = inviteFrom(QJsonDocument::fromJson(payloadBytes.toByteArray()).object());
     if (!invite)
         return std::unexpected(invite.error());
@@ -106,8 +130,5 @@ std::expected<SpaceInvites::Opened, QString> SpaceInvites::open(const Person &me
         return std::unexpected(u"This invite is not signed by whom it says it is from."_s);
     if (invite->to != me.id())
         return std::unexpected(u"This invite was meant for someone else, and sealed again for you."_s);
-    auto key = SpaceKey::fromBytes(Crypto::bytes(keyBytes));
-    if (!key)
-        return std::unexpected(key.error());
-    return Opened{.invite = std::move(*invite), .key = std::move(*key)};
+    return Opened{.invite = std::move(*invite), .keys = std::move(keys->first)};
 }

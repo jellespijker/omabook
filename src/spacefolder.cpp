@@ -55,14 +55,21 @@ struct Named {
     return op;
 }
 
-[[nodiscard]] std::expected<QList<SpaceOperation>, QString> openBatch(const QString &path, const QString &space, const SpaceKey &key,
-                                                                      const Named &name) {
+[[nodiscard]] std::expected<QList<SpaceOperation>, QString> openBatch(const QString &path, const QString &space,
+                                                                      std::span<const SpaceKey> keys, const Named &name) {
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
         return std::unexpected(u"It can't be read: %1"_s.arg(file.errorString()));
-    const auto opened = SignedOps::open(key, space, file.readAll());
+    const QByteArray batch = file.readAll();
+    std::expected<QList<SignedOperation>, QString> opened = std::unexpected(u"This computer holds no key of the space."_s);
+    for (const SpaceKey &key : keys) {
+        opened = SignedOps::open(key, space, batch);
+        if (opened)
+            break;
+    }
     if (!opened)
-        return std::unexpected(opened.error());
+        return std::unexpected(keys.size() > 1 ? u"It opens with none of the space's keys held here: %1"_s.arg(opened.error())
+                                               : opened.error());
     QList<SpaceOperation> ops;
     for (const SignedOperation &signedOp : *opened) {
         if (signedOp.op.device != name.device || signedOp.op.seq < name.first || signedOp.op.seq > name.last)
@@ -115,9 +122,11 @@ std::expected<QString, QString> SpaceFolder::write(const QString &folder, const 
     return path;
 }
 
-SpaceFolder::Read SpaceFolder::read(const QString &folder, const QString &space, const SpaceKey &key, const QHash<QString, qint64> &held) {
+SpaceFolder::Read SpaceFolder::read(const QString &folder, const QString &space, std::span<const SpaceKey> keys,
+                                    const QHash<QString, qint64> &held) {
     Read read;
     const QString from = of(folder, space);
+    QHash<QString, QString> waiting; // device → its batch that didn't open
     for (const QString &file : batchFiles(from)) {
         const auto name = named(file);
         if (!name) {
@@ -126,9 +135,14 @@ SpaceFolder::Read SpaceFolder::read(const QString &folder, const QString &space,
         }
         if (name->last <= held.value(name->device))
             continue;
-        const auto ops = openBatch(QDir(from).absoluteFilePath(file), space, key, *name);
+        if (waiting.contains(name->device)) {
+            read.refused << u"%1: it waits for %2, before it, which didn't open."_s.arg(file, waiting.value(name->device));
+            continue;
+        }
+        const auto ops = openBatch(QDir(from).absoluteFilePath(file), space, keys, *name);
         if (!ops) {
             read.refused << u"%1: %2"_s.arg(file, ops.error());
+            waiting.insert(name->device, file);
             continue;
         }
         ++read.batches;

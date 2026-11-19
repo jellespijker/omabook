@@ -12,6 +12,7 @@
 
 #include "crypto.h"
 #include "hlc.h"
+#include "keyrotation.h"
 #include "library.h"
 #include "person.h"
 #include "signedops.h"
@@ -76,7 +77,9 @@ using SharedSpace::State;
 }
 
 // Why an operation by an author of `role` is refused; nothing when it is taken.
-[[nodiscard]] std::optional<QString> refusal(const SpaceOperation &op, Role role) {
+[[nodiscard]] std::optional<QString> refusal(const SpaceOperation &op, Role role, const KeyRotations::CutOffs &cutOffs) {
+    if (auto cutOff = cutOffs.refusal(op))
+        return cutOff;
     if (role != Role::Writer)
         return whyNotWriter(role, op.author);
     if (isFoundingLike(op))
@@ -86,8 +89,9 @@ using SharedSpace::State;
     return std::nullopt;
 }
 
-// The founding found, the roles as the operations change them, in order.
-void judge(const QList<SpaceOperation> &judged, qsizetype founding, State &state) {
+// The founding found, the roles as the operations change them, in order,
+// and what the rotations of the key that prevail cut off.
+void judge(const QList<SpaceOperation> &judged, qsizetype founding, State &state, KeyRotations::CutOffs cutOffs) {
     const QJsonObject founded = object(judged.at(founding).value);
     state.founder = judged.at(founding).author;
     state.name = founded.value("name").toString();
@@ -97,7 +101,7 @@ void judge(const QList<SpaceOperation> &judged, qsizetype founding, State &state
     QList<QString> order{state.founder};
     for (qsizetype at = 0; at < judged.size(); ++at) {
         const SpaceOperation &op = judged.at(at);
-        const std::optional<QString> why = at == founding ? std::nullopt : refusal(op, roles.value(op.author).role);
+        const std::optional<QString> why = at == founding ? std::nullopt : refusal(op, roles.value(op.author).role, cutOffs);
         if (why) {
             state.refused << Refused{.op = op, .why = *why};
             continue;
@@ -107,11 +111,64 @@ void judge(const QList<SpaceOperation> &judged, qsizetype founding, State &state
             if (!roles.contains(op.id))
                 order << op.id;
             roles.insert(op.id, Member{.person = op.id, .role = *given, .since = op.hlc});
+            if (*given != Role::None)
+                cutOffs.madeMember(op, op.id);
         }
     }
     for (const QString &person : std::as_const(order))
         if (const Member member = roles.value(person); member.role != Role::None)
             state.members << member;
+}
+
+// Of a rotation of the key, how long its writer had been one by what they
+// held when they wrote it (the operations within its cut-off): the clock of
+// their role; nothing when, by that, it doesn't stand.
+[[nodiscard]] std::optional<qint64> standsAs(const QList<SpaceOperation> &judged, const SpaceOperation &founding,
+                                             const KeyRotation &rotation) {
+    if (rotation.isPast(founding))
+        return std::nullopt;
+    QList<SpaceOperation> held = judged;
+    held.removeIf([&rotation](const SpaceOperation &op) { return rotation.isPast(op); });
+    const auto at = std::ranges::find(held, founding);
+    State view;
+    judge(held, std::ranges::distance(held.cbegin(), at), view, KeyRotations::CutOffs(QList<KeyRotation>{}));
+    if (!std::ranges::contains(view.accepted, rotation.op))
+        return std::nullopt;
+    const auto writer =
+        std::ranges::find_if(view.members, [&rotation](const Member &member) { return member.person == rotation.op.author; });
+    return writer != view.members.cend() ? writer->since : rotation.op.hlc;
+}
+
+// Judges the space with the rotations of its key that prevail: those that
+// stand by what their writers held, and of two that each removed the other's
+// writer, the senior's. One the role rules then refuse after all (its writer
+// was removed meanwhile by someone who didn't know of it) falls, and the
+// others are tried again without it, until none falls.
+void judgeWithRotations(const QList<SpaceOperation> &judged, qsizetype founding, State &state) {
+    QList<std::pair<KeyRotation, qint64>> standing;
+    for (const SpaceOperation &op : judged)
+        if (const auto rotation = KeyRotation::from(op))
+            if (const auto since = standsAs(judged, judged.at(founding), *rotation))
+                standing.append({*rotation, *since});
+    const QList<Refused> before = state.refused;
+    for (;;) {
+        const QList<KeyRotation> prevailing = KeyRotations::prevailing(standing);
+        state.accepted.clear();
+        state.members.clear();
+        state.parts.clear();
+        state.refused = before;
+        judge(judged, founding, state, KeyRotations::CutOffs(prevailing));
+        const qsizetype was = standing.size();
+        standing.removeIf([&](const auto &one) {
+            return std::ranges::contains(prevailing, one.first.op, &KeyRotation::op)
+                   && !std::ranges::contains(state.accepted, one.first.op);
+        });
+        if (standing.size() == was) {
+            state.rotations = prevailing;
+            std::ranges::sort(state.rotations, [](const KeyRotation &one, const KeyRotation &other) { return other.isNewerThan(one); });
+            return;
+        }
+    }
 }
 
 // Keeps an operation as its writer wrote it, under their device and number.
@@ -176,7 +233,7 @@ State SharedSpace::admit(QStringView space, std::span<const SpaceOperation> ops)
             state.refused << Refused{.op = op, .why = u"The space's founding isn't here yet, so nobody is a writer of it."_s};
         return state;
     }
-    judge(judged, std::ranges::distance(judged.cbegin(), founding), state);
+    judgeWithRotations(judged, std::ranges::distance(judged.cbegin(), founding), state);
     return state;
 }
 

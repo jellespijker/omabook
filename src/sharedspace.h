@@ -12,6 +12,7 @@
 #include <span>
 
 #include "changelog.h"
+#include "keyrotation.h"
 #include "spacereplay.h"
 
 class Library;
@@ -33,7 +34,9 @@ class Library;
 // clocks (then device, then number). Anything else is refused and reported,
 // never kept or applied. A reader gets everything and writes nothing. A
 // member removed has every later operation refused; what they wrote before
-// stays. The rules are applied again to everything held each time the space
+// stays. Removing one changes the space's key (KeyRotation, #49), and what
+// comes after that change from anyone the new key wasn't handed to is
+// refused too, whatever its clock says. The rules are applied again to everything held each time the space
 // is read, so a removal that arrives late still refuses what came after it.
 //
 // Like a published space, a shared space is a layer beside the library: its
@@ -71,8 +74,11 @@ struct State {
     QList<SpaceOperation> accepted;
     QList<Refused> refused;
     QList<Member> members; // as of the last operation, removed ones left out, in the order they joined
+    QList<KeyRotation> rotations; // the changes of its key that hold, the newest last (KeyRotation::isNewerThan)
 
     [[nodiscard]] Role roleOf(const QString &person) const;
+    // The newest change of its key, or none while it has the key it was founded with.
+    [[nodiscard]] const KeyRotation *newestRotation() const { return rotations.isEmpty() ? nullptr : &rotations.last(); }
 };
 
 // The id of the space `founder` founds with `nonce`.

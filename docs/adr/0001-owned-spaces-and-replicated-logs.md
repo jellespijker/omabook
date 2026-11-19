@@ -234,10 +234,9 @@ As built (#38), shared spaces:
   shared space, since which of them count depends on the history.
 - **Removal doesn't take back.** A member removed has every later operation refused, and what they wrote
   before stays (no retroactive rejection). It doesn't protect what they already had: their copy of the
-  space and its key stay theirs. And a clock is what its writer says it is: a removed writer who still
-  has the key can write operations dated before their removal, and those are taken. Rotating the key on
-  removal (a new key, sealed to each member left, and batches under the old key refused after it) would
-  close the folder to them, not the clock; it is not built yet.
+  space and its old keys stay theirs. A clock is what its writer says it is, so a removed writer could
+  date an operation before their removal; since #49 removal changes the key and such an operation is
+  refused (below).
 - **Inviting is handing over the key.** `omabook spaces invite` records the member and writes an invite
   file (`spaceinvite.h`): a sealed box (`crypto_box_seal`) to the invitee's Ed25519 key converted to
   X25519 (`crypto_sign_ed25519_pk_to_curve25519`), holding the space's id, name, role and key, signed by
@@ -307,8 +306,8 @@ As built (#51), what one's own computers carry to each other of the spaces one i
   where it is: a peer that only claims the id opens nothing, and one not paired (its person another,
   as at the first sync before the key goes over, or an Omabook from before, which doesn't say it
   carries) is sent nothing of it. A key arrives for its owner alone and whole (`SecretFile`), never
-  over one there. Every generation of a space's key is a list's entry of its own (one today), so key
-  rotation (#49) adds its generations to the list, and keeping them, without a new format.
+  over one there. Every generation of a space's key is a list's entry of its own, with its generation
+  (0 for the founding one) and its id, and each is kept that isn't there yet (#49).
 - **Not a choice.** A subscription made on one computer is made on all, with no per-subscription
   switch: one's computers are one person with one personal space, which carries everything else of
   theirs without asking, and the collection a subscription fills and its wishlist entries travel in
@@ -325,6 +324,48 @@ As built (#51), what one's own computers carry to each other of the spaces one i
 - **Still open.** Leaving a shared space is not built, so there is nothing of it to carry. A member of
   a space as a person given up at a pairing (#50) is carried the space and its key but not that
   person: the computer it reaches is a member as the person now, once a writer makes it one.
+
+As built (#49), changing a shared space's key when a member is removed:
+
+- **A rotation is an operation.** `spaces remove` writes the removal, then a rotation (entity `key`, the
+  new key's id, a BLAKE2b hash of it, field `rotated`; `keyrotation.h`): its generation (one more than the
+  newest its writer knew), its cut-off (of each device the last number its writer held, a version
+  vector, and of its own device itself), and the new key sealed (`crypto_box_seal`) to each member left,
+  the writer included. Signed and judged by the role rules like any other. Old keys are kept, never
+  replaced, beside the founding one (`spaces/<id>.<key id>.key`, owner-only, written whole;
+  `SpaceKeys::all` gives every generation of a space, for whatever carries spaces to one's other
+  computers), so old batches stay readable.
+- **The cut-off rule.** An operation past a rotation's cut-off on its device (or of a device it doesn't
+  name) is taken only from someone the new key was handed to, or made a member past the cut-off by one
+  who was. The new key is the only thing that changed: past the cut-off, whoever it wasn't handed to can
+  only have sealed under an old one, so their operation is refused and said, whatever its clock. It is a
+  rule over the operations, not over which key opened a batch, so it is applied again on every read like
+  the role rules, and a rotation that arrives after the operation still refuses it. A member left who
+  wrote under the old key just before learning of the rotation is not refused: their batches can't be
+  rewritten, and nobody else can sign as them. What the remover hadn't taken yet of the removed one is
+  past the cut-off too, and refused: sync before removing.
+- **Which key seals what.** A computer seals its operations with the newest key it holds, except what
+  it wrote up to a rotation of its own (with the key before, so a member away can read up to it) and a
+  rotation itself, which goes under the founding key: every member holds that one (an invite now hands
+  over every key), and a rotation gives nothing away to the removed, its key being sealed to each member.
+  A member away reads up to the rotation, takes the new key from it and reads on; the folder is read
+  per device in order up to the first batch that doesn't open, so nothing is taken past a gap.
+- **Rotations at once.** Two writers removing at once each write a generation of the same number. Both
+  hold: each has its cut-off, each key opens its batches, and new writes go under the newer by
+  generation, then key id, so every member picks the same. When the newest was handed to someone who is
+  not a member now (Ada removed Bo while Dee removed Cy, each handing a key to the one the other
+  removed), or a writer doesn't hold it, the next writer to sync rotates again, to the members now; two
+  doing so at once hand theirs to the same members, so it settles. A rotation stands only by what its
+  writer held (the operations within its cut-off), so an operation dated before it can't unseat it, and
+  of two at once where each leaves the other's writer out (each removed the other), the one whose writer
+  has been a writer longer prevails. A removed writer who backdates their remover's removal, or a
+  rotation of their own, is refused by the remover's rotation; between two writers who really remove
+  each other at once, the senior stays, and a removed senior can claim to have done so: a limit of
+  self-asserted clocks.
+- **What it doesn't protect.** Whatever the removed member held before the rotation stays theirs, and a
+  rotation's own batch (and the founding key) stays readable to them: it holds only sealed keys. A
+  reader invited at the very time someone rotates may lack the newest key until a writer rotates again
+  or invites them anew.
 
 ### Book files
 

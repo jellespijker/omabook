@@ -4,6 +4,8 @@
 #include <QByteArrayView>
 #include <QString>
 #include <expected>
+#include <span>
+#include <vector>
 
 #include "person.h"
 #include "spacekey.h"
@@ -20,19 +22,22 @@ struct SpaceInvite {
 
 // The invite file, `.omabook-invite`: JSON that says only its format and whom
 // it is for ("to"), and a sealed box (Person::sealFor) to the invitee's key
-// that only they can open. Inside: the invite and the space's key, signed by
-// the inviter (over "omabook-invite", a version byte and the invite), so the
-// invitee knows whom it is from and that it was meant for them, and an
-// invite sealed again for someone else is refused.
+// that only they can open. Inside: the invite and the space's keys, signed
+// by the inviter (over "omabook-invite", a version byte, the keys and the
+// invite), so the invitee knows whom it is from and that it was meant for
+// them, and an invite sealed again for someone else is refused.
 namespace SpaceInvites {
 
 inline constexpr auto suffix = ".omabook-invite";
 
-[[nodiscard]] std::expected<QByteArray, QString> write(const Person &from, const SpaceInvite &invite, const SpaceKey &key);
+// The invite file for `invite`, handing over `keys`: every key of the space
+// the inviter holds, the founding one first (SpaceKeys::all), so that the
+// invitee reads what was sealed before each change of the key too (#49).
+[[nodiscard]] std::expected<QByteArray, QString> write(const Person &from, const SpaceInvite &invite, std::span<const SpaceKey> keys);
 
 struct Opened {
     SpaceInvite invite;
-    SpaceKey key;
+    std::vector<SpaceKey> keys; // the founding one first
 };
 // The invite in `file`, opened by `me`: refused when it is for someone else,
 // was changed, or isn't signed by whom it says it is from.

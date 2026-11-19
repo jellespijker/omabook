@@ -7,6 +7,7 @@
 #include <cstddef>
 #include <sodium.h>
 #include <span>
+#include <utility>
 
 // What the person's key pair and the space keys share (ADR 0001, *People and
 // keys*): libsodium made ready once, a holder that wipes secret bytes when it
@@ -71,6 +72,23 @@ public:
 
 private:
     std::array<std::byte, N> m_bytes{};
+};
+
+// A QByteArray that held a secret, wiped when it goes. It is moved in, never
+// copied: a copy would share the bytes, and wiping it would wipe a detached copy.
+class WipedBytes {
+public:
+    explicit WipedBytes(QByteArray bytes) noexcept : m_bytes(std::move(bytes)) {}
+    ~WipedBytes() { sodium_memzero(m_bytes.data(), static_cast<std::size_t>(m_bytes.size())); }
+    WipedBytes(const WipedBytes &) = delete;
+    WipedBytes &operator=(const WipedBytes &) = delete;
+    WipedBytes(WipedBytes &&) = delete;
+    WipedBytes &operator=(WipedBytes &&) = delete;
+
+    [[nodiscard]] const QByteArray &bytes() const noexcept { return m_bytes; }
+
+private:
+    QByteArray m_bytes;
 };
 
 } // namespace Crypto

@@ -15,7 +15,7 @@ summary = "Settings, logging, theme and interface files, text cleaning, the scri
 uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
-  "person", "readingformat", "scriptapi", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "theme", "themechoice",
+  "person", "readingformat", "scriptapi", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator",
 ]
 
@@ -31,7 +31,7 @@ modules = [
 summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
 uses = ["formats", "foundation"]
 modules = [
-  "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "knowledgesearch", "libraries",
+  "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
   "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
   "spacesnapshot", "subscribedspace", "textmarks",
 ]
@@ -51,7 +51,7 @@ summary = "What the command line, the MCP server and the window all do, each wri
 uses = ["services", "library", "formats", "foundation"]
 modules = [
   "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "plugintools",
-  "scripttools", "sharedcollection", "sharedspaces", "spacecarry", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
+  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

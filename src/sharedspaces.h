@@ -20,12 +20,13 @@ class Library;
 // collection here to it: the one named, or a new one of the space's name.
 // Inviting someone makes them a member, as an operation in the space, and
 // writes an invite file sealed to them (SpaceInvites): only they can open
-// it, and it hands them the space's key. Joining opens it, keeps the key and
-// links a collection of theirs. Syncing goes through a folder something else
-// syncs (SpaceFolder): what is new there is taken in by the role rules
-// (SharedSpace), filed into the linked collection (SharedCollection), a
-// writer's own edits of it written into the space, and this computer's new
-// operations written there as a sealed batch.
+// it, and it hands them the space's keys. Joining opens it, keeps the keys
+// and links a collection of theirs. Removing someone changes the key.
+// Syncing goes through a folder something else syncs (SpaceFolder): what is
+// new there is taken in by the role rules (SharedSpace), with each new key
+// handed over on the way (SharedKeys), filed into the linked collection
+// (SharedCollection), a writer's own edits of it written into the space, and
+// this computer's new operations written there as sealed batches.
 namespace SharedSpaces {
 
 struct Member {
@@ -46,8 +47,9 @@ struct Summary {
 // Every space this library is in.
 [[nodiscard]] QList<Summary> list(const Library &library);
 
-// Where the user keeps the key of `space`: beside their person's key.
-[[nodiscard]] QString keyFile(Library &library, const QString &space);
+// Where the user keeps the key `space` was founded with: beside their
+// person's key (SharedKeys holds every key of it).
+[[nodiscard]] QString keyFile(const Library &library, const QString &space);
 
 // A shared space by its id or its name.
 [[nodiscard]] std::expected<QString, QString> resolve(const Library &library, const QString &which);
@@ -74,7 +76,10 @@ struct Invited {
 [[nodiscard]] std::expected<Invited, QString> invite(Library &library, const QString &which, const QString &person, SharedSpace::Role role,
                                                      const QString &out = {});
 
-// Removes `person` from the space: what they write after this is refused.
+// Removes `person` from the space: what they write after this is refused,
+// and the space's key changes (SharedKeys::rotate), so that they can't open
+// what is written after it, nor have anything taken that they write past
+// what this library holds of the space now, whatever its date.
 [[nodiscard]] std::expected<Summary, QString> remove(const Library &library, const QString &which, const QString &person);
 
 // Joins the space of the invite in `file`, its books going in the collection

@@ -56,8 +56,8 @@ const bool registered = [] {
 
     registerTool(
         {"space_remove_member", "Remove someone from a shared space",
-         "Removes a member from a shared space: whatever they write after this is refused by every member. "
-         "What they already had of it stays theirs.",
+         "Removes a member from a shared space: whatever they write after this is refused by every member, whatever its date, "
+         "and the space's key changes, so they can't open what is written after. What they already had of it stays theirs.",
          schema({{"space", string("The shared space's name or id.")}, {"person", string("The member's person id.")}}, {"space", "person"}),
          Destructive, [](const QJsonObject &arguments) {
              return command({"spaces", "remove", arguments.value("space").toString(), arguments.value("person").toString()});

@@ -26,6 +26,10 @@ constexpr std::size_t partOverhead = crypto_secretstream_xchacha20poly1305_ABYTE
 constexpr std::string_view keyFileMagic{"omaskey\x01", 8};
 using KeyFileBytes = Crypto::SecretBytes<keyFileMagic.size() + SpaceKey::size>;
 
+// What a key's id is a hash of, before the key; and how long it is.
+constexpr std::string_view idDomain{"omabook space key id\x01", 21};
+constexpr std::size_t idBytes = 16;
+
 [[nodiscard]] QByteArray additionalData(QStringView space) { return QByteArray(batchMagic.data(), batchMagic.size()) + space.toUtf8(); }
 
 void appendPart(QByteArray &batch, Stream &stream, const QByteArray &additional, QByteArrayView message, unsigned char tag) {
@@ -135,6 +139,17 @@ std::expected<QList<QByteArray>, QString> SpaceKey::open(QStringView space, QByt
     return result;
 }
 
+QString SpaceKey::id() const {
+    std::array<std::byte, idBytes> hash{};
+    crypto_generichash_state state{};
+    crypto_generichash_init(&state, nullptr, 0, hash.size());
+    crypto_generichash_update(&state, Crypto::uchars(std::as_bytes(std::span(idDomain))), idDomain.size());
+    crypto_generichash_update(&state, m_key.data(), size);
+    crypto_generichash_final(&state, Crypto::writableUchars(hash), hash.size());
+    sodium_memzero(&state, sizeof state);
+    return QString::fromLatin1(Crypto::toByteArray(hash).toHex());
+}
+
 QString SpaceKey::fileFor(const QString &folder, QStringView space) {
     QString name;
     for (const QChar c : space)
@@ -142,11 +157,11 @@ QString SpaceKey::fileFor(const QString &folder, QStringView space) {
     return QDir(folder).absoluteFilePath(name + u".key"_s);
 }
 
-std::expected<void, QString> SpaceKey::keepIn(const QString &file) const {
+std::expected<void, QString> SpaceKey::keepIn(const QString &file, SecretFile::Placing placing) const {
     KeyFileBytes bytes;
     std::ranges::copy(std::as_bytes(std::span(keyFileMagic)), bytes.span().begin());
     std::ranges::copy(m_key.span(), bytes.span().subspan(keyFileMagic.size()).begin());
-    return SecretFile::keep(file, bytes.span(), SecretFile::Placing::Replace);
+    return SecretFile::keep(file, bytes.span(), placing);
 }
 
 std::expected<SpaceKey, QString> SpaceKey::load(const QString &file) {

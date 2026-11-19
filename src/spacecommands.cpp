@@ -155,10 +155,13 @@ struct Command {
         printJson(toJson(*removed));
         return 0;
     }
-    printLine(stdout, (QStringList{u"%1 is no longer a member: what they write from now on is refused. What they had of the space "
-                                   "stays theirs; nothing takes it back."_s.arg(command.words.at(2))}
-                       + describe(*removed))
-                          .join(u'\n'));
+    printLine(
+        stdout,
+        (QStringList{u"%1 is no longer a member: what they write from now on is refused, whatever its date, and the "
+                     "space's key has changed, so they can't open what is written after; sync the space to hand the "
+                     "new key to the others. What they had of the space stays theirs; nothing takes it back."_s.arg(command.words.at(2))}
+         + describe(*removed))
+            .join(u'\n'));
     return 0;
 }
 

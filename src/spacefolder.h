@@ -25,6 +25,8 @@
 // folder never holds plaintext, and a batch changed there, cut short, or
 // sealed for another space is refused whole. Reading takes the batches with
 // operations newer than what is held of each device (a version vector).
+// Each batch is sealed with one of the space's keys; since a member was
+// removed, the newer ones with a key they don't hold (SharedKeys).
 //
 // WebDAV and S3 would carry the same files; they are not built.
 namespace SpaceFolder {
@@ -47,7 +49,11 @@ struct Read {
     QStringList refused;       // of each batch refused, its name and why
 };
 // The operations of the batches newer than `held` (each device's last
-// number held here), each batch opened and checked whole.
-[[nodiscard]] Read read(const QString &folder, const QString &space, const SpaceKey &key, const QHash<QString, qint64> &held);
+// number held here), each batch opened with whichever of `keys` (every
+// generation of the space's key held, #49) it was sealed with and checked
+// whole. A device's batches are read in order and up to the first that
+// doesn't open: what comes after it waits, so that nothing is taken past
+// what is missing (a later key may open it).
+[[nodiscard]] Read read(const QString &folder, const QString &space, std::span<const SpaceKey> keys, const QHash<QString, qint64> &held);
 
 } // namespace SpaceFolder

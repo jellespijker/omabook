@@ -9,9 +9,11 @@
 #include "library.h"
 #include "person.h"
 #include "sharedcollection.h"
+#include "sharedkeys.h"
 #include "spacefolder.h"
 #include "spaceinvite.h"
 #include "spacekey.h"
+#include "spacekeys.h"
 #include "spaces.h"
 #include "subscribedspace.h"
 
@@ -68,13 +70,6 @@ using SharedSpaces::Summary;
             .collection = subscribed ? collectionPath(library, space.id) : QString()};
 }
 
-[[nodiscard]] std::expected<SpaceKey, QString> keyOf(Library &library, const QString &space) {
-    auto key = SpaceKey::load(SharedSpaces::keyFile(library, space));
-    if (!key)
-        return std::unexpected(u"This computer doesn't hold the key of %1: %2"_s.arg(space, key.error()));
-    return key;
-}
-
 [[nodiscard]] std::expected<QString, QString> writeInvite(const QString &out, const SpaceInvite &invite, const QByteArray &bytes) {
     QString path = out.isEmpty() ? QDir::currentPath() : out;
     if (QFileInfo(path).isDir()) {
@@ -116,6 +111,67 @@ using SharedSpaces::Summary;
     return u"operation %1 of %2 (%3 %4): %5"_s.arg(refused.op.seq).arg(refused.op.device, refused.op.entity, refused.op.field, refused.why);
 }
 
+// Changes the key again when the newest was handed to someone who is not a
+// member now, or not to this writer (SharedKeys::needsRotating).
+[[nodiscard]] std::expected<void, QString> rotateIfNeeded(const Library &library, const QString &space) {
+    const auto keys = SharedKeys::held(library, space);
+    if (!keys)
+        return std::unexpected(keys.error());
+    if (!SharedKeys::needsRotating(library, SharedSpace::state(library, space), *keys))
+        return {};
+    return SharedKeys::rotate(library, space);
+}
+
+// Takes in what is new in the folder. A batch sealed with a key handed over
+// in another batch opens once that one is taken: so again, with the keys
+// learnt, until no key is new (one round per change of the key, at most).
+[[nodiscard]] std::expected<void, QString> takeFrom(const Library &library, const QString &space, const QString &folder,
+                                                    SharedSpaces::Synced &synced) {
+    QStringList refusedOps; // of every round; of the batches, only the last round's say what didn't open
+    for (;;) {
+        const auto keys = SharedKeys::held(library, space);
+        if (!keys)
+            return std::unexpected(keys.error());
+        const SpaceFolder::Read read = SpaceFolder::read(folder, space, *keys, SharedSpace::lastHeld(library, space));
+        synced.batches += read.batches;
+        const SharedSpace::Taken taken = SharedSpace::take(library, space, read.ops);
+        synced.taken += taken.added;
+        synced.known += taken.known;
+        for (const SharedSpace::Refused &refused : taken.refused)
+            if (const QString said = refusal(refused); !refusedOps.contains(said))
+                refusedOps << said;
+        const auto learnt = SharedKeys::learn(library, space);
+        if (!learnt)
+            return std::unexpected(learnt.error());
+        if (*learnt == 0 || read.batches == 0) {
+            synced.refused = read.refused + refusedOps;
+            return {};
+        }
+    }
+}
+
+// Writes what this computer wrote of the space and the folder lacks, each
+// run of operations sealed with the same key as one batch (SharedKeys::sealing).
+[[nodiscard]] std::expected<qsizetype, QString> sendTo(const Library &library, const QString &space, const QString &folder) {
+    const QList<SpaceOperation> mine = unsent(library, space, folder);
+    if (mine.isEmpty())
+        return 0;
+    const auto keys = SharedKeys::held(library, space);
+    if (!keys)
+        return std::unexpected(keys.error());
+    const SharedSpace::State state = SharedSpace::state(library, space);
+    for (qsizetype from = 0; from < mine.size();) {
+        const SpaceKey &key = SharedKeys::sealing(state, *keys, mine.at(from));
+        qsizetype to = from + 1;
+        while (to < mine.size() && &SharedKeys::sealing(state, *keys, mine.at(to)) == &key)
+            ++to;
+        if (const auto sent = SpaceFolder::write(folder, space, key, Spaces::deviceId(library), mine.sliced(from, to - from)); !sent)
+            return std::unexpected(sent.error());
+        from = to;
+    }
+    return mine.size();
+}
+
 } // namespace
 
 QList<Summary> SharedSpaces::list(const Library &library) {
@@ -129,8 +185,8 @@ QList<Summary> SharedSpaces::list(const Library &library) {
     return spaces;
 }
 
-QString SharedSpaces::keyFile(Library &library, const QString &space) {
-    return SpaceKey::fileFor(QFileInfo(library.personFile().file()).absoluteDir().filePath(u"spaces"_s), space);
+QString SharedSpaces::keyFile(const Library &library, const QString &space) {
+    return SpaceKey::fileFor(SharedKeys::folder(library), space);
 }
 
 std::expected<QString, QString> SharedSpaces::resolve(const Library &library, const QString &which) {
@@ -177,15 +233,15 @@ std::expected<SharedSpaces::Invited, QString> SharedSpaces::invite(Library &libr
     const Person *me = library.person();
     if (me == nullptr)
         return std::unexpected(u"Only a person invites, and this library has none (omabook identity says why)."_s);
-    const auto key = keyOf(library, *space);
-    if (!key)
-        return std::unexpected(key.error());
+    const auto keys = SharedKeys::held(library, *space);
+    if (!keys)
+        return std::unexpected(keys.error());
     if (const auto added = SharedSpace::setRole(library, *space, person.trimmed(), role); !added)
         return std::unexpected(added.error());
     const Summary summary = sharedSummary(library, *space, which);
     const SpaceInvite invite{
         .space = *space, .name = summary.name, .role = SharedSpace::roleName(role), .from = me->id(), .to = person.trimmed()};
-    const auto bytes = SpaceInvites::write(*me, invite, *key);
+    const auto bytes = SpaceInvites::write(*me, invite, *keys);
     if (!bytes)
         return std::unexpected(bytes.error());
     const auto file = writeInvite(out, invite, *bytes);
@@ -202,6 +258,9 @@ std::expected<Summary, QString> SharedSpaces::remove(const Library &library, con
         return std::unexpected(u"%1 is not a member of %2."_s.arg(person, which));
     if (const auto removed = SharedSpace::setRole(library, *space, person.trimmed(), SharedSpace::Role::None); !removed)
         return std::unexpected(removed.error());
+    // What is sealed from now on, they can't open; and what they write past what is held here now is refused.
+    if (const auto rotated = SharedKeys::rotate(library, *space); !rotated)
+        return std::unexpected(rotated.error());
     return sharedSummary(library, *space, which);
 }
 
@@ -216,7 +275,7 @@ std::expected<Summary, QString> SharedSpaces::join(Library &library, const QStri
     if (!opened)
         return std::unexpected(opened.error());
     const QString &space = opened->invite.space;
-    if (const auto kept = opened->key.keepIn(keyFile(library, space)); !kept)
+    if (const auto kept = SpaceKeys::keepAll(SharedKeys::folder(library), space, opened->keys); !kept)
         return std::unexpected(kept.error());
     const Library::Batch batch(library);
     SharedSpace::record(library, space, opened->invite.name);
@@ -235,21 +294,12 @@ std::expected<SharedSpaces::Synced, QString> SharedSpaces::sync(Library &library
     const auto space = resolve(library, which);
     if (!space)
         return std::unexpected(space.error());
-    const auto key = keyOf(library, *space);
-    if (!key)
-        return std::unexpected(key.error());
     if (!QFileInfo(folder).isDir())
         return std::unexpected(u"There is no folder %1 to sync through."_s.arg(folder));
     Synced synced;
-    const SpaceFolder::Read read = SpaceFolder::read(folder, *space, *key, SharedSpace::lastHeld(library, *space));
-    synced.batches = read.batches;
-    synced.refused = read.refused;
     const QList<SpaceOperation> before = SharedSpace::state(library, *space).accepted;
-    const SharedSpace::Taken taken = SharedSpace::take(library, *space, read.ops);
-    synced.taken = taken.added;
-    synced.known = taken.known;
-    for (const SharedSpace::Refused &refused : taken.refused)
-        synced.refused << refusal(refused);
+    if (const auto taken = takeFrom(library, *space, folder, synced); !taken)
+        return std::unexpected(taken.error());
     // A membership of a person given up at a pairing, handed to the one now, once it is here (#50).
     if (const auto carried = SharedSpace::carryOver(library, *space); !carried)
         return std::unexpected(carried.error());
@@ -264,11 +314,12 @@ std::expected<SharedSpaces::Synced, QString> SharedSpaces::sync(Library &library
             return std::unexpected(written.error());
         synced.written = *written;
     }
-    if (const QList<SpaceOperation> mine = unsent(library, *space, folder); !mine.isEmpty()) {
-        if (const auto sent = SpaceFolder::write(folder, *space, *key, Spaces::deviceId(library), mine); !sent)
-            return std::unexpected(sent.error());
-        synced.sent = mine.size();
-    }
+    if (const auto healed = rotateIfNeeded(library, *space); !healed)
+        return std::unexpected(healed.error());
+    const auto sent = sendTo(library, *space, folder);
+    if (!sent)
+        return std::unexpected(sent.error());
+    synced.sent = *sent;
     synced.space = sharedSummary(library, *space, which);
     return synced;
 }
