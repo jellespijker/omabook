@@ -15,7 +15,9 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <algorithm>
+#include <expected>
 #include <optional>
+#include <utility>
 
 #include "changelog.h"
 #include "fixtures.h"
@@ -23,6 +25,7 @@
 #include "graphcontext.h"
 #include "library.h"
 #include "person.h"
+#include "publishedlog.h"
 #include "publishedspace.h"
 #include "spacereducer.h"
 #include "spaces.h"
@@ -175,6 +178,22 @@ void expectNothingOfHome(const Shelf &shelf) {
     }
     return QJsonDocument(object).toJson();
 }
+
+// Why a result failed, for a check's message: a check's message is made
+// also when it passes, and a result that holds a value has no error to read.
+template <typename T> [[nodiscard]] QByteArray why(const std::expected<T, QString> &result) {
+    return result ? QByteArray() : result.error().toLocal8Bit();
+}
+
+// Where an operation of the graph says a thing was met or learned, if it does.
+[[nodiscard]] std::optional<std::pair<int, double>> placeOf(const SpaceOperation &op) {
+    if (op.entity != "fact" && op.entity != "edge" && !op.field.startsWith("seen:"))
+        return std::nullopt;
+    const QJsonObject at = QJsonDocument::fromJson(op.value.toUtf8()).object();
+    return std::pair{at.value("section").toInt(), at.value("fraction").toDouble()};
+}
+
+[[nodiscard]] bool gone(const ReducedBook &book) { return SpaceReducer::isRemoved(book.alive, book.removed); }
 
 } // namespace
 
@@ -398,6 +417,124 @@ private slots:
             QCOMPARE(Parts::fromNames(snapshot->parts), (Parts{.graph = true, .questions = true, .ratings = true, .reading = true}));
             QVERIFY2(!state.nodes.isEmpty() && !state.days.isEmpty(), qPrintable(name));
         }
+    }
+
+    // What the owner hasn't read yet doesn't go: of the graph, nothing met,
+    // learned or related past their place in a book, nothing of a book not
+    // begun, nor a thing's summary of now. What they meet later follows.
+    void nothingPastTheOwnersPlaceIsPublished() {
+        Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        Graph graph(shelf.library);
+        const qint64 leto = graph.upsert({}, "character", "Leto II", "The duke's grandson.", {}, GraphPlace{shelf.dune, 5, 0.1}, "Leto");
+        const qint64 hayt = graph.upsert({}, "character", "Hayt", "A ghola.", {}, GraphPlace{shelf.messiah, 1, 0.1}, "Hayt");
+        QCOMPARE(graph.upsert({}, "character", "Paul Atreides", "He becomes emperor.", {}, GraphPlace{shelf.dune, 6, 0.2}, "emperor"),
+                 shelf.paul);
+        QVERIFY(graph.link(shelf.paul, leto, "father of", {}, GraphPlace{shelf.dune, 5, 0.1}) > 0);
+
+        const QList<SpaceOperation> ops = shelf.published({.graph = true, .questions = true});
+        const QSet<QString> things = idsOf(ops, "node");
+        QVERIFY(things.contains(shelf.node(shelf.paul)) && things.contains(shelf.node(shelf.jessica)));
+        QVERIFY(!things.contains(shelf.node(leto)));
+        QVERIFY(!things.contains(shelf.node(hayt))); // Dune Messiah isn't begun
+        for (const SpaceOperation &op : ops) {
+            QVERIFY2(!op.value.contains("emperor") && !op.value.contains("father of") && !op.value.contains("Leto"),
+                     qPrintable(op.field + ": " + op.value));
+            if (const auto at = placeOf(op))
+                QVERIFY2(*at <= (std::pair{3, 0.5}), qPrintable(op.field + ": " + op.value)); // where Dune is read to
+        }
+        const ReducedState before = SpaceReducer::reduce(ops);
+        QVERIFY(before.nodes.value(shelf.node(shelf.paul)).fields.value("summary").value.isEmpty());
+
+        // The owner reads on, and the space follows: a newer snapshot has
+        // what they have met since, and still nothing of the book not begun.
+        const SpaceSnapshot::Owner ada = owner();
+        const auto first = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true}, ada);
+        QVERIFY2(first.has_value(), why(first).constData());
+        QVERIFY(!idsOf(first->operations, "node").contains(shelf.node(leto)));
+        shelf.library.setProgress(shelf.dune, {.section = 7, .fraction = 0.1, .percent = 90, .updated = 1794740000});
+        const auto later = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true}, ada);
+        QVERIFY2(later.has_value(), why(later).constData());
+        const ReducedState after = SpaceReducer::reduce(later->operations);
+        QVERIFY(after.nodes.contains(shelf.node(leto)));
+        QVERIFY(!after.nodes.contains(shelf.node(hayt)));
+        QVERIFY(std::ranges::any_of(after.facts, [](const ReducedFact &fact) { return fact.value == "He becomes emperor."; }));
+        QVERIFY(std::ranges::any_of(after.edges, [](const ReducedEdge &edge) { return edge.kind == "father of"; }));
+    }
+
+    // The published space follows the collection: renamed, a book in and
+    // one out, details and stars changed, a newer snapshot says so. What an
+    // earlier one held keeps its numbers in the space's log, so one who
+    // holds it needs only the operations after it to be where the newer is.
+    void aLaterChangeShowsUpInANewerSnapshot() {
+        Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const SpaceSnapshot::Owner ada = owner();
+        const auto first = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.ratings = true}, ada);
+        QVERIFY2(first.has_value(), why(first).constData());
+
+        QVERIFY(shelf.library.renameCollection(shelf.sciFi, "Science fiction"));
+        QVERIFY(shelf.library.putInCollection(shelf.sciFi, shelf.outside, true));
+        QVERIFY(shelf.library.putInCollection(shelf.sciFi, shelf.picked, false));
+        BookMeta meta = shelf.library.book(shelf.messiah)->meta;
+        meta.title = "Dune Messiah, Revised";
+        QVERIFY(shelf.library.setMeta(shelf.messiah, meta));
+        QVERIFY(shelf.library.setReading(shelf.dune, "reading", 5, {}));
+
+        const auto second = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.ratings = true}, ada);
+        QVERIFY2(second.has_value(), why(second).constData());
+        QCOMPARE(second->space, first->space);
+        QCOMPARE(second->name, QString("Science fiction"));
+        QVERIFY(second->clock >= first->clock);
+        const ReducedState state = SpaceReducer::reduce(second->operations);
+        QVERIFY(!collectionNamed(state, "Science fiction").isEmpty());
+        QVERIFY(collectionNamed(state, "Sci-fi").isEmpty());
+        QCOMPARE(state.books.value(shelf.gid(shelf.outside)).fields.value("title").value, QString("Outside the Shelf"));
+        QVERIFY(!gone(state.books.value(shelf.gid(shelf.outside))));
+        QVERIFY(gone(state.books.value(shelf.gid(shelf.picked))));
+        QCOMPARE(state.books.value(shelf.gid(shelf.messiah)).fields.value("title").value, QString("Dune Messiah, Revised"));
+        QCOMPARE(state.books.value(shelf.gid(shelf.dune)).fields.value("rating").value, QString("5"));
+
+        // The numbers stay: every operation of the first is in the log as it
+        // was, and of the second those numbered as far as the first went are
+        // the first's.
+        const QList<SpaceOperation> log = PublishedLog::operations(shelf.library, first->space);
+        for (const SpaceOperation &op : first->operations)
+            QVERIFY2(log.contains(op), qPrintable(op.field + ": " + op.value));
+        QSet<QString> devices;
+        qint64 last = 0;
+        for (const SpaceOperation &op : first->operations) {
+            devices << op.device;
+            last = std::max(last, op.seq);
+        }
+        QCOMPARE(devices.size(), 1);
+        QVERIFY(devices.begin()->startsWith("device-") && !devices.begin()->contains(Spaces::deviceId(shelf.library)));
+        for (const SpaceOperation &op : second->operations)
+            QVERIFY2(op.seq > last || first->operations.contains(op), qPrintable(op.field + ": " + op.value));
+
+        // The first and what came after it say what the second says.
+        QList<SpaceOperation> caughtUp = first->operations;
+        for (const SpaceOperation &op : log)
+            if (op.seq > last)
+                caughtUp << op;
+        const ReducedState followed = SpaceReducer::reduce(caughtUp);
+        QCOMPARE(QSet<QString>(followed.books.keyBegin(), followed.books.keyEnd()),
+                 QSet<QString>(state.books.keyBegin(), state.books.keyEnd()));
+        for (auto book = state.books.cbegin(); book != state.books.cend(); ++book) {
+            QCOMPARE(gone(followed.books.value(book.key())), gone(*book));
+            for (const char *field : {"title", "rating"})
+                QCOMPARE(followed.books.value(book.key()).fields.value(field).value, book->fields.value(field).value);
+        }
+        QCOMPARE(collectionNamed(followed, "Science fiction"), collectionNamed(state, "Science fiction"));
+
+        // Nothing changed, nothing new; a part switched off is said to be gone.
+        const auto again = PublishedSpace::publish(shelf.library, shelf.sciFi, {.ratings = true}, ada);
+        QVERIFY2(again.has_value(), why(again).constData());
+        QCOMPARE(again->appended, 0);
+        QCOMPARE(again->operations, log.size());
+        const auto without = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {}, ada);
+        QVERIFY2(without.has_value(), why(without).constData());
+        QCOMPARE(SpaceReducer::reduce(without->operations).books.value(shelf.gid(shelf.dune)).fields.value("rating").value, QString());
     }
 
     // Writes the sample of this format from the fixtures above, when asked

@@ -52,13 +52,35 @@ struct Parts {
 // `collectionId`, with `parts`, numbered anew in this space. Nothing in them
 // names what is above the collection at home or any of the owner's
 // computers: collections go by ids of this space, and each computer that
-// wrote one by its place among them ("device-001").
+// wrote one by its place among them ("device-001"). Of the graph only what
+// the owner has met (GraphContext::reachOf): nothing seen, learned or
+// related past where they are in a book, nothing of a book not begun.
 [[nodiscard]] std::expected<QList<SpaceOperation>, QString> operations(const Library &library, qint64 collectionId, const Parts &parts,
                                                                        const QString &space);
 
-// The snapshot of the space `owner` publishes the collection as, taken now,
-// with the space recorded in the library's spaces as theirs and each
-// operation's author the owner.
+// A published space as its log has it after following the collection.
+struct Publication {
+    QString space;
+    qint64 appended = 0;   // operations its log took now
+    qint64 operations = 0; // in its log, all told
+};
+
+// Publishes the collection as the space `owner` publishes it as: the space
+// recorded in the library's spaces as theirs, with the collection and parts,
+// and its log (PublishedLog) brought in step with what it says now.
+// Publishing it again, with other parts or after the collection changed,
+// appends to the same log.
+[[nodiscard]] std::expected<Publication, QString> publish(const Library &library, qint64 collectionId, const Parts &parts,
+                                                          const SpaceSnapshot::Owner &owner);
+
+// Brings the log of a space published here in step with its collection as
+// it is now, with the parts it was published with: what a transport runs
+// before it sends the space.
+[[nodiscard]] std::expected<Publication, QString> follow(const Library &library, const QString &space);
+
+// The snapshot of the space `owner` publishes the collection as, taken now:
+// published first, then its log compacted (Compaction::latest), each
+// operation keeping its number there and with the owner as its author.
 [[nodiscard]] std::expected<SpaceSnapshot, QString> snapshot(const Library &library, qint64 collectionId, const Parts &parts,
                                                              const SpaceSnapshot::Owner &owner);
 

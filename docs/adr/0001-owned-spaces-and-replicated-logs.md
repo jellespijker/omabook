@@ -130,6 +130,23 @@ whole (`Compaction::forgetSubscribed`, compaction still the one place that delet
 the collection. The layer's graph is not shown until it follows the receiver's reading place (#5);
 copying chosen things of it into one's own graph is for later.
 
+As built (#3): on the owner's computer a published space has a log of its own, `published_ops`,
+apart from `ops`, though `live_ops` now leaves published spaces out. In `ops` it would be a space like
+those its members sync, compacted by snapshot marks it doesn't keep and sent by replication to the
+owner's other computers, each then appending its own copy, while its numbers must stay as
+subscribers hold them; and which collection it publishes, with which parts, needs a table anyway.
+The log follows the collection by being brought in step with what the space says now
+(`PublishedLog::follow`): a field's new value, what only grows and is new, a thing back or gone, a part
+switched off said to be empty, appended after what is there and never changed, written by the
+owner's person id under a name of this computer's own in that space. It is brought in step whenever
+the space is published or its snapshot written, and a transport does the same before it sends; what
+it appends then is what following every write would have appended, less values overwritten since,
+which can't win anyway. So its numbers stay: a snapshot is the log compacted with each operation's
+number in the log, and one who holds it needs only the operations after it. What the space says of
+the graph is cut where the owner is in each book (`GraphContext::reachOf`): a sighting, a fact or a
+relation learned further on stays out until they get there, nothing of a book not begun goes, and a
+thing's summary goes only as its facts, each with the place it was learned at.
+
 ### Transports are adapters
 
 How operations move is not the model. They are append-only and can be encrypted with the space's

@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
+#include <QSqlQuery>
+#include <QVariant>
 #include <algorithm>
 #include <array>
 #include <cstddef>
@@ -12,8 +14,11 @@
 #include <tuple>
 #include <utility>
 
+#include "changelog.h"
 #include "compaction.h"
+#include "graphcontext.h"
 #include "library.h"
+#include "publishedlog.h"
 #include "spacereducer.h"
 #include "spaces.h"
 
@@ -50,9 +55,22 @@ struct Members {
     QSet<QString> facts;
     QSet<QString> edges;
     QSet<QString> days;
+    // How far the owner has read each of its books (GraphContext::reachOf).
+    QHash<QString, GraphContext::Reach> reach;
 
     [[nodiscard]] bool holds(const Canon &canon, const QString &bookGid) const {
         return !bookGid.isEmpty() && books.contains(canon.book(bookGid));
+    }
+    // Whether the owner has met a place of a book: nothing past where they
+    // got in it, nothing of one not begun, all of one read. A place of no
+    // book, or of a book the space doesn't hold, is not theirs to bound.
+    [[nodiscard]] bool met(const Canon &canon, const QString &bookGid, int section, double fraction) const {
+        if (!holds(canon, bookGid))
+            return true;
+        return reach.value(canon.book(bookGid)).covers(GraphPlace{.bookId = 0, .section = section, .fraction = fraction});
+    }
+    [[nodiscard]] bool met(const Canon &canon, const QString &bookGid, const SpaceMoment &moment) const {
+        return met(canon, bookGid, moment.section, moment.fraction);
     }
 };
 
@@ -79,8 +97,24 @@ void collectTree(const Library &library, const Collection &root, const Canon &ca
     members.root = Spaces::collectionId(library, root.id);
     for (const qint64 id : std::as_const(tree))
         members.collections.insert(Spaces::collectionId(library, id));
-    for (const Book &book : root.of(library.books()))
-        members.books.insert(canon.book(Spaces::bookId(library, book.id)));
+    for (const Book &book : root.of(library.books())) {
+        const QString gid = canon.book(Spaces::bookId(library, book.id));
+        members.books.insert(gid);
+        members.reach.insert(gid, GraphContext::reachOf(library, book.id));
+    }
+}
+
+// Whether a thing was met in one of the space's books, where the owner has read.
+[[nodiscard]] bool metInBooks(const ReducedNode &node, const Canon &canon, const Members &members) {
+    for (auto seen = node.seen.cbegin(); seen != node.seen.cend(); ++seen)
+        if (members.holds(canon, seen.key()) && members.met(canon, seen.key(), *seen))
+            return true;
+    return false;
+}
+
+// Whether a relation was learned where the owner has read, or in no book of the space.
+[[nodiscard]] bool learned(const ReducedEdge &edge, const Canon &canon, const Members &members) {
+    return !edge.hasLearned || members.met(canon, edge.bookGid, edge.learned);
 }
 
 // The things of the graph its books hold: met in one of them, learned of
@@ -107,8 +141,7 @@ void readThings(const ReducedState &state, const Canon &canon, const Members &me
             graph.bookNodes.insert(node.key());
         if (kind == "question"_L1)
             graph.questions.insert(node.key());
-        const QList<QString> seenIn = node->seen.keys();
-        if (std::ranges::any_of(seenIn, [&](const QString &book) { return members.holds(canon, book); }))
+        if (metInBooks(*node, canon, members))
             graph.met.insert(node.key());
     }
 }
@@ -116,10 +149,10 @@ void readThings(const ReducedState &state, const Canon &canon, const Members &me
 // What was learned in the books, or is related there or to a book's own thing.
 void readRelations(const ReducedState &state, const Canon &canon, const Members &members, GraphOfBooks &graph) {
     for (const ReducedFact &fact : state.facts)
-        if (alive(fact) && members.holds(canon, fact.bookGid))
+        if (alive(fact) && members.holds(canon, fact.bookGid) && members.met(canon, fact.bookGid, fact.moment))
             graph.met.insert(canon.thing(fact.nodeGid));
     for (const ReducedEdge &edge : state.edges) {
-        if (!alive(edge))
+        if (!alive(edge) || !learned(edge, canon, members))
             continue;
         const QString source = canon.thing(edge.sourceGid);
         const QString target = canon.thing(edge.targetGid);
@@ -144,15 +177,16 @@ void chooseThings(const GraphOfBooks &graph, const PublishedSpace::Parts &parts,
 }
 
 // Of the things taken, what is known of them and how they relate, in the
-// space's books or in none.
+// space's books (where the owner has read) or in none.
 void chooseFactsAndRelations(const ReducedState &state, const Canon &canon, Members &members) {
     const auto ofBooks = [&](const QString &book) { return book.isEmpty() || members.holds(canon, book); };
     for (auto fact = state.facts.cbegin(); fact != state.facts.cend(); ++fact)
-        if (alive(*fact) && members.nodes.contains(canon.thing(fact->nodeGid)) && ofBooks(fact->bookGid))
+        if (alive(*fact) && members.nodes.contains(canon.thing(fact->nodeGid)) && ofBooks(fact->bookGid)
+            && members.met(canon, fact->bookGid, fact->moment))
             members.facts.insert(fact.key());
     for (auto edge = state.edges.cbegin(); edge != state.edges.cend(); ++edge) {
         const bool between = members.nodes.contains(canon.thing(edge->sourceGid)) && members.nodes.contains(canon.thing(edge->targetGid));
-        if (alive(*edge) && between && ofBooks(edge->bookGid))
+        if (alive(*edge) && between && ofBooks(edge->bookGid) && learned(*edge, canon, members))
             members.edges.insert(edge.key());
     }
 }
@@ -173,7 +207,24 @@ void collectDays(const ReducedState &state, const Canon &canon, Members &members
             members.days.insert(day.key());
 }
 
-[[nodiscard]] QString bookIn(const QString &json) { return QJsonDocument::fromJson(json.toUtf8()).object().value("book").toString(); }
+// Where an operation of the graph says something was met or learned: its
+// book (of a sighting, the field's) and the place in it.
+struct Place {
+    QString book;
+    int section = 0;
+    double fraction = 0;
+};
+
+[[nodiscard]] Place placeIn(const QString &json, const QString &book = {}) {
+    const QJsonObject object = QJsonDocument::fromJson(json.toUtf8()).object();
+    return {.book = book.isEmpty() ? object.value("book").toString() : book,
+            .section = object.value("section").toInt(),
+            .fraction = object.value("fraction").toDouble()};
+}
+
+[[nodiscard]] bool metAt(const Members &members, const Canon &canon, const Place &place) {
+    return members.met(canon, place.book, place.section, place.fraction);
+}
 
 [[nodiscard]] bool bookFieldIn(const SpaceOperation &op, const PublishedSpace::Parts &parts) {
     return among(identityFields, op.field) || op.field == "same_as"_L1 || (parts.ratings && op.field == "rating"_L1)
@@ -181,10 +232,12 @@ void collectDays(const ReducedState &state, const Canon &canon, Members &members
 }
 
 [[nodiscard]] bool nodeFieldIn(const SpaceOperation &op, const Members &members, const Canon &canon) {
-    if (op.field == "removed"_L1)
+    // Its summary is the latest it was given, wherever in a book that was;
+    // each summary it had is a fact, with the place it was learned at.
+    if (op.field == "removed"_L1 || op.field == "summary"_L1)
         return false;
     if (op.field.startsWith("seen:"_L1))
-        return members.holds(canon, op.field.mid(5));
+        return members.holds(canon, op.field.mid(5)) && metAt(members, canon, placeIn(op.value, op.field.mid(5)));
     return op.field != "book"_L1 || op.value.isEmpty() || members.holds(canon, op.value);
 }
 
@@ -192,14 +245,16 @@ void collectDays(const ReducedState &state, const Canon &canon, Members &members
     if (op.entity == "node"_L1)
         return members.nodes.contains(canon.thing(op.id)) && nodeFieldIn(op, members, canon);
     if (op.entity == "fact"_L1)
-        return members.facts.contains(op.id) && op.field == "revealed"_L1;
-    const QString book = bookIn(op.value);
+        return members.facts.contains(op.id) && op.field == "revealed"_L1 && metAt(members, canon, placeIn(op.value));
+    const Place place = placeIn(op.value);
     return op.entity == "edge"_L1 && members.edges.contains(op.id) && op.field == "link"_L1
-           && (book.isEmpty() || members.holds(canon, book));
+           && (place.book.isEmpty() || members.holds(canon, place.book)) && metAt(members, canon, place);
 }
 
 // Whether the operation says something the space holds. Of the graph, a
-// thing's sightings and a relation's places only in the space's books.
+// thing's sightings and a relation's places only in the space's books, and
+// of those only what the owner has met: a sighting, a fact or a relation
+// learned past where they are in its book stays out until they get there.
 [[nodiscard]] bool belongs(const SpaceOperation &op, const Members &members, const Canon &canon, const PublishedSpace::Parts &parts) {
     if (op.entity == "book"_L1)
         return members.books.contains(canon.book(op.id)) && bookFieldIn(op, parts);
@@ -324,34 +379,62 @@ std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const L
     return compacted;
 }
 
-std::expected<SpaceSnapshot, QString> PublishedSpace::snapshot(const Library &library, qint64 collectionId, const Parts &parts,
-                                                               const SpaceSnapshot::Owner &owner) {
+std::expected<PublishedSpace::Publication, QString> PublishedSpace::publish(const Library &library, qint64 collectionId, const Parts &parts,
+                                                                            const SpaceSnapshot::Owner &owner) {
     if (owner.person.isEmpty())
         return std::unexpected(u"A space is published by a person, and there is no person id to publish it as."_s);
     const std::optional<Collection> collection = collectionOf(library, collectionId);
     if (!collection)
         return std::unexpected(u"There is no collection %1 to publish."_s.arg(collectionId));
-    const QString space = idFor(owner.person, Spaces::collectionId(library, collectionId));
-    auto ops = operations(library, collectionId, parts, space);
-    if (!ops)
-        return std::unexpected(ops.error());
+    const QString home = Spaces::collectionId(library, collectionId);
+    const QString space = idFor(owner.person, home);
     Spaces::ensurePublishedSpace(library, space, collection->name, owner.person, owner.name);
+    PublishedLog::remember(library, space, {.collection = home, .parts = parts.names()});
+    return follow(library, space);
+}
+
+std::expected<PublishedSpace::Publication, QString> PublishedSpace::follow(const Library &library, const QString &space) {
+    const std::optional<PublishedLog::Record> record = PublishedLog::recorded(library, space);
+    if (!record)
+        return std::unexpected(u"%1 is not a space published from this library."_s.arg(space));
+    QSqlQuery owner = ChangeLog::query(library, "SELECT owner FROM spaces WHERE id = ?", {space});
+    const QString person = owner.next() ? owner.value(0).toString() : QString();
+    owner.finish();
+    const qint64 collectionId = Spaces::localId(library, u"collection"_s, record->collection);
+    const auto now = operations(library, collectionId, Parts::fromNames(record->parts), space);
+    if (!now)
+        return std::unexpected(now.error());
+    // Written by the owner, whichever of their computers it was, and
+    // unsigned: what was signed at home was signed as it is there (its
+    // space, device and number), which none of these is (ADR 0001, People
+    // and keys).
+    const qint64 appended = PublishedLog::follow(library, space, *now, person);
+    return Publication{.space = space, .appended = appended, .operations = PublishedLog::operations(library, space).size()};
+}
+
+std::expected<SpaceSnapshot, QString> PublishedSpace::snapshot(const Library &library, qint64 collectionId, const Parts &parts,
+                                                               const SpaceSnapshot::Owner &owner) {
+    const auto published = publish(library, collectionId, parts, owner);
+    if (!published)
+        return std::unexpected(published.error());
+    const std::optional<Collection> collection = collectionOf(library, collectionId);
+    if (!collection)
+        return std::unexpected(u"There is no collection %1 to publish."_s.arg(collectionId));
+    // Each operation keeps the number it has in the log, so that one who
+    // holds this snapshot is sent only what the log takes after it.
+    QList<SpaceOperation> ops = Compaction::latest(PublishedLog::operations(library, published->space));
+    std::ranges::sort(ops, [](const SpaceOperation &one, const SpaceOperation &other) {
+        return std::tie(one.device, one.seq) < std::tie(other.device, other.seq);
+    });
     qint64 clock = Spaces::lastHlc(library);
-    // Written by the owner, whichever of their computers it was. What was
-    // signed at home was signed as it is there (its space, device and number),
-    // which none of these is: none carries that signature (ADR 0001, People and keys).
-    for (SpaceOperation &op : *ops) {
+    for (const SpaceOperation &op : std::as_const(ops))
         clock = std::max(clock, op.hlc);
-        op.author = owner.person;
-        op.signer.clear();
-        op.signature.clear();
-    }
-    return SpaceSnapshot{.space = space,
+    return SpaceSnapshot{.space = published->space,
                          .kind = QString::fromLatin1(kind),
                          .name = collection->name,
                          .owner = owner,
                          .parts = parts.names(),
                          .clock = clock,
                          .writtenBy = QString::fromLatin1(OMABOOK_VERSION),
-                         .operations = std::move(*ops)};
+                         .operations = std::move(ops)};
 }
