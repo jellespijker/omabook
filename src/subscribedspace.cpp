@@ -14,6 +14,7 @@
 #include "person.h"
 #include "publishedspace.h"
 #include "signedops.h"
+#include "spacelinks.h"
 #include "spaces.h"
 
 using namespace Qt::StringLiterals;
@@ -224,5 +225,6 @@ std::expected<qint64, QString> SubscribedSpace::drop(const Library &library, con
     ChangeLog::exec(library, "DELETE FROM spaces WHERE id = ?", {space});
     ChangeLog::exec(library, "DELETE FROM global_ids WHERE entity = 'subscription' AND global_id = ?", {space});
     ChangeLog::exec(library, "DELETE FROM global_ids WHERE entity = ?", {booksOf(space)});
+    SpaceLinks::forget(library, space);
     return dropped;
 }

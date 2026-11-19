@@ -52,7 +52,7 @@ enable_testing()
 set(omabook_test_home "${CMAKE_BINARY_DIR}/test-home")
 file(MAKE_DIRECTORY "${omabook_test_home}/.config" "${omabook_test_home}/.local/share" "${omabook_test_home}/.cache")
 set(omabook_test_environment "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state;HOME=${omabook_test_home};XDG_CONFIG_HOME=${omabook_test_home}/.config;XDG_DATA_HOME=${omabook_test_home}/.local/share;XDG_CACHE_HOME=${omabook_test_home}/.cache")
-foreach(test formats library services graphsync spaces replication ui mcp calibre folio readingsites scripting pluginmanager graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace)
+foreach(test formats library services graphsync spaces replication ui mcp calibre folio readingsites scripting pluginmanager graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking)
   add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)
@@ -96,6 +96,14 @@ add_dependencies(subscribing_tests omabook)
 target_compile_definitions(subscribing_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 add_dependencies(sharedgraph_tests omabook)
 target_compile_definitions(sharedgraph_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+# Sharing by link sends gists through GitHub's command line; the tests' gh is
+# a stand-in (tests/fakegh.cpp) that sends to the fake GitHub, in a folder of
+# its own so that a test can put it first on PATH.
+add_executable(fakegh tests/fakegh.cpp)
+target_link_libraries(fakegh PRIVATE Qt6::Core Qt6::Network)
+set_target_properties(fakegh PROPERTIES OUTPUT_NAME gh RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fake-gh")
+add_dependencies(linking_tests omabook fakegh)
+target_compile_definitions(linking_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>" FAKE_GH="$<TARGET_FILE:fakegh>")
 
 # The commands agents use, driven through the real binary with no display.
 add_test(NAME cli_tests COMMAND ${CMAKE_SOURCE_DIR}/tests/cli_tests.sh $<TARGET_FILE:omabook>)

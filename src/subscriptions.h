@@ -67,8 +67,8 @@ struct Dropped {
     qint64 operations = 0;
 };
 
-// Where a snapshot comes from: a file today. A link (a gist or a repository)
-// is another transport for the same snapshot (#7).
+// A snapshot from a file. A link (a gist or a repository) is fetched by a
+// transport instead (SpaceTransport, Following).
 [[nodiscard]] std::expected<SpaceSnapshot, QString> fetch(const QString &source);
 
 [[nodiscard]] std::expected<Report, QString> subscribe(Library &library, const SpaceSnapshot &snapshot, const Options &options);
@@ -85,6 +85,8 @@ struct Filing {
 // and linked to the space); with dryRun, only says what it would do. The
 // report's operations are left for the caller to say.
 [[nodiscard]] std::expected<Report, QString> file(Library &library, const Filing &filing, const Options &options);
+// A subscription by the space's id, its name, or the collection linked to it.
+[[nodiscard]] std::expected<SubscribedSpace::Subscription, QString> named(const Library &library, const QString &which);
 // By the space's id, its name, or the collection linked to it.
 [[nodiscard]] std::expected<Dropped, QString> unsubscribe(const Library &library, const QString &which);
 

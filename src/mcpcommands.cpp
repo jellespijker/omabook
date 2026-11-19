@@ -332,12 +332,15 @@ const bool registered = [] {
                   "reading places and days), and what is left out: the books' files always, and each of the user's own "
                   "parts that isn't switched on. Of the graph only what the user has read goes, nothing past their "
                   "place in a book. Show that to the user with dry_run before sharing, and ask them which parts to add "
-                  "and the name they go by in it.",
+                  "and the name they go by in it. With gist, it is sent to a gist through GitHub's command line (gh, "
+                  "signed in) and the link is answered: secret unless public is asked, the same gist each time.",
                   schema({{"name", string("The collection's path, name, or number.")},
                           {"graph", boolean("With what the knowledge graph knows of its books.")},
                           {"with", list("The user's own parts to add.", choice("A part.", {"questions", "ratings", "progress"}))},
                           {"as", string("The name the user goes by in the space; needed the first time.")},
                           {"output", string("The file to write the snapshot to, ending in .omabook-space.")},
+                          {"gist", boolean("Also send the snapshot to a gist and answer its link; sharing again updates it.")},
+                          {"public", boolean("With gist: a public gist anyone may find, not a secret one. Only when the user asks.")},
                           {"dry_run", boolean("Only say what would go in and what would stay out; publish and write nothing.")}},
                          {"name"}),
                   Changes, [](const QJsonObject &arguments) {
@@ -352,8 +355,9 @@ const bool registered = [] {
                       for (const char *option : {"as", "output"})
                           if (const QString value = arguments.value(QLatin1StringView(option)).toString(); !value.isEmpty())
                               asked << "--" + QString::fromLatin1(option) << value;
-                      if (arguments.value("dry_run").toBool())
-                          asked << "--dry-run";
+                      for (const char *option : {"gist", "public", "dry_run"})
+                          if (arguments.value(QLatin1StringView(option)).toBool())
+                              asked << "--" + QString::fromLatin1(option).replace('_', '-');
                       return command(asked);
                   }});
 
@@ -421,17 +425,26 @@ const bool registered = [] {
                   "(never downloads), in a collection of the user's own: the space's name, or `as`; one of that name is "
                   "merged into, not overwritten. Its knowledge graph stays in the space, shown beside the user's as far as "
                   "they have read each book. A newer "
-                  "file of the same space brings only what is new. Try dry_run first to show the user what it would do.",
-                  schema({{"file", string("The .omabook-space file.")},
+                  "file of the same space brings only what is new. Try dry_run first to show the user what it would do. "
+                  "Imported from a link (a gist, or a file of a GitHub repository), it is followed from there: follow "
+                  "checks the link for a newer version and answers what it would change, counted, taking it in only "
+                  "with yes; never say yes without asking the user.",
+                  schema({{"file", string("The .omabook-space file, or a gist's or GitHub file's link; with follow, the "
+                                          "shared collection to check (all when empty).")},
                           {"as", string("The collection's name here, instead of the shared one's.")},
+                          {"follow", boolean("Check the link it was imported from for a newer version.")},
+                          {"yes", boolean("With follow: take the newer version in, once the user agreed.")},
                           {"dry_run", boolean("Change nothing; say what importing would do.")}},
-                         {"file"}),
+                         {}),
                   Changes, [](const QJsonObject &arguments) {
-                      QStringList asked{"collections", "import", arguments.value("file").toString()};
+                      QStringList asked{"collections", "import"};
+                      if (const QString file = arguments.value("file").toString(); !file.isEmpty())
+                          asked << file;
                       if (const QString as = arguments.value("as").toString().trimmed(); !as.isEmpty())
                           asked << "--as" << as;
-                      if (arguments.value("dry_run").toBool())
-                          asked << "--dry-run";
+                      for (const char *option : {"follow", "yes", "dry_run"})
+                          if (arguments.value(QLatin1StringView(option)).toBool())
+                              asked << "--" + QString::fromLatin1(option).replace('_', '-');
                       return command(asked);
                   }});
 

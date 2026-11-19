@@ -82,7 +82,8 @@ void placeBook(const Library &library, const QString &space, const QString &book
 [[nodiscard]] qint64 bookHere(const Library &library, const QString &space, const QString &book);
 
 // Drops the layer: the space, its operations (Compaction::forgetSubscribed),
-// the link and where its books are here. The collection it was linked to stays the library's own.
+// the link, where its books are here and where it was followed from
+// (SpaceLinks). The collection it was linked to stays the library's own.
 // How many operations left the log.
 [[nodiscard]] std::expected<qint64, QString> drop(const Library &library, const QString &space);
 

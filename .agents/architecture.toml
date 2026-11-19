@@ -32,7 +32,7 @@ summary = "The library and the knowledge graph: storage, books, their sides and 
 uses = ["formats", "foundation"]
 modules = [
   "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "knowledgesearch", "libraries",
-  "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacereducer", "spacereplay", "spaces",
+  "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
   "spacesnapshot", "subscribedspace", "textmarks",
 ]
 
@@ -40,17 +40,17 @@ modules = [
 summary = "What talks to the outside or to a model: AI, metadata sources, reading sites, Calibre, plugins, the help's content."
 uses = ["library", "formats", "foundation"]
 modules = [
-  "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "goodreads",
+  "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
   "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
-  "readingsite", "scriptplugin", "scriptplugins", "sitedesk", "tour", "whatsnew",
+  "readingsite", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "tour", "whatsnew",
 ]
 
 [layers.operations]
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "collections", "collectionshare", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "plugintools",
+  "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "plugintools",
   "scripttools", "sharedcollection", "sharedspaces", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
 ]
 

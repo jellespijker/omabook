@@ -13,7 +13,9 @@
 #include <tuple>
 
 #include "changelog.h"
+#include "githublink.h"
 #include "person.h"
+#include "spacelinks.h"
 #include "spacereducer.h"
 #include "spaces.h"
 #include "spacesnapshot.h"
@@ -195,6 +197,13 @@ void printPreview(const QJsonObject &shown) {
         done.insert("output", file);
         done.insert("snapshot_operations", snapshot->operations.size());
     }
+    if (parser.isSet(u"gist"_s)) {
+        GitHubLink github;
+        const auto sent = CollectionShare::send(library, published->space, github, parser.isSet(u"public"_s));
+        if (!sent)
+            return std::unexpected(sent.error());
+        done.insert("sent", *sent);
+    }
     return done;
 }
 
@@ -205,9 +214,22 @@ void printPublished(const QJsonObject &done) {
     if (done.contains("output"))
         say(stdout, u"Wrote %1 (%2 operations): give it to whoever you share the collection with."_s.arg(
                         done.value("output").toString(), QString::number(done.value("snapshot_operations").toInteger())));
-    else
+    if (const QJsonObject sent = done.value("sent").toObject(); !sent.isEmpty()) {
+        const QString link = sent.value("address").toString();
+        const QString kind = sent.value("public").toBool() ? u"public"_s : u"secret"_s;
         say(stdout,
-            u"Write a snapshot of it to give to others with --output <file>%1."_s.arg(QLatin1StringView(SpaceSnapshotFile::suffix)));
+            sent.value("created").toBool()
+                ? u"Sent to a %1 gist (%2 operations): %3\nWhoever has the link can import it, omabook collections import %3, and "
+                  "follow what you change; sharing it again with --gist updates this gist."_s.arg(kind)
+                      .arg(sent.value("operations").toInteger())
+                      .arg(link)
+                : u"Brought the %1 gist up to date (%2 operations): %3"_s.arg(kind).arg(sent.value("operations").toInteger()).arg(link));
+        if (const QString note = sent.value("note").toString(); !note.isEmpty())
+            say(stdout, note);
+    }
+    if (!done.contains("output") && !done.contains("sent"))
+        say(stdout, u"Give it to others as a file with --output <file>%1, or as a link with --gist."_s.arg(
+                        QLatin1StringView(SpaceSnapshotFile::suffix)));
 }
 
 } // namespace
@@ -216,6 +238,24 @@ void CollectionShare::addOptions(QCommandLineParser &parser) {
     parser.addOption({u"with-graph"_s, u"share: with what the knowledge graph knows of its books, up to where you have read."_s});
     parser.addOption({u"with"_s, u"share: also these of yours: questions, ratings, progress."_s, u"parts"_s});
     parser.addOption({u"output"_s, u"share: write the space's snapshot to this file."_s, u"file"_s});
+    parser.addOption({u"gist"_s, u"share: send the space's snapshot to a gist, through GitHub's command line gh, and print its link; "
+                                 "the same gist each time."_s});
+    parser.addOption({u"public"_s, u"share --gist: a public gist, which anyone may find, rather than a secret one."_s});
+}
+
+std::expected<QJsonObject, QString> CollectionShare::send(const Library &library, const QString &space, SpaceTransport &transport,
+                                                          bool open) {
+    const auto snapshot = PublishedSpace::snapshotOf(library, space);
+    if (!snapshot)
+        return std::unexpected(snapshot.error());
+    const auto before = SpaceLinks::of(library, space, SpaceLinks::Role::Sent, transport.name());
+    const auto sent = transport.publish(*snapshot, {.previous = before ? before->address : QString(), .open = open});
+    if (!sent)
+        return std::unexpected(sent.error());
+    SpaceLinks::remember(library, SpaceLinks::Role::Sent, {.space = space, .transport = transport.name(), .address = sent->address});
+    return QJsonObject{{"address", sent->address}, {"transport", transport.name()},
+                       {"created", sent->created}, {"public", sent->open},
+                       {"note", sent->note},       {"operations", snapshot->operations.size()}};
 }
 
 std::expected<QJsonObject, QString> CollectionShare::preview(const Library &library, const Collection &collection, const Parts &parts) {
@@ -246,6 +286,8 @@ int CollectionShare::run(const Library &library, const QCommandLineParser &parse
     const auto parts = partsFrom(parser);
     if (!parts)
         return fail(parts.error());
+    if (parser.isSet(u"public"_s) && !parser.isSet(u"gist"_s))
+        return fail(u"--public says what kind of gist to share to, so it goes with --gist."_s);
     auto shown = preview(library, *collection, *parts);
     if (!shown)
         return fail(shown.error());

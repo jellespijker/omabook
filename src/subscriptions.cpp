@@ -238,7 +238,7 @@ void putIn(Library &library, qint64 collectionId, qint64 bookId) {
 
 std::expected<SpaceSnapshot, QString> Subscriptions::fetch(const QString &source) {
     if (const QUrl url(source); !url.scheme().isEmpty() && url.scheme().size() > 1 && !url.isLocalFile())
-        return std::unexpected(u"Only a space file can be imported for now, not a link: %1"_s.arg(source));
+        return std::unexpected(u"This link is not one Omabook can import from (a gist or a file of a GitHub repository): %1"_s.arg(source));
     const QString path = source.startsWith("file:"_L1) ? QUrl(source).toLocalFile() : source;
     if (!QFileInfo(path).isFile())
         return std::unexpected(u"There is no file %1 to import."_s.arg(path));
@@ -305,7 +305,7 @@ std::expected<Report, QString> Subscriptions::file(Library &library, const Filin
     return report;
 }
 
-std::expected<Dropped, QString> Subscriptions::unsubscribe(const Library &library, const QString &which) {
+std::expected<SubscribedSpace::Subscription, QString> Subscriptions::named(const Library &library, const QString &which) {
     const QList<SubscribedSpace::Subscription> subscriptions = SubscribedSpace::list(library);
     const auto collection = library.collectionNamed(which);
     QList<SubscribedSpace::Subscription> meant;
@@ -321,7 +321,14 @@ std::expected<Dropped, QString> Subscriptions::unsubscribe(const Library &librar
             ids << subscription.space;
         return std::unexpected(u"More than one space goes by %1; name one by its id: %2"_s.arg(which, ids.join(", "_L1)));
     }
-    const SubscribedSpace::Subscription &space = meant.first();
+    return meant.first();
+}
+
+std::expected<Dropped, QString> Subscriptions::unsubscribe(const Library &library, const QString &which) {
+    const auto meant = named(library, which);
+    if (!meant)
+        return std::unexpected(meant.error());
+    const SubscribedSpace::Subscription &space = *meant;
     const auto kept = space.collection > 0 ? library.collection(space.collection) : std::nullopt;
     const auto dropped = SubscribedSpace::drop(library, space.space);
     if (!dropped)

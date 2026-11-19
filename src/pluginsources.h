@@ -80,8 +80,12 @@ public:
         // plugins, see PluginFinder).
         QString raw = "https://raw.githubusercontent.com";
         // The only hosts a request may be sent or redirected to.
-        QStringList hosts{"github.com", "api.github.com", "codeload.github.com", "objects.githubusercontent.com",
-                          "raw.githubusercontent.com"};
+        QStringList hosts{"github.com",
+                          "api.github.com",
+                          "codeload.github.com",
+                          "objects.githubusercontent.com",
+                          "raw.githubusercontent.com",
+                          "gist.githubusercontent.com"};
         bool httpsOnly = true;
         static Service fromEnvironment();
     };
@@ -165,9 +169,11 @@ public:
     static QJsonObject wait(const std::function<void(Done)> &start, int milliseconds = 180000);
 
 private:
-    // Finding plugins asks GitHub the same careful way: HTTPS to GitHub only,
-    // nothing too large, the token only to the API.
+    // Finding plugins, and fetching a shared collection from a gist or a
+    // repository (GitHubLink), ask GitHub the same careful way: HTTPS to
+    // GitHub only, nothing too large, the token only to the API.
     friend class PluginFinder;
+    friend class GitHubLink;
     using Entry = std::shared_ptr<QJsonObject>;
     // What a request came to.
     struct Reply {

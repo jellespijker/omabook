@@ -38,9 +38,12 @@ omabook collections sort --pick 1,4=Werk/Regeltechniek   # from that same list, 
 omabook collections sort Werk --json           # within one: collections inside Werk for its books in none of them; they stay in Werk
 omabook collections share Werk --with-graph --dry-run --json   # what would go in (counts) and stay out; writes nothing
 omabook collections share Werk --with ratings --as "Ada" --output Werk.omabook-space   # publish it as a space, write its snapshot
+omabook collections share Werk --gist          # send it to a secret gist through gh and print its link; again: the same gist
+omabook collections import https://gist.github.com/ada/<id>   # subscribe by link (a gist, or a GitHub file); it is followed from there
+omabook collections import --follow --json     # what a newer version would change, counted; taken in only with --yes
 ```
 
-Sharing never sends the books' files; the graph, questions, ratings and progress go only when the user switches them on, and of the graph only what they have read. Show the dry run to the user and ask which parts and what name before sharing.
+Sharing never sends the books' files; the graph, questions, ratings and progress go only when the user switches them on, and of the graph only what they have read. Show the dry run to the user and ask which parts and what name before sharing. A gist is secret unless the user asks for `--public`. Show what following would change and ask before `--yes`.
 omabook spaces --json                                   # the spaces the user is in: kind, their role, members
 omabook spaces create "Book club" --collection Club     # a shared space several people write, of a collection
 omabook spaces invite "Book club" <person-id> --role reader --out invite.omabook-invite

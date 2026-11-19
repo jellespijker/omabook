@@ -112,6 +112,17 @@ public:
     int pageSize = 30;
     QHash<QString, QHash<QString, QByteArray>> files;
     QHash<QString, QByteArray> raw;
+    // Gists, as the API keeps them, by id: what `gh api` sends (the fake gh
+    // in fakegh.cpp) makes and changes them, and anyone may read them.
+    struct Gist {
+        QString owner = "ada";
+        QString description;
+        bool open = false;
+        QHash<QString, QByteArray> files;
+        bool truncated = false; // its files are sent only in part, with where the whole is
+    };
+    QHash<QString, Gist> gists;
+    int gistsMade = 0;
     // A repository as the search answers it.
     static QJsonObject found(const QString &repository, int stars = 0, bool archived = false, const QString &description = {}) {
         return {{"full_name", repository}, {"description", description}, {"stargazers_count", stars}, {"archived", archived},
@@ -129,7 +140,12 @@ public:
                     if (!request.contains("\r\n\r\n"))
                         return;
                     const QByteArray head = request.left(request.indexOf("\r\n\r\n"));
-                    answer(socket, QString::fromLatin1(head.left(head.indexOf("\r\n")).split(' ').value(1)), head);
+                    // What a request sends after its head, all of it.
+                    const QByteArray body = request.mid(head.size() + 4);
+                    if (body.size() < header(head, "content-length").toLongLong())
+                        return;
+                    const QList<QByteArray> line = head.left(head.indexOf("\r\n")).split(' ');
+                    route(socket, QString::fromLatin1(line.value(1)), head, QString::fromLatin1(line.value(0)), body);
                 });
                 connect(socket, &QTcpSocket::disconnected, socket, &QObject::deleteLater);
             }
@@ -177,6 +193,69 @@ private:
             send(socket, 304, {}, "ETag: " + etag + "\r\n");
         else
             send(socket, 200, body, "ETag: " + etag + "\r\n");
+    }
+
+    QJsonObject gistJson(const QString &id) const {
+        const Gist gist = gists.value(id);
+        QJsonObject files;
+        for (const auto &[name, content] : gist.files.asKeyValueRange())
+            files.insert(name, QJsonObject{{"filename", name},
+                                           {"content", QString::fromUtf8(gist.truncated ? content.left(10) : content)},
+                                           {"truncated", gist.truncated},
+                                           {"raw_url", api() + "/gistraw/" + id + "/" + name}});
+        return {{"id", id},
+                {"html_url", "https://gist.github.com/" + gist.owner + "/" + id},
+                {"public", gist.open},
+                {"description", gist.description},
+                {"files", files}};
+    }
+
+    // GET, POST and PATCH of /gists[/<id>], as GitHub answers them.
+    void answerGist(QTcpSocket *socket, const QString &method, const QString &id, const QByteArray &body) {
+        const QJsonObject sent = QJsonDocument::fromJson(body).object();
+        if (method == "POST" && id.isEmpty()) {
+            const QString made = QString("%1").arg(++gistsMade, 32, 10, QChar('0'));
+            gists.insert(made, Gist{.owner = "ada",
+                                    .description = sent.value("description").toString(),
+                                    .open = sent.value("public").toBool(false),
+                                    .files = {},
+                                    .truncated = false});
+            answerGist(socket, "PATCH", made, body);
+            return;
+        }
+        if (!gists.contains(id)) {
+            send(socket, 404, "{\"message\": \"Not Found\"}");
+            return;
+        }
+        if (method == "PATCH") {
+            Gist &gist = gists[id];
+            const QJsonObject files = sent.value("files").toObject();
+            for (auto file = files.begin(); file != files.end(); ++file)
+                if (file.value().isNull())
+                    gist.files.remove(file.key());
+                else
+                    gist.files.insert(file.key(), file.value().toObject().value("content").toString().toUtf8());
+            if (sent.contains("description"))
+                gist.description = sent.value("description").toString();
+        }
+        send(socket, 200, QJsonDocument(gistJson(id)).toJson());
+    }
+
+    // Gists first, then everything else GitHub answers.
+    void route(QTcpSocket *socket, const QString &whole, const QByteArray &head, const QString &method, const QByteArray &body) {
+        const QStringList parts = QUrl(whole).path(QUrl::FullyEncoded).split('/', Qt::SkipEmptyParts);
+        if (parts.value(0) == "gistraw") {
+            asked << whole;
+            heads << head;
+            const QByteArray content = gists.value(parts.value(1)).files.value(parts.value(2));
+            send(socket, content.isNull() ? 404 : 200, content);
+        } else if (parts.value(0) == "gists" && !limited) {
+            asked << whole;
+            heads << head;
+            answerGist(socket, method, parts.value(1), body);
+        } else {
+            answer(socket, whole, head);
+        }
     }
 
     void answer(QTcpSocket *socket, const QString &whole, const QByteArray &head) {

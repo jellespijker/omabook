@@ -7,15 +7,14 @@
 #include <QJsonDocument>
 #include <cstdio>
 #include <optional>
-#include <utility>
 
 #include "bookops.h"
+#include "collectionimport.h"
 #include "collectionshare.h"
 #include "curation.h"
 #include "keptproposals.h"
 #include "readingformat.h"
 #include "settings.h"
-#include "subscriptions.h"
 
 using namespace Qt::StringLiterals;
 
@@ -61,16 +60,23 @@ constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|in
                        "                                    of its own yet; they stay in it too. Picking takes from the list\n"
                        "                                    the last sort gave, asking nothing again (--again asks afresh);\n"
                        "                                    --pick N=path takes a proposal under another name\n"
-                       "  import <file> [--as <name>] [--dry-run]  Subscribe to a collection someone shared (.omabook-space):\n"
-                       "                                    its books you have are matched, the others become wishlist\n"
-                       "                                    entries, in a collection of yours; its graph stays in its space\n"
+                       "  import <file|link> [--as <name>] [--dry-run]  Subscribe to a collection someone shared: an\n"
+                       "                                    .omabook-space file, or a gist or GitHub file link to follow. Its\n"
+                       "                                    books you have are matched, the others become wishlist entries, in\n"
+                       "                                    a collection of yours; its graph stays in its space\n"
+                       "  import --follow [<name|space>] [--yes]  Check the links shared collections were imported from:\n"
+                       "                                    what a newer version would change is shown, and only taken in\n"
+                       "                                    with --yes\n"
                        "  unsubscribe <name|space>          Drop a shared collection's space; your collection of it stays\n"
-                       "  share <path> [--with-graph] [--with questions,ratings,progress] [--as <name>] [--output <file>] [--dry-run]\n"
+                       "  share <path> [--with-graph] [--with questions,ratings,progress] [--as <name>] [--output <file>]\n"
+                       "        [--gist [--public]] [--dry-run]\n"
                        "                                    Publish it as a space others can follow: what goes in (with counts)\n"
                        "                                    and what stays out is shown first, and --dry-run shows only that.\n"
                        "                                    The books' files never go; your graph, questions, stars and reading\n"
                        "                                    only when switched on, the graph only up to where you have read.\n"
-                       "                                    --output writes its snapshot (.omabook-space) to give to others\n\n"
+                       "                                    --output writes its snapshot (.omabook-space) to give to others;\n"
+                       "                                    --gist sends it to a secret gist (--public: a public one) through\n"
+                       "                                    gh, and prints its link; sharing again updates that gist\n\n"
                        "The search language: bare words, author:, title:, series:, tag:, genre: (fiction, nonfiction, or a\n"
                        "tag), format:, lang:, publisher:, about:, status:, is: and rating:; \"quotes\" keep words together,\n"
                        "-word leaves out, and OR joins alternatives: genre:fiction OR series:Dune -tag:poetry\n\n"
@@ -108,41 +114,6 @@ int takeFrom(Library &library, const QString &path, bool json) {
         printJson(QJsonObject{{"changed", changed}});
     else
         print(stdout, QString("%1 collections brought up to date").arg(changed));
-    return 0;
-}
-
-// A shared collection subscribed to, or its space dropped (subscriptions.h):
-// what it did as JSON and as text.
-using Shown = std::expected<std::pair<QJsonObject, QString>, QString>;
-
-Shown subscribe(Library &library, const QString &file, const Subscriptions::Options &options) {
-    const auto snapshot = Subscriptions::fetch(file);
-    const auto report = snapshot ? Subscriptions::subscribe(library, *snapshot, options)
-                                 : std::expected<Subscriptions::Report, QString>(std::unexpected(snapshot.error()));
-    if (!report)
-        return std::unexpected(report.error());
-    return std::pair{Subscriptions::toJson(*report), Subscriptions::describe(*report).join('\n')};
-}
-
-Shown unsubscribe(const Library &library, const QString &which) {
-    const auto dropped = Subscriptions::unsubscribe(library, which);
-    if (!dropped)
-        return std::unexpected(dropped.error());
-    return std::pair{Subscriptions::toJson(*dropped), Subscriptions::describe(*dropped)};
-}
-
-// `collections import <file>` and `collections unsubscribe <name|space>`.
-int shared(Library &library, const QStringList &words, const Subscriptions::Options &options, bool json) {
-    if (words.size() < 2)
-        return fail(usage);
-    const QString what = words.mid(1).join(' ');
-    const Shown shown = words.first() == "import" ? subscribe(library, what, options) : unsubscribe(library, what);
-    if (!shown)
-        return fail(shown.error());
-    if (json)
-        printJson(shown->first);
-    else
-        print(stdout, shown->second);
     return 0;
 }
 
@@ -204,9 +175,8 @@ int Collections::run(const QStringList &arguments) {
                               "a collection of that path instead.", "numbers"});
     parser.addOption({"parent", "add: make it inside this collection.", "path"});
     parser.addOption({"again", "sort: ask the AI again rather than pick from the list the last sort gave."});
-    parser.addOption({"as", "import: the collection's name here, instead of the shared one's; share: the name you go by in it.", "name"});
-    parser.addOption({"dry-run", "import, share: say what it would do, and change nothing."});
     CollectionShare::addOptions(parser);
+    CollectionImport::addOptions(parser);
     parser.addOption({{"h", "help"}, "Show this help."});
     QStringList rest = arguments;
     rest.removeAt(1);
@@ -359,7 +329,7 @@ int Collections::run(const QStringList &arguments) {
         return takeFrom(library, words.value(1), json);
 
     if (sub == "import" || sub == "unsubscribe")
-        return shared(library, words, {parser.value("as"), parser.isSet("dry-run")}, json);
+        return CollectionImport::run(library, parser, words, json);
     if (sub == "share")
         return CollectionShare::run(library, parser, words.mid(1).join(' '), json);
 
