@@ -18,8 +18,8 @@
 #include <QVariant>
 #include <algorithm>
 #include <array>
-#include <atomic>
 #include <functional>
+#include <atomic>
 #include <ranges>
 #include <span>
 
@@ -54,7 +54,8 @@ namespace {
 }
 
 [[nodiscard]] QString folderFor(const BookMeta &meta, qint64 id) {
-    return fileName(meta.authors.value(0), "Unknown") + "/" + fileName(meta.title, "Untitled") + QString(" (%1)").arg(id);
+    return fileName(meta.authors.value(0), "Unknown") + "/" + fileName(meta.title, "Untitled")
+           + QString(" (%1)").arg(id);
 }
 
 [[nodiscard]] Book bookFrom(const QSqlQuery &query) {
@@ -88,11 +89,13 @@ namespace {
 // The details as the books table keeps them, to tell whether a change
 // changes anything.
 [[nodiscard]] QVariantList storedDetails(const BookMeta &meta) {
-    return {meta.title,    meta.authorText(), meta.series,    meta.seriesIndex, meta.publisher,
-            meta.language, meta.isbn,         meta.published, meta.description, meta.tags.join(", ")};
+    return {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
+            meta.isbn, meta.published, meta.description, meta.tags.join(", ")};
 }
 
-[[nodiscard]] QString compact(const QJsonObject &object) { return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact)); }
+[[nodiscard]] QString compact(const QJsonObject &object) {
+    return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
+}
 
 // A null QString binds as SQL NULL, which the NOT NULL columns refuse; a book
 // with no series has the empty string for one.
@@ -134,8 +137,8 @@ QString Book::held() const {
 namespace {
 
 // The fields a search can look in one at a time, as "key:value".
-constexpr std::array searchKeys{"author"_L1,    "title"_L1, "series"_L1, "tag"_L1, "genre"_L1,  "format"_L1, "lang"_L1,
-                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1,  "rating"_L1, "knows"_L1};
+constexpr std::array searchKeys{"author"_L1, "title"_L1, "series"_L1, "tag"_L1, "genre"_L1, "format"_L1, "lang"_L1,
+                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1, "rating"_L1, "knows"_L1};
 
 // The words of a search, a quoted phrase as one: `tag:"science fiction"`
 // is one word, and so is `"the hobbit"`.
@@ -162,15 +165,16 @@ constexpr std::array searchKeys{"author"_L1,    "title"_L1, "series"_L1, "tag"_L
 
 // What tags say a book is a story, and what tags say it is about the world.
 // A tag that is both ("Historical Fiction", "Science Fiction") is a story.
-constexpr std::array storyWords{"fiction"_L1,    "novel"_L1,    "fantasy"_L1, "sci-fi"_L1,        "mystery"_L1,   "mysteries"_L1,
-                                "thriller"_L1,   "romance"_L1,  "horror"_L1,  "crime"_L1,         "adventure"_L1, "short stories"_L1,
-                                "fairy tale"_L1, "dystopia"_L1, "fables"_L1,  "graphic novel"_L1, "detective"_L1};
-constexpr std::array worldWords{"nonfiction"_L1,  "non-fiction"_L1, "history"_L1,   "biography"_L1,  "memoir"_L1,     "science"_L1,
-                                "programming"_L1, "computer"_L1,    "software"_L1,  "technology"_L1, "philosophy"_L1, "business"_L1,
-                                "economics"_L1,   "reference"_L1,   "textbook"_L1,  "self-help"_L1,  "psychology"_L1, "mathematics"_L1,
-                                "politics"_L1,    "essays"_L1,      "travel"_L1,    "cooking"_L1,    "health"_L1,     "education"_L1,
-                                "engineering"_L1, "management"_L1,  "design"_L1,    "language"_L1,   "religion"_L1,   "law"_L1,
-                                "nature"_L1,      "cookbook"_L1,    "parenting"_L1, "medicine"_L1};
+constexpr std::array storyWords{"fiction"_L1, "novel"_L1, "fantasy"_L1, "sci-fi"_L1, "mystery"_L1, "mysteries"_L1,
+                                "thriller"_L1, "romance"_L1, "horror"_L1, "crime"_L1, "adventure"_L1, "short stories"_L1,
+                                "fairy tale"_L1, "dystopia"_L1, "fables"_L1, "graphic novel"_L1, "detective"_L1};
+constexpr std::array worldWords{"nonfiction"_L1, "non-fiction"_L1, "history"_L1, "biography"_L1, "memoir"_L1,
+                                "science"_L1, "programming"_L1, "computer"_L1, "software"_L1, "technology"_L1,
+                                "philosophy"_L1, "business"_L1, "economics"_L1, "reference"_L1, "textbook"_L1,
+                                "self-help"_L1, "psychology"_L1, "mathematics"_L1, "politics"_L1, "essays"_L1,
+                                "travel"_L1, "cooking"_L1, "health"_L1, "education"_L1, "engineering"_L1,
+                                "management"_L1, "design"_L1, "language"_L1, "religion"_L1, "law"_L1,
+                                "nature"_L1, "cookbook"_L1, "parenting"_L1, "medicine"_L1};
 
 [[nodiscard]] bool tagHas(const QString &tag, std::span<const QLatin1StringView> words) {
     return std::ranges::any_of(words, [&tag](QLatin1StringView word) { return tag.contains(word, Qt::CaseInsensitive); });
@@ -292,15 +296,8 @@ QJsonObject Collection::toJson() const {
             array << id;
         return array;
     };
-    return {{"id", id},
-            {"name", name},
-            {"path", path},
-            {"parent", parent},
-            {"rule", rule},
-            {"included", ids(included)},
-            {"excluded", ids(excluded)},
-            {"shelf", shelf},
-            {"format", format}};
+    return {{"id", id}, {"name", name}, {"path", path}, {"parent", parent}, {"rule", rule}, {"included", ids(included)},
+            {"excluded", ids(excluded)}, {"shelf", shelf}, {"format", format}};
 }
 
 QJsonObject Book::toJson() const {
@@ -338,15 +335,6 @@ Library::~Library() {
         QSqlDatabase::database(m_connection, false).close();
         QSqlDatabase::removeDatabase(m_connection);
     }
-}
-
-Library::Changes Library::changes() const {
-    Changes changes;
-    for (QSqlQuery query = this->query("SELECT key, value FROM library_state WHERE key IN ('books', 'graph', 'format')"); query.next();) {
-        const QString key = query.value(0).toString();
-        (key == "books" ? changes.books : key == "graph" ? changes.graph : changes.format) = query.value(1).toLongLong();
-    }
-    return changes;
 }
 
 Library::Batch::Batch(const Library &library) : m_library(library) {
@@ -414,8 +402,8 @@ bool Library::open(QString *error) {
     // The write-ahead log needs memory shared between processes, which a
     // folder on another machine (sshfs, NFS, SMB) can't give; there the
     // older rollback journal is the one that works.
-    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4",       "cifs",
-                                                          "smb3",       "smbfs", "9p",  "fuse.rclone"};
+    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4", "cifs",
+                                                          "smb3", "smbfs", "9p", "fuse.rclone"};
     const QByteArray fileSystem = QStorageInfo(m_root).fileSystemType();
     const bool local = !std::ranges::contains(remote, QByteArrayView(fileSystem));
     exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
@@ -453,7 +441,7 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
                            "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
                             meta.isbn, meta.published, meta.description, meta.tags.join(", "),
-                            QDateTime::currentSecsSinceEpoch(), QDateTime::currentSecsSinceEpoch()});
+                            Spaces::wallSeconds(*this), Spaces::wallSeconds(*this)});
     if (!id)
         return {.error = "The library can't be written: " + id.error()};
     const QString folder = folderFor(meta, *id);
@@ -484,8 +472,8 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
         return fail("The book's folder can't be created: " + folder);
 
     const QString name = fileName(book->meta.title, "Untitled")
-                         + (book->meta.authors.isEmpty() ? QString() : " - " + fileName(book->meta.authors.first(), "Unknown")) + "."
-                         + format;
+                         + (book->meta.authors.isEmpty() ? QString() : " - " + fileName(book->meta.authors.first(), "Unknown"))
+                         + "." + format;
     const QString target = folder + "/" + name;
     const QString hash = hashFile(file);
     // The very file is this book's already: there is nothing to copy.
@@ -530,7 +518,7 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
                            "description, tags, added, paper, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
                             meta.isbn, meta.published, meta.description, meta.tags.join(", "),
-                            QDateTime::currentSecsSinceEpoch(), paper, QDateTime::currentSecsSinceEpoch()});
+                            Spaces::wallSeconds(*this), paper, Spaces::wallSeconds(*this)});
     if (!id)
         return {.error = "The library can't be written: " + id.error()};
     // The folder is made when there is something to put in it: a cover, or
@@ -551,12 +539,12 @@ bool Library::setReading(qint64 id, const QString &shelf, int rating, const QStr
     // doesn't make the book look read since.
     return exec("UPDATE books SET shelf = ?, rating = ?, finished = ?, reading_at = CASE WHEN shelf IS ? AND rating = ? "
                 "AND finished IS ? THEN reading_at ELSE ? END WHERE id = ?",
-                {shelf, stars, finished, shelf, stars, finished, QDateTime::currentSecsSinceEpoch(), id});
+                {shelf, stars, finished, shelf, stars, finished, Spaces::wallSeconds(*this), id});
 }
 
 bool Library::setPaper(qint64 id, bool paper) {
     return exec("UPDATE books SET paper = ?, reading_at = CASE WHEN paper = ? THEN reading_at ELSE ? END WHERE id = ?",
-                {paper, paper, QDateTime::currentSecsSinceEpoch(), id});
+                {paper, paper, Spaces::wallSeconds(*this), id});
 }
 
 bool Library::setDetailsAt(qint64 id, qint64 at) { return ChangeLog::setDetailsAt(*this, id, at); }
@@ -590,13 +578,17 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
         identifiers.insert(scheme, value);
     if (identifiers == found->identifiers)
         return true;
-    if (at && *at > 0)
-        Spaces::observeHlc(*this, *at);
-    return exec("UPDATE books SET identifiers = ?, details_at = ? WHERE id = ?",
-                {compact(identifiers), at ? Hlc::seconds(*at) : QDateTime::currentSecsSinceEpoch(), id});
+    const Batch batch(*this);
+    if (!exec("UPDATE books SET identifiers = ?, details_at = ? WHERE id = ?",
+              {compact(identifiers), at ? Hlc::seconds(*at) : Spaces::wallSeconds(*this), id}))
+        return false;
+    if (at)
+        ChangeLog::setDetailsAt(*this, id, *at);
+    return true;
 }
 
-QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title, const QStringList &authors) {
+QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title,
+                               const QStringList &authors) {
     static const QRegularExpression other(R"([^\p{L}\p{N}]+)");
     const auto fold = [](QString text) { return text.toCaseFolded().remove(other); };
     QStringList keys;
@@ -616,14 +608,15 @@ QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &is
     return keys;
 }
 
-QStringList Library::entryKeys(const Book &book) { return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors); }
+QStringList Library::entryKeys(const Book &book) {
+    return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors);
+}
 
 qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) const {
     if (value.isEmpty())
         return 0;
     const QList<Book> all = books();
-    const auto called =
-        std::ranges::find_if(all, [&scheme, &value](const Book &book) { return book.identifiers.value(scheme).toString() == value; });
+    const auto called = std::ranges::find_if(all, [&scheme, &value](const Book &book) { return book.identifiers.value(scheme).toString() == value; });
     return called != all.end() ? called->id : 0;
 }
 
@@ -637,11 +630,11 @@ bool Library::remove(qint64 id, QString *error) {
     // is still in the library, so a sync mustn't take it for removed.
     for (const FormatFile &format : formats)
         if (!query("SELECT 1 FROM formats WHERE hash = ? AND book_id <> ?", {format.hash, id}).next())
-            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, QDateTime::currentSecsSinceEpoch()});
+            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, Spaces::wallSeconds(*this)});
     // A book with no file is remembered by what names it instead.
     if (const std::optional<Book> gone = formats.isEmpty() ? book(id) : std::nullopt)
         for (const QString &key : entryKeys(*gone))
-            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {key, QDateTime::currentSecsSinceEpoch()});
+            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {key, Spaces::wallSeconds(*this)});
     // To the trash, where a mistake can be undone; a filesystem with no
     // trash gets the folder removed, since the user asked for it to go.
     if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively())
@@ -680,32 +673,34 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
     const auto before = book(id);
     if (!before)
         return failed(error, QString("There is no book %1.").arg(id));
-    const Batch batch(*this);
-    if (at && *at > 0)
-        Spaces::observeHlc(*this, *at);
-    BookMeta kept = meta;
-    if (kept.title.isEmpty())
-        kept.title = before->meta.title;
-    QVariantList values = storedDetails(kept);
-    // Stamped when something changed, or with the time it is given.
-    const bool changed = values != storedDetails(before->meta);
-    const qint64 stamp = changed ? QDateTime::currentSecsSinceEpoch() : before->detailsAt;
-    values << (at ? Hlc::seconds(*at) : stamp) << id;
-    if (!exec("UPDATE books SET title = ?, authors = ?, series = ?, series_index = ?, publisher = ?, language = ?, "
-              "isbn = ?, published = ?, description = ?, tags = ?, details_at = ? WHERE id = ?",
-              values))
-        return failed(error, "The library can't be written.");
-    // The folder is named after the author and title, so it follows them.
-    // Where it can't be moved it keeps its old name, which still works.
-    const QString folder = folderFor(meta.title.isEmpty() ? before->meta : meta, id);
-    if (folder != before->path && QFileInfo::exists(m_root + "/" + before->path)
-        && QDir().mkpath(QFileInfo(m_root + "/" + folder).absolutePath())
-        && QDir().rename(m_root + "/" + before->path, m_root + "/" + folder)) {
-        exec("UPDATE books SET path = ? WHERE id = ?", {folder, id});
-        QDir().rmdir(QFileInfo(m_root + "/" + before->path).absolutePath());
+    {
+        const Batch batch(*this);
+        BookMeta kept = meta;
+        if (kept.title.isEmpty())
+            kept.title = before->meta.title;
+        QVariantList values = storedDetails(kept);
+        // Stamped when something changed, or with the time it is given.
+        const bool changed = values != storedDetails(before->meta);
+        const qint64 stamp = changed ? Spaces::wallSeconds(*this) : before->detailsAt;
+        values << (at ? Hlc::seconds(*at) : stamp) << id;
+        if (!exec("UPDATE books SET title = ?, authors = ?, series = ?, series_index = ?, publisher = ?, language = ?, "
+                  "isbn = ?, published = ?, description = ?, tags = ?, details_at = ? WHERE id = ?",
+                  values))
+            return failed(error, "The library can't be written.");
+        // The folder is named after the author and title, so it follows them.
+        // Where it can't be moved it keeps its old name, which still works.
+        const QString folder = folderFor(meta.title.isEmpty() ? before->meta : meta, id);
+        if (folder != before->path && QFileInfo::exists(m_root + "/" + before->path)
+            && QDir().mkpath(QFileInfo(m_root + "/" + folder).absolutePath())
+            && QDir().rename(m_root + "/" + before->path, m_root + "/" + folder)) {
+            exec("UPDATE books SET path = ? WHERE id = ?", {folder, id});
+            QDir().rmdir(QFileInfo(m_root + "/" + before->path).absolutePath());
+        }
+        if (!meta.cover.isNull())
+            setCover(id, meta.cover, at);
+        if (at)
+            ChangeLog::setDetailsAt(*this, id, *at);
     }
-    if (!meta.cover.isNull())
-        setCover(id, meta.cover, at);
     return true;
 }
 
@@ -721,12 +716,9 @@ bool Library::setCover(qint64 id, const QImage &cover, std::optional<qint64> at)
     if (!scaled.convertToFormat(QImage::Format_RGB32).save(file, "JPG", 88))
         return false;
     // The same picture again is no change to the details.
-    if (at && *at > 0) {
-        Spaces::observeHlc(*this, *at);
-        at = Hlc::seconds(*at);
-    }
     if (at || hashFile(file) != before)
-        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?", {at.value_or(QDateTime::currentSecsSinceEpoch()), id});
+        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?",
+                    {at ? Hlc::seconds(*at) : Spaces::wallSeconds(*this), id});
     return exec("UPDATE books SET has_cover = 1 WHERE id = ?", {id});
 }
 
@@ -872,7 +864,7 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
         const int rating = kept->rating > 0 ? kept->rating : folded->rating;
         const QString finished = kept->finished.isEmpty() ? folded->finished : kept->finished;
         // What changed is stamped, as any change of the details or the reading is.
-        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        const qint64 now = Spaces::wallSeconds(*this);
         const bool readingChanged = paper != kept->paper || shelf != kept->shelf || rating != kept->rating || finished != kept->finished;
         if (!exec("UPDATE books SET identifiers = ?, paper = ?, shelf = ?, rating = ?, finished = ?, details_at = ?, reading_at = ? "
                   "WHERE id = ?",
@@ -987,7 +979,9 @@ namespace {
     return {};
 }
 
-[[nodiscard]] QJsonObject objectFrom(const QVariant &text) { return QJsonDocument::fromJson(text.toString().toUtf8()).object(); }
+[[nodiscard]] QJsonObject objectFrom(const QVariant &text) {
+    return QJsonDocument::fromJson(text.toString().toUtf8()).object();
+}
 
 [[nodiscard]] QStringList pathParts(const QString &path) {
     QStringList parts;
@@ -1030,19 +1024,19 @@ QList<Collection> Library::collections(bool withRemoved) const {
             collection.parent = 0;
     // The tree, read from the top: each one, then those inside it.
     QList<Collection> tree;
-    const std::function<void(qint64, const QString &, int, QSet<qint64> &)> visit = [&](qint64 parent, const QString &above, int depth,
-                                                                                        QSet<qint64> &seen) {
-        for (const Collection &collection : std::as_const(flat)) {
-            if (collection.parent != parent || seen.contains(collection.id))
-                continue;
-            seen.insert(collection.id);
-            Collection placed = collection;
-            placed.path = above.isEmpty() ? collection.name : above + "/" + collection.name;
-            placed.depth = depth;
-            tree << placed;
-            visit(collection.id, placed.path, depth + 1, seen);
-        }
-    };
+    const std::function<void(qint64, const QString &, int, QSet<qint64> &)> visit =
+        [&](qint64 parent, const QString &above, int depth, QSet<qint64> &seen) {
+            for (const Collection &collection : std::as_const(flat)) {
+                if (collection.parent != parent || seen.contains(collection.id))
+                    continue;
+                seen.insert(collection.id);
+                Collection placed = collection;
+                placed.path = above.isEmpty() ? collection.name : above + "/" + collection.name;
+                placed.depth = depth;
+                tree << placed;
+                visit(collection.id, placed.path, depth + 1, seen);
+            }
+        };
     QSet<qint64> seen;
     visit(0, {}, 0, seen);
     // What each holds of those inside it, at every depth.
@@ -1115,7 +1109,7 @@ std::expected<qint64, QString> Library::addCollection(const QString &name, const
             return made;
         parent = *made;
     }
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    const qint64 now = Spaces::wallSeconds(*this);
     QSqlQuery last = query("SELECT COALESCE(MAX(position), 0) + 1 FROM collections WHERE removed = 0");
     const int position = last.next() ? last.value(0).toInt() : 1;
     last.finish();
@@ -1153,14 +1147,14 @@ bool Library::renameCollection(qint64 id, const QString &name, QString *error) {
         return failed(error, QString("There is no collection %1.").arg(id));
     if (now->name == named)
         return true;
-    QSqlQuery other =
-        query("SELECT id, removed FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE AND id <> ?", {now->parent, named, id});
+    QSqlQuery other = query("SELECT id, removed FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE AND id <> ?",
+                            {now->parent, named, id});
     if (other.next() && !other.value(1).toBool())
         return failed(error, QString("There is a collection called %1 there already.").arg(named));
     other.finish();
     // A removed one of that name gives the name up.
     exec("DELETE FROM collections WHERE removed = 1 AND parent = ? AND name = ? COLLATE NOCASE AND id <> ?", {now->parent, named, id});
-    return exec("UPDATE collections SET name = ?, updated = ? WHERE id = ?", {named, QDateTime::currentSecsSinceEpoch(), id})
+    return exec("UPDATE collections SET name = ?, updated = ? WHERE id = ?", {named, Spaces::wallSeconds(*this), id})
            || failed(error, "The library can't be written.");
 }
 
@@ -1169,7 +1163,7 @@ bool Library::setCollectionRule(qint64 id, const QString &rule, QString *error) 
         return failed(error, why);
     if (!collection(id))
         return failed(error, QString("There is no collection %1.").arg(id));
-    return exec("UPDATE collections SET rule = ?, updated = ? WHERE id = ?", {rule.trimmed(), QDateTime::currentSecsSinceEpoch(), id})
+    return exec("UPDATE collections SET rule = ?, updated = ? WHERE id = ?", {rule.trimmed(), Spaces::wallSeconds(*this), id})
            || failed(error, "The library can't be written.");
 }
 
@@ -1185,7 +1179,8 @@ bool Library::setCollectionParent(qint64 id, qint64 parent, QString *error) {
         if (into == all.end())
             return failed(error, QString("There is no collection %1 to put it in.").arg(parent));
         // Not inside itself, nor inside one of those inside it.
-        if (into->path.compare(moved->path, Qt::CaseInsensitive) == 0 || into->path.startsWith(moved->path + "/", Qt::CaseInsensitive))
+        if (into->path.compare(moved->path, Qt::CaseInsensitive) == 0
+            || into->path.startsWith(moved->path + "/", Qt::CaseInsensitive))
             return failed(error, QString("%1 can't go inside itself.").arg(moved->name));
     }
     if (std::ranges::any_of(all, [&](const Collection &c) {
@@ -1193,7 +1188,7 @@ bool Library::setCollectionParent(qint64 id, qint64 parent, QString *error) {
         }))
         return failed(error, QString("There is a collection called %1 there already.").arg(moved->name));
     exec("DELETE FROM collections WHERE removed = 1 AND parent = ? AND name = ? COLLATE NOCASE", {parent, moved->name});
-    return exec("UPDATE collections SET parent = ?, updated = ? WHERE id = ?", {parent, QDateTime::currentSecsSinceEpoch(), id})
+    return exec("UPDATE collections SET parent = ?, updated = ? WHERE id = ?", {parent, Spaces::wallSeconds(*this), id})
            || failed(error, "The library can't be written.");
 }
 
@@ -1202,7 +1197,7 @@ bool Library::removeCollection(qint64 id) {
     if (!gone)
         return false;
     const Batch batch(*this);
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    const qint64 now = Spaces::wallSeconds(*this);
     // Those inside it move up to where it was.
     exec("UPDATE collections SET parent = ?, updated = ? WHERE parent = ? AND removed = 0", {gone->parent, now, id});
     exec("DELETE FROM collection_books WHERE collection_id = ?", {id});
@@ -1220,7 +1215,7 @@ bool Library::putInCollection(qint64 id, qint64 bookId, bool in) {
     ruled.included.remove(bookId);
     ruled.excluded.remove(bookId);
     const Batch batch(*this);
-    exec("UPDATE collections SET updated = ? WHERE id = ?", {QDateTime::currentSecsSinceEpoch(), id});
+    exec("UPDATE collections SET updated = ? WHERE id = ?", {Spaces::wallSeconds(*this), id});
     if (in == ruled.contains(*book))
         return exec("DELETE FROM collection_books WHERE collection_id = ? AND book_id = ?", {id, bookId});
     return exec("INSERT OR REPLACE INTO collection_books (collection_id, book_id, included) VALUES (?, ?, ?)", {id, bookId, in});
@@ -1228,7 +1223,7 @@ bool Library::putInCollection(qint64 id, qint64 bookId, bool in) {
 
 bool Library::followRule(qint64 id, qint64 bookId) {
     const Batch batch(*this);
-    exec("UPDATE collections SET updated = ? WHERE id = ?", {QDateTime::currentSecsSinceEpoch(), id});
+    exec("UPDATE collections SET updated = ? WHERE id = ?", {Spaces::wallSeconds(*this), id});
     return exec("DELETE FROM collection_books WHERE collection_id = ? AND book_id = ?", {id, bookId});
 }
 
@@ -1238,7 +1233,7 @@ bool Library::setCollectionShelf(qint64 id, const QJsonObject &shelf) {
         return false;
     if (now->shelf == shelf)
         return true;
-    return exec("UPDATE collections SET shelf = ?, updated = ? WHERE id = ?", {compact(shelf), QDateTime::currentSecsSinceEpoch(), id});
+    return exec("UPDATE collections SET shelf = ?, updated = ? WHERE id = ?", {compact(shelf), Spaces::wallSeconds(*this), id});
 }
 
 bool Library::setCollectionFormat(qint64 id, const QJsonObject &options) {
@@ -1248,7 +1243,7 @@ bool Library::setCollectionFormat(qint64 id, const QJsonObject &options) {
     const QJsonObject kept = ReadingFormat::fitting(options);
     if (now->format == kept)
         return true;
-    return exec("UPDATE collections SET format = ?, updated = ? WHERE id = ?", {compact(kept), QDateTime::currentSecsSinceEpoch(), id});
+    return exec("UPDATE collections SET format = ?, updated = ? WHERE id = ?", {compact(kept), Spaces::wallSeconds(*this), id});
 }
 
 bool Library::storeCollection(const Collection &given) {
@@ -1256,6 +1251,7 @@ bool Library::storeCollection(const Collection &given) {
     if (!nameProblem(named).isEmpty())
         return false;
     const Batch batch(*this);
+    const qint64 updatedSec = Hlc::seconds(given.updated);
     QSqlQuery same = query("SELECT id FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE", {given.parent, named});
     qint64 id = same.next() ? same.value(0).toLongLong() : 0;
     same.finish();
@@ -1264,14 +1260,14 @@ bool Library::storeCollection(const Collection &given) {
         const int position = last.next() ? last.value(0).toInt() : 1;
         last.finish();
         const auto made = insert("INSERT INTO collections (name, position, updated, parent) VALUES (?, ?, ?, ?)",
-                                 {named, position, given.updated, given.parent});
+                                 {named, position, updatedSec, given.parent});
         if (!made)
             return false;
         id = *made;
     }
     if (!exec("UPDATE collections SET name = ?, rule = ?, shelf = ?, format = ?, updated = ?, removed = ?, parent = ? WHERE id = ?",
-              {named, given.rule.trimmed(), compact(given.shelf), compact(ReadingFormat::fitting(given.format)), given.updated,
-               given.removed, given.parent, id}))
+              {named, given.rule.trimmed(), compact(given.shelf), compact(ReadingFormat::fitting(given.format)), updatedSec, given.removed,
+               given.parent, id}))
         return false;
     exec("DELETE FROM collection_books WHERE collection_id = ?", {id});
     for (const bool in : {true, false})

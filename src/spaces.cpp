@@ -1,6 +1,7 @@
 #include "spaces.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVariant>
@@ -88,7 +89,8 @@ qint64 Spaces::lastHlc(const Library &library) {
 
 qint64 Spaces::tickHlc(const Library &library, std::optional<qint64> wallSeconds) {
     Hlc clock(lastHlc(library));
-    const qint64 next = wallSeconds ? clock.tick(*wallSeconds) : clock.tick();
+    const qint64 wall = wallSeconds ? *wallSeconds : (QDateTime::currentSecsSinceEpoch() + clockOffset(library));
+    const qint64 next = clock.tick(wall);
     library.exec("INSERT OR REPLACE INTO library_state (key, value) VALUES ('hlc', ?)", {next});
     return next;
 }
@@ -98,6 +100,19 @@ void Spaces::observeHlc(const Library &library, qint64 remote) {
     clock.observe(remote);
     if (clock.last() > 0)
         library.exec("INSERT OR REPLACE INTO library_state (key, value) VALUES ('hlc', ?)", {clock.last()});
+}
+
+void Spaces::setClockOffset(const Library &library, qint64 offsetSeconds) {
+    library.exec("INSERT OR REPLACE INTO library_state (key, value) VALUES ('clock_offset', ?)", {offsetSeconds});
+}
+
+qint64 Spaces::clockOffset(const Library &library) {
+    QSqlQuery query = library.query("SELECT value FROM library_state WHERE key = 'clock_offset'");
+    return query.next() ? query.value(0).toLongLong() : 0;
+}
+
+qint64 Spaces::wallSeconds(const Library &library) {
+    return std::max(QDateTime::currentSecsSinceEpoch() + clockOffset(library), Hlc::seconds(lastHlc(library)));
 }
 
 QString Spaces::bookGlobalId(const QStringList &fileHashes, const QStringList &entryKeys) {
@@ -153,25 +168,15 @@ void Spaces::setGlobalId(const Library &library, const QString &entity, qint64 l
 }
 
 void Spaces::ensureBookId(const Library &library, qint64 localId) {
-    if (localId <= 0)
-        return;
-    const QString existing = globalId(library, u"book"_s, localId);
-    // A book with a file keeps the file-hash id it was first given, even as
-    // other formats are added or removed later.
-    if (existing.startsWith("b:"_L1))
+    if (localId <= 0 || !globalId(library, u"book"_s, localId).isEmpty())
         return;
     QStringList hashes;
     for (QSqlQuery query = library.query("SELECT hash FROM formats WHERE book_id = ? AND hash <> ''", {localId}); query.next();)
         hashes << query.value(0).toString();
     if (!hashes.isEmpty()) {
-        const QString derived = bookGlobalId(hashes, {});
-        if (!existing.isEmpty() && existing != derived)
-            library.exec("UPDATE ops SET id = ? WHERE entity = 'book' AND id = ?", {derived, existing});
-        setGlobalId(library, u"book"_s, localId, derived);
+        setGlobalId(library, u"book"_s, localId, bookGlobalId(hashes, {}));
         return;
     }
-    if (!existing.isEmpty())
-        return;
     const std::optional<Book> book = library.book(localId);
     if (!book)
         return;
@@ -184,18 +189,11 @@ QString Spaces::bookId(const Library &library, qint64 localId) {
 }
 
 void Spaces::ensureCollectionId(const Library &library, qint64 localId) {
-    if (localId <= 0)
+    if (localId <= 0 || !globalId(library, u"collection"_s, localId).isEmpty())
         return;
-    const QString existing = globalId(library, u"collection"_s, localId);
     for (const Collection &collection : library.collections(true)) {
         if (collection.id == localId) {
-            const QString derived = collectionGlobalId(collection.path);
-            if (!existing.isEmpty() && existing != derived) {
-                library.exec("UPDATE ops SET id = ? WHERE entity = 'collection' AND id = ?", {derived, existing});
-                library.exec("UPDATE ops SET value = ? WHERE entity = 'collection' AND field = 'parent' AND value = ?",
-                             {derived, existing});
-            }
-            setGlobalId(library, u"collection"_s, localId, derived);
+            setGlobalId(library, u"collection"_s, localId, collectionGlobalId(collection.path));
             return;
         }
     }
@@ -270,7 +268,7 @@ void Spaces::assignAll(const Library &library) {
     for (QSqlQuery query = library.query("SELECT id FROM books ORDER BY id"); query.next();)
         ensureBookId(library, query.value(0).toLongLong());
     for (const Collection &collection : library.collections(true))
-        setGlobalId(library, u"collection"_s, collection.id, collectionGlobalId(collection.path));
+        ensureCollectionId(library, collection.id);
     for (QSqlQuery query = library.query("SELECT id, scope FROM graph_nodes ORDER BY id"); query.next();) {
         const QString scope = query.value(1).toString();
         if (!scope.isEmpty())

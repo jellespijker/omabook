@@ -50,15 +50,17 @@ public:
     // Appends one operation in `entry` (ticking the library's HLC when
     // `entry.hlc` is not given) and updates `seen`.
     static void append(const Library &library, const Entry &entry);
+    [[nodiscard]] static qint64 internId(const Library &library, const QString &name);
 
     // Records the current `library_state` counters as seen by the log.
     static void markLogged(const Library &library);
 
     // Single write path for rows that travel: each mutates the row and
     // records its operation(s) in the same transaction.
+    static void syncCollectionAt(const Library &library, qint64 collectionId, qint64 hlc);
     static void setProgress(Library &library, qint64 bookId, const Progress &progress);
     static bool setDetailsAt(Library &library, qint64 bookId, qint64 at);
-    static void recordRemoval(const Library &library, const QString &key, qint64 removedAt);
+    static void recordRemoval(const Library &library, const QString &key, qint64 removedAt, bool baseline = false);
 
     // Narrow SQL access for ChangeLog and SpaceReplay.
     [[nodiscard]] static QSqlQuery query(const Library &library, const QString &sql, const QVariantList &values = {});

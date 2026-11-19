@@ -200,15 +200,90 @@ const QList<QStringList> migrations{
      "CREATE TABLE IF NOT EXISTS space_members (space TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, "
      "person TEXT NOT NULL, role TEXT NOT NULL DEFAULT 'writer', name TEXT NOT NULL DEFAULT '', "
      "added INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (space, person))",
-     "CREATE TABLE IF NOT EXISTS ops (space TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, device TEXT NOT NULL, "
-     "seq INTEGER NOT NULL, hlc INTEGER NOT NULL, author TEXT NOT NULL DEFAULT '', entity TEXT NOT NULL, "
-     "id TEXT NOT NULL, field TEXT NOT NULL DEFAULT '', value TEXT NOT NULL DEFAULT '', PRIMARY KEY (space, device, seq))",
-     "CREATE INDEX IF NOT EXISTS ops_entity ON ops(space, entity, id)",
-     "CREATE TABLE IF NOT EXISTS seen (space TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, device TEXT NOT NULL, "
-     "seq INTEGER NOT NULL DEFAULT 0, hlc INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (space, device))",
+     "CREATE TABLE IF NOT EXISTS log_ids (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE)",
+     "CREATE TABLE IF NOT EXISTS ops (space INTEGER NOT NULL REFERENCES log_ids(id), device INTEGER NOT NULL REFERENCES log_ids(id), "
+     "seq INTEGER NOT NULL, hlc INTEGER NOT NULL, author INTEGER NOT NULL REFERENCES log_ids(id), entity TEXT NOT NULL, "
+     "id INTEGER NOT NULL REFERENCES log_ids(id), field TEXT NOT NULL DEFAULT '', value TEXT NOT NULL DEFAULT '', "
+     "PRIMARY KEY (space, device, seq)) WITHOUT ROWID",
+     "CREATE INDEX IF NOT EXISTS ops_entity ON ops(entity, id, field)",
+     "CREATE TABLE IF NOT EXISTS seen (space INTEGER NOT NULL REFERENCES log_ids(id), device INTEGER NOT NULL REFERENCES log_ids(id), "
+     "seq INTEGER NOT NULL DEFAULT 0, hlc INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (space, device)) WITHOUT ROWID",
      "CREATE TABLE IF NOT EXISTS global_ids (entity TEXT NOT NULL, local_id INTEGER NOT NULL, global_id TEXT NOT NULL, "
      "PRIMARY KEY (entity, local_id))",
      "CREATE UNIQUE INDEX IF NOT EXISTS global_ids_gid ON global_ids(entity, global_id)",
+     // Which rows a write touched, so the log takes in just those (ChangeLog::afterWrite)
+     // instead of comparing the whole library after every write.
+     "CREATE TABLE IF NOT EXISTS log_dirty (entity TEXT NOT NULL, local_id INTEGER NOT NULL, PRIMARY KEY (entity, local_id)) "
+     "WITHOUT ROWID",
+     "CREATE TRIGGER IF NOT EXISTS books_insert_dirty AFTER INSERT ON books BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS books_update_dirty AFTER UPDATE ON books BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS books_delete_dirty AFTER DELETE ON books BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', OLD.id); END",
+     "CREATE TRIGGER IF NOT EXISTS formats_insert_dirty AFTER INSERT ON formats BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', NEW.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS formats_update_dirty AFTER UPDATE ON formats BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', NEW.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS formats_delete_dirty AFTER DELETE ON formats BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', OLD.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS progress_insert_dirty AFTER INSERT ON progress BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', NEW.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS progress_update_dirty AFTER UPDATE ON progress BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', NEW.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS progress_delete_dirty AFTER DELETE ON progress BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('book', OLD.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS removed_insert_dirty AFTER INSERT ON removed BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('removal', 0); END",
+     "CREATE TRIGGER IF NOT EXISTS removed_update_dirty AFTER UPDATE ON removed BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('removal', 0); END",
+     "CREATE TRIGGER IF NOT EXISTS removed_delete_dirty AFTER DELETE ON removed BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('removal', 0); END",
+     "CREATE TRIGGER IF NOT EXISTS collections_insert_dirty AFTER INSERT ON collections BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('collection', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS collections_update_dirty AFTER UPDATE ON collections BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('collection', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS collections_delete_dirty AFTER DELETE ON collections BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('collection', OLD.id); END",
+     "CREATE TRIGGER IF NOT EXISTS collection_books_insert_dirty AFTER INSERT ON collection_books BEGIN INSERT OR IGNORE INTO log_dirty "
+     "VALUES "
+     "('collection', NEW.collection_id); END",
+     "CREATE TRIGGER IF NOT EXISTS collection_books_update_dirty AFTER UPDATE ON collection_books BEGIN INSERT OR IGNORE INTO log_dirty "
+     "VALUES "
+     "('collection', NEW.collection_id); END",
+     "CREATE TRIGGER IF NOT EXISTS collection_books_delete_dirty AFTER DELETE ON collection_books BEGIN INSERT OR IGNORE INTO log_dirty "
+     "VALUES "
+     "('collection', OLD.collection_id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_nodes_insert_dirty AFTER INSERT ON graph_nodes BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('node', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_nodes_update_dirty AFTER UPDATE ON graph_nodes BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('node', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_nodes_delete_dirty AFTER DELETE ON graph_nodes BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('node', OLD.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_seen_insert_dirty AFTER INSERT ON graph_seen BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('node', NEW.node_id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_seen_update_dirty AFTER UPDATE ON graph_seen BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('node', NEW.node_id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_seen_delete_dirty AFTER DELETE ON graph_seen BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('node', OLD.node_id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_facts_insert_dirty AFTER INSERT ON graph_facts BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('fact', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_facts_update_dirty AFTER UPDATE ON graph_facts BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('fact', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_facts_delete_dirty AFTER DELETE ON graph_facts BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('fact', OLD.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_edges_insert_dirty AFTER INSERT ON graph_edges BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('edge', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_edges_update_dirty AFTER UPDATE ON graph_edges BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('edge', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS graph_edges_delete_dirty AFTER DELETE ON graph_edges BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('edge', OLD.id); END",
+     "CREATE TRIGGER IF NOT EXISTS reading_log_insert_dirty AFTER INSERT ON reading_log BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('reading_log', NEW.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS reading_log_update_dirty AFTER UPDATE ON reading_log BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('reading_log', NEW.book_id); END",
+     "CREATE TRIGGER IF NOT EXISTS reading_log_delete_dirty AFTER DELETE ON reading_log BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('reading_log', OLD.book_id); END",
      "INSERT OR IGNORE INTO library_state (key, value) VALUES ('hlc', 0), ('logged_books', -1), ('logged_graph', -1), ('logged_format', "
      "-1)",
      "CREATE TRIGGER IF NOT EXISTS removed_insert_counted AFTER INSERT ON removed BEGIN UPDATE library_state SET value = value + 1 WHERE "
@@ -295,4 +370,18 @@ std::expected<void, QString> LibraryMigrations::migrate(const Library &library) 
         library.exec("CREATE UNIQUE INDEX collections_named ON collections(parent, name COLLATE NOCASE)");
     }
     return {};
+}
+
+Library::Changes Library::changes() const {
+    Changes changes;
+    for (QSqlQuery query = this->query("SELECT key, value FROM library_state WHERE key IN ('books', 'graph', 'format')"); query.next();) {
+        const QString key = query.value(0).toString();
+        if (key == "books")
+            changes.books = query.value(1).toLongLong();
+        else if (key == "graph")
+            changes.graph = query.value(1).toLongLong();
+        else
+            changes.format = query.value(1).toLongLong();
+    }
+    return changes;
 }

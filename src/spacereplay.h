@@ -46,4 +46,5 @@ public:
 
     // The latest HLC recorded in `ops` for an entity (or 0 when none).
     [[nodiscard]] static qint64 entityHlc(const Library &library, const QString &entity, const QString &globalId);
+    [[nodiscard]] static qint64 fieldHlc(const Library &library, const QString &entity, const QString &globalId, const QString &field);
 };

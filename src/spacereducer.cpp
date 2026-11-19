@@ -3,7 +3,10 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <algorithm>
+#include <array>
 #include <tuple>
+
+#include "hlc.h"
 
 using namespace Qt::StringLiterals;
 
@@ -142,6 +145,10 @@ void SpaceReducer::foldBook(ReducedBook &book, const SpaceOperation &op) {
             takeMax(book.alive, {op.hlc, op.device, 1, op.value});
         return;
     }
+    if (op.field == "removed_at"_L1) {
+        takeMax(book.fields[op.field], {op.hlc, op.device, 1, op.value});
+        return;
+    }
     takeMax(book.alive, {op.hlc, op.device, 1, op.value});
     if (op.field.startsWith("tag:"_L1)) {
         const QString tag = op.field.mid(4).trimmed();
@@ -151,6 +158,64 @@ void SpaceReducer::foldBook(ReducedBook &book, const SpaceOperation &op) {
         return;
     }
     takeMax(book.fields[op.field], {op.hlc, op.device, 1, op.value});
+}
+
+namespace {
+
+[[nodiscard]] qint64 stampedHlc(const ReducedBook &book, qint64 raw, const QString &stampField) {
+    if (raw < 0)
+        return 0;
+    const auto stamp = book.fields.constFind(stampField);
+    if (stamp != book.fields.cend() && stamp->hlc >= raw)
+        return Hlc::normalize(stamp->value.toLongLong());
+    return Hlc::normalize(raw);
+}
+
+[[nodiscard]] bool isReadingField(const QString &field) {
+    return field == "shelf"_L1 || field == "rating"_L1 || field == "finished"_L1 || field == "paper"_L1;
+}
+
+[[nodiscard]] qint64 rawFieldHlc(const ReducedBook &book, const QString &field) {
+    qint64 raw = -1;
+    if (const auto it = book.fields.constFind(field); it != book.fields.cend())
+        raw = it->hlc;
+    if (field == "tags"_L1) {
+        for (auto it = book.tagSet.cbegin(); it != book.tagSet.cend(); ++it)
+            raw = std::max(raw, it.value().hlc);
+    }
+    return raw;
+}
+
+} // namespace
+
+qint64 SpaceReducer::fieldHlc(const ReducedBook &book, const QString &field) {
+    if (field == "progress"_L1) {
+        const auto it = book.fields.constFind(field);
+        if (it == book.fields.cend() || it->value.isEmpty())
+            return 0;
+        return Hlc::normalize(parseObject(it->value).value("hlc").toInteger(it->hlc));
+    }
+    if (field == "removed"_L1)
+        return stampedHlc(book, book.removed.hlc, u"removed_at"_s);
+    return stampedHlc(book, rawFieldHlc(book, field), isReadingField(field) ? u"reading_at"_s : u"details_at"_s);
+}
+
+qint64 SpaceReducer::detailsHlc(const ReducedBook &book) {
+    static constexpr std::array detailKeys{"title"_L1,       "authors"_L1,   "series"_L1,    "series_index"_L1, "publisher"_L1,
+                                           "language"_L1,    "isbn"_L1,      "published"_L1, "description"_L1,  "tags"_L1,
+                                           "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1};
+    qint64 best = 0;
+    for (const QLatin1StringView key : detailKeys)
+        best = std::max(best, fieldHlc(book, QString(key)));
+    return best;
+}
+
+qint64 SpaceReducer::readingHlc(const ReducedBook &book) {
+    static constexpr std::array readingKeys{"shelf"_L1, "rating"_L1, "finished"_L1, "paper"_L1};
+    qint64 best = 0;
+    for (const QLatin1StringView key : readingKeys)
+        best = std::max(best, fieldHlc(book, QString(key)));
+    return best;
 }
 
 ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) {

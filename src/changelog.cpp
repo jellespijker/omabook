@@ -1,5 +1,6 @@
 #include "changelog.h"
 
+#include <QDateTime>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -11,9 +12,11 @@
 #include <tuple>
 #include <utility>
 
+#include "changeloggraph.h"
 #include "graph.h"
 #include "hlc.h"
 #include "library.h"
+#include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
 
@@ -66,7 +69,9 @@ struct EntityContext {
 
 [[nodiscard]] FieldMap loggedFields(const Library &library, const QString &entity, const QString &globalId) {
     FieldMap map;
-    for (QSqlQuery query = ChangeLog::query(library, "SELECT field, value, hlc, device FROM ops WHERE entity = ? AND id = ? ORDER BY seq",
+    for (QSqlQuery query = ChangeLog::query(library,
+                                            "SELECT o.field, o.value, o.hlc, d.name FROM ops AS o JOIN log_ids AS d ON d.id = o.device "
+                                            "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.seq",
                                             {entity, globalId});
          query.next();) {
         const QString field = query.value(0).toString();
@@ -80,91 +85,143 @@ struct EntityContext {
     return map;
 }
 
-void writeField(const EntityContext &ctx, const QString &field, const QString &value, qint64 rowHlc) {
+[[nodiscard]] ReducedBook reducedFrom(const FieldMap &existing) {
+    ReducedBook book;
+    for (auto it = existing.cbegin(); it != existing.cend(); ++it)
+        SpaceReducer::foldBook(book, {{}, it.value().device, 0, it.value().hlc, {}, u"book"_s, {}, it.key(), it.value().value});
+    return book;
+}
+
+void stampAtIfNeeded(EntityContext &ctx, const QString &stampField, qint64 targetHlc, bool mismatch) {
+    if (ctx.baseline || !mismatch)
+        return;
+    const qint64 stamp = Spaces::tickHlc(*ctx.library);
+    ChangeLog::append(*ctx.library, {ctx.space, u"book"_s, ctx.gid, stampField, QString::number(targetHlc), stamp});
+    ctx.existing.insert(stampField, {stamp, Spaces::deviceId(*ctx.library), QString::number(targetHlc)});
+}
+
+void writeField(EntityContext &ctx, const QString &field, const QString &value, qint64 rowHlc) {
     const auto it = ctx.existing.constFind(field);
     if (it != ctx.existing.cend() && it->value == value)
         return;
     qint64 useHlc = rowHlc;
-    if (!ctx.baseline && it != ctx.existing.cend() && useHlc > 0 && useHlc <= it->hlc)
+    if (!ctx.baseline) {
+        const bool isRecentWall =
+            rowHlc > 0 && Hlc::counter(rowHlc) == 0 && std::abs(Spaces::wallSeconds(*ctx.library) - Hlc::seconds(rowHlc)) <= 5;
+        if (isRecentWall || (it != ctx.existing.cend() && useHlc <= it->hlc))
+            useHlc = Spaces::tickHlc(*ctx.library);
+    } else if (it != ctx.existing.cend() && useHlc <= it->hlc) {
         useHlc = Spaces::tickHlc(*ctx.library);
+    }
     ChangeLog::append(*ctx.library, {ctx.space, ctx.entity, ctx.gid, field, value, useHlc});
+    ctx.existing.insert(field, {useHlc, Spaces::deviceId(*ctx.library), value});
 }
 
-void clampBookDetailHlcsIfBackdated(const Library &library, const QString &gid, qint64 detailsAt, FieldMap &existing) {
-    qint64 maxDetailHlc = 0;
-    for (auto it = existing.cbegin(); it != existing.cend(); ++it) {
-        const QString &key = it.key();
-        if (key != "progress"_L1 && key != "shelf"_L1 && key != "rating"_L1 && key != "finished"_L1 && key != "paper"_L1
-            && key != "removed"_L1)
-            maxDetailHlc = std::max(maxDetailHlc, it.value().hlc);
-    }
-    if (maxDetailHlc > 0 && Hlc::seconds(detailsAt) < Hlc::seconds(maxDetailHlc)) {
-        const qint64 target = Hlc::normalize(detailsAt);
-        ChangeLog::exec(library,
-                        "UPDATE ops SET hlc = ? WHERE entity = 'book' AND id = ? AND hlc > ? "
-                        "AND field NOT IN ('progress', 'shelf', 'rating', 'finished', 'paper', 'removed')",
-                        {target, gid, target});
-        existing = loggedFields(library, u"book"_s, gid);
-    }
+[[nodiscard]] qint64 targetProgressHlc(const EntityContext &ctx, const Progress &prog) {
+    if (prog.updated > 0)
+        return Hlc::normalize(prog.updated);
+    return ctx.baseline ? 0 : Spaces::tickHlc(*ctx.library);
 }
 
-void syncBookReading(const EntityContext &ctx, const Book &book) {
-    const bool hasReading = !book.shelf.isEmpty() || book.rating > 0 || !book.finished.isEmpty() || book.paper || book.readingAt > 0
-                            || ctx.existing.contains(u"shelf"_s);
-    if (hasReading) {
+[[nodiscard]] bool progressUnchanged(const EntityContext &ctx, const QString &plainJson, qint64 targetHlc, bool explicitHlc) {
+    const auto it = ctx.existing.constFind(u"progress"_s);
+    if (it == ctx.existing.cend())
+        return false;
+    const QJsonObject oldObj = QJsonDocument::fromJson(it->value.toUtf8()).object();
+    const QString oldPlain =
+        compactJson({{"section", oldObj.value("section")}, {"fraction", oldObj.value("fraction")}, {"percent", oldObj.value("percent")}});
+    const qint64 oldEffHlc = SpaceReducer::fieldHlc(reducedFrom(ctx.existing), u"progress"_s);
+    const bool sameTime = explicitHlc ? (oldEffHlc == targetHlc) : (Hlc::seconds(oldEffHlc) == Hlc::seconds(targetHlc));
+    return oldPlain == plainJson && sameTime;
+}
+
+void writeProgress(EntityContext &ctx, const Progress &prog, bool explicitHlc) {
+    const qint64 targetHlc = targetProgressHlc(ctx, prog);
+    const QString plainJson = progressJson(prog);
+    if (progressUnchanged(ctx, plainJson, targetHlc, explicitHlc))
+        return;
+    const auto it = ctx.existing.constFind(u"progress"_s);
+    qint64 opHlc = targetHlc;
+    if (!ctx.baseline) {
+        const bool isRecentWall = !explicitHlc && prog.updated > 0 && Hlc::counter(targetHlc) == 0
+                                  && std::abs(Spaces::wallSeconds(*ctx.library) - Hlc::seconds(targetHlc)) <= 5;
+        if (isRecentWall || (it != ctx.existing.cend() && opHlc <= it->hlc))
+            opHlc = Spaces::tickHlc(*ctx.library);
+    }
+    const bool embedTargetHlc = Hlc::seconds(opHlc) != Hlc::seconds(targetHlc) || (explicitHlc && opHlc != targetHlc);
+    const QString value =
+        embedTargetHlc
+            ? compactJson({{"section", prog.section}, {"fraction", prog.fraction}, {"percent", prog.percent}, {"hlc", targetHlc}})
+            : plainJson;
+    ChangeLog::append(*ctx.library, {ctx.space, u"book"_s, ctx.gid, u"progress"_s, value, opHlc});
+    ctx.existing.insert(u"progress"_s, {opHlc, Spaces::deviceId(*ctx.library), value});
+}
+
+[[nodiscard]] bool hasReadingFields(const EntityContext &ctx, const Book &book) {
+    return !book.shelf.isEmpty() || book.rating > 0 || !book.finished.isEmpty() || book.paper || book.readingAt > 0
+           || ctx.existing.contains(u"shelf"_s);
+}
+
+[[nodiscard]] bool hasProgressFields(const Progress &prog) {
+    return prog.updated > 0 || prog.percent > 0 || prog.section > 0 || prog.fraction > 0;
+}
+
+void syncBookReading(EntityContext &ctx, const Book &book) {
+    if (hasReadingFields(ctx, book)) {
         const qint64 readingHlc = Hlc::normalize(book.readingAt);
         writeField(ctx, u"shelf"_s, book.shelf, readingHlc);
         writeField(ctx, u"rating"_s, QString::number(book.rating), readingHlc);
         writeField(ctx, u"finished"_s, book.finished, readingHlc);
         writeField(ctx, u"paper"_s, book.paper ? u"1"_s : u"0"_s, readingHlc);
+        const qint64 loggedReadingHlc = SpaceReducer::readingHlc(reducedFrom(ctx.existing));
+        stampAtIfNeeded(ctx, u"reading_at"_s, readingHlc, Hlc::seconds(loggedReadingHlc) != Hlc::seconds(book.readingAt));
     }
     const Progress prog = ctx.library->progress(book.id);
-    if (prog.updated > 0 || prog.percent > 0 || prog.section > 0 || prog.fraction > 0)
-        writeField(ctx, u"progress"_s, progressJson(prog), Hlc::normalize(prog.updated));
+    if (hasProgressFields(prog))
+        writeProgress(ctx, prog, false);
     if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value != "0"_L1)
         ChangeLog::append(*ctx.library, {ctx.space, u"book"_s, ctx.gid, u"removed"_s, u"0"_s, Spaces::tickHlc(*ctx.library)});
 }
 
-void syncBookToLog(const Library &library, const Book &book, bool baseline) {
+void syncBookToLog(const Library &library, const Book &book, bool baseline, std::optional<qint64> explicitDetailsHlc = std::nullopt) {
     const QString gid = Spaces::bookId(library, book.id);
     if (gid.isEmpty())
         return;
-    FieldMap existing = loggedFields(library, u"book"_s, gid);
-    if (!baseline)
-        clampBookDetailHlcsIfBackdated(library, gid, book.detailsAt, existing);
-    const EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, existing, baseline};
-    const qint64 last = Spaces::lastHlc(library);
-    const qint64 detailsHlc =
-        (!baseline && book.detailsAt > 0 && Hlc::seconds(last) == book.detailsAt) ? last : Hlc::normalize(book.detailsAt);
-    const QList<std::pair<QString, QString>> details{
-        {u"title"_s, book.meta.title},
-        {u"authors"_s, book.meta.authorText()},
-        {u"series"_s, book.meta.series},
-        {u"series_index"_s, QString::number(book.meta.seriesIndex, 'g', 12)},
-        {u"publisher"_s, book.meta.publisher},
-        {u"language"_s, book.meta.language},
-        {u"isbn"_s, book.meta.isbn},
-        {u"published"_s, book.meta.published},
-        {u"description"_s, book.meta.description},
-        {u"tags"_s, book.meta.tags.join(", "_L1)},
-        {u"identifiers"_s, compactJson(book.identifiers)},
-        {u"added"_s, QString::number(book.added)},
-        {u"has_cover"_s, book.hasCover ? u"1"_s : u"0"_s},
-        {u"path"_s, book.path},
-        {u"formats"_s, formatsJson(library, book.id)},
-    };
+    EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, loggedFields(library, u"book"_s, gid), baseline};
+    const qint64 detailsHlc = explicitDetailsHlc ? Hlc::normalize(*explicitDetailsHlc) : Hlc::normalize(book.detailsAt);
+    const QString coverPath = library.coverPath(book.id);
+    const QList<std::pair<QString, QString>> details{{u"title"_s, book.meta.title},
+                                                     {u"authors"_s, book.meta.authorText()},
+                                                     {u"series"_s, book.meta.series},
+                                                     {u"series_index"_s, QString::number(book.meta.seriesIndex, 'g', 12)},
+                                                     {u"publisher"_s, book.meta.publisher},
+                                                     {u"language"_s, book.meta.language},
+                                                     {u"isbn"_s, book.meta.isbn},
+                                                     {u"published"_s, book.meta.published},
+                                                     {u"description"_s, book.meta.description},
+                                                     {u"tags"_s, book.meta.tags.join(", "_L1)},
+                                                     {u"identifiers"_s, compactJson(book.identifiers)},
+                                                     {u"added"_s, QString::number(book.added)},
+                                                     {u"has_cover"_s, book.hasCover ? u"1"_s : u"0"_s},
+                                                     {u"cover_hash"_s, coverPath.isEmpty() ? QString() : Library::hashFile(coverPath)},
+                                                     {u"path"_s, book.path},
+                                                     {u"formats"_s, formatsJson(library, book.id)}};
     for (const auto &[field, value] : details)
         writeField(ctx, field, value, detailsHlc);
+    const qint64 loggedDetailsHlc = SpaceReducer::detailsHlc(reducedFrom(ctx.existing));
+    const bool detailsMismatch =
+        explicitDetailsHlc ? (loggedDetailsHlc != detailsHlc) : (Hlc::seconds(loggedDetailsHlc) != Hlc::seconds(book.detailsAt));
+    stampAtIfNeeded(ctx, u"details_at"_s, detailsHlc, detailsMismatch);
     syncBookReading(ctx, book);
 }
 
-void syncCollectionToLog(const Library &library, const Collection &col, bool baseline) {
+void syncCollectionToLog(const Library &library, const Collection &col, bool baseline, std::optional<qint64> explicitHlc = std::nullopt) {
     const QString gid = Spaces::collectionId(library, col.id);
     if (gid.isEmpty())
         return;
-    const EntityContext ctx{&library, Spaces::personalSpace(library), u"collection"_s, gid, loggedFields(library, u"collection"_s, gid),
-                            baseline};
-    const qint64 colHlc = Hlc::normalize(col.updated);
+    EntityContext ctx{&library, Spaces::personalSpace(library), u"collection"_s, gid, loggedFields(library, u"collection"_s, gid),
+                      baseline};
+    const qint64 colHlc = explicitHlc ? Hlc::normalize(*explicitHlc) : Hlc::normalize(col.updated);
     const QString parentGid = col.parent > 0 ? Spaces::collectionId(library, col.parent) : QString();
     writeField(ctx, u"name"_s, col.name, colHlc);
     writeField(ctx, u"parent"_s, parentGid, colHlc);
@@ -178,117 +235,28 @@ void syncCollectionToLog(const Library &library, const Collection &col, bool bas
     writeField(ctx, u"format"_s, compactJson(col.format), colHlc);
 
     QSet<QString> currentBooks;
-    for (const qint64 bookId : col.included) {
-        const QString field = u"book:"_s + Spaces::bookId(library, bookId);
-        currentBooks.insert(field);
-        writeField(ctx, field, u"in"_s, colHlc);
-    }
-    for (const qint64 bookId : col.excluded) {
-        const QString field = u"book:"_s + Spaces::bookId(library, bookId);
-        currentBooks.insert(field);
-        writeField(ctx, field, u"out"_s, colHlc);
+    for (const bool in : {true, false}) {
+        for (const qint64 bookId : in ? col.included : col.excluded) {
+            const QString field = u"book:"_s + Spaces::bookId(library, bookId);
+            currentBooks.insert(field);
+            writeField(ctx, field, in ? u"in"_s : u"out"_s, colHlc);
+        }
     }
     for (auto it = ctx.existing.cbegin(); it != ctx.existing.cend(); ++it) {
         if (it.key().startsWith("book:"_L1) && !it.value().value.isEmpty() && !currentBooks.contains(it.key()))
             writeField(ctx, it.key(), QString(), colHlc);
     }
+    if (explicitHlc && SpaceReplay::entityHlc(library, u"collection"_s, gid) < colHlc)
+        ChangeLog::append(library, {ctx.space, u"collection"_s, gid, u"name"_s, col.name, colHlc});
 }
 
-void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool baseline) {
-    const qint64 id = query.value(0).toLongLong();
-    const QString scope = query.value(1).toString();
-    const QString gid = Spaces::nodeId(library, id);
-    const EntityContext ctx{&library, Spaces::spaceForScope(library, scope), u"node"_s,
-                            gid,      loggedFields(library, u"node"_s, gid), baseline};
-    const qint64 hlc = Hlc::normalize(query.value(7).toLongLong());
-    const qint64 bookId = query.value(6).toLongLong();
-    writeField(ctx, u"scope"_s, scope, hlc);
-    writeField(ctx, u"kind"_s, query.value(2).toString(), hlc);
-    writeField(ctx, u"name"_s, query.value(3).toString(), hlc);
-    writeField(ctx, u"summary"_s, query.value(4).toString(), hlc);
-    writeField(ctx, u"data"_s, query.value(5).toString(), hlc);
-    writeField(ctx, u"book"_s, bookId > 0 ? Spaces::bookId(library, bookId) : QString(), hlc);
-    if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
-        ChangeLog::append(library, {ctx.space, u"node"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
-    for (QSqlQuery seen = ChangeLog::query(
-             library, "SELECT book_id, section, fraction, anchor FROM graph_seen WHERE node_id = ? ORDER BY book_id", {id});
-         seen.next();) {
-        const QString bookGid = Spaces::bookId(library, seen.value(0).toLongLong());
-        if (!bookGid.isEmpty())
-            writeField(
-                ctx, u"seen:"_s + bookGid,
-                compactJson(
-                    {{"section", seen.value(1).toInt()}, {"fraction", seen.value(2).toDouble()}, {"anchor", seen.value(3).toString()}}),
-                hlc);
-    }
-}
-
-void syncFactsToLog(const Library &library) {
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor, "
-                                       "n.scope, n.updated FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id ORDER BY f.id");
-         query.next();) {
-        const QString gid = Spaces::factId(library, query.value(0).toLongLong());
-        const qint64 bookId = query.value(4).toLongLong();
-        const QString space = Spaces::spaceForScope(library, query.value(8).toString());
-        const EntityContext ctx{&library, space, u"fact"_s, gid, loggedFields(library, u"fact"_s, gid), true};
-        writeField(ctx, u"revealed"_s,
-                   compactJson({{"node", Spaces::nodeId(library, query.value(1).toLongLong())},
-                                {"kind", query.value(2).toString()},
-                                {"value", query.value(3).toString()},
-                                {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
-                                {"section", query.value(5).toInt()},
-                                {"fraction", query.value(6).toDouble()},
-                                {"anchor", query.value(7).toString()}}),
-                   Hlc::normalize(query.value(9).toLongLong()));
-    }
-}
-
-void syncEdgesToLog(const Library &library) {
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT e.id, e.source, e.target, e.kind, e.note, e.book_id, e.section, e.fraction, e.anchor, "
-                                       "n.scope, n.updated FROM graph_edges AS e JOIN graph_nodes AS n ON n.id = e.source ORDER BY e.id");
-         query.next();) {
-        const QString gid = Spaces::edgeId(library, query.value(0).toLongLong());
-        const qint64 bookId = query.value(5).toLongLong();
-        const QString space = Spaces::spaceForScope(library, query.value(9).toString());
-        const EntityContext ctx{&library, space, u"edge"_s, gid, loggedFields(library, u"edge"_s, gid), true};
-        writeField(ctx, u"link"_s,
-                   compactJson({{"source", Spaces::nodeId(library, query.value(1).toLongLong())},
-                                {"target", Spaces::nodeId(library, query.value(2).toLongLong())},
-                                {"kind", query.value(3).toString()},
-                                {"note", query.value(4).toString()},
-                                {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
-                                {"section", query.value(6).toInt()},
-                                {"fraction", query.value(7).toDouble()},
-                                {"anchor", query.value(8).toString()}}),
-                   Hlc::normalize(query.value(10).toLongLong()));
-        if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
-            ChangeLog::append(library, {space, u"edge"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
-    }
-}
-
-void syncGraphToLog(const Library &library, bool baseline) {
-    for (QSqlQuery query = ChangeLog::query(
-             library, "SELECT id, scope, kind, name, summary, data, COALESCE(book_id, 0), updated FROM graph_nodes ORDER BY id");
-         query.next();)
-        syncNodeRowToLog(library, query, baseline);
-    syncFactsToLog(library);
-    syncEdgesToLog(library);
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT book_id, day, from_percent, to_percent FROM reading_log ORDER BY book_id, day");
-         query.next();) {
-        const QString bookGid = Spaces::bookId(library, query.value(0).toLongLong());
-        if (bookGid.isEmpty())
-            continue;
-        const QString day = query.value(1).toString();
-        const QString gid = bookGid + u":"_s + day;
-        const EntityContext ctx{
-            &library, Spaces::personalSpace(library), u"reading_log"_s, gid, loggedFields(library, u"reading_log"_s, gid), true};
-        writeField(ctx, u"range"_s,
-                   compactJson({{"book", bookGid}, {"day", day}, {"from", query.value(2).toDouble()}, {"to", query.value(3).toDouble()}}),
-                   Spaces::lastHlc(library));
-    }
+// A book that is gone: its tombstone, unless it already has one.
+void logGoneBook(const Library &library, const QString &gid) {
+    if (gid.isEmpty())
+        return;
+    const FieldMap existing = loggedFields(library, u"book"_s, gid);
+    if (!existing.isEmpty() && (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value == "0"_L1))
+        ChangeLog::append(library, {Spaces::personalSpace(library), u"book"_s, gid, u"removed"_s, gid.mid(2), Spaces::tickHlc(library)});
 }
 
 void detectDeletedBooks(const Library &library) {
@@ -296,38 +264,35 @@ void detectDeletedBooks(const Library &library) {
     for (QSqlQuery query = ChangeLog::query(library, "SELECT id FROM books"); query.next();)
         currentBooks.insert(Spaces::bookId(library, query.value(0).toLongLong()));
     for (const Library::Removal &removal : library.removals())
-        ChangeLog::recordRemoval(library, removal.key, removal.at);
-    for (QSqlQuery query = ChangeLog::query(library, "SELECT DISTINCT id FROM ops WHERE entity = 'book'"); query.next();) {
+        ChangeLog::recordRemoval(library, removal.key, removal.at, false);
+    for (QSqlQuery query =
+             ChangeLog::query(library, "SELECT DISTINCT i.name FROM ops AS o JOIN log_ids AS i ON i.id = o.id WHERE o.entity = 'book'");
+         query.next();) {
         const QString gid = query.value(0).toString();
-        if (currentBooks.contains(gid))
-            continue;
-        const FieldMap existing = loggedFields(library, u"book"_s, gid);
-        if (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value == "0"_L1)
-            ChangeLog::append(library,
-                              {Spaces::personalSpace(library), u"book"_s, gid, u"removed"_s, gid.mid(2), Spaces::tickHlc(library)});
+        if (!currentBooks.contains(gid))
+            logGoneBook(library, gid);
     }
 }
 
-void detectDeletedGraphEntity(const Library &library, const QString &entity, const QString &table) {
-    QSet<QString> alive;
-    for (QSqlQuery query = ChangeLog::query(library, "SELECT id FROM " + table); query.next();) {
-        const qint64 id = query.value(0).toLongLong();
-        if (entity == "node"_L1)
-            alive.insert(Spaces::nodeId(library, id));
-        else if (entity == "edge"_L1)
-            alive.insert(Spaces::edgeId(library, id));
+// Takes the rows a write touched into the log, each as reconcile would.
+void logRows(const Library &library, const QHash<QString, QList<qint64>> &dirty) {
+    if (dirty.contains(u"removal"_s))
+        for (const Library::Removal &removal : library.removals())
+            ChangeLog::recordRemoval(library, removal.key, removal.at, false);
+    for (const qint64 id : dirty.value(u"book"_s)) {
+        if (const std::optional<Book> book = library.book(id))
+            syncBookToLog(library, *book, false);
         else
-            alive.insert(Spaces::factId(library, id));
+            logGoneBook(library, Spaces::bookId(library, id));
     }
-    for (QSqlQuery query = ChangeLog::query(library, "SELECT DISTINCT space, id FROM ops WHERE entity = ?", {entity}); query.next();) {
-        const QString space = query.value(0).toString();
-        const QString gid = query.value(1).toString();
-        if (alive.contains(gid))
-            continue;
-        const FieldMap existing = loggedFields(library, entity, gid);
-        if (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value != "1"_L1)
-            ChangeLog::append(library, {space, entity, gid, u"removed"_s, u"1"_s, Spaces::tickHlc(library)});
-    }
+    if (const QList<qint64> touched = dirty.value(u"collection"_s); !touched.isEmpty())
+        for (const Collection &collection : library.collections(true))
+            if (touched.contains(collection.id))
+                syncCollectionToLog(library, collection, false);
+    ChangeLogGraph::syncRowsToLog(library, {.nodes = dirty.value(u"node"_s),
+                                            .facts = dirty.value(u"fact"_s),
+                                            .edges = dirty.value(u"edge"_s),
+                                            .readingBooks = dirty.value(u"reading_log"_s)});
 }
 
 [[nodiscard]] bool countersMatch(const Library &library) {
@@ -368,10 +333,11 @@ void ChangeLog::writeBaseline(const Library &library) {
     for (const Book &book : library.books())
         syncBookToLog(library, book, true);
     for (const Library::Removal &removal : library.removals())
-        recordRemoval(library, removal.key, removal.at);
+        recordRemoval(library, removal.key, removal.at, true);
     for (const Collection &collection : library.collections(true))
         syncCollectionToLog(library, collection, true);
-    syncGraphToLog(library, true);
+    ChangeLogGraph::syncToLog(library, true);
+    ChangeLog::exec(library, "DELETE FROM log_dirty"); // all of it is in the log now
     markLogged(library);
 }
 
@@ -385,11 +351,12 @@ void ChangeLog::reconcile(const Library &library) {
         syncBookToLog(library, book, false);
     for (const Collection &collection : library.collections(true))
         syncCollectionToLog(library, collection, false);
-    syncGraphToLog(library, false);
+    ChangeLogGraph::syncToLog(library, false);
     detectDeletedBooks(library);
-    detectDeletedGraphEntity(library, u"node"_s, u"graph_nodes"_s);
-    detectDeletedGraphEntity(library, u"edge"_s, u"graph_edges"_s);
-    detectDeletedGraphEntity(library, u"fact"_s, u"graph_facts"_s);
+    ChangeLogGraph::detectDeletedEntity(library, u"node"_s, u"graph_nodes"_s);
+    ChangeLogGraph::detectDeletedEntity(library, u"edge"_s, u"graph_edges"_s);
+    ChangeLogGraph::detectDeletedEntity(library, u"fact"_s, u"graph_facts"_s);
+    ChangeLog::exec(library, "DELETE FROM log_dirty"); // all of it is in the log now
     markLogged(library);
 }
 
@@ -401,7 +368,25 @@ void ChangeLog::afterWrite(const Library &library) {
     if (!logged.next() || logged.value(0).toLongLong() < 0)
         return;
     logged.finish();
-    reconcile(library);
+    // Only the rows this write touched (the triggers of log_dirty), never the
+    // whole library: that is for opening a library a write bypassed (reconcile).
+    QHash<QString, QList<qint64>> dirty;
+    for (QSqlQuery rows = ChangeLog::query(library, "SELECT entity, local_id FROM log_dirty"); rows.next();)
+        dirty[rows.value(0).toString()] << rows.value(1).toLongLong();
+    if (dirty.isEmpty())
+        return;
+    const Library::Batch batch(library);
+    logRows(library, dirty);
+    ChangeLog::exec(library, "DELETE FROM log_dirty");
+    markLogged(library);
+}
+
+qint64 ChangeLog::internId(const Library &library, const QString &name) {
+    QSqlQuery found = ChangeLog::query(library, "SELECT id FROM log_ids WHERE name = ?", {name});
+    if (found.next())
+        return found.value(0).toLongLong();
+    found.finish();
+    return ChangeLog::insert(library, "INSERT INTO log_ids (name) VALUES (?)", {name}).value_or(0);
 }
 
 void ChangeLog::append(const Library &library, const Entry &entry) {
@@ -410,22 +395,25 @@ void ChangeLog::append(const Library &library, const Entry &entry) {
         return;
     const QString targetSpace = entry.space.isEmpty() ? Spaces::personalSpace(library) : entry.space;
     const QString device = Spaces::deviceId(library);
+    const qint64 spaceNum = internId(library, targetSpace);
+    const qint64 deviceNum = internId(library, device);
+    const qint64 idNum = internId(library, entry.id);
     const qint64 stamp = entry.hlc ? Hlc::normalize(*entry.hlc) : Spaces::tickHlc(library);
     if (entry.hlc && *entry.hlc > 0)
         Spaces::observeHlc(library, stamp);
     QSqlQuery nextSeq =
-        ChangeLog::query(library, "SELECT COALESCE(MAX(seq), 0) + 1 FROM ops WHERE space = ? AND device = ?", {targetSpace, device});
+        ChangeLog::query(library, "SELECT COALESCE(MAX(seq), 0) + 1 FROM ops WHERE space = ? AND device = ?", {spaceNum, deviceNum});
     const qint64 seq = nextSeq.next() ? nextSeq.value(0).toLongLong() : 1;
     nextSeq.finish();
     ChangeLog::exec(library,
                     "INSERT INTO ops (space, device, seq, hlc, author, entity, id, field, value) "
                     "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    {targetSpace, device, seq, stamp, device, entry.entity, entry.id, entry.field, entry.value});
+                    {spaceNum, deviceNum, seq, stamp, deviceNum, entry.entity, idNum, entry.field, entry.value});
     ChangeLog::exec(library,
                     "INSERT INTO seen (space, device, seq, hlc) VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq), "
                     "hlc = MAX(hlc, excluded.hlc)",
-                    {targetSpace, device, seq, stamp});
+                    {spaceNum, deviceNum, seq, stamp});
 }
 
 void ChangeLog::markLogged(const Library &library) {
@@ -436,7 +424,22 @@ void ChangeLog::markLogged(const Library &library) {
     ChangeLog::exec(library, "INSERT OR REPLACE INTO library_state (key, value) VALUES ('logged_format', ?)", {now.format});
 }
 
+void ChangeLog::syncCollectionAt(const Library &library, qint64 collectionId, qint64 hlc) {
+    const Scope guard;
+    const qint64 normalized = Hlc::normalize(hlc);
+    if (normalized > 0)
+        Spaces::observeHlc(library, normalized);
+    for (const Collection &collection : library.collections(true)) {
+        if (collection.id == collectionId) {
+            syncCollectionToLog(library, collection, true, normalized);
+            break;
+        }
+    }
+    ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'collection' AND local_id = ?", {collectionId});
+}
+
 void ChangeLog::setProgress(Library &library, qint64 bookId, const Progress &progress) {
+    afterWrite(library);
     const Scope guard;
     const Library::Batch batch(library);
     const qint64 hlc = progress.updated > 0 ? Hlc::normalize(progress.updated) : Spaces::tickHlc(library);
@@ -446,12 +449,12 @@ void ChangeLog::setProgress(Library &library, qint64 bookId, const Progress &pro
                     {bookId, progress.section, progress.fraction, progress.percent, Hlc::seconds(hlc)});
     const QString gid = Spaces::bookId(library, bookId);
     if (!gid.isEmpty()) {
-        if (progress.updated > 0) {
-            ChangeLog::exec(library, "UPDATE ops SET hlc = ? WHERE entity = 'book' AND id = ? AND field = 'progress' AND hlc > ?",
-                            {hlc, gid, hlc});
-        }
-        append(library, {Spaces::personalSpace(library), u"book"_s, gid, u"progress"_s, progressJson(progress), hlc});
+        EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, loggedFields(library, u"book"_s, gid), false};
+        Progress stamped = progress;
+        stamped.updated = hlc;
+        writeProgress(ctx, stamped, true);
     }
+    ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'book' AND local_id = ?", {bookId});
     markLogged(library);
 }
 
@@ -463,29 +466,25 @@ bool ChangeLog::setDetailsAt(Library &library, qint64 bookId, qint64 at) {
         Spaces::observeHlc(library, hlc);
     if (!ChangeLog::exec(library, "UPDATE books SET details_at = ? WHERE id = ?", {Hlc::seconds(hlc), bookId}))
         return false;
-    const QString gid = Spaces::bookId(library, bookId);
-    if (!gid.isEmpty()) {
-        ChangeLog::exec(library,
-                        "UPDATE ops SET hlc = ? WHERE entity = 'book' AND id = ? "
-                        "AND field NOT IN ('progress', 'shelf', 'rating', 'finished', 'paper', 'removed')",
-                        {hlc, gid});
-    }
+    if (const std::optional<Book> book = library.book(bookId))
+        syncBookToLog(library, *book, false, hlc);
+    ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'book' AND local_id = ?", {bookId});
     markLogged(library);
     return true;
 }
 
-void ChangeLog::recordRemoval(const Library &library, const QString &key, qint64 removedAt) {
+void ChangeLog::recordRemoval(const Library &library, const QString &key, qint64 removedAt, bool baseline) {
+    if (!baseline)
+        afterWrite(library);
     const Scope guard;
     const Library::Batch batch(library);
     const QString gid = Spaces::removalGlobalId(key);
-    FieldMap existing = loggedFields(library, u"book"_s, gid);
+    EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, loggedFields(library, u"book"_s, gid), baseline};
     const qint64 hlc = Hlc::normalize(removedAt);
-    if (existing.contains(u"removed"_s) && Hlc::seconds(removedAt) < Hlc::seconds(existing.value(u"removed"_s).hlc)) {
-        ChangeLog::exec(library, "UPDATE ops SET hlc = ? WHERE entity = 'book' AND id = ? AND field = 'removed'", {hlc, gid});
-        existing = loggedFields(library, u"book"_s, gid);
-    }
-    const EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, existing, true};
     writeField(ctx, u"removed"_s, key, hlc);
+    const qint64 effHlc = SpaceReducer::fieldHlc(reducedFrom(ctx.existing), u"removed"_s);
+    stampAtIfNeeded(ctx, u"removed_at"_s, hlc, Hlc::seconds(effHlc) != Hlc::seconds(removedAt));
+    ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'removal'");
     markLogged(library);
 }
 

@@ -31,6 +31,9 @@ public:
     [[nodiscard]] static qint64 lastHlc(const Library &library);
     [[nodiscard]] static qint64 tickHlc(const Library &library, std::optional<qint64> wallSeconds = std::nullopt);
     static void observeHlc(const Library &library, qint64 remote);
+    static void setClockOffset(const Library &library, qint64 offsetSeconds);
+    [[nodiscard]] static qint64 clockOffset(const Library &library);
+    [[nodiscard]] static qint64 wallSeconds(const Library &library);
 
     // Pure content-derived global-id rules.
     [[nodiscard]] static QString bookGlobalId(const QStringList &fileHashes, const QStringList &entryKeys);

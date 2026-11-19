@@ -102,6 +102,9 @@ namespace SpaceReducer {
 
 [[nodiscard]] bool isRemoved(const SpaceStamp &alive, const SpaceStamp &removed) noexcept;
 void foldBook(ReducedBook &book, const SpaceOperation &op);
+[[nodiscard]] qint64 fieldHlc(const ReducedBook &book, const QString &field);
+[[nodiscard]] qint64 detailsHlc(const ReducedBook &book);
+[[nodiscard]] qint64 readingHlc(const ReducedBook &book);
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops);
 
 } // namespace SpaceReducer

@@ -1,10 +1,10 @@
 #include "graph.h"
 
 #include "booksides.h"
+#include "spaces.h"
 
 #include <QCryptographicHash>
 #include <QDate>
-#include <QDateTime>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -240,7 +240,7 @@ qint64 Graph::upsert(const QString &scope, const QString &kind, const QString &n
     const QString called = name.simplified();
     if (called.isEmpty() || kind.simplified().isEmpty())
         return 0;
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    const qint64 now = Spaces::wallSeconds(*m_library);
     qint64 id = named(scope, kind, called);
     // What it is newly said to be, and newly called, is kept as facts with
     // the moment it was revealed.
@@ -327,11 +327,11 @@ qint64 Graph::learn(qint64 id, const QString &kind, const QString &value, const 
     if (!known || said.isEmpty() || (kind != "summary" && kind != "alias"))
         return 0;
     if (kind == "summary") {
-        m_library->exec("UPDATE graph_nodes SET summary = ?, updated = ? WHERE id = ?", {said, QDateTime::currentSecsSinceEpoch(), id});
+        m_library->exec("UPDATE graph_nodes SET summary = ?, updated = ? WHERE id = ?", {said, Spaces::wallSeconds(*m_library), id});
     } else if (known->name.compare(said, Qt::CaseInsensitive) != 0 && !known->aliases().contains(said, Qt::CaseInsensitive)) {
         QJsonObject data = known->data;
         data.insert("aliases", QJsonArray::fromStringList(known->aliases() << said));
-        m_library->exec("UPDATE graph_nodes SET data = ?, updated = ? WHERE id = ?", {compact(data), QDateTime::currentSecsSinceEpoch(), id});
+        m_library->exec("UPDATE graph_nodes SET data = ?, updated = ? WHERE id = ?", {compact(data), Spaces::wallSeconds(*m_library), id});
     } else if (known->name.compare(said, Qt::CaseInsensitive) == 0) {
         return 0; // its own name is no other name
     }
@@ -430,7 +430,7 @@ bool Graph::edit(qint64 id, const QString &name, const QString &summary) {
     else
         data.insert("aliases", QJsonArray::fromStringList(aliases));
     if (!m_library->exec("UPDATE graph_nodes SET name = ?, summary = ?, data = ?, updated = ? WHERE id = ?",
-                         {called, summary.trimmed(), compact(data), QDateTime::currentSecsSinceEpoch(), id}))
+                         {called, summary.trimmed(), compact(data), Spaces::wallSeconds(*m_library), id}))
         return false;
     // Written by hand, it is the latest word on it, at no place of a book.
     if (summary.trimmed() != known->summary && !summary.trimmed().isEmpty())
@@ -907,7 +907,7 @@ qint64 Graph::bookNode(qint64 bookId) {
         return id;
     query.finish();
     data.insert("made", made);
-    const qint64 now = QDateTime::currentSecsSinceEpoch();
+    const qint64 now = Spaces::wallSeconds(*m_library);
     if (id == 0) {
         const auto added = m_library->insert(
             "INSERT INTO graph_nodes (scope, kind, name, summary, data, book_id, updated) VALUES ('', 'book', ?, '', ?, ?, ?)",

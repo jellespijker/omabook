@@ -32,16 +32,6 @@ namespace {
     return it != fields.cend() ? it->value : fallback;
 }
 
-[[nodiscard]] qint64 maxFieldHlc(const QHash<QString, SpaceStamp> &fields, std::initializer_list<QLatin1StringView> keys) {
-    qint64 best = 0;
-    for (const QLatin1StringView key : keys) {
-        const auto it = fields.constFind(QString(key));
-        if (it != fields.cend() && it->hlc > best)
-            best = it->hlc;
-    }
-    return best;
-}
-
 [[nodiscard]] QString mergedTags(const ReducedBook &book) {
     QStringList tags = BookMeta::splitTags(fieldText(book.fields, u"tags"_s));
     for (auto it = book.tagSet.cbegin(); it != book.tagSet.cend(); ++it) {
@@ -55,10 +45,8 @@ namespace {
 }
 
 void writeBookRow(const Library &library, const QString &gid, const ReducedBook &book, QSet<qint64> &keptIds) {
-    const qint64 detailsHlc =
-        maxFieldHlc(book.fields, {"title"_L1, "authors"_L1, "series"_L1, "series_index"_L1, "publisher"_L1, "language"_L1, "isbn"_L1,
-                                  "published"_L1, "description"_L1, "tags"_L1, "identifiers"_L1, "has_cover"_L1});
-    const qint64 readingHlc = maxFieldHlc(book.fields, {"shelf"_L1, "rating"_L1, "finished"_L1, "paper"_L1});
+    const qint64 detailsHlc = SpaceReducer::detailsHlc(book);
+    const qint64 readingHlc = SpaceReducer::readingHlc(book);
     const QVariantList values{fieldText(book.fields, u"title"_s, u"Untitled"_s),
                               fieldText(book.fields, u"authors"_s),
                               fieldText(book.fields, u"series"_s),
@@ -116,9 +104,9 @@ void writeBookRow(const Library &library, const QString &gid, const ReducedBook 
     }
     if (const auto prog = book.fields.constFind(u"progress"_s); prog != book.fields.cend() && !prog->value.isEmpty()) {
         const QJsonObject p = parseObject(prog->value);
-        ChangeLog::exec(
-            library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
-            {localId, p.value("section").toInt(), p.value("fraction").toDouble(), p.value("percent").toDouble(), Hlc::seconds(prog->hlc)});
+        ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
+                        {localId, p.value("section").toInt(), p.value("fraction").toDouble(), p.value("percent").toDouble(),
+                         Hlc::seconds(SpaceReducer::fieldHlc(book, u"progress"_s))});
     }
 }
 
@@ -142,7 +130,7 @@ void materializeBooks(const Library &library, const QMap<QString, ReducedBook> &
         if (SpaceReducer::isRemoved(book.alive, book.removed)) {
             const QString key = book.removed.value.isEmpty() ? gid.mid(2) : book.removed.value;
             ChangeLog::exec(library, "INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)",
-                            {key, Hlc::seconds(book.removed.hlc)});
+                            {key, Hlc::seconds(SpaceReducer::fieldHlc(book, u"removed"_s))});
             continue;
         }
         writeBookRow(library, gid, book, keptIds);
@@ -334,12 +322,37 @@ void materializeDays(const Library &library, const QMap<QString, ReducedDay> &da
     }
 }
 
+[[nodiscard]] ReducedBook reducedBookFor(const Library &library, const QString &gid) {
+    ReducedBook reduced;
+    for (QSqlQuery query = ChangeLog::query(library,
+                                            "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value "
+                                            "FROM ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                                            "JOIN log_ids AS a ON a.id = o.author JOIN log_ids AS i ON i.id = o.id "
+                                            "WHERE o.entity = 'book' AND o.id = (SELECT id FROM log_ids WHERE name = ?)",
+                                            {gid});
+         query.next();) {
+        SpaceReducer::foldBook(reduced, {.space = query.value(0).toString(),
+                                         .device = query.value(1).toString(),
+                                         .seq = query.value(2).toLongLong(),
+                                         .hlc = query.value(3).toLongLong(),
+                                         .author = query.value(4).toString(),
+                                         .entity = query.value(5).toString(),
+                                         .id = query.value(6).toString(),
+                                         .field = query.value(7).toString(),
+                                         .value = query.value(8).toString()});
+    }
+    return reduced;
+}
+
 } // namespace
 
 QList<SpaceOperation> SpaceReplay::operations(const Library &library) {
     QList<SpaceOperation> list;
-    for (QSqlQuery query = ChangeLog::query(
-             library, "SELECT space, device, seq, hlc, author, entity, id, field, value FROM ops ORDER BY space, device, seq");
+    for (QSqlQuery query =
+             ChangeLog::query(library, "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value "
+                                       "FROM ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                                       "JOIN log_ids AS a ON a.id = o.author JOIN log_ids AS i ON i.id = o.id "
+                                       "ORDER BY s.name, d.name, o.seq");
          query.next();) {
         list.append({.space = query.value(0).toString(),
                      .device = query.value(1).toString(),
@@ -362,15 +375,19 @@ bool SpaceReplay::apply(Library &library, std::span<const SpaceOperation> ops) {
         const QString kind = space.startsWith("world:"_L1) ? u"world"_s : u"personal"_s;
         ChangeLog::exec(library, "INSERT OR IGNORE INTO spaces (id, kind, name, owner, created) VALUES (?, ?, ?, ?, ?)",
                         {space, kind, space, op.author, op.hlc});
+        const qint64 spaceNum = ChangeLog::internId(library, space);
+        const qint64 deviceNum = ChangeLog::internId(library, op.device);
+        const qint64 authorNum = ChangeLog::internId(library, op.author);
+        const qint64 idNum = ChangeLog::internId(library, op.id);
         ChangeLog::exec(library,
                         "INSERT OR IGNORE INTO ops (space, device, seq, hlc, author, entity, id, field, value) "
                         "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        {space, op.device, op.seq, Hlc::normalize(op.hlc), op.author, op.entity, op.id, op.field, op.value});
+                        {spaceNum, deviceNum, op.seq, Hlc::normalize(op.hlc), authorNum, op.entity, idNum, op.field, op.value});
         ChangeLog::exec(library,
                         "INSERT INTO seen (space, device, seq, hlc) VALUES (?, ?, ?, ?) "
                         "ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq), "
                         "hlc = MAX(hlc, excluded.hlc)",
-                        {space, op.device, op.seq, Hlc::normalize(op.hlc)});
+                        {spaceNum, deviceNum, op.seq, Hlc::normalize(op.hlc)});
         Spaces::observeHlc(library, op.hlc);
     }
     return replay(library);
@@ -395,28 +412,31 @@ QHash<QString, qint64> SpaceReplay::bookFieldHlcs(const Library &library, qint64
     const QString gid = Spaces::bookId(library, bookId);
     if (gid.isEmpty())
         return hlcs;
-    ReducedBook reduced;
-    for (QSqlQuery query = ChangeLog::query(
-             library, "SELECT space, device, seq, hlc, author, entity, id, field, value FROM ops WHERE entity = 'book' AND id = ?", {gid});
-         query.next();) {
-        SpaceReducer::foldBook(reduced, {.space = query.value(0).toString(),
-                                         .device = query.value(1).toString(),
-                                         .seq = query.value(2).toLongLong(),
-                                         .hlc = query.value(3).toLongLong(),
-                                         .author = query.value(4).toString(),
-                                         .entity = query.value(5).toString(),
-                                         .id = query.value(6).toString(),
-                                         .field = query.value(7).toString(),
-                                         .value = query.value(8).toString()});
+    const ReducedBook reduced = reducedBookFor(library, gid);
+    for (auto it = reduced.fields.cbegin(); it != reduced.fields.cend(); ++it) {
+        if (it.key() == "details_at"_L1 || it.key() == "reading_at"_L1 || it.key() == "removed_at"_L1)
+            continue;
+        if (const qint64 hlc = SpaceReducer::fieldHlc(reduced, it.key()); hlc > 0)
+            hlcs.insert(it.key(), hlc);
     }
-    for (auto it = reduced.fields.cbegin(); it != reduced.fields.cend(); ++it)
-        hlcs.insert(it.key(), it.value().hlc);
     return hlcs;
 }
 
 qint64 SpaceReplay::entityHlc(const Library &library, const QString &entity, const QString &globalId) {
     if (globalId.isEmpty())
         return 0;
-    QSqlQuery query = ChangeLog::query(library, "SELECT MAX(hlc) FROM ops WHERE entity = ? AND id = ?", {entity, globalId});
+    QSqlQuery query = ChangeLog::query(
+        library, "SELECT MAX(hlc) FROM ops WHERE entity = ? AND id = (SELECT id FROM log_ids WHERE name = ?)", {entity, globalId});
+    return query.next() ? Hlc::normalize(query.value(0).toLongLong()) : 0;
+}
+
+qint64 SpaceReplay::fieldHlc(const Library &library, const QString &entity, const QString &globalId, const QString &field) {
+    if (globalId.isEmpty())
+        return 0;
+    if (entity == "book"_L1)
+        return SpaceReducer::fieldHlc(reducedBookFor(library, globalId), field);
+    QSqlQuery query = ChangeLog::query(
+        library, "SELECT MAX(hlc) FROM ops WHERE entity = ? AND id = (SELECT id FROM log_ids WHERE name = ?) AND field = ?",
+        {entity, globalId, field});
     return query.next() ? Hlc::normalize(query.value(0).toLongLong()) : 0;
 }
