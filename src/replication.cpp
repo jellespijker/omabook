@@ -39,7 +39,10 @@ constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,   
         fields << u"'"_s + field + u"'"_s;
     return u"((o.entity = 'book' AND (o.field IN ("_s + fields.join(u", "_s)
            + u") OR o.field LIKE 'tag:%')) OR o.entity = 'collection' "
-             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log') AND s.name LIKE 'personal:%'))"_s;
+             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log') AND s.name LIKE 'personal:%')) "
+             // A space this computer subscribes to is its own to follow (SubscribedSpace).
+             "AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
+             "AND person = (SELECT global_id FROM global_ids WHERE entity = 'device' AND local_id = 0))"_s;
 }
 
 [[nodiscard]] QString standsFor(const QHash<QString, QString> &canonical, const QString &gid) { return canonical.value(gid, gid); }

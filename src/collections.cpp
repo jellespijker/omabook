@@ -11,11 +11,13 @@
 #include <QJsonDocument>
 #include <cstdio>
 #include <optional>
+#include <utility>
 
 #include "bookops.h"
 #include "curation.h"
 #include "readingformat.h"
 #include "settings.h"
+#include "subscriptions.h"
 
 using namespace Qt::StringLiterals;
 
@@ -37,7 +39,8 @@ void printJson(const QJsonValue &value) {
                       .trimmed());
 }
 
-constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort] …\n\n"
+constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort|import|"
+                       "unsubscribe] …\n\n"
                        "Collections are named parts of the library, named as you like: a book can be in several, and\n"
                        "nothing is copied or moved. Each has a rule, a search as omabook list takes it, and the books put\n"
                        "in or taken out by hand, which win over the rule. Collections nest: a path such as Studie/Python\n"
@@ -59,7 +62,11 @@ constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|in
                        "                                    collections inside that one for the books in it that are in none\n"
                        "                                    of its own yet; they stay in it too. Picking takes from the list\n"
                        "                                    the last sort gave, asking nothing again (--again asks afresh);\n"
-                       "                                    --pick N=path takes a proposal under another name\n\n"
+                       "                                    --pick N=path takes a proposal under another name\n"
+                       "  import <file> [--as <name>] [--dry-run]  Subscribe to a collection someone shared (.omabook-space):\n"
+                       "                                    its books you have are matched, the others become wishlist\n"
+                       "                                    entries, in a collection of yours; its graph stays in its space\n"
+                       "  unsubscribe <name|space>          Drop a shared collection's space; your collection of it stays\n\n"
                        "The search language: bare words, author:, title:, series:, tag:, genre: (fiction, nonfiction, or a\n"
                        "tag), format:, lang:, publisher:, about:, status:, is: and rating:; \"quotes\" keep words together,\n"
                        "-word leaves out, and OR joins alternatives: genre:fiction OR series:Dune -tag:poetry\n\n"
@@ -127,6 +134,58 @@ std::optional<QList<Proposal>> keptProposals(const Library &library) {
     return proposals;
 }
 
+// A shared collection subscribed to, or its space dropped (subscriptions.h):
+// what it did as JSON and as text.
+using Shown = std::expected<std::pair<QJsonObject, QString>, QString>;
+
+Shown subscribe(Library &library, const QString &file, const Subscriptions::Options &options) {
+    const auto snapshot = Subscriptions::fetch(file);
+    const auto report = snapshot ? Subscriptions::subscribe(library, *snapshot, options)
+                                 : std::expected<Subscriptions::Report, QString>(std::unexpected(snapshot.error()));
+    if (!report)
+        return std::unexpected(report.error());
+    return std::pair{Subscriptions::toJson(*report), Subscriptions::describe(*report).join('\n')};
+}
+
+Shown unsubscribe(const Library &library, const QString &which) {
+    const auto dropped = Subscriptions::unsubscribe(library, which);
+    if (!dropped)
+        return std::unexpected(dropped.error());
+    return std::pair{Subscriptions::toJson(*dropped), Subscriptions::describe(*dropped)};
+}
+
+// `collections import <file>` and `collections unsubscribe <name|space>`.
+int shared(Library &library, const QStringList &words, const Subscriptions::Options &options, bool json) {
+    if (words.size() < 2)
+        return fail(usage);
+    const QString what = words.mid(1).join(' ');
+    const Shown shown = words.first() == "import" ? subscribe(library, what, options) : unsubscribe(library, what);
+    if (!shown)
+        return fail(shown.error());
+    if (json)
+        printJson(shown->first);
+    else
+        print(stdout, shown->second);
+    return 0;
+}
+
+// `collections list`: the tree, each inside the one above it, indented.
+void printList(const QJsonArray &collections, bool json) {
+    if (json) {
+        printJson(collections);
+    } else if (collections.isEmpty()) {
+        print(stdout, "There are no collections yet. Make one with: omabook collections add <name> --rule <search>, "
+                      "or have the AI propose some with: omabook collections sort");
+    } else {
+        for (const auto &value : collections) {
+            const QJsonObject collection = value.toObject();
+            print(stdout, QString("%1\t%2%3\t%4 books\t%5").arg(collection.value("id").toInteger())
+                              .arg(QString(qsizetype{2} * collection.value("depth").toInt(), ' '), collection.value("name").toString())
+                              .arg(collection.value("count").toInt()).arg(collection.value("rule").toString()));
+        }
+    }
+}
+
 } // namespace
 
 QJsonArray Collections::list(const Library &library) {
@@ -168,6 +227,8 @@ int Collections::run(const QStringList &arguments) {
                               "a collection of that path instead.", "numbers"});
     parser.addOption({"parent", "add: make it inside this collection.", "path"});
     parser.addOption({"again", "sort: ask the AI again rather than pick from the list the last sort gave."});
+    parser.addOption({"as", "import: the collection's name here, instead of the shared one's.", "name"});
+    parser.addOption({"dry-run", "import: say what it would do, and change nothing."});
     parser.addOption({{"h", "help"}, "Show this help."});
     QStringList rest = arguments;
     rest.removeAt(1);
@@ -185,21 +246,7 @@ int Collections::run(const QStringList &arguments) {
         return fail(error);
 
     if (sub == "list") {
-        const QJsonArray collections = list(library);
-        if (json) {
-            printJson(collections);
-        } else if (collections.isEmpty()) {
-            print(stdout, "There are no collections yet. Make one with: omabook collections add <name> --rule <search>, "
-                          "or have the AI propose some with: omabook collections sort");
-        } else {
-            // The tree: each inside the one above it, indented.
-            for (const QJsonValue &value : collections) {
-                const QJsonObject collection = value.toObject();
-                print(stdout, QString("%1\t%2%3\t%4 books\t%5").arg(collection.value("id").toInteger())
-                                  .arg(QString(collection.value("depth").toInt() * 2, ' '), collection.value("name").toString())
-                                  .arg(collection.value("count").toInt()).arg(collection.value("rule").toString()));
-            }
-        }
+        printList(Collections::list(library), json);
         return 0;
     }
     if (sub == "add") {
@@ -343,6 +390,9 @@ int Collections::run(const QStringList &arguments) {
             print(stdout, QString("%1 collections brought up to date").arg(changed));
         return 0;
     }
+
+    if (sub == "import" || sub == "unsubscribe")
+        return shared(library, words, {parser.value("as"), parser.isSet("dry-run")}, json);
 
     // The rest name a collection.
     if (words.size() < 2)

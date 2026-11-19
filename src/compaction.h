@@ -59,4 +59,11 @@ void compactWhenWorthIt(const Library &library);
 // person's id for a published or shared one.
 void rememberSeen(const Library &library, const QString &member, const Replication::Vector &held);
 
+// Drops a space this computer subscribes to (SubscribedSpace: it is a reader
+// of it) from the log whole, its snapshot and what it saw of it too, when it
+// unsubscribes: the layer is gone, and nobody needs it from here, since a
+// subscription never travels on. A space it writes or shares is never
+// dropped this way. How many operations it took out of `ops`.
+qint64 forgetSubscribed(const Library &library, const QString &space);
+
 } // namespace Compaction

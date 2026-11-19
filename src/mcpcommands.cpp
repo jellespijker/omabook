@@ -381,6 +381,34 @@ const bool registered = [] {
                       return command(picked.isEmpty() ? QStringList{"collections", "sort", "--apply"}
                                                       : QStringList{"collections", "sort", "--pick", picked.join(',')});
                   }});
+
+    registerTool({"collection_import", "Subscribe to a shared collection",
+                  "Imports a collection someone shared, from its .omabook-space file, by subscribing to its space: the "
+                  "space is kept read-only beside the library, never merged into it. Its books the user has are matched "
+                  "(the same file, an identifier or ISBN, or title and authors) and the others become wishlist entries "
+                  "(never downloads), in a collection of the user's own: the space's name, or `as`; one of that name is "
+                  "merged into, not overwritten. Its knowledge graph stays in the space and isn't shown yet. A newer "
+                  "file of the same space brings only what is new. Try dry_run first to show the user what it would do.",
+                  schema({{"file", string("The .omabook-space file.")},
+                          {"as", string("The collection's name here, instead of the shared one's.")},
+                          {"dry_run", boolean("Change nothing; say what importing would do.")}},
+                         {"file"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      QStringList asked{"collections", "import", arguments.value("file").toString()};
+                      if (const QString as = arguments.value("as").toString().trimmed(); !as.isEmpty())
+                          asked << "--as" << as;
+                      if (arguments.value("dry_run").toBool())
+                          asked << "--dry-run";
+                      return command(asked);
+                  }});
+
+    registerTool({"collection_unsubscribe", "Unsubscribe from a shared collection",
+                  "Drops a shared collection's space from the library. The user's own collection of it stays, with its "
+                  "books and wishlist entries.",
+                  schema({{"name", string("The space's name or id, or the collection it was imported into.")}}, {"name"}), Destructive,
+                  [](const QJsonObject &arguments) {
+                      return command({"collections", "unsubscribe", arguments.value("name").toString()});
+                  }});
     return true;
 }();
 

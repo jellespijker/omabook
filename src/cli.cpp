@@ -2196,7 +2196,7 @@ QString cliSummary() {
            "  open [book]                     Open the window, and a book file or library number in it\n"
            "  list [search] [--collection c]  List the library's books, or one collection's\n"
            "  search <words> [--ai]           Find books by their details and what you know of them; --ai asks the AI\n"
-           "  collections [add|rule|move|sort|...]  Named parts of the library, nested as you like\n"
+           "  collections [add|rule|move|sort|import|...]  Named parts of the library, nested as you like, or shared\n"
            "  show <id>                       Show one book's details and files\n"
            "  add <file|folder>...            Copy books into the library; a Calibre library comes with its details\n"
            "  remove <id>                     Move a book to the trash\n"

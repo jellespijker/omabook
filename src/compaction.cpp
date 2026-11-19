@@ -95,6 +95,27 @@ void Compaction::rememberSeen(const Library &library, const QString &member, con
                 {ChangeLog::internId(library, space.key()), member, ChangeLog::internId(library, device.key()), device.value()});
 }
 
+qint64 Compaction::forgetSubscribed(const Library &library, const QString &space) {
+    // Only a space this computer reads and never writes: one of its own, or
+    // one it shares, may still be needed from here by another member.
+    QSqlQuery reader = ChangeLog::query(library, "SELECT 1 FROM space_members WHERE space = ? AND person = ? AND role = 'reader'",
+                                        {space, Spaces::deviceId(library)});
+    if (!reader.next())
+        return 0;
+    reader.finish();
+    const Library::Batch batch(library);
+    const qint64 id = ChangeLog::internId(library, space);
+    QSqlQuery held = ChangeLog::query(library, "SELECT COUNT(*) FROM ops WHERE space = ?", {id});
+    const qint64 dropped = held.next() ? held.value(0).toLongLong() : 0;
+    held.finish();
+    ChangeLog::exec(library, "DELETE FROM ops WHERE space = ?", {id});
+    ChangeLog::exec(library, "DELETE FROM snapshot_ops WHERE space = ?", {id});
+    ChangeLog::exec(library, "DELETE FROM snapshot_marks WHERE space = ?", {id});
+    ChangeLog::exec(library, "DELETE FROM seen WHERE space = ?", {id});
+    ChangeLog::exec(library, "DELETE FROM member_vectors WHERE space = ?", {id});
+    return dropped;
+}
+
 QList<SpaceOperation> Compaction::latest(std::span<const SpaceOperation> ops) {
     QHash<QString, qint64> newest;
     for (const SpaceOperation &op : ops)

@@ -377,7 +377,10 @@ namespace {
 void storeOperations(const Library &library, std::span<const SpaceOperation> ops) {
     for (const SpaceOperation &op : ops) {
         const QString space = op.space.isEmpty() ? Spaces::personalSpace(library) : op.space;
-        const QString kind = space.startsWith("world:"_L1) ? u"world"_s : u"personal"_s;
+        QString kind = u"personal"_s;
+        for (const auto prefix : {"world"_L1, "published"_L1})
+            if (space.startsWith(prefix + u':'))
+                kind = prefix;
         ChangeLog::exec(library, "INSERT OR IGNORE INTO spaces (id, kind, name, owner, created) VALUES (?, ?, ?, ?, ?)",
                         {space, kind, space, op.author, op.hlc});
         const qint64 spaceNum = ChangeLog::internId(library, space);

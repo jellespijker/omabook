@@ -33,7 +33,7 @@ uses = ["formats", "foundation"]
 modules = [
   "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphmatch", "graphsync", "knowledgesearch", "libraries",
   "library", "librarymigrations", "publishedspace", "replication", "signedops", "spacereducer", "spacereplay", "spaces",
-  "spacesnapshot", "textmarks",
+  "spacesnapshot", "subscribedspace", "textmarks",
 ]
 
 [layers.services]
@@ -50,8 +50,8 @@ modules = [
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "olderpeer", "pairing", "plugintools", "scripttools",
-  "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
+  "bookmatch", "bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "olderpeer", "pairing", "plugintools",
+  "scripttools", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

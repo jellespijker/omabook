@@ -38,7 +38,9 @@ struct SpaceOperation {
 class SpaceReplay {
 public:
     // Every operation that still matters (Compaction: the snapshot and what came
-    // after it, which merge as all of `ops` do), ordered by space, device and seq.
+    // after it, which merge as all of `ops` do) of the spaces the library's rows
+    // are made of, ordered by space, device and seq: never a published space's,
+    // which is a layer apart (SubscribedSpace, #4).
     [[nodiscard]] static QList<SpaceOperation> operations(const Library &library);
 
     // Applies `ops` (in any order) to `library`, merging with any operations

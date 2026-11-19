@@ -16,6 +16,7 @@ moves those lines under its version.
 
 - `omabook identity` prints your id and its fingerprint: the public half of a key pair made the first time it is asked for and kept in your Omabook data folder (`~/.local/share/omabook/person.key`), readable only by you, which signs what you write (#47, #48). A key an earlier build kept beside the library is moved there once, so a library folder synced elsewhere no longer carries it (#48).
 - `omabook identity` also lists your computers paired into your personal space (#48).
+- `omabook collections import <file> [--as <name>] [--dry-run]` (and the MCP tool `collection_import`) subscribes to a collection someone shared as an `.omabook-space` file: the shared space is kept read-only beside your library, never merged into it. Its books you have are matched (the same file, an identifier or ISBN, or title and authors, as the tidy finds them), the others become wishlist entries, in a collection of yours of its name or the one you give, with a collection inside it for each of the shared ones; one of that name already there is added to, never emptied. A newer file of the same space brings only what is new, the same file twice changes nothing. Its knowledge graph stays in the space, apart from yours, and isn't shown yet. `omabook collections unsubscribe <name>` (`collection_unsubscribe`) drops the space and keeps your collection. The library's format goes up by one for it (a copy is kept first) (#4).
 
 ### Changed
 

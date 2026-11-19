@@ -116,6 +116,20 @@ major.minor, with the space's id and kind, its owner's chosen name and person id
 the Omabook that wrote it, and its operations compacted (`PublishedSpace`); samples of it in
 `tests/data/` must keep reading.
 
+**Subscribing** (#4): importing a published space's snapshot is subscribing to it. Its operations are
+kept in `ops` under the space's id as its owner wrote them, the space recorded as published with its
+owner a writer and this computer a reader (`subscribedspace.h`). What the library's rows are made of
+(`live_ops`) leaves every published space out by its id, so a layer never merges into the
+subscriber's books, collections or graph, and is read by itself from `space_ops` (every space, which
+compaction and replication read); a subscription doesn't travel to the subscriber's other computers.
+What is new in a later snapshot is what the subscriber doesn't hold yet, by device, clock, thing,
+field and value, as a snapshot numbers its operations anew until publishing keeps them. The
+subscriber's own part is one collection, theirs like any other, linked to the space: their matched
+books and wishlist entries, filed as the space files them. Unsubscribing drops the space from the log
+whole (`Compaction::forgetSubscribed`, compaction still the one place that deletes from it) and keeps
+the collection. The layer's graph is not shown until it follows the receiver's reading place (#5);
+copying chosen things of it into one's own graph is for later.
+
 ### Transports are adapters
 
 How operations move is not the model. They are append-only and can be encrypted with the space's
