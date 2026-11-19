@@ -31,6 +31,10 @@ target_link_libraries(omabook_core PUBLIC
   PkgConfig::LIBARCHIVE PkgConfig::POPPLER_QT6 PkgConfig::LIBSODIUM)
 target_compile_options(omabook_core PUBLIC -Wall -Wextra)
 target_compile_definitions(omabook_core PUBLIC OMABOOK_VERSION="${PROJECT_VERSION}")
+# The standard library's own checks (error() on an expected holding a value, an
+# index past the end): Arch's makepkg builds the package with them (#57), so
+# every build here, the tests too, does as well. Defining it again is harmless.
+target_compile_definitions(omabook_core PUBLIC _GLIBCXX_ASSERTIONS)
 # The Calibre bridge is a separate, GPL-licensed file (see README, License):
 # installed to share/omabook, and found in the source tree by an uninstalled build.
 target_compile_definitions(omabook_core PRIVATE OMABOOK_BRIDGE_SOURCE="${CMAKE_SOURCE_DIR}/share/omabook/calibre_bridge.py")

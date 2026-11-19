@@ -1,0 +1,10 @@
+id: no-error-in-check-message
+valid:
+  - "void f() { QVERIFY2(r, qPrintable(Fixtures::whyNot(r))); }"
+  - "void f() { QVERIFY2(!r && r.error().contains(\"gone\"), qPrintable(whyNot(r))); }"
+  - "void f() { QVERIFY2(bench.error(\"a\").isEmpty(), qPrintable(bench.error(\"a\"))); }"
+  - "void f() { if (!r) QFAIL(qPrintable(r.error())); }"
+invalid:
+  - "void f() { QVERIFY2(r, qPrintable(r.error())); }"
+  - "void f() { QVERIFY2(r.has_value(), qPrintable(name + \": \" + r.error())); }"
+  - "void f() { QVERIFY2(r,\n             qPrintable(r ? QString() : r.error())); }"

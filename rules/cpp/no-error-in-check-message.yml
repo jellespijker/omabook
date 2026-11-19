@@ -1,0 +1,40 @@
+id: no-error-in-check-message
+language: cpp
+severity: error
+message: A QVERIFY2 message reads `.error()`; write `Fixtures::whyNot(result)`.
+note: |
+  Qt makes a QVERIFY2's message even when the check passes, so `.error()`
+  there is called on a std::expected that may hold a value: undefined
+  behaviour, and an abort under -D_GLIBCXX_ASSERTIONS (#57).
+  `Fixtures::whyNot` gives the error only when there is one. The condition
+  may read `.error()` once it has tested the result
+  (`!r && r.error().contains(...)`); only the message is checked.
+utils:
+  # std::expected's error() takes nothing; a class's own error(name) is not it.
+  error-call:
+    kind: call_expression
+    all:
+      - has:
+          field: function
+          kind: field_expression
+          has:
+            field: field
+            regex: ^error$
+      - has:
+          field: arguments
+          regex: ^\(\s*\)$
+rule:
+  kind: call_expression
+  all:
+    - has:
+        field: function
+        regex: ^QVERIFY2$
+    - has:
+        field: arguments
+        has:
+          nthChild: 2
+          any:
+            - matches: error-call
+            - has:
+                stopBy: end
+                matches: error-call
