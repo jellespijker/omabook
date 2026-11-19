@@ -16,6 +16,7 @@
 #include <tuple>
 
 #include "fixtures.h"
+#include "graph.h"
 #include "hlc.h"
 #include "library.h"
 #include "remote.h"
@@ -266,6 +267,27 @@ void removeOnEachSide(SamplePairs &p) {
     QCOMPARE(Samples::librarySnapshot(p.logThere).value("removals"), Samples::librarySnapshot(p.logHere).value("removals"));
     const SyncSummary settled = syncLibrary(p.logHere, p.current);
     QCOMPARE(settled.removedHere + settled.removedThere + settled.received + settled.sent, 0);
+}
+
+void learnOnEachSide(SamplePairs &p) {
+    for (Library *library : {&p.oldHere, &p.logHere})
+        QVERIFY(Graph(*library).upsert({}, "character", "Mara", "Flies the boat.", {}, GraphPlace{1, 2, 0.5}, "Mara") > 0);
+    for (Library *library : {&p.oldThere, &p.logThere}) {
+        Graph graph(*library);
+        const qint64 ann = graph.named({}, "character", "Ann");
+        QVERIFY(ann > 0 && graph.learn(ann, "alias", "Annie", GraphMoment{GraphPlace{1, 1, 0.2}, "Annie"}) > 0);
+        QVERIFY(graph.upsert({}, "place", "The Lighthouse", {}, {}, GraphPlace{1, 3, 0.1}, "lighthouse") > 0);
+    }
+    const SyncSummary oldLearned = syncLibrary(p.oldHere, p.older);
+    const SyncSummary logLearned = syncLibrary(p.logHere, p.current);
+    QVERIFY2(logLearned.problems.isEmpty(), qPrintable(logLearned.problems.join('\n')));
+    QVERIFY(logLearned.graphTaken > 0 && logLearned.graphSent > 0);
+    QVERIFY(Graph(p.logThere).named({}, "character", "Mara") > 0);
+    QVERIFY(Graph(p.logHere).node(Graph(p.logHere).named({}, "character", "Ann"))->aliases().contains("Annie"));
+    p.expectAlike("6");
+    const SyncSummary settled = syncLibrary(p.logHere, p.current);
+    QCOMPARE(settled.graphTaken + settled.graphSent, 0);
+    QCOMPARE(syncLibrary(p.oldHere, p.older).graphTaken, 0);
 }
 
 } // namespace
@@ -540,6 +562,42 @@ private slots:
         QCOMPARE(settled.removedHere + settled.removedThere + settled.received + settled.sent, 0);
     }
 
+    void theGraphTravelsThroughTheLogAndAThingOfAnotherNameIsLinkedOnce() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "Of The Boat"));
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 mine = here.add(dir.filePath("shared.epub")).id;
+        const qint64 theirs = there.add(dir.filePath("shared.epub")).id;
+        // Here she is Mara, also called the Pilot; there only the Pilot is known, met further on.
+        Graph graphHere(here);
+        const qint64 mara = graphHere.upsert({}, "character", "Mara", {}, {}, GraphPlace{mine, 3, 0.5}, "Mara");
+        QVERIFY(graphHere.learn(mara, "alias", "The Pilot") > 0);
+        Graph graphThere(there);
+        const qint64 pilot = graphThere.upsert({}, "character", "The Pilot", "Steers.", {}, GraphPlace{theirs, 1, 0.25}, "the Pilot");
+        QVERIFY(pilot > 0
+                && graphThere.link(pilot, graphThere.upsert({}, "place", "The Boat"), "steers", {}, GraphPlace{theirs, 1, 0.3}) > 0);
+        QVERIFY(!libraryManifest(there, ManifestFor::LogPeer).contains("graph"));
+
+        const Remote remote("laptop:" + dir.filePath("There"), {recordingSsh(dir, "ssh-graph", false)});
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QVERIFY(summary.graphTaken > 0);
+        // One thing on each side, met where it was met first, with what was learned there.
+        QCOMPARE(graphHere.named({}, "character", "The Pilot"), mara);
+        QCOMPARE(graphHere.firstMet(mara, mine)->place.section, 1);
+        QCOMPARE(graphHere.node(mara)->summary, QString("Steers."));
+        QCOMPARE(graphHere.around(mara).edges.size(), 1);
+        QCOMPARE(graphThere.named({}, "character", "Mara"), pilot);
+        QCOMPARE(countOf(SpaceReplay::operations(here), "same_as"), 1);
+        QVERIFY2(!commandsOf(dir, "ssh-graph").contains("'graph'"), qPrintable(commandsOf(dir, "ssh-graph")));
+
+        const SyncSummary settled = syncLibrary(here, remote);
+        QCOMPARE(settled.graphTaken + settled.graphSent, 0);
+        QCOMPARE(countOf(SpaceReplay::operations(here), "same_as"), 1);
+    }
+
     void anOlderOmabookStillSyncsByTheManifest() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "On Both"));
@@ -560,6 +618,7 @@ private slots:
         QVERIFY(there.setMeta(otherThere, meta, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0)));
         QVERIFY(here.setReading(sharedHere, "read", 5, {}));
         QVERIFY(there.addCollection("From There", "status:reading"));
+        QVERIFY(Graph(there).upsert({}, "character", "Pilot", {}, {}, GraphPlace{sharedThere, 1, 0.5}, "Pilot") > 0);
         QVERIFY(Fixtures::epub(dir.filePath("gone.epub"), "Gone Here"));
         const qint64 goneHere = here.add(dir.filePath("gone.epub")).id;
         QVERIFY(there.add(dir.filePath("gone.epub")).error.isEmpty());
@@ -589,13 +648,16 @@ private slots:
         QVERIFY(here.collectionNamed("From There"));
         QCOMPARE(summary.removedThere, 1);
         QVERIFY(there.books("Gone Here").isEmpty());
+        QVERIFY(summary.graphTaken > 0);
+        QVERIFY(Graph(here).named({}, "character", "Pilot") > 0);
 
         // Asked for the log, it refused; it was asked for its manifest and
         // given the place by the command it has always taken, as plain seconds.
         const QString commands = commandsOf(dir, "ssh-older");
         QVERIFY2(commands.contains("'manifest' '--log'") && commands.contains("'manifest' --library"), qPrintable(commands));
         QVERIFY2(commands.contains("'progress'") && commands.contains("'--updated' '1794860500'"), qPrintable(commands));
-        QVERIFY2(commands.contains("'--status' 'read'") && commands.contains("'collections' 'take'") && commands.contains("'remove'"),
+        QVERIFY2(commands.contains("'--status' 'read'") && commands.contains("'collections' 'take'") && commands.contains("'remove'")
+                     && commands.contains("'graph' 'take'"),
                  qPrintable(commands));
         QVERIFY2(!commands.contains("'--replicate'"), qPrintable(commands));
         // No pairing with a computer that doesn't speak the log.
@@ -633,7 +695,8 @@ private slots:
             // Never by the manifest's commands between two that speak the log.
             const QString logCommands = commandsOf(pairs.dir, "ssh-log");
             QVERIFY2(logCommands.contains("'--replicate'"), qPrintable(dump));
-            QVERIFY2(!logCommands.contains("'--meta'") && !logCommands.contains("'--status'") && !logCommands.contains("'remove'"),
+            QVERIFY2(!logCommands.contains("'--meta'") && !logCommands.contains("'--status'") && !logCommands.contains("'remove'")
+                         && !logCommands.contains("'graph'") && !logCommands.contains("'collections'"),
                      qPrintable(dump));
             QVERIFY2(!commandsOf(pairs.dir, "ssh-older").contains("'--replicate'"), qPrintable(dump));
         }

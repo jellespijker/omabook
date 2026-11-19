@@ -16,6 +16,7 @@
 #include "spacereducer.h"
 #include "spaces.h"
 #include "syncmanifest.h"
+#include "synctakegraph.h"
 
 using namespace Qt::StringLiterals;
 
@@ -223,10 +224,28 @@ void takeBook(Taking &taking, const Book &here) {
 // concurrent remove): each that the log says otherwise than here is written
 // as it says, a parent before what is in it. One removed that this side never
 // had is not made.
-void takeCollections(Taking &taking) {
+// The name each thing of the graph was given, by its id (before same-as links fold them).
+[[nodiscard]] QHash<QString, QString> thingNames(std::span<const SpaceOperation> ops) {
+    QHash<QString, std::pair<qint64, QString>> latest;
+    for (const SpaceOperation &op : ops)
+        if (op.entity == "node"_L1 && op.field == "name"_L1 && op.hlc >= latest.value(op.id).first)
+            latest.insert(op.id, {op.hlc, op.value});
+    QHash<QString, QString> names;
+    for (auto it = latest.cbegin(); it != latest.cend(); ++it)
+        names.insert(it.key(), it->second);
+    return names;
+}
+
+// The books here by the id they stand for.
+[[nodiscard]] QHash<QString, qint64> booksHere(const Taking &taking) {
     QHash<QString, qint64> books;
     for (const Book &book : taking.library.books())
         books.insert(taking.standsFor(Spaces::bookId(taking.library, book.id)), book.id);
+    return books;
+}
+
+void takeCollections(Taking &taking) {
+    const QHash<QString, qint64> books = booksHere(taking);
     QHash<QString, Collection> rows;
     QHash<QString, qint64> ids;
     for (const Collection &collection : taking.library.collections(true)) {
@@ -276,6 +295,11 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
     for (const Book &here : books)
         takeBook(taking, here);
     takeCollections(taking);
+    // A dry run leaves the graph be, as it always did.
+    if (!peer.dryRun)
+        summary.graphTaken += SyncTakeGraph::take(
+            library, taking.merged, booksHere(taking), SpaceReducer::sameAs(ops, "node"_L1),
+            {.theirs = QSet<QString>(taking.theirs.nodes.keyBegin(), taking.theirs.nodes.keyEnd()), .names = thingNames(ops)});
     // Their books, each as the log says they hold it, for what this side lacks.
     Taken taken{.books = {}, .gone = taking.gone};
     for (const auto &value : peer.books) {

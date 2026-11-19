@@ -28,7 +28,9 @@ namespace GraphSync {
 QJsonObject bundle(const Library &library);
 
 // Takes in another computer's bundle: answers how many things, facts,
-// places, relations and reading days were new here.
+// places, relations and reading days were new here. For an Omabook from
+// before the change log; between two that speak it the graph travels by the
+// log (synctakegraph.h).
 int take(Library &library, const QJsonObject &bundle);
 
 } // namespace GraphSync

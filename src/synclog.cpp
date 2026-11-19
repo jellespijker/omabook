@@ -50,6 +50,7 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     add(summary.readingSent, summary.titles.readingSent, "reading_taken");
     add(summary.removedThere, summary.titles.removedThere, "removed_here");
     summary.collectionsSent += there.value("collections_taken").toInt();
+    summary.graphSent += there.value("graph_taken").toInt();
     for (const auto &problem : there.value("problems").toArray())
         summary.problems << problem.toString();
 }

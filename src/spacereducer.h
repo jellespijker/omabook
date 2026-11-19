@@ -109,8 +109,10 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 // (entity "book", field "same_as", the one id and the other as its value)
 // links them. Links only ever grow, so every id of a linked group stands
 // for its smallest, in any order: each linked id and the one it stands for.
-[[nodiscard]] QHash<QString, QString> sameAs(std::span<const SpaceOperation> ops);
-// Books are folded under the id their same-as links stand for.
+// The same of things of the graph (entity "node"), linked once where two
+// computers know one by different names.
+[[nodiscard]] QHash<QString, QString> sameAs(std::span<const SpaceOperation> ops, QLatin1StringView entity = QLatin1StringView("book"));
+// Books and things are folded under the id their same-as links stand for.
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops);
 // What one computer holds: only the operations its device wrote, which is what
 // its rows are (every write there appends one), with the links of all of them.

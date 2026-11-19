@@ -23,6 +23,7 @@ moves those lines under its version.
 - Between two computers with this Omabook, `omabook sync` also carries books' details and what is said of their reading (shelf, stars, finished day, paper copy, names elsewhere) through the change log: each computer takes what is newer on the other itself, only a cover is still given as a file, and the manifest leaves the details out. Details from before their times were kept stay undecided, as before, until `--details mine` or `--details theirs` (#37).
 - The collections go through the change log too between two computers with this Omabook, merged field by field: a collection renamed or moved on one computer is the same one on the other, not a second (#37).
 - A book's removal goes through the change log too between two computers with this Omabook: the other computer removes it itself, by the same rule as before (all of it removed, and unchanged there since), and keeps the time it was removed; the manifest leaves removals out (#37).
+- The knowledge graph goes through the change log too between two computers with this Omabook, so the manifest a sync asks for now names only each book and its files. A thing known by another name on the other computer is matched once, by the rules the graph sync always used, and stays matched (#37).
 
 ### Fixed
 

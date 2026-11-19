@@ -159,16 +159,14 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
             files << QJsonObject{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
         books << (log ? logPeerBook(library, book, files) : olderPeerBook(library, book, files));
     }
-    QJsonObject manifest{{"version", manifestVersion},
-                         {"hlc", Spaces::lastHlc(library)},
-                         {"omabook", QStringLiteral(OMABOOK_VERSION)},
-                         {"books", books},
-                         {"graph", GraphSync::bundle(library)}};
+    QJsonObject manifest{
+        {"version", manifestVersion}, {"hlc", Spaces::lastHlc(library)}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books}};
     // What travels by the log is left out for an Omabook that speaks it.
     if (!log) {
         manifest.insert("removed", QJsonArray::fromStringList(library.removedHashes()));
         manifest.insert("removals", removals(library));
         manifest.insert("collections", Collections::manifest(library));
+        manifest.insert("graph", GraphSync::bundle(library));
     }
     if (log) {
         manifest.insert("log", 1);

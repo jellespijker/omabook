@@ -223,7 +223,9 @@ qint64 SpaceReducer::readingHlc(const ReducedBook &book) {
 
 namespace {
 
-[[nodiscard]] bool isSameAs(const SpaceOperation &op) { return op.entity == "book"_L1 && op.field == "same_as"_L1; }
+[[nodiscard]] bool isSameAs(const SpaceOperation &op) {
+    return op.field == "same_as"_L1 && (op.entity == "book"_L1 || op.entity == "node"_L1);
+}
 
 // The id a group of linked ids stands for, shortening the path on the way.
 [[nodiscard]] QString rootOf(QHash<QString, QString> &parent, const QString &id) {
@@ -237,12 +239,12 @@ namespace {
 
 } // namespace
 
-QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops) {
+QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops, QLatin1StringView entity) {
     // Of two groups that are joined, the smaller root stays the root, so the
     // root of every group is its smallest id, whatever the order of the links.
     QHash<QString, QString> parent;
     for (const SpaceOperation &op : ops) {
-        if (!isSameAs(op) || op.id.isEmpty() || op.value.isEmpty() || op.id == op.value)
+        if (!isSameAs(op) || op.entity != entity || op.id.isEmpty() || op.value.isEmpty() || op.id == op.value)
             continue;
         const QString one = rootOf(parent, op.id);
         const QString other = rootOf(parent, op.value);
@@ -260,6 +262,7 @@ namespace {
 ReducedState reduceOf(std::span<const SpaceOperation> ops, const QString &device) {
     ReducedState state;
     const QHash<QString, QString> canonical = SpaceReducer::sameAs(ops);
+    const QHash<QString, QString> things = SpaceReducer::sameAs(ops, "node"_L1);
     for (const SpaceOperation &op : ops) {
         if (isSameAs(op) || (!device.isEmpty() && op.device != device))
             continue;
@@ -268,7 +271,7 @@ ReducedState reduceOf(std::span<const SpaceOperation> ops, const QString &device
         else if (op.entity == "collection"_L1)
             foldCollection(state.collections[op.id], op);
         else if (op.entity == "node"_L1)
-            foldNode(state.nodes[op.id], op);
+            foldNode(state.nodes[things.value(op.id, op.id)], op);
         else if (op.entity == "fact"_L1)
             foldFact(state.facts[op.id], op);
         else if (op.entity == "edge"_L1)
