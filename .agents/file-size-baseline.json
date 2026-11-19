@@ -45,7 +45,6 @@
     "src/scriptplugins.cpp": 836,
     "src/scripttools.cpp": 900,
     "src/sitedesk.cpp": 585,
-    "src/sync.cpp": 529,
     "src/themechoice.cpp": 601,
     "tests/graph_tests.cpp": 1736,
     "tests/layout_tests.cpp": 1867,

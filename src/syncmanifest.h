@@ -44,8 +44,14 @@ void observeManifest(const Library &library, const QJsonObject &manifest);
 [[nodiscard]] std::optional<qint64> removedWhen(const QStringList &hashes, const QStringList &keys,
                                                 const std::function<std::optional<qint64>(const QString &)> &at);
 
-// Merges a book's details field by field using each field's HLC.
+// Merges a book's details field by field using each field's HLC, this side's
+// as its log says them, theirs as their manifest does.
 [[nodiscard]] MergedBookDetails mergeBookDetails(const Library &library, const Book &here, const QJsonObject &theirs, bool current,
                                                  SyncOptions::Details choice);
+// The rule itself: of each field that differs, the newer one (by `mine`'s and
+// `theirs`' "field_hlc", from their details time), or neither where the times
+// are the same and `choice` says nothing; the cover too when `covers` differ.
+[[nodiscard]] MergedBookDetails decideDetails(const Book &here, const QJsonObject &mine, const QJsonObject &theirs, bool current,
+                                              SyncOptions::Details choice, bool covers);
 
 } // namespace SyncManifest

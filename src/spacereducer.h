@@ -112,5 +112,8 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 [[nodiscard]] QHash<QString, QString> sameAs(std::span<const SpaceOperation> ops);
 // Books are folded under the id their same-as links stand for.
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops);
+// What one computer holds: only the operations its device wrote, which is what
+// its rows are (every write there appends one), with the links of all of them.
+[[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops, const QString &device);
 
 } // namespace SpaceReducer

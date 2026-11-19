@@ -253,14 +253,16 @@ QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops
     return canonical;
 }
 
-ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) {
+namespace {
+
+ReducedState reduceOf(std::span<const SpaceOperation> ops, const QString &device) {
     ReducedState state;
-    const QHash<QString, QString> canonical = sameAs(ops);
+    const QHash<QString, QString> canonical = SpaceReducer::sameAs(ops);
     for (const SpaceOperation &op : ops) {
-        if (isSameAs(op))
+        if (isSameAs(op) || (!device.isEmpty() && op.device != device))
             continue;
         if (op.entity == "book"_L1)
-            foldBook(state.books[canonical.value(op.id, op.id)], op);
+            SpaceReducer::foldBook(state.books[canonical.value(op.id, op.id)], op);
         else if (op.entity == "collection"_L1)
             foldCollection(state.collections[op.id], op);
         else if (op.entity == "node"_L1)
@@ -274,3 +276,9 @@ ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) {
     }
     return state;
 }
+
+} // namespace
+
+ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) { return reduceOf(ops, {}); }
+
+ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QString &device) { return reduceOf(ops, device); }

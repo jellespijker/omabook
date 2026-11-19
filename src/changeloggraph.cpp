@@ -8,10 +8,10 @@
 #include <QSqlQuery>
 #include <QStringList>
 #include <optional>
-#include <tuple>
 #include <utility>
 
 #include "changelog.h"
+#include "changelogfields.h"
 #include "hlc.h"
 #include "spacereplay.h"
 #include "spaces.h"
@@ -20,72 +20,24 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-struct LoggedValue {
-    qint64 hlc = -1;
-    QString device;
-    QString value;
-};
-
-using FieldMap = QHash<QString, LoggedValue>;
-
-struct GraphContext {
-    const Library *library = nullptr;
-    QString space;
-    QString entity;
-    QString gid;
-    FieldMap existing;
-    bool baseline = false;
-};
+using FieldMap = ChangeLogFields::Map;
+using GraphContext = ChangeLogFields::Context;
 
 [[nodiscard]] QString compactJson(const QJsonObject &object) {
     return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
-}
-
-[[nodiscard]] FieldMap loggedFields(const Library &library, const QString &entity, const QString &globalId) {
-    FieldMap map;
-    for (QSqlQuery query = ChangeLog::query(library,
-                                            "SELECT o.field, o.value, o.hlc, d.name FROM ops AS o JOIN log_ids AS d ON d.id = o.device "
-                                            "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.seq",
-                                            {entity, globalId});
-         query.next();) {
-        const QString field = query.value(0).toString();
-        const QString value = query.value(1).toString();
-        const qint64 hlc = query.value(2).toLongLong();
-        const QString device = query.value(3).toString();
-        const auto it = map.constFind(field);
-        if (it == map.cend() || std::tie(hlc, device, value) >= std::tie(it->hlc, it->device, it->value))
-            map.insert(field, {hlc, device, value});
-    }
-    return map;
-}
-
-void writeField(GraphContext &ctx, const QString &field, const QString &value, qint64 rowHlc) {
-    const auto it = ctx.existing.constFind(field);
-    if (it != ctx.existing.cend() && it->value == value)
-        return;
-    qint64 useHlc = rowHlc;
-    if (!ctx.baseline) {
-        const bool isRecentWall =
-            rowHlc > 0 && Hlc::counter(rowHlc) == 0 && std::abs(Spaces::wallSeconds(*ctx.library) - Hlc::seconds(rowHlc)) <= 5;
-        if (isRecentWall || (it != ctx.existing.cend() && useHlc <= it->hlc))
-            useHlc = Spaces::tickHlc(*ctx.library);
-    } else if (it != ctx.existing.cend() && useHlc <= it->hlc) {
-        useHlc = Spaces::tickHlc(*ctx.library);
-    }
-    ChangeLog::append(*ctx.library, {ctx.space, ctx.entity, ctx.gid, field, value, useHlc});
-    ctx.existing.insert(field, {useHlc, Spaces::deviceId(*ctx.library), value});
 }
 
 void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool baseline, std::optional<qint64> explicitHlc = std::nullopt) {
     const qint64 id = query.value(0).toLongLong();
     const QString scope = query.value(1).toString();
     const QString gid = Spaces::nodeId(library, id);
-    GraphContext ctx{&library, Spaces::spaceForScope(library, scope), u"node"_s, gid, loggedFields(library, u"node"_s, gid), baseline};
+    GraphContext ctx{&library, Spaces::spaceForScope(library, scope), u"node"_s, gid, ChangeLogFields::logged(library, u"node"_s, gid),
+                     baseline};
     const qint64 hlc = explicitHlc ? Hlc::normalize(*explicitHlc) : Hlc::normalize(query.value(7).toLongLong());
     const qint64 bookId = query.value(6).toLongLong();
     for (const auto &[field, col] : {std::pair{u"scope"_s, 1}, {u"kind"_s, 2}, {u"name"_s, 3}, {u"summary"_s, 4}, {u"data"_s, 5}})
-        writeField(ctx, field, query.value(col).toString(), hlc);
-    writeField(ctx, u"book"_s, bookId > 0 ? Spaces::bookId(library, bookId) : QString(), hlc);
+        ChangeLogFields::write(ctx, field, query.value(col).toString(), hlc);
+    ChangeLogFields::write(ctx, u"book"_s, bookId > 0 ? Spaces::bookId(library, bookId) : QString(), hlc);
     if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
         ChangeLog::append(library, {ctx.space, u"node"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
     for (QSqlQuery seen = ChangeLog::query(
@@ -93,7 +45,7 @@ void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool basel
          seen.next();) {
         const QString bookGid = Spaces::bookId(library, seen.value(0).toLongLong());
         if (!bookGid.isEmpty())
-            writeField(
+            ChangeLogFields::write(
                 ctx, u"seen:"_s + bookGid,
                 compactJson(
                     {{"section", seen.value(1).toInt()}, {"fraction", seen.value(2).toDouble()}, {"anchor", seen.value(3).toString()}}),
@@ -118,7 +70,7 @@ void syncFactsToLog(const Library &library, const std::optional<QList<qint64>> &
     if (ids && ids->isEmpty())
         return;
     const auto makeCtx = [&](const QString &space, const QString &entity, const QString &gid) {
-        return GraphContext{&library, space, entity, gid, loggedFields(library, entity, gid), true};
+        return GraphContext{&library, space, entity, gid, ChangeLogFields::logged(library, entity, gid), true};
     };
     for (QSqlQuery query =
              ChangeLog::query(library, u"SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor, "
@@ -129,15 +81,15 @@ void syncFactsToLog(const Library &library, const std::optional<QList<qint64>> &
         const qint64 bookId = query.value(4).toLongLong();
         const QString space = Spaces::spaceForScope(library, query.value(8).toString());
         GraphContext ctx = makeCtx(space, u"fact"_s, gid);
-        writeField(ctx, u"revealed"_s,
-                   compactJson({{"node", Spaces::nodeId(library, query.value(1).toLongLong())},
-                                {"kind", query.value(2).toString()},
-                                {"value", query.value(3).toString()},
-                                {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
-                                {"section", query.value(5).toInt()},
-                                {"fraction", query.value(6).toDouble()},
-                                {"anchor", query.value(7).toString()}}),
-                   Hlc::normalize(query.value(9).toLongLong()));
+        ChangeLogFields::write(ctx, u"revealed"_s,
+                               compactJson({{"node", Spaces::nodeId(library, query.value(1).toLongLong())},
+                                            {"kind", query.value(2).toString()},
+                                            {"value", query.value(3).toString()},
+                                            {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
+                                            {"section", query.value(5).toInt()},
+                                            {"fraction", query.value(6).toDouble()},
+                                            {"anchor", query.value(7).toString()}}),
+                               Hlc::normalize(query.value(9).toLongLong()));
     }
 }
 
@@ -152,17 +104,17 @@ void syncEdgesToLog(const Library &library, const std::optional<QList<qint64>> &
         const QString gid = Spaces::edgeId(library, query.value(0).toLongLong());
         const qint64 bookId = query.value(5).toLongLong();
         const QString space = Spaces::spaceForScope(library, query.value(9).toString());
-        GraphContext ctx{&library, space, u"edge"_s, gid, loggedFields(library, u"edge"_s, gid), true};
-        writeField(ctx, u"link"_s,
-                   compactJson({{"source", Spaces::nodeId(library, query.value(1).toLongLong())},
-                                {"target", Spaces::nodeId(library, query.value(2).toLongLong())},
-                                {"kind", query.value(3).toString()},
-                                {"note", query.value(4).toString()},
-                                {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
-                                {"section", query.value(6).toInt()},
-                                {"fraction", query.value(7).toDouble()},
-                                {"anchor", query.value(8).toString()}}),
-                   Hlc::normalize(query.value(10).toLongLong()));
+        GraphContext ctx{&library, space, u"edge"_s, gid, ChangeLogFields::logged(library, u"edge"_s, gid), true};
+        ChangeLogFields::write(ctx, u"link"_s,
+                               compactJson({{"source", Spaces::nodeId(library, query.value(1).toLongLong())},
+                                            {"target", Spaces::nodeId(library, query.value(2).toLongLong())},
+                                            {"kind", query.value(3).toString()},
+                                            {"note", query.value(4).toString()},
+                                            {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
+                                            {"section", query.value(6).toInt()},
+                                            {"fraction", query.value(7).toDouble()},
+                                            {"anchor", query.value(8).toString()}}),
+                               Hlc::normalize(query.value(10).toLongLong()));
         if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
             ChangeLog::append(library, {space, u"edge"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
     }
@@ -190,10 +142,11 @@ void syncReadingLogToLog(const Library &library, const std::optional<QList<qint6
         const QString day = query.value(1).toString();
         const QString gid = bookGid + u":"_s + day;
         const QString space = Spaces::personalSpace(library);
-        GraphContext ctx{&library, space, u"reading_log"_s, gid, loggedFields(library, u"reading_log"_s, gid), true};
-        writeField(ctx, u"range"_s,
-                   compactJson({{"book", bookGid}, {"day", day}, {"from", query.value(2).toDouble()}, {"to", query.value(3).toDouble()}}),
-                   Spaces::lastHlc(library));
+        GraphContext ctx{&library, space, u"reading_log"_s, gid, ChangeLogFields::logged(library, u"reading_log"_s, gid), true};
+        ChangeLogFields::write(
+            ctx, u"range"_s,
+            compactJson({{"book", bookGid}, {"day", day}, {"from", query.value(2).toDouble()}, {"to", query.value(3).toDouble()}}),
+            Spaces::lastHlc(library));
     }
 }
 
@@ -201,7 +154,7 @@ void syncReadingLogToLog(const Library &library, const std::optional<QList<qint6
 void tombstone(const Library &library, const QString &entity, const QString &gid, const QString &space) {
     if (gid.isEmpty())
         return;
-    const FieldMap existing = loggedFields(library, entity, gid);
+    const FieldMap existing = ChangeLogFields::logged(library, entity, gid);
     if (!existing.isEmpty() && (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value != "1"_L1))
         ChangeLog::append(library, {space, entity, gid, u"removed"_s, u"1"_s, Spaces::tickHlc(library)});
 }
@@ -276,7 +229,7 @@ void ChangeLogGraph::detectDeletedEntity(const Library &library, const QString &
         const QString gid = query.value(1).toString();
         if (alive.contains(gid))
             continue;
-        const FieldMap existing = loggedFields(library, entity, gid);
+        const FieldMap existing = ChangeLogFields::logged(library, entity, gid);
         if (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value != "1"_L1)
             ChangeLog::append(library, {space, entity, gid, u"removed"_s, u"1"_s, Spaces::tickHlc(library)});
     }

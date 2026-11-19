@@ -11,14 +11,15 @@
 #include <span>
 
 #include "library.h"
+#include "spacereducer.h"
 #include "spacereplay.h"
 
 // Replicating the change log between computers by version vector (ADR 0001).
 //
-// What travels by the log so far is the reading places, with the same-as
-// operations that line up the books they name where two computers' content
-// ids don't (#36); everything else still travels by the manifest, one kind
-// moving over at a time. Two computers exchange what they have of it, per
+// What travels by the log so far is the books' reading places, details and
+// what is said of their reading, with the same-as operations that line up the
+// books where two computers' content ids don't (#36, #37); everything else
+// still travels by the manifest, one kind moving over at a time. Two computers exchange what they have of it, per
 // space and device the last sequence number (`{laptop: 812, desktop: 77}`),
 // and send each other the operations after that. Taking an operation twice
 // changes nothing.
@@ -46,6 +47,10 @@ public:
     };
 
     [[nodiscard]] static bool travels(const SpaceOperation &op);
+
+    // A book as the log says it is, in the shape of a manifest's book: its
+    // details with when each changed, and what is said of its reading.
+    [[nodiscard]] static QJsonObject bookView(const ReducedBook &book);
 
     // Every operation of the log that travels, in order of space, device and sequence.
     [[nodiscard]] static QList<SpaceOperation> operations(const Library &library);

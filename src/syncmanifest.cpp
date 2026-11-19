@@ -163,6 +163,48 @@ bool takeCollection(Library &library, const QJsonObject &object, QHash<QString, 
     return true;
 }
 
+// A book as an Omabook that speaks the log needs it: what names it (its global
+// id, and for a book without a file its entry keys), its files and cover to
+// fetch, and when it last changed, for a removal. Its details, its reading and
+// its place are the log's.
+QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files) {
+    const QString cover = library.coverPath(book.id);
+    return {{"id", book.id},
+            {"gid", Spaces::bookId(library, book.id)},
+            {"files", files},
+            {"keys", files.isEmpty() ? QJsonArray::fromStringList(Library::entryKeys(book)) : QJsonArray()},
+            {"cover", cover},
+            {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)},
+            {"changed_hlc", SyncManifest::lastChangeHlc(library, book)}};
+}
+
+// A book as an Omabook from before the log needs it: everything of it.
+QJsonObject olderPeerBook(const Library &library, const Book &book, const QJsonArray &files) {
+    QJsonObject object = book.toJson();
+    object.insert("files", files);
+    const QString cover = library.coverPath(book.id);
+    object.insert("cover", cover);
+    object.insert("cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover));
+    object.insert("added_at", book.added);
+    const QHash<QString, qint64> fieldHlcs = SpaceReplay::bookFieldHlcs(library, book.id);
+    const Progress prog = library.progress(book.id);
+    object.insert("progress", toJson(prog, stampedOrNormalizedHlc(prog.updated, fieldHlcs.value(u"progress"_s))));
+    object.insert("shelf", book.shelf);
+    object.insert("paper", book.paper);
+    const qint64 detailsHlc =
+        book.detailsAt == 0 ? 0
+                            : maxOf(fieldHlcs,
+                                    {"title"_L1, "authors"_L1, "series"_L1, "series_index"_L1, "publisher"_L1, "language"_L1, "isbn"_L1,
+                                     "published"_L1, "description"_L1, "tags"_L1, "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1},
+                                    Hlc::normalize(book.detailsAt));
+    const qint64 readingHlc =
+        book.readingAt == 0 ? 0 : maxOf(fieldHlcs, {"shelf"_L1, "rating"_L1, "finished"_L1, "paper"_L1}, Hlc::normalize(book.readingAt));
+    object.insert("details_hlc", detailsHlc);
+    object.insert("reading_hlc", readingHlc);
+    object.insert("field_hlc", bookFieldHlcJson(book, fieldHlcs));
+    return object;
+}
+
 } // namespace
 
 QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
@@ -170,40 +212,10 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
     ChangeLog::reconcile(library);
     QJsonArray books;
     for (const Book &book : library.books()) {
-        QJsonObject object = book.toJson();
         QJsonArray files;
         for (const FormatFile &file : library.formatFiles(book.id))
             files << QJsonObject{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
-        object.insert("files", files);
-        const QString cover = library.coverPath(book.id);
-        object.insert("cover", cover);
-        object.insert("cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover));
-        object.insert("added_at", book.added);
-        const QHash<QString, qint64> fieldHlcs = SpaceReplay::bookFieldHlcs(library, book.id);
-        if (log) {
-            // The place is the log's; when the book last changed, place and all,
-            // still decides whether a removal here reaches it there.
-            object.insert("gid", Spaces::bookId(library, book.id));
-            object.insert("changed_hlc", SyncManifest::lastChangeHlc(library, book));
-        } else {
-            const Progress prog = library.progress(book.id);
-            object.insert("progress", toJson(prog, stampedOrNormalizedHlc(prog.updated, fieldHlcs.value(u"progress"_s))));
-        }
-        object.insert("shelf", book.shelf);
-        object.insert("paper", book.paper);
-        const qint64 detailsHlc =
-            book.detailsAt == 0 ? 0
-                                : maxOf(fieldHlcs,
-                                        {"title"_L1, "authors"_L1, "series"_L1, "series_index"_L1, "publisher"_L1, "language"_L1, "isbn"_L1,
-                                         "published"_L1, "description"_L1, "tags"_L1, "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1},
-                                        Hlc::normalize(book.detailsAt));
-        const qint64 readingHlc =
-            book.readingAt == 0 ? 0
-                                : maxOf(fieldHlcs, {"shelf"_L1, "rating"_L1, "finished"_L1, "paper"_L1}, Hlc::normalize(book.readingAt));
-        object.insert("details_hlc", detailsHlc);
-        object.insert("reading_hlc", readingHlc);
-        object.insert("field_hlc", bookFieldHlcJson(book, fieldHlcs));
-        books << object;
+        books << (log ? logPeerBook(library, book, files) : olderPeerBook(library, book, files));
     }
     QJsonArray removals;
     for (const Library::Removal &removal : library.removals()) {
@@ -403,12 +415,19 @@ qint64 wireTimestamp(qint64 hlc, bool peerHasLog) noexcept { return peerHasLog ?
 
 MergedBookDetails mergeBookDetails(const Library &library, const Book &here, const QJsonObject &theirs, bool current,
                                    SyncOptions::Details choice) {
+    const QJsonObject mine{{"details_at", here.detailsAt},
+                           {"field_hlc", bookFieldHlcJson(here, SpaceReplay::bookFieldHlcs(library, here.id))}};
+    return decideDetails(here, mine, theirs, current, choice, current && coversDiffer(library, here.id, theirs));
+}
+
+MergedBookDetails decideDetails(const Book &here, const QJsonObject &mine, const QJsonObject &theirs, bool current,
+                                SyncOptions::Details choice, bool covers) {
     MergedBookDetails out;
     out.meta = BookMeta::fromJson(here.meta.toJson());
     const BookMeta theirMeta = BookMeta::fromJson(theirs);
-    const QJsonObject myFieldObj = bookFieldHlcJson(here, SpaceReplay::bookFieldHlcs(library, here.id));
+    const QJsonObject myFieldObj = mine.value("field_hlc").toObject();
     const QJsonObject theirFieldObj = theirs.value("field_hlc").toObject();
-    const qint64 myBase = here.detailsAt == 0 ? 0 : Hlc::normalize(here.detailsAt);
+    const qint64 myBase = theirDetailsHlc(mine);
     const qint64 theirBase = theirDetailsHlc(theirs);
     const auto myAt = [&](QLatin1StringView key) { return fieldHlc(myBase, myFieldObj, key); };
     const auto theirAt = [&](QLatin1StringView key) { return fieldHlc(theirBase, theirFieldObj, key); };
@@ -434,7 +453,7 @@ MergedBookDetails mergeBookDetails(const Library &library, const Book &here, con
             out.meta.seriesIndex = theirMeta.seriesIndex;
         });
 
-    if (current && coversDiffer(library, here.id, theirs))
+    if (covers)
         mergeCoverField(out, myAt("cover"_L1), theirAt("cover"_L1), choice);
     return out;
 }

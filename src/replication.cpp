@@ -1,10 +1,13 @@
 #include "replication.h"
 
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QSqlQuery>
+#include <QStringList>
 #include <QVariant>
 #include <algorithm>
+#include <array>
 #include <tuple>
 
 #include "changelog.h"
@@ -16,8 +19,22 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-// The operations that travel by the log, in SQL; Replication::travels says the same of one.
-constexpr auto travelling = "o.entity = 'book' AND o.field IN ('progress', 'same_as')";
+// A book's fields that travel by the log: its reading place, its details and
+// what is said of its reading, each with the stamp of its time, and the links
+// that line up its ids. Never where its files are here (`path`, `formats`):
+// those are this computer's own.
+constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,      "authors"_L1,    "series"_L1,      "series_index"_L1,
+                                "publisher"_L1,   "language"_L1,  "isbn"_L1,       "published"_L1,  "description"_L1, "tags"_L1,
+                                "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
+                                "finished"_L1,    "paper"_L1,     "reading_at"_L1};
+
+// The operations that travel, in SQL; Replication::travels says the same of one.
+[[nodiscard]] QString travelling() {
+    QStringList fields;
+    for (const QLatin1StringView field : bookFields)
+        fields << u"'"_s + field + u"'"_s;
+    return u"o.entity = 'book' AND (o.field IN ("_s + fields.join(u", "_s) + u") OR o.field LIKE 'tag:%')"_s;
+}
 
 [[nodiscard]] QString standsFor(const QHash<QString, QString> &canonical, const QString &gid) { return canonical.value(gid, gid); }
 
@@ -43,6 +60,29 @@ void join(QHash<QString, QString> &canonical, const QString &one, const QString 
     return books;
 }
 
+[[nodiscard]] QString text(const ReducedBook &book, QLatin1StringView field) { return book.fields.value(QString(field)).value; }
+
+// When each of a book's details changed, as a manifest says it (field_hlc):
+// none when no time is known of them.
+[[nodiscard]] QJsonObject fieldTimes(const ReducedBook &book, qint64 details) {
+    if (details == 0)
+        return {};
+    const auto at = [&](QLatin1StringView field) {
+        const qint64 hlc = SpaceReducer::fieldHlc(book, QString(field));
+        return hlc > 0 ? hlc : details;
+    };
+    return {{"title", at("title"_L1)},
+            {"authors", at("authors"_L1)},
+            {"series", std::max(at("series"_L1), at("series_index"_L1))},
+            {"publisher", at("publisher"_L1)},
+            {"language", at("language"_L1)},
+            {"isbn", at("isbn"_L1)},
+            {"published", at("published"_L1)},
+            {"description", at("description"_L1)},
+            {"tags", at("tags"_L1)},
+            {"cover", std::max(at("has_cover"_L1), at("cover_hash"_L1))}};
+}
+
 [[nodiscard]] Progress placeOf(const ReducedBook &book) {
     const QJsonObject value = QJsonDocument::fromJson(book.fields.value(u"progress"_s).value.toUtf8()).object();
     return {.section = value.value("section").toInt(),
@@ -54,7 +94,33 @@ void join(QHash<QString, QString> &canonical, const QString &one, const QString 
 } // namespace
 
 bool Replication::travels(const SpaceOperation &op) {
-    return op.entity == "book"_L1 && (op.field == "progress"_L1 || op.field == "same_as"_L1);
+    return op.entity == "book"_L1
+           && (std::ranges::any_of(bookFields, [&op](QLatin1StringView field) { return op.field == field; })
+               || op.field.startsWith("tag:"_L1));
+}
+
+QJsonObject Replication::bookView(const ReducedBook &book) {
+    const qint64 details = SpaceReducer::detailsHlc(book);
+    return {{"title", text(book, "title"_L1)},
+            {"authors", QJsonArray::fromStringList(BookMeta::splitAuthors(text(book, "authors"_L1)))},
+            {"series", text(book, "series"_L1)},
+            {"series_index", text(book, "series_index"_L1).toDouble()},
+            {"publisher", text(book, "publisher"_L1)},
+            {"language", text(book, "language"_L1)},
+            {"isbn", text(book, "isbn"_L1)},
+            {"published", text(book, "published"_L1)},
+            {"description", text(book, "description"_L1)},
+            {"tags", QJsonArray::fromStringList(BookMeta::splitTags(text(book, "tags"_L1)))},
+            {"identifiers", QJsonDocument::fromJson(text(book, "identifiers"_L1).toUtf8()).object()},
+            {"cover_hash", text(book, "cover_hash"_L1)},
+            {"shelf", text(book, "shelf"_L1)},
+            {"rating", text(book, "rating"_L1).toInt()},
+            {"finished", text(book, "finished"_L1)},
+            {"paper", text(book, "paper"_L1) == "1"_L1},
+            {"details_at", Hlc::seconds(details)},
+            {"details_hlc", details},
+            {"reading_hlc", SpaceReducer::readingHlc(book)},
+            {"field_hlc", fieldTimes(book, details)}};
 }
 
 QList<SpaceOperation> Replication::operations(const Library &library) {
@@ -64,7 +130,7 @@ QList<SpaceOperation> Replication::operations(const Library &library) {
                                                "FROM ops AS o JOIN log_ids AS s ON s.id = o.space "
                                                "JOIN log_ids AS d ON d.id = o.device JOIN log_ids AS a ON a.id = o.author "
                                                "JOIN log_ids AS i ON i.id = o.id WHERE %1 ORDER BY s.name, d.name, o.seq")
-                                           .arg(travelling));
+                                           .arg(travelling()));
          query.next();)
         list.append({.space = query.value(0).toString(),
                      .device = query.value(1).toString(),
@@ -83,7 +149,7 @@ Replication::Vector Replication::vector(const Library &library) {
     for (QSqlQuery query = ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(o.seq) FROM ops AS o "
                                                              "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
                                                              "WHERE %1 GROUP BY o.space, o.device")
-                                                         .arg(travelling));
+                                                         .arg(travelling()));
          query.next();)
         known[query.value(0).toString()][query.value(1).toString()] = query.value(2).toLongLong();
     return known;

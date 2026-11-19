@@ -170,7 +170,7 @@ int runManifestCli(const QStringList &arguments) {
     addCommonOptions(parser, "Print everything the library holds as JSON: each book's details, files with their "
                              "hashes, cover and reading place. This is what omabook sync reads from the other computer.");
     parser.addOption({"log", "For an Omabook that speaks the change log: say so, and leave out what the log carries "
-                             "(the reading places)."});
+                             "(the books' details, reading and reading places)."});
     if (!parseArguments(parser, "manifest", arguments, 0))
         return 1;
     const auto library = openCliLibrary(parser);

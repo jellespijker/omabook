@@ -18,84 +18,24 @@
 #include "graphsync.h"
 #include "hlc.h"
 #include "olderpeer.h"
+#include "replication.h"
 #include "synclog.h"
 #include "syncmanifest.h"
+#include "synctake.h"
 
 namespace {
 
-// What names a book of the other side's manifest that has no file.
+// What names a book of the other side's manifest that has no file: its keys,
+// as an Omabook that speaks the log gives them, or else made from its details.
 QStringList entryKeysOf(const QJsonObject &theirs) {
+    if (theirs.contains("keys")) {
+        QStringList keys;
+        for (const auto &key : theirs.value("keys").toArray())
+            keys << key.toString();
+        return keys;
+    }
     return Library::entryKeys(theirs.value("identifiers").toObject(), theirs.value("isbn").toString(), theirs.value("title").toString(),
                               BookMeta::fromJson(theirs).authors);
-}
-
-// `omabook set` arguments that give the other side this book's reading and
-// its names elsewhere: the shelf, stars, finished day and paper copy.
-// With `detailsAt` (for an Omabook there that keeps it), the time its
-// details are stamped with there: the names elsewhere are part of the
-// details, and what a sync brings keeps the time it had.
-//
-// "generated" (which plugin made a book) never travels: only that plugin
-// marks a book as its own, and the mark is what lets it fork and branch a
-// story, which must never reach a book by a human author. A sync neither
-// sends it nor takes it in.
-bool travels(const QString &scheme) { return scheme.compare(QStringLiteral("generated"), Qt::CaseInsensitive) != 0; }
-
-QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt) {
-    QStringList arguments{"set", QString::number(id), "--status", book.shelf.isEmpty() ? QStringLiteral("none") : book.shelf,
-                          "--rating", QString::number(book.rating), "--paper", book.paper ? QStringLiteral("yes") : QStringLiteral("no")};
-    if (!book.finished.isEmpty())
-        arguments << "--finished" << book.finished;
-    for (auto it = book.identifiers.begin(); it != book.identifiers.end(); ++it)
-        if (const QString value = it.value().toVariant().toString(); !value.isEmpty() && travels(it.key()))
-            arguments << "--identifier" << it.key() + "=" + value;
-    if (detailsAt)
-        arguments << "--details-at" << QString::number(*detailsAt);
-    return arguments;
-}
-
-// Takes in what the other side says of a book's reading where this side
-// says nothing: an empty shelf, no stars, no finished day; a paper copy
-// either side has is had. Whether that changes anything; with `dryRun`
-// only that.
-bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun) {
-    const std::optional<Book> mine = library.book(id);
-    if (!mine)
-        return false;
-    bool changed = false;
-    const QString shelf = mine->shelf.isEmpty() ? theirs.value("shelf").toString() : mine->shelf;
-    const int rating = mine->rating > 0 ? mine->rating : theirs.value("rating").toInt();
-    const QString finished = mine->finished.isEmpty() ? theirs.value("finished").toString() : mine->finished;
-    if (shelf != mine->shelf || rating != mine->rating || finished != mine->finished) {
-        changed = true;
-        if (!dryRun)
-            library.setReading(id, shelf, rating, finished);
-    }
-    if (!mine->paper && theirs.value("paper").toBool()) {
-        changed = true;
-        if (!dryRun)
-            library.setPaper(id, true);
-    }
-    // Names that came by sync keep the details' time, so they are no
-    // reason to send the details back.
-    const QJsonObject identifiers = theirs.value("identifiers").toObject();
-    for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (travels(it.key()) && !mine->identifiers.contains(it.key())) {
-            changed = true;
-            if (!dryRun)
-                library.setIdentifier(id, it.key(), it.value().toVariant().toString(), SyncManifest::myDetailsHlc(library, *mine));
-        }
-    return changed;
-}
-
-// Whether the other side says less of a book's reading than this one does
-// now, so it is given this side's.
-bool saysLess(const QJsonObject &theirs, const Book &mine) {
-    if ((theirs.value("shelf").toString().isEmpty() && !mine.shelf.isEmpty()) || (theirs.value("rating").toInt() == 0 && mine.rating > 0)
-        || (theirs.value("finished").toString().isEmpty() && !mine.finished.isEmpty()) || (!theirs.value("paper").toBool() && mine.paper))
-        return true;
-    const QJsonObject identifiers = theirs.value("identifiers").toObject();
-    return std::ranges::any_of(mine.identifiers.keys(), [&](const QString &scheme) { return travels(scheme) && !identifiers.contains(scheme); });
 }
 
 // Counts one book in a summary, with its title for a terminal.
@@ -132,85 +72,6 @@ void logSyncSummary(const SyncSummary &summary, const QString &host) {
                              << summary.graphSent << "graph sent," << summary.problems.size() << "problems";
 }
 
-struct PeerScratch {
-    Library &library; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members): short-lived stack context
-    const Remote *remote = nullptr;
-    QTemporaryDir *scratch = nullptr;
-    QString *folderThere = nullptr;
-    int *counter = nullptr;
-    const SyncOptions &options; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members): short-lived stack context
-    SyncSummary &summary;       // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members): short-lived stack context
-    bool current = false;
-    bool peerHasLog = false;
-
-    QString remoteDir() const {
-        if (folderThere->isEmpty())
-            *folderThere = QString::fromUtf8(remote->run("mktemp -d").output).trimmed();
-        return *folderThere;
-    }
-    QString writeDetails(const QJsonObject &metaJson) const {
-        const QString file = scratch->filePath(QString("details-%1.json").arg(++(*counter)));
-        QFile json(file);
-        return json.open(QIODevice::WriteOnly) && json.write(QJsonDocument(metaJson).toJson()) > 0 ? file : QString();
-    }
-};
-
-void takeMergedDetails(qint64 mine, const QJsonObject &theirs, const PeerScratch &peer, const SyncManifest::MergedBookDetails &merged,
-                       qint64 settledHlc) {
-    BookMeta meta = merged.meta;
-    const QString title = theirs.value("title").toString();
-    const QString cover = theirs.value("cover").toString();
-    const QString picture = peer.scratch->filePath(QString("cover-%1.jpg").arg(++(*peer.counter)));
-    if (!peer.options.dryRun && merged.takeCover && !theirs.value("cover_hash").toString().isEmpty() && !cover.isEmpty()
-        && peer.remote->fetch(cover, picture))
-        meta.cover = QImageReader(picture).read();
-    QString error;
-    if (peer.options.dryRun || peer.library.setMeta(mine, meta, &error, settledHlc))
-        note(peer.summary.detailsTaken, peer.summary.titles.detailsTaken, title);
-    else
-        peer.summary.problems << title + ": " + error;
-}
-
-void sendMergedDetails(qint64 mine, const QJsonObject &theirs, const PeerScratch &peer, const SyncManifest::MergedBookDetails &merged,
-                       qint64 settledHlc, std::optional<qint64> &detailsThere) {
-    bool given = peer.options.dryRun;
-    const qint64 sentAt = SyncManifest::wireTimestamp(settledHlc, peer.peerHasLog);
-    if (!peer.options.dryRun) {
-        const QString folder = peer.remoteDir();
-        const QString details = peer.writeDetails(merged.meta.toJson());
-        const QString myCoverFile = peer.library.coverPath(mine);
-        QStringList set{"set",          QString::number(theirs.value("id").toInteger()),
-                        "--meta",       folder + "/details.json",
-                        "--details-at", QString::number(sentAt)};
-        if (merged.sendCover && !myCoverFile.isEmpty() && peer.remote->send(myCoverFile, folder + "/cover.jpg"))
-            set << "--cover" << folder + "/cover.jpg";
-        given = !folder.isEmpty() && !details.isEmpty() && peer.remote->send(details, folder + "/details.json")
-                && peer.remote->omabook(set).ok();
-    }
-    const QString title = theirs.value("title").toString();
-    if (given) {
-        note(peer.summary.detailsSent, peer.summary.titles.detailsSent, title);
-        detailsThere = sentAt;
-    } else {
-        peer.summary.problems << title + ": its details could not be given to " + peer.remote->host() + ".";
-    }
-}
-
-void mergeExistingBookDetails(const Book &here, const QJsonObject &theirs, const PeerScratch &peer, std::optional<qint64> &detailsThere) {
-    const SyncManifest::MergedBookDetails merged =
-        SyncManifest::mergeBookDetails(peer.library, here, theirs, peer.current, peer.options.details);
-    // The details keep the time they had: the later of the two books' own
-    // details times, never a field's clock in the log, which a local write
-    // moves past what was logged before (ChangeLog's writeField).
-    const qint64 settledHlc = std::max(Hlc::normalize(here.detailsAt), Hlc::normalize(theirs.value("details_at").toInteger()));
-    if (merged.undecided && !merged.takeFields && !merged.sendFields)
-        note(peer.summary.detailsUndecided, peer.summary.titles.detailsUndecided, theirs.value("title").toString());
-    if (merged.takeFields)
-        takeMergedDetails(here.id, theirs, peer, merged, settledHlc);
-    if (merged.sendFields)
-        sendMergedDetails(here.id, theirs, peer, merged, settledHlc, detailsThere);
-}
-
 } // namespace
 
 SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
@@ -225,7 +86,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     Remote::Result listed = remote.omabook({"manifest", "--log"});
     if (listed.code == 1)
         listed = remote.omabook({"manifest"});
-    const QJsonObject manifest = QJsonDocument::fromJson(listed.output).object();
+    QJsonObject manifest = QJsonDocument::fromJson(listed.output).object();
     if (!listed.ok() || !manifest.contains("books")) {
         summary.error = listed.code == 127 || listed.error.contains("not found")
                             ? "Omabook isn't installed on " + remote.host() + ", or isn't on its PATH."
@@ -248,6 +109,13 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     const bool peerHasLog = manifest.value("log").toInt() >= 1;
     if (!dryRun)
         SyncManifest::observeManifest(library, manifest);
+    // Between two that speak the log, it goes first: each side takes what is
+    // newer on the other, and the books this one lacks arrive with what it says.
+    if (peerHasLog) {
+        manifest.insert("books", SyncLog::replicate(library, remote, manifest, summary, options));
+        // Both now hold the same operations: what this side holds, they do.
+        manifest.insert("vector", Replication::toJson(Replication::vector(library)));
+    }
     QTemporaryDir scratch;
     int counter = 0;
     QSet<QString> theirHashes;
@@ -270,6 +138,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         QFile json(file);
         return json.open(QIODevice::WriteOnly) && json.write(document.toJson()) > 0 ? file : QString();
     };
+    const OlderPeer::Sync olderPeer{library, remote, scratch, folderThere, counter, options, summary, current};
 
     // What they have: fetch the books this library lacks, and for the ones
     // both have, the formats it lacks, the newer details and reading place.
@@ -349,7 +218,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 summary.problems << added.error;
                 continue;
             }
-            fillReading(library, added.id, theirs, false);
+            SyncTake::fillReading(library, added.id, theirs, false);
             if (current)
                 library.setDetailsAt(added.id, theirDetailsAt);
             if (const std::optional<Book> made = library.book(added.id))
@@ -379,23 +248,10 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             note(summary.received, summary.titles.received, title);
         }
 
-        // The details: merged field by field by each field's HLC, with the
-        // cover when it is another picture. Taken or given, they keep the
-        // time they had, so the next sync finds both alike and does nothing.
-        std::optional<qint64> detailsThere =
-            current ? std::optional<qint64>(SyncManifest::wireTimestamp(theirDetailsAt, peerHasLog)) : std::nullopt;
-        if (const std::optional<Book> here = arrived ? std::nullopt : library.book(mine)) {
-            const PeerScratch peer{library, &remote, &scratch, &folderThere, &counter, options, summary, current, peerHasLog};
-            mergeExistingBookDetails(*here, theirs, peer, detailsThere);
-        }
-
-        if (fillReading(library, mine, theirs, dryRun) && !arrived)
-            note(summary.readingTaken, summary.titles.readingTaken, title);
-        // Older Omabooks don't say "shelf"; they are given nothing they can't keep.
-        if (const std::optional<Book> merged = library.book(mine); merged && theirs.contains("shelf") && saysLess(theirs, *merged)) {
-            if (dryRun || remote.omabook(readingArguments(theirId, *merged, detailsThere)).ok())
-                note(summary.readingSent, summary.titles.readingSent, title);
-        }
+        if (!peerHasLog)
+            OlderPeer::mergeBook(olderPeer, mine, arrived, theirs);
+        else if (arrived)
+            SyncTake::fillReading(library, mine, theirs, false);
         if (files.isEmpty())
             continue;
         const QStringList have = library.book(mine)->formats;
@@ -408,8 +264,6 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 summary.problems << error;
             QFile::remove(local);
         }
-        if (!peerHasLog)
-            OlderPeer::mergePlace(library, remote, mine, theirs, summary, dryRun);
     }
 
     // What they lack: send it, unless they removed it themselves; and when
@@ -512,7 +366,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         // Its details there keep the time they have here.
         const qint64 myBookDetailsAt =
             book.detailsAt == 0 ? 0 : SyncManifest::wireTimestamp(SyncManifest::myDetailsHlc(library, book), peerHasLog);
-        remote.omabook(readingArguments(theirId, book, current ? std::optional<qint64>(myBookDetailsAt) : std::nullopt));
+        remote.omabook(SyncTake::readingArguments(theirId, book, current ? std::optional<qint64>(myBookDetailsAt) : std::nullopt));
         note(summary.sent, summary.titles.sent, book.meta.title);
     }
     // The collections and the knowledge graph, once both sides have every book: theirs taken in
@@ -521,9 +375,10 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // a dry run leaves them be.
     if (!dryRun)
         syncCollectionsAndGraph(library, remote, manifest, summary);
-    // The reading places, between two that speak the log, once both have every book.
-    if (peerHasLog)
-        SyncLog::replicate(library, remote, manifest, summary, dryRun);
+    // Books that moved arrived after the log went: once more for what their
+    // arrival wrote, and their reading places.
+    if (peerHasLog && !dryRun && summary.received + summary.sent > 0)
+        SyncLog::replicate(library, remote, manifest, summary, options);
     logSyncSummary(summary, remote.host());
     return summary;
 }
