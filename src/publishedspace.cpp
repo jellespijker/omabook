@@ -309,7 +309,7 @@ void disguise(QList<SpaceOperation> &ops, const QString &space) {
     QHash<QString, QString> alias;
     for (qsizetype at = 0; at < devices.size(); ++at)
         alias.insert(devices.at(at), u"device-%1"_s.arg(at + 1, 3, 10, QChar(u'0')));
-    const auto collection = [&space](const QString &home) { return u"c:"_s + hashed(space, home); };
+    const auto collection = [&space](const QString &home) { return PublishedSpace::collectionIdIn(space, home); };
     for (SpaceOperation &op : ops) {
         op.device = alias.value(op.device);
         op.author = alias.value(op.author);
@@ -342,6 +342,8 @@ PublishedSpace::Parts PublishedSpace::Parts::fromNames(const QStringList &names)
             .ratings = names.contains("ratings"_L1),
             .reading = names.contains("reading"_L1)};
 }
+
+QString PublishedSpace::collectionIdIn(const QString &space, const QString &homeGid) { return u"c:"_s + hashed(space, homeGid); }
 
 QString PublishedSpace::idFor(const QString &person, const QString &collectionGlobalId) {
     return u"published:"_s + hashed(person, collectionGlobalId);

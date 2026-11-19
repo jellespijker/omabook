@@ -33,6 +33,16 @@ public:
     // computer otherwise.
     [[nodiscard]] std::span<const std::byte, size> bytes() const noexcept { return m_key.span(); }
 
+    // Where the key of `space` is kept in `folder`: one file per space, named
+    // by its id, so that only the key's owner holds it (the user's Omabook
+    // data folder, never a library folder that may be synced elsewhere).
+    [[nodiscard]] static QString fileFor(const QString &folder, QStringView space);
+    // Keeps the key in `file`, for its owner alone (SecretFile), in place of
+    // any kept there.
+    [[nodiscard]] std::expected<void, QString> keepIn(const QString &file) const;
+    // The key kept in `file` (keepIn).
+    [[nodiscard]] static std::expected<SpaceKey, QString> load(const QString &file);
+
     // Seals `messages` as one batch of the space `space`.
     [[nodiscard]] QByteArray seal(QStringView space, std::span<const QByteArray> messages) const;
     // The messages of a batch sealed by seal() for `space` with this key.

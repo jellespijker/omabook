@@ -120,6 +120,16 @@ QString Spaces::spaceForScope(const Library &library, const QString &scope) {
     return trimmed;
 }
 
+QList<Spaces::Recorded> Spaces::recorded(const Library &library) {
+    QList<Recorded> spaces;
+    for (QSqlQuery query = library.query("SELECT id, kind, name, owner FROM spaces ORDER BY kind, name, id"); query.next();)
+        spaces << Recorded{.id = query.value(0).toString(),
+                           .kind = query.value(1).toString(),
+                           .name = query.value(2).toString(),
+                           .owner = query.value(3).toString()};
+    return spaces;
+}
+
 void Spaces::ensurePublishedSpace(const Library &library, const QString &space, const QString &name, const QString &owner,
                                   const QString &ownerName) {
     if (!space.startsWith("published:"_L1) || owner.isEmpty())

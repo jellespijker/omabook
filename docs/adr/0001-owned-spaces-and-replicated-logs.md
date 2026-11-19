@@ -217,7 +217,44 @@ As built (#47, #48):
   reads every file of the user there, the key file included, and the sync already hands it the whole
   library. One person is one id, which is what others will name in a shared space's members. The
   `signer` column is apart from `author` so that a person can later sign for device keys, if revoking
-  a computer becomes worth it. Until then, a lost computer means a new person (open, with #38).
+  a computer becomes worth it. Until then, a lost computer means a new person (still open after #38).
+
+As built (#38), shared spaces:
+
+- **Membership travels in the space.** A shared space (`shared:…`) is founded by an operation (entity
+  `space`, field `founded`: the founder's id, a nonce, the name and parts) and its id is a hash of the
+  founder's id and the nonce, so nobody else can found it. Each change of a member is an operation too
+  (entity `member`, the person's id, field `role`: `writer`, `reader` or `removed`), signed and ordered by
+  its clock like everything else, so membership goes wherever the space goes (`sharedspace.h`).
+- **The role rules.** An operation is taken only when it is signed by its author and the author was a
+  writer at its time: by the founding and the role changes before it, in order of clock, then device,
+  then number. Anything else is refused and said, never kept or applied; a reader gets everything and
+  writes nothing. The rules are applied again to everything held each time the space is read, so a
+  removal that arrives late still refuses what came after it; compaction keeps every operation of a
+  shared space, since which of them count depends on the history.
+- **Removal doesn't take back.** A member removed has every later operation refused, and what they wrote
+  before stays (no retroactive rejection). It doesn't protect what they already had: their copy of the
+  space and its key stay theirs. And a clock is what its writer says it is: a removed writer who still
+  has the key can write operations dated before their removal, and those are taken. Rotating the key on
+  removal (a new key, sealed to each member left, and batches under the old key refused after it) would
+  close the folder to them, not the clock; it is not built yet.
+- **Inviting is handing over the key.** `omabook spaces invite` records the member and writes an invite
+  file (`spaceinvite.h`): a sealed box (`crypto_box_seal`) to the invitee's Ed25519 key converted to
+  X25519 (`crypto_sign_ed25519_pk_to_curve25519`), holding the space's id, name, role and key, signed by
+  the inviter, so only the invitee opens it and knows whom it is from. A space's key is kept per user
+  beside the person's key (`spaces/<id>.key`, owner-only, written whole), never in a library folder.
+- **A layer, like a published space.** Its operations are in `ops` under its id, and `live_ops` leaves
+  `shared:` spaces out (format 19), so they never make a member's own rows; nor does ssh replication
+  carry them to one's other computers (each joins on its own). What a member gets is a collection of
+  their own linked to it, filed as a subscription is (`Subscriptions::file`). A writer's edits go the
+  other way: their linked collection, read as publishing reads it, and of each field what they changed
+  later than the space, written as theirs (`SharedCollection::contribute`).
+- **The folder transport.** `omabook spaces sync <space> --folder <dir>`: in `<dir>/<id>/` each computer
+  writes only its own append-only batches, `<device>-<first>-<last>.omaseal`, each its new operations
+  signed and sealed with the space's key (secretstream, the space's id as additional data), written
+  whole under a temporary name and renamed; the folder never holds plaintext. Reading opens the batches
+  with numbers past what is held of each device (a version vector); one changed, cut short or of another
+  space is refused whole. WebDAV and S3 would carry the same files; they are not built.
 
 ### Book files
 

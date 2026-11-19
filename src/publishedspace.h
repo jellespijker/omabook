@@ -48,6 +48,10 @@ struct Parts {
 // so that publishing it again is publishing the same space.
 [[nodiscard]] QString idFor(const QString &person, const QString &collectionGlobalId);
 
+// The id the space `space` gives a collection known at home as `homeGid`
+// (Spaces::collectionId): of the space alone, saying nothing of the path.
+[[nodiscard]] QString collectionIdIn(const QString &space, const QString &homeGid);
+
 // The operations of the published space `space` of the collection
 // `collectionId`, with `parts`, numbered anew in this space. Nothing in them
 // names what is above the collection at home or any of the owner's

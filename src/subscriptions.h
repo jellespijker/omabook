@@ -42,6 +42,7 @@ struct Options {
 
 // A book of the space, and where it is here.
 struct Placed {
+    QString gid; // the space's id of it
     QString title;
     QString authors;
     QString how;             // BookMatch::describe, "wishlist", "removed here before" or "not here any more"
@@ -71,6 +72,19 @@ struct Dropped {
 [[nodiscard]] std::expected<SpaceSnapshot, QString> fetch(const QString &source);
 
 [[nodiscard]] std::expected<Report, QString> subscribe(Library &library, const SpaceSnapshot &snapshot, const Options &options);
+
+// A layer as it was and as it is now, to file into the collection linked to
+// its space: what subscribing does once the operations are taken in, and
+// what a shared space's member does with what its writers wrote (#38).
+struct Filing {
+    SubscribedSpace::Subscription space;
+    QList<SpaceOperation> before;
+    QList<SpaceOperation> after;
+};
+// Files the layer's books into the collection (made where it isn't there,
+// and linked to the space); with dryRun, only says what it would do. The
+// report's operations are left for the caller to say.
+[[nodiscard]] std::expected<Report, QString> file(Library &library, const Filing &filing, const Options &options);
 // By the space's id, its name, or the collection linked to it.
 [[nodiscard]] std::expected<Dropped, QString> unsubscribe(const Library &library, const QString &which);
 

@@ -134,13 +134,13 @@ struct Target {
     qint64 id = 0;
 };
 
-[[nodiscard]] Target targetFor(const Library &library, const SpaceSnapshot &snapshot, const Options &options) {
+[[nodiscard]] Target targetFor(const Library &library, const SubscribedSpace::Subscription &space, const Options &options) {
     if (options.as.trimmed().isEmpty())
-        if (const auto linked = library.collection(SubscribedSpace::linkedCollection(library, snapshot.space)))
+        if (const auto linked = library.collection(SubscribedSpace::linkedCollection(library, space.space)))
             return {.path = linked->path, .id = linked->id};
     QString name = options.as.simplified();
     if (name.isEmpty())
-        name = snapshot.name.trimmed().isEmpty() ? u"Shared"_s : snapshot.name.simplified().replace(u'/', u'-');
+        name = space.name.trimmed().isEmpty() ? u"Shared"_s : space.name.simplified().replace(u'/', u'-');
     if (const auto existing = library.collectionNamed(name))
         return {.path = existing->path, .id = existing->id};
     return {.path = name, .id = 0};
@@ -189,7 +189,8 @@ void putIn(Library &library, qint64 collectionId, qint64 bookId) {
 }
 
 [[nodiscard]] Placed placed(const BookMatch::Known &book, const BookMatch::Found &found, const QStringList &paths, const QString &top) {
-    Placed one{.title = book.meta.title,
+    Placed one{.gid = book.gid,
+               .title = book.meta.title,
                .authors = book.meta.authorText(),
                .how = BookMatch::describe(found.how),
                .book = found.book,
@@ -247,19 +248,39 @@ std::expected<SpaceSnapshot, QString> Subscriptions::fetch(const QString &source
 std::expected<Report, QString> Subscriptions::subscribe(Library &library, const SpaceSnapshot &snapshot, const Options &options) {
     if (const auto verified = SubscribedSpace::verify(library, snapshot); !verified)
         return std::unexpected(verified.error());
-    QList<SpaceOperation> all = SubscribedSpace::operations(library, snapshot.space);
-    const ReducedState before = SpaceReducer::reduce(all);
-    all += snapshot.operations;
-    Layer layer = layerOf(SpaceReducer::reduce(all), snapshot.name);
-    for (auto book = before.books.cbegin(); book != before.books.cend(); ++book)
-        layer.filed.insert(book.key());
-    const QList<BookMatch::Found> found = BookMatch::find(library, layer.books);
-    const Target target = targetFor(library, snapshot, options);
-    Report report{.space = {.space = snapshot.space,
+    Filing filing{.space = {.space = snapshot.space,
                             .name = snapshot.name,
                             .owner = snapshot.owner.person,
                             .ownerName = snapshot.owner.name,
-                            .collection = target.id},
+                            .collection = 0},
+                  .before = SubscribedSpace::operations(library, snapshot.space),
+                  .after = {}};
+    filing.after = filing.before + snapshot.operations;
+    if (options.dryRun) {
+        auto report = file(library, filing, options);
+        const qsizetype lacking = SubscribedSpace::lacking(library, snapshot).size();
+        if (report)
+            report->operations = {.added = lacking, .known = snapshot.operations.size() - lacking};
+        return report;
+    }
+    const Library::Batch batch(library);
+    const auto accepted = SubscribedSpace::accept(library, snapshot);
+    if (!accepted)
+        return std::unexpected(accepted.error());
+    auto report = file(library, filing, options);
+    if (report)
+        report->operations = *accepted;
+    return report;
+}
+
+std::expected<Report, QString> Subscriptions::file(Library &library, const Filing &filing, const Options &options) {
+    const ReducedState before = SpaceReducer::reduce(filing.before);
+    Layer layer = layerOf(SpaceReducer::reduce(filing.after), filing.space.name);
+    for (auto book = before.books.cbegin(); book != before.books.cend(); ++book)
+        layer.filed.insert(book.key());
+    const QList<BookMatch::Found> found = BookMatch::find(library, layer.books);
+    const Target target = targetFor(library, filing.space, options);
+    Report report{.space = filing.space,
                   .collection = target.path,
                   .newCollection = target.id == 0,
                   .dryRun = options.dryRun,
@@ -268,9 +289,8 @@ std::expected<Report, QString> Subscriptions::subscribe(Library &library, const 
                   .things = layer.things,
                   .facts = layer.facts,
                   .relations = layer.relations};
+    report.space.collection = target.id;
     if (options.dryRun) {
-        const qsizetype lacking = SubscribedSpace::lacking(library, snapshot).size();
-        report.operations = {.added = lacking, .known = snapshot.operations.size() - lacking};
         for (qsizetype at = 0; at < layer.books.size(); ++at) {
             Placed one = placed(layer.books.at(at), found.at(at), layer.placedIn.at(at), target.path);
             if (one.book == 0)
@@ -280,10 +300,6 @@ std::expected<Report, QString> Subscriptions::subscribe(Library &library, const 
         return report;
     }
     const Library::Batch batch(library);
-    const auto accepted = SubscribedSpace::accept(library, snapshot);
-    if (!accepted)
-        return std::unexpected(accepted.error());
-    report.operations = *accepted;
     if (const auto taken = takeIn(library, layer, found, report); !taken)
         return std::unexpected(taken.error());
     return report;

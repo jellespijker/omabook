@@ -15,7 +15,7 @@ summary = "Settings, logging, theme and interface files, text cleaning, the scri
 uses = []
 modules = [
   "bookmeta", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
-  "person", "readingformat", "scriptapi", "scriptform", "secretstore", "settings", "spacekey", "theme", "themechoice",
+  "person", "readingformat", "scriptapi", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "theme", "themechoice",
   "translator",
 ]
 
@@ -32,7 +32,7 @@ summary = "The library and the knowledge graph: storage, books, their sides and 
 uses = ["formats", "foundation"]
 modules = [
   "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "knowledgesearch", "libraries",
-  "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "signedops", "spacereducer", "spacereplay", "spaces",
+  "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacereducer", "spacereplay", "spaces",
   "spacesnapshot", "subscribedspace", "textmarks",
 ]
 
@@ -42,7 +42,7 @@ uses = ["library", "formats", "foundation"]
 modules = [
   "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
-  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts", "remote",
+  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "readingsite", "scriptplugin", "scriptplugins", "sitedesk", "tour", "whatsnew",
 ]
 
@@ -51,7 +51,7 @@ summary = "What the command line, the MCP server and the window all do, each wri
 uses = ["services", "library", "formats", "foundation"]
 modules = [
   "bookmatch", "bookops", "collections", "collectionshare", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "plugintools",
-  "scripttools", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
+  "scripttools", "sharedcollection", "sharedspaces", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
 ]
 
 # The two front ends are peers: neither includes the other. What both need
@@ -59,7 +59,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["cli", "identitycommands", "mcp", "mcpcommands", "synccommands"]
+modules = ["cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

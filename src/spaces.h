@@ -45,6 +45,15 @@ public:
     static void ensureSpaceForScope(const Library &library, const QString &scope);
     [[nodiscard]] static QString spaceForScope(const Library &library, const QString &scope);
 
+    // Every space recorded here, as `spaces` keeps it, by kind and name.
+    struct Recorded {
+        QString id;
+        QString kind;
+        QString name;
+        QString owner;
+    };
+    [[nodiscard]] static QList<Recorded> recorded(const Library &library);
+
     // Records a published space (ADR 0001, *Spaces*): written only by its
     // owner, the person `owner` (Person::id), who goes by `ownerName` in it.
     static void ensurePublishedSpace(const Library &library, const QString &space, const QString &name, const QString &owner,

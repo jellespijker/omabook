@@ -6,13 +6,13 @@
 #include <QStringView>
 #include <array>
 #include <cstddef>
-#include <cstdint>
 #include <expected>
 #include <optional>
 #include <span>
 #include <utility>
 
 #include "crypto.h"
+#include "secretfile.h"
 
 // A person is a key pair (ADR 0001, *People and keys*): Ed25519, with
 // libsodium. The public key is the person's id; the secret key signs what
@@ -60,6 +60,14 @@ public:
 
     [[nodiscard]] Signature sign(std::span<const std::byte> message) const;
 
+    // Seals `message` so that only the person `to` can open it: a sealed box
+    // (libsodium's crypto_box_seal) to their key as X25519, from a key pair
+    // made for this once, so it says nothing of who sealed it.
+    [[nodiscard]] static std::expected<QByteArray, QString> sealFor(const PublicKey &to, QByteArrayView message);
+    // What was sealed for this person (sealFor). The caller wipes it
+    // (sodium_memzero) when it holds a secret.
+    [[nodiscard]] std::expected<QByteArray, QString> openSealed(QByteArrayView sealed) const;
+
     // The id of a public key: the key in URL-safe base64 without padding.
     [[nodiscard]] static QString idOf(const PublicKey &key);
     // A short hash of the key, in groups of four hex digits, to compare by
@@ -75,7 +83,7 @@ private:
     using SecretKey = Crypto::SecretBytes<crypto_sign_SECRETKEYBYTES>;
 
     Person() = default;
-    enum class Placing : std::uint8_t { KeepWhatIsThere, Replace };
+    using Placing = SecretFile::Placing;
 
     [[nodiscard]] static std::expected<Person, QString> fromSeed(const Seed &seed);
     [[nodiscard]] static std::expected<void, QString> keep(const QString &file, const Seed &seed, Placing placing);

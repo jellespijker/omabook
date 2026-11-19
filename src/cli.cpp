@@ -56,6 +56,7 @@
 #include "secretstore.h"
 #include "settings.h"
 #include "sitedesk.h"
+#include "spacecommands.h"
 #include "synccommands.h"
 #include "theme.h"
 #include "themechoice.h"
@@ -2166,6 +2167,7 @@ constexpr std::array cliCommands{
     CliCommand{"sync"_L1, runSyncCli},
     CliCommand{"manifest"_L1, runManifestCli},
     CliCommand{"identity"_L1, runIdentityCli},
+    CliCommand{"spaces"_L1, runSpacesCli},
     CliCommand{"plugins"_L1, plugins},
     CliCommand{"plugin"_L1, runPluginCli},
     CliCommand{"calibre"_L1, calibre},
@@ -2190,55 +2192,6 @@ constexpr std::array cliCommands{
 }
 
 } // namespace
-
-QString cliSummary() {
-    return "Commands:\n"
-           "  open [book]                     Open the window, and a book file or library number in it\n"
-           "  list [search] [--collection c]  List the library's books, or one collection's\n"
-           "  search <words> [--ai]           Find books by their details and what you know of them; --ai asks the AI\n"
-           "  collections [add|rule|move|sort|import|...]  Named parts of the library, nested as you like, or shared\n"
-           "  show <id>                       Show one book's details and files\n"
-           "  add <file|folder>...            Copy books into the library; a Calibre library comes with its details\n"
-           "  remove <id>                     Move a book to the trash\n"
-           "  set <id> [--title ...]          Change a book's details or cover\n"
-           "  info [file]                     Show what a file says about itself, or what Omabook is set up with\n"
-           "  toc <book>                      List a book's contents\n"
-           "  text <book> [--section N]       Print a book as plain text\n"
-           "  find <book> <words>             Find words in a book\n"
-           "  lookup <id> [--ai] [--apply N|ID]  Look a book's details up with every metadata plugin\n"
-           "  plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one\n"
-           "  plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help\n"
-           "  plugin install|remove           Install a plugin from a folder or a .zip (checked first), or remove one\n"
-           "  plugin search|add <name>        Find plugins to install, and install one by its name\n"
-           "  plugin add|sources|update       Install a plugin from a GitHub repository, and keep it up to date from there\n"
-           "  calibre libraries|plugins|import  What was found of Calibre here; import its libraries\n"
-           "  catalog [search] [--format f]   Write the library as csv or bibtex\n"
-           "  customize [view]                Show where the interface's files live; copy a view there to edit\n"
-           "  theme [list|use <name>|show]    Which theme the colors come from: Omarchy's, Aether's, or a built-in one\n"
-           "  convert <id> [--to format]      Convert a book and add the result to it\n"
-           "  export <id> <folder>            Copy a book's file out of the library\n"
-           "  ask <book|all> <question>       Ask the AI about a book, or about the whole library\n"
-           "  graph show|find|node|build|...  The knowledge graph of what is read; see omabook graph --help\n"
-           "  tidy [--ai] [--apply]           List duplicates, author spellings and series to tidy; make the changes\n"
-           "  suggest [--no-check]            Have the AI suggest what to read next, checked against the reading sites\n"
-           "  goodreads import|sync|export|shelves  Keep your Goodreads shelves and the library in step\n"
-           "  openlibrary sync|shelves        Bring an Open Library reading log into the library\n"
-           "  sites [connect|check|disconnect|sync]  The reading sites, and how you are connected to each\n"
-           "  change <wish> | --undo          Ask the AI to change how Omabook looks or works\n"
-           "  logs [-n N] [--level l] [--since 1h]  What Omabook did and what went wrong, from the window and every command\n"
-           "  progress <id> [--section N]     Show or set how far a book has been read\n"
-           "  format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment\n"
-           "  sync <computer[:folder]>        Bring this library and another computer's in step over ssh\n"
-           "  manifest                        Print the whole library as JSON, as sync reads it\n"
-           "  identity [--export]             Print your id and its fingerprint, to share spaces with others\n"
-           "  help [topic]                    Print the help the window shows: getting started, reading, keys, ...\n"
-           "  skill [install]                 Print the skill for coding agents, or install it\n"
-           "  mcp [install [agent]]           Run as an MCP server for agents, or register it with one\n\n"
-           "<book> is a number from omabook list, or a book file. Every command takes --json and\n"
-           "--library <folder> (that library for this run only), before or after its name, and\n"
-           "omabook <command> --help says more. A command that asks the AI takes --model <name>:\n"
-           "main, quick, or a model's own name, for that run.";
-}
 
 bool isCliCommand(const QString &word) { return cliCommand(word) != cliCommands.end(); }
 

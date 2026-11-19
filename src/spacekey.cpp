@@ -1,9 +1,12 @@
 #include "spacekey.h"
 
+#include <QDir>
 #include <QtEndian>
 #include <array>
 #include <limits>
 #include <string_view>
+
+#include "secretfile.h"
 
 namespace {
 
@@ -18,6 +21,10 @@ constexpr std::string_view batchMagic{"omaseal\x01", 8};
 constexpr std::size_t headerSize = crypto_secretstream_xchacha20poly1305_HEADERBYTES;
 constexpr std::size_t lengthSize = sizeof(quint32);
 constexpr std::size_t partOverhead = crypto_secretstream_xchacha20poly1305_ABYTES;
+
+// A key file: these eight bytes (a name and the format's version), then the key.
+constexpr std::string_view keyFileMagic{"omaskey\x01", 8};
+using KeyFileBytes = Crypto::SecretBytes<keyFileMagic.size() + SpaceKey::size>;
 
 [[nodiscard]] QByteArray additionalData(QStringView space) { return QByteArray(batchMagic.data(), batchMagic.size()) + space.toUtf8(); }
 
@@ -126,4 +133,27 @@ std::expected<QList<QByteArray>, QString> SpaceKey::open(QStringView space, QByt
     }
     sodium_memzero(&stream, sizeof stream);
     return result;
+}
+
+QString SpaceKey::fileFor(const QString &folder, QStringView space) {
+    QString name;
+    for (const QChar c : space)
+        name += c.isLetterOrNumber() || c == u'-' || c == u'_' ? c : QChar(u'-');
+    return QDir(folder).absoluteFilePath(name + u".key"_s);
+}
+
+std::expected<void, QString> SpaceKey::keepIn(const QString &file) const {
+    KeyFileBytes bytes;
+    std::ranges::copy(std::as_bytes(std::span(keyFileMagic)), bytes.span().begin());
+    std::ranges::copy(m_key.span(), bytes.span().subspan(keyFileMagic.size()).begin());
+    return SecretFile::keep(file, bytes.span(), SecretFile::Placing::Replace);
+}
+
+std::expected<SpaceKey, QString> SpaceKey::load(const QString &file) {
+    KeyFileBytes bytes;
+    if (auto read = SecretFile::read(file, bytes.span(), u"a space's key file"_s); !read)
+        return std::unexpected(read.error());
+    if (!std::ranges::equal(bytes.span().first(keyFileMagic.size()), std::as_bytes(std::span(keyFileMagic))))
+        return std::unexpected(u"%1 is not a space's key file of a kind this Omabook knows."_s.arg(file));
+    return fromBytes(bytes.span().subspan(keyFileMagic.size()));
 }

@@ -126,6 +126,21 @@ expect "identity makes a key pair and prints its id" 0 "Fingerprint:" "$omabook"
 id="$("$omabook" identity --export --library "$library")"
 expect "identity keeps the same id" 0 "\"id\": \"$id\"" "$omabook" identity --json --library "$library"
 expect "identity is in the help" 0 "identity [--export]" "$omabook" help
+# A shared space (#38) between two people, each with an Omabook data folder of
+# their own, through a folder something else syncs.
+other() { XDG_DATA_HOME="$work/other/.local/share" "$omabook" "$@"; }
+bo="$(other identity --export --library "$work/Bo")"
+expect "a shared space is founded" 0 "Founded the shared space Club" "$omabook" spaces create Club --library "$work/Ada"
+expect "the spaces are listed with kinds and roles" 0 "(shared; you are a writer)" "$omabook" spaces --library "$work/Ada"
+expect "someone is invited" 0 "is a writer of Club now" "$omabook" spaces invite Club "$bo" --out "$work/bo.omabook-invite" --library "$work/Ada"
+expect "an invite is only for its invitee" 1 "for someone else" "$omabook" spaces join "$work/bo.omabook-invite" --library "$work/Ada"
+mkdir -p "$work/synced"
+expect "the space syncs through a folder" 0 "written to the folder" "$omabook" spaces sync Club --folder "$work/synced" --library "$work/Ada"
+expect "the invitee joins" 0 "Joined Club" other spaces join "$work/bo.omabook-invite" --library "$work/Bo"
+expect "and takes what is in the folder" 0 '"taken": ' other spaces sync Club --folder "$work/synced" --json --library "$work/Bo"
+expect "and is a writer of it" 0 '"role": "writer"' other spaces list --json --library "$work/Bo"
+! grep -rqa "Club" "$work/synced" || fail "the folder holds plaintext"
+expect "spaces is in the help" 0 "spaces [create|invite" "$omabook" help
 
 expect "the plugins are listed" 0 "builtin:Open Library" "$omabook" plugins
 expect "the plugins say what they bring" 0 '"fields"' "$omabook" plugins --json

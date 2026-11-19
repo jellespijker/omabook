@@ -41,6 +41,12 @@ omabook collections share Werk --with ratings --as "Ada" --output Werk.omabook-s
 ```
 
 Sharing never sends the books' files; the graph, questions, ratings and progress go only when the user switches them on, and of the graph only what they have read. Show the dry run to the user and ask which parts and what name before sharing.
+omabook spaces --json                                   # the spaces the user is in: kind, their role, members
+omabook spaces create "Book club" --collection Club     # a shared space several people write, of a collection
+omabook spaces invite "Book club" <person-id> --role reader --out invite.omabook-invite
+omabook spaces join invite.omabook-invite               # on the invitee's computer
+omabook spaces sync "Book club" --folder ~/Sync/club    # through a folder Syncthing or a share keeps in step
+A person's id is what `omabook identity --export` prints. Writers change a shared space by changing their collection of it, then sync.
 
 A rule is a search (`tag:`, `genre:fiction`, `-word`, `OR`, `"quotes"`); books put in or out by hand win. Show the user the sort proposals and the to-decide list before picking anything; `--apply` takes them all.
 
