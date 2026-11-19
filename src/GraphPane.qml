@@ -843,8 +843,8 @@ FocusScope {
                         }
                         Label {
                             Layout.fillWidth: true
-                            // A thing of another book says which, before what it is.
-                            text: entry.heading ? "" : entry.modelData.outer && entry.modelData.from !== ""
+                            // A thing of another book, or of a graph someone shared, says whose, before what it is.
+                            text: entry.heading ? "" : entry.modelData.from !== ""
                                                        ? entry.modelData.from + (entry.modelData.summary !== "" ? " · " + entry.modelData.summary : "")
                                                        : entry.modelData.summary
                             color: theme.colors.muted

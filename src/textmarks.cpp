@@ -1,6 +1,12 @@
 #include "textmarks.h"
 
+#include "graphlayers.h"
+
+#include <QRegularExpression>
+#include <QTextCursor>
+#include <QTextDocument>
 #include <algorithm>
+#include <cmath>
 #include <ranges>
 
 namespace TextMarks {
@@ -92,7 +98,7 @@ QList<Thing> known(const QList<std::pair<GraphNode, GraphPlace>> &met, const Gra
     QList<Thing> things;
     for (const auto &[node, at] : met | std::views::take(reach(met, place)))
         if (marked(node.kind))
-            things.append({node.id, node.kind, node.name, node.summary, node.aliases(), at});
+            things.append({node.id, node.kind, node.name, node.summary, node.aliases(), at, GraphLayers::from(node)});
     return things;
 }
 
@@ -350,6 +356,26 @@ QList<Suggestion> suggestions(const GraphNode &thing, const GraphPlace &met, con
                 chosen.append(one);
         }
     return chosen;
+}
+
+std::optional<std::pair<int, int>> nearest(const QTextDocument &document, const QString &words, double fraction) {
+    QStringList parts;
+    for (const QString &word : words.simplified().split(' ', Qt::SkipEmptyParts))
+        parts << QRegularExpression::escape(word);
+    if (parts.isEmpty())
+        return std::nullopt;
+    const QRegularExpression phrase(parts.join("\\s+"), QRegularExpression::CaseInsensitiveOption);
+    const double wanted = qBound(0.0, fraction, 1.0) * document.characterCount();
+    std::optional<std::pair<int, int>> best;
+    double closest = -1;
+    for (QTextCursor found = document.find(phrase); !found.isNull(); found = document.find(phrase, found)) {
+        const double off = std::abs(found.selectionStart() - wanted);
+        if (closest < 0 || off < closest) {
+            closest = off;
+            best = std::pair{found.selectionStart(), found.selectionEnd()};
+        }
+    }
+    return best;
 }
 
 } // namespace TextMarks

@@ -13,6 +13,7 @@
 #include "backend.h"
 #include "graphcanvas.h"
 #include "graphcontext.h"
+#include "graphwalk.h"
 
 namespace {
 
@@ -43,35 +44,15 @@ bool before(const GraphNode &a, const GraphNode &b) {
     return names != 0 ? names < 0 : a.id < b.id;
 }
 
+// What of a view is one's own, not of a graph someone shared (GraphLayers).
+qsizetype ownCount(const GraphView &view) {
+    return std::ranges::count_if(view.nodes, [](const GraphNode &node) { return node.id > 0; });
+}
+
 // Whether a node goes by every one of the words.
 bool goesBy(const GraphNode &node, const QStringList &words) {
     const QString names = (node.name + " " + node.aliases().join(' ')).toLower();
     return std::ranges::all_of(words, [&names](const QString &word) { return names.contains(word); });
-}
-
-// The nodes within `depth` edges of one, and the edges among them.
-GraphView within(const GraphView &view, qint64 centre, int depth) {
-    QSet<qint64> reached{centre};
-    QSet<qint64> frontier{centre};
-    for (int walked = 0; walked < depth && !frontier.isEmpty(); ++walked) {
-        QSet<qint64> next;
-        for (const GraphEdge &edge : view.edges) {
-            if (frontier.contains(edge.source) && !reached.contains(edge.target))
-                next << edge.target;
-            if (frontier.contains(edge.target) && !reached.contains(edge.source))
-                next << edge.source;
-        }
-        reached += next;
-        frontier = next;
-    }
-    GraphView near;
-    for (const GraphNode &node : view.nodes)
-        if (reached.contains(node.id))
-            near.nodes << node;
-    for (const GraphEdge &edge : view.edges)
-        if (reached.contains(edge.source) && reached.contains(edge.target))
-            near.edges << edge;
-    return near;
 }
 
 } // namespace
@@ -228,17 +209,20 @@ GraphView GraphBrowser::allowed() const {
     }
     if (m_what == What::Scope)
         return m_centre > 0 && m_depth > 0 ? graph.around(m_centre, m_depth, 400) : graph.whole(m_scope, 2000);
+    // A book's graph, with the graphs someone shared as far as its reader has
+    // read it, however much of it is shown (GraphContext::layers).
     if (m_what == What::Book)
-        return graph.ofBook(m_bookId, m_upTo);
+        return GraphLayers::with(graph.ofBook(m_bookId, m_upTo), GraphContext::layers(*books, m_upTo), m_bookId);
     // A series, or a collection, is its books' graphs laid over each other.
     GraphView all;
     QSet<qint64> nodes, edges;
+    const QList<GraphLayers::Layer> layers = GraphContext::layers(*books);
     const auto collection = m_what == What::Collection ? books->collectionNamed(m_series) : std::nullopt;
     for (const Book &book : books->books()) {
         if (m_what == What::Collection ? !collection || !collection->contains(book)
                                        : book.meta.series.compare(m_series, Qt::CaseInsensitive) != 0)
             continue;
-        const GraphView one = graph.ofBook(book.id, placeIn(book));
+        const GraphView one = GraphLayers::with(graph.ofBook(book.id, placeIn(book)), layers, book.id);
         for (const GraphNode &node : one.nodes)
             if (!nodes.contains(node.id)) {
                 nodes << node.id;
@@ -334,7 +318,7 @@ void GraphBrowser::load(bool keepPlaces) {
 
     m_base = allowed();
     // A centre that is gone (removed, merged away) is no centre.
-    if (m_centre > 0 && !std::ranges::contains(m_base.nodes, m_centre, &GraphNode::id)) {
+    if (m_centre != 0 && !std::ranges::contains(m_base.nodes, m_centre, &GraphNode::id)) {
         m_centre = 0;
         m_base = allowed();
     }
@@ -350,14 +334,15 @@ void GraphBrowser::load(bool keepPlaces) {
     m_knownCount = int(m_base.nodes.size());
     // What is known of the book past the place shown, so the view can say
     // so rather than look as if nothing were known.
-    m_hiddenCount = bounded() && library() ? qMax(0, int(Graph(*library()).ofBook(m_bookId).nodes.size()) - m_knownCount) : 0;
+    m_hiddenCount =
+        bounded() && library() ? qMax(0, static_cast<int>(Graph(*library()).ofBook(m_bookId).nodes.size() - ownCount(m_base))) : 0;
     m_storied = std::ranges::any_of(m_base.nodes, std::not_fn(ofTheLibrary), &GraphNode::kind);
 
     GraphView view = m_base;
     // A scope is cut around its centre by the storage; a book or a series
     // is cut here, out of what its reader may see.
-    if (m_what != What::Scope && m_centre > 0 && m_depth > 0)
-        view = within(view, m_centre, m_depth);
+    if (m_what != What::Scope && m_centre != 0 && m_depth > 0)
+        view = GraphWalk::within(view, m_centre, m_depth);
     if (m_onlyAsked) {
         // The questions, and what each was asked about.
         QSet<qint64> asked;
@@ -418,15 +403,7 @@ void GraphBrowser::load(bool keepPlaces) {
     m_index.clear();
     for (const GraphNode &node : std::as_const(view.nodes)) {
         m_index.insert(node.id, int(m_shown.size()));
-        Shown shown;
-        shown.node = node;
-        if (outer.contains(node.id)) {
-            shown.outer = true;
-            const auto from = bookOf(node);
-            shown.fromBook = from.first;
-            shown.from = from.second;
-        }
-        m_shown.append(shown);
+        m_shown.append(shownOf(node, outer.contains(node.id)));
     }
     m_links.clear();
     m_beside = QList<QList<int>>(m_shown.size());
@@ -490,7 +467,7 @@ void GraphBrowser::load(bool keepPlaces) {
             emit settlingChanged();
     }
 
-    if (m_selected > 0 && !m_index.contains(m_selected))
+    if (m_selected != 0 && !m_index.contains(m_selected))
         m_selected = 0;
     describe();
     emit changed();
@@ -577,6 +554,16 @@ QPair<qint64, QString> GraphBrowser::bookOf(const GraphNode &node) const {
     return {};
 }
 
+GraphBrowser::Shown GraphBrowser::shownOf(const GraphNode &node, bool outer) const {
+    Shown shown{.node = node, .links = 0, .outer = outer, .fromBook = 0, .from = GraphLayers::from(node)};
+    if (outer) {
+        const auto from = bookOf(node);
+        shown.fromBook = from.first;
+        shown.from = from.second;
+    }
+    return shown;
+}
+
 GraphBrowser::Visit GraphBrowser::here() const {
     return {m_centre, m_depth, m_selected, m_what, m_scope, m_series, m_bookTitle, m_bookId, m_upTo};
 }
@@ -624,7 +611,7 @@ void GraphBrowser::select(qint64 node) {
 }
 
 void GraphBrowser::jumpTo(qint64 node) {
-    if (node <= 0 || !library())
+    if (node == 0 || !library())
         return;
     if (!m_index.contains(node)) {
         const auto found = Graph(*library()).node(node);

@@ -130,8 +130,11 @@ Item {
                 Label {
                     objectName: "detailsFoundByText"
                     Layout.fillWidth: true
-                    // "Found by what you know: Mara Venn (Character)"
-                    text: foundBy.visible ? qsTr("Found by what you know: %1 (%2)").arg(foundBy.known.name).arg(graphWords.kind(foundBy.known.kind)) : ""
+                    // "Found by what you know: Mara Venn (Character)", and of a
+                    // graph someone shared, whose it is.
+                    text: !foundBy.visible ? ""
+                          : foundBy.known.from ? qsTr("Found by what you know from %3: %1 (%2)").arg(foundBy.known.name).arg(graphWords.kind(foundBy.known.kind)).arg(foundBy.known.from)
+                          : qsTr("Found by what you know: %1 (%2)").arg(foundBy.known.name).arg(graphWords.kind(foundBy.known.kind))
                     textFormat: Text.PlainText
                     color: theme.accent
                     wrapMode: Text.Wrap

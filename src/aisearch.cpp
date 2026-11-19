@@ -79,7 +79,7 @@ AiRequest AiSearch::request(const QString &question, const QList<Book> &batch, c
         if (known) {
             QStringList things;
             for (const KnownMatch &thing : known->of(book.id))
-                things << thing.name.left(60) + " (" + thing.kind + ")";
+                things << thing.name.left(60) + " (" + thing.kind + (thing.from.isEmpty() ? QString() : ", from " + thing.from) + ")";
             if (!things.isEmpty())
                 object.insert("known", things.join("; "));
         }

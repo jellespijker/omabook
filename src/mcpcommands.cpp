@@ -419,7 +419,8 @@ const bool registered = [] {
                   "space is kept read-only beside the library, never merged into it. Its books the user has are matched "
                   "(the same file, an identifier or ISBN, or title and authors) and the others become wishlist entries "
                   "(never downloads), in a collection of the user's own: the space's name, or `as`; one of that name is "
-                  "merged into, not overwritten. Its knowledge graph stays in the space and isn't shown yet. A newer "
+                  "merged into, not overwritten. Its knowledge graph stays in the space, shown beside the user's as far as "
+                  "they have read each book. A newer "
                   "file of the same space brings only what is new. Try dry_run first to show the user what it would do.",
                   schema({{"file", string("The .omabook-space file.")},
                           {"as", string("The collection's name here, instead of the shared one's.")},

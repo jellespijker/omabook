@@ -173,6 +173,8 @@ private:
     QHash<qint64, QList<GraphFact>> m_facts;
     QList<GraphPlace> m_factPlaces;
     qsizetype m_factReach = -1;
+    // How far the graphs someone shared were read, when there are any.
+    std::optional<GraphPlace> m_layersTo;
     QVariantMap m_flash;
     QTimer *m_flashOver = nullptr;
     QHash<qint64, TextMarks::Thing> m_things;

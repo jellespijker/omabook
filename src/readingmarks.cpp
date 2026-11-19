@@ -13,6 +13,7 @@
 
 #include "graphbuilder.h"
 #include "graphcanvas.h"
+#include "graphcontext.h"
 #include "graphmodel.h"
 #include "reader.h"
 
@@ -25,6 +26,8 @@ constexpr int thingProperty = QTextFormat::UserProperty + 41;
 constexpr const char *stampProperty = "omabookMarks";
 // Chapters whose marks are kept; a book is read a few at a time.
 constexpr qsizetype kept = 48;
+
+GraphPlace laterOf(const GraphPlace &a, const GraphPlace &b) { return a.notAfter(b) ? b : a; }
 
 } // namespace
 
@@ -109,6 +112,11 @@ void ReadingMarks::load() {
                   ? Graph(*library).factsOf(m_met | std::views::transform([](const auto &met) { return met.first.id; })
                                             | std::ranges::to<QList<qint64>>())
                   : QHash<qint64, QList<GraphFact>>();
+    // And the graphs someone shared, as far as the reader has read the book:
+    // read again once they read on past that (follow).
+    const QList<GraphLayers::Layer> layers = library && enabled() ? GraphContext::layers(*library) : QList<GraphLayers::Layer>();
+    GraphLayers::addTo(m_met, m_facts, layers, m_book);
+    m_layersTo = layers.isEmpty() ? std::nullopt : std::optional(laterOf(GraphContext::furthest(*library, m_book), m_reader->place()));
     m_factPlaces.clear();
     for (const QList<GraphFact> &facts : std::as_const(m_facts))
         for (const GraphFact &fact : facts)
@@ -137,6 +145,10 @@ void ReadingMarks::refresh() {
 void ReadingMarks::follow() {
     if (!m_reader->isOpen() || m_reader->bookId() != m_book)
         return;
+    if (m_layersTo && !m_reader->place().notAfter(*m_layersTo)) {
+        load();
+        return;
+    }
     if (TextMarks::reach(m_met, m_reader->place()) != m_reach || factReach(m_reader->place()) != m_factReach)
         rebuild(false);
 }
@@ -399,8 +411,11 @@ QVariantMap ReadingMarks::thing(qint64 id) const {
                     {"name", found->name},
                     {"summary", found->summary},
                     {"aliases", found->aliases},
+                    {"from", found->from},
                     {"color", colorOf(found->kind)},
-                    {"met", QVariantMap{{"section", found->met.section}, {"fraction", found->met.fraction}, {"anchor", metAnchor},
+                    {"met", QVariantMap{{"section", found->met.section},
+                                        {"fraction", found->met.fraction},
+                                        {"anchor", metAnchor},
                                         {"title", titleOf(found->met.section)}}}};
     // Where the summary it has here was revealed, when that came later than
     // meeting it: the latest of the book's summaries up to the reader.
@@ -580,22 +595,7 @@ void ReadingMarks::goToMoment(int section, double fraction, const QString &words
 }
 
 QVariantMap ReadingMarks::findIn(QQuickTextDocument *chapter, const QString &words, double fraction) const {
-    QTextDocument *document = chapter ? chapter->textDocument() : nullptr;
-    QStringList parts;
-    for (const QString &word : words.simplified().split(' ', Qt::SkipEmptyParts))
-        parts << QRegularExpression::escape(word);
-    if (!document || parts.isEmpty())
-        return {};
-    const QRegularExpression phrase(parts.join("\\s+"), QRegularExpression::CaseInsensitiveOption);
-    const double wanted = qBound(0.0, fraction, 1.0) * document->characterCount();
-    QVariantMap best;
-    double nearest = -1;
-    for (QTextCursor found = document->find(phrase); !found.isNull(); found = document->find(phrase, found)) {
-        const double off = std::abs(found.selectionStart() - wanted);
-        if (nearest < 0 || off < nearest) {
-            nearest = off;
-            best = {{"start", found.selectionStart()}, {"end", found.selectionEnd()}};
-        }
-    }
-    return best;
+    const QTextDocument *document = chapter ? chapter->textDocument() : nullptr;
+    const auto found = document ? TextMarks::nearest(*document, words, fraction) : std::nullopt;
+    return found ? QVariantMap{{"start", found->first}, {"end", found->second}} : QVariantMap();
 }

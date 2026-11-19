@@ -73,8 +73,16 @@ struct Accepted {
 void link(const Library &library, const QString &space, qint64 collection);
 [[nodiscard]] qint64 linkedCollection(const Library &library, const QString &space);
 
-// Drops the layer: the space, its operations (Compaction::forgetSubscribed)
-// and the link. The collection it was linked to stays the library's own.
+// Where a book of the space (by its id there) is here: the library's own copy
+// found when subscribing or the wishlist entry made for it, as recorded then,
+// else the book here of the same id (the same file); 0 for none. What the
+// layer's graph says of the book is cut at its reader's place in that one
+// (GraphLayers, #5).
+void placeBook(const Library &library, const QString &space, const QString &book, qint64 here);
+[[nodiscard]] qint64 bookHere(const Library &library, const QString &space, const QString &book);
+
+// Drops the layer: the space, its operations (Compaction::forgetSubscribed),
+// the link and where its books are here. The collection it was linked to stays the library's own.
 // How many operations left the log.
 [[nodiscard]] std::expected<qint64, QString> drop(const Library &library, const QString &space);
 

@@ -1285,13 +1285,13 @@ QJsonObject resourceTemplates() {
             books << brief(book);
         return json(books);
     }
-    // A book's knowledge graph, which is never ahead of its reader.
+    // A book's knowledge graph, which is never ahead of its reader, nor are the graphs someone shared in it.
     static const QRegularExpression graphAddress("^omabook://graph/book/(\\d+)$");
     if (const auto of = graphAddress.match(uri); of.hasMatch()) {
         const qint64 id = of.captured(1).toLongLong();
         if (!library->book(id))
             return notFound;
-        return json(Graph(*library).ofBook(id).toJson());
+        return json(GraphLayers::with(Graph(*library).ofBook(id), GraphContext::layers(*library), id).toJson());
     }
     static const QRegularExpression address("^omabook://book/(\\d+)(?:/section/(\\d+))?$");
     const auto match = address.match(uri);

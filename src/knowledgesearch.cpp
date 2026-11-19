@@ -36,12 +36,22 @@ QJsonObject KnownMatch::toJson() const {
     }
     if (inSummary)
         object.insert("in_summary", true);
+    if (!from.isEmpty())
+        object.insert("from", from);
     return object;
 }
 
 QVariantMap KnownMatch::toMap() const {
-    return {{"node", node}, {"kind", kind}, {"name", name}, {"bookId", bookId}, {"metIn", met.place.bookId},
-            {"section", met.place.section}, {"fraction", met.place.fraction}, {"anchor", met.anchor}, {"inSummary", inSummary}};
+    return {{"node", node},
+            {"kind", kind},
+            {"name", name},
+            {"bookId", bookId},
+            {"metIn", met.place.bookId},
+            {"section", met.place.section},
+            {"fraction", met.place.fraction},
+            {"anchor", met.anchor},
+            {"inSummary", inSummary},
+            {"from", from}};
 }
 
 QStringList KnowledgeIndex::kinds() {
@@ -53,10 +63,16 @@ KnowledgeIndex KnowledgeIndex::build(const Library &library) {
     index.changes = library.changes();
     const QStringList kinds = KnowledgeIndex::kinds();
     const Graph graph(library);
-    const QList<Graph::Sighting> sightings = graph.sightings(kinds);
+    QList<Graph::Sighting> sightings = graph.sightings(kinds);
+    QHash<qint64, QList<GraphFact>> facts = sightings.isEmpty() ? QHash<qint64, QList<GraphFact>>() : graph.factsOfKinds(kinds);
+    // And the graphs someone shared, as far as the reader has read each book.
+    for (const GraphLayers::Layer &layer : GraphContext::layers(library)) {
+        sightings += layer.sightings();
+        facts.insert(layer.facts);
+    }
+    sightings.removeIf([&kinds](const Graph::Sighting &sighting) { return !kinds.contains(sighting.node.kind); });
     if (sightings.isEmpty())
         return index;
-    const QHash<qint64, QList<GraphFact>> facts = graph.factsOfKinds(kinds);
 
     // How far each book was read, asked once per book.
     QHash<qint64, GraphContext::Reach> reaches;
@@ -91,6 +107,7 @@ KnowledgeIndex KnowledgeIndex::build(const Library &library) {
         entry.names = (QStringList{node.name} + node.aliases()).join('\n').toCaseFolded();
         entry.said = node.summary.left(saidRoom).toCaseFolded();
         entry.met = sighting.at.place.bookId == sighting.bookId ? sighting.at : GraphMoment{};
+        entry.from = GraphLayers::from(node);
         taken.insert(key, qsizetype(index.m_entries.size()));
         index.m_byBook[entry.book].append(qsizetype(index.m_entries.size()));
         index.m_entries.push_back(std::move(entry));
@@ -113,8 +130,13 @@ QHash<qint64, KnownMatch> KnowledgeIndex::find(const QString &word, bool deep) c
         if (const auto before = found.constFind(entry.book);
             before != found.cend() && std::tuple{before->inSummary, kinds.indexOf(before->kind)} <= std::tuple{!byName, qsizetype(entry.kind)})
             continue;
-        found.insert(entry.book, {.bookId = entry.book, .node = entry.node, .kind = kinds.value(entry.kind), .name = entry.name,
-                                  .met = entry.met, .inSummary = !byName});
+        found.insert(entry.book, {.bookId = entry.book,
+                                  .node = entry.node,
+                                  .kind = kinds.value(entry.kind),
+                                  .name = entry.name,
+                                  .met = entry.met,
+                                  .inSummary = !byName,
+                                  .from = entry.from});
     }
     return found;
 }
@@ -130,8 +152,13 @@ QList<KnownMatch> KnowledgeIndex::of(qint64 bookId, int most) const {
     const QStringList kinds = KnowledgeIndex::kinds();
     for (const qsizetype row : rows | std::views::take(std::max(0, most))) {
         const Entry &entry = m_entries[std::size_t(row)];
-        known.append({.bookId = entry.book, .node = entry.node, .kind = kinds.value(entry.kind), .name = entry.name, .met = entry.met,
-                      .inSummary = false});
+        known.append({.bookId = entry.book,
+                      .node = entry.node,
+                      .kind = kinds.value(entry.kind),
+                      .name = entry.name,
+                      .met = entry.met,
+                      .inSummary = false,
+                      .from = entry.from});
     }
     return known;
 }

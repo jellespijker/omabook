@@ -5,6 +5,7 @@
 #include <optional>
 
 #include "graph.h"
+#include "graphlayers.h"
 #include "library.h"
 
 // What the AI is told from the knowledge graph, and what is written into it
@@ -45,6 +46,16 @@ std::optional<GraphPlace> spoilersAfter(const Library &library, qint64 bookId);
 // spoilersAfter, what may be shown without a warning.
 GraphKnown readerKnows(const Library &library);
 GraphKnown unspoiled(const Library &library);
+
+// The graphs of the spaces this library subscribes to, as its reader knows
+// them (#5): the one cut every surface shows or tells a layer by. Of each
+// book, what was met or learned no further than its reader's own place in it
+// (reachOf: all of a book read, nothing of one not begun or only wished
+// for), with `upTo` of its book no further than that place either; never
+// spoilersAfter's "no spoilers in a book never opened here", and never
+// more for a place asked for further on. Each layer stays apart from the
+// reader's own graph (GraphLayers).
+QList<GraphLayers::Layer> layers(const Library &library, const std::optional<GraphPlace> &upTo = std::nullopt);
 
 // A book's graph up to a place without what isn't of the story: the
 // questions asked there, the book itself, and the relations learned in a

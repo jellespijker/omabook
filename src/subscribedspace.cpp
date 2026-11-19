@@ -82,6 +82,9 @@ void keep(const Library &library, const SpaceOperation &op, qint64 seq) {
                     {space, device, seq, Hlc::normalize(op.hlc)});
 }
 
+// Where the books of one space are here, apart from every other space's.
+[[nodiscard]] QString booksOf(const QString &space) { return u"subscribed-book:"_s + space; }
+
 } // namespace
 
 std::expected<void, QString> SubscribedSpace::verify(const Library &library, const SpaceSnapshot &snapshot) {
@@ -201,6 +204,17 @@ qint64 SubscribedSpace::linkedCollection(const Library &library, const QString &
     return there && !there->removed ? collection : 0;
 }
 
+void SubscribedSpace::placeBook(const Library &library, const QString &space, const QString &book, qint64 here) {
+    if (here > 0)
+        Spaces::setGlobalId(library, booksOf(space), here, book);
+}
+
+qint64 SubscribedSpace::bookHere(const Library &library, const QString &space, const QString &book) {
+    const qint64 placed = Spaces::localId(library, booksOf(space), book);
+    const qint64 here = placed > 0 ? placed : Spaces::localId(library, u"book"_s, book);
+    return here > 0 && library.book(here) ? here : 0;
+}
+
 std::expected<qint64, QString> SubscribedSpace::drop(const Library &library, const QString &space) {
     if (!isSubscribed(library, space))
         return std::unexpected(u"This library doesn't subscribe to %1."_s.arg(space));
@@ -209,5 +223,6 @@ std::expected<qint64, QString> SubscribedSpace::drop(const Library &library, con
     ChangeLog::exec(library, "DELETE FROM space_members WHERE space = ?", {space});
     ChangeLog::exec(library, "DELETE FROM spaces WHERE id = ?", {space});
     ChangeLog::exec(library, "DELETE FROM global_ids WHERE entity = 'subscription' AND global_id = ?", {space});
+    ChangeLog::exec(library, "DELETE FROM global_ids WHERE entity = ?", {booksOf(space)});
     return dropped;
 }

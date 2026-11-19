@@ -17,6 +17,7 @@
 #include "graphcontext.h"
 #include "graphlinks.h"
 #include "graphprint.h"
+#include "graphwalk.h"
 #include "mcp.h"
 #include "settings.h"
 
@@ -37,10 +38,6 @@ void syncWhenBooksChanged(Library &library) {
     if (graph.find({}, "book", QString(), 1000000).size() != library.books().size())
         graph.syncLibrary();
 }
-
-} // namespace
-
-namespace {
 
 // What a book connects to elsewhere, with the books on its side each thing is in.
 QJsonObject beyondJson(const Library &library, qint64 bookId, const GraphView &view) {
@@ -87,6 +84,9 @@ QJsonObject GraphOps::show(Library &library, qint64 bookId, const QString &scope
             answer.insert("built_to", placeJson(*built));
         if (beyond)
             answer.insert("beyond", beyondJson(library, bookId, graph.beyond(bookId, upTo)));
+        // The graphs someone shared, apart, as far as the reader has read the book.
+        if (const QList<GraphLayers::Layer> layers = GraphContext::layers(library, upTo); !layers.isEmpty())
+            answer.insert("layers", GraphLayers::toJson(layers, bookId));
     } else {
         answer.insert("scope", scope);
     }
@@ -118,23 +118,9 @@ QJsonObject GraphOps::node(const Library &library, qint64 id, int depth, bool ti
         if (self == book.nodes.end())
             return problem(QString("Node %1 is not met in book %2 by that place.").arg(id).arg(bookId));
         found = *self;
-        QSet<qint64> reached{id}, frontier{id};
-        for (int step = 0; step < qBound(0, depth, 6) && !frontier.isEmpty(); ++step) {
-            QSet<qint64> next;
-            for (const GraphEdge &edge : book.edges) {
-                if (frontier.contains(edge.source) && !reached.contains(edge.target)) next << edge.target;
-                if (frontier.contains(edge.target) && !reached.contains(edge.source)) next << edge.source;
-            }
-            reached += next;
-            frontier = next;
-        }
-        around.nodes.append(*found);
-        for (const GraphNode &node : book.nodes)
-            if (node.id != id && reached.contains(node.id))
-                around.nodes.append(node);
-        for (const GraphEdge &edge : book.edges)
-            if (reached.contains(edge.source) && reached.contains(edge.target))
-                around.edges.append(edge);
+        around = GraphWalk::within(book, id, qBound(0, depth, 6));
+        // The node asked about first.
+        std::ranges::stable_partition(around.nodes, [id](const GraphNode &node) { return node.id == id; });
     } else {
         around = graph.around(id, depth);
     }

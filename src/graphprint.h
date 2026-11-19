@@ -14,7 +14,8 @@ QString nodeLine(const QJsonObject &node);
 // What a book connects to elsewhere, a line a tie: both ends by name, and
 // the book the far end is in.
 void printBeyond(const QJsonObject &answer);
-// A view as lines: the things, then how they relate, by name.
+// A view as lines: the things, then how they relate, by name; then each
+// graph someone shared ("layers"), apart.
 void printView(const QJsonObject &view);
 
 } // namespace GraphPrint

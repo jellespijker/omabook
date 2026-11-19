@@ -244,6 +244,18 @@ FocusScope {
                 lineHeight: 1.2
                 textFormat: Text.PlainText
             }
+            // Of a graph someone shared, never the reader's own: whose it is.
+            Label {
+                objectName: "readingMenuFrom"
+                Layout.fillWidth: true
+                Layout.leftMargin: 6
+                Layout.rightMargin: 6
+                visible: text !== ""
+                text: menu.known && menu.thing.from ? qsTr("From %1").arg(menu.thing.from) : ""
+                color: theme.accent
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+            }
             // Answered from the graph: how it relates, and where it was first met.
             Repeater {
                 model: menu.answered && menu.known ? menu.thing.relations : []

@@ -30,7 +30,7 @@ using TextMarks::Thing;
 namespace {
 
 Thing thing(qint64 id, const QString &kind, const QString &name, const QStringList &aliases = {}) {
-    return {id, kind, name, {}, aliases, {}};
+    return {id, kind, name, {}, aliases, {}, {}};
 }
 
 // What the marks in a text say, as the words they cover.

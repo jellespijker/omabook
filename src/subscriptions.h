@@ -28,9 +28,9 @@ class Library;
 // newer snapshot of it lands in the same one, and files only the books it
 // newly brings: what the subscriber did with those filed before stays.
 //
-// The space's graph stays in the layer, never in the subscriber's own, and
-// isn't shown yet: it will be once it can follow their own reading place in
-// each book (#5). Copying chosen things of it into their own graph is for
+// The space's graph stays in the layer, never in the subscriber's own, and is
+// shown beside it as far as they have read each book (GraphContext::layers,
+// #5). Copying chosen things of it into their own graph is for
 // later. Unsubscribing drops the layer and keeps the collection, with the
 // books and wishlist entries it holds: those are the subscriber's own.
 namespace Subscriptions {

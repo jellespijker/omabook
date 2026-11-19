@@ -127,8 +127,18 @@ field and value, as a snapshot numbers its operations anew until publishing keep
 subscriber's own part is one collection, theirs like any other, linked to the space: their matched
 books and wishlist entries, filed as the space files them. Unsubscribing drops the space from the log
 whole (`Compaction::forgetSubscribed`, compaction still the one place that deletes from it) and keeps
-the collection. The layer's graph is not shown until it follows the receiver's reading place (#5);
-copying chosen things of it into one's own graph is for later.
+the collection. Copying chosen things of the layer's graph into one's own is for later.
+
+As built (#5): the layer's graph is shown beside the receiver's own wherever that is shown or told (the
+graph's window and its cards, the marks on the page, a search by what is known, `omabook graph show`
+and the MCP server, what the AI is told), always cut at the receiver's own place in each book: there
+is one cut, `GraphContext::layers`, by the rule the AI already kept for one's own graph (`reachOf`:
+all of a book read, up to the furthest place of one being read, nothing of one not begun or only
+wished for), and a place asked for further on never shows more. The layer is read from the space's
+operations (`GraphLayers`), never written into the graph's rows; what it says of no book (put in by
+hand) has no place to cut at and is left out. Its things have ids below zero and say whose they are.
+Where each of the space's books is here is recorded when subscribing (`global_ids`, per space), so a
+book matched by identifier or title, or a wishlist entry, is the same book to the cut.
 
 As built (#3): on the owner's computer a published space has a log of its own, `published_ops`,
 apart from `ops`, though `live_ops` now leaves published spaces out. In `ops` it would be a space like

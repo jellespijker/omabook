@@ -23,7 +23,9 @@
 // far its graph was built. A name a thing was given later in the book, or a
 // summary from past the reader's page, is not looked in. What was put in by
 // hand with no place in a book (a name, a summary, a tie to a book, a
-// question) is the reader's own and always counts.
+// question) is the reader's own and always counts. The graphs of the spaces
+// subscribed to count too, as far as the reader has read each book there
+// (GraphContext::layers), and each match says whose it is.
 //
 // The graph is read once into memory, in a few statements, and a search
 // then looks through that: nothing is read from the database per keystroke.
@@ -38,8 +40,11 @@ struct KnownMatch {
     GraphMoment met;
     // Found in what is said of the thing rather than its names (knows: only).
     bool inSummary = false;
+    // Of a graph someone shared (GraphLayers::from): "Ada's shared graph";
+    // empty for one's own.
+    QString from{};
 
-    // {"node", "kind", "name", "met": {"book", "section", "fraction", "anchor"}}.
+    // {"node", "kind", "name", "met": {"book", "section", "fraction", "anchor"}, "from"}.
     QJsonObject toJson() const;
     QVariantMap toMap() const;
 };
@@ -75,6 +80,7 @@ private:
         QString name;           // as shown
         QString names, said;    // the known names, and what is said of it, case folded
         GraphMoment met;
+        QString from; // a graph someone shared it is of
     };
     std::vector<Entry> m_entries;
     QHash<qint64, QList<qsizetype>> m_byBook;

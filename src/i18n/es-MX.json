@@ -1404,6 +1404,7 @@
   "Asked before; the library hasn't changed since, so the AI wasn't asked again.": "Ya se preguntó; la biblioteca no ha cambiado desde entonces, así que no se volvió a preguntar a la IA.",
   "Ask the AI to find it": "Pedir a la IA que lo encuentre",
   "Enter asks the AI to find books for this question.": "Intro pide a la IA que encuentre libros para esta pregunta.",
+  "Found by what you know from %3: %1 (%2)": "Encontrado por lo que sabe de %3: %1 (%2)",
   "Found by what you know: %1 (%2)": "Encontrado por lo que sabe: %1 (%2)",
   "Show in the graph": "Mostrar en el grafo",
   "Go to the moment": "Ir a ese momento",

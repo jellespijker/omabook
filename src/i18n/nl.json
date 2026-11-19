@@ -1348,6 +1348,7 @@
   "Asked before; the library hasn't changed since, so the AI wasn't asked again.": "Eerder gevraagd; de bibliotheek is sindsdien niet veranderd, dus de AI is niet opnieuw gevraagd.",
   "Ask the AI to find it": "De AI het laten zoeken",
   "Enter asks the AI to find books for this question.": "Enter laat de AI boeken bij deze vraag vinden.",
+  "Found by what you know from %3: %1 (%2)": "Gevonden via wat je weet uit %3: %1 (%2)",
   "Found by what you know: %1 (%2)": "Gevonden via wat je weet: %1 (%2)",
   "Show in the graph": "In de graaf tonen",
   "Go to the moment": "Naar dat moment gaan",

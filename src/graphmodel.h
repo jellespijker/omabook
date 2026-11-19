@@ -111,6 +111,7 @@ public:
         int links = 0;
         // Of the ring: a thing of another book, with the book it is from
         // (0 and nothing for one that is in no book, or is a book itself).
+        // Of a graph someone shared, whose it is (GraphLayers::from).
         bool outer = false;
         qint64 fromBook = 0;
         QString from;
@@ -248,6 +249,9 @@ private:
     Visit here() const;
     // The book a thing is from, other than the one shown: its id and title.
     QPair<qint64, QString> bookOf(const GraphNode &node) const;
+    // A node as it is shown: of the ring, with the book it is from; of a
+    // graph someone shared, with whose it is.
+    Shown shownOf(const GraphNode &node, bool outer) const;
 
     const Library *library() const;
     // Where a book's reader is, or nothing when the book is finished.

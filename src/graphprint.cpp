@@ -55,4 +55,12 @@ void GraphPrint::printView(const QJsonObject &view) {
                           .arg(names.value(edge.value("source").toInteger()), edge.value("kind").toString(),
                                names.value(edge.value("target").toInteger())));
     }
+    // A graph someone shared, after one's own and apart from it.
+    for (const auto &value : view.value("layers").toArray()) {
+        const QJsonObject layer = value.toObject();
+        const QString owner = layer.value("owner").toString();
+        print(stdout, QString("\nFrom %1 (%2), as far as you have read:")
+                          .arg(owner.isEmpty() ? QString("a shared graph") : owner + "'s shared graph", layer.value("name").toString()));
+        printView(layer);
+    }
 }

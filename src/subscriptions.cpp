@@ -224,6 +224,7 @@ void putIn(Library &library, qint64 collectionId, qint64 bookId) {
             one.how = unmatched(library, layer, book);
         if (one.book == 0 && one.how == "wishlist"_L1)
             one.book = wish(library, book);
+        SubscribedSpace::placeBook(library, report.space.space, book.gid, one.book);
         for (const QString &path : layer.placedIn.at(at))
             if (one.book > 0 && !layer.filed.contains(book.gid))
                 putIn(library, collections.value(path), one.book);
@@ -323,21 +324,22 @@ QJsonObject Subscriptions::toJson(const Report &report) {
                              {"collections", QJsonArray::fromStringList(book.collections)}};
         matched += book.how != "wishlist"_L1 && book.how != "removed here before"_L1 ? 1 : 0;
     }
-    return {{"space", report.space.space},
-            {"name", report.space.name},
-            {"owner", QJsonObject{{"name", report.space.ownerName}, {"person", report.space.owner}}},
-            {"collection", report.collection},
-            {"new_collection", report.newCollection},
-            {"dry_run", report.dryRun},
-            {"operations", QJsonObject{{"added", report.operations.added}, {"known", report.operations.known}}},
-            {"books", books},
-            {"matched", matched},
-            {"wishlist", std::ranges::count_if(report.books, [](const Placed &book) { return book.how == "wishlist"_L1; })},
-            {"graph", QJsonObject{{"things", report.things},
-                                  {"facts", report.facts},
-                                  {"relations", report.relations},
-                                  {"shown", false},
-                                  {"kept", "in the subscribed space, apart from your own graph"}}}};
+    return {
+        {"space", report.space.space},
+        {"name", report.space.name},
+        {"owner", QJsonObject{{"name", report.space.ownerName}, {"person", report.space.owner}}},
+        {"collection", report.collection},
+        {"new_collection", report.newCollection},
+        {"dry_run", report.dryRun},
+        {"operations", QJsonObject{{"added", report.operations.added}, {"known", report.operations.known}}},
+        {"books", books},
+        {"matched", matched},
+        {"wishlist", std::ranges::count_if(report.books, [](const Placed &book) { return book.how == "wishlist"_L1; })},
+        {"graph", QJsonObject{{"things", report.things},
+                              {"facts", report.facts},
+                              {"relations", report.relations},
+                              {"shown", true},
+                              {"kept", "in the subscribed space, apart from your own graph, shown as far as you have read each book"}}}};
 }
 
 QJsonObject Subscriptions::toJson(const Dropped &dropped) {
@@ -359,8 +361,8 @@ QStringList Subscriptions::describe(const Report &report) {
         lines << u"  %1\t%2\t%3\t%4\t%5"_s.arg(book.book > 0 ? QString::number(book.book) : u"-"_s, book.title, book.authors, book.how,
                                                book.collections.join(", "_L1));
     if (report.things + report.facts + report.relations > 0)
-        lines << u"Its knowledge graph (%1 things, %2 facts, %3 relations) stays in the space, apart from yours, and isn't shown "
-                 "yet: it will be, as far as you have read each book."_s.arg(report.things)
+        lines << u"Its knowledge graph (%1 things, %2 facts, %3 relations) stays in the space, apart from yours, and is shown "
+                 "beside it as far as you have read each book."_s.arg(report.things)
                      .arg(report.facts)
                      .arg(report.relations);
     if (report.dryRun)

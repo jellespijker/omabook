@@ -189,7 +189,7 @@ private slots:
         QVERIFY(dune && dune->meta.isbn == "9780441172719" && dune->identifiers.value("goodreads").toString() == "44767458");
         QVERIFY(report.things > 0 && report.facts > 0);
         QCOMPARE(Subscriptions::toJson(report).value("wishlist").toInteger(), qint64(3));
-        QCOMPARE(Subscriptions::toJson(report).value("graph").toObject().value("shown").toBool(), false);
+        QCOMPARE(Subscriptions::toJson(report).value("graph").toObject().value("shown").toBool(), true);
     }
 
     void booksAreMatchedByFileIdentifierThenTitleAndAuthors() {

@@ -1348,6 +1348,7 @@
   "Asked before; the library hasn't changed since, so the AI wasn't asked again.": "Schon einmal gefragt; die Bibliothek hat sich seitdem nicht geändert, also wurde die KI nicht erneut gefragt.",
   "Ask the AI to find it": "Die KI danach suchen lassen",
   "Enter asks the AI to find books for this question.": "Eingabe lässt die KI Bücher zu dieser Frage finden.",
+  "Found by what you know from %3: %1 (%2)": "Gefunden durch das, was du aus %3 weißt: %1 (%2)",
   "Found by what you know: %1 (%2)": "Gefunden durch das, was du weißt: %1 (%2)",
   "Show in the graph": "Im Graphen zeigen",
   "Go to the moment": "Zu dieser Stelle gehen",

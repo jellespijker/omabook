@@ -6,6 +6,7 @@
 #include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
+#include <functional>
 #include <memory>
 
 #include "prompts.h"
@@ -49,6 +50,59 @@ GraphView storyOf(const Library &library, qint64 bookId, const std::optional<Gra
     return GraphContext::story(library, bookId, upTo);
 }
 
+// The things of a view a question names, then what they are tied to: who a
+// person belongs to, where a thing is.
+QList<GraphNode> namedBy(const GraphView &view, const QString &lower, int mostNodes) {
+    QList<GraphNode> chosen;
+    QSet<qint64> taken;
+    for (const GraphNode &node : view.nodes)
+        if (chosen.size() < mostNodes && GraphContext::namedIn(node, lower, true)) {
+            chosen << node;
+            taken << node.id;
+        }
+    QSet<qint64> beside;
+    for (const GraphEdge &edge : view.edges) {
+        if (taken.contains(edge.source) && !taken.contains(edge.target))
+            beside << edge.target;
+        if (taken.contains(edge.target) && !taken.contains(edge.source))
+            beside << edge.source;
+    }
+    for (const GraphNode &node : view.nodes)
+        if (chosen.size() < mostNodes && beside.contains(node.id))
+            chosen << node;
+    return chosen;
+}
+
+// Things of these kinds, the most tied-in first, one to a line with their relations.
+QString digestOf(GraphView view, const QStringList &kinds, int mostNodes) {
+    view.nodes.removeIf([&](const GraphNode &node) { return !kinds.contains(node.kind); });
+    // The most tied-in are the ones that matter; cut, they are kept.
+    QHash<qint64, int> ties;
+    for (const GraphEdge &edge : std::as_const(view.edges)) {
+        ++ties[edge.source];
+        ++ties[edge.target];
+    }
+    std::ranges::stable_sort(view.nodes, std::greater{}, [&](const GraphNode &node) { return ties.value(node.id); });
+    return written(view.nodes.mid(0, mostNodes), view.edges, mostNodes * 2);
+}
+
+// What the graphs someone shared hold of a book, as far as its reader has
+// read it (GraphContext::layers), each headed by whose it is so that the
+// model tells it from the reader's own; `part` writes what of a layer's
+// story goes, empty for none.
+QString shared(const Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo,
+               const std::function<QString(const GraphView &)> &part) {
+    QStringList parts;
+    for (const GraphLayers::Layer &layer : GraphContext::layers(library, upTo)) {
+        GraphView view = layer.ofBook(bookId);
+        view.nodes.removeIf([](const GraphNode &node) { return !Prompts::graphKinds().contains(node.kind); });
+        if (const QString text = view.nodes.isEmpty() ? QString() : part(view); !text.isEmpty())
+            parts << "From " + GraphLayers::from(view.nodes.first()) + " (" + layer.name
+                         + "), which someone shared: not the reader's own notes, and as far as the reader has read:\n" + text;
+    }
+    return parts.join("\n\n");
+}
+
 // The start of an answer, to its first sentence end past a line or so.
 QString gistOf(const QString &answer) {
     const QString text = answer.simplified();
@@ -74,6 +128,8 @@ QString brief(const QString &text, qsizetype room) {
 
 // The most connections across books that go with a question.
 constexpr int mostConnections = 6;
+// The most things the words of a question to the whole library name.
+constexpr qsizetype mostTouched = 15;
 
 // The book a thing is from, for a reader of another book: the latest read
 // of the books it was met in, other than that one, and on its side.
@@ -83,6 +139,49 @@ QString titleOf(const Library &library, const Graph &graph, qint64 node, qint64 
             if (const auto book = library.book(place.bookId))
                 return book->meta.title;
     return {};
+}
+
+// What the graphs someone shared know of the words of a question, as far as
+// the reader got in each book, said to be theirs.
+void sharedTouched(const Library &library, const QStringList &words, const GraphKnown &knows, QStringList &touched, QSet<qint64> &shown) {
+    const auto named = [&words](const GraphNode &node) {
+        const QString names = namesOf(node).join('\n').toLower();
+        return std::ranges::any_of(words, [&names](const QString &word) { return word.size() >= 4 && names.contains(word); });
+    };
+    for (const GraphLayers::Layer &layer : GraphContext::layers(library))
+        for (const Graph::Sighting &seen : layer.sightings()) {
+            const GraphNode node = Graph::asKnown(seen.node, layer.facts.value(seen.node.id), seen.bookId, knows);
+            const auto book = library.book(seen.bookId);
+            if (touched.size() >= mostTouched || !book || shown.contains(node.id) || !Prompts::graphKinds().contains(node.kind)
+                || !named(node))
+                continue;
+            shown << node.id;
+            touched << line(node) + " [in: " + book->meta.title + "; from " + GraphLayers::from(node) + ", not the reader's own]";
+        }
+}
+
+// What the words of a question name in the graph, a line a thing, as far as
+// the reader got in each book: never a summary or a name from past their
+// page. Then what the graphs someone shared know of them, as far too.
+QStringList touchedBy(const Library &library, const Graph &graph, const QString &question,
+                      const std::function<QString(const GraphNode &)> &metIn) {
+    QStringList touched;
+    QSet<qint64> shown;
+    const GraphKnown knows = GraphContext::readerKnows(library);
+    const QStringList words = question.toLower().split(QRegularExpression("[^\\p{L}\\p{N}]+"), Qt::SkipEmptyParts);
+    for (const QString &word : words) {
+        if (word.size() < 4 || touched.size() >= mostTouched)
+            continue;
+        for (const GraphNode &node : graph.find(word, {}, QString(), 8)) {
+            if (shown.contains(node.id) || !Prompts::graphKinds().contains(node.kind) || touched.size() >= mostTouched)
+                continue;
+            shown << node.id;
+            const QString in = metIn(node);
+            touched << line(Graph::asKnown(node, graph.facts(node.id), 0, knows)) + (in.isEmpty() ? QString() : " [in: " + in + "]");
+        }
+    }
+    sharedTouched(library, words, knows, touched, shown);
+    return touched;
 }
 
 QString stars(int rating) { return rating > 0 ? QString(", %1 of 5 stars").arg(rating) : QString(); }
@@ -140,6 +239,12 @@ GraphKnown GraphContext::unspoiled(const Library &library) {
     };
 }
 
+QList<GraphLayers::Layer> GraphContext::layers(const Library &library, const std::optional<GraphPlace> &upTo) {
+    const GraphKnown knows = readerKnows(library);
+    return GraphLayers::read(
+        library, [&knows, &upTo](const GraphPlace &at) { return knows(at) && (!upTo || at.bookId != upTo->bookId || at.notAfter(*upTo)); });
+}
+
 GraphView GraphContext::story(const Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo) {
     const Graph graph(library);
     GraphView view = graph.ofBook(bookId, upTo);
@@ -174,26 +279,12 @@ bool GraphContext::namedIn(const GraphNode &node, const QString &lower, bool loo
 QString GraphContext::forQuestion(const Library &library, qint64 bookId, const GraphPlace &upTo, const QString &words, int mostNodes) {
     const GraphView view = storyOf(library, bookId, upTo);
     const QString lower = words.toLower();
-    QList<GraphNode> chosen;
-    QSet<qint64> taken;
-    for (const GraphNode &node : view.nodes)
-        if (chosen.size() < mostNodes && namedIn(node, lower, true)) {
-            chosen << node;
-            taken << node.id;
-        }
+    QString theirs = shared(library, bookId, upTo, [&lower, mostNodes](const GraphView &layer) {
+        return written(namedBy(layer, lower, mostNodes), layer.edges, mostNodes * 2);
+    });
+    const QList<GraphNode> chosen = namedBy(view, lower, mostNodes);
     if (chosen.isEmpty())
-        return {};
-    // Then what they are tied to: who a person belongs to, where a thing is.
-    QSet<qint64> beside;
-    for (const GraphEdge &edge : view.edges) {
-        if (taken.contains(edge.source) && !taken.contains(edge.target))
-            beside << edge.target;
-        if (taken.contains(edge.target) && !taken.contains(edge.source))
-            beside << edge.source;
-    }
-    for (const GraphNode &node : view.nodes)
-        if (chosen.size() < mostNodes && beside.contains(node.id))
-            chosen << node;
+        return theirs;
     QString slice = written(chosen, view.edges, mostNodes * 2);
     // And what those things connect to in the other books read: a few
     // lines, each naming the book, so the answer can say "you met a
@@ -222,20 +313,14 @@ QString GraphContext::forQuestion(const Library &library, qint64 bookId, const G
                  + (edge.note.isEmpty() ? QString() : " (" + brief(edge.note, 160) + ")");
         ++connections;
     }
-    return slice;
+    return theirs.isEmpty() ? slice : slice + "\n\n" + theirs;
 }
 
 QString GraphContext::digest(const Library &library, qint64 bookId, const GraphPlace &upTo, const QStringList &kinds, int mostNodes) {
-    GraphView view = storyOf(library, bookId, upTo);
-    view.nodes.removeIf([&](const GraphNode &node) { return !kinds.contains(node.kind); });
-    // The most tied-in are the ones that matter; cut, they are kept.
-    QHash<qint64, int> ties;
-    for (const GraphEdge &edge : std::as_const(view.edges)) {
-        ++ties[edge.source];
-        ++ties[edge.target];
-    }
-    std::ranges::stable_sort(view.nodes, std::greater{}, [&](const GraphNode &node) { return ties.value(node.id); });
-    return written(view.nodes.mid(0, mostNodes), view.edges, mostNodes * 2);
+    const QString own = digestOf(storyOf(library, bookId, upTo), kinds, mostNodes);
+    const QString theirs =
+        shared(library, bookId, upTo, [&kinds, mostNodes](const GraphView &layer) { return digestOf(layer, kinds, mostNodes); });
+    return own.isEmpty() || theirs.isEmpty() ? own + theirs : own + "\n\n" + theirs;
 }
 
 QString GraphContext::picture(const Library &library, const QString &question, qsizetype room) {
@@ -328,23 +413,7 @@ QString GraphContext::picture(const Library &library, const QString &question, q
         parts << "Connections between books:\n" + lines.join('\n');
 
     // What the question's own words name in the graph, with what is known.
-    QStringList touched;
-    QSet<qint64> shown;
-    const GraphKnown knows = readerKnows(library);
-    const QStringList words = question.toLower().split(QRegularExpression("[^\\p{L}\\p{N}]+"), Qt::SkipEmptyParts);
-    for (const QString &word : words) {
-        if (word.size() < 4 || touched.size() >= 15)
-            continue;
-        for (const GraphNode &node : graph.find(word, {}, QString(), 8)) {
-            if (shown.contains(node.id) || !Prompts::graphKinds().contains(node.kind) || touched.size() >= 15)
-                continue;
-            shown << node.id;
-            const QString in = metIn(node, 3).second;
-            // As far as the reader got in each book: never a summary or a
-            // name from past their page.
-            touched << line(Graph::asKnown(node, graph.facts(node.id), 0, knows)) + (in.isEmpty() ? QString() : " [in: " + in + "]");
-        }
-    }
+    const QStringList touched = touchedBy(library, graph, question, [&metIn](const GraphNode &node) { return metIn(node, 3).second; });
     if (!touched.isEmpty())
         parts << "In the graph for the words of the question:\n" + touched.join('\n');
 

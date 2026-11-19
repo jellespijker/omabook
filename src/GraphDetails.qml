@@ -252,11 +252,11 @@ Item {
                 wrapMode: Text.Wrap
                 textFormat: Text.PlainText
             }
-            // A thing of another book says which book it is from.
+            // A thing of another book says which book it is from; of a graph someone shared, whose.
             Label {
                 objectName: "graphDetailsFrom"
                 Layout.fillWidth: true
-                visible: !!panel.node.outer && (panel.node.from || "") !== ""
+                visible: (panel.node.from || "") !== ""
                 text: qsTr("From %1").arg(panel.node.from || "")
                 color: theme.accent
                 wrapMode: Text.Wrap

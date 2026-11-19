@@ -6,8 +6,12 @@
 #include <QString>
 #include <QStringList>
 #include <QStringView>
+#include <optional>
+#include <utility>
 
 #include "graph.h"
+
+class QTextDocument;
 
 // Finding the things of a book's knowledge graph in its text, so that the
 // people, places and ideas the graph holds can be marked where the page
@@ -47,6 +51,8 @@ struct Thing {
     QString kind, name, summary;
     QStringList aliases;
     GraphPlace met;
+    // Of a graph someone shared, whose it is (GraphLayers::from); empty for one's own.
+    QString from;
 };
 
 // Where a thing is named in a text: from `start`, `length` characters.
@@ -136,5 +142,10 @@ struct Suggestion {
 // edges of `view` (the book's graph up to the place) are used.
 QList<Suggestion> suggestions(const GraphNode &thing, const GraphPlace &met, const GraphView &view, const GraphPlace &here,
                               int most = 3);
+
+// Where words are in a document, the nearest to a place in it (0 to 1): the
+// first character and the one past the last; none when it doesn't hold them.
+// Across lines and in any case, as a moment's words are kept.
+[[nodiscard]] std::optional<std::pair<int, int>> nearest(const QTextDocument &document, const QString &words, double fraction);
 
 } // namespace TextMarks

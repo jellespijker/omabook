@@ -31,7 +31,7 @@ modules = [
 summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
 uses = ["formats", "foundation"]
 modules = [
-  "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphmatch", "graphsync", "knowledgesearch", "libraries",
+  "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "knowledgesearch", "libraries",
   "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "signedops", "spacereducer", "spacereplay", "spaces",
   "spacesnapshot", "subscribedspace", "textmarks",
 ]
