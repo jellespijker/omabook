@@ -3,8 +3,10 @@
 #include <QHash>
 #include <QImageReader>
 #include <QJsonDocument>
+#include <QSet>
 #include <QTemporaryDir>
 #include <algorithm>
+#include <compare>
 #include <tuple>
 
 #include "graph.h"
@@ -55,6 +57,7 @@ struct Taking {
     ReducedState merged; // both sides' operations, as the log's rules merge them
     QHash<QString, QJsonObject> listed;
     QTemporaryDir scratch;
+    QSet<qint64> gone; // the books here the other side removed
 
     [[nodiscard]] QString standsFor(const QString &gid) const { return canonical.value(gid, gid); }
 };
@@ -124,7 +127,44 @@ bool takeDetails(Taking &taking, const Book &here, const QJsonObject &theirs, co
     return true;
 }
 
+// When the other side removed what names this book here (`name`: a file's
+// hash, or an entry key), as the operations their device wrote say; none
+// when they hold it, or never had it.
+[[nodiscard]] std::optional<qint64> removedThere(const Taking &taking, const QString &name) {
+    if (taking.peer.held.contains(name))
+        return std::nullopt;
+    const auto book = taking.theirs.books.constFind(taking.standsFor(Spaces::removalGlobalId(name)));
+    if (book == taking.theirs.books.cend() || !SpaceReducer::isRemoved(book->alive, book->removed))
+        return std::nullopt;
+    return SpaceReducer::fieldHlc(*book, u"removed"_s);
+}
+
+// The books here that the other side removed, all of each, as the manifest
+// sync decides it: removed here too, at the time they were removed there,
+// unless they changed here since; and either way never given back to them.
+void takeRemovals(Taking &taking, const QList<Book> &books) {
+    for (const Book &here : books) {
+        QStringList hashes;
+        for (const FormatFile &file : taking.library.formatFiles(here.id))
+            hashes << file.hash;
+        const std::optional<qint64> when = SyncManifest::removedWhen(hashes, hashes.isEmpty() ? Library::entryKeys(here) : QStringList(),
+                                                                     [&](const QString &name) { return removedThere(taking, name); });
+        if (!when)
+            continue;
+        taking.gone.insert(here.id);
+        if (!std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(taking.library, here), *when)))
+            continue;
+        QString error;
+        if (taking.peer.dryRun || taking.library.remove(here.id, &error, Hlc::seconds(*when)))
+            note(taking.summary.removedHere, taking.summary.titles.removedHere, here.meta.title);
+        else
+            taking.summary.problems << here.meta.title + " could not be removed here: " + error;
+    }
+}
+
 void takeBook(Taking &taking, const Book &here) {
+    if (taking.gone.contains(here.id))
+        return;
     const QString gid = taking.standsFor(Spaces::bookId(taking.library, here.id));
     const std::optional<QJsonObject> theirs = theirView(taking, gid);
     if (!theirs)
@@ -215,7 +255,7 @@ void takeCollections(Taking &taking) {
 
 } // namespace
 
-QJsonArray SyncTake::take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary) {
+SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary) {
     QList<SpaceOperation> ops = Replication::operations(library);
     if (peer.dryRun)
         ops.append(QList<SpaceOperation>(incoming.begin(), incoming.end()));
@@ -227,22 +267,49 @@ QJsonArray SyncTake::take(Library &library, std::span<const SpaceOperation> inco
                   .theirs = SpaceReducer::reduce(ops, peer.device),
                   .merged = SpaceReducer::reduce(ops),
                   .listed = {},
-                  .scratch = {}};
+                  .scratch = {},
+                  .gone = {}};
     for (const auto &value : peer.books)
         taking.listed.insert(taking.standsFor(value.toObject().value("gid").toString()), value.toObject());
-    for (const Book &here : library.books())
+    const QList<Book> books = library.books();
+    takeRemovals(taking, books);
+    for (const Book &here : books)
         takeBook(taking, here);
     takeCollections(taking);
     // Their books, each as the log says they hold it, for what this side lacks.
-    QJsonArray described;
+    Taken taken{.books = {}, .gone = taking.gone};
     for (const auto &value : peer.books) {
         QJsonObject book = value.toObject();
         if (const std::optional<QJsonObject> view = theirView(taking, taking.standsFor(book.value("gid").toString())))
             for (auto field = view->begin(); field != view->end(); ++field)
                 book.insert(field.key(), field.value());
-        described << book;
+        taken.books << book;
     }
-    return described;
+    return taken;
+}
+
+QSet<QString> SyncTake::heldBy(const Library &library) {
+    QSet<QString> held;
+    for (const Book &book : library.books()) {
+        const QList<FormatFile> files = library.formatFiles(book.id);
+        for (const FormatFile &file : files)
+            held.insert(file.hash);
+        if (files.isEmpty())
+            for (const QString &key : Library::entryKeys(book))
+                held.insert(key);
+    }
+    return held;
+}
+
+QSet<QString> SyncTake::heldBy(const QJsonArray &books) {
+    QSet<QString> held;
+    for (const auto &value : books) {
+        for (const auto &file : value.toObject().value("files").toArray())
+            held.insert(file.toObject().value("hash").toString());
+        for (const auto &key : value.toObject().value("keys").toArray())
+            held.insert(key.toString());
+    }
+    return held;
 }
 
 bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun) {

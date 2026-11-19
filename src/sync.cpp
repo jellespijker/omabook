@@ -12,6 +12,7 @@
 #include <QTemporaryDir>
 #include <algorithm>
 #include <optional>
+#include <tuple>
 
 #include "collections.h"
 #include "formats.h"
@@ -105,14 +106,17 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // An Omabook there that keeps when details changed and when books were
     // removed, which can take details and be asked to remove a book. With
     // an older one the books and reading travel as they always did.
-    const bool current = manifest.contains("removals");
     const bool peerHasLog = manifest.value("log").toInt() >= 1;
+    const bool current = manifest.contains("removals") || peerHasLog;
     if (!dryRun)
         SyncManifest::observeManifest(library, manifest);
     // Between two that speak the log, it goes first: each side takes what is
     // newer on the other, and the books this one lacks arrive with what it says.
+    QSet<qint64> gone; // the books here they removed, which the log took care of
     if (peerHasLog) {
-        manifest.insert("books", SyncLog::replicate(library, remote, manifest, summary, options));
+        const SyncTake::Taken taken = SyncLog::replicate(library, remote, manifest, summary, options);
+        manifest.insert("books", taken.books);
+        gone = taken.gone;
         // Both now hold the same operations: what this side holds, they do.
         manifest.insert("vector", Replication::toJson(Replication::vector(library)));
     }
@@ -144,7 +148,6 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // both have, the formats it lacks, the newer details and reading place.
     for (const QJsonValue &value : manifest.value("books").toArray()) {
         const QJsonObject theirs = value.toObject();
-        const qint64 theirId = theirs.value("id").toInteger();
         const QString title = theirs.value("title").toString();
         const QJsonArray files = theirs.value("files").toArray();
         qint64 mine = 0;
@@ -168,24 +171,12 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 removedHere = removedHere || library.wasRemoved(key);
             }
         }
-        // Removed here, so never fetched back; and removed there too, when
-        // all of it was removed here and it didn't change there since. One
-        // with a file this library still holds is a book here (`mine`), as
-        // the one a merge kept is, and is never removed.
+        // Removed here, so never fetched back. Between two that speak the log
+        // the other side removed it too, as the log said, unless it changed
+        // there since; an older one is asked to.
         if (!mine && removedHere) {
-            const std::optional<qint64> when =
-                SyncManifest::removedWhen(hashes, keys, [&](const QString &key) { return SyncManifest::localRemovalHlc(library, key); });
-            if (current && when && std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(theirs), *when))) {
-                const Remote::Result removed =
-                    dryRun ? Remote::Result{.code = 0, .output = {}, .error = {}} : remote.omabook({"remove", QString::number(theirId)});
-                if (removed.ok()) {
-                    note(summary.removedThere, summary.titles.removedThere, title);
-                    if (!dryRun)
-                        qCInfo(lcSync).noquote() << "book" << theirId << "removed on" << remote.host() << "as it was here";
-                } else {
-                    summary.problems << title + " could not be removed on " + remote.host() + ": " + removed.error.section('\n', -1);
-                }
-            }
+            if (!peerHasLog)
+                OlderPeer::removeThere(olderPeer, theirs, hashes, keys);
             continue;
         }
         if (!mine && dryRun) {
@@ -267,14 +258,12 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     }
 
     // What they lack: send it, unless they removed it themselves; and when
-    // they removed all of it and it didn't change here since, remove it here.
-    QSet<QString> removedThere;
-    for (const QJsonValue &hash : manifest.value("removed").toArray())
-        removedThere << hash.toString();
-    const QHash<QString, qint64> removalsThere = SyncManifest::remoteRemovalHlcs(manifest);
-    for (auto it = removalsThere.cbegin(); it != removalsThere.cend(); ++it)
-        removedThere << it.key();
+    // they removed all of it and it didn't change here since, remove it here
+    // (between two that speak the log, as it says, already).
+    const QSet<QString> removedThere = peerHasLog ? QSet<QString>() : OlderPeer::removedThere(manifest);
     for (const Book &book : library.books()) {
+        if (gone.contains(book.id))
+            continue;
         const QList<FormatFile> files = library.formatFiles(book.id);
         bool known = false, removed = false;
         QStringList hashes, keys;
@@ -292,19 +281,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (known)
             continue;
         if (removed) {
-            const std::optional<qint64> when = SyncManifest::removedWhen(hashes, keys, [&](const QString &key) {
-                return removalsThere.contains(key) ? std::optional<qint64>(removalsThere.value(key)) : std::nullopt;
-            });
-            if (current && when && std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(library, book), *when))) {
-                QString error;
-                if (dryRun || library.remove(book.id, &error)) {
-                    note(summary.removedHere, summary.titles.removedHere, book.meta.title);
-                    if (!dryRun)
-                        qCInfo(lcSync).noquote() << "book" << book.id << "removed here, as it was on" << remote.host();
-                } else {
-                    summary.problems << book.meta.title + " could not be removed here: " + error;
-                }
-            }
+            OlderPeer::removeHere(olderPeer, book, hashes, keys, manifest);
             continue;
         }
         if (dryRun) {
@@ -378,7 +355,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // Books that moved arrived after the log went: once more for what their
     // arrival wrote, and their reading places.
     if (peerHasLog && !dryRun && summary.received + summary.sent > 0)
-        SyncLog::replicate(library, remote, manifest, summary, options);
+        std::ignore = SyncLog::replicate(library, remote, manifest, summary, options); // their books were taken in already
     logSyncSummary(summary, remote.host());
     return summary;
 }

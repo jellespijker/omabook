@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -78,6 +79,15 @@ QJsonObject withoutMadeNodes(QJsonObject snapshot) {
     return snapshot;
 }
 
+// The same with each removal by what was removed, not when.
+QJsonObject withoutRemovalTimes(QJsonObject snapshot) {
+    QJsonArray removals;
+    for (const auto &removal : snapshot.value("removals").toArray())
+        removals << removal.toObject().value("key");
+    snapshot.insert("removals", removals);
+    return snapshot;
+}
+
 // The first place two snapshots differ, as section[index]: actual where expected, or nothing.
 QString firstDifference(const QJsonObject &actual, const QJsonObject &expected) {
     const auto text = [](const QJsonValue &value) {
@@ -114,18 +124,40 @@ struct SamplePairs {
 
     void expectAlike(const char *step) const {
         const QString at = dump + ", step " + step + ", ";
-        const QString here = firstDifference(withoutMadeNodes(without(Samples::librarySnapshot(logHere), "days")),
-                                             withoutMadeNodes(without(Samples::librarySnapshot(oldHere), "days")));
-        const QString there =
-            firstDifference(without(Samples::librarySnapshot(logThere), "days"), without(Samples::librarySnapshot(oldThere), "days"));
+        const QString here = firstDifference(withoutRemovalTimes(withoutMadeNodes(without(Samples::librarySnapshot(logHere), "days"))),
+                                             withoutRemovalTimes(withoutMadeNodes(without(Samples::librarySnapshot(oldHere), "days"))));
+        const QString there = firstDifference(withoutRemovalTimes(without(Samples::librarySnapshot(logThere), "days")),
+                                              withoutRemovalTimes(without(Samples::librarySnapshot(oldThere), "days")));
         QVERIFY2(here.isEmpty(), qPrintable(at + "here: " + here));
-        QVERIFY2(there.isEmpty(), qPrintable(at + "there: " + there));
+        if (collectionTimesDiffer)
+            expectAlikeButCollectionTimes(at);
+        else
+            QVERIFY2(there.isEmpty(), qPrintable(at + "there: " + there));
         QCOMPARE(Samples::librarySnapshot(logHere).value("days"), days);
         QCOMPARE(Samples::librarySnapshot(logThere).value("days"), days);
     }
 
+    // From the removal step on: the old way moves a collection's time when a
+    // book in it is removed (and hands it over as changed); the log, only when
+    // the collection itself changes.
+    void expectAlikeButCollectionTimes(const QString &at) const {
+        const auto times = [](QJsonObject snapshot) {
+            QJsonArray collections;
+            for (const auto &collection : snapshot.value("collections").toArray()) {
+                QJsonObject object = collection.toObject();
+                object.remove("updated");
+                collections << object;
+            }
+            snapshot.insert("collections", collections);
+            return withoutRemovalTimes(without(snapshot, "days"));
+        };
+        const QString there = firstDifference(times(Samples::librarySnapshot(logThere)), times(Samples::librarySnapshot(oldThere)));
+        QVERIFY2(there.isEmpty(), qPrintable(at + "there: " + there));
+    }
+
     QTemporaryDir dir;
     QString dump;
+    bool collectionTimesDiffer = false;
     Library oldHere, oldThere, logHere, logThere;
     Remote older, current;
     QJsonValue days;
@@ -215,6 +247,25 @@ void makeAndRemoveCollections(SamplePairs &p) {
     QVERIFY(p.logHere.collections(true).size() == p.oldHere.collections(true).size());
     QVERIFY(!p.logHere.collectionNamed("Picks/Here"));
     p.expectAlike("4, removed");
+}
+
+void removeOnEachSide(SamplePairs &p) {
+    for (Library *library : {&p.oldHere, &p.logHere})
+        QVERIFY(library->remove(3));
+    for (Library *library : {&p.oldThere, &p.logThere})
+        QVERIFY(library->remove(2));
+    const SyncSummary oldRemoved = syncLibrary(p.oldHere, p.older);
+    const SyncSummary logRemoved = syncLibrary(p.logHere, p.current);
+    QVERIFY2(logRemoved.problems.isEmpty(), qPrintable(logRemoved.problems.join('\n')));
+    QCOMPARE(logRemoved.removedHere, oldRemoved.removedHere);
+    QCOMPARE(logRemoved.removedThere, oldRemoved.removedThere);
+    QVERIFY(!p.logHere.book(2) && !p.logThere.book(3));
+    p.collectionTimesDiffer = true;
+    p.expectAlike("5");
+    // Through the log, a removal keeps the time it was made on the computer that made it.
+    QCOMPARE(Samples::librarySnapshot(p.logThere).value("removals"), Samples::librarySnapshot(p.logHere).value("removals"));
+    const SyncSummary settled = syncLibrary(p.logHere, p.current);
+    QCOMPARE(settled.removedHere + settled.removedThere + settled.received + settled.sent, 0);
 }
 
 } // namespace
@@ -444,6 +495,51 @@ private slots:
         QCOMPARE(settled.collectionsTaken + settled.collectionsSent, 0);
     }
 
+    void removalsTravelAsTombstonesAndABookChangedSinceIsKept() {
+        QTemporaryDir dir;
+        for (const char *title : {"Gone Both Ways", "Read After", "Gone There"})
+            QVERIFY(Fixtures::epub(dir.filePath(QString(title) + ".epub"), title));
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        QHash<QString, qint64> mine, theirs;
+        for (const char *title : {"Gone Both Ways", "Read After", "Gone There"}) {
+            mine.insert(title, here.add(dir.filePath(QString(title) + ".epub")).id);
+            theirs.insert(title, there.add(dir.filePath(QString(title) + ".epub")).id);
+        }
+        const Remote remote("laptop:" + dir.filePath("There"), {recordingSsh(dir, "ssh-removals", false)});
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        QVERIFY(!libraryManifest(there, ManifestFor::LogPeer).contains("removals"));
+
+        // Removed here; removed there, and the other read there after.
+        QVERIFY(here.remove(mine.value("Gone Both Ways")));
+        QVERIFY(there.remove(theirs.value("Gone There")));
+        QVERIFY(here.remove(mine.value("Read After")));
+        const qint64 after = QDateTime::currentSecsSinceEpoch() + 60; // after the removal, whatever the two clocks say
+        there.setProgress(theirs.value("Read After"), {.section = 2, .fraction = 0.5, .percent = 40, .updated = after});
+        const SyncSummary dry = syncLibrary(here, remote, {}, SyncOptions{.dryRun = true});
+        QCOMPARE(dry.titles.removedHere, QStringList{"Gone There"});
+        QCOMPARE(dry.titles.removedThere, QStringList{"Gone Both Ways"});
+        QVERIFY(here.book(mine.value("Gone There")));
+
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.removedHere, 1);
+        QCOMPARE(summary.removedThere, 1);
+        QVERIFY(!here.book(mine.value("Gone There")) && !there.book(theirs.value("Gone Both Ways")));
+        // Removed here at the time it was removed there.
+        const QString goneThere = Library::hashFile(dir.filePath("Gone There.epub"));
+        QCOMPARE(here.removedAt(goneThere), there.removedAt(goneThere));
+        // Read there after it was removed here: kept there, and never brought back here.
+        QCOMPARE(summary.received + summary.sent, 0);
+        QVERIFY(here.books("Read After").isEmpty());
+        QVERIFY(there.book(theirs.value("Read After")));
+        QVERIFY2(!commandsOf(dir, "ssh-removals").contains("'remove'"), qPrintable(commandsOf(dir, "ssh-removals")));
+
+        const SyncSummary settled = syncLibrary(here, remote);
+        QCOMPARE(settled.removedHere + settled.removedThere + settled.received + settled.sent, 0);
+    }
+
     void anOlderOmabookStillSyncsByTheManifest() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "On Both"));
@@ -464,6 +560,12 @@ private slots:
         QVERIFY(there.setMeta(otherThere, meta, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0)));
         QVERIFY(here.setReading(sharedHere, "read", 5, {}));
         QVERIFY(there.addCollection("From There", "status:reading"));
+        QVERIFY(Fixtures::epub(dir.filePath("gone.epub"), "Gone Here"));
+        const qint64 goneHere = here.add(dir.filePath("gone.epub")).id;
+        QVERIFY(there.add(dir.filePath("gone.epub")).error.isEmpty());
+        Spaces::setClockOffset(here, 120); // removed here after anything there, whose clock saw a minute ahead
+        QVERIFY(here.remove(goneHere));
+        Spaces::setClockOffset(here, 0);
 
         // An older Omabook's manifest says nothing of the log, and has the places.
         const QJsonObject manifest = libraryManifest(there);
@@ -485,13 +587,16 @@ private slots:
         QCOMPARE(there.book(sharedThere)->rating, 5);
         QCOMPARE(summary.collectionsTaken, 1);
         QVERIFY(here.collectionNamed("From There"));
+        QCOMPARE(summary.removedThere, 1);
+        QVERIFY(there.books("Gone Here").isEmpty());
 
         // Asked for the log, it refused; it was asked for its manifest and
         // given the place by the command it has always taken, as plain seconds.
         const QString commands = commandsOf(dir, "ssh-older");
         QVERIFY2(commands.contains("'manifest' '--log'") && commands.contains("'manifest' --library"), qPrintable(commands));
         QVERIFY2(commands.contains("'progress'") && commands.contains("'--updated' '1794860500'"), qPrintable(commands));
-        QVERIFY2(commands.contains("'--status' 'read'") && commands.contains("'collections' 'take'"), qPrintable(commands));
+        QVERIFY2(commands.contains("'--status' 'read'") && commands.contains("'collections' 'take'") && commands.contains("'remove'"),
+                 qPrintable(commands));
         QVERIFY2(!commands.contains("'--replicate'"), qPrintable(commands));
         // No pairing with a computer that doesn't speak the log.
         QCOMPARE(Spaces::personalSpace(here), hereSpace);
@@ -509,15 +614,18 @@ private slots:
     // it comes to, so there the reading days stay as they were. And the old
     // way gives the other side details with `omabook set`, which makes that
     // side's knowledge graph nodes of the book (its own, its authors') follow
-    // them, but not this side's; through the log, the side that takes them.
+    // them, but not this side's; through the log, the side that takes them. A
+    // removal the old way takes is stamped with the time of the sync; through
+    // the log, with the time it was made. And a book removed from a collection
+    // with it moves the collection's time the old way, not through the log.
     void everySampleSyncsAlikeTheOldWayAndThroughTheLog() {
         const QDir data(QFileInfo(QFINDTESTDATA("data/library-0.1.0.sql")).absolutePath());
         const QStringList dumps = data.entryList({"library-*.sql"}, QDir::Files, QDir::Name);
         QVERIFY(dumps.size() >= 5);
         for (const QString &dump : dumps) {
             SamplePairs pairs(data.filePath(dump), dump);
-            for (const auto step :
-                 {readFurtherAndChangeDetailsBothSides, readFurtherThere, changeDetailsWithNoTime, makeAndRemoveCollections})
+            for (const auto step : {readFurtherAndChangeDetailsBothSides, readFurtherThere, changeDetailsWithNoTime,
+                                    makeAndRemoveCollections, removeOnEachSide})
                 if (!QTest::currentTestFailed())
                     step(pairs);
             QVERIFY(!QTest::currentTestFailed());
@@ -525,7 +633,8 @@ private slots:
             // Never by the manifest's commands between two that speak the log.
             const QString logCommands = commandsOf(pairs.dir, "ssh-log");
             QVERIFY2(logCommands.contains("'--replicate'"), qPrintable(dump));
-            QVERIFY2(!logCommands.contains("'--meta'") && !logCommands.contains("'--status'"), qPrintable(dump));
+            QVERIFY2(!logCommands.contains("'--meta'") && !logCommands.contains("'--status'") && !logCommands.contains("'remove'"),
+                     qPrintable(dump));
             QVERIFY2(!commandsOf(pairs.dir, "ssh-older").contains("'--replicate'"), qPrintable(dump));
         }
     }

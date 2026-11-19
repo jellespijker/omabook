@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QSet>
 #include <QString>
 #include <QTemporaryDir>
 #include <QtTypes>
@@ -35,6 +36,16 @@ struct Sync {
 // (one that just `arrived` from there needs only its reading place): takes
 // what is newer there, and gives them what is newer here.
 void mergeBook(const Sync &sync, qint64 mine, bool arrived, const QJsonObject &theirs);
+
+// A book of theirs (`theirs`, by its files' `hashes` or its entry `keys`)
+// that was removed here: removed there too when all of it was removed here
+// and it didn't change there since.
+void removeThere(const Sync &sync, const QJsonObject &theirs, const QStringList &hashes, const QStringList &keys);
+// What their manifest says was removed there, by file hash or entry key.
+[[nodiscard]] QSet<QString> removedThere(const QJsonObject &manifest);
+// A book here they removed: removed here too when all of it was removed
+// there and it didn't change here since.
+void removeHere(const Sync &sync, const Book &book, const QStringList &hashes, const QStringList &keys, const QJsonObject &manifest);
 
 // Gives a book just sent to them, `theirId` there, its place here.
 void givePlace(const Library &library, const Remote &remote, qint64 mine, qint64 theirId);

@@ -101,17 +101,12 @@ void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qin
 
 // A book as an Omabook that speaks the log needs it: what names it (its global
 // id, and for a book without a file its entry keys), its files and cover to
-// fetch, and when it last changed, for a removal. Its details, its reading and
-// its place are the log's.
+// fetch. Its details, its reading, its place and its removal are the log's.
 QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files) {
     const QString cover = library.coverPath(book.id);
-    return {{"id", book.id},
-            {"gid", Spaces::bookId(library, book.id)},
-            {"files", files},
-            {"keys", files.isEmpty() ? QJsonArray::fromStringList(Library::entryKeys(book)) : QJsonArray()},
-            {"cover", cover},
-            {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)},
-            {"changed_hlc", SyncManifest::lastChangeHlc(library, book)}};
+    return {{"id", book.id},  {"gid", Spaces::bookId(library, book.id)},
+            {"files", files}, {"keys", files.isEmpty() ? QJsonArray::fromStringList(Library::entryKeys(book)) : QJsonArray()},
+            {"cover", cover}, {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)}};
 }
 
 // A book as an Omabook from before the log needs it: everything of it.
@@ -141,6 +136,17 @@ QJsonObject olderPeerBook(const Library &library, const Book &book, const QJsonA
     return object;
 }
 
+// When each book or name was removed here, for an older Omabook to decide whether to remove it there.
+QJsonArray removals(const Library &library) {
+    QJsonArray removals;
+    for (const Library::Removal &removal : library.removals()) {
+        const qint64 loggedHlc = SpaceReplay::fieldHlc(library, u"book"_s, Spaces::removalGlobalId(removal.key), u"removed"_s);
+        const qint64 hlc = Hlc::seconds(loggedHlc) == removal.at ? loggedHlc : Hlc::normalize(removal.at);
+        removals << QJsonObject{{"key", removal.key}, {"at", removal.at}, {"hlc", hlc}};
+    }
+    return removals;
+}
+
 } // namespace
 
 QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
@@ -153,22 +159,17 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
             files << QJsonObject{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
         books << (log ? logPeerBook(library, book, files) : olderPeerBook(library, book, files));
     }
-    QJsonArray removals;
-    for (const Library::Removal &removal : library.removals()) {
-        const qint64 loggedHlc = SpaceReplay::fieldHlc(library, u"book"_s, Spaces::removalGlobalId(removal.key), u"removed"_s);
-        const qint64 hlc = Hlc::seconds(loggedHlc) == removal.at ? loggedHlc : Hlc::normalize(removal.at);
-        removals << QJsonObject{{"key", removal.key}, {"at", removal.at}, {"hlc", hlc}};
-    }
     QJsonObject manifest{{"version", manifestVersion},
                          {"hlc", Spaces::lastHlc(library)},
                          {"omabook", QStringLiteral(OMABOOK_VERSION)},
                          {"books", books},
-                         {"removed", QJsonArray::fromStringList(library.removedHashes())},
-                         {"removals", removals},
                          {"graph", GraphSync::bundle(library)}};
     // What travels by the log is left out for an Omabook that speaks it.
-    if (!log)
+    if (!log) {
+        manifest.insert("removed", QJsonArray::fromStringList(library.removedHashes()));
+        manifest.insert("removals", removals(library));
         manifest.insert("collections", Collections::manifest(library));
+    }
     if (log) {
         manifest.insert("log", 1);
         const QJsonObject introduction = SyncLog::introduction(library);

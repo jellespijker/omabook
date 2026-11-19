@@ -12,6 +12,7 @@
 #include "changelog.h"
 #include "collections.h"
 #include "hlc.h"
+#include "log.h"
 #include "spacereplay.h"
 #include "spaces.h"
 #include "syncmanifest.h"
@@ -215,6 +216,52 @@ void OlderPeer::mergeBook(const Sync &sync, qint64 mine, bool arrived, const QJs
             note(sync.summary.readingSent, sync.summary.titles.readingSent, title);
     }
     mergePlace(sync, mine, theirs);
+}
+
+void OlderPeer::removeThere(const Sync &sync, const QJsonObject &theirs, const QStringList &hashes, const QStringList &keys) {
+    const QString title = theirs.value("title").toString();
+    const qint64 theirId = theirs.value("id").toInteger();
+    const std::optional<qint64> when =
+        SyncManifest::removedWhen(hashes, keys, [&](const QString &key) { return SyncManifest::localRemovalHlc(sync.library, key); });
+    if (!sync.current || !when || !std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(theirs), *when)))
+        return;
+    const Remote::Result removed = sync.options.dryRun ? Remote::Result{.code = 0, .output = {}, .error = {}}
+                                                       : sync.remote.omabook({"remove", QString::number(theirId)});
+    if (removed.ok()) {
+        note(sync.summary.removedThere, sync.summary.titles.removedThere, title);
+        if (!sync.options.dryRun)
+            qCInfo(lcSync).noquote() << "book" << theirId << "removed on" << sync.remote.host() << "as it was here";
+    } else {
+        sync.summary.problems << title + " could not be removed on " + sync.remote.host() + ": " + removed.error.section('\n', -1);
+    }
+}
+
+QSet<QString> OlderPeer::removedThere(const QJsonObject &manifest) {
+    QSet<QString> removed;
+    for (const auto &hash : manifest.value("removed").toArray())
+        removed << hash.toString();
+    const QHash<QString, qint64> removals = SyncManifest::remoteRemovalHlcs(manifest);
+    for (auto it = removals.cbegin(); it != removals.cend(); ++it)
+        removed << it.key();
+    return removed;
+}
+
+void OlderPeer::removeHere(const Sync &sync, const Book &book, const QStringList &hashes, const QStringList &keys,
+                           const QJsonObject &manifest) {
+    const QHash<QString, qint64> removalsThere = SyncManifest::remoteRemovalHlcs(manifest);
+    const std::optional<qint64> when = SyncManifest::removedWhen(hashes, keys, [&](const QString &key) {
+        return removalsThere.contains(key) ? std::optional<qint64>(removalsThere.value(key)) : std::nullopt;
+    });
+    if (!sync.current || !when || !std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(sync.library, book), *when)))
+        return;
+    QString error;
+    if (sync.options.dryRun || sync.library.remove(book.id, &error)) {
+        note(sync.summary.removedHere, sync.summary.titles.removedHere, book.meta.title);
+        if (!sync.options.dryRun)
+            qCInfo(lcSync).noquote() << "book" << book.id << "removed here, as it was on" << sync.remote.host();
+    } else {
+        sync.summary.problems << book.meta.title + " could not be removed here: " + error;
+    }
 }
 
 void OlderPeer::givePlace(const Library &library, const Remote &remote, qint64 mine, qint64 theirId) {

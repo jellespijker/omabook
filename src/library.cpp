@@ -620,7 +620,7 @@ qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) 
     return called != all.end() ? called->id : 0;
 }
 
-bool Library::remove(qint64 id, QString *error) {
+bool Library::remove(qint64 id, QString *error, std::optional<qint64> at) { // ast-grep-ignore: prefer-expected-over-error-out-param
     const QString folder = bookFolder(id);
     if (folder.isEmpty())
         return failed(error, QString("There is no book %1.").arg(id));
@@ -630,11 +630,11 @@ bool Library::remove(qint64 id, QString *error) {
     // is still in the library, so a sync mustn't take it for removed.
     for (const FormatFile &format : formats)
         if (!query("SELECT 1 FROM formats WHERE hash = ? AND book_id <> ?", {format.hash, id}).next())
-            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, Spaces::wallSeconds(*this)});
+            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, at.value_or(Spaces::wallSeconds(*this))});
     // A book with no file is remembered by what names it instead.
     if (const std::optional<Book> gone = formats.isEmpty() ? book(id) : std::nullopt)
         for (const QString &key : entryKeys(*gone))
-            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {key, Spaces::wallSeconds(*this)});
+            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {key, at.value_or(Spaces::wallSeconds(*this))});
     // To the trash, where a mistake can be undone; a filesystem with no
     // trash gets the folder removed, since the user asked for it to go.
     if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively())

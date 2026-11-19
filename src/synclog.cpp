@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
+#include <tuple>
 
 #include "log.h"
 #include "replication.h"
@@ -30,6 +31,13 @@ namespace {
     return books;
 }
 
+[[nodiscard]] QSet<QString> heldIn(const QJsonArray &names) {
+    QSet<QString> held;
+    for (const auto &name : names)
+        held.insert(name.toString());
+    return held;
+}
+
 // What the other side took of this one's, as its own summary says it took it.
 void countThere(SyncSummary &summary, const QJsonObject &there) {
     const QJsonObject titles = there.value("named").toObject();
@@ -40,6 +48,7 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     };
     add(summary.detailsSent, summary.titles.detailsSent, "details_taken");
     add(summary.readingSent, summary.titles.readingSent, "reading_taken");
+    add(summary.removedThere, summary.titles.removedThere, "removed_here");
     summary.collectionsSent += there.value("collections_taken").toInt();
     for (const auto &problem : there.value("problems").toArray())
         summary.problems << problem.toString();
@@ -53,10 +62,10 @@ QJsonObject SyncLog::introduction(const Library &library) {
             {"vector", Replication::toJson(Replication::vector(library))}};
 }
 
-QJsonArray SyncLog::replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
-                              const SyncOptions &options) {
+SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
+                                   const SyncOptions &options) {
     const bool dryRun = options.dryRun;
-    QJsonArray books = manifest.value("books").toArray(); // answered as it is when the log can't go
+    const QJsonArray books = manifest.value("books").toArray();
     if (!dryRun)
         Spaces::pair(library, manifest.value("space").toString(), manifest.value("device").toString());
     QSet<QString> theirGids;
@@ -70,11 +79,12 @@ QJsonArray SyncLog::replicate(Library &library, const Remote &remote, const QJso
                               {"ops", Replication::toJson(lacking)},
                               {"books", dryRun ? QJsonArray() : Replication::toJson(Replication::unlinked(library, theirGids))},
                               {"details", SyncTake::otherSide(options.details)},
+                              {"held", QJsonArray::fromStringList(SyncTake::heldBy(library).values())},
                               {"dry_run", dryRun}};
     const auto answer = remote.exchange(QJsonDocument(request), {"sync", "--replicate"});
     if (!answer) {
         summary.problems << "The change log could not be carried between here and " + remote.host() + ": " + answer.error();
-        return books;
+        return {.books = books, .gone = {}};
     }
     const QList<SpaceOperation> incoming = Replication::operationsFrom(answer->value("ops").toArray());
     const QList<qint64> taken = takePlaces(library, incoming, dryRun);
@@ -83,10 +93,14 @@ QJsonArray SyncLog::replicate(Library &library, const Remote &remote, const QJso
     summary.placesSent += answer->value("changed").toInt();
     for (const auto &title : answer->value("titles").toArray())
         summary.titles.placesSent << title.toString();
-    const QJsonArray described = SyncTake::take(
-        library, incoming,
-        {.device = manifest.value("device").toString(), .details = options.details, .dryRun = dryRun, .remote = &remote, .books = books},
-        summary);
+    SyncTake::Taken described = SyncTake::take(library, incoming,
+                                               {.device = manifest.value("device").toString(),
+                                                .details = options.details,
+                                                .dryRun = dryRun,
+                                                .remote = &remote,
+                                                .books = books,
+                                                .held = SyncTake::heldBy(books)},
+                                               summary);
     QJsonObject there = answer->value("taken").toObject();
     there.insert("named", answer->value("named"));
     countThere(summary, there);
@@ -106,13 +120,14 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     SyncSummary taken;
     taken.dryRun = dryRun;
     // The side asked has no books of the other's to describe: it never fetches any.
-    SyncTake::take(library, incoming,
-                   {.device = request.value("device").toString(),
-                    .details = SyncTake::detailsFrom(request.value("details").toString()),
-                    .dryRun = dryRun,
-                    .remote = nullptr,
-                    .books = {}},
-                   taken);
+    std::ignore = SyncTake::take(library, incoming,
+                                 {.device = request.value("device").toString(),
+                                  .details = SyncTake::detailsFrom(request.value("details").toString()),
+                                  .dryRun = dryRun,
+                                  .remote = nullptr,
+                                  .books = {},
+                                  .held = heldIn(request.value("held").toArray())},
+                                 taken);
     // After taking theirs, so what was just written here goes back with the rest.
     const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(request.value("vector").toObject()));
     return {{"ops", Replication::toJson(lacking)},
@@ -120,5 +135,6 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
             {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
             {"taken", taken.toJson()},
             {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
-                                  {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)}}}};
+                                  {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
+                                  {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)}}}};
 }

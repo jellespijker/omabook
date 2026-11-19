@@ -22,11 +22,12 @@ namespace {
 // A book's fields that travel by the log: its reading place, its details and
 // what is said of its reading, each with the stamp of its time, and the links
 // that line up its ids. Never where its files are here (`path`, `formats`):
-// those are this computer's own. Every field of a collection travels.
+// those are this computer's own. A book's removal travels as its tombstone.
+// Every field of a collection travels.
 constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,      "authors"_L1,    "series"_L1,      "series_index"_L1,
                                 "publisher"_L1,   "language"_L1,  "isbn"_L1,       "published"_L1,  "description"_L1, "tags"_L1,
                                 "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
-                                "finished"_L1,    "paper"_L1,     "reading_at"_L1};
+                                "finished"_L1,    "paper"_L1,     "reading_at"_L1, "removed"_L1,    "removed_at"_L1};
 
 // The operations that travel, in SQL; Replication::travels says the same of one.
 [[nodiscard]] QString travelling() {

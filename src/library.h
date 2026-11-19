@@ -196,9 +196,12 @@ public:
     // Adds another format of a book already here, replacing one of the same kind.
     bool addFormat(qint64 id, const QString &file, QString *error = nullptr);
     // Moves the book's folder to the trash and forgets it. Its files are
-    // remembered as removed (wasRemoved), but for one another book here
-    // still holds, as the book kept by a merge does.
-    bool remove(qint64 id, QString *error = nullptr);
+    // remembered as removed (wasRemoved), now or `at` (when it was removed on
+    // another computer), but for one another book here still holds, as the
+    // book kept by a merge does.
+    // (The out-parameter is the existing one fourteen callers read; `at` is what is new.)
+    // ast-grep-ignore: prefer-expected-over-error-out-param
+    bool remove(qint64 id, QString *error = nullptr, std::optional<qint64> at = std::nullopt);
 
     QList<Book> books(const QString &query = {}) const;
     std::optional<Book> book(qint64 id) const;

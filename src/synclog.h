@@ -6,6 +6,7 @@
 #include "library.h"
 #include "remote.h"
 #include "sync.h"
+#include "synctake.h"
 
 // The part of a sync that goes through the change log, between two Omabooks
 // that both speak it (ADR 0001, Migration 3 and 4). So far that is the books'
@@ -29,7 +30,8 @@ namespace SyncLog {
 // other side holds of it, for the books this side lacks. A dry run changes
 // nothing on either side. Run again once books have moved, it carries what
 // their arrival wrote, and their places.
-QJsonArray replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary, const SyncOptions &options);
+SyncTake::Taken replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
+                          const SyncOptions &options);
 
 // There: takes in a request from replicate() and answers it.
 [[nodiscard]] QJsonObject answer(Library &library, const QJsonObject &request);
