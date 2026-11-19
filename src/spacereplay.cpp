@@ -454,7 +454,7 @@ qint64 SpaceReplay::entityHlc(const Library &library, const QString &entity, con
     if (globalId.isEmpty())
         return 0;
     QSqlQuery query = ChangeLog::query(
-        library, "SELECT MAX(hlc) FROM ops WHERE entity = ? AND id = (SELECT id FROM log_ids WHERE name = ?)", {entity, globalId});
+        library, "SELECT MAX(hlc) FROM live_ops WHERE entity = ? AND id = (SELECT id FROM log_ids WHERE name = ?)", {entity, globalId});
     return query.next() ? Hlc::normalize(query.value(0).toLongLong()) : 0;
 }
 
@@ -464,7 +464,7 @@ qint64 SpaceReplay::fieldHlc(const Library &library, const QString &entity, cons
     if (entity == "book"_L1)
         return SpaceReducer::fieldHlc(reducedBookFor(library, globalId), field);
     QSqlQuery query = ChangeLog::query(
-        library, "SELECT MAX(hlc) FROM ops WHERE entity = ? AND id = (SELECT id FROM log_ids WHERE name = ?) AND field = ?",
+        library, "SELECT MAX(hlc) FROM live_ops WHERE entity = ? AND id = (SELECT id FROM log_ids WHERE name = ?) AND field = ?",
         {entity, globalId, field});
     return query.next() ? Hlc::normalize(query.value(0).toLongLong()) : 0;
 }

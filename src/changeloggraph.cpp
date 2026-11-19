@@ -197,7 +197,7 @@ void ChangeLogGraph::syncRowsToLog(const Library &library, const Rows &rows) {
                 continue;
             const QString gid = globalId(library, id);
             QSqlQuery space = ChangeLog::query(library,
-                                               "SELECT s.name FROM ops AS o JOIN log_ids AS s ON s.id = o.space "
+                                               "SELECT s.name FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space "
                                                "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) LIMIT 1",
                                                {entity, gid});
             if (space.next())
@@ -221,7 +221,7 @@ void ChangeLogGraph::detectDeletedEntity(const Library &library, const QString &
             alive.insert(Spaces::factId(library, id));
     }
     for (QSqlQuery query = ChangeLog::query(library,
-                                            "SELECT DISTINCT s.name, i.name FROM ops AS o JOIN log_ids AS s ON s.id = o.space "
+                                            "SELECT DISTINCT s.name, i.name FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space "
                                             "JOIN log_ids AS i ON i.id = o.id WHERE o.entity = ?",
                                             {entity});
          query.next();) {

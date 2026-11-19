@@ -154,10 +154,14 @@ QList<SpaceOperation> Replication::operations(const Library &library) {
 
 Replication::Vector Replication::vector(const Library &library) {
     Vector known;
-    for (QSqlQuery query = ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(o.seq) FROM ops AS o "
-                                                             "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
-                                                             "WHERE %1 GROUP BY o.space, o.device")
-                                                         .arg(travelling()));
+    // Up to its mark at least, of a device the snapshot covers: what it
+    // leaves out of that is held in the snapshot's place.
+    for (QSqlQuery query =
+             ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(MAX(o.seq), COALESCE(m.seq, 0)) FROM live_ops AS o "
+                                               "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                                               "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device "
+                                               "WHERE %1 GROUP BY o.space, o.device")
+                                           .arg(travelling()));
          query.next();)
         known[query.value(0).toString()][query.value(1).toString()] = query.value(2).toLongLong();
     return known;

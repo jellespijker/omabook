@@ -215,8 +215,8 @@ void detectDeletedBooks(const Library &library) {
         currentBooks.insert(Spaces::bookId(library, query.value(0).toLongLong()));
     for (const Library::Removal &removal : library.removals())
         ChangeLog::recordRemoval(library, removal.key, removal.at, false);
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT DISTINCT i.name FROM ops AS o JOIN log_ids AS i ON i.id = o.id WHERE o.entity = 'book'");
+    for (QSqlQuery query = ChangeLog::query(
+             library, "SELECT DISTINCT i.name FROM live_ops AS o JOIN log_ids AS i ON i.id = o.id WHERE o.entity = 'book'");
          query.next();) {
         const QString gid = query.value(0).toString();
         if (!currentBooks.contains(gid))
@@ -264,7 +264,7 @@ ChangeLog::Scope::~Scope() { --activeScopes(); }
 
 void ChangeLog::open(const Library &library) {
     const Scope guard;
-    QSqlQuery hasOps = ChangeLog::query(library, "SELECT 1 FROM ops LIMIT 1");
+    QSqlQuery hasOps = ChangeLog::query(library, "SELECT 1 FROM live_ops LIMIT 1");
     const bool emptyOps = !hasOps.next();
     hasOps.finish();
     QSqlQuery logged = ChangeLog::query(library, "SELECT value FROM library_state WHERE key = 'logged_books'");
@@ -351,8 +351,12 @@ void ChangeLog::append(const Library &library, const Entry &entry) {
     const qint64 stamp = entry.hlc ? Hlc::normalize(*entry.hlc) : Spaces::tickHlc(library);
     if (entry.hlc && *entry.hlc > 0)
         Spaces::observeHlc(library, stamp);
-    QSqlQuery nextSeq =
-        ChangeLog::query(library, "SELECT COALESCE(MAX(seq), 0) + 1 FROM ops WHERE space = ? AND device = ?", {spaceNum, deviceNum});
+    // After the last this device wrote here, also of what compaction took out
+    // of `ops` into the snapshot (its mark): a number is never given twice.
+    QSqlQuery nextSeq = ChangeLog::query(library,
+                                         "SELECT MAX(COALESCE((SELECT MAX(seq) FROM ops WHERE space = ? AND device = ?), 0), "
+                                         "COALESCE((SELECT seq FROM snapshot_marks WHERE space = ? AND device = ?), 0)) + 1",
+                                         {spaceNum, deviceNum, spaceNum, deviceNum});
     const qint64 seq = nextSeq.next() ? nextSeq.value(0).toLongLong() : 1;
     nextSeq.finish();
     ChangeLog::exec(library,

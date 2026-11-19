@@ -12,10 +12,11 @@
 ChangeLogFields::Map ChangeLogFields::logged(const Library &library, const QString &entity, const QString &globalId) {
     Map map;
     const QString me = Spaces::deviceId(library);
-    for (QSqlQuery query = ChangeLog::query(library,
-                                            "SELECT o.field, o.value, o.hlc, d.name FROM ops AS o JOIN log_ids AS d ON d.id = o.device "
-                                            "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.seq",
-                                            {entity, globalId});
+    for (QSqlQuery query =
+             ChangeLog::query(library,
+                              "SELECT o.field, o.value, o.hlc, d.name FROM live_ops AS o JOIN log_ids AS d ON d.id = o.device "
+                              "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.seq",
+                              {entity, globalId});
          query.next();) {
         const QString field = query.value(0).toString();
         const QString value = query.value(1).toString();

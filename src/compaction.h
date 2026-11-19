@@ -16,10 +16,13 @@
 // merges or sends the log (Replication, SpaceReplay) reads the snapshot and
 // the operations after the mark (`live_ops`), which merge to what all of
 // them do, for every device; a peer behind the snapshot is sent the
-// snapshot. The operations the snapshot covers and leaves out are dropped
-// from `ops` (the one place that may: ops-deleted-only-by-compaction), but
-// only those every member of their space has seen, as it last said when
-// syncing (`member_vectors`), so no computer can still need one.
+// snapshot. The snapshot takes the place of the operations it covers (#2):
+// they are dropped from `ops` (the one place that may:
+// ops-deleted-only-by-compaction), what it keeps of them and what it leaves
+// out alike, but only those every member of their space has seen, as it last
+// said when syncing (`member_vectors`), so no computer can still need one.
+// What reads one thing's operations, or a device's last number, reads the
+// snapshot and its marks with `ops`.
 namespace Compaction {
 
 struct Result {

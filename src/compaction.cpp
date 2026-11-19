@@ -34,17 +34,21 @@ Compaction::Result Compaction::compact(const Library &library) {
                                      "SELECT 1 FROM temp.compacting AS later WHERE later.device = c.device AND later.entity = c.entity "
                                      "AND later.id = c.id AND later.field = c.field AND later.hlc > c.hlc)")
                                  .arg(QString::fromLatin1(growing).replace("field", "c.field")));
-    ChangeLog::exec(library, "INSERT OR REPLACE INTO snapshot_marks (space, device, seq) SELECT space, device, MAX(seq) FROM ops "
-                             "GROUP BY space, device");
+    // A mark only moves on: what is left in `ops` of a device may all lie
+    // before its mark now, kept for a member that hasn't seen it, and the
+    // snapshot already holds what matters of it.
+    ChangeLog::exec(library, "INSERT INTO snapshot_marks (space, device, seq) SELECT space, device, MAX(seq) FROM ops "
+                             "WHERE 1 GROUP BY space, device ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq)");
     ChangeLog::exec(library, "DROP TABLE temp.compacting");
-    // What the snapshot covers and leaves out, of what every other member of
-    // its space has seen (a space with no other member is this computer's).
+    // What the snapshot covers, of what every other member of its space has
+    // seen (a space with no other member is this computer's): the snapshot
+    // takes the place of what it keeps of it, and what it leaves out is no
+    // longer needed anywhere. What a member hasn't seen stays until it has.
     const qint64 before = count(library, "SELECT COUNT(*) FROM ops");
     ChangeLog::exec(
         library,
         "DELETE FROM ops WHERE seq <= COALESCE((SELECT m.seq FROM snapshot_marks AS m WHERE m.space = ops.space "
         "AND m.device = ops.device), 0) "
-        "AND NOT EXISTS (SELECT 1 FROM snapshot_ops AS s WHERE s.space = ops.space AND s.device = ops.device AND s.seq = ops.seq) "
         "AND NOT EXISTS (SELECT 1 FROM space_members AS p JOIN log_ids AS named ON named.name = p.space "
         "WHERE named.id = ops.space AND p.person <> ? AND COALESCE((SELECT v.seq FROM member_vectors AS v "
         "WHERE v.space = ops.space AND v.member = p.person AND v.device = ops.device), 0) < ops.seq)",

@@ -662,6 +662,7 @@ private slots:
             const QList<SpaceOperation> all = SpaceReplay::operations(p.logHere);
             const qint64 placesBefore = places();
             const qint64 sizeBefore = fileSize(p.logHere.databasePath(), false);
+            const qint64 sizeBeforeVacuumed = fileSize(p.logHere.databasePath(), true);
             const QJsonObject merged = Samples::librarySnapshot(p.logHere);
             const auto views = [](std::span<const SpaceOperation> ops, const QString &device) {
                 QJsonObject books;
@@ -678,7 +679,21 @@ private slots:
             const qint64 sizeAfter = fileSize(p.logHere.databasePath(), false);
             const qint64 sizeVacuumed = fileSize(p.logHere.databasePath(), true);
             qInfo().noquote() << dump << ": ops" << all.size() << "before," << compacted.operations << "after," << live.size()
-                              << "read; database" << sizeBefore << "bytes before," << sizeAfter << "after," << sizeVacuumed << "vacuumed";
+                              << "read; database" << sizeBefore << "bytes before," << sizeAfter << "after;" << sizeBeforeVacuumed
+                              << "vacuumed before," << sizeVacuumed << "vacuumed after";
+            // The snapshot takes the place of what it covers: the library is
+            // smaller than before, and of what the snapshot covers only what
+            // the other computer hasn't seen is still in `ops`.
+            QVERIFY2(sizeVacuumed < sizeBeforeVacuumed, qPrintable(dump));
+            QSqlQuery covered = ChangeLog::query(p.logHere,
+                                                 "SELECT COUNT(*) FROM ops AS o JOIN snapshot_marks AS m ON m.space = o.space "
+                                                 "AND m.device = o.device WHERE o.seq <= m.seq AND o.seq <= COALESCE((SELECT v.seq "
+                                                 "FROM member_vectors AS v WHERE v.space = o.space AND v.device = o.device "
+                                                 "AND v.member = ?), 0)",
+                                                 {theirs});
+            QVERIFY(covered.next());
+            QCOMPARE(covered.value(0).toLongLong(), qint64(0));
+            covered.finish();
             // Of the places and descriptions each side wrote, only the last of each is read;
             // what the other side has seen of them is gone, what it hasn't is kept.
             QVERIFY2(all.size() - live.size() >= 2 * 2 * 19, qPrintable(dump));
