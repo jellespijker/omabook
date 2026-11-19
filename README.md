@@ -451,7 +451,7 @@ omabook spaces                                                # the spaces you a
 omabook spaces remove "Book club" <person-id>                 # what they write from now on is refused
 ```
 
-The folder is one that something else keeps in step between the members' computers: Syncthing, or a mounted share. Each computer writes only its own batches there, sealed with the space's key, so the folder never holds anything readable. Invite someone and sync before they join, so the change that makes them a member is in the folder before they write. A member removed has what they write from then on refused. What they wrote before stays, and so does their copy of what they had.
+The folder is one that something else keeps in step between the members' computers: Syncthing, or a mounted share. Each computer writes only its own batches there, sealed with the space's key, so the folder never holds anything readable. Invite someone and sync before they join, so the change that makes them a member is in the folder before they write. A member removed has what they write from then on refused. What they wrote before stays, and so does their copy of what they had. Removing a member also changes the space's key: the members who stay get the new one, the one removed can't read what is written after, and what they write later is refused even when they date it before their removal. Every key the space has had goes with it to your other computers at the next sync, so what was written before stays readable there.
 
 ### Your own computers
 

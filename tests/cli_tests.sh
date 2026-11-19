@@ -66,6 +66,7 @@ expect "a plugin switched off" 0 "off" "$omabook" plugins disable folder:shelver
 rm -rf "$XDG_CONFIG_HOME/omabook/plugins/shelver"
 expect "what is new" 0 "Pages or scroll" "$omabook" help new
 expect "a help page on sharing" 0 "What is never shared" "$omabook" help sharing
+expect "it says removing a member changes the key" 0 "changes its key" "$omabook" help sharing
 expect "what is new as JSON" 0 '"features"' "$omabook" help new --json
 expect "an unknown help topic fails" 1 "no help on" "$omabook" help nonsense
 expect "an empty library lists nothing" 0 "" "$omabook" list --library "$library"

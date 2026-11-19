@@ -1034,6 +1034,8 @@
   "Remove “%1” from the library?": "Remove “%1” from the library?",
   "Removed books": "Removed books",
   "Remove…": "Remove…",
+  "Removing a member": "Removing a member",
+  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.",
   "Rename the selected thing, or rewrite what is said of it": "Rename the selected thing, or rewrite what is said of it",
   "Reset": "Reset",
   "Reset %1 to the defaults": "Reset %1 to the defaults",

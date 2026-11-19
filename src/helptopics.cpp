@@ -77,6 +77,11 @@ Manual::Topic sharingTopic() {
                             "create` makes one of a collection of yours, `spaces invite` writes an invite only that person "
                             "can open, `spaces join` takes it, and `spaces sync --folder` keeps it in step through a folder "
                             "something else syncs, such as Syncthing. Readers get every change; only writers make them.")},
+                {Manual::tr("Removing a member"),
+                 Manual::tr("Removing someone from a shared space changes its key. The members who stay get the new one, "
+                            "and what the one removed writes after is refused, even when they date it before. A sync "
+                            "brings every key the space has had to your other computers, so what was written before stays "
+                            "readable there.")},
                 {Manual::tr("On all your computers"),
                  Manual::tr("A sync between your own computers carries the shared spaces you are in and the collections you "
                             "subscribed to, sealed to you: subscribe or join on one, and the next sync brings it to the "
