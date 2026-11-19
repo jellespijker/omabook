@@ -1,4 +1,5 @@
 #include <QDir>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <QScopeGuard>
 #include <QSqlDatabase>
@@ -146,6 +147,40 @@ private slots:
             QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
             QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-%1-*.db").arg(older)}).size(), 1);
         }
+    }
+
+    // Opened again on the thread that is setting it up, as a plugin that
+    // opens the library as it loads would, loaded while it is (#60): that
+    // opening doesn't wait for the lock this thread holds, under whatever
+    // name of the folder, and the setting up goes on.
+    void aLibraryOpenedWhileThisThreadSetsItUpIsNotWaitedFor() {
+        const QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString root = dir.filePath(QStringLiteral("Library"));
+        {
+            Library library(root);
+            QVERIFY(library.open());
+        }
+        QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = %1").arg(LibraryMigrations::currentFormat() - 1)), 0);
+        Library library(root);
+        bool openedAgain = true;
+        QString why;
+        qint64 waited = -1;
+        library.onBringingUpToDate([&](const QString &) {
+            QElapsedTimer timer;
+            timer.start();
+            Library again(dir.filePath(QStringLiteral("Library/../Library")));
+            openedAgain = again.open(&why);
+            waited = timer.elapsed();
+        });
+        QVERIFY(library.open());
+        QVERIFY2(waited >= 0 && waited < 5000, qPrintable(QStringLiteral("waited %1 ms").arg(waited)));
+        QVERIFY(!openedAgain);
+        QVERIFY2(!why.contains(QStringLiteral("another program")), qPrintable(why));
+        QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
+        // Once it is set up, it opens.
+        Library after(root);
+        QVERIFY(after.open());
     }
 
     // A command that brings a library up to date says so on standard error

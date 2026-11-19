@@ -15,6 +15,7 @@ moves those lines under its version.
 ### Fixed
 
 - `omabook sync --dry-run` between two computers that keep the change log says what a sync would do and keeps nothing on either side: its journal says how many operations *would* be sent and taken, and before the two computers ever synced it no longer reports every operation as refused, which a sync, pairing them first, takes. The details left undecided are counted once per book, not again at the end of a sync that moved books, and only where the words differ: a cover saved apart on each computer, with no time to say which is newer, no longer makes a book undecided, as before 0.1.6; `--details mine` or `theirs` still settles those that differ, cover and all (#59).
+- The first command after an update, with a plugin installed, no longer takes two minutes: bringing the library up to date ran the plugins, which opened the library and waited for the lock their own program held, until it gave up and stopped them. A command that only lists books runs no plugin, and a library opened again by the program setting it up is not waited for (#60).
 
 ## [0.1.6] - 2026-11-19
 

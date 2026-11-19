@@ -77,6 +77,9 @@ target_compile_definitions(sharing_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:o
 target_sources(spaces_tests PRIVATE tests/samples.cpp)
 target_sources(replication_tests PRIVATE tests/samples.cpp)
 target_sources(upgrading_tests PRIVATE tests/samples.cpp)
+# The first start after an update, with a plugin installed, runs the real binary (#60).
+add_dependencies(upgrading_tests omabook)
+target_compile_definitions(upgrading_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 add_dependencies(replication_tests omabook)
 target_compile_definitions(replication_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 # Two libraries brought up from 0.1.5 and synced over the stand-in ssh.

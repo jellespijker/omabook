@@ -5,10 +5,14 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QList>
+#include <QScopeGuard>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QStorageInfo>
 #include <QStringList>
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <print>
 #include <ranges>
@@ -105,7 +109,44 @@ std::expected<void, QString> LibraryMigrations::migrate(const Library &library) 
     return {};
 }
 
+namespace {
+
+// The databases this thread is setting up, each by its file. Another
+// connection to one of them, from this thread, would wait for the lock this
+// thread holds, which it gives back only once that connection is done
+// waiting: a plugin that opens the library as it loads, say, loaded while
+// it is set up (#60).
+[[nodiscard]] QStringList &settingUp() {
+    thread_local QStringList files;
+    return files;
+}
+
+// The same for every name of the folder: it is there by the time a library is set up.
+[[nodiscard]] QString databaseFile(const QString &root) { return QFileInfo(root).canonicalFilePath() + "/omabook.db"; }
+
+} // namespace
+
+void LibraryMigrations::configure(const Library &library) {
+    // The write-ahead log needs memory shared between processes, which a
+    // folder on another machine (sshfs, NFS, SMB) can't give; there the
+    // older rollback journal is the one that works.
+    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4",       "cifs",
+                                                          "smb3",       "smbfs", "9p",  "fuse.rclone"};
+    const QByteArray fileSystem = QStorageInfo(library.m_root).fileSystemType();
+    const bool local = !std::ranges::contains(remote, QByteArrayView(fileSystem));
+    library.exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
+    library.exec("PRAGMA foreign_keys = ON");
+}
+
 std::expected<void, QString> LibraryMigrations::setUp(const Library &library) {
+    // Opened again on the thread that is setting it up, it is not waited for:
+    // that wait could only end when it runs out.
+    const QString file = databaseFile(library.m_root);
+    if (settingUp().contains(file))
+        return std::unexpected("The library is still being set up here; it can be opened once that is done.");
+    settingUp() << file;
+    const auto done = qScopeGuard([&file] { settingUp().removeOne(file); });
+    configure(library);
     // Two programs opening a library at once (the window and a command), the
     // first time or the first after an update, would otherwise both see it
     // unready and both take the same steps, copy and baseline (#11). So it is

@@ -91,6 +91,16 @@ Registry &registry() {
 
 [[nodiscard]] QString fileName(const QString &path) { return QFileInfo(path).fileName(); }
 
+// Omabook's own extensions, then those of these providers.
+[[nodiscard]] QStringList extensionsOf(const QList<FormatProvider> &providers) {
+    QStringList extensions = formats | std::views::transform(&Format::extension) | std::ranges::to<QStringList>();
+    for (const FormatProvider &provider : providers)
+        for (const QString &extension : provider.extensions)
+            if (!extensions.contains(extension))
+                extensions << extension;
+    return extensions;
+}
+
 // Opens a book, or says why it can't be.
 [[nodiscard]] OpenedDocument opened(const QString &path) {
     if (!QFileInfo::exists(path))
@@ -202,14 +212,7 @@ QString Formats::extension(const QString &path) {
     return lower.endsWith(".fb2.zip"_L1) ? u"fb2.zip"_s : QFileInfo(lower).suffix();
 }
 
-QStringList Formats::extensions() {
-    QStringList extensions = formats | std::views::transform(&Format::extension) | std::ranges::to<QStringList>();
-    for (const FormatProvider &provider : providers())
-        for (const QString &extension : provider.extensions)
-            if (!extensions.contains(extension))
-                extensions << extension;
-    return extensions;
-}
+QStringList Formats::extensions() { return extensionsOf(providers()); }
 
 bool Formats::isBook(const QString &path) {
     return find(extension(path)) != nullptr || providerWith(extension(path)) || pluginFormat(extension(path)).has_value();
@@ -242,7 +245,15 @@ QString Formats::names(const QStringList &extensions) {
 }
 
 QStringList Formats::byPreference(QStringList extensions) {
-    const QStringList order = Formats::extensions();
+    // By the providers there are now, without loading any: putting a book's
+    // formats in order is no reason to run the plugins. Every list of books
+    // does it, a command that only lists them and the setting up of a
+    // library included, where a plugin opening the library would wait for
+    // the lock its own program holds (#60). One not loaded comes last.
+    const QStringList order = [] {
+        const QReadLocker locker(&registry().lock);
+        return extensionsOf(registry().providers);
+    }();
     // An extension that isn't known comes after all that are.
     std::ranges::stable_sort(extensions, {}, [&order](const QString &extension) {
         const qsizetype place = order.indexOf(extension);

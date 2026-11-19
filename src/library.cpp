@@ -13,7 +13,6 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
-#include <QStorageInfo>
 #include <QUuid>
 #include <QVariant>
 #include <algorithm>
@@ -400,16 +399,6 @@ bool Library::open(QString *error) {
     database.setConnectOptions("QSQLITE_BUSY_TIMEOUT=10000");
     if (!database.open())
         return fail("The library can't be opened: " + database.lastError().text());
-    // The write-ahead log needs memory shared between processes, which a
-    // folder on another machine (sshfs, NFS, SMB) can't give; there the
-    // older rollback journal is the one that works.
-    static constexpr std::array<QByteArrayView, 9> remote{"fuse.sshfs", "sshfs", "nfs", "nfs4", "cifs",
-                                                          "smb3", "smbfs", "9p", "fuse.rclone"};
-    const QByteArray fileSystem = QStorageInfo(m_root).fileSystemType();
-    const bool local = !std::ranges::contains(remote, QByteArrayView(fileSystem));
-    exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
-    exec("PRAGMA foreign_keys = ON");
-
     const auto setUp = LibraryMigrations::setUp(*this);
     return setUp ? true : fail(setUp.error());
 }

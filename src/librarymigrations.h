@@ -12,12 +12,16 @@ class LibraryMigrations {
 public:
     [[nodiscard]] static int currentFormat() noexcept;
     // Makes a library that was just opened ready: brought to the newest
-    // format and its change log up to date, by one program at a time.
+    // format and its change log up to date, by one program at a time. One
+    // this thread is setting up already is not waited for (#60).
     [[nodiscard]] static std::expected<void, QString> setUp(const Library &library);
     // What a command passes to Library::onBringingUpToDate: the line, on standard error.
     static void sayOnStandardError(const QString &said);
 
 private:
+    // How the connection writes: the journal the folder's file system can
+    // keep, and the foreign keys kept.
+    static void configure(const Library &library);
     [[nodiscard]] static std::expected<void, QString> migrate(const Library &library);
     static void sayBringingUpToDate(const Library &library, int schema);
 };
