@@ -1,0 +1,10 @@
+id: ops-append-only
+valid:
+  - 'auto q = query("SELECT space, device, seq FROM ops ORDER BY seq");'
+  - 'exec("INSERT INTO ops (space, device, seq) VALUES (?, ?, ?)");'
+  - 'exec("INSERT OR IGNORE INTO ops (space, device, seq) VALUES (?, ?, ?)");'
+  - 'exec("DELETE FROM log_dirty");'
+invalid:
+  - 'void rewrite(Library &l) { l.exec("UPDATE ops SET hlc = ? WHERE id = ?"); }'
+  - 'void replace(Library &l) { l.exec("UPDATE OR IGNORE ops SET value = ?"); }'
+  - 'void wipe(Library &l) { l.exec("DELETE FROM ops WHERE entity = ?"); }'

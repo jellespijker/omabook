@@ -1,0 +1,11 @@
+id: ops-append-only
+language: cpp
+severity: error
+message: The change log (`ops`) is append-only; never UPDATE or DELETE FROM ops (ADR 0001).
+note: |
+  Every operation in `ops` is immutable once written. A later or backdated
+  change appends a new operation rather than rewriting or deleting an existing
+  one.
+rule:
+  kind: string_literal
+  regex: '(?i)\b(UPDATE(\s+OR\s+\w+)?|DELETE\s+FROM)\s+ops\b'
