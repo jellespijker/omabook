@@ -68,7 +68,7 @@ SpaceOperation lastWritten(const Library &library, const QString &field = {}) {
 
 using SharedSpace::Role;
 
-template <typename Answer> [[nodiscard]] QString whyNot(const Answer &answer) { return answer ? QString() : answer.error(); }
+using Fixtures::whyNot;
 
 // A book in the collection `collection` (made when there is none).
 void fileBook(Library &library, const QString &collection, const QString &title, const QString &isbn) {
@@ -427,7 +427,7 @@ private slots:
         // Each operation as the space has it (its own space, devices and
         // numbers) is not what was signed at home, so it goes without that signature.
         const auto published = PublishedSpace::snapshot(library, *shelf, {}, {.name = "Ada", .person = library.person()->id()});
-        QVERIFY2(published, qPrintable(published ? QString() : published.error()));
+        QVERIFY2(published, qPrintable(whyNot(published)));
         QVERIFY(!published->operations.isEmpty());
         for (const SpaceOperation &op : published->operations)
             QVERIFY(op.signer.isEmpty() && op.signature.isEmpty() && op.author == library.person()->id());

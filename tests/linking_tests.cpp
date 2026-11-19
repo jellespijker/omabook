@@ -31,7 +31,7 @@
 
 namespace {
 
-template <typename Answer> [[nodiscard]] QString whyNot(const Answer &answer) { return answer ? QString() : answer.error(); }
+using Fixtures::whyNot;
 
 [[nodiscard]] PluginSources::Service at(const QString &api) {
     PluginSources::Service service;

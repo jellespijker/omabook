@@ -140,7 +140,7 @@ struct Shelf {
 void expectNothingOfHome(const Shelf &shelf) {
     const auto snapshot =
         PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true, .questions = true, .ratings = true, .reading = true}, owner());
-    QVERIFY2(snapshot.has_value(), qPrintable(snapshot.error()));
+    QVERIFY2(snapshot.has_value(), qPrintable(Fixtures::whyNot(snapshot)));
     const QByteArray file = SpaceSnapshotFile::write(*snapshot);
     const QStringList home{Shelf::aboveName,
                            Shelf::siblingName,
@@ -376,7 +376,7 @@ private slots:
         QVERIFY(!QTest::currentTestFailed());
         const SpaceSnapshot::Owner ada = owner();
         const auto snapshot = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.ratings = true}, ada);
-        QVERIFY2(snapshot.has_value(), qPrintable(snapshot.error()));
+        QVERIFY2(snapshot.has_value(), qPrintable(Fixtures::whyNot(snapshot)));
         QCOMPARE(snapshot->space, PublishedSpace::idFor(ada.person, Spaces::collectionId(shelf.library, shelf.sciFi)));
         QVERIFY(snapshot->space.startsWith("published:"));
         QCOMPARE(snapshot->kind, QString("published"));
@@ -401,7 +401,7 @@ private slots:
         QVERIFY2(file.startsWith("{\n  \"format\": \"omabook-space\",\n  \"version\": \"1.0\",\n"), file.left(80).constData());
         QCOMPARE(file.count("\n    ["), snapshot->operations.size());
         const auto back = SpaceSnapshotFile::read(file);
-        QVERIFY2(back.has_value(), qPrintable(back.error()));
+        QVERIFY2(back.has_value(), qPrintable(Fixtures::whyNot(back)));
         QCOMPARE(*back, *snapshot);
 
         const QString path = shelf.dir.filePath(QString("Sci-fi") + SpaceSnapshotFile::suffix);
@@ -420,14 +420,14 @@ private slots:
         QVERIFY(sample.open(QIODevice::ReadOnly));
         const QByteArray file = sample.readAll();
         const auto known = SpaceSnapshotFile::read(file);
-        QVERIFY2(known.has_value(), qPrintable(known.error()));
+        QVERIFY2(known.has_value(), qPrintable(Fixtures::whyNot(known)));
 
         const auto newer = SpaceSnapshotFile::read(rewritten(file, "2.0", false));
         QVERIFY(!newer.has_value());
         QVERIFY2(newer.error().contains("newer Omabook") && newer.error().contains("2.0") && newer.error().contains("Update Omabook"),
-                 qPrintable(newer.error()));
+                 qPrintable(Fixtures::whyNot(newer)));
         const auto later = SpaceSnapshotFile::read(rewritten(file, "1.7", true));
-        QVERIFY2(later.has_value(), qPrintable(later.error()));
+        QVERIFY2(later.has_value(), qPrintable(Fixtures::whyNot(later)));
         QCOMPARE(later->operations, known->operations);
         QCOMPARE(later->owner, known->owner);
 
@@ -450,7 +450,7 @@ private slots:
         QVERIFY(samples.contains("space-1.0.omabook-space"));
         for (const QString &name : samples) {
             const auto snapshot = SpaceSnapshotFile::load(data.filePath(name));
-            QVERIFY2(snapshot.has_value(), qPrintable(name + ": " + snapshot.error()));
+            QVERIFY2(snapshot.has_value(), qPrintable(name + ": " + Fixtures::whyNot(snapshot)));
             QCOMPARE(snapshot->kind, QString("published"));
             QVERIFY2(snapshot->space.startsWith("published:"), qPrintable(name));
             QVERIFY2(!snapshot->owner.name.isEmpty() && Person::publicKeyFrom(snapshot->owner.person).has_value(), qPrintable(name));
@@ -871,7 +871,7 @@ private slots:
         QVERIFY(!QTest::currentTestFailed());
         const auto snapshot = PublishedSpace::snapshot(shelf.library, shelf.sciFi,
                                                        {.graph = true, .questions = true, .ratings = true, .reading = true}, owner());
-        QVERIFY2(snapshot.has_value(), qPrintable(snapshot.error()));
+        QVERIFY2(snapshot.has_value(), qPrintable(Fixtures::whyNot(snapshot)));
         QVERIFY(SpaceSnapshotFile::save(*snapshot, target).has_value());
     }
 };

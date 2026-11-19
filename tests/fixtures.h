@@ -70,4 +70,10 @@ QString script(const QString &path, const QByteArray &body);
 // out, looks at every library they name, which would open the user's own.
 QString standInSsh(const QString &folder, const QString &binary);
 
+// Why a result (a std::expected) failed, for a check's message: Qt makes a
+// QVERIFY2's message also when the check passes, and a result that holds a
+// value has no error to read (calling error() on it aborts under
+// _GLIBCXX_ASSERTIONS). Empty when there is a value.
+template <typename Result> [[nodiscard]] QString whyNot(const Result &result) { return result ? QString() : QString(result.error()); }
+
 } // namespace Fixtures

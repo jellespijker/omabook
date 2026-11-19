@@ -16,6 +16,7 @@
 #include <vector>
 
 #include "changelog.h"
+#include "fixtures.h"
 #include "keyrotation.h"
 #include "library.h"
 #include "person.h"
@@ -36,7 +37,7 @@ namespace {
 
 using SharedSpace::Role;
 
-template <typename Answer> [[nodiscard]] QString whyNot(const Answer &answer) { return answer ? QString() : answer.error(); }
+using Fixtures::whyNot;
 
 [[nodiscard]] Person newPerson() {
     auto person = Person::generate();

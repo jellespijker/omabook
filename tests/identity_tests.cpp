@@ -141,7 +141,7 @@ private slots:
         const QByteArray batch = SignedOps::seal(key, u"space-1", ops);
         QVERIFY(!batch.contains("book-gid"));
         const auto opened = SignedOps::open(key, u"space-1", batch);
-        QVERIFY2(opened, qPrintable(opened.error()));
+        QVERIFY2(opened, qPrintable(Fixtures::whyNot(opened)));
         QCOMPARE(opened->size(), 3);
         for (qsizetype at = 0; at < ops.size(); ++at) {
             QCOMPARE(SignedOps::canonicalBytes(opened->at(at).op), SignedOps::canonicalBytes(ops.at(at).op));
@@ -204,7 +204,7 @@ private slots:
         const mode_t before = ::umask(0);
         const auto person = Person::loadOrCreate(file);
         ::umask(before);
-        QVERIFY2(person, qPrintable(person ? QString() : person.error()));
+        QVERIFY2(person, qPrintable(Fixtures::whyNot(person)));
         struct stat info{};
         QCOMPARE(::stat(QFile::encodeName(file).constData(), &info), 0);
         QCOMPARE(info.st_mode & 0777U, 0600U);

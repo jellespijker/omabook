@@ -268,7 +268,7 @@ private slots:
 
         // The file holds the graph switched on, and nothing switched off.
         const auto written = SpaceSnapshotFile::load(file);
-        QVERIFY2(written.has_value(), qPrintable(written ? QString() : written.error()));
+        QVERIFY2(written.has_value(), qPrintable(Fixtures::whyNot(written)));
         QCOMPARE(written->owner.name, QString("Ada"));
         QCOMPARE(written->parts, QStringList({"graph"}));
         const auto fields = [&written](const QString &field) {
@@ -379,7 +379,7 @@ private slots:
         FolderLink sender(links);
         const auto sent =
             CollectionShare::publish(owner, *owner.collection(*shelf), {}, {.as = "Ada", .output = {}, .link = &sender, .open = false});
-        QVERIFY2(sent.has_value(), qPrintable(sent ? QString() : sent.error()));
+        QVERIFY2(sent.has_value(), qPrintable(Fixtures::whyNot(sent)));
         const QString address = sent->value("sent").toObject().value("address").toString();
         QVERIFY(address.startsWith("https://link.test/"));
         QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));

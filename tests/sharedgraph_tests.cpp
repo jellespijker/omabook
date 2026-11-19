@@ -104,7 +104,7 @@ struct Receiver {
         QVERIFY(book > 0);
         own = Graph(library).upsert({}, "character", "Mara", "My note: she rows at night.", {}, GraphPlace{book, 0, 0.2});
         const auto subscribed = Subscriptions::subscribe(library, owner.snapshot(), {});
-        QVERIFY2(subscribed.has_value(), qPrintable(subscribed ? QString() : subscribed.error()));
+        QVERIFY2(subscribed.has_value(), qPrintable(Fixtures::whyNot(subscribed)));
         space = subscribed->space.space;
     }
 

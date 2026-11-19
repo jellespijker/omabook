@@ -34,8 +34,7 @@ namespace {
 
 [[nodiscard]] QString sample() { return QFINDTESTDATA("data/space-1.0.omabook-space"); }
 
-// Why an answer is none, for a check's message: only asked of one that is.
-template <typename Answer> [[nodiscard]] QString whyNot(const Answer &answer) { return answer ? QString() : answer.error(); }
+using Fixtures::whyNot;
 
 [[nodiscard]] SpaceSnapshot sampleSnapshot() {
     const auto snapshot = Subscriptions::fetch(sample());
