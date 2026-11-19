@@ -58,6 +58,15 @@ GridLayout {
             show()
         }
 
+        // A model that sends the text on to another service says so.
+        delegate: ItemDelegate {
+            required property int index
+            required property string modelData
+            width: ListView.view ? ListView.view.width : 200
+            text: index > 0 && aiAgent.elsewhereModels.includes(modelData) ? qsTr("%1 (runs elsewhere)").arg(modelData) : modelData
+            highlighted: box.highlightedIndex === index
+        }
+
         onActivated: (index) => take(index === 0 ? "" : aiAgent.knownModels[index - 1])
         onAccepted: take(editText)
         onModelChanged: show()

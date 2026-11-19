@@ -187,9 +187,9 @@ QList<Manual::Topic> Manual::topicList() {
               tr("{global.change} takes a wish in words, such as “make it warmer” or “bigger covers”, and rewrites the "
                  "interface's files for you. One click puts back what the last change replaced.")},
              {tr("Which model, and what is sent"),
-              tr("The settings ({global.settings}) pick the model: Omarchy's default agent, Claude with a key, any "
-                 "command such as a local model, or none. Nothing is sent until you ask; then it is your question, the "
-                 "book's title and authors, and the part of the text you asked about.")},
+              tr("The settings ({global.settings}) pick the model: Omarchy's default agent, Claude with a key, a server such "
+                 "as Ollama or Omarchy's local models, any command, or none. Nothing is sent until you ask; then it is your "
+                 "question, the book's title and authors, and the part of the text you asked about, to that model only.")},
          }},
         {"library", tr("Your library"), tr("Views, order, filters, collections, details, and books on paper."),
          {

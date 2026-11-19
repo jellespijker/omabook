@@ -16,9 +16,18 @@ AppPopup {
         { key: "claude", name: qsTr("Claude Code, with your subscription") },
         { key: "agy", name: qsTr("Antigravity, with your subscription") },
         { key: "anthropic", name: qsTr("Claude, with an API key") },
+        { key: "openai", name: qsTr("A server (OpenAI-compatible)") },
         { key: "command", name: qsTr("A command") },
         { key: "off", name: qsTr("Off") }
     ]
+
+    // The servers "A server" can be: Omarchy's local models only where
+    // Omarchy can run them.
+    readonly property var servers: (aiAgent.omarchyLocal ? [{ key: "omarchy-local", name: qsTr("Omarchy's local model") }] : []).concat([
+        { key: "ollama", name: qsTr("Ollama") },
+        { key: "openai", name: qsTr("OpenAI") },
+        { key: "custom", name: qsTr("Another server: OpenRouter, Groq, LM Studio, llama.cpp, ...") }
+    ])
 
     // In a short window the settings scroll rather than run off its edge.
     contentItem: ScrollView {
@@ -113,6 +122,76 @@ AppPopup {
             selectByMouse: true
             Material.roundedScale: theme.radius
             onEditingFinished: settings.aiCommand = text
+        }
+        // A server: which one, where it is, and its key, which is kept in
+        // the keyring and never shown again.
+        ComboBox {
+            objectName: "aiServer"
+            Layout.fillWidth: true
+            visible: settings.aiProvider === "openai"
+            model: dialog.servers
+            textRole: "name"
+            currentIndex: Math.max(0, dialog.servers.findIndex(entry => entry.key === aiAgent.serverPreset))
+            Material.roundedScale: theme.radius
+            onActivated: (index) => aiAgent.setServer(dialog.servers[index].key, "")
+        }
+        TextField {
+            objectName: "aiServerUrl"
+            Layout.fillWidth: true
+            visible: settings.aiProvider === "openai" && aiAgent.serverPreset !== "omarchy-local"
+            placeholderText: qsTr("The server's address, such as https://openrouter.ai/api/v1")
+            text: aiAgent.serverUrl
+            selectByMouse: true
+            Material.roundedScale: theme.radius
+            onEditingFinished: aiAgent.setServer(aiAgent.serverPreset, text)
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            visible: settings.aiProvider === "openai" && aiAgent.serverPreset !== "omarchy-local"
+            TextField {
+                id: serverKey
+                objectName: "aiServerKey"
+                Layout.fillWidth: true
+                echoMode: TextInput.Password
+                placeholderText: aiAgent.serverHasKey ? qsTr("Kept in the keyring; paste another to replace it")
+                                                      : qsTr("Its key, if it takes one")
+                selectByMouse: true
+                Material.roundedScale: theme.radius
+                onAccepted: {
+                    if (text === "")
+                        return
+                    serverKeyProblem.text = aiAgent.setServerKey(text)
+                    text = ""
+                }
+            }
+            AppButton {
+                objectName: "forgetServerKey"
+                visible: aiAgent.serverHasKey
+                text: qsTr("Forget the Key")
+                onClicked: serverKeyProblem.text = aiAgent.setServerKey("")
+            }
+        }
+        Label {
+            id: serverKeyProblem
+            Layout.fillWidth: true
+            visible: settings.aiProvider === "openai" && text !== ""
+            wrapMode: Text.Wrap
+        }
+        Label {
+            objectName: "aiServerUnencrypted"
+            Layout.fillWidth: true
+            visible: settings.aiProvider === "openai" && aiAgent.serverInTheClear
+            wrapMode: Text.Wrap
+            text: qsTr("This address starts with http://, so your questions and the book's text cross the network unencrypted. Use https:// for a server beyond this computer and your tailnet.")
+        }
+        Label {
+            objectName: "aiServerModels"
+            Layout.fillWidth: true
+            visible: settings.aiProvider === "openai" && aiAgent.modelsProblem !== ""
+            wrapMode: Text.Wrap
+            color: theme.colors.muted
+            text: aiAgent.modelsProblem
         }
         // The model picker: one model for what you read, a smaller one for
         // what Omabook reads. The lists are those of the AI in use.

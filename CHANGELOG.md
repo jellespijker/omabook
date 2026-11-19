@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Added
+
+- The AI can be a server that speaks the OpenAI-compatible API: **A server (OpenAI-compatible)** in Settings, `ai_provider: "openai"` with `ai_endpoint` in `config.json`. Omarchy's own local models (`omarchy agent local`, the one running here or one paired from the tailnet, with the key Omarchy keeps, read again for every question), Ollama on this computer or another one, OpenAI with `OPENAI_API_KEY` or a key of your own, or any other by its address (OpenRouter, Groq, LM Studio, llama.cpp, vLLM, ...). Answers stream, the system prompt and the conversation go as they are, and a thinking model's working is never shown. Both model rows list the server's models, kept for each server; Ollama's `…:cloud` models are marked *runs elsewhere* and never used unless picked. A refused model is asked again of the main one, a server that can't be reached says so, and Settings says when `http://` sends the text unencrypted beyond this computer and the tailnet. Keys are kept in the keyring, never in `config.json` or the log. Automatic is unchanged: it never switches to a server by itself. `omabook ai use|models|key` does the same on the command line, and `omabook info --json` says which server and whether a key is set (#32).
+
 ### Changed
 
 - A long press on a book with a finger lists what can be done with it, as a right click does, beside where it was pressed, in every view of the shelf; its details are one of what is listed. Before, holding a book only opened its details, and the list was reached only from the details' *More* (#9).

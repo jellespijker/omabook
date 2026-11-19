@@ -153,5 +153,9 @@ QList<Manual::Step> Manual::features() {
          tr("For a household or a book club, `omabook spaces` makes a collection several people write, kept in step "
             "through a folder you already sync."),
          "", "", "", ""},
+        {"ai-servers", "0.1.7", tr("Your own AI server"),
+         tr("Under {global.settings}, the AI can be a server: Omarchy's local models, Ollama on this computer or another "
+            "one, OpenAI, or any other by its address. Its models are listed to pick from."),
+         "", "global.settings", "", ""},
     };
 }
