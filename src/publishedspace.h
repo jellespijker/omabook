@@ -79,9 +79,14 @@ struct Publication {
 [[nodiscard]] std::expected<Publication, QString> follow(const Library &library, const QString &space);
 
 // The snapshot of the space `owner` publishes the collection as, taken now:
-// published first, then its log compacted (Compaction::latest), each
+// published first, then its log compacted (PublishedLog::compacted), each
 // operation keeping its number there and with the owner as its author.
 [[nodiscard]] std::expected<SpaceSnapshot, QString> snapshot(const Library &library, qint64 collectionId, const Parts &parts,
                                                              const SpaceSnapshot::Owner &owner);
+
+// The snapshot of a space published here, its log brought in step first:
+// what a later snapshot of it is, also once its collection is gone at home
+// (then it holds only the removal of all it held).
+[[nodiscard]] std::expected<SpaceSnapshot, QString> snapshotOf(const Library &library, const QString &space);
 
 } // namespace PublishedSpace

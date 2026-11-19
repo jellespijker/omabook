@@ -39,6 +39,12 @@ void remember(const Library &library, const QString &space, const Record &record
 // Every operation of the space, by device and sequence.
 [[nodiscard]] QList<SpaceOperation> operations(const Library &library, const QString &space);
 
+// What a snapshot of the space holds of `ops` (its log): of each field the
+// latest and of what grows all (Compaction::latest), each with its number in
+// the log; of a thing gone (out of the collection, or of a part switched
+// off) only its removal, so nothing it said goes on to anyone after that.
+[[nodiscard]] QList<SpaceOperation> compacted(std::span<const SpaceOperation> ops);
+
 // Appends what `now` says that the log doesn't yet, each written by
 // `author`: a field's new value (with its own stamp, or a new one where the
 // log has a later one), what only grows and is new, a thing back that was

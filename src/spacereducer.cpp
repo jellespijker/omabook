@@ -113,14 +113,19 @@ void foldEdge(ReducedEdge &edge, const SpaceOperation &op) {
 }
 
 void foldDay(ReducedDay &day, const SpaceOperation &op) {
-    if (op.field != "range"_L1)
+    if (op.field == "removed"_L1 && op.value == "1"_L1) {
+        takeMax(day.removed, {op.hlc, op.device, 0, op.value});
+    } else if (op.field == "range"_L1) {
+        takeMax(day.alive, {op.hlc, op.device, 1, op.value});
+        const QJsonObject obj = parseObject(op.value);
+        day.bookGid = obj.value("book").toString();
+        day.day = obj.value("day").toString();
+        day.from = std::min(day.from, obj.value("from").toDouble());
+        day.to = std::max(day.to, obj.value("to").toDouble());
+    } else {
         return;
-    const QJsonObject obj = parseObject(op.value);
-    day.bookGid = obj.value("book").toString();
-    day.day = obj.value("day").toString();
-    day.from = std::min(day.from, obj.value("from").toDouble());
-    day.to = std::max(day.to, obj.value("to").toDouble());
-    day.valid = !day.bookGid.isEmpty() && !day.day.isEmpty();
+    }
+    day.valid = !day.bookGid.isEmpty() && !day.day.isEmpty() && !SpaceReducer::isRemoved(day.alive, day.removed);
 }
 
 } // namespace

@@ -86,7 +86,12 @@ struct ReducedDay {
     QString day;
     double from = 100.0;
     double to = 0.0;
+    // Whether the day is there: said of a book and a day, and not taken
+    // back by a removal ("removed" "1") later than what was said of it. Only
+    // a published space takes one back, when its reading is switched off.
     bool valid = false;
+    SpaceStamp alive;
+    SpaceStamp removed;
 };
 
 struct ReducedState {

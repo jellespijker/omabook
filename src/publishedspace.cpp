@@ -296,6 +296,7 @@ struct Place {
 
 // What the space shows of the owner's own. A collection by an id of this
 // space alone: its id at home is its path there, which names what holds it.
+// A reading day the same, so that its removal names no day.
 // Each of the owner's computers by its place among them, which keeps how
 // their writes order (SpaceReducer breaks a tie by device) and says only
 // how many wrote it.
@@ -312,6 +313,10 @@ void disguise(QList<SpaceOperation> &ops, const QString &space) {
     for (SpaceOperation &op : ops) {
         op.device = alias.value(op.device);
         op.author = alias.value(op.author);
+        // A reading day by an id of this space too: at home it is the book
+        // and the day, which its removal would still say once the day is gone.
+        if (op.entity == "reading_log"_L1)
+            op.id = u"d:"_s + hashed(space, op.id);
         if (op.entity != "collection"_L1)
             continue;
         op.id = collection(op.id);
@@ -400,41 +405,64 @@ std::expected<PublishedSpace::Publication, QString> PublishedSpace::follow(const
     QSqlQuery owner = ChangeLog::query(library, "SELECT owner FROM spaces WHERE id = ?", {space});
     const QString person = owner.next() ? owner.value(0).toString() : QString();
     owner.finish();
-    const qint64 collectionId = Spaces::localId(library, u"collection"_s, record->collection);
-    const auto now = operations(library, collectionId, Parts::fromNames(record->parts), space);
-    if (!now)
-        return std::unexpected(now.error());
+    // A collection no longer at home is no longer in the space: all it held
+    // there is taken back from those who follow it.
+    QList<SpaceOperation> now;
+    if (const qint64 collectionId = Spaces::localId(library, u"collection"_s, record->collection); collectionOf(library, collectionId)) {
+        auto ops = operations(library, collectionId, Parts::fromNames(record->parts), space);
+        if (!ops)
+            return std::unexpected(ops.error());
+        now = std::move(*ops);
+    }
     // Written by the owner, whichever of their computers it was, and
     // unsigned: what was signed at home was signed as it is there (its
     // space, device and number), which none of these is (ADR 0001, People
     // and keys).
-    const qint64 appended = PublishedLog::follow(library, space, *now, person);
+    const qint64 appended = PublishedLog::follow(library, space, now, person);
     return Publication{.space = space, .appended = appended, .operations = PublishedLog::operations(library, space).size()};
 }
+
+namespace {
+
+// The snapshot of a space published here, of its log as it is: each
+// operation with its number there, so that one who holds it is sent only
+// what the log takes after it, and of a thing gone only its removal.
+std::expected<SpaceSnapshot, QString> taken(const Library &library, const QString &space) {
+    const std::optional<PublishedLog::Record> record = PublishedLog::recorded(library, space);
+    QSqlQuery about = ChangeLog::query(library,
+                                       "SELECT s.name, s.owner, m.name FROM spaces AS s LEFT JOIN space_members AS m "
+                                       "ON m.space = s.id AND m.person = s.owner WHERE s.id = ?",
+                                       {space});
+    if (!record || !about.next())
+        return std::unexpected(u"%1 is not a space published from this library."_s.arg(space));
+    const std::optional<Collection> collection = collectionOf(library, Spaces::localId(library, u"collection"_s, record->collection));
+    QList<SpaceOperation> ops = PublishedLog::compacted(PublishedLog::operations(library, space));
+    qint64 clock = Spaces::lastHlc(library);
+    for (const SpaceOperation &op : std::as_const(ops))
+        clock = std::max(clock, op.hlc);
+    return SpaceSnapshot{.space = space,
+                         .kind = QString::fromLatin1(PublishedSpace::kind),
+                         .name = collection ? collection->name : about.value(0).toString(),
+                         .owner = {.name = about.value(2).toString(), .person = about.value(1).toString()},
+                         .parts = record->parts,
+                         .clock = clock,
+                         .writtenBy = QString::fromLatin1(OMABOOK_VERSION),
+                         .operations = std::move(ops)};
+}
+
+} // namespace
 
 std::expected<SpaceSnapshot, QString> PublishedSpace::snapshot(const Library &library, qint64 collectionId, const Parts &parts,
                                                                const SpaceSnapshot::Owner &owner) {
     const auto published = publish(library, collectionId, parts, owner);
     if (!published)
         return std::unexpected(published.error());
-    const std::optional<Collection> collection = collectionOf(library, collectionId);
-    if (!collection)
-        return std::unexpected(u"There is no collection %1 to publish."_s.arg(collectionId));
-    // Each operation keeps the number it has in the log, so that one who
-    // holds this snapshot is sent only what the log takes after it.
-    QList<SpaceOperation> ops = Compaction::latest(PublishedLog::operations(library, published->space));
-    std::ranges::sort(ops, [](const SpaceOperation &one, const SpaceOperation &other) {
-        return std::tie(one.device, one.seq) < std::tie(other.device, other.seq);
-    });
-    qint64 clock = Spaces::lastHlc(library);
-    for (const SpaceOperation &op : std::as_const(ops))
-        clock = std::max(clock, op.hlc);
-    return SpaceSnapshot{.space = published->space,
-                         .kind = QString::fromLatin1(kind),
-                         .name = collection->name,
-                         .owner = owner,
-                         .parts = parts.names(),
-                         .clock = clock,
-                         .writtenBy = QString::fromLatin1(OMABOOK_VERSION),
-                         .operations = std::move(ops)};
+    return taken(library, published->space);
+}
+
+std::expected<SpaceSnapshot, QString> PublishedSpace::snapshotOf(const Library &library, const QString &space) {
+    const auto followed = follow(library, space);
+    if (!followed)
+        return std::unexpected(followed.error());
+    return taken(library, space);
 }

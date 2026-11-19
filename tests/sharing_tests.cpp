@@ -568,6 +568,8 @@ private slots:
                  QSet<QString>(state.books.keyBegin(), state.books.keyEnd()));
         for (auto book = state.books.cbegin(); book != state.books.cend(); ++book) {
             QCOMPARE(gone(followed.books.value(book.key())), gone(*book));
+            if (gone(*book))
+                continue; // the newer snapshot says only that it went
             for (const char *field : {"title", "rating"})
                 QCOMPARE(followed.books.value(book.key()).fields.value(field).value, book->fields.value(field).value);
         }
@@ -581,6 +583,99 @@ private slots:
         const auto without = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {}, ada);
         QVERIFY2(without.has_value(), why(without).constData());
         QCOMPARE(SpaceReducer::reduce(without->operations).books.value(shelf.gid(shelf.dune)).fields.value("rating").value, QString());
+    }
+
+    // Switching the personal parts off takes all of them back: a snapshot
+    // written after holds none of it (not a byte of the file), and one who
+    // held the earlier snapshot and takes the operations after it is left
+    // without it too.
+    void switchingAPartOffTakesItBackFromLaterSnapshotsAndFollowers() {
+        Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const SpaceSnapshot::Owner ada = owner();
+        const auto first =
+            PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true, .questions = true, .ratings = true, .reading = true}, ada);
+        QVERIFY2(first.has_value(), why(first).constData());
+        const QByteArray before = SpaceSnapshotFile::write(*first);
+        const QList<QByteArray> personal{
+            "\"rating\",\"4\"", "\"progress\",\"{", "\"shelf\",\"reading\"", "\"range\"", "2026-11-01", "\"revealed\"", "\"link\"", "seen:",
+            "Paul Atreides",    "Who is Paul",      "The duke's son"};
+        for (const QByteArray &word : personal)
+            QVERIFY2(before.contains(word), word.constData()); // there to be taken back
+
+        const auto second = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {}, ada);
+        QVERIFY2(second.has_value(), why(second).constData());
+        QCOMPARE(second->space, first->space);
+        const QByteArray after = SpaceSnapshotFile::write(*second);
+        for (const QByteArray &word : personal)
+            QVERIFY2(!after.contains(word), word.constData());
+        const ReducedState now = SpaceReducer::reduce(second->operations);
+        QCOMPARE(now.books.size(), 3);
+        QCOMPARE(now.books.value(shelf.gid(shelf.dune)).fields.value("title").value, QString("Dune"));
+
+        // One who follows: the first snapshot, then what the log took after it.
+        qint64 last = 0;
+        for (const SpaceOperation &op : first->operations)
+            last = std::max(last, op.seq);
+        QList<SpaceOperation> followed = first->operations;
+        for (const SpaceOperation &op : PublishedLog::operations(shelf.library, first->space))
+            if (op.seq > last)
+                followed << op;
+        const ReducedState state = SpaceReducer::reduce(followed);
+        const auto isGone = [](const auto &thing) { return SpaceReducer::isRemoved(thing.alive, thing.removed); };
+        QVERIFY(!state.nodes.isEmpty() && std::ranges::all_of(state.nodes, isGone));
+        QVERIFY(!state.facts.isEmpty() && std::ranges::all_of(state.facts, isGone));
+        QVERIFY(!state.edges.isEmpty() && std::ranges::all_of(state.edges, isGone));
+        QVERIFY(!state.days.isEmpty() && std::ranges::none_of(state.days, [](const ReducedDay &day) { return day.valid; }));
+        for (const ReducedBook &book : state.books)
+            for (const char *field : {"rating", "progress", "shelf", "finished"})
+                QVERIFY2(book.fields.value(field).value.isEmpty() || book.fields.value(field).value == "0", field);
+
+        // Switched on again, it comes back.
+        const auto again = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.reading = true}, ada);
+        QVERIFY2(again.has_value(), why(again).constData());
+        const ReducedState back = SpaceReducer::reduce(again->operations);
+        QVERIFY(std::ranges::any_of(back.days, [](const ReducedDay &day) { return day.valid; }));
+        QCOMPARE(back.books.value(shelf.gid(shelf.dune)).fields.value("shelf").value, QString("reading"));
+    }
+
+    // A collection deleted at home is taken back from its space: what follows
+    // the space is its removal of all it held, and a snapshot of it holds
+    // nothing more.
+    void aCollectionDeletedAtHomeIsTakenBackFromItsSpace() {
+        Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const auto first = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true, .ratings = true}, owner());
+        QVERIFY2(first.has_value(), why(first).constData());
+        QVERIFY(shelf.library.removeCollection(shelf.sciFi));
+
+        const auto followed = PublishedSpace::follow(shelf.library, first->space);
+        QVERIFY2(followed.has_value(), why(followed).constData());
+        QVERIFY(followed->appended > 0);
+        const auto later = PublishedSpace::snapshotOf(shelf.library, first->space);
+        QVERIFY2(later.has_value(), why(later).constData());
+        QCOMPARE(later->owner, first->owner);
+        QVERIFY(!later->operations.isEmpty());
+        for (const SpaceOperation &op : later->operations)
+            QVERIFY2(op.field == "removed" && op.value == "1", qPrintable(op.entity + " " + op.field + ": " + op.value));
+        const QByteArray file = SpaceSnapshotFile::write(*later);
+        for (const char *word : {"Dune", "Paul Atreides", "9780441172719", "\"rating\""})
+            QVERIFY2(!file.contains(word), word);
+
+        qint64 last = 0;
+        for (const SpaceOperation &op : first->operations)
+            last = std::max(last, op.seq);
+        QList<SpaceOperation> all = first->operations;
+        for (const SpaceOperation &op : PublishedLog::operations(shelf.library, first->space))
+            if (op.seq > last)
+                all << op;
+        const ReducedState state = SpaceReducer::reduce(all);
+        const auto isGone = [](const auto &thing) { return SpaceReducer::isRemoved(thing.alive, thing.removed); };
+        QVERIFY(!state.books.isEmpty() && std::ranges::all_of(state.books, isGone));
+        QVERIFY(!state.collections.isEmpty() && std::ranges::all_of(state.collections, isGone));
+        QVERIFY(std::ranges::all_of(state.nodes, isGone) && std::ranges::all_of(state.edges, isGone));
+        const auto quiet = PublishedSpace::follow(shelf.library, first->space);
+        QVERIFY(quiet.has_value() && quiet->appended == 0);
     }
 
     // Before anything is written: what goes in, counted by kind, and what is

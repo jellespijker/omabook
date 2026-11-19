@@ -10,6 +10,7 @@
 #include <tuple>
 
 #include "changelog.h"
+#include "compaction.h"
 #include "library.h"
 #include "spacereducer.h"
 #include "spaces.h"
@@ -29,12 +30,15 @@ namespace {
     return op.entity == "book"_L1 ? !op.value.isEmpty() && op.value != "0"_L1 : op.value == "1"_L1;
 }
 
+// Every kind a space holds can go, a reading day too: what is switched off
+// is taken back from those who had it, not only no longer sent.
 [[nodiscard]] bool removable(const QString &entity) {
-    return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1 || entity == "fact"_L1 || entity == "edge"_L1;
+    return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1 || entity == "fact"_L1 || entity == "edge"_L1
+           || entity == "reading_log"_L1;
 }
 
-// What a removal of "0" brings back; a fact or a relation comes back by
-// saying what it says again, later than its removal. A reading day only grows.
+// What a removal of "0" brings back; a fact, a relation or a reading day
+// comes back by saying what it says again, later than its removal.
 [[nodiscard]] bool backByZero(const QString &entity) { return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1; }
 
 struct Said {
@@ -221,6 +225,28 @@ QList<SpaceOperation> PublishedLog::operations(const Library &library, const QSt
                               .field = query.value(6).toString(),
                               .value = query.value(7).toString()};
     return ops;
+}
+
+QList<SpaceOperation> PublishedLog::compacted(std::span<const SpaceOperation> ops) {
+    const QHash<QString, Logged> things = loggedOf(ops);
+    QHash<QString, SpaceOperation> tombstones;
+    QList<SpaceOperation> kept;
+    for (const SpaceOperation &op : Compaction::latest(ops)) {
+        const QString key = keyOf(op.entity, op.id);
+        if (!things.value(key).gone()) {
+            kept << op;
+            continue;
+        }
+        // Of a thing gone, its latest removal and nothing it said.
+        const auto at = tombstones.constFind(key);
+        if (removes(op) && (at == tombstones.cend() || std::tie(op.hlc, op.seq) > std::tie(at->hlc, at->seq)))
+            tombstones.insert(key, op);
+    }
+    kept << tombstones.values();
+    std::ranges::sort(kept, [](const SpaceOperation &one, const SpaceOperation &other) {
+        return std::tie(one.device, one.seq) < std::tie(other.device, other.seq);
+    });
+    return kept;
 }
 
 qint64 PublishedLog::follow(const Library &library, const QString &space, std::span<const SpaceOperation> now, const QString &author) {

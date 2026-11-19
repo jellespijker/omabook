@@ -145,7 +145,11 @@ which can't win anyway. So its numbers stay: a snapshot is the log compacted wit
 number in the log, and one who holds it needs only the operations after it. What the space says of
 the graph is cut where the owner is in each book (`GraphContext::reachOf`): a sighting, a fact or a
 relation learned further on stays out until they get there, nothing of a book not begun goes, and a
-thing's summary goes only as its facts, each with the place it was learned at.
+thing's summary goes only as its facts, each with the place it was learned at. A part switched off
+is taken back, not only no longer sent: each thing of it gets its removal (a reading day too, with an
+id of the space's own so its removal names no day) and each field of it is said to be empty, and a
+snapshot holds of a thing gone only its removal. A collection deleted at home is followed by the
+removal of all its space held.
 
 ### Transports are adapters
 
