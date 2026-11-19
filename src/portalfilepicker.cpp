@@ -89,6 +89,8 @@ PortalFileFilter pluginFilter() {
     return {PortalFilePicker::tr("Plugins"), {{0, QStringLiteral("*.zip")}}};
 }
 
+PortalFileFilter spaceFilter() { return {PortalFilePicker::tr("Shared collections"), {{0, QStringLiteral("*.omabook-space")}}}; }
+
 PortalFileFilter allFilter() {
     return {PortalFilePicker::tr("All files"), {{0, QStringLiteral("*")}}};
 }
@@ -104,6 +106,14 @@ QByteArray portalPathBytes(const QString &path) {
 QString startFolder(QStandardPaths::StandardLocation location) {
     const QString folder = QStandardPaths::writableLocation(location);
     return QDir(folder).exists() ? folder : QDir::homePath();
+}
+
+// A save dialog's options: the button, and the folder and name of the file suggested.
+void saveAs(QVariantMap &options, const QString &suggested) {
+    const QFileInfo target(suggested);
+    options.insert(QStringLiteral("accept_label"), PortalFilePicker::tr("Save"));
+    options.insert(QStringLiteral("current_folder"), portalPathBytes(target.absolutePath()));
+    options.insert(QStringLiteral("current_name"), target.fileName());
 }
 
 } // namespace
@@ -141,28 +151,20 @@ void PortalFilePicker::pick(Purpose purpose, const QString &suggested) {
         options.insert(QStringLiteral("current_filter"), QVariant::fromValue(pictureFilter()));
         requestFile(QStringLiteral("OpenFile"), tr("Choose a Cover"), options, purpose);
         break;
-    case ExportBook: {
-        const QFileInfo target(suggested);
-        options.insert(QStringLiteral("accept_label"), tr("Save"));
-        options.insert(QStringLiteral("current_folder"), portalPathBytes(target.absolutePath()));
-        options.insert(QStringLiteral("current_name"), target.fileName());
+    case ExportBook:
+        saveAs(options, suggested);
         requestFile(QStringLiteral("SaveFile"), tr("Save a Copy"), options, purpose);
         break;
-    }
     case ImportReading:
         // The file a reading site lets its users download of their shelves.
         options.insert(QStringLiteral("accept_label"), tr("Import"));
         options.insert(QStringLiteral("current_folder"), portalPathBytes(startFolder(QStandardPaths::DownloadLocation)));
         requestFile(QStringLiteral("OpenFile"), tr("Import Your Shelves"), options, purpose);
         break;
-    case ExportReading: {
-        const QFileInfo target(suggested);
-        options.insert(QStringLiteral("accept_label"), tr("Save"));
-        options.insert(QStringLiteral("current_folder"), portalPathBytes(target.absolutePath()));
-        options.insert(QStringLiteral("current_name"), target.fileName());
+    case ExportReading:
+        saveAs(options, suggested);
         requestFile(QStringLiteral("SaveFile"), tr("Save Your Reading"), options, purpose);
         break;
-    }
     case InstallPlugin:
         options.insert(QStringLiteral("accept_label"), tr("Choose"));
         options.insert(QStringLiteral("current_folder"), portalPathBytes(startFolder(QStandardPaths::DownloadLocation)));
@@ -175,6 +177,17 @@ void PortalFilePicker::pick(Purpose purpose, const QString &suggested) {
         options.insert(QStringLiteral("directory"), true);
         options.insert(QStringLiteral("current_folder"), portalPathBytes(QDir::homePath()));
         requestFile(QStringLiteral("OpenFile"), tr("Install a Plugin From a Folder"), options, purpose);
+        break;
+    case SaveSpace:
+        saveAs(options, suggested);
+        requestFile(QStringLiteral("SaveFile"), tr("Save the Shared Collection"), options, purpose);
+        break;
+    case OpenSpace:
+        options.insert(QStringLiteral("accept_label"), tr("Open"));
+        options.insert(QStringLiteral("current_folder"), portalPathBytes(startFolder(QStandardPaths::DownloadLocation)));
+        options.insert(QStringLiteral("filters"), QVariant::fromValue(PortalFileFilters{spaceFilter(), allFilter()}));
+        options.insert(QStringLiteral("current_filter"), QVariant::fromValue(spaceFilter()));
+        requestFile(QStringLiteral("OpenFile"), tr("Subscribe to a Shared Collection"), options, purpose);
         break;
     }
 }

@@ -97,7 +97,7 @@ QString shared(const Library &library, qint64 bookId, const std::optional<GraphP
         GraphView view = layer.ofBook(bookId);
         view.nodes.removeIf([](const GraphNode &node) { return !Prompts::graphKinds().contains(node.kind); });
         if (const QString text = view.nodes.isEmpty() ? QString() : part(view); !text.isEmpty())
-            parts << "From " + GraphLayers::from(view.nodes.first()) + " (" + layer.name
+            parts << "From " + GraphLayers::from(view.nodes.first(), GraphLayers::Said::English) + " (" + layer.name
                          + "), which someone shared: not the reader's own notes, and as far as the reader has read:\n" + text;
     }
     return parts.join("\n\n");
@@ -156,7 +156,8 @@ void sharedTouched(const Library &library, const QStringList &words, const Graph
                 || !named(node))
                 continue;
             shown << node.id;
-            touched << line(node) + " [in: " + book->meta.title + "; from " + GraphLayers::from(node) + ", not the reader's own]";
+            touched << line(node) + " [in: " + book->meta.title + "; from " + GraphLayers::from(node, GraphLayers::Said::English)
+                           + ", not the reader's own]";
         }
 }
 

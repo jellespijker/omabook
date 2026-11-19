@@ -1372,5 +1372,81 @@
   "Read as pages that turn, as one column that scrolls on through the chapters, or automatically, and round again": "Als Seiten zum Umblättern lesen, als eine Spalte, die durch die Kapitel weiterscrollt, oder automatisch, und wieder von vorn",
   "Pages or scroll": "Seiten oder Scrollen",
   "{reader.layout} chooses how a book is read through, also under Layout in the Aa panel. Pages: even one column is cut into pages, each chapter starts on a page of its own, and turning on from its last page opens the next chapter; a PDF or comic page is shown whole, and two side by side open as a book does, page 1 alone (First page alone). Scroll: one column that runs on, with a line at each chapter's end saying what is next; scroll on past it, or tap it, to go on. Automatic: pages where two fit side by side, else a column that scrolls. Your place stays where it is when you change.": "{reader.layout} wählt, wie ein Buch gelesen wird, auch unter Aufteilung im Aa-Feld. Seiten: Auch eine einzelne Spalte wird in Seiten geteilt, jedes Kapitel beginnt auf einer eigenen Seite, und nach seiner letzten Seite öffnet ein Umblättern das nächste Kapitel; eine PDF- oder Comicseite wird ganz gezeigt, und zwei nebeneinander öffnen sich wie ein Buch, Seite 1 allein (Erste Seite allein). Scrollen: eine Spalte, die weiterläuft, mit einer Zeile am Ende jedes Kapitels, die sagt, was folgt; scrolle darüber hinaus oder tippe sie an, um weiterzulesen. Automatisch: Seiten, wo zwei nebeneinander passen, sonst eine Spalte zum Scrollen. Deine Stelle bleibt, wo sie ist, wenn du wechselst.",
-  "{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, or as one column that runs on from chapter to chapter. A turn never shows a line twice.": "{reader.layout} liest ein Buch als Seiten, jedes Kapitel auf einer eigenen Seite und eine PDF-Seite ganz, oder als eine Spalte, die von Kapitel zu Kapitel weiterläuft. Ein Umblättern zeigt keine Zeile zweimal."
+  "{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, or as one column that runs on from chapter to chapter. A turn never shows a line twice.": "{reader.layout} liest ein Buch als Seiten, jedes Kapitel auf einer eigenen Seite und eine PDF-Seite ganz, oder als eine Spalte, die von Kapitel zu Kapitel weiterläuft. Ein Umblättern zeigt keine Zeile zweimal.",
+  "%1's shared graph": "%1 (geteilter Graph)",
+  "the shared graph of %1": "„%1“ (geteilter Graph)",
+  "%Ln become wishlist entries: books without a file, never downloaded": {
+    "one": "%Ln kommt auf die Wunschliste: ein Buch ohne Datei, nie heruntergeladen",
+    "other": "%Ln kommen auf die Wunschliste: Bücher ohne Datei, nie heruntergeladen"
+  },
+  "%Ln books: title, authors, series, ISBN and their names on other sites": {
+    "one": "%Ln Buch: Titel, Autoren, Reihe, ISBN und seine Namen auf anderen Seiten",
+    "other": "%Ln Bücher: Titel, Autoren, Reihe, ISBN und ihre Namen auf anderen Seiten"
+  },
+  "%Ln collections, with their names, rules and how their shelves show": {
+    "one": "%Ln Sammlung, mit Name, Regel und wie ihr Regal aussieht",
+    "other": "%Ln Sammlungen, mit Namen, Regeln und wie ihre Regale aussehen"
+  },
+  "%Ln of its books are in your library": {
+    "one": "%Ln seiner Bücher ist in deiner Bibliothek",
+    "other": "%Ln seiner Bücher sind in deiner Bibliothek"
+  },
+  "%Ln you removed before stay removed": {
+    "one": "%Ln, das du früher entfernt hast, bleibt entfernt",
+    "other": "%Ln, die du früher entfernt hast, bleiben entfernt"
+  },
+  "and %Ln more": {
+    "one": "und %Ln weiteres",
+    "other": "und %Ln weitere"
+  },
+  "A new collection, yours to change like any other.": "Eine neue Sammlung, die du ändern kannst wie jede andere.",
+  "Another file…": "Eine andere Datei…",
+  "Choose a file…": "Datei wählen…",
+  "Choose the .omabook-space file someone gave you, or drop it on the window. Nothing is subscribed to before you say so here.": "Wähle die .omabook-space-Datei, die dir jemand gegeben hat, oder zieh sie auf das Fenster. Abonniert wird erst, wenn du es hier sagst.",
+  "Choose…": "Wählen…",
+  "Counting what goes in…": "Zähle, was hineinkommt…",
+  "Goes in": "Kommt hinein",
+  "Its books go in the collection": "Seine Bücher kommen in die Sammlung",
+  "Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "Sein Graph (%1 Dinge, %2 Fakten, %3 Beziehungen) bleibt eine eigene Ebene, getrennt von deinem, und zeigt nur, so weit du jedes Buch gelesen hast.",
+  "Never goes": "Kommt nie hinein",
+  "No graph comes with it.": "Es kommt kein Graph mit.",
+  "Publish": "Veröffentlichen",
+  "Publish %1…": "%1 veröffentlichen…",
+  "Publish a collection": "Eine Sammlung veröffentlichen",
+  "Publish the collection shown for others to subscribe to: says first what goes in, and what never does": "Die gezeigte Sammlung veröffentlichen, damit andere sie abonnieren: sagt zuerst, was hineinkommt und was nie",
+  "Published as %1, as before.": "Veröffentlicht als %1, wie zuvor.",
+  "Published as %1. %2 holds it: give it to whoever you share the collection with.": "Veröffentlicht als %1. %2 enthält sie: gib die Datei denen, mit denen du die Sammlung teilst.",
+  "Published by %1.": "Veröffentlicht von %1.",
+  "Published by someone who gave no name.": "Veröffentlicht von jemandem ohne Namen.",
+  "Publish…": "Veröffentlichen…",
+  "Reading the shared collection…": "Lese die geteilte Sammlung…",
+  "Save it as": "Speichern als",
+  "Save the Shared Collection": "Die geteilte Sammlung speichern",
+  "Shared collections": "Geteilte Sammlungen",
+  "Subscribe": "Abonnieren",
+  "Subscribe to %1": "%1 abonnieren",
+  "Subscribe to a Shared Collection": "Eine geteilte Sammlung abonnieren",
+  "Subscribe to a collection someone published, from its .omabook-space file": "Eine Sammlung abonnieren, die jemand veröffentlicht hat, aus ihrer .omabook-space-Datei",
+  "Subscribe to a shared collection": "Eine geteilte Sammlung abonnieren",
+  "Subscribe to a shared collection…": "Eine geteilte Sammlung abonnieren…",
+  "Subscribed to %1, shared by %2. Its books are in %3; its graph stays a layer of its own.": "%1 abonniert, geteilt von %2. Seine Bücher sind in %3; sein Graph bleibt eine eigene Ebene.",
+  "Subscribed to, from %1's shared collection": "Abonniert, aus der geteilten Sammlung von %1",
+  "Subscribed to, from %1's shared collection: what they add to it comes here too.": "Abonniert, aus der geteilten Sammlung von %1: was dort dazukommt, kommt auch hierher.",
+  "That collection is gone.": "Diese Sammlung gibt es nicht mehr.",
+  "The books' files (%1): those you share it with need their own copies.": "Die Dateien der Bücher (%1): wem du die Sammlung gibst, braucht eigene Exemplare.",
+  "The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book": "Der Graph: %1 Dinge, %2 Fakten und %3 Beziehungen, nur was du gelesen hast, nichts über deine Stelle in einem Buch hinaus",
+  "The name you go by, as those you share it with will see it": "Der Name, unter dem dich die anderen sehen",
+  "The questions you asked of its books (%1)": "Die Fragen, die du zu seinen Büchern gestellt hast (%1)",
+  "There is no library open.": "Es ist keine Bibliothek geöffnet.",
+  "Unsubscribe": "Abo beenden",
+  "Unsubscribe from %1's shared collection? This collection stays, with its books and wishlist entries; the shared graph goes.": "Das Abo der geteilten Sammlung von %1 beenden? Diese Sammlung bleibt, mit ihren Büchern und Wünschen; der geteilte Graph geht.",
+  "Unsubscribed from %1.": "Abo von %1 beendet.",
+  "Unsubscribed from %1. The collection %2 stays, with its books and wishlist entries: it is yours.": "Abo von %1 beendet. Die Sammlung %2 bleibt, mit ihren Büchern und Wünschen: sie gehört dir.",
+  "Unsubscribe…": "Abo beenden…",
+  "Whoever you give the file to can subscribe to it: their library finds the books they have, and the rest become wishes. Nothing of theirs changes, and nothing of it can be changed by them.": "Wem du die Datei gibst, kann sie abonnieren: die Bibliothek findet die Bücher, die man hat, und der Rest wird zu Wünschen. Nichts von ihnen ändert sich, und sie können nichts daran ändern.",
+  "You have a collection of that name: its books join it, and nothing in it is taken out.": "Du hast eine Sammlung dieses Namens: die Bücher kommen hinzu, und nichts darin wird herausgenommen.",
+  "You subscribe to it already: this brings what changed since.": "Du hast sie schon abonniert: das bringt, was sich seitdem geändert hat.",
+  "Your ratings (%1)": "Deine Bewertungen (%1)",
+  "Your reading: how far you are in %1 books, and the %2 days you read": "Dein Lesen: wie weit du in %1 Büchern bist, und die %2 Tage, an denen du gelesen hast",
+  "Yours, only if you switch it on": "Deines, nur wenn du es einschaltest"
 }

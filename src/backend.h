@@ -21,6 +21,7 @@
 #include "plugins.h"
 #include "scriptplugins.h"
 #include "settings.h"
+#include "spacedesk.h"
 
 // The library as the window uses it: the shelf, adding and removing books,
 // editing their details, and looking details up online or with AI. It holds
@@ -51,6 +52,8 @@ class Backend : public QObject {
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
     // Building the knowledge graph for books after the fact.
     Q_PROPERTY(GraphJobs *graphJobs READ graphJobs CONSTANT)
+    // Publishing a collection for others, and subscribing to one of theirs.
+    Q_PROPERTY(SpaceDesk *spaces READ spaces CONSTANT)
     // The library's view in the file manager, kept in step while the window
     // runs, and whether Omabook opens ebooks by default.
     Q_PROPERTY(Folio::Follower *fileManager READ fileManager CONSTANT)
@@ -68,7 +71,8 @@ class Backend : public QObject {
     Q_PROPERTY(QString group READ group WRITE setGroup NOTIFY shelfChanged)
     // The library's collections (library.h), as a tree read from the top,
     // each as {"id", "name", "path", "parent", "depth", "children", "rule",
-    // "count", "included", "excluded", "format"}; and
+    // "count", "included", "excluded", "format", and of one a subscribed
+    // space fills "space" and "sharedBy", its owner's name}; and
     // the one the shelf shows, 0 for all the books. Each collection keeps
     // its own view, stacks and order, so going from one to another shows
     // each as it was left. Which one is shown is remembered per library.
@@ -153,6 +157,7 @@ public:
     ScriptPlugins *scripts() noexcept { return m_scripts.get(); }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
+    SpaceDesk *spaces() noexcept { return &m_spaces; }
 
     // For what works on the whole library (the librarian): a model, the
     // sources a look-up asks, a book's opening pages, and a cover fetched.
@@ -241,6 +246,9 @@ private:
     void buildKnowledge();
     void readKnowledge();
     void picked(FilePicker::Purpose purpose, const QList<QUrl> &urls);
+    // What was picked for the book asked about (m_pickingFor): its cover, and where a copy goes.
+    void useCover(const QString &file);
+    void saveCopy(const QString &target);
     void importFinished(const ImportSummary &summary, bool calibreLeftOut);
     void loadPlugins(bool refresh);
     void lookForCalibre(bool asked);
@@ -312,4 +320,5 @@ private:
     int m_pendingSources = 0;
     qint64 m_lookUpId = 0;
     QString m_searchProblem;
+    SpaceDesk m_spaces{*this, m_picker};
 };

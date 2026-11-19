@@ -62,7 +62,7 @@ AppPopup {
         const list = [{ kindName: "", label: qsTr("All books"), collection: 0, on: backend.collection === 0, common: true, count: 0 }]
         for (const collection of backend.collections)
             list.push({ kindName: "", label: collection.path, collection: collection.id, on: backend.collection === collection.id,
-                        common: true, count: collection.count })
+                        common: true, count: collection.count, shared: collection.space !== "" })
         list.push({ kindName: "", label: qsTr("New collection…"), act: "collectionNew", on: false, common: true, count: 0 })
         if (backend.shelfRule() !== "")
             list.push({ kindName: "", label: qsTr("New collection of this search and filters…"), act: "collectionFromShelf",
@@ -70,6 +70,12 @@ AppPopup {
         if (backend.collection !== 0)
             list.push({ kindName: "", label: qsTr("Change %1…").arg(backend.collectionName), act: "collectionEdit",
                         on: false, common: true, count: 0 })
+        // Published for others, or one of theirs subscribed to (each a command, with its key).
+        if (backend.collection !== 0)
+            list.push({ kindName: "", label: qsTr("Publish %1…").arg(backend.collectionName), command: "library.publish",
+                        on: false, common: true, count: 0 })
+        list.push({ kindName: "", label: qsTr("Subscribe to a shared collection…"), command: "library.subscribe", on: false,
+                    common: true, count: 0 })
         if (backend.collections.length > 0 && librarian.hasAi)
             list.push({ kindName: "", label: qsTr("Sort books into collections, with AI…"), act: "collectionSort",
                         on: false, common: true, count: 0 })
@@ -120,6 +126,10 @@ AppPopup {
         } else if (entry.graph) {
             close()
             win.showGraph(0)
+            return
+        } else if (entry.command !== undefined) {
+            close()
+            win.run(entry.command)
             return
         } else if (entry.act !== undefined) {
             close()
@@ -201,6 +211,13 @@ AppPopup {
                         Layout.fillWidth: true
                         text: entry.modelData.label
                         elide: Text.ElideRight
+                    }
+                    // A collection someone shared, subscribed to.
+                    Glyph {
+                        visible: entry.modelData.shared === true
+                        name: "shared"
+                        size: 14
+                        color: theme.colors.muted
                     }
                     Label {
                         visible: entry.modelData.count > 0

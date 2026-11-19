@@ -7,7 +7,8 @@ import QtQuick.Layouts
 // it, with how many books that finds as it is typed. Books put in or taken
 // out by hand stay so whatever the rule; this says how many there are.
 // Removing a collection asks first, and only ever takes the collection away:
-// its books stay in the library.
+// its books stay in the library. From here a collection is published for
+// others, and one filled by a space someone shared is unsubscribed from.
 AppPopup {
     id: dialog
     objectName: "collectionDialog"
@@ -17,6 +18,7 @@ AppPopup {
     // The collection it is inside; 0 for the top.
     property var parentId: 0
     property bool confirming: false
+    property bool unsubscribing: false
     // Where it can go: the top, or any collection but itself and those inside it.
     readonly property var places: {
         const self = editing
@@ -69,7 +71,10 @@ AppPopup {
         if (collectionId === 0)
             backend.collection = id
     }
-    onClosed: confirming = false
+    onClosed: {
+        confirming = false
+        unsubscribing = false
+    }
     // Once it is up: a popup that is still opening doesn't keep the keyboard.
     onOpened: name.forceActiveFocus()
 
@@ -163,6 +168,45 @@ AppPopup {
             visible: shelf !== "" && rule.text.trim() !== shelf
             text: qsTr("Use the shelf's search and filters")
             onClicked: rule.text = shelf
+        }
+        // Whose space fills it, and unsubscribing from that, asked first in place.
+        Label {
+            objectName: "collectionShared"
+            Layout.fillWidth: true
+            visible: dialog.editing !== null && (dialog.editing.space || "") !== ""
+            wrapMode: Text.Wrap
+            color: dialog.unsubscribing ? theme.colors.orange : theme.colors.muted
+            text: dialog.editing === null ? ""
+                  : dialog.unsubscribing ? qsTr("Unsubscribe from %1's shared collection? This collection stays, with its books and wishlist entries; the shared graph goes.").arg(dialog.editing.sharedBy || "?")
+                  : qsTr("Subscribed to, from %1's shared collection: what they add to it comes here too.").arg(dialog.editing.sharedBy || "?")
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: dialog.collectionId !== 0
+            spacing: 8
+            AppButton {
+                objectName: "collectionPublish"
+                runs: "library.publish"
+                text: qsTr("Publish…")
+                onClicked: {
+                    const id = dialog.collectionId
+                    dialog.close()
+                    win.showPublish(id)
+                }
+            }
+            AppButton {
+                objectName: "collectionUnsubscribe"
+                visible: dialog.editing !== null && (dialog.editing.space || "") !== ""
+                text: dialog.unsubscribing ? qsTr("Unsubscribe") : qsTr("Unsubscribe…")
+                onClicked: {
+                    if (!dialog.unsubscribing) {
+                        dialog.unsubscribing = true
+                        return
+                    }
+                    backend.spaces.unsubscribe(dialog.editing.space)
+                    dialog.close()
+                }
+            }
         }
         // Removing asks first, in place.
         Label {

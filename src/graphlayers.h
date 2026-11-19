@@ -55,9 +55,12 @@ struct Layer {
 // known (a place of no book never is); one for each, also when nothing of it is.
 [[nodiscard]] QList<Layer> read(const Library &library, const GraphKnown &known);
 
+// How `from` says it: in the language the window is in, or in English, as
+// the AI is told it.
+enum class Said { Shown, English };
 // Where a thing is from: "Ada's shared graph" for a thing of a layer, empty
 // for one's own.
-[[nodiscard]] QString from(const GraphNode &node);
+[[nodiscard]] QString from(const GraphNode &node, Said said = Said::Shown);
 
 // A view of one's own of a book, with the layers' part of it after.
 [[nodiscard]] GraphView with(GraphView view, const QList<Layer> &layers, qint64 bookId);

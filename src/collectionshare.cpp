@@ -157,56 +157,6 @@ void printPreview(const QJsonObject &shown) {
     }
 }
 
-// The name the owner goes by in the space: as given, else as they gave it before.
-[[nodiscard]] std::expected<SpaceSnapshot::Owner, QString> ownerOf(const Library &library, const QCommandLineParser &parser,
-                                                                   const Collection &collection) {
-    // The user's person, who signs what this library writes (Library::person).
-    const Person *person = library.person();
-    if (person == nullptr)
-        return std::unexpected(u"There is no person to publish the space as; omabook identity says why."_s);
-    SpaceSnapshot::Owner owner{.name = parser.value(u"as"_s).trimmed(), .person = person->id()};
-    if (owner.name.isEmpty()) {
-        const QString space = PublishedSpace::spaceFor(library, owner.person, Spaces::collectionId(library, collection.id));
-        QSqlQuery named = ChangeLog::query(library, "SELECT name FROM space_members WHERE space = ? AND person = ?", {space, owner.person});
-        owner.name = named.next() ? named.value(0).toString() : QString();
-    }
-    if (owner.name.isEmpty())
-        return std::unexpected(u"Say what name you go by in the space with --as <name>: it is what those you share it with see of you."_s);
-    return owner;
-}
-
-[[nodiscard]] std::expected<QJsonObject, QString> publish(const Library &library, const QCommandLineParser &parser,
-                                                          const Collection &collection, const Parts &parts) {
-    const auto owner = ownerOf(library, parser, collection);
-    if (!owner)
-        return std::unexpected(owner.error());
-    const auto published = PublishedSpace::publish(library, collection.id, parts, *owner);
-    if (!published)
-        return std::unexpected(published.error());
-    QJsonObject done{{"space", published->space},
-                     {"owner", owner->name},
-                     {"person", owner->person},
-                     {"operations", published->operations},
-                     {"new", published->appended}};
-    if (const QString file = parser.value(u"output"_s); !file.isEmpty()) {
-        const auto snapshot = PublishedSpace::snapshot(library, collection.id, parts, *owner);
-        if (!snapshot)
-            return std::unexpected(snapshot.error());
-        if (const auto saved = SpaceSnapshotFile::save(*snapshot, file); !saved)
-            return std::unexpected(saved.error());
-        done.insert("output", file);
-        done.insert("snapshot_operations", snapshot->operations.size());
-    }
-    if (parser.isSet(u"gist"_s)) {
-        GitHubLink github;
-        const auto sent = CollectionShare::send(library, published->space, github, parser.isSet(u"public"_s));
-        if (!sent)
-            return std::unexpected(sent.error());
-        done.insert("sent", *sent);
-    }
-    return done;
-}
-
 void printPublished(const QJsonObject &done) {
     say(stdout, u"Published as the space %1, by %2: %3 operations in its log, %4 of them new."_s.arg(
                     done.value("space").toString(), done.value("owner").toString(), QString::number(done.value("operations").toInteger()),
@@ -277,6 +227,52 @@ std::expected<QJsonObject, QString> CollectionShare::preview(const Library &libr
                        {"left_out", leftOut(parts, countsOf(*every), files)}};
 }
 
+QString CollectionShare::nameGoneBy(const Library &library, const Collection &collection) {
+    const Person *person = library.person();
+    if (person == nullptr)
+        return {};
+    const QString space = PublishedSpace::spaceFor(library, person->id(), Spaces::collectionId(library, collection.id));
+    QSqlQuery named = ChangeLog::query(library, "SELECT name FROM space_members WHERE space = ? AND person = ?", {space, person->id()});
+    return named.next() ? named.value(0).toString() : QString();
+}
+
+std::expected<QJsonObject, QString> CollectionShare::publish(const Library &library, const Collection &collection, const Parts &parts,
+                                                             const Publishing &how) {
+    // The user's person, who signs what this library writes (Library::person).
+    const Person *person = library.person();
+    if (person == nullptr)
+        return std::unexpected(u"There is no person to publish the space as; omabook identity says why."_s);
+    // The name the owner goes by in the space: as given, else as they gave it before.
+    const SpaceSnapshot::Owner owner{.name = how.as.trimmed().isEmpty() ? nameGoneBy(library, collection) : how.as.trimmed(),
+                                     .person = person->id()};
+    if (owner.name.isEmpty())
+        return std::unexpected(u"Say what name you go by in the space with --as <name>: it is what those you share it with see of you."_s);
+    const auto published = PublishedSpace::publish(library, collection.id, parts, owner);
+    if (!published)
+        return std::unexpected(published.error());
+    QJsonObject done{{"space", published->space},
+                     {"owner", owner.name},
+                     {"person", owner.person},
+                     {"operations", published->operations},
+                     {"new", published->appended}};
+    if (!how.output.isEmpty()) {
+        const auto snapshot = PublishedSpace::snapshot(library, collection.id, parts, owner);
+        if (!snapshot)
+            return std::unexpected(snapshot.error());
+        if (const auto saved = SpaceSnapshotFile::save(*snapshot, how.output); !saved)
+            return std::unexpected(saved.error());
+        done.insert("output", how.output);
+        done.insert("snapshot_operations", snapshot->operations.size());
+    }
+    if (how.link != nullptr) {
+        const auto sent = send(library, published->space, *how.link, how.open);
+        if (!sent)
+            return std::unexpected(sent.error());
+        done.insert("sent", *sent);
+    }
+    return done;
+}
+
 int CollectionShare::run(const Library &library, const QCommandLineParser &parser, const QString &path, bool json) {
     if (path.trimmed().isEmpty())
         return fail(u"Name the collection to share: omabook collections share <path>."_s);
@@ -296,7 +292,12 @@ int CollectionShare::run(const Library &library, const QCommandLineParser &parse
     if (!json)
         printPreview(*shown);
     if (!dryRun) {
-        const auto done = publish(library, parser, *collection, *parts);
+        GitHubLink github;
+        const auto done = publish(library, *collection, *parts,
+                                  {.as = parser.value(u"as"_s),
+                                   .output = parser.value(u"output"_s),
+                                   .link = parser.isSet(u"gist"_s) ? &github : nullptr,
+                                   .open = parser.isSet(u"public"_s)});
         if (!done)
             return fail(done.error());
         shown->insert("published", *done);

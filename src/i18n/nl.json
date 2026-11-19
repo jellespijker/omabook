@@ -1372,5 +1372,81 @@
   "Read as pages that turn, as one column that scrolls on through the chapters, or automatically, and round again": "Lezen als pagina's die je omslaat, als één kolom die door de hoofdstukken doorscrolt, of automatisch, en weer rond",
   "Pages or scroll": "Pagina's of scrollen",
   "{reader.layout} chooses how a book is read through, also under Layout in the Aa panel. Pages: even one column is cut into pages, each chapter starts on a page of its own, and turning on from its last page opens the next chapter; a PDF or comic page is shown whole, and two side by side open as a book does, page 1 alone (First page alone). Scroll: one column that runs on, with a line at each chapter's end saying what is next; scroll on past it, or tap it, to go on. Automatic: pages where two fit side by side, else a column that scrolls. Your place stays where it is when you change.": "{reader.layout} kiest hoe je een boek leest, ook onder Indeling in het Aa-paneel. Pagina's: ook één kolom wordt in pagina's gedeeld, elk hoofdstuk begint op een eigen pagina, en verder bladeren vanaf de laatste pagina opent het volgende hoofdstuk; een pdf- of strippagina staat er helemaal, en twee naast elkaar gaan open zoals een boek, pagina 1 alleen (Eerste pagina alleen). Scrollen: één kolom die doorloopt, met een regel aan het eind van elk hoofdstuk die zegt wat er volgt; scrol er voorbij of tik erop om verder te gaan. Automatisch: pagina's waar er twee naast elkaar passen, anders een kolom die scrolt. Je plek blijft waar hij is als je wisselt.",
-  "{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, or as one column that runs on from chapter to chapter. A turn never shows a line twice.": "{reader.layout} leest een boek als pagina's, elk hoofdstuk op een eigen pagina en een pdf-pagina helemaal, of als één kolom die van hoofdstuk naar hoofdstuk doorloopt. Omslaan toont nooit een regel twee keer."
+  "{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, or as one column that runs on from chapter to chapter. A turn never shows a line twice.": "{reader.layout} leest een boek als pagina's, elk hoofdstuk op een eigen pagina en een pdf-pagina helemaal, of als één kolom die van hoofdstuk naar hoofdstuk doorloopt. Omslaan toont nooit een regel twee keer.",
+  "%1's shared graph": "%1 (gedeelde graaf)",
+  "the shared graph of %1": "‘%1’ (gedeelde graaf)",
+  "%Ln become wishlist entries: books without a file, never downloaded": {
+    "one": "%Ln komt op het verlanglijstje: een boek zonder bestand, nooit gedownload",
+    "other": "%Ln komen op het verlanglijstje: boeken zonder bestand, nooit gedownload"
+  },
+  "%Ln books: title, authors, series, ISBN and their names on other sites": {
+    "one": "%Ln boek: titel, auteurs, reeks, ISBN en de namen op andere sites",
+    "other": "%Ln boeken: titel, auteurs, reeks, ISBN en hun namen op andere sites"
+  },
+  "%Ln collections, with their names, rules and how their shelves show": {
+    "one": "%Ln collectie, met naam, regel en hoe de plank eruitziet",
+    "other": "%Ln collecties, met namen, regels en hoe hun planken eruitzien"
+  },
+  "%Ln of its books are in your library": {
+    "one": "%Ln van de boeken staat in je bibliotheek",
+    "other": "%Ln van de boeken staan in je bibliotheek"
+  },
+  "%Ln you removed before stay removed": {
+    "one": "%Ln dat je eerder verwijderde, blijft verwijderd",
+    "other": "%Ln die je eerder verwijderde, blijven verwijderd"
+  },
+  "and %Ln more": {
+    "one": "en nog %Ln",
+    "other": "en nog %Ln"
+  },
+  "A new collection, yours to change like any other.": "Een nieuwe collectie, die je kunt veranderen zoals elke andere.",
+  "Another file…": "Een ander bestand…",
+  "Choose a file…": "Bestand kiezen…",
+  "Choose the .omabook-space file someone gave you, or drop it on the window. Nothing is subscribed to before you say so here.": "Kies het .omabook-space-bestand dat iemand je gaf, of sleep het op het venster. Er wordt niets geabonneerd voordat je dat hier zegt.",
+  "Choose…": "Kiezen…",
+  "Counting what goes in…": "Tellen wat erin gaat…",
+  "Goes in": "Gaat erin",
+  "Its books go in the collection": "De boeken komen in de collectie",
+  "Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "De graaf (%1 dingen, %2 feiten, %3 relaties) blijft een eigen laag, los van de jouwe, en toont alleen zo ver als je elk boek gelezen hebt.",
+  "Never goes": "Gaat er nooit in",
+  "No graph comes with it.": "Er komt geen graaf mee.",
+  "Publish": "Publiceren",
+  "Publish %1…": "%1 publiceren…",
+  "Publish a collection": "Een collectie publiceren",
+  "Publish the collection shown for others to subscribe to: says first what goes in, and what never does": "De getoonde collectie publiceren zodat anderen zich erop abonneren: zegt eerst wat erin gaat, en wat nooit",
+  "Published as %1, as before.": "Gepubliceerd als %1, zoals eerder.",
+  "Published as %1. %2 holds it: give it to whoever you share the collection with.": "Gepubliceerd als %1. %2 bevat haar: geef het aan wie je de collectie mee deelt.",
+  "Published by %1.": "Gepubliceerd door %1.",
+  "Published by someone who gave no name.": "Gepubliceerd door iemand die geen naam gaf.",
+  "Publish…": "Publiceren…",
+  "Reading the shared collection…": "De gedeelde collectie lezen…",
+  "Save it as": "Opslaan als",
+  "Save the Shared Collection": "De gedeelde collectie opslaan",
+  "Shared collections": "Gedeelde collecties",
+  "Subscribe": "Abonneren",
+  "Subscribe to %1": "Abonneren op %1",
+  "Subscribe to a Shared Collection": "Abonneren op een gedeelde collectie",
+  "Subscribe to a collection someone published, from its .omabook-space file": "Abonneren op een collectie die iemand publiceerde, uit het .omabook-space-bestand",
+  "Subscribe to a shared collection": "Abonneren op een gedeelde collectie",
+  "Subscribe to a shared collection…": "Abonneren op een gedeelde collectie…",
+  "Subscribed to %1, shared by %2. Its books are in %3; its graph stays a layer of its own.": "Geabonneerd op %1, gedeeld door %2. De boeken staan in %3; de graaf blijft een eigen laag.",
+  "Subscribed to, from %1's shared collection": "Geabonneerd, uit de gedeelde collectie van %1",
+  "Subscribed to, from %1's shared collection: what they add to it comes here too.": "Geabonneerd, uit de gedeelde collectie van %1: wat daar bijkomt, komt ook hier.",
+  "That collection is gone.": "Die collectie bestaat niet meer.",
+  "The books' files (%1): those you share it with need their own copies.": "De bestanden van de boeken (%1): wie je het mee deelt, heeft eigen exemplaren nodig.",
+  "The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book": "De graaf: %1 dingen, %2 feiten en %3 relaties, alleen wat je gelezen hebt, niets voorbij je plek in een boek",
+  "The name you go by, as those you share it with will see it": "De naam waaronder anderen je zien",
+  "The questions you asked of its books (%1)": "De vragen die je over de boeken stelde (%1)",
+  "There is no library open.": "Er is geen bibliotheek open.",
+  "Unsubscribe": "Opzeggen",
+  "Unsubscribe from %1's shared collection? This collection stays, with its books and wishlist entries; the shared graph goes.": "Het abonnement op de gedeelde collectie van %1 opzeggen? Deze collectie blijft, met haar boeken en wensen; de gedeelde graaf gaat.",
+  "Unsubscribed from %1.": "Abonnement op %1 opgezegd.",
+  "Unsubscribed from %1. The collection %2 stays, with its books and wishlist entries: it is yours.": "Abonnement op %1 opgezegd. De collectie %2 blijft, met haar boeken en wensen: ze is van jou.",
+  "Unsubscribe…": "Opzeggen…",
+  "Whoever you give the file to can subscribe to it: their library finds the books they have, and the rest become wishes. Nothing of theirs changes, and nothing of it can be changed by them.": "Wie je het bestand geeft, kan zich erop abonneren: de bibliotheek vindt de boeken die ze hebben, en de rest wordt wensen. Niets van hen verandert, en zij kunnen er niets aan veranderen.",
+  "You have a collection of that name: its books join it, and nothing in it is taken out.": "Je hebt een collectie met die naam: de boeken komen erbij, en er wordt niets uit gehaald.",
+  "You subscribe to it already: this brings what changed since.": "Je bent er al op geabonneerd: dit brengt wat sindsdien veranderde.",
+  "Your ratings (%1)": "Je beoordelingen (%1)",
+  "Your reading: how far you are in %1 books, and the %2 days you read": "Je lezen: hoe ver je bent in %1 boeken, en de %2 dagen dat je las",
+  "Yours, only if you switch it on": "Van jou, alleen als je het aanzet"
 }

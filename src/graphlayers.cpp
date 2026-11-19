@@ -1,5 +1,6 @@
 #include "graphlayers.h"
 
+#include <QCoreApplication>
 #include <QCryptographicHash>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -193,12 +194,18 @@ QList<Layer> GraphLayers::read(const Library &library, const GraphKnown &known) 
     return layers;
 }
 
-QString GraphLayers::from(const GraphNode &node) {
+QString GraphLayers::from(const GraphNode &node, Said said) {
     const QJsonObject layer = node.data.value("layer").toObject();
     if (layer.isEmpty())
         return {};
+    // In the catalogs (bin/i18n reads what tr() is handed). Each follows a
+    // word the window puts before it ("From %1", "what you know from %3"),
+    // so it is translated to read well after that word.
+    const auto tr = [said](const char *text) {
+        return said == Said::English ? QString::fromUtf8(text) : QCoreApplication::translate("GraphLayers", text);
+    };
     const QString owner = layer.value("owner").toString();
-    return owner.isEmpty() ? u"the shared graph of %1"_s.arg(layer.value("name").toString()) : u"%1's shared graph"_s.arg(owner);
+    return owner.isEmpty() ? tr("the shared graph of %1").arg(layer.value("name").toString()) : tr("%1's shared graph").arg(owner);
 }
 
 GraphView GraphLayers::with(GraphView view, const QList<Layer> &layers, qint64 bookId) {

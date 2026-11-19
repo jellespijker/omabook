@@ -117,6 +117,15 @@ void keep(const Library &library, const SpaceOperation &op, qint64 seq) {
 // Where the books of one space are here, apart from every other space's.
 [[nodiscard]] QString booksOf(const QString &space) { return u"subscribed-book:"_s + space; }
 
+// A layer's graph is shown beside the library's own, so taking a space in or
+// dropping it changes what is known: it counts as a change to the graph
+// (Library::changes), which a running window follows (its `knows:` search,
+// its graph). The log's own count goes up with it, since nothing of the
+// library's own rows is left to log by it.
+void countGraphChange(const Library &library) {
+    ChangeLog::exec(library, "UPDATE library_state SET value = value + 1 WHERE key = 'graph' OR (key = 'logged_graph' AND value >= 0)");
+}
+
 } // namespace
 
 std::expected<void, QString> SubscribedSpace::verify(const Library &library, const SpaceSnapshot &snapshot) {
@@ -211,6 +220,8 @@ std::expected<SubscribedSpace::Accepted, QString> SubscribedSpace::accept(const 
         device = op.seq > device ? op.seq : device + 1;
         keep(library, op, device);
     }
+    if (!lacking.isEmpty())
+        countGraphChange(library);
     return Accepted{.added = lacking.size(), .known = snapshot.operations.size() - lacking.size()};
 }
 
@@ -245,5 +256,6 @@ std::expected<qint64, QString> SubscribedSpace::drop(const Library &library, con
     ChangeLog::exec(library, "DELETE FROM global_ids WHERE entity = 'subscription' AND global_id = ?", {space});
     ChangeLog::exec(library, "DELETE FROM global_ids WHERE entity = ?", {booksOf(space)});
     SpaceLinks::forget(library, space);
+    countGraphChange(library);
     return dropped;
 }

@@ -19,6 +19,9 @@
         <file alias="CollectionStrip.qml">CollectionStrip.qml</file>
         <file alias="CommandMenu.qml">CommandMenu.qml</file>
         <file alias="CollectionDialog.qml">CollectionDialog.qml</file>
+        <file alias="PublishDialog.qml">PublishDialog.qml</file>
+        <file alias="RemovalDialog.qml">RemovalDialog.qml</file>
+        <file alias="SubscribeDialog.qml">SubscribeDialog.qml</file>
         <file alias="EditDialog.qml">EditDialog.qml</file>
         <file alias="FindPopup.qml">FindPopup.qml</file>
         <file alias="FlowReader.qml">FlowReader.qml</file>

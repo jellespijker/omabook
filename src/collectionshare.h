@@ -32,6 +32,26 @@ namespace CollectionShare {
 // "created", "public", "note", "operations"}.
 [[nodiscard]] std::expected<QJsonObject, QString> send(const Library &library, const QString &space, SpaceTransport &transport, bool open);
 
+// The name the user went by when they published the collection before;
+// empty the first time.
+[[nodiscard]] QString nameGoneBy(const Library &library, const Collection &collection);
+
+struct Publishing {
+    QString as;     // the name the owner goes by in the space; the one gone by before when empty
+    QString output; // where to write the space's snapshot; nothing is written when empty
+    // A transport to send it by as well (send), and whether to a place anyone may find.
+    SpaceTransport *link = nullptr;
+    bool open = false;
+};
+
+// Publishes the collection as the user's space, with `parts`, and writes its
+// snapshot where `how` says: {"space", "owner", "person", "operations",
+// "new", with a file "output" and "snapshot_operations", and with a link
+// "sent", as send says it}. What the command line and the window both do
+// once the summary has been shown.
+[[nodiscard]] std::expected<QJsonObject, QString> publish(const Library &library, const Collection &collection,
+                                                          const PublishedSpace::Parts &parts, const Publishing &how);
+
 // The options of `omabook collections share` that are its own, on the parser of
 // `omabook collections`, which has --as and --dry-run for import and share both
 // (CollectionImport::addOptions).

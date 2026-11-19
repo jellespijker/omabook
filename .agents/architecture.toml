@@ -14,7 +14,7 @@
 summary = "Settings, logging, theme and interface files, text cleaning, the script API table: no knowledge of books."
 uses = []
 modules = [
-  "bookmeta", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
+  "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
   "person", "readingformat", "scriptapi", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "theme", "themechoice",
   "translator",
 ]
@@ -65,8 +65,8 @@ modules = ["cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "space
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
-  "assistant", "backend", "backendcollections", "backendlookup", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
-  "interface", "librarian", "librarianfind", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks",
+  "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
+  "interface", "librarian", "librarianfind", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "spacedesk",
 ]
 
 [layers.app]

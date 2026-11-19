@@ -12,12 +12,14 @@ class FilePicker : public QObject {
 public:
     enum Purpose { AddBooks, AddFolder, ChooseLibrary, ChooseCover, ExportBook, ImportReading, ExportReading,
                    // A plugin to install: as a .zip, or as the folder it is kept in.
-                   InstallPlugin, InstallPluginFolder };
+                   InstallPlugin, InstallPluginFolder,
+                   // A published space's snapshot (.omabook-space): where to write one, and one to subscribe to.
+                   SaveSpace, OpenSpace };
     Q_ENUM(Purpose)
 
     explicit FilePicker(QObject *parent = nullptr) : QObject(parent) {}
 
-    // `suggested` is the file to propose when saving (ExportBook, ExportReading).
+    // `suggested` is the file to propose when saving (ExportBook, ExportReading, SaveSpace).
     virtual void pick(Purpose purpose, const QString &suggested = {}) = 0;
 
 signals:

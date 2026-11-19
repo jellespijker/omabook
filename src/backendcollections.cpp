@@ -6,6 +6,8 @@
 
 #include <QJsonObject>
 
+#include "subscribedspace.h"
+
 namespace {
 
 // A value as one word of a search: quoted when it has spaces in it.
@@ -36,6 +38,11 @@ void Backend::readCollections(const QList<Book> &books) {
     const QList<Collection> collections = m_library ? m_library->collections() : QList<Collection>();
     QVariantList list;
     std::optional<QSet<qint64>> members;
+    // A collection a subscribed space fills says whose space it is (#6).
+    QHash<qint64, SubscribedSpace::Subscription> spaces;
+    for (const SubscribedSpace::Subscription &space :
+         m_library ? SubscribedSpace::list(*m_library) : QList<SubscribedSpace::Subscription>())
+        spaces.insert(space.collection, space);
     for (const Collection &collection : collections) {
         QSet<qint64> in;
         for (const Book &book : books)
@@ -51,7 +58,9 @@ void Backend::readCollections(const QList<Book> &books) {
                             {"count", int(in.size())},
                             {"included", int(collection.included.size())},
                             {"excluded", int(collection.excluded.size())},
-                            {"format", !collection.format.isEmpty()}};
+                            {"format", !collection.format.isEmpty()},
+                            {"space", spaces.value(collection.id).space},
+                            {"sharedBy", spaces.value(collection.id).ownerName}};
         if (collection.id == m_collection)
             members = in;
     }

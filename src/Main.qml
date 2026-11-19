@@ -73,7 +73,7 @@ ApplicationWindow {
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened
                                        || tidyUp.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
-                                       || collectionEditor.opened || commandMenu.opened
+                                       || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
                                        || aiSearch.opened
@@ -210,6 +210,9 @@ ApplicationWindow {
     // A new collection, its rule filled in when one is given; or one to change.
     function newCollection(rule, parent) { collectionEditor.create(rule, parent || 0) }
     function editCollection(id) { if (id) collectionEditor.change(id) }
+    // A collection published for others (the one shown when none is named), and one of theirs subscribed to.
+    function showPublish(id) { publishing.show(id || backend.collection) }
+    function showSubscribe() { subscribing.show() }
     function showReadingSites() { readingSites.open() }
     function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
@@ -253,6 +256,8 @@ ApplicationWindow {
     // The pane that is open beside the shelf or the page, wider or narrower.
     Key { command: "global.pane_wider"; onActivated: win.resizePane(1) }
     Key { command: "global.pane_narrower"; onActivated: win.resizePane(-1) }
+    Key { command: "library.publish"; when: library.visible && backend.collections.length > 0; onActivated: win.showPublish(0) }
+    Key { command: "library.subscribe"; when: library.visible; onActivated: win.showSubscribe() }
 
     // Right-to-left languages mirror the window; the Translator sets the
     // application's layout direction.
@@ -338,7 +343,8 @@ ApplicationWindow {
         DropArea {
             anchors.fill: parent
             enabled: !win.inReader
-            onDropped: (drop) => { if (drop.hasUrls) backend.addUrls(drop.urls) }
+            // A shared collection's file is offered for subscribing to; books are added.
+            onDropped: (drop) => { if (drop.hasUrls) backend.addUrls(backend.spaces.takeSpaces(drop.urls)) }
         }
 
         // What just happened, said once at the bottom and dismissed by a click
@@ -433,6 +439,8 @@ ApplicationWindow {
     PluginForm { id: pluginForm }
     TidyDialog { id: tidyUp }
     CollectionDialog { id: collectionEditor }
+    PublishDialog { id: publishing }
+    SubscribeDialog { id: subscribing }
     ReadingSitesDialog { id: readingSites }
     ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }
@@ -468,54 +476,5 @@ ApplicationWindow {
         onUndo: librarian.undoChange()
     }
 
-    AppPopup {
-        id: removal
-        objectName: "removal"
-        property var bookId: 0
-        property string bookTitle: ""
-        // A plugin's launcher is only taken off the shelf; its plugin hears of it.
-        property bool launcher: false
-        property string pluginName: ""
-        function show(id) {
-            const book = backend.book(id)
-            bookId = id
-            bookTitle = book.title || ""
-            launcher = book.launcher === true
-            pluginName = book.pluginName || ""
-            open()
-        }
-
-        widest: 468
-
-        DialogBody {
-            Label {
-                Layout.fillWidth: true
-                text: removal.launcher ? qsTr("Take “%1” off the shelf?").arg(removal.bookTitle)
-                      : qsTr("Remove “%1” from the library?").arg(removal.bookTitle)
-                font.pixelSize: 18
-                wrapMode: Text.Wrap
-            }
-            Label {
-                Layout.fillWidth: true
-                text: removal.launcher ? qsTr("It is not a book: %1 put it there to start something new. %1 can put it back.").arg(removal.pluginName)
-                      : qsTr("Its files in the library folder move to the trash. The file you added it from is not touched.")
-                color: theme.colors.muted
-                wrapMode: Text.Wrap
-            }
-            actions: [
-                AppButton { text: qsTr("Keep"); onClicked: removal.close() },
-                AppButton {
-                    objectName: "confirmRemove"
-                    text: qsTr("Remove")
-                    primary: true
-                    focus: true
-                    onClicked: {
-                        if (removal.launcher) backend.scripts.removeLauncher(removal.bookId)
-                        else backend.remove(removal.bookId)
-                        removal.close()
-                    }
-                }
-            ]
-        }
-    }
+    RemovalDialog { id: removal }
 }

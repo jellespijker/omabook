@@ -10,7 +10,8 @@ import QtQuick.Layouts
 // is too narrow for every tab, the row scrolls (by finger, by wheel, and by
 // itself to keep the one shown in view), with a fade at the side that has
 // more. At its end, always in view: a new collection, and the list of what
-// can be done with collections.
+// can be done with collections. A collection filled by a space someone
+// shared, subscribed to, is marked as theirs.
 Item {
     id: strip
     objectName: "collectionStrip"
@@ -82,8 +83,10 @@ Item {
             required property int index
             required property var modelData
             readonly property bool shown: modelData.id === strip.marked
+            // Filled by a space someone shared, which it is subscribed to.
+            readonly property bool shared: (modelData.space || "") !== ""
             objectName: (strip.parentId ? "collectionSubTab-" : "collectionTab-") + modelData.id
-            width: Math.min(label.implicitWidth, 200) + 24
+            width: Math.min(label.implicitWidth, 200) + 24 + (shared ? 18 : 0)
             height: tabs.height
             Accessible.role: Accessible.PageTab
             Accessible.name: modelData.name
@@ -98,15 +101,26 @@ Item {
                 visible: hover.hovered && !tab.shown
                 opacity: 0.6
             }
-            Label {
-                id: label
-                objectName: "collectionTabName"
+            Row {
                 anchors.centerIn: parent
-                width: Math.min(implicitWidth, 200)
-                text: tab.modelData.name
-                elide: Text.ElideRight
-                color: tab.shown || hover.hovered ? theme.foreground : theme.colors.muted
-                font.bold: tab.shown
+                spacing: 5
+                Glyph {
+                    objectName: "collectionTabShared"
+                    visible: tab.shared
+                    anchors.verticalCenter: parent.verticalCenter
+                    name: "shared"
+                    size: 13
+                    color: tab.shown ? theme.accent : theme.colors.muted
+                }
+                Label {
+                    id: label
+                    objectName: "collectionTabName"
+                    width: Math.min(implicitWidth, 200)
+                    text: tab.modelData.name
+                    elide: Text.ElideRight
+                    color: tab.shown || hover.hovered ? theme.foreground : theme.colors.muted
+                    font.bold: tab.shown
+                }
             }
             Rectangle {
                 anchors.bottom: parent.bottom
@@ -130,6 +144,7 @@ Item {
             ToolTip.delay: 600
             ToolTip.text: tab.modelData.id === 0 ? qsTr("Every book in the library")
                           : qsTr("%1: %Ln books", "", tab.modelData.count !== undefined ? tab.modelData.count : backend.books.total).arg(tab.modelData.name)
+                            + (tab.shared ? "\n" + qsTr("Subscribed to, from %1's shared collection").arg(tab.modelData.sharedBy || "?") : "")
                             + "  " + strip.keyOf("library.collection_next")
         }
     }

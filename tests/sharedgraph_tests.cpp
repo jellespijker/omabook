@@ -385,6 +385,30 @@ private slots:
         QTRY_VERIFY(!marks->named("Wick").isEmpty());
         QCOMPARE(marks->named("Mara").value("summary").toString(), QString("Secretly the queen in exile."));
     }
+
+    void unsubscribingElsewhereRefreshesWhatTheWindowKnows() {
+        const Owner owner;
+        Desk desk;
+        Library &library = *desk.backend->library();
+        QVERIFY(QFile::copy(owner.file(), desk.dir.filePath("tide.epub")));
+        const qint64 book = library.add(desk.dir.filePath("tide.epub")).id;
+        QVERIFY(Subscriptions::subscribe(library, owner.snapshot(), {}).has_value());
+        library.setProgress(book, {2, 0.5, 30});
+        desk.backend->reload();
+        BookListModel *books = desk.backend->books();
+        books->setQuery("harbour");
+        QTRY_COMPARE(books->count(), 1);
+        // Unsubscribed by a command or an agent while the window runs: it
+        // counts as a change to the graph, which the window follows.
+        Library elsewhere(library.root());
+        QVERIFY(elsewhere.open());
+        const Library::Changes before = library.changes();
+        QVERIFY(Subscriptions::unsubscribe(elsewhere, "Tides").has_value());
+        QVERIFY(library.changes().graph > before.graph);
+        QCOMPARE(library.changes().books, before.books);
+        desk.backend->reloadIfChanged();
+        QTRY_COMPARE_WITH_TIMEOUT(books->count(), 0, 10000);
+    }
 };
 
 QTEST_MAIN(SharedGraphTests)
