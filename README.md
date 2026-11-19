@@ -96,6 +96,8 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 | `C` | The collections: show one, make, change or sort them | | |
 | `]` `[` | The next or previous collection | | |
 | `Shift+C` | Put the selected book in collections, or take it out | | |
+| `Shift+P` | Publish the collection shown, for others to subscribe to | | |
+| `Shift+O` | Subscribe to a collection someone shared | | |
 | `P` | Plugins | `C` | Have the AI catch you up |
 | `Shift+T` | Tidy the library | `W` | Who is who so far |
 | `W` | Ask about your library | `V` | Select words with the keyboard, to ask about them or find them |
@@ -118,7 +120,7 @@ Books can also be dropped on the window.
 
 `?` (or `F1`) opens the help wherever you are. It lists every key **as it is bound now**: change one in `keys.json`, or add a plugin with a command of its own, and the help shows it without anyone having written it down: a plugin's keys under its name, each saying whether it works on the shelf, while reading or anywhere, for as long as the plugin is on. After them come the keys a panel or dialog has of its own (the menu beside selected words, the contents, the Aa panel, the plugin manager, the tour...), under the panel they work in. Type what you want to do ("add a folder", "how do I bookmark") and the list narrows to the commands and pages that match; Up and Down pick one and Enter runs it, so the help is also a way to do things. Typing only ever searches. Opened over a book, the reading keys come first.
 
-Beside the keys are a few short pages: getting started, reading, the AI companion, your library, plugins, Calibre and Goodreads, other computers, and one for agents. Tab turns to the next. Each lists the commands it mentions, and the same pages print in a terminal:
+Beside the keys are a few short pages: getting started, reading, the AI companion, your library, plugins, Calibre and Goodreads, other computers, sharing, and one for agents. Tab turns to the next. Each lists the commands it mentions, and the same pages print in a terminal:
 
 ```bash
 omabook help             # the commands, and the topics
@@ -383,7 +385,79 @@ A sync carries the collections too: the books each holds by hand, its rule, its 
 
 A sync carries the knowledge graph as well, merged rather than copied: what the AI noted on either computer while you read (the people, places, ideas and threads, what was revealed where, the relations, the questions you asked, the reading log) is on both afterwards, each fact with the moment it was revealed, so the map (`M`) of a book is never ahead of where you are on either. A thing is the same thing on both when it has the same kind and name, or one of its other names. The story worlds of Storyteller stay with their stories. Both computers need an Omabook that carries the graph (0.1.5.2 or newer); with an older one on the other side, the books still sync and the graph waits.
 
-What a sync doesn't carry yet: bookmarks, and Storyteller's story worlds.
+What a sync doesn't carry yet: bookmarks, and Storyteller's story worlds. Between your own paired computers it carries the collections you subscribed to and the shared spaces you are in (see [Sharing](#sharing)). The first sync between two computers also pairs them into one person, so both sign what they write as you; see [Your own computers](#your-own-computers).
+
+## Sharing
+
+A collection can be shared with other people who use Omabook. You publish it, and they subscribe to it. What they get is a space of its own: the collection's books and their details, and whatever else you chose. It is never merged into their library, and nothing they do changes yours.
+
+### Publishing a collection
+
+With a collection shown, `Shift+P` publishes it; so do the ⋯ menu, the list of collections (`C`) and the collection's own dialog. First it says what goes in, counted, and what never does, with a switch for each part of your own, all off until you switch them on. The first time, it asks the name you go by. Then it saves an `.omabook-space` file to give by mail or chat, or sends it as a link: a gist, secret unless you say so, its link copied for pasting.
+
+```bash
+omabook collections share Fiction --dry-run                          # what would go in and what stays out; writes nothing
+omabook collections share Fiction --as Ada --output Fiction.omabook-space
+omabook collections share Fiction --with-graph --with ratings --gist # as a secret gist; --public for a public one
+```
+
+The space follows the collection. Rename it, put books in or take them out, change their details, and the next snapshot says so. Sharing by gist again updates the same gist, so the link stays. Switch a part off later and it is taken back: the next snapshot holds none of it, and those who follow are told to drop it, as they are when you delete the collection. A gist is sent by GitHub's command line, `gh`; Omabook keeps no GitHub account or token of its own.
+
+### What is never shared
+
+- **The books' files.** Never, whatever you switch on. Whoever subscribes is matched against the books they have.
+- **Your own reading**, unless you switch it on, each part by itself: your knowledge graph (`--with-graph`), the questions you asked, your stars, and your reading places and days (`--with questions,ratings,progress`).
+- **Anything outside the collection.** The collections it sits in at home don't go: in the space it is at the top. Nor does the rest of your library.
+- **Your computers.** Their names don't go. The space numbers them instead, which says only how many wrote it.
+
+### No spoilers
+
+Of your graph, only what you have read goes: nothing past your place in a book, nothing of a book you haven't begun, and what you read later follows. On the other side, the receiver's own reading place decides again. They see a shared graph only as far as they have read each book themselves: nothing of a book they haven't begun or only wish for, more as they read on, and never more for a place asked for further on. A shared graph can't spoil a book for either of you.
+
+### Subscribing
+
+`Shift+O`, or the ⋯ menu, picks an `.omabook-space` file to subscribe to. One dropped on the window is offered too, and a link can be pasted. Before anything is written it says which of its books you have, which become wishlist entries, the collection they go in (its name is yours to change), and that its graph stays a layer of its own.
+
+```bash
+omabook collections import Fiction.omabook-space --dry-run        # what it would do; changes nothing
+omabook collections import https://gist.github.com/ada/<id> --as "Ada's fiction"
+omabook collections unsubscribe "Ada's fiction"                   # drop the space, keep the collection
+```
+
+- **Matched, or wished for.** A book you have is found by its file, an identifier or ISBN, or its title and authors, as the tidy finds them. The others become wishlist entries. They go in a collection of yours, with a collection inside it for each shared one. One of that name already there is added to, never emptied.
+- **A layer, read-only.** The shared space is kept beside your library. Its graph shows beside yours, saying whose it is ("From Ada's shared graph"): in the graph's window, as marks on the page, in a search by what is known (`knows:`), in `omabook graph show` and the MCP server, and in what the AI is told. None of it is written into your own graph. The collection is marked as someone else's, on its tab and in the list.
+- **Unsubscribing**, in the collection's dialog or with `collections unsubscribe`, drops the space and its graph, and keeps your collection.
+
+### Following updates
+
+A newer file of the same space brings only what is new, and the same file twice changes nothing. A collection subscribed to by its link (a gist's link or id, or a file in a GitHub repository, its page or its raw link) is followed from there. The window looks there for a newer version and says what changed; nothing is taken in until you say so.
+
+```bash
+omabook collections import --follow           # what a newer version would change: books, collections, the graph
+omabook collections import --follow --yes     # take it in
+```
+
+### Shared spaces: a household, a book club
+
+A published collection has one writer. A shared space has several: a household library, or a book club's list. Each member links a collection of their own to it. Writers change the space by changing that collection; readers get every change and write nothing. Who is a member, and as what, travels in the space itself, and whatever isn't signed by someone who was a writer at its time is refused, and said. The space never changes your own books, only your collection of it.
+
+```bash
+omabook identity --export                                     # your id: give it to whoever invites you
+omabook spaces create "Book club" --collection Club           # found a shared space of a collection of yours
+omabook spaces invite "Book club" <person-id> --role reader --out bo.omabook-invite   # only that person opens it
+omabook spaces join bo.omabook-invite                         # on their computer
+omabook spaces sync "Book club" --folder ~/Sync/club          # in step through a folder something else syncs
+omabook spaces                                                # the spaces you are in, your role, the members
+omabook spaces remove "Book club" <person-id>                 # what they write from now on is refused
+```
+
+The folder is one that something else keeps in step between the members' computers: Syncthing, or a mounted share. Each computer writes only its own batches there, sealed with the space's key, so the folder never holds anything readable. Invite someone and sync before they join, so the change that makes them a member is in the folder before they write. A member removed has what they write from then on refused. What they wrote before stays, and so does their copy of what they had.
+
+### Your own computers
+
+All your computers are one person. The first `omabook sync` between two of them pairs them: from then on both sign what they write as you, and a sync refuses a change that isn't as it was signed. `omabook identity` shows your id, its fingerprint and the computers paired; compare fingerprints by eye, or read them out, to be sure an id is whose it says. The key is made the first time it is asked for and kept in your Omabook data folder (`~/.local/share/omabook/person.key`), readable only by you, never in a library folder. Its secret half leaves a computer only to another of your own, over the ssh the sync runs on. A computer that gave up its own key at a pairing keeps what it was in spaces: an invite to it still opens, and in a shared space it goes on writing or reading as before.
+
+A sync between your own computers also carries the shared spaces you are in and the collections you subscribed to. Join a space or subscribe on one computer, and after the next sync the others are in it too, with the space's key (readable only by you), your collection of it, and where a subscription is followed from. It is sealed to your key and signed with it, so it goes to no computer that isn't you, and what arrives is checked as anything from elsewhere is: a shared space's writes by its members' roles and signatures. A subscription's graph shows as far as you have read on each computer. Unsubscribing on one computer unsubscribes the others at their next sync. An Omabook from before gets none of it.
 
 ## In the file manager
 
@@ -504,6 +578,7 @@ omabook open [book]                     Open the window, and a book file or libr
 omabook list [search] [--collection c]  List the library's books, or one collection's
 omabook search <words> [--ai] [--collection c]  Find books by their details and what you know of them; --ai asks the AI
 omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort]  Collections, nested as you like
+omabook collections share|import|unsubscribe  Publish a collection, or subscribe to one someone shared; see Sharing
 omabook show <id>                       Show one book's details and files
 omabook add <file|folder>...            Copy books into the library; a Calibre library comes with its details
 omabook remove <id>                     Move a book to the trash
@@ -539,6 +614,8 @@ omabook progress <id> [--section N]     Show or set how far a book has been read
 omabook format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment
 omabook sync <computer[:folder]>        Bring this library and another computer's in step over ssh
 omabook manifest                        Print the whole library as JSON, as sync reads it
+omabook identity [--export]             Print your id and its fingerprint, to share spaces with others
+omabook spaces [create|invite|join|sync|remove]  The spaces you are in; shared ones several people write
 omabook help [topic]                    Print the help the window shows: getting started, reading, keys, ...
 omabook skill [part|install] [--all]    Print the skill for coding agents (parts: library, graph, plugins), or install it
 omabook mcp [install [agent]]           Run as an MCP server for agents, or register it with one

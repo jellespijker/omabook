@@ -36,22 +36,32 @@ omabook list --collection Studie/Python        # also: ask all --collection, sug
 omabook collections sort --json                # AI proposals, numbered, and "to_decide": books it can't place
 omabook collections sort --pick 1,4=Werk/Regeltechniek   # from that same list, not asked again; N=path renames
 omabook collections sort Werk --json           # within one: collections inside Werk for its books in none of them; they stay in Werk
+```
+
+A rule is a search (`tag:`, `genre:fiction`, `-word`, `OR`, `"quotes"`); books put in or out by hand win. Show the user the sort proposals and the to-decide list before picking anything; `--apply` takes them all.
+
+## Sharing
+
+A collection is shared by publishing it as a space, which others subscribe to; a shared space is one several people write (a household, a book club). Neither is ever merged into the library: a subscriber's books are matched or become wishlist entries in a collection of their own, and the space's graph is a read-only layer, shown only as far as they have read each book.
+
+```bash
 omabook collections share Werk --with-graph --dry-run --json   # what would go in (counts) and stay out; writes nothing
 omabook collections share Werk --with ratings --as "Ada" --output Werk.omabook-space   # publish it as a space, write its snapshot
 omabook collections share Werk --gist          # send it to a secret gist through gh and print its link; again: the same gist
+omabook collections import Werk.omabook-space --dry-run --json   # subscribe: which books match, which become wishes
 omabook collections import https://gist.github.com/ada/<id>   # subscribe by link (a gist, or a GitHub file); it is followed from there
 omabook collections import --follow --json     # what a newer version would change, counted; taken in only with --yes
+omabook collections unsubscribe "Werk"         # drop the space; the user's collection of it stays
+omabook identity --export                      # the user's id, for someone who invites them
+omabook spaces --json                          # the spaces the user is in: kind, their role, members
+omabook spaces create "Book club" --collection Club   # a shared space several people write, of a collection
+omabook spaces invite "Book club" <person-id> --role reader --out invite.omabook-invite
+omabook spaces join invite.omabook-invite      # on the invitee's computer
+omabook spaces sync "Book club" --folder ~/Sync/club   # through a folder Syncthing or a share keeps in step
+omabook spaces remove "Book club" <person-id>  # what they write from now on is refused; ask first
 ```
 
-Sharing never sends the books' files; the graph, questions, ratings and progress go only when the user switches them on, and of the graph only what they have read. Show the dry run to the user and ask which parts and what name before sharing. A gist is secret unless the user asks for `--public`. Show what following would change and ask before `--yes`.
-omabook spaces --json                                   # the spaces the user is in: kind, their role, members
-omabook spaces create "Book club" --collection Club     # a shared space several people write, of a collection
-omabook spaces invite "Book club" <person-id> --role reader --out invite.omabook-invite
-omabook spaces join invite.omabook-invite               # on the invitee's computer
-omabook spaces sync "Book club" --folder ~/Sync/club    # through a folder Syncthing or a share keeps in step
-A person's id is what `omabook identity --export` prints. Writers change a shared space by changing their collection of it, then sync.
-
-A rule is a search (`tag:`, `genre:fiction`, `-word`, `OR`, `"quotes"`); books put in or out by hand win. Show the user the sort proposals and the to-decide list before picking anything; `--apply` takes them all.
+Never shared: the books' files. The graph, questions, ratings and progress go only when the user switches each on, and of the graph only what they have read; nothing outside the collection goes, nor the names of their computers. Show the dry run to the user and ask which parts and what name before sharing. A gist is secret unless the user asks for `--public`. Show what following would change and ask before `--yes`. Writers change a shared space by changing their collection of it, then sync; invite, then sync, before the invitee joins. Between the user's own paired computers, `omabook sync` carries their subscriptions and shared spaces (sealed to them): subscribe or join once; unsubscribing on one computer unsubscribes the others.
 
 ## Calibre
 
@@ -97,7 +107,7 @@ omabook sync laptop --details mine               # where details differ and no t
 
 The layout and the first page are reading-format options like the rest: a book's own lies over its collection's, which lies over the defaults, and the reading place (section and how far through it) is kept when the layout changes. In the window `Shift+L` goes round auto, pages and scroll.
 
-`sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks, books without a file included (matched by identifiers, else title and authors), with their shelf, stars and finished day, and the newer reading place and the newer details win; a book removed on one side is removed on the other too (to the trash) unless it was read or changed there since. Run `--dry-run` first and show the user what would be removed. Books from before details had a time are counted when their details differ, and only `--details mine|theirs` settles them: ask the user which side is right.
+`sync` needs Omabook installed on both computers and ssh access (a Tailscale name works as the computer). Each side gets the books it lacks, books without a file included (matched by identifiers, else title and authors), with their shelf, stars and finished day, and the newer reading place and the newer details win; a book removed on one side is removed on the other too (to the trash) unless it was read or changed there since. Run `--dry-run` first and show the user what would be removed. The first sync between two computers pairs them into one person, who signs what both write; `omabook identity` lists the computers paired. Books from before details had a time are counted when their details differ, and only `--details mine|theirs` settles them: ask the user which side is right.
 
 ## Plugins
 

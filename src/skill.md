@@ -5,7 +5,7 @@ description: Work with the user's ebook library through the omabook command line
 
 # Omabook
 
-Omabook is the ebook library and reader on this desktop. Everything the window does with the library is also a command that needs no display. Every command takes `--json`, writes errors to standard error, and exits 0 on success and 1 on failure. `omabook <command> --help` lists its options, and `omabook help <topic>` (`start`, `reading`, `ai`, `library`, `plugins`, `calibre`, `computers`, `agents`, `keys`, `new`) prints the help the window shows.
+Omabook is the ebook library and reader on this desktop. Everything the window does with the library is also a command that needs no display. Every command takes `--json`, writes errors to standard error, and exits 0 on success and 1 on failure. `omabook <command> --help` lists its options, and `omabook help <topic>` (`start`, `reading`, `ai`, `library`, `plugins`, `calibre`, `computers`, `sharing`, `agents`, `keys`, `new`) prints the help the window shows.
 
 A `<book>` is a number from `omabook list`, or the path of any book file, so the reading commands also work on files that are not in the library.
 
@@ -15,7 +15,7 @@ Read only the part the task is about. Each is a file in `references/` next to th
 
 | Part | Read it to |
 | --- | --- |
-| [library.md](references/library.md) | look up details, tidy duplicates, import from Calibre or Goodreads, sync reading sites or computers, manage plugins, change how a book is set or how the window looks |
+| [library.md](references/library.md) | look up details, tidy duplicates, import from Calibre or Goodreads, sync reading sites or computers, share a collection or subscribe to one, manage plugins, change how a book is set or how the window looks |
 | [graph.md](references/graph.md) | ask the AI about a book, or read and change the knowledge graph (characters, places, ideas, where each was learned) |
 | [plugins.md](references/plugins.md) | write a plugin: a source of details, a book format, a command, a panel, a hook |
 
@@ -59,6 +59,8 @@ omabook remove 12                  # to the trash; ask the user before removing
 `set` changes only the options given. Several authors are separated with ` & `, tags with commas. Ask before `remove`, and before changing many books at once.
 
 Collections are the user's own named parts of the library, nested as they like (`omabook collections`, `omabook list --collection <path>`); see library.md before making or sorting them.
+
+A collection can be shared: published as a space others subscribe to (`omabook collections share`, `collections import`), or kept by several people together (`omabook spaces`). The books' files never go, and the user's own reading (graph, questions, stars, progress) only when they switch it on; read library.md and show the user what would go before sharing anything.
 
 ## The window and the library folder
 

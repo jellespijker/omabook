@@ -5,7 +5,8 @@
 // short tour of the entries that arrived since; "What's new" in the help
 // (?) and `omabook help new` show the newest release's at any time.
 //
-// TO ANNOUNCE A FEATURE, add one entry here, and nothing else:
+// TO ANNOUNCE A FEATURE, add one entry at the end of features(), and nothing
+// else (the first release's entries are in firstRelease(), to keep it short):
 //
 //   {"id", "version", tr("Title"), tr("One or two sentences."), "spot", "command", "place", ""},
 //
@@ -24,52 +25,62 @@
 // command or an objectName that isn't there, so a rename can't leave the
 // tour pointing at nothing. Entries are never removed: someone who skips
 // three releases is shown all three.
-QList<Manual::Step> Manual::features() {
+namespace {
+
+// What the first release, 0.1.0, brought.
+QList<Manual::Step> firstRelease() {
     return {
-        {"views", "0.1.0", tr("Five views of the shelf"),
-         tr("Covers, spines on a bookshelf, a carousel, a list, or stacks by series. Each library remembers its own."),
+        {"views", "0.1.0", Manual::tr("Five views of the shelf"),
+         Manual::tr("Covers, spines on a bookshelf, a carousel, a list, or stacks by series. Each library remembers its own."),
          "viewSwitcher|viewChoice", "library.view_next", "library", ""},
-        {"filter", "0.1.0", tr("Filter by typing"),
-         tr("{library.filter} and a few letters of a status, a tag, an author, a format or a rating. Filters add up, "
-            "and a click on a chip takes one off."),
+        {"filter", "0.1.0", Manual::tr("Filter by typing"),
+         Manual::tr("{library.filter} and a few letters of a status, a tag, an author, a format or a rating. Filters add up, "
+                    "and a click on a chip takes one off."),
          "filterLabel|touchFilter|libraryMore", "library.filter", "library", ""},
-        {"paper", "0.1.0", tr("Books on paper, and wishes"),
-         tr("{library.new} adds a book that has no file: one on your shelf at home, or one to read some day. They count "
-            "in what you have read."),
+        {"paper", "0.1.0", Manual::tr("Books on paper, and wishes"),
+         Manual::tr("{library.new} adds a book that has no file: one on your shelf at home, or one to read some day. They count "
+                    "in what you have read."),
          "", "library.new", "library", ""},
-        {"companion", "0.1.0", tr("A companion that can't spoil"),
-         tr("While reading, {reader.ask} asks about the page, {reader.catch_up} catches you up, and {reader.cast} says "
-            "who is who. It never sees past where you are."),
+        {"companion", "0.1.0", Manual::tr("A companion that can't spoil"),
+         Manual::tr("While reading, {reader.ask} asks about the page, {reader.catch_up} catches you up, and {reader.cast} says "
+                    "who is who. It never sees past where you are."),
          "assistantPane", "reader.ask", "reader", ""},
-        {"tidy", "0.1.0", tr("Tidy the library"),
-         tr("{library.tidy} finds the same book twice, authors spelled several ways and books that belong to a series, "
-            "as one list to tick. Nothing changes until you say so."),
+        {"tidy", "0.1.0", Manual::tr("Tidy the library"),
+         Manual::tr("{library.tidy} finds the same book twice, authors spelled several ways and books that belong to a series, "
+                    "as one list to tick. Nothing changes until you say so."),
          "", "library.tidy", "library", ""},
-        {"suggest", "0.1.0", tr("What to read next"),
-         tr("{library.suggest} suggests books from everything you have read, on paper too, and checks each one against "
-            "the reading sites."),
+        {"suggest", "0.1.0", Manual::tr("What to read next"),
+         Manual::tr("{library.suggest} suggests books from everything you have read, on paper too, and checks each one against "
+                    "the reading sites."),
          "", "library.suggest", "library", ""},
-        {"change", "0.1.0", tr("Change Omabook by asking"),
-         tr("{global.change} takes a wish in words and rewrites the keys, colors and settings for you. One click undoes it."),
+        {"change", "0.1.0", Manual::tr("Change Omabook by asking"),
+         Manual::tr("{global.change} takes a wish in words and rewrites the keys, colors and settings for you. One click undoes it."),
          "", "global.change", "", ""},
-        {"plugins", "0.1.0", tr("Plugins, and scripts of your own"),
-         tr("{library.plugins} lists every source and format, Calibre's among them. A script in the plugins folder can "
-            "add commands, panels and sources."),
+        {"plugins", "0.1.0", Manual::tr("Plugins, and scripts of your own"),
+         Manual::tr("{library.plugins} lists every source and format, Calibre's among them. A script in the plugins folder can "
+                    "add commands, panels and sources."),
          "", "library.plugins", "library", ""},
-        {"sync", "0.1.0", tr("Other computers"),
-         tr("{library.sync} brings this library and another computer's in step over ssh; the later reading place wins."),
+        {"sync", "0.1.0", Manual::tr("Other computers"),
+         Manual::tr("{library.sync} brings this library and another computer's in step over ssh; the later reading place wins."),
          "", "library.sync", "library", ""},
-        {"graph", "0.1.0", tr("A knowledge graph of what you read"),
-         tr("As you finish chapters, the AI notes who and what is in the book and how they relate, never past where "
-            "you are. Your questions, stars and reading days join it. {library.graph} shows it."),
+        {"graph", "0.1.0", Manual::tr("A knowledge graph of what you read"),
+         Manual::tr("As you finish chapters, the AI notes who and what is in the book and how they relate, never past where "
+                    "you are. Your questions, stars and reading days join it. {library.graph} shows it."),
          "", "library.graph", "library", ""},
-        {"sites", "0.1.0", tr("Reading sites, connected"),
-         tr("{library.sites} connects Goodreads, Open Library and Hardcover: paste a link to your profile and it says what "
-            "it found. Open Library and Hardcover can take your changes back, once you say so; tokens stay in the keyring."),
+        {"sites", "0.1.0", Manual::tr("Reading sites, connected"),
+         Manual::tr("{library.sites} connects Goodreads, Open Library and Hardcover: paste a link to your profile and it says what "
+                    "it found. Open Library and Hardcover can take your changes back, once you say so; tokens stay in the keyring."),
          "", "library.sites", "library", ""},
-        {"help", "0.1.0", tr("Help you can search"),
-         tr("{global.help} lists every key as it is bound now. Type what you want to do, and Enter runs it."),
+        {"help", "0.1.0", Manual::tr("Help you can search"),
+         Manual::tr("{global.help} lists every key as it is bound now. Type what you want to do, and Enter runs it."),
          "", "global.help", "", ""},
+    };
+}
+
+} // namespace
+
+QList<Manual::Step> Manual::features() {
+    return firstRelease() + QList<Step>{
         {"graphbuild", "0.1.1", tr("A graph for books already read"),
          tr("{library.graph_build} notes the people, places and ideas of books you read before, or elsewhere, and says what it will cost first. "
             "Books are now linked to each other where they share an idea."),
@@ -130,5 +141,17 @@ QList<Manual::Step> Manual::features() {
          tr("{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, "
             "or as one column that runs on from chapter to chapter. A turn never shows a line twice."),
          "", "reader.layout", "reader", ""},
+        {"publish", "0.1.6", tr("Share a collection"),
+         tr("{library.publish} publishes the collection shown, as a file or a link, and says first what goes in. The "
+            "books' files never do, and nothing of your own reading goes unless you switch it on."),
+         "", "library.publish", "library", ""},
+        {"subscribe", "0.1.6", tr("Subscribe to one"),
+         tr("{library.subscribe} takes a collection someone shared: the books you have are matched, the others become "
+            "wishes, and its graph shows only as far as you have read each book yourself."),
+         "", "library.subscribe", "library", ""},
+        {"shared-spaces", "0.1.6", tr("A collection kept together"),
+         tr("For a household or a book club, `omabook spaces` makes a collection several people write, kept in step "
+            "through a folder you already sync."),
+         "", "", "", ""},
     };
 }

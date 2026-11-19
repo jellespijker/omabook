@@ -8,6 +8,87 @@
 // to type in a terminal. A page lists, after its text, the commands it
 // named, and in the window those can be run from there. Keep a page to
 // what a person needs: the README is where the rest goes.
+//
+// A page of its own is a function of its own, as the two below are.
+
+namespace {
+
+Manual::Topic computersTopic() {
+    return {"computers", Manual::tr("Other computers"), Manual::tr("The same library on every computer you read at."),
+            {
+                {Manual::tr("Sync"),
+                 Manual::tr("Name the other computer in the settings ({global.settings}) and {library.sync} brings the two "
+                            "libraries in step over ssh. Each side gets the books it lacks, and for a book both have, the "
+                            "later reading place wins, and so do the details changed last. `omabook sync laptop` does the "
+                            "same from a terminal.")},
+                {Manual::tr("Removed books"),
+                 Manual::tr("A book removed on one computer is removed on the other at the next sync too, to its trash, "
+                            "unless it was read or changed there since. A file a merge gave to the book it kept stays, and so "
+                            "does that book.")},
+                {Manual::tr("Before the first sync"),
+                 Manual::tr("`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each "
+                            "side, and changes nothing. Books from before Omabook kept when their details changed can't say "
+                            "whose are newer: where they differ, `--details mine` keeps this computer's and `--details "
+                            "theirs` takes the other's.")},
+                {Manual::tr("One person on every computer"),
+                 Manual::tr("The first sync between two computers pairs them: from then on both sign what they write as you, "
+                            "and a change that isn't as it was signed is refused. `omabook identity` shows your id and the "
+                            "computers paired.")},
+                {Manual::tr("What it needs"),
+                 Manual::tr("Omabook on both computers, and ssh that logs in without asking for a password. Tailscale makes "
+                            "that work from anywhere.")},
+                {Manual::tr("Why not a shared folder"),
+                 Manual::tr("A library is a live database, and two computers writing it through a network folder can "
+                            "corrupt it. So each computer keeps a whole library of its own, readable offline, and a sync "
+                            "brings them in step.")},
+                {Manual::tr("What a sync leaves out"),
+                 Manual::tr("Bookmarks stay on the computer they were made on.")},
+            }};
+}
+
+Manual::Topic sharingTopic() {
+    return {"sharing", Manual::tr("Sharing"), Manual::tr("Publish a collection, subscribe to one, or keep one together."),
+            {
+                {Manual::tr("Publishing a collection"),
+                 Manual::tr("With a collection shown, {library.publish} publishes it for others to subscribe to. It says "
+                            "first what goes in and what never does, then saves an .omabook-space file to give them, or "
+                            "sends it as a link: a gist, secret unless you say so. Publish it again after a change, and "
+                            "those who follow it get what changed. `omabook collections share <path>` does the same from "
+                            "a terminal.")},
+                {Manual::tr("What is never shared"),
+                 Manual::tr("The books' files never go. Your graph, questions, stars, reading places and reading days go "
+                            "only when you switch each on. Nothing outside the collection goes, not the collections it sits "
+                            "in, and not the names of your computers.")},
+                {Manual::tr("Subscribing"),
+                 Manual::tr("{library.subscribe} takes such a file, one dropped on the window, or a link. Before anything is "
+                            "written it says which of its books you have and which become wishlist entries, in a collection "
+                            "of yours. The shared space stays apart, read-only, and is never merged into your library. "
+                            "Unsubscribing drops it and keeps your collection.")},
+                {Manual::tr("No spoilers"),
+                 Manual::tr("Of a shared graph, the one who published it sends only what they have read. You see it beside "
+                            "your own, marked as theirs, and only as far as you have read each book yourself: nothing of a "
+                            "book you haven't begun, more as you read on.")},
+                {Manual::tr("Following"),
+                 Manual::tr("A collection subscribed to by its link looks there for a newer version and says what would "
+                            "change. Nothing is taken in until you say so. `omabook collections import --follow` does the "
+                            "same from a terminal.")},
+                {Manual::tr("Shared spaces"),
+                 Manual::tr("A household library or a book club is a collection several people write. `omabook spaces "
+                            "create` makes one of a collection of yours, `spaces invite` writes an invite only that person "
+                            "can open, `spaces join` takes it, and `spaces sync --folder` keeps it in step through a folder "
+                            "something else syncs, such as Syncthing. Readers get every change; only writers make them.")},
+                {Manual::tr("On all your computers"),
+                 Manual::tr("A sync between your own computers carries the shared spaces you are in and the collections you "
+                            "subscribed to, sealed to you: subscribe or join on one, and the next sync brings it to the "
+                            "others. Unsubscribing on one unsubscribes them all.")},
+                {Manual::tr("Who you are"),
+                 Manual::tr("`omabook identity --export` prints your id: give it to someone who wants to invite you to a "
+                            "shared space.")},
+            }};
+}
+
+} // namespace
+
 QList<Manual::Topic> Manual::topicList() {
     return {
         {"start", tr("Getting started"), tr("Add your books, find one, and read it."),
@@ -205,28 +286,8 @@ QList<Manual::Topic> Manual::topicList() {
                  "the last one stays as you left it. Disconnecting forgets who you are on the site and its token, and "
                  "leaves every book.")},
          }},
-        {"computers", tr("Other computers"), tr("The same library on every computer you read at."),
-         {
-             {tr("Sync"),
-              tr("Name the other computer in the settings ({global.settings}) and {library.sync} brings the two libraries "
-                 "in step over ssh. Each side gets the books it lacks, and for a book both have, the later reading place "
-                 "wins, and so do the details changed last. `omabook sync laptop` does the same from a terminal.")},
-             {tr("Removed books"),
-              tr("A book removed on one computer is removed on the other at the next sync too, to its trash, unless it "
-                 "was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.")},
-             {tr("Before the first sync"),
-              tr("`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each side, and "
-                 "changes nothing. Books from before Omabook kept when their details changed can't say whose are newer: "
-                 "where they differ, `--details mine` keeps this computer's and `--details theirs` takes the other's.")},
-             {tr("What it needs"),
-              tr("Omabook on both computers, and ssh that logs in without asking for a password. Tailscale makes that "
-                 "work from anywhere.")},
-             {tr("Why not a shared folder"),
-              tr("A library is a live database, and two computers writing it through a network folder can corrupt it. So "
-                 "each computer keeps a whole library of its own, readable offline, and a sync brings them in step.")},
-             {tr("What a sync leaves out"),
-              tr("Bookmarks and the AI's notes stay on the computer they were made on.")},
-         }},
+        computersTopic(),
+        sharingTopic(),
         {"themes", tr("Colors and themes"), tr("Look like Omarchy anywhere, follow Aether, or pick a theme."),
          {
              {tr("Automatic"),
