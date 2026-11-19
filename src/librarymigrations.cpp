@@ -344,8 +344,8 @@ const QList<QStringList> migrations{
     // A collection published as a space (#3): which collection, with which
     // parts, and the space's own log, numbered once and for good, so that one
     // who has its operations up to a number is sent only those after it.
-    // Apart from `ops`: what is read to make this library's own rows reads
-    // all of `ops`, and must never take a published space's word for a book.
+    // Apart from `ops`, where compaction and replication would treat it as
+    // a space its members sync (ADR 0001, *Compaction*, as built for #3).
     {"CREATE TABLE IF NOT EXISTS published (space TEXT PRIMARY KEY, collection TEXT NOT NULL, parts TEXT NOT NULL DEFAULT '')",
      "CREATE TABLE IF NOT EXISTS published_ops (space TEXT NOT NULL, device TEXT NOT NULL, seq INTEGER NOT NULL, hlc INTEGER NOT NULL, "
      "author TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL, field TEXT NOT NULL DEFAULT '', value TEXT NOT NULL DEFAULT '', "

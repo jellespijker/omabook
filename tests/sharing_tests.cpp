@@ -32,6 +32,7 @@
 #include "spacereducer.h"
 #include "spaces.h"
 #include "spacesnapshot.h"
+#include "subscribedspace.h"
 
 namespace {
 
@@ -208,8 +209,14 @@ struct Ran {
     QString output, errors;
 };
 
-[[nodiscard]] Ran omabook(const QStringList &arguments) {
+[[nodiscard]] Ran omabook(const QStringList &arguments, const QString &dataHome = {}) {
     QProcess process;
+    // A data folder of its own is a person of its own (Person::userKeyFile).
+    if (!dataHome.isEmpty()) {
+        QProcessEnvironment environment = QProcessEnvironment::systemEnvironment();
+        environment.insert("XDG_DATA_HOME", dataHome);
+        process.setProcessEnvironment(environment);
+    }
     process.start(OMABOOK_BINARY, arguments);
     process.closeWriteChannel();
     Ran ran;
@@ -764,6 +771,67 @@ private slots:
         const Ran again = omabook({"collections", "share", path, "--with-graph", "--library", root});
         QVERIFY2(again.code == 0, qPrintable(again.errors));
         QVERIFY2(again.output.contains("by Ada") && again.output.contains("0 of them new"), qPrintable(again.output));
+    }
+
+    // From one library to another and on: shared with its graph, stars and
+    // reading, imported; then changed and its parts switched off, shared
+    // again, and the newer snapshot imported: the receiver's layer has the
+    // change and none of what was switched off.
+    void aShareIsImportedAndItsChangesAndRetractionsFollow() {
+        Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const QTemporaryDir there;
+        const QString owner = there.filePath("owner-data"), reader = there.filePath("reader-data");
+        const QString receiver = there.filePath("Library");
+        const QString root = shelf.library.root();
+        const QString first = there.filePath(QString("first") + SpaceSnapshotFile::suffix);
+        const QString second = there.filePath(QString("second") + SpaceSnapshotFile::suffix);
+
+        const Ran shared = omabook({"collections", "share", QString(Shelf::aboveName) + "/Sci-fi", "--with-graph", "--with",
+                                    "ratings,progress", "--as", "Ada", "--output", first, "--library", root},
+                                   owner);
+        QVERIFY2(shared.code == 0, qPrintable(shared.errors));
+        const Ran imported = omabook({"collections", "import", first, "--library", receiver}, reader);
+        QVERIFY2(imported.code == 0, qPrintable(imported.errors + imported.output));
+        const auto snapshot = SpaceSnapshotFile::load(first);
+        QVERIFY2(snapshot.has_value(), why(snapshot).constData());
+        const QString space = snapshot->space;
+        {
+            Library library(receiver);
+            QVERIFY(library.open());
+            QVERIFY(SubscribedSpace::isSubscribed(library, space));
+            const ReducedState held = SpaceReducer::reduce(SubscribedSpace::operations(library, space));
+            QCOMPARE(held.books.value(shelf.gid(shelf.dune)).fields.value("rating").value, QString("4"));
+            QVERIFY(std::ranges::any_of(held.days, [](const ReducedDay &day) { return day.valid; }));
+            QVERIFY(std::ranges::any_of(held.nodes,
+                                        [](const ReducedNode &node) { return !SpaceReducer::isRemoved(node.alive, node.removed); }));
+        }
+
+        QVERIFY(shelf.library.renameCollection(shelf.sciFi, "Science fiction"));
+        QVERIFY(shelf.library.putInCollection(shelf.sciFi, shelf.picked, false));
+        BookMeta meta = shelf.library.book(shelf.messiah)->meta;
+        meta.title = "Dune Messiah, Revised";
+        QVERIFY(shelf.library.setMeta(shelf.messiah, meta));
+        const Ran again =
+            omabook({"collections", "share", QString(Shelf::aboveName) + "/Science fiction", "--output", second, "--library", root}, owner);
+        QVERIFY2(again.code == 0, qPrintable(again.errors));
+        const Ran newer = omabook({"collections", "import", second, "--library", receiver}, reader);
+        QVERIFY2(newer.code == 0, qPrintable(newer.errors + newer.output));
+
+        Library library(receiver);
+        QVERIFY(library.open());
+        const ReducedState held = SpaceReducer::reduce(SubscribedSpace::operations(library, space));
+        const auto isGone = [](const auto &thing) { return SpaceReducer::isRemoved(thing.alive, thing.removed); };
+        QVERIFY(!collectionNamed(held, "Science fiction").isEmpty());
+        QCOMPARE(held.books.value(shelf.gid(shelf.messiah)).fields.value("title").value, QString("Dune Messiah, Revised"));
+        QVERIFY(isGone(held.books.value(shelf.gid(shelf.picked))));
+        QVERIFY(!isGone(held.books.value(shelf.gid(shelf.dune))));
+        for (const ReducedBook &book : held.books)
+            for (const char *field : {"rating", "progress", "shelf", "finished"})
+                QVERIFY2(book.fields.value(field).value.isEmpty() || book.fields.value(field).value == "0", field);
+        QVERIFY(std::ranges::none_of(held.days, [](const ReducedDay &day) { return day.valid; }));
+        QVERIFY(std::ranges::all_of(held.nodes, isGone) && std::ranges::all_of(held.facts, isGone)
+                && std::ranges::all_of(held.edges, isGone));
     }
 
     void theMcpToolSharesACollection() {
