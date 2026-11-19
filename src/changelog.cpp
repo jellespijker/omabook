@@ -15,6 +15,7 @@
 #include "graph.h"
 #include "hlc.h"
 #include "library.h"
+#include "signedops.h"
 #include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
@@ -359,10 +360,20 @@ void ChangeLog::append(const Library &library, const Entry &entry) {
                                          {spaceNum, deviceNum, spaceNum, deviceNum});
     const qint64 seq = nextSeq.next() ? nextSeq.value(0).toLongLong() : 1;
     nextSeq.finish();
+    // Signed by the person, as it is kept: the very bytes stored are the ones
+    // signed. Without a person it goes unsigned, its author this computer, as
+    // every operation did before there were people.
+    SpaceOperation op{targetSpace, device, seq, stamp, device, entry.entity, entry.id, entry.field, entry.value};
+    QVariant signer;
+    if (const Person *person = library.person()) {
+        SignedOps::signAs(op, *person);
+        signer = internId(library, op.signer);
+    }
     ChangeLog::exec(library,
-                    "INSERT INTO ops (space, device, seq, hlc, author, entity, id, field, value) "
-                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                    {spaceNum, deviceNum, seq, stamp, deviceNum, entry.entity, idNum, entry.field, entry.value});
+                    "INSERT INTO ops (space, device, seq, hlc, author, entity, id, field, value, signer, signature) "
+                    "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    {spaceNum, deviceNum, seq, stamp, signer.isNull() ? QVariant(deviceNum) : signer, entry.entity, idNum, entry.field,
+                     entry.value, signer, op.signature.isEmpty() ? QVariant() : QVariant(op.signature)});
     ChangeLog::exec(library,
                     "INSERT INTO seen (space, device, seq, hlc) VALUES (?, ?, ?, ?) "
                     "ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq), "

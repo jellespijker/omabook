@@ -131,6 +131,49 @@ A person is a key pair; a computer joins a person's personal space by **pairing*
 already in it (over ssh, as sync is today). A shared space has members (person, role: reader or
 writer) and a key; inviting someone is giving them the key, and the operations they write are signed.
 
+As built (#47, #48):
+
+- **One key per person, kept per user.** The key pair (Ed25519) is in the user's Omabook data folder
+  (`$XDG_DATA_HOME/omabook/person.key`, owner-only), never in a library folder, which may itself be
+  synced somewhere. Every library of the user signs with it.
+- **Every operation is signed.** `ops` gains `signer` (the person's id, in `log_ids`) and `signature`
+  (format 16, only added columns). An operation written now has the person as its `author` and this
+  computer as its `device`, and is signed in exactly the bytes it is kept as (`SignedOps`, canonical
+  bytes `omabook-op` 1). Operations from before carry neither and are trusted as one's own. A snapshot
+  (compaction) keeps each operation it holds as it was, signature and all, so what it holds can still
+  be verified by whoever it is sent to; nothing is re-signed. A published space's operations are its
+  own (its space, its devices, its numbers), so they are signed afresh by the owner when the space is
+  taken (`PublishedSpace::snapshot`), when the owner is this library's person. The `.omabook-space`
+  file does not carry the signatures yet (a minor version of it can add them at each operation's end).
+- **Verified before replaying.** Replication sends an operation's signer and signature after its nine
+  parts to a peer that says it signs (`"signs": 1`), and only the nine to an Omabook from before. The
+  side that takes operations verifies every signed one first: one that is not as its author signed it
+  is refused, never stored or applied, and the sync's summary counts and says it. An **unsigned**
+  operation is taken only from one of one's own computers (a device paired into the personal space),
+  for Omabooks from before signing and the operations written before it. Such an operation could be a
+  signed one with its signature stripped; that is accepted because one's own computers can write the
+  library anyway. Every ssh peer is paired at its first replication, so for ssh this rule changes
+  nothing yet; it holds the line for the transports to come, where it will matter.
+- **Pairing gives one person by copying the key.** When two updated computers replicate, they keep the
+  personal space with the smaller id (as before) and the person with the smaller id: the other computer
+  is given that person's key, in the replication request (a file in a scratch folder only the user
+  can read, removed after) or in its answer, over the ssh the sync runs on, and keeps it in place of
+  its own. Since the smaller id always wins, any of one's computers that meet
+  settle on one person, also two groups paired apart, and none goes back to a key it gave up. What was
+  signed with a key given up stays signed by it and verifies. `omabook identity` shows the computers
+  paired.
+
+  *Why copying the key, and not a key per computer vouched for by the person.* The alternative keeps
+  a key on each computer and makes the person a set of device keys, each added by a signed membership
+  operation. It would let a lost computer be shut out without the person changing. But every verifier
+  then needs the person's membership history, in order, before it can check anything; every shared
+  space must learn of each new computer; and revoking needs rules of its own (what of what the lost
+  computer wrote before?). Copying the key adds no trust that isn't there: ssh to a computer already
+  reads every file of the user there, the key file included, and the sync already hands it the whole
+  library. One person is one id, which is what others will name in a shared space's members. The
+  `signer` column is apart from `author` so that a person can later sign for device keys, if revoking
+  a computer becomes worth it. Until then, a lost computer means a new person (open, with #38).
+
 ### Book files
 
 Files are referenced by their hash and fetched only when wanted. Between one's own computers they

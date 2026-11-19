@@ -1,14 +1,20 @@
 #include "identitycommands.h"
 
 #include <QCommandLineParser>
+#include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QStringList>
+#include <algorithm>
 #include <cstdio>
 #include <print>
 #include <tuple>
 
+#include "library.h"
 #include "person.h"
 #include "settings.h"
+#include "spaces.h"
 
 namespace {
 
@@ -19,14 +25,35 @@ void printLine(FILE *stream, const QString &text) {
     std::ignore = fflush(stream); // Nothing better to do when the terminal is gone.
 }
 
+// The computers paired into the personal space of the library in `root`,
+// this one first; none when there is no library there yet, or one this
+// command would have to bring to a newer format first.
+[[nodiscard]] QList<Spaces::Computer> pairedComputers(const QString &root, QString &thisOne) {
+    Library library(root);
+    library.keepFormat();
+    if (!QFileInfo::exists(library.databasePath()) || !library.open())
+        return {};
+    thisOne = Spaces::deviceId(library);
+    QList<Spaces::Computer> computers = Spaces::computers(library);
+    std::ranges::stable_partition(computers, [&thisOne](const Spaces::Computer &computer) { return computer.device == thisOne; });
+    return computers;
+}
+
+[[nodiscard]] QString computerLine(const Spaces::Computer &computer, const QString &thisOne) {
+    const QString name = computer.name.isEmpty() ? u"(a computer not named yet)"_s : computer.name;
+    return u"  %1  %2%3"_s.arg(name, computer.device, computer.device == thisOne ? u"  (this computer)"_s : QString());
+}
+
 } // namespace
 
 int runIdentityCli(const QStringList &arguments) {
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        u"Print your id and its fingerprint: the public half of the key pair that signs what you write in a shared space. "
-        "It is made the first time it is asked for and kept beside the library, readable only by you; the secret half "
-        "never leaves this computer. Compare fingerprints by eye, or read them out, to be sure an id is whose it says."_s);
+        u"Print your id and its fingerprint: the public half of the key pair that signs everything you write in your "
+        "library's log, and the computers of yours paired into your personal space. The key is made the first time it is "
+        "asked for and kept in your Omabook data folder, readable only by you; the secret half leaves this computer only "
+        "to another of your own, over ssh, when a sync first pairs the two, so all of them are one person. Compare "
+        "fingerprints by eye, or read them out, to be sure an id is whose it says."_s);
     parser.addHelpOption();
     parser.addOption({u"json"_s, u"Print the result as JSON."_s});
     parser.addOption({u"export"_s, u"Print only your id (the public key), to give to someone."_s});
@@ -42,21 +69,39 @@ int runIdentityCli(const QStringList &arguments) {
         printLine(stderr, parser.helpText().trimmed());
         return 1;
     }
-    const QString file = Person::keyFile(parser.isSet(u"library"_s) ? parser.value(u"library"_s) : Settings().libraryPath());
-    const auto person = Person::loadOrCreate(file);
-    if (!person) {
-        printLine(stderr, person.error());
+    const QString root = parser.isSet(u"library"_s) ? parser.value(u"library"_s) : Settings().libraryPath();
+    PersonFile kept;
+    const Person *person = kept.get(root);
+    if (person == nullptr) {
+        printLine(stderr, kept.problem());
         return 1;
     }
-    if (parser.isSet(u"export"_s))
+    if (parser.isSet(u"export"_s)) {
         printLine(stdout, person->exportPublicKey());
-    else if (parser.isSet(u"json"_s))
-        printLine(stdout,
-                  QString::fromUtf8(
-                      QJsonDocument(QJsonObject{{u"id"_s, person->id()}, {u"fingerprint"_s, person->fingerprint()}, {u"key_file"_s, file}})
-                          .toJson(QJsonDocument::Indented))
-                      .trimmed());
-    else
-        printLine(stdout, u"Your id:      %1\nFingerprint:  %2\nKey file:     %3"_s.arg(person->id(), person->fingerprint(), file));
+        return 0;
+    }
+    QString thisOne;
+    const QList<Spaces::Computer> computers = pairedComputers(root, thisOne);
+    if (parser.isSet(u"json"_s)) {
+        QJsonArray paired;
+        for (const Spaces::Computer &computer : computers)
+            paired << QJsonObject{{u"device"_s, computer.device}, {u"name"_s, computer.name}, {u"this"_s, computer.device == thisOne}};
+        printLine(stdout, QString::fromUtf8(QJsonDocument(QJsonObject{{u"id"_s, person->id()},
+                                                                      {u"fingerprint"_s, person->fingerprint()},
+                                                                      {u"key_file"_s, kept.file()},
+                                                                      {u"computers"_s, paired}})
+                                                .toJson(QJsonDocument::Indented))
+                              .trimmed());
+        return 0;
+    }
+    QStringList lines{u"Your id:      %1\nFingerprint:  %2\nKey file:     %3"_s.arg(person->id(), person->fingerprint(), kept.file())};
+    if (computers.size() > 1) {
+        lines << u"Your computers, paired into your personal space:"_s;
+        for (const Spaces::Computer &computer : computers)
+            lines << computerLine(computer, thisOne);
+    } else if (!computers.isEmpty()) {
+        lines << u"No other computer is paired yet: the first omabook sync with one of yours pairs the two."_s;
+    }
+    printLine(stdout, lines.join(u'\n'));
     return 0;
 }

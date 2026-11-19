@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "bookmeta.h"
+#include "person.h"
 
 class QSqlQuery;
 
@@ -181,6 +182,13 @@ public:
     QString backupFolder() const;
     // The format the database is in, counted from 1; it only ever goes up.
     int formatVersion() const;
+    // Who signs what this library writes to its change log (ADR 0001,
+    // *People and keys*): the user's person, kept per user and read once.
+    // Nothing when there can be none; the operations then go unsigned.
+    [[nodiscard]] const Person *person() const { return m_person.get(m_root); }
+    // Where the person is kept: per user, or a test's or a pairing's own.
+    [[nodiscard]] PersonFile &personFile() noexcept { return m_person; }
+    void usePersonFile(const QString &file) { m_person = PersonFile(file); }
 
     struct Added {
         qint64 id = 0;
@@ -377,4 +385,5 @@ private:
     QString m_root;
     bool m_keepFormat = false;
     QString m_connection;
+    mutable PersonFile m_person;
 };

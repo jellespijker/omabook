@@ -349,11 +349,11 @@ void materializeDays(const Library &library, const QMap<QString, ReducedDay> &da
 
 QList<SpaceOperation> SpaceReplay::operations(const Library &library) {
     QList<SpaceOperation> list;
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value "
-                                       "FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
-                                       "JOIN log_ids AS a ON a.id = o.author JOIN log_ids AS i ON i.id = o.id "
-                                       "ORDER BY s.name, d.name, o.seq");
+    for (QSqlQuery query = ChangeLog::query(
+             library, "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value, g.name, o.signature "
+                      "FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                      "JOIN log_ids AS a ON a.id = o.author JOIN log_ids AS i ON i.id = o.id "
+                      "LEFT JOIN log_ids AS g ON g.id = o.signer ORDER BY s.name, d.name, o.seq");
          query.next();) {
         list.append({.space = query.value(0).toString(),
                      .device = query.value(1).toString(),
@@ -363,7 +363,9 @@ QList<SpaceOperation> SpaceReplay::operations(const Library &library) {
                      .entity = query.value(5).toString(),
                      .id = query.value(6).toString(),
                      .field = query.value(7).toString(),
-                     .value = query.value(8).toString()});
+                     .value = query.value(8).toString(),
+                     .signer = query.value(9).toString(),
+                     .signature = query.value(10).toByteArray()});
     }
     return list;
 }
@@ -382,10 +384,14 @@ void storeOperations(const Library &library, std::span<const SpaceOperation> ops
         const qint64 deviceNum = ChangeLog::internId(library, op.device);
         const qint64 authorNum = ChangeLog::internId(library, op.author);
         const qint64 idNum = ChangeLog::internId(library, op.id);
+        // Kept as it was signed, its signature with it, to be verified again wherever it goes next.
+        const bool isSigned = !op.signer.isEmpty() && !op.signature.isEmpty();
         ChangeLog::exec(library,
-                        "INSERT OR IGNORE INTO ops (space, device, seq, hlc, author, entity, id, field, value) "
-                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                        {spaceNum, deviceNum, op.seq, Hlc::normalize(op.hlc), authorNum, op.entity, idNum, op.field, op.value});
+                        "INSERT OR IGNORE INTO ops (space, device, seq, hlc, author, entity, id, field, value, signer, signature) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        {spaceNum, deviceNum, op.seq, Hlc::normalize(op.hlc), authorNum, op.entity, idNum, op.field, op.value,
+                         isSigned ? QVariant(ChangeLog::internId(library, op.signer)) : QVariant(),
+                         isSigned ? QVariant(op.signature) : QVariant()});
         ChangeLog::exec(library,
                         "INSERT INTO seen (space, device, seq, hlc) VALUES (?, ?, ?, ?) "
                         "ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq), "

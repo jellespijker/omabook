@@ -57,7 +57,7 @@ QString Spaces::personalSpace(const Library &library) {
     return query.next() ? query.value(0).toString() : (u"personal:"_s + deviceId(library));
 }
 
-void Spaces::pair(const Library &library, const QString &theirSpace, const QString &theirDevice) {
+void Spaces::pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName) {
     if (!theirSpace.startsWith("personal:"_L1) || theirDevice.isEmpty())
         return;
     const qint64 created = lastHlc(library);
@@ -69,6 +69,30 @@ void Spaces::pair(const Library &library, const QString &theirSpace, const QStri
         for (const QString &device : {deviceId(library), theirDevice})
             library.exec("INSERT OR IGNORE INTO space_members (space, person, role, added) VALUES (?, ?, 'writer', ?)",
                          {space, device, created});
+    if (!theirName.isEmpty())
+        library.exec("UPDATE space_members SET name = ? WHERE person = ? AND space IN (SELECT id FROM spaces WHERE kind = 'personal')",
+                     {theirName, theirDevice});
+}
+
+bool Spaces::isOwnComputer(const Library &library, const QString &device) {
+    if (device.isEmpty())
+        return false;
+    if (device == deviceId(library))
+        return true;
+    // Of any personal space here: the one kept is the smallest id, which a later pairing may change.
+    QSqlQuery query = library.query("SELECT 1 FROM space_members AS m JOIN spaces AS s ON s.id = m.space "
+                                    "WHERE s.kind = 'personal' AND m.person = ?",
+                                    {device});
+    return query.next();
+}
+
+QList<Spaces::Computer> Spaces::computers(const Library &library) {
+    QList<Computer> paired;
+    for (QSqlQuery query = library.query("SELECT m.person, MAX(m.name) FROM space_members AS m JOIN spaces AS s ON s.id = m.space "
+                                         "WHERE s.kind = 'personal' GROUP BY m.person ORDER BY MIN(m.added), m.person");
+         query.next();)
+        paired << Computer{.device = query.value(0).toString(), .name = query.value(1).toString()};
+    return paired;
 }
 
 void Spaces::ensureSpaceForScope(const Library &library, const QString &scope) {

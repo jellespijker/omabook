@@ -6,7 +6,7 @@ set -uo pipefail
 omabook="$1"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
-export HOME="$work/home" XDG_CONFIG_HOME="$work/home/.config" XDG_CACHE_HOME="$work/home/.cache"
+export HOME="$work/home" XDG_CONFIG_HOME="$work/home/.config" XDG_CACHE_HOME="$work/home/.cache" XDG_DATA_HOME="$work/home/.local/share"
 unset DISPLAY WAYLAND_DISPLAY ANTHROPIC_API_KEY
 mkdir -p "$HOME" "$XDG_CONFIG_HOME/omabook"
 # AI off, so `ask` has a certain answer whatever is installed on this machine.
@@ -121,7 +121,8 @@ expect "add with given details" 0 '"id": 3' "$omabook" add --library "$library" 
 expect "the given details are used" 0 '"title": "Described"' "$omabook" show 3 --library "$library" --json
 expect "sync needs a computer" 1 "computer" "$omabook" sync --library "$library"
 expect "identity makes a key pair and prints its id" 0 "Fingerprint:" "$omabook" identity --library "$library"
-[ "$(stat -c %a "$library/omabook-person.key")" = 600 ] || fail "the key file can be read by others"
+[ "$(stat -c %a "$XDG_DATA_HOME/omabook/person.key")" = 600 ] || fail "the key file can be read by others"
+[ ! -e "$library/omabook-person.key" ] || fail "the key file is kept in the library folder, not per user"
 id="$("$omabook" identity --export --library "$library")"
 expect "identity keeps the same id" 0 "\"id\": \"$id\"" "$omabook" identity --json --library "$library"
 expect "identity is in the help" 0 "identity [--export]" "$omabook" help

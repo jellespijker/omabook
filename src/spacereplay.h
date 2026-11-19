@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QHash>
 #include <QList>
 #include <QString>
@@ -19,6 +20,11 @@ struct SpaceOperation {
     QString id;
     QString field;
     QString value;
+    // Who signed it, a person's id (its author), and the signature of its
+    // canonical bytes (SignedOps); both empty for one written before
+    // operations were signed, or by an Omabook from before that.
+    QString signer{};
+    QByteArray signature{};
 
     bool operator==(const SpaceOperation &) const = default;
 };

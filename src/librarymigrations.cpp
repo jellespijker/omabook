@@ -317,6 +317,16 @@ const QList<QStringList> migrations{
     // The snapshot takes the place of the operations it covers (#2), so what
     // looks up one thing's operations finds them there as it does in `ops`.
     {"CREATE INDEX IF NOT EXISTS snapshot_ops_entity ON snapshot_ops(entity, id, field)"},
+    // Signed operations (ADR 0001, People and keys): who signed each, the
+    // person who wrote it, and the signature of its canonical bytes; neither
+    // for one written before. A snapshot keeps an operation as it was, its
+    // signature with it, so what it holds can still be verified.
+    {"ALTER TABLE ops ADD COLUMN signer INTEGER REFERENCES log_ids(id)", "ALTER TABLE ops ADD COLUMN signature BLOB",
+     "ALTER TABLE snapshot_ops ADD COLUMN signer INTEGER", "ALTER TABLE snapshot_ops ADD COLUMN signature BLOB",
+     "DROP VIEW IF EXISTS live_ops",
+     "CREATE VIEW live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value, signer, signature FROM snapshot_ops "
+     "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
+     "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

@@ -14,7 +14,8 @@ moves those lines under its version.
 
 ### Added
 
-- `omabook identity` prints your id and its fingerprint: the public half of a key pair made the first time it is asked for and kept beside the library, readable only by you, which will sign what you write in a space shared with others (#47).
+- `omabook identity` prints your id and its fingerprint: the public half of a key pair made the first time it is asked for and kept in your Omabook data folder (`~/.local/share/omabook/person.key`), readable only by you, which signs what you write (#47, #48). A key an earlier build kept beside the library is moved there once, so a library folder synced elsewhere no longer carries it (#48).
+- `omabook identity` also lists your computers paired into your personal space (#48).
 
 ### Changed
 
@@ -24,6 +25,8 @@ moves those lines under its version.
 - The collections go through the change log too between two computers with this Omabook, merged field by field: a collection renamed or moved on one computer is the same one on the other, not a second (#37).
 - A book's removal goes through the change log too between two computers with this Omabook: the other computer removes it itself, by the same rule as before (all of it removed, and unchanged there since), and keeps the time it was removed; the manifest leaves removals out (#37).
 - The knowledge graph goes through the change log too between two computers with this Omabook, so the manifest a sync asks for now names only each book and its files. A thing known by another name on the other computer is matched once, by the rules the graph sync always used, and stays matched (#37).
+- Every change written to the library's change log is signed by you, and a sync between two computers with this Omabook carries the signatures and checks each before taking anything in: a change that is not as it was signed is refused, never applied, and the sync says so. Changes from an older Omabook, which are unsigned, are taken only from your own computers. The library's format goes up by one for it (a copy is kept first) (#48).
+- The first sync between two computers with this Omabook pairs them into one personal space with one person: the computer whose id is not kept takes on the other's key, over the same ssh the sync runs on, so all your computers sign as you (#48).
 - The library's format goes up by one (a copy is kept first, as for every format change): the change log gains a snapshot per space, so a sync reads the operations that still matter instead of all of them, and those it no longer needs, that every computer of the space has seen, are dropped (#37).
 
 - Compacting the change log now makes the library smaller: the snapshot of a space takes the place of the operations it covers instead of keeping a copy beside them, so of what every computer of the space has seen only what came after the snapshot stays. The library's format goes up by one for it (a copy is kept first) (#2).

@@ -41,6 +41,12 @@ inline constexpr char version = 1;
 // Whether the operation is as its signer signed it.
 [[nodiscard]] bool verify(const SignedOperation &signedOp);
 
+// Signs `op` as the log keeps it (ChangeLog::append): `person` becomes its
+// author and its signer, and its signature is of the bytes it is kept as.
+void signAs(SpaceOperation &op, const Person &person);
+// Whether `op` is signed, by its author, and is as they signed it.
+[[nodiscard]] bool verify(const SpaceOperation &op);
+
 // Seals signed operations as one batch of `space`.
 [[nodiscard]] QByteArray seal(const SpaceKey &key, QStringView space, std::span<const SignedOperation> ops);
 // The operations of a batch, refused as a whole when the batch doesn't open

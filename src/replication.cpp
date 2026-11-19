@@ -8,10 +8,12 @@
 #include <QVariant>
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <tuple>
 
 #include "changelog.h"
 #include "hlc.h"
+#include "signedops.h"
 #include "spacereducer.h"
 #include "spaces.h"
 
@@ -134,10 +136,11 @@ QJsonObject Replication::bookView(const ReducedBook &book) {
 QList<SpaceOperation> Replication::operations(const Library &library) {
     QList<SpaceOperation> list;
     for (QSqlQuery query =
-             ChangeLog::query(library, QString("SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value "
-                                               "FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space "
+             ChangeLog::query(library, QString("SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value, "
+                                               "g.name, o.signature FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space "
                                                "JOIN log_ids AS d ON d.id = o.device JOIN log_ids AS a ON a.id = o.author "
-                                               "JOIN log_ids AS i ON i.id = o.id WHERE %1 ORDER BY s.name, d.name, o.seq")
+                                               "JOIN log_ids AS i ON i.id = o.id LEFT JOIN log_ids AS g ON g.id = o.signer "
+                                               "WHERE %1 ORDER BY s.name, d.name, o.seq")
                                            .arg(travelling()));
          query.next();)
         list.append({.space = query.value(0).toString(),
@@ -148,7 +151,9 @@ QList<SpaceOperation> Replication::operations(const Library &library) {
                      .entity = query.value(5).toString(),
                      .id = query.value(6).toString(),
                      .field = query.value(7).toString(),
-                     .value = query.value(8).toString()});
+                     .value = query.value(8).toString(),
+                     .signer = query.value(9).toString(),
+                     .signature = query.value(10).toByteArray()});
     return list;
 }
 
@@ -194,10 +199,15 @@ Replication::Vector Replication::vectorFrom(const QJsonObject &object) {
     return vector;
 }
 
-QJsonArray Replication::toJson(std::span<const SpaceOperation> ops) {
+QJsonArray Replication::toJson(std::span<const SpaceOperation> ops, bool signatures) {
     QJsonArray array;
-    for (const SpaceOperation &op : ops)
-        array << QJsonArray{op.space, op.device, op.seq, op.hlc, op.author, op.entity, op.id, op.field, op.value};
+    for (const SpaceOperation &op : ops) {
+        QJsonArray parts{op.space, op.device, op.seq, op.hlc, op.author, op.entity, op.id, op.field, op.value};
+        if (signatures)
+            parts << op.signer
+                  << QString::fromLatin1(op.signature.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
+        array << parts;
+    }
     return array;
 }
 
@@ -213,11 +223,34 @@ QList<SpaceOperation> Replication::operationsFrom(const QJsonArray &array) {
                                    .entity = op.at(5).toString(),
                                    .id = op.at(6).toString(),
                                    .field = op.at(7).toString(),
-                                   .value = op.at(8).toString()};
-        if (op.size() == 9 && travels(taken) && !taken.space.isEmpty() && !taken.device.isEmpty() && taken.seq > 0 && !taken.id.isEmpty())
+                                   .value = op.at(8).toString(),
+                                   .signer = op.at(9).toString(),
+                                   .signature = QByteArray::fromBase64(op.at(10).toString().toLatin1(), QByteArray::Base64UrlEncoding)};
+        if ((op.size() == 9 || op.size() == 11) && travels(taken) && !taken.space.isEmpty() && !taken.device.isEmpty() && taken.seq > 0
+            && !taken.id.isEmpty())
             ops << taken;
     }
     return ops;
+}
+
+Replication::Admitted Replication::admit(const Library &library, const QList<SpaceOperation> &incoming, const QString &peer) {
+    Admitted admitted;
+    std::optional<bool> ownComputer;
+    for (const SpaceOperation &op : incoming) {
+        bool taken = false;
+        if (!op.signer.isEmpty() || !op.signature.isEmpty()) {
+            taken = SignedOps::verify(op);
+        } else {
+            if (!ownComputer)
+                ownComputer = Spaces::isOwnComputer(library, peer);
+            taken = *ownComputer;
+        }
+        if (taken)
+            admitted.ops << op;
+        else
+            ++admitted.refused;
+    }
+    return admitted;
 }
 
 QJsonArray Replication::toJson(const QList<BookNames> &books) {

@@ -61,9 +61,23 @@ public:
 
     [[nodiscard]] static QJsonObject toJson(const Vector &vector);
     [[nodiscard]] static Vector vectorFrom(const QJsonObject &object);
-    [[nodiscard]] static QJsonArray toJson(std::span<const SpaceOperation> ops);
+    // Each operation as an array of its nine parts, and `signatures` its
+    // signer and signature after them (an Omabook from before signing takes
+    // only the nine, so it is sent only those).
+    [[nodiscard]] static QJsonArray toJson(std::span<const SpaceOperation> ops, bool signatures = true);
     // Only the operations that travel: anything else in `array` is left out.
     [[nodiscard]] static QList<SpaceOperation> operationsFrom(const QJsonArray &array);
+
+    // Of the operations a peer sent, those that may be taken in, and how many were refused.
+    struct Admitted {
+        QList<SpaceOperation> ops;
+        int refused = 0;
+    };
+    // Every signed operation is verified before anything is taken of it, and
+    // refused unless it is as its author signed it. An unsigned one, as an
+    // Omabook from before signing writes them, is taken only from one of
+    // one's own computers (`peer`, a device of the personal space).
+    [[nodiscard]] static Admitted admit(const Library &library, const QList<SpaceOperation> &incoming, const QString &peer);
     [[nodiscard]] static QJsonArray toJson(const QList<BookNames> &books);
     [[nodiscard]] static QList<BookNames> booksFrom(const QJsonArray &array);
 

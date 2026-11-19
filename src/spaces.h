@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QList>
 #include <QString>
 #include <QStringList>
 #include <QtTypes>
@@ -29,7 +30,16 @@ public:
     // (personalSpace), the two devices members of both. The operations
     // already written in the other space stay where they are (the log is
     // append-only) and travel and merge with the rest.
-    static void pair(const Library &library, const QString &theirSpace, const QString &theirDevice);
+    static void pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName = {});
+    // Whether `device` is one of one's own computers: a member of the personal space.
+    [[nodiscard]] static bool isOwnComputer(const Library &library, const QString &device);
+    // One's own computers, paired into the personal space: each device's id
+    // and the name it goes by (as it said when paired; empty when unknown).
+    struct Computer {
+        QString device;
+        QString name;
+    };
+    [[nodiscard]] static QList<Computer> computers(const Library &library);
     // The space a graph scope belongs to: the personal space for "", and a
     // story-world space for "world:…".
     static void ensureSpaceForScope(const Library &library, const QString &scope);

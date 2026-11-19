@@ -14,6 +14,7 @@
 
 #include "compaction.h"
 #include "library.h"
+#include "signedops.h"
 #include "spacereducer.h"
 #include "spaces.h"
 
@@ -337,10 +338,15 @@ std::expected<SpaceSnapshot, QString> PublishedSpace::snapshot(const Library &li
         return std::unexpected(ops.error());
     Spaces::ensurePublishedSpace(library, space, collection->name, owner.person, owner.name);
     qint64 clock = Spaces::lastHlc(library);
-    // Written by the owner, whichever of their computers it was.
+    // Written by the owner, whichever of their computers it was, and signed
+    // by them when the owner is this library's person (signing makes them the author).
+    const Person *person = library.person();
+    const bool signs = person != nullptr && person->id() == owner.person;
     for (SpaceOperation &op : *ops) {
         clock = std::max(clock, op.hlc);
         op.author = owner.person;
+        if (signs)
+            SignedOps::signAs(op, *person);
     }
     return SpaceSnapshot{.space = space,
                          .kind = QString::fromLatin1(kind),

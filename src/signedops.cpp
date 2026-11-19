@@ -150,6 +150,23 @@ bool SignedOps::verify(const SignedOperation &signedOp) {
     return Person::verify(signedOp.signer, Crypto::bytes(canonicalBytes(signedOp.op)), signedOp.signature);
 }
 
+void SignedOps::signAs(SpaceOperation &op, const Person &person) {
+    op.author = person.id();
+    op.signer = op.author;
+    op.signature = Crypto::toByteArray(person.sign(Crypto::bytes(canonicalBytes(op))));
+}
+
+bool SignedOps::verify(const SpaceOperation &op) {
+    if (op.signer.isEmpty() || op.signer != op.author || std::cmp_not_equal(op.signature.size(), crypto_sign_BYTES))
+        return false;
+    const auto signer = Person::publicKeyFrom(op.signer);
+    if (!signer)
+        return false;
+    Person::Signature signature{};
+    std::ranges::copy(Crypto::bytes(op.signature), signature.begin());
+    return Person::verify(*signer, Crypto::bytes(canonicalBytes(op)), signature);
+}
+
 QByteArray SignedOps::seal(const SpaceKey &key, QStringView space, std::span<const SignedOperation> ops) {
     QList<QByteArray> messages;
     messages.reserve(static_cast<qsizetype>(ops.size()));

@@ -5,9 +5,11 @@
 #include <QSet>
 #include <algorithm>
 #include <tuple>
+#include <utility>
 
 #include "compaction.h"
 #include "log.h"
+#include "pairing.h"
 #include "replication.h"
 #include "spacereplay.h"
 #include "spaces.h"
@@ -48,6 +50,32 @@ namespace {
     return held;
 }
 
+// The operations of `incoming` the computer `peer` may give, and those it
+// may not counted in `summary` and said there as `refusal` (with the count
+// and why) says it, for whoever started the sync (Replication::admit).
+[[nodiscard]] QList<SpaceOperation> admitted(const Library &library, const QList<SpaceOperation> &incoming, const QString &peer,
+                                             const QString &refusal, SyncSummary &summary) {
+    Replication::Admitted taken = Replication::admit(library, incoming, peer);
+    if (taken.refused > 0) {
+        summary.refused += taken.refused;
+        summary.problems << refusal.arg(taken.refused)
+                                .arg("they are not as their author signed them, or are unsigned and not from one of your own computers");
+        qCWarning(lcSync).noquote() << taken.refused << "operations refused from" << peer;
+    }
+    return std::move(taken.ops);
+}
+
+void takePerson(Library &library, const QJsonObject &theirs, SyncSummary &summary) {
+    if (const auto taken = Pairing::take(library, theirs); !taken)
+        summary.problems << "This computer could not take on the person it is paired with: " + taken.error();
+}
+
+QJsonObject with(QJsonObject object, const QJsonObject &more) {
+    for (auto it = more.begin(); it != more.end(); ++it)
+        object.insert(it.key(), it.value());
+    return object;
+}
+
 // What the other side took of this one's, as its own summary says it took it.
 void countThere(SyncSummary &summary, const QJsonObject &there) {
     const QJsonObject titles = there.value("named").toObject();
@@ -68,39 +96,45 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
 } // namespace
 
 QJsonObject SyncLog::introduction(const Library &library) {
-    return {{"space", Spaces::personalSpace(library)},
-            {"device", Spaces::deviceId(library)},
-            {"vector", Replication::toJson(Replication::vector(library))}};
+    return with({{"space", Spaces::personalSpace(library)},
+                 {"device", Spaces::deviceId(library)},
+                 {"vector", Replication::toJson(Replication::vector(library))}},
+                Pairing::introduction(library));
 }
 
 SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
                                    const SyncOptions &options) {
     const bool dryRun = options.dryRun;
     const QJsonArray books = manifest.value("books").toArray();
+    const QString theirDevice = manifest.value("device").toString();
     if (!dryRun)
-        Spaces::pair(library, manifest.value("space").toString(), manifest.value("device").toString());
+        Spaces::pair(library, manifest.value("space").toString(), theirDevice, manifest.value("name").toString());
     QSet<QString> theirGids;
     for (const auto &book : books)
         theirGids.insert(book.toObject().value("gid").toString());
     const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(manifest.value("vector").toObject()));
-    // A dry run links nothing: what is unlinked stays so until a sync.
-    const QJsonObject request{{"space", Spaces::personalSpace(library)},
-                              {"device", Spaces::deviceId(library)},
-                              {"vector", Replication::toJson(Replication::vector(library))},
-                              {"ops", Replication::toJson(lacking)},
-                              {"books", dryRun ? QJsonArray() : Replication::toJson(Replication::unlinked(library, theirGids))},
-                              {"details", SyncTake::otherSide(options.details)},
-                              {"held", QJsonArray::fromStringList(SyncTake::heldBy(library).values())},
-                              {"dry_run", dryRun}};
+    // A dry run links nothing: what is unlinked stays so until a sync. Nor
+    // does it pair: the person's key goes with it only in a sync, when theirs
+    // is to become this one's (pairing.h).
+    const QJsonObject request = with({{"space", Spaces::personalSpace(library)},
+                                      {"device", Spaces::deviceId(library)},
+                                      {"vector", Replication::toJson(Replication::vector(library))},
+                                      {"ops", Replication::toJson(lacking, manifest.value("signs").toInt() >= 1)},
+                                      {"books", dryRun ? QJsonArray() : Replication::toJson(Replication::unlinked(library, theirGids))},
+                                      {"details", SyncTake::otherSide(options.details)},
+                                      {"held", QJsonArray::fromStringList(SyncTake::heldBy(library).values())},
+                                      {"dry_run", dryRun}},
+                                     with(Pairing::introduction(library), dryRun ? QJsonObject() : Pairing::keyFor(library, manifest)));
     const auto answer = remote.exchange(QJsonDocument(request), {"sync", "--replicate"});
     if (!answer) {
         summary.problems << "The change log could not be carried between here and " + remote.host() + ": " + answer.error();
         return {.books = books, .gone = {}};
     }
-    const QList<SpaceOperation> incoming = Replication::operationsFrom(answer->value("ops").toArray());
+    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), theirDevice,
+                                                    "%1 operations from " + remote.host() + " were refused and not taken in: %2.", summary);
     // They hold what they held, and now what was sent them.
     if (!dryRun)
-        Compaction::rememberSeen(library, manifest.value("device").toString(),
+        Compaction::rememberSeen(library, theirDevice,
                                  joined(Replication::vectorFrom(manifest.value("vector").toObject()),
                                         Replication::vectorFrom(request.value("vector").toObject())));
     const QList<qint64> taken = takePlaces(library, incoming, dryRun);
@@ -110,7 +144,7 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
     for (const auto &title : answer->value("titles").toArray())
         summary.titles.placesSent << title.toString();
     SyncTake::Taken described = SyncTake::take(library, incoming,
-                                               {.device = manifest.value("device").toString(),
+                                               {.device = theirDevice,
                                                 .details = options.details,
                                                 .dryRun = dryRun,
                                                 .remote = &remote,
@@ -120,8 +154,10 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
     QJsonObject there = answer->value("taken").toObject();
     there.insert("named", answer->value("named"));
     countThere(summary, there);
-    if (!dryRun)
+    if (!dryRun) {
         Compaction::compactWhenWorthIt(library);
+        takePerson(library, *answer, summary);
+    }
     qCInfo(lcSync).noquote() << "the log with" << remote.host() << ":" << lacking.size() << "operations sent," << incoming.size()
                              << "taken";
     return described;
@@ -129,35 +165,42 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
 
 QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     const bool dryRun = request.value("dry_run").toBool();
+    const QString theirDevice = request.value("device").toString();
     if (!dryRun) {
-        Spaces::pair(library, request.value("space").toString(), request.value("device").toString());
+        Spaces::pair(library, request.value("space").toString(), theirDevice, request.value("name").toString());
         Replication::link(library, Replication::booksFrom(request.value("books").toArray()));
     }
-    const QList<SpaceOperation> incoming = Replication::operationsFrom(request.value("ops").toArray());
-    // What they held when they asked: whether the answer reaches them, this side can't know.
-    if (!dryRun)
-        Compaction::rememberSeen(library, request.value("device").toString(), Replication::vectorFrom(request.value("vector").toObject()));
-    const QList<qint64> changed = takePlaces(library, incoming, dryRun);
     SyncSummary taken;
     taken.dryRun = dryRun;
+    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(request.value("ops").toArray()), theirDevice,
+                                                    "%1 operations sent from here were refused there and not taken in: %2.", taken);
+    // What they held when they asked: whether the answer reaches them, this side can't know.
+    if (!dryRun)
+        Compaction::rememberSeen(library, theirDevice, Replication::vectorFrom(request.value("vector").toObject()));
+    const QList<qint64> changed = takePlaces(library, incoming, dryRun);
     // The side asked has no books of the other's to describe: it never fetches any.
     std::ignore = SyncTake::take(library, incoming,
-                                 {.device = request.value("device").toString(),
+                                 {.device = theirDevice,
                                   .details = SyncTake::detailsFrom(request.value("details").toString()),
                                   .dryRun = dryRun,
                                   .remote = nullptr,
                                   .books = {},
                                   .held = heldIn(request.value("held").toArray())},
                                  taken);
-    if (!dryRun)
+    // This side's key, when theirs is to be this side's person; else theirs is taken here.
+    const QJsonObject pairing = with(Pairing::introduction(library), dryRun ? QJsonObject() : Pairing::keyFor(library, request));
+    if (!dryRun) {
         Compaction::compactWhenWorthIt(library);
+        takePerson(library, request, taken);
+    }
     // After taking theirs, so what was just written here goes back with the rest.
     const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(request.value("vector").toObject()));
-    return {{"ops", Replication::toJson(lacking)},
-            {"changed", static_cast<int>(changed.size())},
-            {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
-            {"taken", taken.toJson()},
-            {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
-                                  {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
-                                  {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)}}}};
+    return with({{"ops", Replication::toJson(lacking, request.value("signs").toInt() >= 1)},
+                 {"changed", static_cast<int>(changed.size())},
+                 {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
+                 {"taken", taken.toJson()},
+                 {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
+                                       {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
+                                       {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)}}}},
+                pairing);
 }

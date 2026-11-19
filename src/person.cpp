@@ -4,6 +4,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QStandardPaths>
 #include <QStringList>
 #include <cerrno>
 #include <cstdio>
@@ -13,6 +14,8 @@
 #include <tuple>
 #include <unistd.h>
 #include <utility>
+
+#include "log.h"
 
 namespace {
 
@@ -103,7 +106,19 @@ private:
     return placed;
 }
 
+// Puts the finished temporary file in place of whatever key is there.
+[[nodiscard]] bool placeReplacing(const QByteArray &from, const QByteArray &to) {
+    if (::rename(from.constData(), to.constData()) == 0)
+        return true;
+    const int why = errno;
+    std::ignore = ::unlink(from.constData()); // Only the temporary name goes; the key there stays as it was.
+    errno = why;
+    return false;
+}
+
 } // namespace
+
+QString Person::userKeyFile() { return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + u"/omabook/person.key"_s; }
 
 QString Person::keyFile(const QString &libraryRoot) { return QDir(libraryRoot).absoluteFilePath(u"omabook-person.key"_s); }
 
@@ -148,7 +163,7 @@ std::expected<Person, QString> Person::load(const QString &file) {
     return fromSeed(seed);
 }
 
-std::expected<void, QString> Person::keep(const QString &file, const Seed &seed) {
+std::expected<void, QString> Person::keep(const QString &file, const Seed &seed, Placing placing) {
     const QFileInfo where(file);
     if (!QDir().mkpath(where.absolutePath()))
         return std::unexpected(u"Can't make the folder %1."_s.arg(where.absolutePath()));
@@ -168,7 +183,9 @@ std::expected<void, QString> Person::keep(const QString &file, const Seed &seed)
         removeTemporary();
         return std::unexpected(why);
     }
-    if (!placeWithoutReplacing(temporary, QFile::encodeName(file)))
+    const bool placed = placing == Placing::Replace ? placeReplacing(temporary, QFile::encodeName(file))
+                                                    : placeWithoutReplacing(temporary, QFile::encodeName(file));
+    if (!placed)
         return std::unexpected(failure(u"Can't keep the key file"_s, file));
     // The new name is only lasting once the folder that holds it is written.
     if (const FileDescriptor folder{::open(QFile::encodeName(where.absolutePath()).constData(), O_RDONLY | O_DIRECTORY | O_CLOEXEC)};
@@ -185,10 +202,42 @@ std::expected<Person, QString> Person::loadOrCreate(const QString &file) {
         return std::unexpected(u"libsodium could not be made ready: the system gives it no randomness."_s);
     Seed seed;
     randombytes_buf(seed.data(), Seed::size());
-    if (auto kept = keep(file, seed); !kept)
+    if (auto kept = keep(file, seed, Placing::KeepWhatIsThere); !kept)
         return std::unexpected(kept.error());
     // Read back what is there: ours, or the one another program kept first.
     return load(file);
+}
+
+Person::Seed Person::seed() const {
+    Seed seed;
+    crypto_sign_ed25519_sk_to_seed(seed.data(), m_secret.data());
+    return seed;
+}
+
+std::expected<void, QString> Person::keepIn(const QString &file) const { return keep(file, seed(), Placing::Replace); }
+
+QByteArray Person::secretForPairing() const {
+    const Seed bytes = seed();
+    // The Base64 text is the caller's to wipe; the seed itself is wiped here as it goes.
+    QByteArray raw(static_cast<qsizetype>(Seed::size()), Qt::Uninitialized);
+    std::ranges::copy(bytes.span(), std::as_writable_bytes(std::span(raw.data(), Seed::size())).begin());
+    QByteArray secret = raw.toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals);
+    sodium_memzero(raw.data(), Seed::size());
+    return secret;
+}
+
+std::expected<Person, QString> Person::fromPairingSecret(QByteArrayView secret) {
+    auto decoded =
+        QByteArray::fromBase64Encoding(secret.toByteArray(), QByteArray::Base64UrlEncoding | QByteArray::AbortOnBase64DecodingErrors);
+    const auto wipe = [&decoded] { sodium_memzero(decoded.decoded.data(), static_cast<std::size_t>(decoded.decoded.size())); };
+    if (!decoded || std::cmp_not_equal(decoded.decoded.size(), crypto_sign_SEEDBYTES)) {
+        wipe();
+        return std::unexpected(u"What was given as a person's key is not one."_s);
+    }
+    Seed seed;
+    std::ranges::copy(Crypto::bytes(decoded.decoded), seed.span().begin());
+    wipe();
+    return fromSeed(seed);
 }
 
 Person::Signature Person::sign(std::span<const std::byte> message) const {
@@ -228,4 +277,34 @@ std::expected<Person::PublicKey, QString> Person::publicKeyFrom(QStringView id) 
     PublicKey key{};
     std::ranges::copy(Crypto::bytes(decoded.decoded), key.begin());
     return key;
+}
+
+const Person *PersonFile::get(const QString &libraryRoot) {
+    if (m_tried)
+        return m_person ? &*m_person : nullptr;
+    m_tried = true;
+    const QString formerFile = libraryRoot.isEmpty() ? QString() : Person::keyFile(libraryRoot);
+    // Kept beside a library by the first builds of 0.1.7: moved here, once,
+    // so a library folder that is synced elsewhere no longer carries it.
+    if (!formerFile.isEmpty() && !QFileInfo::exists(m_file) && QFileInfo::exists(formerFile)) {
+        if (const auto former = Person::load(formerFile); former && Person::keep(m_file, former->seed(), Person::Placing::KeepWhatIsThere))
+            std::ignore = QFile::remove(formerFile); // Moved; were it to stay, the one here is what counts.
+    }
+    auto person = Person::loadOrCreate(m_file);
+    if (!person) {
+        m_problem = person.error();
+        qCWarning(lcLibrary).noquote() << "what this library writes goes unsigned:" << m_problem;
+        return nullptr;
+    }
+    m_person.emplace(std::move(*person));
+    return &*m_person;
+}
+
+std::expected<void, QString> PersonFile::adopt(Person person) {
+    if (auto kept = person.keepIn(m_file); !kept)
+        return kept;
+    m_person.emplace(std::move(person));
+    m_tried = true;
+    m_problem.clear();
+    return {};
 }
