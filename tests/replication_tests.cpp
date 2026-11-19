@@ -90,10 +90,131 @@ QString firstDifference(const QJsonObject &actual, const QJsonObject &expected) 
             const QJsonValue one = i < mine.size() ? mine.at(i) : QJsonValue();
             const QJsonValue other = i < theirs.size() ? theirs.at(i) : QJsonValue();
             if (one != other)
-                return QString("%1[%2]: %3 where %4").arg(key).arg(i).arg(text(one), text(other));
+                return QString("%1[%2]: expected %4, got %3").arg(key).arg(i).arg(text(one), text(other));
         }
     }
     return {};
+}
+
+// Two copies of a library sample synced the old way (by the manifest, as with
+// an older Omabook) and two through the log, to compare after each step.
+struct SamplePairs {
+    SamplePairs(const QString &sample, const QString &name)
+        : dump(name), oldHere(dir.filePath("OldHere")), oldThere(dir.filePath("OldThere")), logHere(dir.filePath("LogHere")),
+          logThere(dir.filePath("LogThere")), older("laptop:" + dir.filePath("OldThere"), {recordingSsh(dir, "ssh-older", true)}),
+          current("laptop:" + dir.filePath("LogThere"), {recordingSsh(dir, "ssh-log", false)}) {
+        int format = 0;
+        for (const char *copy : {"OldHere", "OldThere", "LogHere", "LogThere"}) {
+            QVERIFY(QDir(dir.path()).mkpath(copy));
+            Samples::loadSqlDump(sample, dir.filePath(QString(copy) + "/omabook.db"), format);
+        }
+        QVERIFY(oldHere.open() && oldThere.open() && logHere.open() && logThere.open());
+        days = Samples::librarySnapshot(logHere).value("days");
+    }
+
+    void expectAlike(const char *step) const {
+        const QString at = dump + ", step " + step + ", ";
+        const QString here = firstDifference(withoutMadeNodes(without(Samples::librarySnapshot(logHere), "days")),
+                                             withoutMadeNodes(without(Samples::librarySnapshot(oldHere), "days")));
+        const QString there =
+            firstDifference(without(Samples::librarySnapshot(logThere), "days"), without(Samples::librarySnapshot(oldThere), "days"));
+        QVERIFY2(here.isEmpty(), qPrintable(at + "here: " + here));
+        QVERIFY2(there.isEmpty(), qPrintable(at + "there: " + there));
+        QCOMPARE(Samples::librarySnapshot(logHere).value("days"), days);
+        QCOMPARE(Samples::librarySnapshot(logThere).value("days"), days);
+    }
+
+    QTemporaryDir dir;
+    QString dump;
+    Library oldHere, oldThere, logHere, logThere;
+    Remote older, current;
+    QJsonValue days;
+};
+
+void readFurtherAndChangeDetailsBothSides(SamplePairs &p) {
+    // 1. Read further here, and the details changed both sides.
+    for (Library *library : {&p.oldHere, &p.logHere})
+        readOn(*library, {.section = 2, .fraction = 0.25, .percent = 70, .updated = 1794700000}, Hlc::pack(1794700100, 0), "Here Press");
+    for (Library *library : {&p.oldThere, &p.logThere})
+        readOn(*library, {.section = 1, .fraction = 0.9, .percent = 65, .updated = 1794699000}, Hlc::pack(1794700200, 0), "There Press");
+    const SyncSummary oldFirst = syncLibrary(p.oldHere, p.older);
+    const SyncSummary logFirst = syncLibrary(p.logHere, p.current);
+    QVERIFY2(oldFirst.problems.isEmpty() && logFirst.problems.isEmpty(),
+             qPrintable(p.dump + ": " + (oldFirst.problems + logFirst.problems).join('\n')));
+    QCOMPARE(logFirst.placesSent, oldFirst.placesSent);
+    QCOMPARE(logFirst.placesTaken, oldFirst.placesTaken);
+    QCOMPARE(logFirst.detailsTaken + logFirst.detailsSent, oldFirst.detailsTaken + oldFirst.detailsSent);
+    p.expectAlike("1");
+    QCOMPARE(p.logThere.progress(1).updated, qint64(1794700000));
+    QCOMPARE(Samples::librarySnapshot(p.oldThere).value("days").toArray().size(), p.days.toArray().size() + 1);
+}
+
+void readFurtherThere(SamplePairs &p) {
+    // 2. Then read further there.
+    for (Library *library : {&p.oldThere, &p.logThere})
+        library->setProgress(1, {.section = 3, .fraction = 0.1, .percent = 80, .updated = 1794710000});
+    const SyncSummary oldSecond = syncLibrary(p.oldHere, p.older);
+    const SyncSummary logSecond = syncLibrary(p.logHere, p.current);
+    QCOMPARE(logSecond.placesTaken, oldSecond.placesTaken);
+    QCOMPARE(logSecond.placesSent, oldSecond.placesSent);
+    p.expectAlike("2");
+    QCOMPARE(p.logHere.progress(1).section, 3);
+}
+
+void changeDetailsWithNoTime(SamplePairs &p) {
+    // 3. Details changed both sides with no time to say which are
+    //    newer, as before times were kept: left as they are, and
+    //    counted, until the other side's are taken.
+    for (Library *library : {&p.oldHere, &p.logHere, &p.oldThere, &p.logThere}) {
+        BookMeta meta = library->book(2)->meta;
+        meta.publisher = library == &p.oldHere || library == &p.logHere ? "Here Books" : "There Books";
+        QVERIFY(library->setMeta(2, meta, nullptr, 0));
+    }
+    const SyncSummary oldUndecided = syncLibrary(p.oldHere, p.older);
+    const SyncSummary logUndecided = syncLibrary(p.logHere, p.current);
+    QCOMPARE(oldUndecided.detailsUndecided, 1);
+    QCOMPARE(logUndecided.detailsUndecided, oldUndecided.detailsUndecided);
+    QCOMPARE(p.logHere.book(2)->meta.publisher, QString("Here Books"));
+    QCOMPARE(p.logThere.book(2)->meta.publisher, QString("There Books"));
+    p.expectAlike("3");
+    const SyncSummary oldSettled = syncLibrary(p.oldHere, p.older, {}, SyncOptions{.details = SyncOptions::Details::Theirs});
+    const SyncSummary logSettled = syncLibrary(p.logHere, p.current, {}, SyncOptions{.details = SyncOptions::Details::Theirs});
+    QCOMPARE(logSettled.detailsTaken, oldSettled.detailsTaken);
+    QCOMPARE(p.logHere.book(2)->meta.publisher, QString("There Books"));
+    p.expectAlike("3, settled");
+    QCOMPARE(syncLibrary(p.logHere, p.current).detailsUndecided, 0);
+}
+
+void makeAndRemoveCollections(SamplePairs &p) {
+    // 4. A collection made on each side, then one removed, each at a
+    //    time of its own so the four copies do the same.
+    const auto store = [](Library &library, const QString &path, qint64 parent, qint64 at, bool removed = false) {
+        Collection collection{.parent = parent, .name = path.section('/', -1), .rule = removed ? QString() : "rating:4", .updated = at};
+        collection.id = library.collectionNamed(path) ? library.collectionNamed(path)->id : 0;
+        collection.removed = removed;
+        if (path == "Picks/Here" && !removed)
+            collection.included = {1};
+        return library.storeCollection(collection).value_or(0);
+    };
+    for (Library *library : {&p.oldHere, &p.logHere})
+        QVERIFY(store(*library, "Picks/Here", store(*library, "Picks", 0, 1794720000), 1794720010) > 0);
+    for (Library *library : {&p.oldThere, &p.logThere})
+        QVERIFY(store(*library, "To Lend", 0, 1794720020) > 0);
+    const SyncSummary oldCollected = syncLibrary(p.oldHere, p.older);
+    const SyncSummary logCollected = syncLibrary(p.logHere, p.current);
+    QCOMPARE(logCollected.collectionsTaken, oldCollected.collectionsTaken);
+    QVERIFY(p.logThere.collectionNamed("Picks/Here") && p.logHere.collectionNamed("To Lend"));
+    QVERIFY(p.logThere.collectionNamed("Picks/Here")->included.contains(1));
+    p.expectAlike("4");
+    for (Library *library : {&p.oldThere, &p.logThere}) {
+        const std::optional<Collection> picked = library->collectionNamed("Picks/Here");
+        QVERIFY(picked && store(*library, "Picks/Here", picked->parent, 1794720030, true) > 0);
+    }
+    QVERIFY(syncLibrary(p.oldHere, p.older).problems.isEmpty());
+    QVERIFY(syncLibrary(p.logHere, p.current).problems.isEmpty());
+    QVERIFY(p.logHere.collections(true).size() == p.oldHere.collections(true).size());
+    QVERIFY(!p.logHere.collectionNamed("Picks/Here"));
+    p.expectAlike("4, removed");
 }
 
 } // namespace
@@ -290,6 +411,39 @@ private slots:
         QCOMPARE(syncLibrary(here, remote).detailsUndecided, 0);
     }
 
+    void collectionsTravelThroughTheLogRenamesAndAll() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "Kept Together"));
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 mine = here.add(dir.filePath("shared.epub")).id;
+        const qint64 theirs = there.add(dir.filePath("shared.epub")).id;
+        const auto made = here.addCollection("Study/Sea", "tag:sea");
+        QVERIFY(made);
+        const Remote remote("laptop:" + dir.filePath("There"), {recordingSsh(dir, "ssh-collections", false)});
+        QCOMPARE(syncLibrary(here, remote).collectionsSent, 2); // "Study" and "Study/Sea"
+        QVERIFY(there.collectionNamed("Study/Sea"));
+        QVERIFY(!libraryManifest(there, ManifestFor::LogPeer).contains("collections"));
+
+        // Renamed there and given the book by hand: the same collection here, not another.
+        const qint64 sea = there.collectionNamed("Study/Sea")->id;
+        QVERIFY(there.renameCollection(sea, "Coast"));
+        QVERIFY(there.putInCollection(sea, theirs, true));
+        const SyncSummary dry = syncLibrary(here, remote, {}, SyncOptions{.dryRun = true});
+        QCOMPARE(dry.collectionsTaken, 1);
+        QVERIFY(here.collectionNamed("Study/Sea"));
+        QCOMPARE(syncLibrary(here, remote).collectionsTaken, 1);
+        QVERIFY(!here.collectionNamed("Study/Sea"));
+        const std::optional<Collection> coast = here.collectionNamed("Study/Coast");
+        QVERIFY(coast && coast->id == *made);
+        QVERIFY(coast->included.contains(mine));
+        QCOMPARE(here.collections().size(), 2);
+        QVERIFY2(!commandsOf(dir, "ssh-collections").contains("'collections'"), qPrintable(commandsOf(dir, "ssh-collections")));
+        const SyncSummary settled = syncLibrary(here, remote);
+        QCOMPARE(settled.collectionsTaken + settled.collectionsSent, 0);
+    }
+
     void anOlderOmabookStillSyncsByTheManifest() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "On Both"));
@@ -309,6 +463,7 @@ private slots:
         meta.publisher = "Older Press";
         QVERIFY(there.setMeta(otherThere, meta, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0)));
         QVERIFY(here.setReading(sharedHere, "read", 5, {}));
+        QVERIFY(there.addCollection("From There", "status:reading"));
 
         // An older Omabook's manifest says nothing of the log, and has the places.
         const QJsonObject manifest = libraryManifest(there);
@@ -328,13 +483,15 @@ private slots:
         QCOMPARE(here.book(otherHere)->meta.publisher, QString("Older Press"));
         QCOMPARE(summary.readingSent, 1);
         QCOMPARE(there.book(sharedThere)->rating, 5);
+        QCOMPARE(summary.collectionsTaken, 1);
+        QVERIFY(here.collectionNamed("From There"));
 
         // Asked for the log, it refused; it was asked for its manifest and
         // given the place by the command it has always taken, as plain seconds.
         const QString commands = commandsOf(dir, "ssh-older");
         QVERIFY2(commands.contains("'manifest' '--log'") && commands.contains("'manifest' --library"), qPrintable(commands));
         QVERIFY2(commands.contains("'progress'") && commands.contains("'--updated' '1794860500'"), qPrintable(commands));
-        QVERIFY2(commands.contains("'--status' 'read'"), qPrintable(commands));
+        QVERIFY2(commands.contains("'--status' 'read'") && commands.contains("'collections' 'take'"), qPrintable(commands));
         QVERIFY2(!commands.contains("'--replicate'"), qPrintable(commands));
         // No pairing with a computer that doesn't speak the log.
         QCOMPARE(Spaces::personalSpace(here), hereSpace);
@@ -358,85 +515,18 @@ private slots:
         const QStringList dumps = data.entryList({"library-*.sql"}, QDir::Files, QDir::Name);
         QVERIFY(dumps.size() >= 5);
         for (const QString &dump : dumps) {
-            QTemporaryDir dir;
-            int format = 0;
-            for (const char *copy : {"OldHere", "OldThere", "LogHere", "LogThere"}) {
-                QVERIFY(QDir(dir.path()).mkpath(copy));
-                Samples::loadSqlDump(data.filePath(dump), dir.filePath(QString(copy) + "/omabook.db"), format);
-            }
-            Library oldHere(dir.filePath("OldHere")), oldThere(dir.filePath("OldThere"));
-            Library logHere(dir.filePath("LogHere")), logThere(dir.filePath("LogThere"));
-            QVERIFY(oldHere.open() && oldThere.open() && logHere.open() && logThere.open());
-            const Remote older("laptop:" + dir.filePath("OldThere"), {recordingSsh(dir, "ssh-older", true)});
-            const Remote current("laptop:" + dir.filePath("LogThere"), {recordingSsh(dir, "ssh-log", false)});
-            const QJsonValue days = Samples::librarySnapshot(logHere).value("days");
-            const auto expectAlike = [&](const char *step) {
-                const QString at = dump + ", step " + step + ", ";
-                const QString here = firstDifference(withoutMadeNodes(without(Samples::librarySnapshot(logHere), "days")),
-                                                     withoutMadeNodes(without(Samples::librarySnapshot(oldHere), "days")));
-                const QString there = firstDifference(without(Samples::librarySnapshot(logThere), "days"),
-                                                      without(Samples::librarySnapshot(oldThere), "days"));
-                QVERIFY2(here.isEmpty(), qPrintable(at + "here: " + here));
-                QVERIFY2(there.isEmpty(), qPrintable(at + "there: " + there));
-                QCOMPARE(Samples::librarySnapshot(logHere).value("days"), days);
-                QCOMPARE(Samples::librarySnapshot(logThere).value("days"), days);
-            };
-
-            // 1. Read further here, and the details changed both sides.
-            for (Library *library : {&oldHere, &logHere})
-                readOn(*library, {.section = 2, .fraction = 0.25, .percent = 70, .updated = 1794700000}, Hlc::pack(1794700100, 0),
-                       "Here Press");
-            for (Library *library : {&oldThere, &logThere})
-                readOn(*library, {.section = 1, .fraction = 0.9, .percent = 65, .updated = 1794699000}, Hlc::pack(1794700200, 0),
-                       "There Press");
-            const SyncSummary oldFirst = syncLibrary(oldHere, older);
-            const SyncSummary logFirst = syncLibrary(logHere, current);
-            QVERIFY2(oldFirst.problems.isEmpty() && logFirst.problems.isEmpty(),
-                     qPrintable(dump + ": " + (oldFirst.problems + logFirst.problems).join('\n')));
-            QCOMPARE(logFirst.placesSent, oldFirst.placesSent);
-            QCOMPARE(logFirst.placesTaken, oldFirst.placesTaken);
-            QCOMPARE(logFirst.detailsTaken + logFirst.detailsSent, oldFirst.detailsTaken + oldFirst.detailsSent);
-            expectAlike("1");
-            QCOMPARE(logThere.progress(1).updated, qint64(1794700000));
-            QCOMPARE(Samples::librarySnapshot(oldThere).value("days").toArray().size(), days.toArray().size() + 1);
-
-            // 2. Then read further there.
-            for (Library *library : {&oldThere, &logThere})
-                library->setProgress(1, {.section = 3, .fraction = 0.1, .percent = 80, .updated = 1794710000});
-            const SyncSummary oldSecond = syncLibrary(oldHere, older);
-            const SyncSummary logSecond = syncLibrary(logHere, current);
-            QCOMPARE(logSecond.placesTaken, oldSecond.placesTaken);
-            QCOMPARE(logSecond.placesSent, oldSecond.placesSent);
-            expectAlike("2");
-            QCOMPARE(logHere.progress(1).section, 3);
-
-            // 3. Details changed both sides with no time to say which are
-            //    newer, as before times were kept: left as they are, and
-            //    counted, until the other side's are taken.
-            for (Library *library : {&oldHere, &logHere, &oldThere, &logThere}) {
-                BookMeta meta = library->book(2)->meta;
-                meta.publisher = library == &oldHere || library == &logHere ? "Here Books" : "There Books";
-                QVERIFY(library->setMeta(2, meta, nullptr, 0));
-            }
-            const SyncSummary oldUndecided = syncLibrary(oldHere, older);
-            const SyncSummary logUndecided = syncLibrary(logHere, current);
-            QCOMPARE(oldUndecided.detailsUndecided, 1);
-            QCOMPARE(logUndecided.detailsUndecided, oldUndecided.detailsUndecided);
-            QCOMPARE(logHere.book(2)->meta.publisher, QString("Here Books"));
-            QCOMPARE(logThere.book(2)->meta.publisher, QString("There Books"));
-            expectAlike("3");
-            const SyncSummary oldSettled = syncLibrary(oldHere, older, {}, SyncOptions{.details = SyncOptions::Details::Theirs});
-            const SyncSummary logSettled = syncLibrary(logHere, current, {}, SyncOptions{.details = SyncOptions::Details::Theirs});
-            QCOMPARE(logSettled.detailsTaken, oldSettled.detailsTaken);
-            QCOMPARE(logHere.book(2)->meta.publisher, QString("There Books"));
-            expectAlike("3, settled");
-            QCOMPARE(syncLibrary(logHere, current).detailsUndecided, 0);
+            SamplePairs pairs(data.filePath(dump), dump);
+            for (const auto step :
+                 {readFurtherAndChangeDetailsBothSides, readFurtherThere, changeDetailsWithNoTime, makeAndRemoveCollections})
+                if (!QTest::currentTestFailed())
+                    step(pairs);
+            QVERIFY(!QTest::currentTestFailed());
 
             // Never by the manifest's commands between two that speak the log.
-            const QString logCommands = commandsOf(dir, "ssh-log");
+            const QString logCommands = commandsOf(pairs.dir, "ssh-log");
             QVERIFY2(logCommands.contains("'--replicate'"), qPrintable(dump));
             QVERIFY2(!logCommands.contains("'--meta'") && !logCommands.contains("'--status'"), qPrintable(dump));
-            QVERIFY2(!commandsOf(dir, "ssh-older").contains("'--replicate'"), qPrintable(dump));
+            QVERIFY2(!commandsOf(pairs.dir, "ssh-older").contains("'--replicate'"), qPrintable(dump));
         }
     }
 };

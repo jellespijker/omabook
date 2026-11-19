@@ -99,70 +99,6 @@ void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qin
         out.sendCover = true;
 }
 
-[[nodiscard]] qint64 collectionHlc(const Library &library, const Collection &collection) {
-    return std::max(Hlc::normalize(collection.updated),
-                    SpaceReplay::entityHlc(library, u"collection"_s, Spaces::collectionId(library, collection.id)));
-}
-
-[[nodiscard]] qint64 resolveParentId(Library &library, const QHash<QString, qint64> &ids, const QString &parentPath) {
-    if (parentPath.isEmpty())
-        return 0;
-    if (const qint64 existing = ids.value(parentPath.toLower()))
-        return existing;
-    const auto made = library.addCollection(parentPath);
-    return made ? *made : -1;
-}
-
-[[nodiscard]] QSet<qint64> booksWithHashes(const Library &library, const QJsonArray &books) {
-    QSet<qint64> ids;
-    for (const auto &book : books)
-        for (const auto &hash : book.toArray())
-            if (const qint64 id = library.bookWithHash(hash.toString())) {
-                ids.insert(id);
-                break;
-            }
-    return ids;
-}
-
-bool takeCollection(Library &library, const QJsonObject &object, QHash<QString, qint64> &stampedPaths) {
-    const QString name = object.value("name").toString().simplified();
-    const QString parentPath = object.value("parent").toString();
-    if (name.isEmpty())
-        return false;
-    QHash<QString, Collection> mine;
-    QHash<QString, qint64> ids;
-    for (const Collection &collection : library.collections(true)) {
-        mine.insert(collection.path.toLower(), collection);
-        if (!collection.removed)
-            ids.insert(collection.path.toLower(), collection.id);
-    }
-    const QString path = parentPath.isEmpty() ? name : parentPath + "/" + name;
-    const auto known = mine.constFind(path.toLower());
-    const qint64 theirHlc = Hlc::normalize(object.value("hlc").toInteger(object.value("updated").toInteger()));
-    Spaces::observeHlc(library, theirHlc);
-    const qint64 myHlc = known != mine.cend() ? collectionHlc(library, *known) : 0;
-    if ((known != mine.cend() && std::is_gteq(Hlc::compare(myHlc, theirHlc))) || (known == mine.cend() && object.value("removed").toBool()))
-        return false;
-    const qint64 parentId = resolveParentId(library, ids, parentPath);
-    if (parentId < 0)
-        return false;
-    Collection collection;
-    collection.name = name;
-    collection.parent = parentId;
-    collection.rule = object.value("rule").toString();
-    collection.included = booksWithHashes(library, object.value("included").toArray());
-    collection.excluded = booksWithHashes(library, object.value("excluded").toArray());
-    collection.shelf = object.value("shelf").toObject();
-    collection.format = object.value("format").toObject();
-    collection.updated = theirHlc;
-    collection.removed = object.value("removed").toBool();
-    if (!library.storeCollection(collection))
-        return false;
-    if (theirHlc > 0)
-        stampedPaths.insert(path.toLower(), theirHlc);
-    return true;
-}
-
 // A book as an Omabook that speaks the log needs it: what names it (its global
 // id, and for a book without a file its entry keys), its files and cover to
 // fetch, and when it last changed, for a removal. Its details, its reading and
@@ -229,8 +165,10 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
                          {"books", books},
                          {"removed", QJsonArray::fromStringList(library.removedHashes())},
                          {"removals", removals},
-                         {"collections", Collections::manifest(library)},
                          {"graph", GraphSync::bundle(library)}};
+    // What travels by the log is left out for an Omabook that speaks it.
+    if (!log)
+        manifest.insert("collections", Collections::manifest(library));
     if (log) {
         manifest.insert("log", 1);
         const QJsonObject introduction = SyncLog::introduction(library);
@@ -274,58 +212,6 @@ QJsonObject SyncSummary::toJson() const {
                             {"details_undecided", list(titles.detailsUndecided)}};
     result.insert("titles", named);
     return result;
-}
-
-QJsonArray Collections::manifest(const Library &library) {
-    ChangeLog::reconcile(library);
-    QHash<qint64, QJsonArray> hashes;
-    for (const Book &book : library.books()) {
-        QJsonArray of;
-        for (const FormatFile &file : library.formatFiles(book.id))
-            of << file.hash;
-        hashes.insert(book.id, of);
-    }
-    const auto named = [&hashes](const QSet<qint64> &ids) {
-        QJsonArray books;
-        for (const qint64 id : ids)
-            if (!hashes.value(id).isEmpty())
-                books << hashes.value(id);
-        return books;
-    };
-    QJsonArray array;
-    QHash<qint64, QString> paths;
-    for (const Collection &collection : library.collections(true))
-        paths.insert(collection.id, collection.path);
-    for (const Collection &collection : library.collections(true)) {
-        const qint64 hlc = std::max(Hlc::normalize(collection.updated),
-                                    SpaceReplay::entityHlc(library, u"collection"_s, Spaces::collectionId(library, collection.id)));
-        array << QJsonObject{{"name", collection.name},
-                             {"parent", paths.value(collection.parent)},
-                             {"rule", collection.rule},
-                             {"included", named(collection.included)},
-                             {"excluded", named(collection.excluded)},
-                             {"shelf", collection.shelf},
-                             {"format", collection.format},
-                             {"updated", collection.updated},
-                             {"hlc", hlc},
-                             {"removed", collection.removed}};
-    }
-    return array;
-}
-
-int Collections::take(Library &library, const QJsonArray &theirs) {
-    ChangeLog::reconcile(library);
-    int changed = 0;
-    QHash<QString, qint64> stampedPaths;
-    const Library::Batch batch(library);
-    for (const auto &value : theirs)
-        if (takeCollection(library, value.toObject(), stampedPaths))
-            ++changed;
-    for (const Collection &collection : library.collections(true)) {
-        if (const auto it = stampedPaths.constFind(collection.path.toLower()); it != stampedPaths.cend())
-            ChangeLog::syncCollectionAt(library, collection.id, it.value());
-    }
-    return changed;
 }
 
 namespace SyncManifest {

@@ -1246,14 +1246,14 @@ bool Library::setCollectionFormat(qint64 id, const QJsonObject &options) {
     return exec("UPDATE collections SET format = ?, updated = ? WHERE id = ?", {compact(kept), Spaces::wallSeconds(*this), id});
 }
 
-bool Library::storeCollection(const Collection &given) {
+std::optional<qint64> Library::storeCollection(const Collection &given) {
     const QString named = given.name.simplified();
     if (!nameProblem(named).isEmpty())
-        return false;
+        return std::nullopt;
     const Batch batch(*this);
     const qint64 updatedSec = Hlc::seconds(given.updated);
     QSqlQuery same = query("SELECT id FROM collections WHERE parent = ? AND name = ? COLLATE NOCASE", {given.parent, named});
-    qint64 id = same.next() ? same.value(0).toLongLong() : 0;
+    qint64 id = given.id > 0 || !same.next() ? given.id : same.value(0).toLongLong();
     same.finish();
     if (id == 0) {
         QSqlQuery last = query("SELECT COALESCE(MAX(position), 0) + 1 FROM collections");
@@ -1262,13 +1262,13 @@ bool Library::storeCollection(const Collection &given) {
         const auto made = insert("INSERT INTO collections (name, position, updated, parent) VALUES (?, ?, ?, ?)",
                                  {named, position, updatedSec, given.parent});
         if (!made)
-            return false;
+            return std::nullopt;
         id = *made;
     }
     if (!exec("UPDATE collections SET name = ?, rule = ?, shelf = ?, format = ?, updated = ?, removed = ?, parent = ? WHERE id = ?",
               {named, given.rule.trimmed(), compact(given.shelf), compact(ReadingFormat::fitting(given.format)), updatedSec, given.removed,
                given.parent, id}))
-        return false;
+        return std::nullopt;
     exec("DELETE FROM collection_books WHERE collection_id = ?", {id});
     for (const bool in : {true, false})
         for (const qint64 book : in ? given.included : given.excluded)
@@ -1276,7 +1276,7 @@ bool Library::storeCollection(const Collection &given) {
                  "SELECT ?, id, ? FROM books WHERE id = ?",
                  {id, in, book});
     Spaces::ensureCollectionId(*this, id);
-    return true;
+    return id;
 }
 
 QList<Collection> Library::collectionsOf(const Book &book) const {

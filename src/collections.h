@@ -16,9 +16,10 @@ QJsonArray list(const Library &library);
 // One collection and its books, as `omabook list` gives them.
 QJsonObject show(const Library &library, const Collection &collection);
 
-// What a sync carries of the collections: everything of each, the removed
-// ones too, with its books named by their files' hashes, which is how two
-// computers know a book is the same one.
+// What a sync with an Omabook from before the change log carries of the
+// collections (between two that speak it they travel by the log, synctake.h):
+// everything of each, the removed ones too, with its books named by their
+// files' hashes, which is how two computers know a book is the same one.
 QJsonArray manifest(const Library &library);
 // Takes collections from another computer's manifest: a collection it has
 // that this library lacks is added, and of one both have the one changed

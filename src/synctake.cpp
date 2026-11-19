@@ -2,11 +2,14 @@
 
 #include <QHash>
 #include <QImageReader>
+#include <QJsonDocument>
 #include <QTemporaryDir>
 #include <algorithm>
+#include <tuple>
 
 #include "graph.h"
 #include "hlc.h"
+#include "readingformat.h"
 #include "replication.h"
 #include "spacereducer.h"
 #include "spaces.h"
@@ -49,6 +52,7 @@ struct Taking {
     QHash<QString, QString> canonical;
     ReducedState mine;
     ReducedState theirs;
+    ReducedState merged; // both sides' operations, as the log's rules merge them
     QHash<QString, QJsonObject> listed;
     QTemporaryDir scratch;
 
@@ -134,6 +138,81 @@ void takeBook(Taking &taking, const Book &here) {
         Graph(taking.library).bookNode(here.id);
 }
 
+[[nodiscard]] QString fieldOf(const ReducedCollection &collection, const QString &field) { return collection.fields.value(field).value; }
+
+[[nodiscard]] QJsonObject objectOf(const QString &text) { return QJsonDocument::fromJson(text.toUtf8()).object(); }
+
+// A collection as the log says it is now, written over `row` when there is
+// one, its books by the id they stand for here.
+[[nodiscard]] Collection collectionFrom(const Taking &taking, const ReducedCollection &reduced, const Collection *row,
+                                        const QHash<QString, qint64> &parents, const QHash<QString, qint64> &books) {
+    Collection collection;
+    collection.id = row ? row->id : 0;
+    collection.name = fieldOf(reduced, u"name"_s);
+    collection.parent = parents.value(fieldOf(reduced, u"parent"_s));
+    collection.rule = fieldOf(reduced, u"rule"_s).trimmed();
+    collection.shelf = objectOf(fieldOf(reduced, u"shelf"_s));
+    collection.format = ReadingFormat::fitting(objectOf(fieldOf(reduced, u"format"_s)));
+    collection.removed = SpaceReducer::isRemoved(reduced.alive, reduced.removed);
+    collection.updated = std::max(reduced.alive.hlc, reduced.removed.hlc);
+    // A removed one keeps only its name and place, as removing it leaves it.
+    if (collection.removed) {
+        collection.rule.clear();
+        collection.shelf = {};
+        collection.format = {};
+        return collection;
+    }
+    for (auto book = reduced.books.cbegin(); book != reduced.books.cend(); ++book)
+        if (const qint64 id = books.value(taking.standsFor(book.key())); id > 0 && book->value == "in"_L1)
+            collection.included.insert(id);
+        else if (id > 0 && book->value == "out"_L1)
+            collection.excluded.insert(id);
+    return collection;
+}
+
+[[nodiscard]] bool sameCollection(const Collection &row, const Collection &log) {
+    if (row.removed && log.removed)
+        return true;
+    return std::tie(row.name, row.parent, row.rule, row.removed, row.included, row.excluded)
+               == std::tie(log.name, log.parent, log.rule, log.removed, log.included, log.excluded)
+           && row.shelf == log.shelf && row.format == log.format;
+}
+
+// The collections as the log says them, both sides' operations merged by its
+// rules (each field the latest; of the books in it by hand, an add over a
+// concurrent remove): each that the log says otherwise than here is written
+// as it says, a parent before what is in it. One removed that this side never
+// had is not made.
+void takeCollections(Taking &taking) {
+    QHash<QString, qint64> books;
+    for (const Book &book : taking.library.books())
+        books.insert(taking.standsFor(Spaces::bookId(taking.library, book.id)), book.id);
+    QHash<QString, Collection> rows;
+    QHash<QString, qint64> ids;
+    for (const Collection &collection : taking.library.collections(true)) {
+        const QString gid = Spaces::collectionId(taking.library, collection.id);
+        rows.insert(gid, collection);
+        ids.insert(gid, collection.id);
+    }
+    QStringList order = taking.merged.collections.keys();
+    std::ranges::stable_sort(order, {}, [](const QString &gid) { return gid.count(u'/'); });
+    const Library::Batch batch(taking.library);
+    for (const QString &gid : std::as_const(order)) {
+        const ReducedCollection &reduced = taking.merged.collections[gid];
+        const auto row = rows.constFind(gid);
+        const Collection log = collectionFrom(taking, reduced, row == rows.cend() ? nullptr : &*row, ids, books);
+        if ((row == rows.cend() && log.removed) || log.name.isEmpty() || (row != rows.cend() && sameCollection(*row, log)))
+            continue;
+        ++taking.summary.collectionsTaken;
+        if (taking.peer.dryRun)
+            continue;
+        if (const std::optional<qint64> stored = taking.library.storeCollection(log)) {
+            Spaces::setGlobalId(taking.library, u"collection"_s, *stored, gid);
+            ids.insert(gid, *stored);
+        }
+    }
+}
+
 } // namespace
 
 QJsonArray SyncTake::take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary) {
@@ -146,12 +225,14 @@ QJsonArray SyncTake::take(Library &library, std::span<const SpaceOperation> inco
                   .canonical = SpaceReducer::sameAs(ops),
                   .mine = SpaceReducer::reduce(ops, Spaces::deviceId(library)),
                   .theirs = SpaceReducer::reduce(ops, peer.device),
+                  .merged = SpaceReducer::reduce(ops),
                   .listed = {},
                   .scratch = {}};
     for (const auto &value : peer.books)
         taking.listed.insert(taking.standsFor(value.toObject().value("gid").toString()), value.toObject());
     for (const Book &here : library.books())
         takeBook(taking, here);
+    takeCollections(taking);
     // Their books, each as the log says they hold it, for what this side lacks.
     QJsonArray described;
     for (const auto &value : peer.books) {

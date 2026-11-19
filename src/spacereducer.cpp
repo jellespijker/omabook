@@ -135,7 +135,9 @@ bool SpaceReducer::isRemoved(const SpaceStamp &alive, const SpaceStamp &removed)
         return false;
     if (alive.hlc < 0)
         return true;
-    return std::tie(removed.hlc, removed.device) > std::tie(alive.hlc, alive.device);
+    // A tie of the same device is one write that removed it, as a baseline
+    // writes a removed collection's name and its removal at the time it has.
+    return std::tie(removed.hlc, removed.device) >= std::tie(alive.hlc, alive.device);
 }
 
 void SpaceReducer::foldBook(ReducedBook &book, const SpaceOperation &op) {

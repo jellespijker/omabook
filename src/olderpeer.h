@@ -13,7 +13,8 @@
 // the change log, whose manifest says no "log": of a book both sides have,
 // its details (the newer, field by field), what is said of its reading and
 // its reading place, merged as they always were, and given to the other side
-// by its commands. Between two Omabooks that speak the log they travel
+// by its commands; and the collections, each whole, the one changed last
+// winning (Collections::manifest and Collections::take are defined here). Between two Omabooks that speak the log they travel
 // through it (synclog.h, synctake.h). This goes when the manifest sync is
 // retired (ADR 0001, Migration 6).
 namespace OlderPeer {

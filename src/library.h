@@ -314,9 +314,10 @@ public:
     bool setCollectionShelf(qint64 id, const QJsonObject &shelf);
     bool setCollectionFormat(qint64 id, const QJsonObject &options);
     // Writes everything of a collection as it is given, its time and its
-    // parent too: what a sync brings from another computer. One of a name
-    // not there inside that parent is added.
-    bool storeCollection(const Collection &collection);
+    // parent too: what a sync brings from another computer. Given its `id`,
+    // that one; else the one of that name inside that parent, or a new one.
+    // Its number, or none when it can't be written.
+    std::optional<qint64> storeCollection(const Collection &given);
     // The collections a book is in, in their order.
     [[nodiscard]] QList<Collection> collectionsOf(const Book &book) const;
     // The collection whose reading format a book is set with: `preferred`
