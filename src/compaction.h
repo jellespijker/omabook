@@ -53,6 +53,31 @@ void compactWhenWorthIt(const Library &library);
 // for what one computer of it holds. It merges as `ops` does.
 [[nodiscard]] QList<SpaceOperation> latest(std::span<const SpaceOperation> ops);
 
+// One operation of the baseline (ADR 0001, Migration 2), by the ids of
+// `log_ids`: what the library already was when the log began.
+struct BaselineOperation {
+    qint64 space = 0;
+    qint64 device = 0;
+    qint64 seq = 0;
+    qint64 hlc = 0;
+    QString entity;
+    qint64 id = 0;
+    QString field;
+    QString value;
+};
+
+// Writes `op` straight into the snapshot rather than into `ops` (#54): the
+// baseline is a snapshot from the start, the latest of each field and every
+// operation of what only grows, as compact() would make of it, and the log
+// starts after it. It goes unsigned, its author this computer, as the
+// operations from before signing do: a baseline only says what the rows
+// already were, and a peer takes an unsigned operation only from one of
+// one's own computers (Replication::admit). markHeld() then moves each
+// device's mark on to the last it holds, so what comes after is numbered on
+// from there and sent on top of it.
+void holdInSnapshot(const Library &library, const BaselineOperation &op);
+void markHeld(const Library &library);
+
 // What `member` held of the log when it synced: per space and device, the
 // last sequence number. `member` is named as the spaces name their members
 // (space_members): a computer's device id for its personal spaces, a

@@ -39,7 +39,9 @@ public:
     };
 
     // Writes the initial baseline when the library has no personal space yet,
-    // or reconciles any writes that bypassed the log since the last open.
+    // or reconciles any writes that bypassed the log since the last open. The
+    // baseline is written as a snapshot (Compaction::holdInSnapshot, #54):
+    // the same operations, values and times, without a signature each.
     static void open(const Library &library);
     static void writeBaseline(const Library &library);
     static void reconcile(const Library &library);

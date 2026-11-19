@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "changelogbaseline.h"
 #include "changelogfields.h"
 #include "changeloggraph.h"
 #include "graph.h"
@@ -281,6 +282,8 @@ void ChangeLog::writeBaseline(const Library &library) {
     const Scope guard;
     const Library::Batch batch(library);
     Spaces::assignAll(library);
+    // As a snapshot, the log starting after it (#54).
+    ChangeLogBaseline baseline(library);
     for (const Book &book : library.books())
         syncBookToLog(library, book, true);
     for (const Library::Removal &removal : library.removals())
@@ -288,6 +291,7 @@ void ChangeLog::writeBaseline(const Library &library) {
     for (const Collection &collection : library.collections(true))
         syncCollectionToLog(library, collection, true);
     ChangeLogGraph::syncToLog(library, true);
+    baseline.finish();
     ChangeLog::exec(library, "DELETE FROM log_dirty"); // all of it is in the log now
     markLogged(library);
 }
@@ -348,6 +352,10 @@ void ChangeLog::appendAs(const Library &library, const Entry &entry, const Perso
     const Scope guard;
     if (entry.id.isEmpty())
         return;
+    if (ChangeLogBaseline *baseline = ChangeLogBaseline::writing()) {
+        baseline->hold(entry);
+        return;
+    }
     const QString targetSpace = entry.space.isEmpty() ? Spaces::personalSpace(library) : entry.space;
     const QString device = Spaces::deviceId(library);
     const qint64 spaceNum = internId(library, targetSpace);

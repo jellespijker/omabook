@@ -280,8 +280,9 @@ private slots:
             const QStringList tables = tableNames(library.databasePath());
             for (const char *required : {"spaces", "space_members", "log_ids", "ops", "seen", "global_ids"})
                 QVERIFY2(tables.contains(QLatin1StringView(required)), qPrintable(dump + " missing table " + required));
+            // The baseline is the snapshot the log starts at (#54).
             QSqlQuery colTypes = ChangeLog::query(library, "SELECT typeof(o.space), typeof(o.device), typeof(o.author), typeof(o.id), "
-                                                           "typeof(s.space), typeof(s.device) FROM ops AS o, seen AS s LIMIT 1");
+                                                           "typeof(s.space), typeof(s.device) FROM snapshot_ops AS o, seen AS s LIMIT 1");
             QVERIFY(colTypes.next());
             for (int col = 0; col < 6; ++col)
                 QCOMPARE(colTypes.value(col).toString(), QString("integer"));
@@ -326,7 +327,7 @@ private slots:
             QVERIFY(factGid.startsWith("f:"));
             QCOMPARE(Spaces::localId(library, "fact", factGid), facts.first().id);
 
-            // Step 4: opening wrote the initial baseline into `ops` once, timed
+            // Step 4: opening wrote the initial baseline into the snapshot once, timed
             // by each row's existing timestamp (0 when 0). Re-opening is a no-op.
             const QList<SpaceOperation> initialOps = SpaceReplay::operations(library);
             QVERIFY(!initialOps.isEmpty());

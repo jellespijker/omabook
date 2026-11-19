@@ -31,8 +31,8 @@ modules = [
 summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
 uses = ["formats", "foundation"]
 modules = [
-  "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
-  "library", "librarymigrations", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
+  "booksides", "catalog", "changelog", "changelogbaseline", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
+  "library", "librarymigrations", "libraryschema", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
   "spacesnapshot", "subscribedspace", "textmarks",
 ]
 
@@ -66,7 +66,7 @@ summary = "The window: QML-facing models, the reader, the assistant and the dial
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
-  "interface", "librarian", "librarianfind", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "spacedesk",
+  "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "spacedesk",
 ]
 
 [layers.app]

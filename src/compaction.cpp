@@ -85,6 +85,17 @@ void Compaction::compactWhenWorthIt(const Library &library) {
         compact(library);
 }
 
+void Compaction::holdInSnapshot(const Library &library, const BaselineOperation &op) {
+    ChangeLog::exec(
+        library, "INSERT INTO snapshot_ops (space, device, seq, hlc, author, entity, id, field, value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        {op.space, op.device, op.seq, op.hlc, op.device, op.entity, op.id, op.field, op.value});
+}
+
+void Compaction::markHeld(const Library &library) {
+    ChangeLog::exec(library, "INSERT INTO snapshot_marks (space, device, seq) SELECT space, device, MAX(seq) FROM snapshot_ops "
+                             "WHERE 1 GROUP BY space, device ON CONFLICT(space, device) DO UPDATE SET seq = MAX(seq, excluded.seq)");
+}
+
 void Compaction::rememberSeen(const Library &library, const QString &member, const Replication::Vector &held) {
     if (member.isEmpty())
         return;

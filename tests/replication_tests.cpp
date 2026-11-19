@@ -27,6 +27,7 @@
 #include "remote.h"
 #include "replication.h"
 #include "samples.h"
+#include "signedops.h"
 #include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
@@ -55,6 +56,12 @@ QString commandsOf(const QTemporaryDir &dir, const QString &name) {
 
 int countOf(const QList<SpaceOperation> &ops, const QString &field) {
     return static_cast<int>(std::ranges::count_if(ops, [&field](const SpaceOperation &op) { return op.field == field; }));
+}
+
+// The first value `sql` answers of a library, or -1.
+qint64 answer(const Library &library, const QString &sql) {
+    QSqlQuery query = ChangeLog::query(library, sql);
+    return query.next() ? query.value(0).toLongLong() : -1;
 }
 
 // The same reading on two copies of a library, with every time given, so a
@@ -631,6 +638,60 @@ private slots:
     // each device. It drops from `ops` what the snapshot covers and leaves
     // out, of what every member has seen, and a peer behind the snapshot is
     // given the snapshot.
+    // The baseline is written as a snapshot (#54): opening a library from
+    // before the log puts nothing in `ops` and all of the baseline in the
+    // snapshot, unsigned and covered by the marks, and what is written after
+    // it goes into `ops` as before, numbered on from there and signed. A
+    // computer that has none of it is given the snapshot at its first sync,
+    // takes it as from one of its own computers, and the two end alike;
+    // from anyone else an unsigned operation is refused.
+    void theBaselineIsASnapshotAndAComputerPairingWithItTakesIt() {
+        QTemporaryDir dir;
+        int format = 0;
+        for (const char *copy : {"Here", "There"}) {
+            QVERIFY(QDir(dir.path()).mkpath(copy));
+            Samples::loadSqlDump(QFINDTESTDATA("data/library-0.1.5.sql"), dir.filePath(QString(copy) + "/omabook.db"), format);
+        }
+        Library here(dir.filePath("Here"));
+        QVERIFY(here.open());
+        const auto count = [&here](const char *sql) { return answer(here, QString::fromLatin1(sql)); };
+        const char *pastMarks = "SELECT COUNT(*) FROM snapshot_ops AS o JOIN snapshot_marks AS m ON m.space = o.space "
+                                "AND m.device = o.device WHERE o.seq > m.seq";
+        QCOMPARE(count("SELECT COUNT(*) FROM ops"), qint64(0));
+        const qint64 held = count("SELECT COUNT(*) FROM snapshot_ops");
+        QVERIFY(held > 50);
+        QCOMPARE(qint64(SpaceReplay::operations(here).size()), held);
+        QCOMPARE(count("SELECT COUNT(*) FROM snapshot_ops WHERE signature IS NOT NULL OR signer IS NOT NULL OR author <> device"),
+                 qint64(0));
+        QCOMPARE(count(pastMarks), qint64(0));
+
+        here.setProgress(1, {.section = 4, .fraction = 0.5, .percent = 70, .updated = 1794870000});
+        QVERIFY(count("SELECT COUNT(*) FROM ops") > 0 && count("SELECT COUNT(*) FROM ops") < 5);
+        QCOMPARE(count("SELECT COUNT(*) FROM ops AS o JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device "
+                       "WHERE o.seq <= m.seq"),
+                 qint64(0));
+        const QList<SpaceOperation> written = SpaceReplay::operations(here);
+        QVERIFY(std::ranges::any_of(
+            written, [](const SpaceOperation &op) { return op.field == "progress" && !op.signature.isEmpty() && SignedOps::verify(op); }));
+
+        const Remote remote("laptop:" + dir.filePath("There"), {Fixtures::standInSsh(dir.path(), OMABOOK_BINARY)});
+        const SyncSummary synced = syncLibrary(here, remote);
+        QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty(), qPrintable(synced.error + synced.problems.join('\n')));
+        QCOMPARE(synced.refused, 0);
+        Library there(dir.filePath("There"));
+        QVERIFY(there.open());
+        QCOMPARE(there.progress(1).section, 4);
+        QCOMPARE(Replication::operations(there), Replication::operations(here));
+        QCOMPARE(firstDifference(Samples::librarySnapshot(there), Samples::librarySnapshot(here)), QString());
+        QCOMPARE(syncLibrary(here, remote).received + syncLibrary(here, remote).sent, 0);
+
+        QList<SpaceOperation> baseline = Replication::since(here, {});
+        baseline.removeIf([](const SpaceOperation &op) { return !op.signature.isEmpty(); });
+        QVERIFY(!baseline.isEmpty());
+        QCOMPARE(Replication::admit(there, baseline, Spaces::deviceId(here)).refused, 0);
+        QCOMPARE(Replication::admit(there, baseline, "a-computer-of-someone-else").refused, int(baseline.size()));
+    }
+
     void compactionDropsWhatEveryoneHasSeenAndMergesTheSame() {
         const QDir data(QFileInfo(QFINDTESTDATA("data/library-0.1.0.sql")).absolutePath());
         for (const QString &dump : data.entryList({"library-*.sql"}, QDir::Files, QDir::Name)) {
@@ -660,6 +721,7 @@ private slots:
                 return query.next() ? query.value(0).toLongLong() : -1;
             };
             const QList<SpaceOperation> all = SpaceReplay::operations(p.logHere);
+            const qint64 inOps = answer(p.logHere, "SELECT COUNT(*) FROM ops");
             const qint64 placesBefore = places();
             const qint64 sizeBefore = fileSize(p.logHere.databasePath(), false);
             const qint64 sizeBeforeVacuumed = fileSize(p.logHere.databasePath(), true);
@@ -674,7 +736,9 @@ private slots:
 
             const Compaction::Result compacted = Compaction::compact(p.logHere);
             const QList<SpaceOperation> live = SpaceReplay::operations(p.logHere);
-            QCOMPARE(compacted.operations + compacted.dropped, qint64(all.size()));
+            // Of what was in `ops`, each is left or dropped; the baseline never was in it,
+            // being a snapshot from the start (#54).
+            QCOMPARE(compacted.operations + compacted.dropped, inOps);
             QCOMPARE(compacted.live, qint64(live.size()));
             const qint64 sizeAfter = fileSize(p.logHere.databasePath(), false);
             const qint64 sizeVacuumed = fileSize(p.logHere.databasePath(), true);

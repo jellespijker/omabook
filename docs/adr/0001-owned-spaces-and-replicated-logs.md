@@ -403,6 +403,40 @@ one that hasn't.
    - Rows without a time (details from before times were kept) get `hlc` 0 and are *undecided*
      exactly as today: the user settles them with `--details mine|theirs`.
 
+   As built (#54), the baseline is a snapshot:
+
+   - **Written as compaction leaves the log.** The baseline goes into `snapshot_ops`, with a mark
+     per device in `snapshot_marks`, not into `ops`: the same operations, of the same global ids,
+     values and times (a row's own time, `hlc` 0 for undecided details), numbered from 1, and the
+     log carries on after the marks. A baseline holds one operation per field and every operation
+     of what only grows, which is what a compaction would keep of it. Everything that reads the
+     log reads the snapshot with it already (`live_ops`, `space_ops`, a version vector up to the
+     mark), so replication, pairing's one-time matching, the reducers, reconcile and compaction
+     treat it as they treat a compacted log, and a peer that has nothing of it is sent all of it.
+     Since nothing of it was ever in `ops`, compaction has nothing of it to drop.
+   - **Unsigned, and taken only from one's own computers.** Signing each operation of it was
+     6.3 MB of a real library, and most of the time of its first start. One signature over the
+     snapshot as a whole would not hold either: compaction makes the snapshot anew, keeping some
+     operations and leaving others out, and a peer keeps what it takes in its own `ops`, so the
+     bytes signed would be gone after the first compaction on either side. So its operations are
+     what the operations from before signing are: unsigned, their author this computer. The rule
+     for those holds for them: an unsigned operation is taken only from one of one's own computers
+     (a device paired into the personal space, `Replication::admit`), which can write the library
+     anyway, and refused from anyone else. Ssh pairs a peer before taking anything of it, so the
+     first sync of two of one's computers carries both baselines. Only the personal space and
+     story worlds are baselined, and they travel only between one's own computers; a published,
+     shared or subscribed space never has a baseline, so nothing unsigned of it is ever taken.
+   - **Kept as it is looked up** (format 21): the snapshot's key is the thing, its field, then
+     space, device and number, in place of an index beside it, which came to a sixth of the file.
+   - **What it costs still.** The log keeps every value the rows hold, and each thing's global id
+     twice (`global_ids`, `log_ids`), so a baseline costs about as much again as the library's own
+     data and more: a format-12 library made of 1,560 copies of the samples goes from 1.9 MB to
+     8.7 MB (15.1 MB with a signed operation each), its first start from 13.3 s to 4.6 s. Smaller
+     than that needs a log that doesn't repeat what the rows say, which this doesn't attempt.
+   - **Said while it runs.** The window opens a library in an older format on a worker first,
+     saying "Bringing your library up to date…" (`LibraryUpgrade`), and a command says so on
+     standard error (`Library::onBringingUpToDate`).
+
 3. **The first replication pairs.** Two updated computers that sync for the first time each have a
    personal space of their own making. Because they already sync over ssh they trust each other, so
    that first replication **pairs** them: they keep the space with the smaller id, and the other's
