@@ -12,6 +12,8 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.6] - 2026-11-19
+
 ### Added
 
 - `omabook identity` prints your id and its fingerprint: the public half of a key pair made the first time it is asked for and kept in your Omabook data folder (`~/.local/share/omabook/person.key`), readable only by you, which signs what you write (#47, #48). A key an earlier build kept beside the library is moved there once, so a library folder synced elsewhere no longer carries it (#48).
@@ -163,7 +165,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.6...HEAD
+[0.1.6]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...v0.1.6
 [0.1.5.2]: https://github.com/jellespijker/omabook/compare/v0.1.5.1...v0.1.5.2
 [0.1.5.1]: https://github.com/jellespijker/omabook/compare/v0.1.5...v0.1.5.1
 [0.1.5]: https://github.com/jellespijker/omabook/compare/v0.1.4.3...v0.1.5
