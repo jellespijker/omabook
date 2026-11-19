@@ -31,7 +31,7 @@ jobs:
             source "$RUNNER_TEMP/PKGBUILD"
             deps=("${depends[@]}" "${makedepends[@]}" "${checkdepends[@]}")
           else
-            deps=(hicolor-icon-theme qt6-base qt6-declarative qt6-svg qt6-wayland xdg-desktop-portal libarchive poppler-qt6
+            deps=(hicolor-icon-theme qt6-base qt6-declarative qt6-svg qt6-wayland xdg-desktop-portal libarchive poppler-qt6 libsodium
                   cmake gcc make pkgconf ttf-dejavu zip)
           fi
           pacman -S --noconfirm --needed base-devel cmake dbus "${deps[@]%%[<>=]*}"

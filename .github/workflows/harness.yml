@@ -31,7 +31,7 @@ jobs:
       - name: Install the build's and the harness's tools
         run: |
           pacman -S --noconfirm --needed base-devel cmake pkgconf python uv clang ast-grep \
-            qt6-base qt6-declarative qt6-svg qt6-wayland libarchive poppler-qt6
+            qt6-base qt6-declarative qt6-svg qt6-wayland libarchive poppler-qt6 libsodium
           git config --global --add safe.directory "$GITHUB_WORKSPACE"
 
       - name: Choose what to compare with

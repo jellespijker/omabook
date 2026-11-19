@@ -47,7 +47,7 @@ jobs:
           license=('MIT' 'GPL-3.0-or-later')
           options=('!debug')
           depends=('hicolor-icon-theme' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'xdg-desktop-portal'
-                   'libarchive' 'poppler-qt6')
+                   'libarchive' 'poppler-qt6' 'libsodium')
           makedepends=('cmake' 'gcc' 'make' 'pkgconf')
           checkdepends=('ttf-dejavu' 'dbus' 'zip')
           optdepends=('calibre: import Calibre libraries, use its metadata plugins and read Kindle and other converted formats'
