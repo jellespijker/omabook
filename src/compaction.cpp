@@ -51,11 +51,19 @@ Compaction::Result Compaction::compact(const Library &library) {
     // seen (a space with no other member is this computer's): the snapshot
     // takes the place of what it keeps of it, and what it leaves out is no
     // longer needed anywhere. What a member hasn't seen stays until it has.
+    //
+    // A member is named as its space names it, a computer's device id in a
+    // personal space and a person's id in a published or shared one, and has
+    // seen only what it said it held under that same name (rememberSeen): a
+    // member never heard of under it, as the person who owns a published
+    // space, has seen nothing, so nothing of it is dropped. Nor is anything
+    // of a space whose members aren't known here at all.
     const qint64 before = count(library, "SELECT COUNT(*) FROM ops");
     ChangeLog::exec(
         library,
         "DELETE FROM ops WHERE seq <= COALESCE((SELECT m.seq FROM snapshot_marks AS m WHERE m.space = ops.space "
         "AND m.device = ops.device), 0) "
+        "AND EXISTS (SELECT 1 FROM space_members AS p JOIN log_ids AS named ON named.name = p.space WHERE named.id = ops.space) "
         "AND NOT EXISTS (SELECT 1 FROM space_members AS p JOIN log_ids AS named ON named.name = p.space "
         "WHERE named.id = ops.space AND p.person <> ? AND COALESCE((SELECT v.seq FROM member_vectors AS v "
         "WHERE v.space = ops.space AND v.member = p.person AND v.device = ops.device), 0) < ops.seq)",

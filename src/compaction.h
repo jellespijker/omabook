@@ -51,8 +51,10 @@ void compactWhenWorthIt(const Library &library);
 // for what one computer of it holds. It merges as `ops` does.
 [[nodiscard]] QList<SpaceOperation> latest(std::span<const SpaceOperation> ops);
 
-// What `member` (a computer's device id) held of the log when it synced: per
-// space and device, the last sequence number.
+// What `member` held of the log when it synced: per space and device, the
+// last sequence number. `member` is named as the spaces name their members
+// (space_members): a computer's device id for its personal spaces, a
+// person's id for a published or shared one.
 void rememberSeen(const Library &library, const QString &member, const Replication::Vector &held);
 
 } // namespace Compaction

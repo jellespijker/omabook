@@ -722,6 +722,53 @@ private slots:
         }
     }
 
+    // Nothing a member may lack is dropped: not of a computer of one's
+    // personal space that hasn't synced since, nor of a published space,
+    // whose owner is its member by their person id. Once each has said what
+    // it holds, under the name its space knows it by, what it has seen goes.
+    void compactionKeepsWhatAMemberHasNotSeen() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("book.epub"), "Kept"));
+        Library library(dir.filePath("Here"));
+        QVERIFY(library.open());
+        const qint64 book = library.add(dir.filePath("book.epub")).id;
+        const QString personal = Spaces::personalSpace(library);
+        const QString published = "published:compaction";
+        Spaces::ensurePublishedSpace(library, published, "Kept", "person-of-the-owner", "Ada");
+        QVERIFY(ChangeLog::exec(library, "INSERT INTO space_members (space, person, role) VALUES (?, 'laptop-not-synced', 'writer')",
+                                {personal}));
+        for (int round = 0; round < 5; ++round) {
+            library.setProgress(book, {.section = round, .fraction = 0.1, .percent = round * 10.0, .updated = 1794730000 + round});
+            ChangeLog::append(library, {.space = published,
+                                        .entity = "collection",
+                                        .id = "c:kept",
+                                        .field = "name",
+                                        .value = QString("Kept %1").arg(round),
+                                        .hlc = std::nullopt});
+        }
+        const auto count = [&library](const QString &space) {
+            QSqlQuery query =
+                ChangeLog::query(library, "SELECT COUNT(*) FROM ops WHERE space = (SELECT id FROM log_ids WHERE name = ?)", {space});
+            return query.next() ? query.value(0).toLongLong() : -1;
+        };
+        const qint64 personalBefore = count(personal);
+        const qint64 publishedBefore = count(published);
+        const QJsonObject before = Samples::librarySnapshot(library);
+        QCOMPARE(Compaction::compact(library).dropped, qint64(0));
+        QCOMPARE(count(personal), personalBefore);
+        QCOMPARE(count(published), publishedBefore);
+        QCOMPARE(Samples::librarySnapshot(library), before);
+
+        Compaction::rememberSeen(library, "laptop-not-synced", Replication::vector(library));
+        QVERIFY(Compaction::compact(library).dropped > 0);
+        QVERIFY(count(personal) < personalBefore);
+        QCOMPARE(count(published), publishedBefore);
+        Compaction::rememberSeen(library, "person-of-the-owner", Replication::vector(library));
+        QVERIFY(Compaction::compact(library).dropped > 0);
+        QVERIFY(count(published) < publishedBefore);
+        QCOMPARE(Samples::librarySnapshot(library), before);
+    }
+
     void anOlderOmabookStillSyncsByTheManifest() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "On Both"));

@@ -63,10 +63,12 @@ void Spaces::pair(const Library &library, const QString &theirSpace, const QStri
     const qint64 created = lastHlc(library);
     library.exec("INSERT OR IGNORE INTO spaces (id, kind, name, owner, created) VALUES (?, 'personal', 'Personal', ?, ?)",
                  {theirSpace, theirDevice, created});
-    const QString kept = personalSpace(library);
-    for (const QString &device : {deviceId(library), theirDevice})
-        library.exec("INSERT OR IGNORE INTO space_members (space, person, role, added) VALUES (?, ?, 'writer', ?)",
-                     {kept, device, created});
+    // Both computers are members of both spaces: each holds the other's
+    // operations too, so compaction drops of either only what both have seen.
+    for (const QString &space : {personalSpace(library), theirSpace, u"personal:"_s + deviceId(library)})
+        for (const QString &device : {deviceId(library), theirDevice})
+            library.exec("INSERT OR IGNORE INTO space_members (space, person, role, added) VALUES (?, ?, 'writer', ?)",
+                         {space, device, created});
 }
 
 void Spaces::ensureSpaceForScope(const Library &library, const QString &scope) {
