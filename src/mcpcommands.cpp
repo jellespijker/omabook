@@ -325,6 +325,38 @@ const bool registered = [] {
                       return command({"collections", "move", arguments.value("name").toString(), arguments.value("parent").toString()});
                   }});
 
+    registerTool({"collection_share", "Share a collection as a space",
+                  "Publishes a collection as a space others can follow (it follows the collection as it changes) and, "
+                  "with output, writes its snapshot, an .omabook-space file to give them. Answers first what goes in, "
+                  "counted by kind (collections, books, things, facts and relations of the graph, questions, ratings, "
+                  "reading places and days), and what is left out: the books' files always, and each of the user's own "
+                  "parts that isn't switched on. Of the graph only what the user has read goes, nothing past their "
+                  "place in a book. Show that to the user with dry_run before sharing, and ask them which parts to add "
+                  "and the name they go by in it.",
+                  schema({{"name", string("The collection's path, name, or number.")},
+                          {"graph", boolean("With what the knowledge graph knows of its books.")},
+                          {"with", list("The user's own parts to add.", choice("A part.", {"questions", "ratings", "progress"}))},
+                          {"as", string("The name the user goes by in the space; needed the first time.")},
+                          {"output", string("The file to write the snapshot to, ending in .omabook-space.")},
+                          {"dry_run", boolean("Only say what would go in and what would stay out; publish and write nothing.")}},
+                         {"name"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      QStringList asked{"collections", "share", arguments.value("name").toString()};
+                      if (arguments.value("graph").toBool())
+                          asked << "--with-graph";
+                      QStringList parts;
+                      for (const QJsonValue part : arguments.value("with").toArray())
+                          parts << part.toString();
+                      if (!parts.isEmpty())
+                          asked << "--with" << parts.join(',');
+                      for (const char *option : {"as", "output"})
+                          if (const QString value = arguments.value(QLatin1StringView(option)).toString(); !value.isEmpty())
+                              asked << "--" + QString::fromLatin1(option) << value;
+                      if (arguments.value("dry_run").toBool())
+                          asked << "--dry-run";
+                      return command(asked);
+                  }});
+
     registerTool({"books_find", "Find books by what is known of them, or by a question",
                   "Searches as the window's search box does: the words of books_search, where a bare word also finds a "
                   "book by the characters, places, ideas, events, plot threads, themes, topics and questions the "

@@ -254,7 +254,7 @@ private slots:
             {"graph_scopes", "graph"}, {"graph_add", "graph"}, {"graph_link", "graph"}, {"graph_unlink", "graph"},
             {"graph_merge", "graph"}, {"graph_remove", "graph"}, {"graph_build", "graph"}, {"graph_export", "graph"},
             {"graph_copy_scope", "graph"}, {"graph_remove_scope", "graph"}, {"graph_reading_log", "graph"}, {"graph_connect", "graph"},
-            {"themes_list", "theme"}, {"theme_use", "theme"}, {"collection_unsubscribe", "collections"},
+            {"themes_list", "theme"}, {"theme_use", "theme"}, {"collection_unsubscribe", "collections"}, {"collection_share", "collections"},
             {"reading_format_get", "format"}, {"reading_format_set", "format"}, {"collection_import", "collections"},
             {"collections_list", "collections"}, {"collection_get", "collections"}, {"collection_add", "collections"},
             {"collection_set_rule", "collections"}, {"collection_rename", "collections"}, {"collection_move", "collections"},

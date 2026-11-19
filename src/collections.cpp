@@ -1,10 +1,6 @@
 #include "collections.h"
 
 #include <QCommandLineParser>
-#include <QCryptographicHash>
-#include <QDir>
-#include <QFileInfo>
-#include <QSaveFile>
 #include <QDateTime>
 #include <QFile>
 #include <QHash>
@@ -14,7 +10,9 @@
 #include <utility>
 
 #include "bookops.h"
+#include "collectionshare.h"
 #include "curation.h"
+#include "keptproposals.h"
 #include "readingformat.h"
 #include "settings.h"
 #include "subscriptions.h"
@@ -40,7 +38,7 @@ void printJson(const QJsonValue &value) {
 }
 
 constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort|import|"
-                       "unsubscribe] …\n\n"
+                       "unsubscribe|share] …\n\n"
                        "Collections are named parts of the library, named as you like: a book can be in several, and\n"
                        "nothing is copied or moved. Each has a rule, a search as omabook list takes it, and the books put\n"
                        "in or taken out by hand, which win over the rule. Collections nest: a path such as Studie/Python\n"
@@ -66,7 +64,13 @@ constexpr auto usage = "Usage: omabook collections [list|add|rule|rename|move|in
                        "  import <file> [--as <name>] [--dry-run]  Subscribe to a collection someone shared (.omabook-space):\n"
                        "                                    its books you have are matched, the others become wishlist\n"
                        "                                    entries, in a collection of yours; its graph stays in its space\n"
-                       "  unsubscribe <name|space>          Drop a shared collection's space; your collection of it stays\n\n"
+                       "  unsubscribe <name|space>          Drop a shared collection's space; your collection of it stays\n"
+                       "  share <path> [--with-graph] [--with questions,ratings,progress] [--as <name>] [--output <file>] [--dry-run]\n"
+                       "                                    Publish it as a space others can follow: what goes in (with counts)\n"
+                       "                                    and what stays out is shown first, and --dry-run shows only that.\n"
+                       "                                    The books' files never go; your graph, questions, stars and reading\n"
+                       "                                    only when switched on, the graph only up to where you have read.\n"
+                       "                                    --output writes its snapshot (.omabook-space) to give to others\n\n"
                        "The search language: bare words, author:, title:, series:, tag:, genre: (fiction, nonfiction, or a\n"
                        "tag), format:, lang:, publisher:, about:, status:, is: and rating:; \"quotes\" keep words together,\n"
                        "-word leaves out, and OR joins alternatives: genre:fiction OR series:Dune -tag:poetry\n\n"
@@ -91,47 +95,20 @@ std::expected<QList<qint64>, QString> bookIds(const Library &library, const QStr
     return ids;
 }
 
-// Where the last sort's proposals are kept for picking from: this
-// computer's state folder, one file per library.
-QString keptFile(const Library &library) {
-    const QString state = qEnvironmentVariableIsSet("XDG_STATE_HOME") ? qEnvironmentVariable("XDG_STATE_HOME")
-                                                                      : QDir::homePath() + "/.local/state";
-    return state + "/omabook/collections-sort-"
-           + QString::fromLatin1(QCryptographicHash::hash(library.root().toUtf8(), QCryptographicHash::Sha1).toHex().left(16)) + ".json";
-}
-
-void keepProposals(const Library &library, const QList<Proposal> &proposals) {
-    QJsonArray array;
-    for (const Proposal &proposal : proposals)
-        array << QJsonObject{{"kind", proposal.kind}, {"id", proposal.bookId}, {"collection_id", proposal.collectionId},
-                             {"collection", proposal.collection}, {"why", proposal.why}};
-    QDir().mkpath(QFileInfo(keptFile(library)).absolutePath());
-    QSaveFile file(keptFile(library));
-    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(array).toJson(QJsonDocument::Compact)) > 0)
-        file.commit();
-}
-
-// The proposals the last sort listed, of books still here; none when there was no sort.
-std::optional<QList<Proposal>> keptProposals(const Library &library) {
-    QFile file(keptFile(library));
+// `omabook collections take <file>`: what a sync hands over from another
+// computer, a file of collections.
+int takeFrom(Library &library, const QString &path, bool json) {
+    QFile file(path);
     if (!file.open(QIODevice::ReadOnly))
-        return std::nullopt;
-    QList<Proposal> proposals;
-    for (const QJsonValue &value : QJsonDocument::fromJson(file.readAll()).array()) {
-        const QJsonObject object = value.toObject();
-        const auto book = library.book(object.value("id").toInteger());
-        if (!book)
-            continue;
-        Proposal proposal;
-        proposal.kind = object.value("kind").toString();
-        proposal.bookId = book->id;
-        proposal.meta = book->meta;
-        proposal.collectionId = object.value("collection_id").toInteger();
-        proposal.collection = object.value("collection").toString();
-        proposal.why = object.value("why").toString();
-        proposals << proposal;
-    }
-    return proposals;
+        return fail("There is no file " + path + " to take collections from.");
+    const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
+    const int changed =
+        Collections::take(library, document.isArray() ? document.array() : document.object().value("collections").toArray());
+    if (json)
+        printJson(QJsonObject{{"changed", changed}});
+    else
+        print(stdout, QString("%1 collections brought up to date").arg(changed));
+    return 0;
 }
 
 // A shared collection subscribed to, or its space dropped (subscriptions.h):
@@ -227,8 +204,9 @@ int Collections::run(const QStringList &arguments) {
                               "a collection of that path instead.", "numbers"});
     parser.addOption({"parent", "add: make it inside this collection.", "path"});
     parser.addOption({"again", "sort: ask the AI again rather than pick from the list the last sort gave."});
-    parser.addOption({"as", "import: the collection's name here, instead of the shared one's.", "name"});
-    parser.addOption({"dry-run", "import: say what it would do, and change nothing."});
+    parser.addOption({"as", "import: the collection's name here, instead of the shared one's; share: the name you go by in it.", "name"});
+    parser.addOption({"dry-run", "import, share: say what it would do, and change nothing."});
+    CollectionShare::addOptions(parser);
     parser.addOption({{"h", "help"}, "Show this help."});
     QStringList rest = arguments;
     rest.removeAt(1);
@@ -292,7 +270,7 @@ int Collections::run(const QStringList &arguments) {
         QList<Proposal> proposals;
         bool saved = false;
         if (choosing && !parser.isSet("again"))
-            if (const auto kept = keptProposals(library)) {
+            if (const auto kept = KeptProposals::read(library)) {
                 proposals = *kept;
                 saved = true;
             }
@@ -322,7 +300,7 @@ int Collections::run(const QStringList &arguments) {
             }
         }
         if (!saved)
-            keepProposals(library, proposals);
+            KeptProposals::keep(library, proposals);
         // "1,3=Some/Path": the numbers picked, and another path for some.
         QHash<int, QString> picked;
         for (const QString &item : parser.value("pick").split(',', Qt::SkipEmptyParts))
@@ -367,7 +345,7 @@ int Collections::run(const QStringList &arguments) {
             print(stderr, problem);
         // What was applied is done with; another sort asks afresh.
         if (choosing && applied > 0)
-            QFile::remove(keptFile(library));
+            QFile::remove(KeptProposals::file(library));
         if (json)
             printJson(QJsonObject{{"proposals", array}, {"to_decide", undecided}, {"applied", applied}});
         else if (parser.isSet("apply") || parser.isSet("pick"))
@@ -377,22 +355,13 @@ int Collections::run(const QStringList &arguments) {
                                 : QString("Every book is placed, or the AI had nothing to propose."));
         return 0;
     }
-    if (sub == "take") {
-        // What a sync hands over from another computer: a file of collections.
-        QFile file(words.value(1));
-        if (!file.open(QIODevice::ReadOnly))
-            return fail("There is no file " + words.value(1) + " to take collections from.");
-        const QJsonDocument document = QJsonDocument::fromJson(file.readAll());
-        const int changed = take(library, document.isArray() ? document.array() : document.object().value("collections").toArray());
-        if (json)
-            printJson(QJsonObject{{"changed", changed}});
-        else
-            print(stdout, QString("%1 collections brought up to date").arg(changed));
-        return 0;
-    }
+    if (sub == "take")
+        return takeFrom(library, words.value(1), json);
 
     if (sub == "import" || sub == "unsubscribe")
         return shared(library, words, {parser.value("as"), parser.isSet("dry-run")}, json);
+    if (sub == "share")
+        return CollectionShare::run(library, parser, words.mid(1).join(' '), json);
 
     // The rest name a collection.
     if (words.size() < 2)

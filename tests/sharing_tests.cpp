@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QProcess>
 #include <QSet>
 #include <QSqlQuery>
 #include <QTemporaryDir>
@@ -20,6 +21,7 @@
 #include <utility>
 
 #include "changelog.h"
+#include "collectionshare.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "graphcontext.h"
@@ -185,6 +187,11 @@ template <typename T> [[nodiscard]] QByteArray why(const std::expected<T, QStrin
     return result ? QByteArray() : result.error().toLocal8Bit();
 }
 
+[[nodiscard]] qint64 rows(const Library &library, const QString &sql) {
+    QSqlQuery query = ChangeLog::query(library, sql);
+    return query.next() ? query.value(0).toLongLong() : -1;
+}
+
 // Where an operation of the graph says a thing was met or learned, if it does.
 [[nodiscard]] std::optional<std::pair<int, double>> placeOf(const SpaceOperation &op) {
     if (op.entity != "fact" && op.entity != "edge" && !op.field.startsWith("seen:"))
@@ -194,6 +201,45 @@ template <typename T> [[nodiscard]] QByteArray why(const std::expected<T, QStrin
 }
 
 [[nodiscard]] bool gone(const ReducedBook &book) { return SpaceReducer::isRemoved(book.alive, book.removed); }
+
+// `omabook <arguments>`, the real binary, run to the end.
+struct Ran {
+    int code = -1;
+    QString output, errors;
+};
+
+[[nodiscard]] Ran omabook(const QStringList &arguments) {
+    QProcess process;
+    process.start(OMABOOK_BINARY, arguments);
+    process.closeWriteChannel();
+    Ran ran;
+    if (!process.waitForFinished(60000)) {
+        process.kill();
+        process.waitForFinished(2000);
+        return ran;
+    }
+    ran.code = process.exitCode();
+    ran.output = QString::fromUtf8(process.readAllStandardOutput());
+    ran.errors = QString::fromUtf8(process.readAllStandardError());
+    return ran;
+}
+
+// One tool of `omabook mcp` called, as an agent calls it: its result.
+[[nodiscard]] QJsonObject tool(const QString &library, const QString &name, const QJsonObject &arguments) {
+    QProcess server;
+    server.start(OMABOOK_BINARY, {"mcp", "--library", library});
+    const QJsonObject request{
+        {"jsonrpc", "2.0"}, {"id", 1}, {"method", "tools/call"}, {"params", QJsonObject{{"name", name}, {"arguments", arguments}}}};
+    server.write(QJsonDocument(request).toJson(QJsonDocument::Compact) + "\n");
+    while (!server.canReadLine())
+        if (!server.waitForReadyRead(60000))
+            break;
+    const QJsonObject answer = QJsonDocument::fromJson(server.readLine()).object();
+    server.closeWriteChannel();
+    if (!server.waitForFinished(5000))
+        server.kill();
+    return answer.value("result").toObject();
+}
 
 } // namespace
 
@@ -535,6 +581,120 @@ private slots:
         const auto without = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {}, ada);
         QVERIFY2(without.has_value(), why(without).constData());
         QCOMPARE(SpaceReducer::reduce(without->operations).books.value(shelf.gid(shelf.dune)).fields.value("rating").value, QString());
+    }
+
+    // Before anything is written: what goes in, counted by kind, and what is
+    // left out, the files always and each part that isn't switched on.
+    void theSummaryCountsWhatGoesInAndWhatIsLeftOut() {
+        const Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const Collection sciFi = *shelf.library.collection(shelf.sciFi);
+        const auto shown = CollectionShare::preview(shelf.library, sciFi, {.graph = true});
+        QVERIFY2(shown.has_value(), why(shown).constData());
+        const QJsonObject in = shown->value("in").toObject();
+        QCOMPARE(in.value("collections").toInt(), 2);
+        QCOMPARE(in.value("books").toInt(), 3);
+        QVERIFY(in.value("things").toInt() >= 2); // Paul and Jessica, and who wrote the books
+        QCOMPARE(in.value("facts").toInt(), 2);
+        QVERIFY(in.value("relations").toInt() >= 1);
+        for (const char *none : {"questions", "ratings", "reading_places", "reading_days"})
+            QVERIFY2(in.value(none).toInt() == 0, none);
+
+        QHash<QString, QJsonObject> out;
+        for (const QJsonValue &value : shown->value("left_out").toArray())
+            out.insert(value.toObject().value("part").toString(), value.toObject());
+        QCOMPARE(QSet<QString>(out.keyBegin(), out.keyEnd()), (QSet<QString>{"files", "questions", "ratings", "progress"}));
+        QCOMPARE(out.value("files").value("count").toInt(), 3);
+        QVERIFY(out.value("files").value("never").toBool());
+        QCOMPARE(out.value("questions").value("count").toInt(), 1);
+        QCOMPARE(out.value("ratings").value("count").toInt(), 1);
+        QCOMPARE(out.value("ratings").value("switch").toString(), QString("--with ratings"));
+        QCOMPARE(out.value("progress").value("places").toInt(), 1);
+        const qsizetype days = SpaceReducer::reduce(shelf.published({.reading = true})).days.size();
+        QVERIFY(days > 0);
+        QCOMPARE(out.value("progress").value("days").toInt(), days);
+
+        // With every part: they go in, counted as they were left out, and only the files stay.
+        const auto all =
+            CollectionShare::preview(shelf.library, sciFi, {.graph = true, .questions = true, .ratings = true, .reading = true});
+        QVERIFY2(all.has_value(), why(all).constData());
+        const QJsonObject every = all->value("in").toObject();
+        QCOMPARE(every.value("questions").toInt(), 1);
+        QCOMPARE(every.value("ratings").toInt(), 1);
+        QCOMPARE(every.value("reading_places").toInt(), 1);
+        QCOMPARE(every.value("reading_days").toInt(), days);
+        QCOMPARE(all->value("left_out").toArray().size(), 1);
+        // Counting published nothing.
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM published_ops"), 0);
+    }
+
+    // The command: --dry-run shows what would go and writes nothing; a
+    // share publishes, writes the snapshot, and remembers the name.
+    void aDryRunWritesNothing() {
+        const Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const QString root = shelf.library.root();
+        const QString path = QString(Shelf::aboveName) + "/Sci-fi";
+        const QString file = shelf.dir.filePath(QString("Sci-fi") + SpaceSnapshotFile::suffix);
+        const Ran dry =
+            omabook({"collections", "share", path, "--with-graph", "--as", "Ada", "--output", file, "--dry-run", "--library", root});
+        QVERIFY2(dry.code == 0, qPrintable(dry.errors));
+        for (const char *said : {"Goes in", "3 books", "Left out", "never shared", "--with ratings", "--dry-run"})
+            QVERIFY2(dry.output.contains(said), qPrintable(said + QString("\n") + dry.output));
+        QVERIFY(!QFile::exists(file));
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM spaces WHERE kind = 'published'"), 0);
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM published"), 0);
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM published_ops"), 0);
+
+        // The first time, the name to go by is asked for.
+        const Ran nameless = omabook({"collections", "share", path, "--json", "--library", root});
+        QVERIFY(nameless.code != 0 && nameless.errors.contains("--as"));
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM published_ops"), 0);
+
+        const Ran shared =
+            omabook({"collections", "share", path, "--with-graph", "--as", "Ada", "--output", file, "--json", "--library", root});
+        QVERIFY2(shared.code == 0, qPrintable(shared.errors));
+        const QJsonObject done = QJsonDocument::fromJson(shared.output.toUtf8()).object().value("published").toObject();
+        QVERIFY(done.value("space").toString().startsWith("published:"));
+        QVERIFY(done.value("new").toInteger() > 0);
+        QCOMPARE(done.value("operations").toInteger(), done.value("new").toInteger());
+        const auto snapshot = SpaceSnapshotFile::load(file);
+        QVERIFY2(snapshot.has_value(), why(snapshot).constData());
+        QCOMPARE(snapshot->space, done.value("space").toString());
+        QCOMPARE(snapshot->owner.name, QString("Ada"));
+        QCOMPARE(snapshot->parts, QStringList{"graph"});
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM spaces WHERE kind = 'published'"), 1);
+
+        // Again, unchanged: nothing new, and the name is the one given before.
+        const Ran again = omabook({"collections", "share", path, "--with-graph", "--library", root});
+        QVERIFY2(again.code == 0, qPrintable(again.errors));
+        QVERIFY2(again.output.contains("by Ada") && again.output.contains("0 of them new"), qPrintable(again.output));
+    }
+
+    void theMcpToolSharesACollection() {
+        const Shelf shelf;
+        QVERIFY(!QTest::currentTestFailed());
+        const QString root = shelf.library.root();
+        const QString path = QString(Shelf::aboveName) + "/Sci-fi";
+        const QJsonObject dry =
+            tool(root, "collection_share", {{"name", path}, {"graph", true}, {"with", QJsonArray{"ratings"}}, {"dry_run", true}});
+        QVERIFY2(!dry.value("isError").toBool(), qPrintable(QJsonDocument(dry).toJson()));
+        const QJsonObject shown = dry.value("structuredContent").toObject();
+        QCOMPARE(shown.value("in").toObject().value("books").toInt(), 3);
+        QCOMPARE(shown.value("in").toObject().value("ratings").toInt(), 1);
+        QCOMPARE(shown.value("parts").toArray(), (QJsonArray{"graph", "ratings"}));
+        QVERIFY(shown.value("dry_run").toBool() && !shown.contains("published"));
+        QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM published_ops"), 0);
+
+        const QString file = shelf.dir.filePath(QString("Shared") + SpaceSnapshotFile::suffix);
+        const QJsonObject shared = tool(root, "collection_share", {{"name", path}, {"as", "Ada"}, {"output", file}});
+        QVERIFY2(!shared.value("isError").toBool(), qPrintable(QJsonDocument(shared).toJson()));
+        QVERIFY(shared.value("structuredContent").toObject().value("published").toObject().value("new").toInteger() > 0);
+        const auto snapshot = SpaceSnapshotFile::load(file);
+        QVERIFY2(snapshot.has_value(), why(snapshot).constData());
+        QCOMPARE(snapshot->parts, QStringList());
+        QVERIFY(idsOf(snapshot->operations, "node").isEmpty());
+        QVERIFY(!tool(root, "collection_share", {{"name", "Nowhere"}, {"dry_run", true}}).value("content").toArray().isEmpty());
     }
 
     // Writes the sample of this format from the fixtures above, when asked

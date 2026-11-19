@@ -67,6 +67,8 @@ add_dependencies(graphsync_tests omabook)
 target_compile_definitions(graphsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 add_dependencies(spaces_tests omabook)
 target_compile_definitions(spaces_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+add_dependencies(sharing_tests omabook)
+target_compile_definitions(sharing_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 # The library samples of every release, for the tests of the change log and of syncing through it.
 target_sources(spaces_tests PRIVATE tests/samples.cpp)
 target_sources(replication_tests PRIVATE tests/samples.cpp)

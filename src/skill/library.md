@@ -36,7 +36,11 @@ omabook list --collection Studie/Python        # also: ask all --collection, sug
 omabook collections sort --json                # AI proposals, numbered, and "to_decide": books it can't place
 omabook collections sort --pick 1,4=Werk/Regeltechniek   # from that same list, not asked again; N=path renames
 omabook collections sort Werk --json           # within one: collections inside Werk for its books in none of them; they stay in Werk
+omabook collections share Werk --with-graph --dry-run --json   # what would go in (counts) and stay out; writes nothing
+omabook collections share Werk --with ratings --as "Ada" --output Werk.omabook-space   # publish it as a space, write its snapshot
 ```
+
+Sharing never sends the books' files; the graph, questions, ratings and progress go only when the user switches them on, and of the graph only what they have read. Show the dry run to the user and ask which parts and what name before sharing.
 
 A rule is a search (`tag:`, `genre:fiction`, `-word`, `OR`, `"quotes"`); books put in or out by hand win. Show the user the sort proposals and the to-decide list before picking anything; `--apply` takes them all.
 

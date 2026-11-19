@@ -27,7 +27,7 @@ QJsonArray manifest(const Library &library);
 // hold are left out. How many collections changed here.
 int take(Library &library, const QJsonArray &theirs);
 
-// `omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort|take] …`
+// `omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|show|format|sort|take|share] …`
 int run(const QStringList &arguments);
 
 } // namespace Collections
