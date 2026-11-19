@@ -1407,7 +1407,6 @@
   "Counting what goes in…": "Tellen wat erin gaat…",
   "Goes in": "Gaat erin",
   "Its books go in the collection": "De boeken komen in de collectie",
-  "Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "De graaf (%1 dingen, %2 feiten, %3 relaties) blijft een eigen laag, los van de jouwe, en toont alleen zo ver als je elk boek gelezen hebt.",
   "Never goes": "Gaat er nooit in",
   "No graph comes with it.": "Er komt geen graaf mee.",
   "Publish": "Publiceren",
@@ -1434,7 +1433,6 @@
   "Subscribed to, from %1's shared collection: what they add to it comes here too.": "Geabonneerd, uit de gedeelde collectie van %1: wat daar bijkomt, komt ook hier.",
   "That collection is gone.": "Die collectie bestaat niet meer.",
   "The books' files (%1): those you share it with need their own copies.": "De bestanden van de boeken (%1): wie je het mee deelt, heeft eigen exemplaren nodig.",
-  "The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book": "De graaf: %1 dingen, %2 feiten en %3 relaties, alleen wat je gelezen hebt, niets voorbij je plek in een boek",
   "The name you go by, as those you share it with will see it": "De naam waaronder anderen je zien",
   "The questions you asked of its books (%1)": "De vragen die je over de boeken stelde (%1)",
   "There is no library open.": "Er is geen bibliotheek open.",
@@ -1447,7 +1445,6 @@
   "You have a collection of that name: its books join it, and nothing in it is taken out.": "Je hebt een collectie met die naam: de boeken komen erbij, en er wordt niets uit gehaald.",
   "You subscribe to it already: this brings what changed since.": "Je bent er al op geabonneerd: dit brengt wat sindsdien veranderde.",
   "Your ratings (%1)": "Je beoordelingen (%1)",
-  "Your reading: how far you are in %1 books, and the %2 days you read": "Je lezen: hoe ver je bent in %1 boeken, en de %2 dagen dat je las",
   "Yours, only if you switch it on": "Van jou, alleen als je het aanzet",
   "%1 is up to date: %Ln changes taken in.": {
     "one": "%1 is bijgewerkt: %Ln wijziging overgenomen.",
@@ -1467,5 +1464,32 @@
   "Or paste a link: a gist, or a file on GitHub": "Of plak een link: een gist, of een bestand op GitHub",
   "Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.": "Gepubliceerd als %1, via de link %2 (gekopieerd): wie hem heeft, kan zich abonneren en volgen.",
   "Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.": "Gepubliceerd als %1, in %2 en via de link %3 (gekopieerd): wie een van beide heeft, kan zich abonneren.",
-  "Take them in": "Overnemen"
+  "Take them in": "Overnemen",
+  "%Ln changed": {
+    "one": "%Ln gewijzigd",
+    "other": "%Ln gewijzigd"
+  },
+  "%Ln days": {
+    "one": "%Ln dag",
+    "other": "%Ln dagen"
+  },
+  "%Ln facts": {
+    "one": "%Ln feit",
+    "other": "%Ln feiten"
+  },
+  "%Ln gone": {
+    "one": "%Ln weg",
+    "other": "%Ln weg"
+  },
+  "%Ln new": {
+    "one": "%Ln nieuw",
+    "other": "%Ln nieuw"
+  },
+  "Facts": "Feiten",
+  "Things": "Dingen",
+  "Reading days": "Leesdagen",
+  "nothing it says changes": "niets wat ze zegt verandert",
+  "Its graph (%1, %2, %3) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "De graaf (%1, %2, %3) blijft een eigen laag, los van de jouwe, en toont alleen zo ver als je elk boek gelezen hebt.",
+  "The graph: %1, %2 and %3, only what you have read, nothing past your place in a book": "De graaf: %1, %2 en %3, alleen wat je gelezen hebt, niets voorbij je plek in een boek",
+  "Your reading: how far you are in %1, and %2 of reading": "Je lezen: hoe ver je bent in %1, en %2 lezen"
 }

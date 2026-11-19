@@ -9,6 +9,8 @@
 #include <QPointer>
 #include <QStandardPaths>
 #include <QThreadPool>
+#include <array>
+#include <utility>
 
 #include "backend.h"
 #include "collectionshare.h"
@@ -123,6 +125,30 @@ using namespace Qt::StringLiterals;
     if (!snapshot)
         return std::unexpected(snapshot.error());
     return Subscriptions::subscribe(library, *snapshot, options);
+}
+
+// What following a link would change, in the window's language: "Books: 2
+// new, 1 changed; Facts: 4 new".
+[[nodiscard]] QString changesSaid(const SpaceDiff::Changes &changes) {
+    const std::array<std::pair<SpaceDiff::Count, QString>, 6> kinds{{{changes.books, SpaceDesk::tr("Books")},
+                                                                     {changes.collections, SpaceDesk::tr("Collections")},
+                                                                     {changes.things, SpaceDesk::tr("Things")},
+                                                                     {changes.facts, SpaceDesk::tr("Facts")},
+                                                                     {changes.relations, SpaceDesk::tr("Relations")},
+                                                                     {changes.days, SpaceDesk::tr("Reading days")}}};
+    QStringList said;
+    for (const auto &[count, kind] : kinds) {
+        QStringList parts;
+        if (count.added > 0)
+            parts << SpaceDesk::tr("%Ln new", "", static_cast<int>(count.added));
+        if (count.changed > 0)
+            parts << SpaceDesk::tr("%Ln changed", "", static_cast<int>(count.changed));
+        if (count.removed > 0)
+            parts << SpaceDesk::tr("%Ln gone", "", static_cast<int>(count.removed));
+        if (!parts.isEmpty())
+            said << SpaceDesk::tr("%1: %2").arg(kind, parts.join(", "_L1));
+    }
+    return said.isEmpty() ? SpaceDesk::tr("nothing it says changes") : said.join("; "_L1);
 }
 
 } // namespace
@@ -257,7 +283,7 @@ void SpaceDesk::lookForUpdates(const QString &space) {
             const Following::Offer &offer = offers->first();
             return QVariantMap{{"space", space},
                                {"operations", static_cast<qint64>(offer.operations)},
-                               {"changes", SpaceDiff::describe(offer.changes)},
+                               {"changes", changesSaid(offer.changes)},
                                {"problem", offer.problem}};
         },
         [this, space](const QVariantMap &found) {

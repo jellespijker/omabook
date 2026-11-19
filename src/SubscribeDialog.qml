@@ -186,8 +186,9 @@ AppPopup {
             visible: dialog.ready
             wrapMode: Text.Wrap
             text: (dialog.seen.things || 0) + (dialog.seen.facts || 0) + (dialog.seen.relations || 0) > 0
-                  ? qsTr("Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.")
-                    .arg(dialog.seen.things).arg(dialog.seen.facts).arg(dialog.seen.relations)
+                  ? qsTr("Its graph (%1, %2, %3) stays a layer of its own, apart from yours, and shows only as far as you have read each book.")
+                    .arg(qsTr("%Ln things", "", dialog.seen.things)).arg(qsTr("%Ln facts", "", dialog.seen.facts))
+                    .arg(qsTr("%Ln relations", "", dialog.seen.relations))
                   : qsTr("No graph comes with it.")
         }
         Label {

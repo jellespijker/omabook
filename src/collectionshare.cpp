@@ -123,37 +123,45 @@ void countGraph(const ReducedState &state, Counts &counts) {
     return parts;
 }
 
+// A count and what it counts, in English (the command line's language):
+// "1 thing", "2 things".
+[[nodiscard]] QString counted(qint64 count, QStringView one, QStringView many) {
+    return u"%1 %2"_s.arg(count).arg(count == 1 ? one : many);
+}
+
 void printPreview(const QJsonObject &shown) {
     const QJsonObject in = shown.value("in").toObject();
-    const auto n = [&in](const char *key) { return in.value(QLatin1StringView(key)).toInt(); };
+    const auto n = [&in](const char *key) { return in.value(QLatin1StringView(key)).toInteger(); };
     const QStringList parts = shown.value("parts").toVariant().toStringList();
     say(stdout, u"Sharing %1. Goes in:"_s.arg(shown.value("collection").toString()));
-    say(stdout, u"  %1 collections: their names, rules and how their shelves show"_s.arg(n("collections")));
-    say(stdout, u"  %1 books: title, authors, series, ISBN and their names elsewhere"_s.arg(n("books")));
+    say(stdout, u"  %1: their names, rules and how their shelves show"_s.arg(counted(n("collections"), u"collection", u"collections")));
+    say(stdout, u"  %1: title, authors, series, ISBN and their names elsewhere"_s.arg(counted(n("books"), u"book", u"books")));
     if (parts.contains("graph"_L1))
-        say(stdout,
-            u"  the graph: %1 things, %2 facts, %3 relations; only what you have read, nothing past your place in a book"_s.arg(n("things"))
-                .arg(n("facts"))
-                .arg(n("relations")));
+        say(stdout, u"  the graph: %1, %2, %3; only what you have read, nothing past your place in a book"_s.arg(
+                        counted(n("things"), u"thing", u"things"), counted(n("facts"), u"fact", u"facts"),
+                        counted(n("relations"), u"relation", u"relations")));
     if (parts.contains("questions"_L1))
-        say(stdout, u"  %1 questions you asked"_s.arg(n("questions")));
+        say(stdout, u"  %1 you asked"_s.arg(counted(n("questions"), u"question", u"questions")));
     if (parts.contains("ratings"_L1))
-        say(stdout, u"  %1 ratings"_s.arg(n("ratings")));
+        say(stdout, u"  %1"_s.arg(counted(n("ratings"), u"rating", u"ratings")));
     if (parts.contains("reading"_L1))
-        say(stdout, u"  your reading: %1 places, %2 days"_s.arg(n("reading_places")).arg(n("reading_days")));
+        say(stdout, u"  your reading: %1, %2"_s.arg(counted(n("reading_places"), u"place", u"places"), counted(n("reading_days"), u"day", u"days")));
     say(stdout, u"Left out:"_s);
     for (const QJsonValue value : shown.value("left_out").toArray()) {
         const QJsonObject part = value.toObject();
         const QString name = part.value("part").toString();
-        const auto of = [&part](const char *key) { return QString::number(part.value(QLatin1StringView(key)).toInt()); };
+        const auto of = [&part](const char *key, QStringView one, QStringView many) {
+            return counted(part.value(QLatin1StringView(key)).toInteger(), one, many);
+        };
         if (name == "files"_L1)
-            say(stdout, u"  the books' files (%1): never shared"_s.arg(of("count")));
+            say(stdout, u"  the books' files (%1): never shared"_s.arg(of("count", u"file", u"files")));
         else if (name == "graph"_L1)
-            say(stdout, u"  the graph (%1 things, %2 facts, %3 relations): --with-graph"_s.arg(of("things"), of("facts"), of("relations")));
+            say(stdout, u"  the graph (%1, %2, %3): --with-graph"_s.arg(of("things", u"thing", u"things"), of("facts", u"fact", u"facts"),
+                                                                       of("relations", u"relation", u"relations")));
         else if (name == "progress"_L1)
-            say(stdout, u"  your reading (%1 places, %2 days): --with progress"_s.arg(of("places"), of("days")));
+            say(stdout, u"  your reading (%1, %2): --with progress"_s.arg(of("places", u"place", u"places"), of("days", u"day", u"days")));
         else
-            say(stdout, u"  %1 (%2): %3"_s.arg(name, of("count"), part.value("switch").toString()));
+            say(stdout, u"  %1 (%2): %3"_s.arg(name, QString::number(part.value("count").toInteger()), part.value("switch").toString()));
     }
 }
 

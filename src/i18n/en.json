@@ -115,6 +115,10 @@
     "one": "%Ln book: title, authors, series, ISBN and its names on other sites",
     "other": "%Ln books: title, authors, series, ISBN and their names on other sites"
   },
+  "%Ln changed": {
+    "one": "%Ln changed",
+    "other": "%Ln changed"
+  },
   "%Ln changes are new there: %1.": {
     "one": "%Ln change is new there: %1.",
     "other": "%Ln changes are new there: %1."
@@ -147,9 +151,21 @@
     "one": "%Ln collection, with its name, rule and how its shelf shows",
     "other": "%Ln collections, with their names, rules and how their shelves show"
   },
+  "%Ln days": {
+    "one": "%Ln day",
+    "other": "%Ln days"
+  },
   "%Ln days ago": {
     "one": "%Ln day ago",
     "other": "%Ln days ago"
+  },
+  "%Ln facts": {
+    "one": "%Ln fact",
+    "other": "%Ln facts"
+  },
+  "%Ln gone": {
+    "one": "%Ln gone",
+    "other": "%Ln gone"
   },
   "%Ln graph changes sent": {
     "one": "%Ln graph change sent",
@@ -170,6 +186,10 @@
   "%Ln more past your page": {
     "one": "%Ln more past your page",
     "other": "%Ln more past your page"
+  },
+  "%Ln new": {
+    "one": "%Ln new",
+    "other": "%Ln new"
   },
   "%Ln of its books are in your library": {
     "one": "%Ln of its books is in your library",
@@ -525,6 +545,7 @@
   "Explain the passage I selected.": "Explain the passage I selected.",
   "Explain the selection": "Explain the selection",
   "Export for Goodreads": "Export for Goodreads",
+  "Facts": "Facts",
   "Fetch": "Fetch",
   "Fetching it from GitHub…": "Fetching it from GitHub…",
   "Fill in “%1” first.": "Fill in “%1” first.",
@@ -686,7 +707,7 @@
   "Its books go in the collection": "Its books go in the collection",
   "Its files in the library folder move to the trash. The file you added it from is not touched.": "Its files in the library folder move to the trash. The file you added it from is not touched.",
   "Its folder moves to the trash, with everything it kept there. To stop it and keep it, switch it off instead.": "Its folder moves to the trash, with everything it kept there. To stop it and keep it, switch it off instead.",
-  "Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.",
+  "Its graph (%1, %2, %3) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "Its graph (%1, %2, %3) stays a layer of its own, apart from yours, and shows only as far as you have read each book.",
   "Its name": "Its name",
   "Its plugin is off, so nothing is asked of it.": "Its plugin is off, so nothing is asked of it.",
   "Its relations go with it. No book is touched.": "Its relations go with it. No book is touched.",
@@ -979,6 +1000,7 @@
   "Reading": "Reading",
   "Reading Sites": "Reading Sites",
   "Reading and noting…": "Reading and noting…",
+  "Reading days": "Reading days",
   "Reading sites": "Reading sites",
   "Reading sites, connected": "Reading sites, connected",
   "Reading the shared collection…": "Reading the shared collection…",
@@ -1204,7 +1226,7 @@
   "The graph's things are marked in the text while the map is open": "The graph's things are marked in the text while the map is open",
   "The graph's things are marked in the text, always": "The graph's things are marked in the text, always",
   "The graph, in the text": "The graph, in the text",
-  "The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book": "The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book",
+  "The graph: %1, %2 and %3, only what you have read, nothing past your place in a book": "The graph: %1, %2 and %3, only what you have read, nothing past your place in a book",
   "The interface is files in `~/.config/omabook/`, followed while Omabook runs: `keys.json` for any key, `style.json` for colors and corners, `ui/` for views of your own and `mods/` for panels. `omabook customize` writes a guide to all of it there. A file with a mistake never takes the window down: the last version that worked stays in use.": "The interface is files in `~/.config/omabook/`, followed while Omabook runs: `keys.json` for any key, `style.json` for colors and corners, `ui/` for views of your own and `mods/` for panels. `omabook customize` writes a guide to all of it there. A file with a mistake never takes the window down: the last version that worked stays in use.",
   "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” in the settings ({global.settings}).": "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” in the settings ({global.settings}).",
   "The last version that worked is still running.": "The last version that worked is still running.",
@@ -1248,6 +1270,7 @@
   "These pages are pictures, so their type can't be changed; the layout can. What else is set here is for books that flow.": "These pages are pictures, so their type can't be changed; the layout can. What else is set here is for books that flow.",
   "These pages are pictures, so there are no words to select.": "These pages are pictures, so there are no words to select.",
   "They are one and the same: its relations, the places it was met and its name move over.": "They are one and the same: its relations, the places it was met and its name move over.",
+  "Things": "Things",
   "Thinking of questions…": "Thinking of questions…",
   "Thinking…": "Thinking…",
   "This book has no file to read.": "This book has no file to read.",
@@ -1363,7 +1386,7 @@
   "Your own colors": "Your own colors",
   "Your own colors in style.json stay over the theme. This changes Omabook only, not the desktop.": "Your own colors in style.json stay over the theme. This changes Omabook only, not the desktop.",
   "Your ratings (%1)": "Your ratings (%1)",
-  "Your reading: how far you are in %1 books, and the %2 days you read": "Your reading: how far you are in %1 books, and the %2 days you read",
+  "Your reading: how far you are in %1, and %2 of reading": "Your reading: how far you are in %1, and %2 of reading",
   "Your token": "Your token",
   "Your user name (the token says it when this is empty)": "Your user name (the token says it when this is empty)",
   "Yours": "Yours",
@@ -1413,6 +1436,7 @@
   "language": "language",
   "no key": "no key",
   "nothing beyond the library": "nothing beyond the library",
+  "nothing it says changes": "nothing it says changes",
   "part %1": "part %1",
   "programs on this computer": "programs on this computer",
   "publisher": "publisher",

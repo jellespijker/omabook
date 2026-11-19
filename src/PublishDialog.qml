@@ -149,8 +149,9 @@ AppPopup {
         PartSwitch {
             id: graph
             objectName: "publishGraph"
-            text: qsTr("The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book")
-                  .arg(dialog.seen.things || 0).arg(dialog.seen.facts || 0).arg(dialog.seen.relations || 0)
+            text: qsTr("The graph: %1, %2 and %3, only what you have read, nothing past your place in a book")
+                  .arg(qsTr("%Ln things", "", dialog.seen.things || 0)).arg(qsTr("%Ln facts", "", dialog.seen.facts || 0))
+                  .arg(qsTr("%Ln relations", "", dialog.seen.relations || 0))
         }
         PartSwitch {
             id: questions
@@ -165,7 +166,8 @@ AppPopup {
         PartSwitch {
             id: reading
             objectName: "publishReading"
-            text: qsTr("Your reading: how far you are in %1 books, and the %2 days you read").arg(dialog.seen.places || 0).arg(dialog.seen.days || 0)
+            text: qsTr("Your reading: how far you are in %1, and %2 of reading")
+                  .arg(qsTr("%Ln books", "", dialog.seen.places || 0)).arg(qsTr("%Ln days", "", dialog.seen.days || 0))
         }
 
         // Who it is from: asked the first time, and kept with the space.

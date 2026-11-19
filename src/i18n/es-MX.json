@@ -1469,7 +1469,6 @@
   "Counting what goes in…": "Contando lo que entra…",
   "Goes in": "Entra",
   "Its books go in the collection": "Sus libros van a la colección",
-  "Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "Su grafo (%1 cosas, %2 datos, %3 relaciones) queda como una capa propia, aparte del suyo, y muestra solo hasta donde ha leído cada libro.",
   "Never goes": "Nunca entra",
   "No graph comes with it.": "No viene con grafo.",
   "Publish": "Publicar",
@@ -1496,7 +1495,6 @@
   "Subscribed to, from %1's shared collection: what they add to it comes here too.": "Suscrita, de la colección compartida de %1: lo que se le agregue llega aquí también.",
   "That collection is gone.": "Esa colección ya no existe.",
   "The books' files (%1): those you share it with need their own copies.": "Los archivos de los libros (%1): con quienes la comparta necesitan sus propias copias.",
-  "The graph: %1 things, %2 facts and %3 relations, only what you have read, nothing past your place in a book": "El grafo: %1 cosas, %2 datos y %3 relaciones, solo lo que ha leído, nada más allá de su lugar en un libro",
   "The name you go by, as those you share it with will see it": "El nombre con el que lo verán los demás",
   "The questions you asked of its books (%1)": "Las preguntas que hizo sobre sus libros (%1)",
   "There is no library open.": "No hay ninguna biblioteca abierta.",
@@ -1509,7 +1507,6 @@
   "You have a collection of that name: its books join it, and nothing in it is taken out.": "Tiene una colección con ese nombre: sus libros se suman, y no se quita nada de ella.",
   "You subscribe to it already: this brings what changed since.": "Ya está suscrito: esto trae lo que cambió desde entonces.",
   "Your ratings (%1)": "Sus calificaciones (%1)",
-  "Your reading: how far you are in %1 books, and the %2 days you read": "Su lectura: hasta dónde va en %1 libros, y los %2 días que leyó",
   "Yours, only if you switch it on": "Suyo, solo si lo activa",
   "%1 is up to date: %Ln changes taken in.": {
     "many": "%1 está al día: %Ln cambios recibidos.",
@@ -1531,5 +1528,37 @@
   "Or paste a link: a gist, or a file on GitHub": "O pegue un enlace: un gist, o un archivo en GitHub",
   "Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.": "Publicado como %1, por el enlace %2 (copiado): quien lo tenga puede suscribirse y seguirla.",
   "Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.": "Publicado como %1, en %2 y por el enlace %3 (copiado): quien tenga cualquiera puede suscribirse.",
-  "Take them in": "Recibirlos"
+  "Take them in": "Recibirlos",
+  "%Ln changed": {
+    "many": "%Ln cambiados",
+    "one": "%Ln cambiado",
+    "other": "%Ln cambiados"
+  },
+  "%Ln days": {
+    "many": "%Ln días",
+    "one": "%Ln día",
+    "other": "%Ln días"
+  },
+  "%Ln facts": {
+    "many": "%Ln datos",
+    "one": "%Ln dato",
+    "other": "%Ln datos"
+  },
+  "%Ln gone": {
+    "many": "%Ln idos",
+    "one": "%Ln ido",
+    "other": "%Ln idos"
+  },
+  "%Ln new": {
+    "many": "%Ln nuevos",
+    "one": "%Ln nuevo",
+    "other": "%Ln nuevos"
+  },
+  "Facts": "Datos",
+  "Things": "Cosas",
+  "Reading days": "Días de lectura",
+  "nothing it says changes": "nada de lo que dice cambia",
+  "Its graph (%1, %2, %3) stays a layer of its own, apart from yours, and shows only as far as you have read each book.": "Su grafo (%1, %2, %3) queda como una capa propia, aparte del suyo, y muestra solo hasta donde ha leído cada libro.",
+  "The graph: %1, %2 and %3, only what you have read, nothing past your place in a book": "El grafo: %1, %2 y %3, solo lo que ha leído, nada más allá de su lugar en un libro",
+  "Your reading: how far you are in %1, and %2 of reading": "Su lectura: hasta dónde va en %1, y %2 de lectura"
 }

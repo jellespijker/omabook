@@ -235,10 +235,15 @@ private slots:
         QCOMPARE(seen.value("books").toInt(), 2);
         QCOMPARE(seen.value("files").toInt(), 1);
         QCOMPARE(seen.value("ratings").toInt(), 1);
-        QVERIFY(seen.value("things").toInt() >= 1 && seen.value("places").toInt() >= 1);
+        QVERIFY(seen.value("places").toInt() >= 1);
         QVERIFY(desk.value("publishGoesIn", "text").toString().contains("2 books"));
         QVERIFY(desk.value("publishNeverGoes", "text").toString().contains("files (1)"));
-        QVERIFY(desk.value("publishGraph", "text").toString().contains(seen.value("things").toString() + " things"));
+        // Counted in the singular and the plural, as the language has them.
+        QCOMPARE(seen.value("things").toInt(), 1);
+        QCOMPARE(seen.value("facts").toInt(), 1);
+        QVERIFY2(desk.value("publishGraph", "text").toString().startsWith("The graph: 1 thing, 1 fact and 0 relations,"),
+                 qPrintable(desk.value("publishGraph", "text").toString()));
+        QVERIFY(desk.value("publishReading", "text").toString().contains("0 days"));
         QVERIFY(desk.value("publishRatings", "text").toString().contains("(1)"));
         // Every part of the user's own is off until switched on, and the
         // first time it asks the name the user goes by.
