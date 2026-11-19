@@ -5,6 +5,7 @@
 
 #include "changelog.h"
 #include "library.h"
+#include "spaces.h"
 
 namespace {
 
@@ -36,7 +37,23 @@ Compaction::Result Compaction::compact(const Library &library) {
     ChangeLog::exec(library, "INSERT OR REPLACE INTO snapshot_marks (space, device, seq) SELECT space, device, MAX(seq) FROM ops "
                              "GROUP BY space, device");
     ChangeLog::exec(library, "DROP TABLE temp.compacting");
-    return {.operations = count(library, "SELECT COUNT(*) FROM ops"), .live = count(library, "SELECT COUNT(*) FROM live_ops")};
+    // What the snapshot covers and leaves out, of what every other member of
+    // its space has seen (a space with no other member is this computer's).
+    const qint64 before = count(library, "SELECT COUNT(*) FROM ops");
+    ChangeLog::exec(
+        library,
+        "DELETE FROM ops WHERE seq <= COALESCE((SELECT m.seq FROM snapshot_marks AS m WHERE m.space = ops.space "
+        "AND m.device = ops.device), 0) "
+        "AND NOT EXISTS (SELECT 1 FROM snapshot_ops AS s WHERE s.space = ops.space AND s.device = ops.device AND s.seq = ops.seq) "
+        "AND NOT EXISTS (SELECT 1 FROM space_members AS p JOIN log_ids AS named ON named.name = p.space "
+        "WHERE named.id = ops.space AND p.person <> ? AND COALESCE((SELECT v.seq FROM member_vectors AS v "
+        "WHERE v.space = ops.space AND v.member = p.person AND v.device = ops.device), 0) < ops.seq)",
+        {Spaces::deviceId(library)});
+    const qint64 left = count(library, "SELECT COUNT(*) FROM ops");
+    // The pages freed go back to the file only where the library vacuums incrementally.
+    if (count(library, "PRAGMA auto_vacuum") == 2)
+        ChangeLog::exec(library, "PRAGMA incremental_vacuum");
+    return {.operations = left, .live = count(library, "SELECT COUNT(*) FROM live_ops"), .dropped = before - left};
 }
 
 void Compaction::compactWhenWorthIt(const Library &library) {
@@ -44,4 +61,17 @@ void Compaction::compactWhenWorthIt(const Library &library) {
                                         "AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)");
     if (after > 1000 && after > count(library, "SELECT COUNT(*) FROM snapshot_ops"))
         compact(library);
+}
+
+void Compaction::rememberSeen(const Library &library, const QString &member, const Replication::Vector &held) {
+    if (member.isEmpty())
+        return;
+    const Library::Batch batch(library);
+    for (auto space = held.cbegin(); space != held.cend(); ++space)
+        for (auto device = space->cbegin(); device != space->cend(); ++device)
+            ChangeLog::exec(
+                library,
+                "INSERT INTO member_vectors (space, member, device, seq) VALUES (?, ?, ?, ?) "
+                "ON CONFLICT(space, member, device) DO UPDATE SET seq = MAX(seq, excluded.seq)",
+                {ChangeLog::internId(library, space.key()), member, ChangeLog::internId(library, device.key()), device.value()});
 }

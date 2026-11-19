@@ -1,0 +1,15 @@
+id: ops-deleted-only-by-compaction
+language: cpp
+severity: error
+message: Only compaction removes operations from the change log (`ops`); never DELETE FROM ops elsewhere (ADR 0001).
+note: |
+  An operation is never taken back: a correction is a new operation. The one
+  exception is compaction (src/compaction.cpp), which drops operations a
+  snapshot of their space covers, and only those every member of the space
+  has already seen, so no computer can still need them.
+ignores:
+  # The owner's decision (#37): compaction, and only compaction, may delete from the log.
+  - "src/compaction.cpp"
+rule:
+  kind: string_literal
+  regex: '(?i)\bDELETE\s+FROM\s+ops\b'

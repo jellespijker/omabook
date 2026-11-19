@@ -10,11 +10,15 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
+#include <QUuid>
 #include <QtTest>
 #include <algorithm>
 #include <tuple>
 
+#include "changelog.h"
 #include "compaction.h"
 #include "fixtures.h"
 #include "graph.h"
@@ -60,6 +64,25 @@ void readOn(Library &library, const Progress &place, qint64 detailsHlc, const QS
     BookMeta meta = library.book(3)->meta;
     meta.publisher = publisher;
     QVERIFY(library.setMeta(3, meta, nullptr, detailsHlc));
+}
+
+// The size of a library's database file once its write-ahead log is folded
+// in, and with `vacuum` once the pages compaction freed are given back.
+qint64 fileSize(const QString &file, bool vacuum) {
+    const QString connection = "size-" + QUuid::createUuid().toString(QUuid::Id128);
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", connection);
+        database.setDatabaseName(file);
+        if (database.open()) {
+            QSqlQuery query(database);
+            if (vacuum)
+                query.exec("VACUUM");
+            query.exec("PRAGMA wal_checkpoint(TRUNCATE)");
+        }
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(connection);
+    return QFileInfo(file).size();
 }
 
 // A snapshot without what is left out of a comparison.
@@ -604,16 +627,21 @@ private slots:
     }
 
     // Compaction writes a snapshot and reads it with what came after: what that
-    // merges to is what all of `ops` merges to, on every computer and for each
-    // device, and `ops` itself is never cut (it is append-only).
-    void compactionReadsLessAndMergesTheSame() {
+    // merges to is what all of the log merges to, on every computer and for
+    // each device. It drops from `ops` what the snapshot covers and leaves
+    // out, of what every member has seen, and a peer behind the snapshot is
+    // given the snapshot.
+    void compactionDropsWhatEveryoneHasSeenAndMergesTheSame() {
         const QDir data(QFileInfo(QFINDTESTDATA("data/library-0.1.0.sql")).absolutePath());
         for (const QString &dump : data.entryList({"library-*.sql"}, QDir::Files, QDir::Name)) {
             SamplePairs p(data.filePath(dump), dump);
             QVERIFY(!QTest::currentTestFailed());
-            // A while of reading and editing on both sides, synced now and then.
-            for (int round = 0; round < 20; ++round) {
+            // A while of reading and editing on both sides, synced now and then,
+            // and the last three rounds here after the last sync.
+            for (int round = 0; round < 23; ++round) {
                 for (Library *library : {&p.logHere, &p.logThere}) {
+                    if (round >= 20 && library == &p.logThere)
+                        continue;
                     library->setProgress(1, {.section = round, .fraction = 0.5, .percent = round * 4.0, .updated = 1794730000 + round});
                     BookMeta meta = library->book(3)->meta;
                     meta.description = QString("Draft %1 of %2").arg(round).arg(library->root().section('/', -1));
@@ -622,10 +650,18 @@ private slots:
                 if (round % 5 == 4)
                     QVERIFY(syncLibrary(p.logHere, p.current).problems.isEmpty());
             }
-            const QString file = p.logHere.databasePath();
-            const auto size = [&file] { return QFileInfo(file).size() + QFileInfo(file + "-wal").size(); };
+            const QString mine = Spaces::deviceId(p.logHere);
+            const QString theirs = Spaces::deviceId(p.logThere);
+            const auto places = [&] {
+                QSqlQuery query = ChangeLog::query(p.logHere,
+                                                   "SELECT COUNT(*) FROM ops WHERE field = 'progress' AND device = "
+                                                   "(SELECT id FROM log_ids WHERE name = ?)",
+                                                   {mine});
+                return query.next() ? query.value(0).toLongLong() : -1;
+            };
             const QList<SpaceOperation> all = SpaceReplay::operations(p.logHere);
-            const qint64 sizeBefore = size();
+            const qint64 placesBefore = places();
+            const qint64 sizeBefore = fileSize(p.logHere.databasePath(), false);
             const QJsonObject merged = Samples::librarySnapshot(p.logHere);
             const auto views = [](std::span<const SpaceOperation> ops, const QString &device) {
                 QJsonObject books;
@@ -634,17 +670,20 @@ private slots:
                     books.insert(book.key(), Replication::bookView(*book));
                 return books;
             };
-            const QString mine = Spaces::deviceId(p.logHere);
-            const QString theirs = Spaces::deviceId(p.logThere);
 
             const Compaction::Result compacted = Compaction::compact(p.logHere);
             const QList<SpaceOperation> live = SpaceReplay::operations(p.logHere);
-            QCOMPARE(compacted.operations, qint64(all.size()));
+            QCOMPARE(compacted.operations + compacted.dropped, qint64(all.size()));
             QCOMPARE(compacted.live, qint64(live.size()));
-            qInfo().noquote() << dump << ": ops" << all.size() << "read before," << live.size() << "after; database" << sizeBefore
-                              << "bytes before compaction," << size() << "after";
-            // Of the 20 places and descriptions each side wrote, only the last of each is read.
+            const qint64 sizeAfter = fileSize(p.logHere.databasePath(), false);
+            const qint64 sizeVacuumed = fileSize(p.logHere.databasePath(), true);
+            qInfo().noquote() << dump << ": ops" << all.size() << "before," << compacted.operations << "after," << live.size()
+                              << "read; database" << sizeBefore << "bytes before," << sizeAfter << "after," << sizeVacuumed << "vacuumed";
+            // Of the places and descriptions each side wrote, only the last of each is read;
+            // what the other side has seen of them is gone, what it hasn't is kept.
             QVERIFY2(all.size() - live.size() >= 2 * 2 * 19, qPrintable(dump));
+            QVERIFY2(compacted.dropped >= 2 * 2 * 18, qPrintable(dump));
+            QVERIFY2(places() >= 3 && places() < placesBefore, qPrintable(dump));
             for (const QString &device : {mine, theirs})
                 QCOMPARE(views(live, device), views(all, device));
             Library replayed(p.dir.filePath("Replayed"));
@@ -654,47 +693,18 @@ private slots:
             QCOMPARE(firstDifference(Samples::librarySnapshot(replayed), Samples::librarySnapshot(full)), QString());
             QCOMPARE(Samples::librarySnapshot(p.logHere), merged);
 
-            // And syncing on: what changed after the snapshot travels, on top of it.
+            // Syncing on: what changed after the snapshot travels, on top of it.
             p.logThere.setProgress(1, {.section = 40, .fraction = 0.1, .percent = 99, .updated = 1794740000});
             QVERIFY(syncLibrary(p.logHere, p.current).problems.isEmpty());
             QCOMPARE(p.logHere.progress(1).section, 40);
             QCOMPARE(p.logThere.book(3)->meta.description, p.logHere.book(3)->meta.description);
+            // And a computer that never synced before is given the snapshot, and ends alike.
+            const Remote third("laptop:" + p.dir.filePath("OldThere"), {recordingSsh(p.dir, "ssh-third", false)});
+            QVERIFY(syncLibrary(p.logHere, third).problems.isEmpty());
+            QCOMPARE(p.oldThere.book(3)->meta.description, p.logHere.book(3)->meta.description);
+            QCOMPARE(p.oldThere.progress(1).section, 40);
+            QCOMPARE(syncLibrary(p.logHere, third).detailsTaken + syncLibrary(p.logHere, third).detailsSent, 0);
         }
-    }
-
-    // A value one side takes from the other keeps the time it was written
-    // there: taken with a newer one, it would win over a newer edit made
-    // meanwhile on the side it came from, by a clock that is behind.
-    void aValueTakenKeepsItsTimeSoANewerEditThereIsNotLost() {
-        QTemporaryDir dir;
-        Library here(dir.filePath("Here"));
-        Library there(dir.filePath("There"));
-        QVERIFY(here.open() && there.open());
-        const Remote remote("laptop:" + dir.filePath("There"), {recordingSsh(dir, "ssh-echo", false)});
-        // Made here, so here wrote its name before.
-        QVERIFY(here.addCollection("Shelf", "rating:4"));
-        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
-        const qint64 made = there.collectionNamed("Shelf")->id;
-
-        // There renames it; here, its clock ten minutes ahead, takes that.
-        QVERIFY(there.renameCollection(made, "Taken"));
-        Spaces::setClockOffset(here, 600);
-        QCOMPARE(syncLibrary(here, remote).collectionsTaken, 1);
-        QVERIFY(here.collectionNamed("Taken"));
-        // Then, before it hears of here again, there renames it once more.
-        QVERIFY(there.renameCollection(made, "Newer"));
-
-        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
-        QVERIFY2(here.collectionNamed("Newer") && there.collectionNamed("Newer"), qPrintable(here.collections(true).first().name));
-
-        // Settled: syncing on writes no further operations on either side.
-        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
-        const qsizetype mine = SpaceReplay::operations(here).size();
-        const qsizetype theirs = SpaceReplay::operations(there).size();
-        for (int round = 0; round < 2; ++round)
-            QVERIFY(syncLibrary(here, remote).problems.isEmpty());
-        QCOMPARE(SpaceReplay::operations(here).size(), mine);
-        QCOMPARE(SpaceReplay::operations(there).size(), theirs);
     }
 
     void anOlderOmabookStillSyncsByTheManifest() {

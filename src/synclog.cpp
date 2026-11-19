@@ -3,6 +3,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
+#include <algorithm>
 #include <tuple>
 
 #include "compaction.h"
@@ -30,6 +31,14 @@ namespace {
     for (const Replication::PlaceChange &change : Replication::placeChanges(library, incoming))
         books << change.book;
     return books;
+}
+
+// The last of each space and device either vector holds.
+[[nodiscard]] Replication::Vector joined(Replication::Vector one, const Replication::Vector &other) {
+    for (auto space = other.cbegin(); space != other.cend(); ++space)
+        for (auto device = space->cbegin(); device != space->cend(); ++device)
+            one[space.key()][device.key()] = std::max(one.value(space.key()).value(device.key()), device.value());
+    return one;
 }
 
 [[nodiscard]] QSet<QString> heldIn(const QJsonArray &names) {
@@ -89,6 +98,11 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
         return {.books = books, .gone = {}};
     }
     const QList<SpaceOperation> incoming = Replication::operationsFrom(answer->value("ops").toArray());
+    // They hold what they held, and now what was sent them.
+    if (!dryRun)
+        Compaction::rememberSeen(library, manifest.value("device").toString(),
+                                 joined(Replication::vectorFrom(manifest.value("vector").toObject()),
+                                        Replication::vectorFrom(request.value("vector").toObject())));
     const QList<qint64> taken = takePlaces(library, incoming, dryRun);
     summary.placesTaken += static_cast<int>(taken.size());
     summary.titles.placesTaken << titlesOf(library, taken);
@@ -120,6 +134,9 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
         Replication::link(library, Replication::booksFrom(request.value("books").toArray()));
     }
     const QList<SpaceOperation> incoming = Replication::operationsFrom(request.value("ops").toArray());
+    // What they held when they asked: whether the answer reaches them, this side can't know.
+    if (!dryRun)
+        Compaction::rememberSeen(library, request.value("device").toString(), Replication::vectorFrom(request.value("vector").toObject()));
     const QList<qint64> changed = takePlaces(library, incoming, dryRun);
     SyncSummary taken;
     taken.dryRun = dryRun;

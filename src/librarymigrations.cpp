@@ -300,12 +300,17 @@ const QList<QStringList> migrations{
      "WHERE key = 'graph'; END"},
     // Compaction (ADR 0001): per space, a snapshot of the operations that still
     // matter, up to a mark per device, and what reads the log reads that and
-    // the operations after the mark (live_ops). `ops` stays as it was written.
+    // the operations after the mark (live_ops), and the operations that are
+    // in neither and that every member has seen are dropped from `ops`.
     {"CREATE TABLE IF NOT EXISTS snapshot_ops (space INTEGER NOT NULL, device INTEGER NOT NULL, seq INTEGER NOT NULL, "
      "hlc INTEGER NOT NULL, author INTEGER NOT NULL, entity TEXT NOT NULL, id INTEGER NOT NULL, field TEXT NOT NULL DEFAULT '', "
      "value TEXT NOT NULL DEFAULT '', PRIMARY KEY (space, device, seq)) WITHOUT ROWID",
      "CREATE TABLE IF NOT EXISTS snapshot_marks (space INTEGER NOT NULL, device INTEGER NOT NULL, seq INTEGER NOT NULL, "
      "PRIMARY KEY (space, device)) WITHOUT ROWID",
+     // What each member of a space held of it when it last synced: what
+     // compaction may drop must be what every member has seen.
+     "CREATE TABLE IF NOT EXISTS member_vectors (space INTEGER NOT NULL, member TEXT NOT NULL, device INTEGER NOT NULL, "
+     "seq INTEGER NOT NULL, PRIMARY KEY (space, member, device)) WITHOUT ROWID",
      "CREATE VIEW IF NOT EXISTS live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value FROM snapshot_ops "
      "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value FROM ops AS o "
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)"},

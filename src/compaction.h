@@ -1,38 +1,45 @@
 #pragma once
 
+#include <QString>
 #include <QtTypes>
 
-class Library;
+#include "replication.h"
 
 // Compaction of the change log (ADR 0001): a snapshot of each space and the
 // operations after it.
 //
-// The log is append-only (`ops` is never rewritten nor cut: the harness
-// refuses an UPDATE or DELETE of it), so compaction does not drop
-// operations from it. It writes, per space, a snapshot (`snapshot_ops`) of
-// the operations that still matter up to a mark per device
-// (`snapshot_marks`, what the snapshot covers), and what reads the log to
-// merge or send it (Replication, SpaceReplay) reads the snapshot and the
-// operations after the mark (`live_ops`). An operation that matters is one
-// no later operation of the same device overrides: the latest of each field
-// a device wrote (whatever it wrote of it before can't win anywhere, over
-// any order: SpaceReducer), and every one of what only grows (where a thing
-// was met, a fact, a relation, a reading day, a same-as link). So merging the
-// snapshot and what came after gives what merging all of them gives, on
-// every computer, and a peer is sent no operation another one overrides.
+// Per space, a snapshot (`snapshot_ops`) of the operations that still matter
+// up to a mark per device (`snapshot_marks`, what it covers): of each field,
+// the latest a device wrote (whatever it wrote before can't win anywhere, in
+// any order: SpaceReducer), and every operation of what only grows (where a
+// thing was met, a fact, a relation, a reading day, a same-as link). What
+// merges or sends the log (Replication, SpaceReplay) reads the snapshot and
+// the operations after the mark (`live_ops`), which merge to what all of
+// them do, for every device; a peer behind the snapshot is sent the
+// snapshot. The operations the snapshot covers and leaves out are dropped
+// from `ops` (the one place that may: ops-deleted-only-by-compaction), but
+// only those every member of their space has seen, as it last said when
+// syncing (`member_vectors`), so no computer can still need one.
 namespace Compaction {
 
 struct Result {
-    qint64 operations = 0; // in `ops`
+    qint64 operations = 0; // left in `ops`
     qint64 live = 0;       // read in their place: the snapshot and what came after its marks
+    qint64 dropped = 0;    // taken out of `ops` by this compaction
 };
 
-// Writes the snapshot of every space up to now.
+// Writes the snapshot of every space up to now, and drops what it covers that
+// every member has seen. One transaction. The file keeps its size until it is
+// vacuumed, unless the library vacuums incrementally.
 Result compact(const Library &library);
 
 // Compacts when the operations after the marks outnumber the snapshot and a
 // thousand: what a sync runs after it, so reading the log stays about the
 // size of what it says.
 void compactWhenWorthIt(const Library &library);
+
+// What `member` (a computer's device id) held of the log when it synced: per
+// space and device, the last sequence number.
+void rememberSeen(const Library &library, const QString &member, const Replication::Vector &held);
 
 } // namespace Compaction

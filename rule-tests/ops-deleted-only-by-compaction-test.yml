@@ -1,0 +1,8 @@
+id: ops-deleted-only-by-compaction
+valid:
+  - 'exec("DELETE FROM log_dirty");'
+  - 'exec("DELETE FROM snapshot_ops WHERE space = ?");'
+  - 'auto q = query("SELECT seq FROM ops");'
+invalid:
+  - 'void wipe(Library &l) { l.exec("DELETE FROM ops WHERE entity = ?"); }'
+  - 'void drop(Library &l) { l.exec("delete from ops"); }'

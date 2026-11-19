@@ -97,13 +97,15 @@ The cost is the size of the change. The rows stay what the app reads; the log is
 **Compaction**: a snapshot of a space plus the operations after it. Operations every member has are
 dropped behind the snapshot. A published space's snapshot is what a share file is (#2).
 
-As built (#37): `ops` stays append-only, and nothing is dropped from it. Compaction writes, per space,
-a snapshot (`snapshot_ops`) of the operations that still matter up to a mark per device
-(`snapshot_marks`): the latest of each field a device wrote, and every operation of what only grows
-(sightings, facts, relations, reading days, same-as links). What merges or sends the log reads the
-snapshot and the operations after the mark (`live_ops`), which merge to the same state as all of
-`ops`, for every device. Dropping covered operations from `ops` itself, which is what shrinks the
-file, waits for a decision to let compaction, and only compaction, delete from the log.
+As built (#37): compaction writes, per space, a snapshot (`snapshot_ops`) of the operations that still
+matter up to a mark per device (`snapshot_marks`): the latest of each field a device wrote, and every
+operation of what only grows (sightings, facts, relations, reading days, same-as links). What merges
+or sends the log reads the snapshot and the operations after the mark (`live_ops`), which merge to the
+same state as all of them, for every device; a peer behind the snapshot is sent the snapshot. The
+operations the snapshot covers and leaves out are dropped from `ops`, but only those every member of
+their space has seen, as each said when it last synced (`member_vectors`). Compaction is the one place
+that deletes from the log (rule `ops-deleted-only-by-compaction`); nothing ever updates an operation
+(`ops-append-only`). The freed pages go back to the file at the next VACUUM.
 
 ### Transports are adapters
 
