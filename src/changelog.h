@@ -62,7 +62,7 @@ public:
     static bool setDetailsAt(Library &library, qint64 bookId, qint64 at);
     static void recordRemoval(const Library &library, const QString &key, qint64 removedAt, bool baseline = false);
 
-    // Narrow SQL access for ChangeLog and SpaceReplay.
+    // Narrow SQL access for ChangeLog, SpaceReplay and Replication.
     [[nodiscard]] static QSqlQuery query(const Library &library, const QString &sql, const QVariantList &values = {});
     static bool exec(const Library &library, const QString &sql, const QVariantList &values = {});
     [[nodiscard]] static std::expected<qint64, QString> insert(const Library &library, const QString &sql, const QVariantList &values = {});

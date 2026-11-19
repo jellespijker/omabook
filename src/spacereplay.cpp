@@ -12,6 +12,7 @@
 #include "changelog.h"
 #include "hlc.h"
 #include "library.h"
+#include "replication.h"
 #include "spacereducer.h"
 #include "spaces.h"
 
@@ -367,9 +368,11 @@ QList<SpaceOperation> SpaceReplay::operations(const Library &library) {
     return list;
 }
 
-bool SpaceReplay::apply(Library &library, std::span<const SpaceOperation> ops) {
-    const ChangeLog::Scope guard;
-    const Library::Batch batch(library);
+namespace {
+
+// Keeps operations from elsewhere in `ops`, each once, and what of each
+// space and device is now seen.
+void storeOperations(const Library &library, std::span<const SpaceOperation> ops) {
     for (const SpaceOperation &op : ops) {
         const QString space = op.space.isEmpty() ? Spaces::personalSpace(library) : op.space;
         const QString kind = space.startsWith("world:"_L1) ? u"world"_s : u"personal"_s;
@@ -390,7 +393,32 @@ bool SpaceReplay::apply(Library &library, std::span<const SpaceOperation> ops) {
                         {spaceNum, deviceNum, op.seq, Hlc::normalize(op.hlc)});
         Spaces::observeHlc(library, op.hlc);
     }
+}
+
+} // namespace
+
+bool SpaceReplay::apply(Library &library, std::span<const SpaceOperation> ops) {
+    const ChangeLog::Scope guard;
+    const Library::Batch batch(library);
+    storeOperations(library, ops);
     return replay(library);
+}
+
+QList<qint64> SpaceReplay::takePlaces(Library &library, std::span<const SpaceOperation> ops) {
+    ChangeLog::afterWrite(library);
+    const ChangeLog::Scope guard;
+    const Library::Batch batch(library);
+    storeOperations(library, ops);
+    QList<qint64> changed;
+    for (const auto &[book, place] : Replication::placeChanges(library)) {
+        ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
+                        {book, place.section, place.fraction, place.percent, place.updated});
+        // The place is the log's already, so it is no write for the log to take in.
+        ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'book' AND local_id = ?", {book});
+        changed << book;
+    }
+    ChangeLog::markLogged(library);
+    return changed;
 }
 
 bool SpaceReplay::replay(Library &library) {

@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <array>
 #include <tuple>
+#include <utility>
 
 #include "hlc.h"
 
@@ -218,11 +219,48 @@ qint64 SpaceReducer::readingHlc(const ReducedBook &book) {
     return best;
 }
 
+namespace {
+
+[[nodiscard]] bool isSameAs(const SpaceOperation &op) { return op.entity == "book"_L1 && op.field == "same_as"_L1; }
+
+// The id a group of linked ids stands for, shortening the path on the way.
+[[nodiscard]] QString rootOf(QHash<QString, QString> &parent, const QString &id) {
+    QString root = id;
+    while (parent.contains(root) && parent.value(root) != root)
+        root = parent.value(root);
+    for (QString at = id; at != root;)
+        at = std::exchange(parent[at], root);
+    return root;
+}
+
+} // namespace
+
+QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops) {
+    // Of two groups that are joined, the smaller root stays the root, so the
+    // root of every group is its smallest id, whatever the order of the links.
+    QHash<QString, QString> parent;
+    for (const SpaceOperation &op : ops) {
+        if (!isSameAs(op) || op.id.isEmpty() || op.value.isEmpty() || op.id == op.value)
+            continue;
+        const QString one = rootOf(parent, op.id);
+        const QString other = rootOf(parent, op.value);
+        parent.insert(std::max(one, other), std::min(one, other));
+        parent.insert(std::min(one, other), std::min(one, other));
+    }
+    QHash<QString, QString> canonical;
+    for (const QString &id : parent.keys())
+        canonical.insert(id, rootOf(parent, id));
+    return canonical;
+}
+
 ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) {
     ReducedState state;
+    const QHash<QString, QString> canonical = sameAs(ops);
     for (const SpaceOperation &op : ops) {
+        if (isSameAs(op))
+            continue;
         if (op.entity == "book"_L1)
-            foldBook(state.books[op.id], op);
+            foldBook(state.books[canonical.value(op.id, op.id)], op);
         else if (op.entity == "collection"_L1)
             foldCollection(state.collections[op.id], op);
         else if (op.entity == "node"_L1)

@@ -105,6 +105,12 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 [[nodiscard]] qint64 fieldHlc(const ReducedBook &book, const QString &field);
 [[nodiscard]] qint64 detailsHlc(const ReducedBook &book);
 [[nodiscard]] qint64 readingHlc(const ReducedBook &book);
+// Where two computers name one book by different ids, a same-as operation
+// (entity "book", field "same_as", the one id and the other as its value)
+// links them. Links only ever grow, so every id of a linked group stands
+// for its smallest, in any order: each linked id and the one it stands for.
+[[nodiscard]] QHash<QString, QString> sameAs(std::span<const SpaceOperation> ops);
+// Books are folded under the id their same-as links stand for.
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops);
 
 } // namespace SpaceReducer

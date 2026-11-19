@@ -22,6 +22,14 @@ public:
     // Ensures this library's personal space exists and answers its id.
     static void ensurePersonalSpace(const Library &library);
     [[nodiscard]] static QString personalSpace(const Library &library);
+    // Pairs this library with another computer's: two of one's own computers
+    // that sync already trust each other (one reaches the other over ssh),
+    // so the first replication between them makes their personal spaces one.
+    // Each knows the other's, and both keep the one with the smaller id
+    // (personalSpace), the other's device a writer of it. The operations
+    // already written in the other space stay where they are (the log is
+    // append-only) and travel and merge with the rest.
+    static void pair(const Library &library, const QString &theirSpace, const QString &theirDevice);
     // The space a graph scope belongs to: the personal space for "", and a
     // story-world space for "world:…".
     static void ensureSpaceForScope(const Library &library, const QString &scope);
