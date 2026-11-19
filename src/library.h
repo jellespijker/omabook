@@ -381,6 +381,7 @@ public:
 private:
     // The knowledge graph, schema history and spaces live in the same database.
     friend class Graph;
+    friend struct GraphCut;
     friend class LibraryMigrations;
     friend class Spaces;
     friend class ChangeLog;

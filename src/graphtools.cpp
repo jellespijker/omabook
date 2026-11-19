@@ -15,6 +15,7 @@
 #include "bookops.h"
 #include "graphcommands.h"
 #include "graphcontext.h"
+#include "graphcut.h"
 #include "graphlinks.h"
 #include "graphprint.h"
 #include "graphwalk.h"
@@ -77,7 +78,7 @@ QJsonObject GraphOps::show(Library &library, qint64 bookId, const QString &scope
     if (bookId == 0 && scope.isEmpty())
         syncWhenBooksChanged(library);
     const Graph graph(library);
-    QJsonObject answer = (bookId > 0 ? graph.ofBook(bookId, upTo) : graph.whole(scope, qMax(1, limit))).toJson();
+    QJsonObject answer = bookId > 0 ? graph.ofBook(bookId, upTo).toJson() : GraphCut::whole(library, scope, qMax(1, limit)).toJson();
     if (bookId > 0) {
         answer.insert("book", bookId);
         if (const auto built = GraphBuild::builtTo(library, bookId))
@@ -111,18 +112,18 @@ QJsonObject GraphOps::node(const Library &library, qint64 id, int depth, bool ti
         return problem(QString("There is no book %1 in the library.").arg(bookId));
     const bool bounded = bookId > 0 && upTo;
     // As a reader at that place knows it, among what they have met.
-    GraphView around;
+    GraphCut around;
     if (bounded) {
         const GraphView book = graph.ofBook(bookId, upTo);
         const auto self = std::ranges::find(book.nodes, id, &GraphNode::id);
         if (self == book.nodes.end())
             return problem(QString("Node %1 is not met in book %2 by that place.").arg(id).arg(bookId));
         found = *self;
-        around = GraphWalk::within(book, id, qBound(0, depth, 6));
+        around = GraphCut(GraphWalk::within(book, id, qBound(0, depth, 6)));
         // The node asked about first.
-        std::ranges::stable_partition(around.nodes, [id](const GraphNode &node) { return node.id == id; });
+        std::ranges::stable_partition(around.view.nodes, [id](const GraphNode &node) { return node.id == id; });
     } else {
-        around = graph.around(id, depth);
+        around = GraphCut::around(library, id, depth, 200);
     }
     QJsonArray seen;
     for (const GraphPlace &place : graph.seen(id)) {
@@ -303,10 +304,9 @@ QJsonObject GraphOps::exported(Library &library, qint64 bookId, const QString &s
 }
 
 QJsonObject GraphOps::scopes(const Library &library) {
-    const Graph graph(library);
     QJsonArray list;
-    for (const QString &scope : graph.scopes())
-        list << QJsonObject{{"scope", scope}, {"nodes", graph.whole(scope, 1000000).nodes.size()}};
+    for (const QString &scope : Graph(library).scopes())
+        list << QJsonObject{{"scope", scope}, {"nodes", GraphCut::whole(library, scope, 1).things}};
     return {{"scopes", list}};
 }
 
@@ -692,12 +692,12 @@ const bool registered = [] {
                   }});
 
     registerTool({"graph_node", "A node and what is around it",
-                  "One thing of the knowledge graph: what is known of it, the books and places it was met at, and "
-                  "the things within a few relations of it with those relations. With timeline, also when each "
-                  "thing known of it was revealed: every summary it had, every other name it was given, where it "
-                  "was met and each relation, each with its book, section and fraction and a few words of the text "
-                  "there (\"anchor\") to find the very spot; what lies past the reader's furthest place in its book "
-                  "is marked \"ahead\" and gives away what happens. With book and up_to_section, the node as a "
+                  "One thing of the knowledge graph: what is known of it, the books and places it was met at, and the nearest "
+                  "things within a few relations of it with those relations (\"total\" counts them all, \"cut\" says not all "
+                  "are answered). With timeline, also when each thing known of it was revealed: every summary it had, every "
+                  "other name it was given, where it was met and each relation, each with its book, section and fraction and "
+                  "a few words of the text there (\"anchor\") to find the very spot; what lies past the reader's furthest place "
+                  "in its book is marked \"ahead\" and gives away what happens. With book and up_to_section, the node as a "
                   "reader at that place knows it, and nothing later.",
                   schema({{"id", nodeNumber}, {"depth", integer("How many relations away to go; 1 when not given.", 0)},
                           {"timeline", boolean("Also when each thing known of it was revealed, and where.")},
@@ -746,8 +746,8 @@ const bool registered = [] {
                   }, true});
 
     registerTool({"graph_scope", "A whole graph",
-                  "A whole graph, the most connected things first: the general graph of everything read, or a scope "
-                  "of its own (a made-up world a plugin keeps). For one book use graph_book.",
+                  "A whole graph, the most connected things first (\"total\" counts them all, \"cut\" says not all are answered): the "
+                  "general graph of everything read, or a scope of its own (a made-up world a plugin keeps). For one book use graph_book.",
                   schema({{"scope", string("The scope, such as world:42; the general graph when not given.")},
                           {"limit", integer("The most nodes to answer; 500 when not given.", 1)}}),
                   ReadOnly, [](const QJsonObject &arguments) {

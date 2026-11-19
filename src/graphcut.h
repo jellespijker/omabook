@@ -1,0 +1,45 @@
+#pragma once
+
+#include <QJsonObject>
+#include <QString>
+#include <QtTypes>
+
+#include "graph.h"
+#include "library.h"
+
+// A view of the graph cut at a limit, and how much it was cut from: a whole
+// scope, its most connected things first, or what is around a thing, the
+// nearest first. Neither loads more than it shows. How much there is besides
+// is counted in the storage, and only when the view came to its limit, so
+// that a window, a command or an agent can say "2,000 of 6,965 things"
+// rather than pass a part off as the whole.
+struct GraphCut {
+    // How the things shown were picked when not all of them could be.
+    enum class By { Connected, Nearest };
+
+    GraphView view;
+    // In the whole the view was cut from: the view's own counts when
+    // nothing was left out.
+    qint64 things = 0, relations = 0;
+    By by = By::Connected;
+
+    GraphCut() = default;
+    // A view of which nothing was left out.
+    explicit GraphCut(GraphView whole);
+
+    [[nodiscard]] bool cut() const noexcept { return view.nodes.size() < things; }
+    // The view's JSON, with "total": {"nodes", "edges"} of the whole and,
+    // when it was cut, "cut": "most connected" or "nearest".
+    [[nodiscard]] QJsonObject toJson() const;
+
+    // Graph::whole, with the scope's things and the relations among them.
+    [[nodiscard]] static GraphCut whole(const Library &library, const QString &scope, int limit);
+    // Graph::around, with what is within `depth` relations of the node.
+    // Where the library's sides are apart (BookSides), the count goes along
+    // no connection across books, so it never says more was left out than was.
+    [[nodiscard]] static GraphCut around(const Library &library, qint64 node, int depth, int limit);
+
+private:
+    // The relations among a scope's things, as Graph answers them.
+    [[nodiscard]] static qint64 relationsIn(const Library &library, const Graph &graph, const QString &scope);
+};

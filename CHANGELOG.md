@@ -18,6 +18,9 @@ moves those lines under its version.
 ### Added
 
 - A book the search found by what is known of it says which thing found it on the shelf too, not only in the details: along the foot of its cover in the covers and the carousel, on the book pulled out of the spines, and after its title in the list (*Mara Venn (Character)*), by the name you know it by at your place in the book. A thing of a graph someone shared carries the mark of a shared graph, and says whose to a screen reader (#10).
+### Fixed
+
+- The graph of everything read, in a library with more than the 2,000 things the window draws at once, no longer passes them off as all there is: its header says how many there are, `2,000 of 6,965 things · 8,685 of 17,192 relations`, and a word over the picture says the most connected are shown and that finding a thing, centring on one or picking a book under *Filter* reaches the rest. Centred on a thing, past the 400 nearest it says so the same way. `omabook graph show` and `omabook graph node` (and the MCP tools `graph_scope` and `graph_node`) answer a `"total"` of nodes and edges, and a `"cut"` when not all are answered, which the plain output says on its last line; `omabook graph scopes` counts each scope's things without loading them (#64).
 
 ## [0.1.6.1] - 2026-11-19
 

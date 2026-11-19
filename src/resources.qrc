@@ -34,9 +34,11 @@
         <file alias="LibraryView.qml">LibraryView.qml</file>
         <file alias="BookTaps.qml">BookTaps.qml</file>
         <file alias="Glyph.qml">Glyph.qml</file>
+        <file alias="GraphCount.qml">GraphCount.qml</file>
         <file alias="GraphDetails.qml">GraphDetails.qml</file>
         <file alias="GraphEdit.qml">GraphEdit.qml</file>
         <file alias="GraphKind.qml">GraphKind.qml</file>
+        <file alias="GraphNote.qml">GraphNote.qml</file>
         <file alias="GraphPalette.qml">GraphPalette.qml</file>
         <file alias="GraphPane.qml">GraphPane.qml</file>
         <file alias="GraphWords.qml">GraphWords.qml</file>

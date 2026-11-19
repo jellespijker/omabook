@@ -1522,5 +1522,21 @@
   "On all your computers": "Op al je computers",
   "A sync between your own computers carries the shared spaces you are in and the collections you subscribed to, sealed to you: subscribe or join on one, and the next sync brings it to the others. Unsubscribing on one unsubscribes them all.": "Een synchronisatie tussen je eigen computers neemt de gedeelde ruimtes waarin je zit en de collecties waarop je geabonneerd bent mee, verzegeld voor jou: abonneer je of doe mee op één, en de volgende synchronisatie brengt het naar de andere. Op één het abonnement opzeggen zegt het op allemaal op.",
   "Removing a member": "Een lid verwijderen",
-  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Wie je uit een gedeelde ruimte verwijdert, verandert de sleutel ervan. De leden die blijven krijgen de nieuwe, en wat de verwijderde daarna schrijft wordt geweigerd, ook als die het van eerder dateert. Een synchronisatie brengt elke sleutel die de ruimte heeft gehad naar je andere computers, zodat wat eerder geschreven is daar leesbaar blijft."
+  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Wie je uit een gedeelde ruimte verwijdert, verandert de sleutel ervan. De leden die blijven krijgen de nieuwe, en wat de verwijderde daarna schrijft wordt geweigerd, ook als die het van eerder dateert. Een synchronisatie brengt elke sleutel die de ruimte heeft gehad naar je andere computers, zodat wat eerder geschreven is daar leesbaar blijft.",
+  "%1 of %Ln things": {
+    "one": "%1 van %Ln ding",
+    "other": "%1 van %Ln dingen"
+  },
+  "%1 of %Ln relations": {
+    "one": "%1 van %Ln relatie",
+    "other": "%1 van %Ln relaties"
+  },
+  "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.": {
+    "one": "Het %Ln meest verbonden ding staat erin. Zoek een ding, zet er een in het midden of kies een boek onder Filteren voor de rest.",
+    "other": "De %Ln meest verbonden dingen staan erin. Zoek een ding, zet er een in het midden of kies een boek onder Filteren voor de rest."
+  },
+  "The %Ln nearest things are shown. Centre on one of them to see further.": {
+    "one": "Het %Ln dichtstbijzijnde ding staat erin. Zet het in het midden om verder te kijken.",
+    "other": "De %Ln dichtstbijzijnde dingen staan erin. Zet er een in het midden om verder te kijken."
+  }
 }

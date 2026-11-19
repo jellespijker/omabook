@@ -29,6 +29,14 @@
   "%1 needs a newer Omabook than this": "%1 needs a newer Omabook than this",
   "%1 new, %2 updated, %3 unchanged, %4 kept as they are here.": "%1 new, %2 updated, %3 unchanged, %4 kept as they are here.",
   "%1 of %2": "%1 of %2",
+  "%1 of %Ln relations": {
+    "one": "%1 of %Ln relation",
+    "other": "%1 of %Ln relations"
+  },
+  "%1 of %Ln things": {
+    "one": "%1 of %Ln thing",
+    "other": "%1 of %Ln things"
+  },
   "%1 on %2": "%1 on %2",
   "%1 or more": "%1 or more",
   "%1 px": "%1 px",
@@ -1212,6 +1220,14 @@
   "That one works on the shelf.": "That one works on the shelf.",
   "That one works while a book is open.": "That one works while a book is open.",
   "That picture can't be used as a cover.": "That picture can't be used as a cover.",
+  "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.": {
+    "one": "The most connected thing is shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.",
+    "other": "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest."
+  },
+  "The %Ln nearest things are shown. Centre on one of them to see further.": {
+    "one": "The nearest thing is shown. Centre on it to see further.",
+    "other": "The %Ln nearest things are shown. Centre on one of them to see further."
+  },
   "The AI companion": "The AI companion",
   "The AI is answering about your library…": "The AI is answering about your library…",
   "The AI is answering…": "The AI is answering…",

@@ -1522,5 +1522,21 @@
   "On all your computers": "Auf all deinen Computern",
   "A sync between your own computers carries the shared spaces you are in and the collections you subscribed to, sealed to you: subscribe or join on one, and the next sync brings it to the others. Unsubscribing on one unsubscribes them all.": "Ein Abgleich zwischen deinen eigenen Computern nimmt die geteilten Bereiche, in denen du bist, und die Sammlungen, die du abonniert hast, mit, für dich versiegelt: abonniere oder tritt auf einem bei, und der nächste Abgleich bringt es zu den anderen. Das Abo auf einem zu beenden beendet es auf allen.",
   "Removing a member": "Ein Mitglied entfernen",
-  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Wer jemanden aus einem geteilten Raum entfernt, ändert dessen Schlüssel. Die Mitglieder, die bleiben, bekommen den neuen, und was die entfernte Person danach schreibt, wird abgelehnt, auch wenn sie es früher datiert. Ein Abgleich bringt jeden Schlüssel, den der Raum hatte, auf deine anderen Computer, damit dort lesbar bleibt, was vorher geschrieben wurde."
+  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Wer jemanden aus einem geteilten Raum entfernt, ändert dessen Schlüssel. Die Mitglieder, die bleiben, bekommen den neuen, und was die entfernte Person danach schreibt, wird abgelehnt, auch wenn sie es früher datiert. Ein Abgleich bringt jeden Schlüssel, den der Raum hatte, auf deine anderen Computer, damit dort lesbar bleibt, was vorher geschrieben wurde.",
+  "%1 of %Ln things": {
+    "one": "%1 von %Ln Ding",
+    "other": "%1 von %Ln Dingen"
+  },
+  "%1 of %Ln relations": {
+    "one": "%1 von %Ln Beziehung",
+    "other": "%1 von %Ln Beziehungen"
+  },
+  "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.": {
+    "one": "Gezeigt wird das %Ln am meisten verbundene Ding. Such ein Ding, stell eins in die Mitte oder wähl unter Filtern ein Buch, um den Rest zu erreichen.",
+    "other": "Gezeigt werden die %Ln am meisten verbundenen Dinge. Such ein Ding, stell eins in die Mitte oder wähl unter Filtern ein Buch, um den Rest zu erreichen."
+  },
+  "The %Ln nearest things are shown. Centre on one of them to see further.": {
+    "one": "Gezeigt wird das %Ln nächste Ding. Stell es in die Mitte, um weiter zu sehen.",
+    "other": "Gezeigt werden die %Ln nächsten Dinge. Stell eins davon in die Mitte, um weiter zu sehen."
+  }
 }

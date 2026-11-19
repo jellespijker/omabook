@@ -6,7 +6,7 @@
   },
   "files": {
     "src/GraphDetails.qml": 717,
-    "src/GraphPane.qml": 1073,
+    "src/GraphPane.qml": 1064,
     "src/HelpOverlay.qml": 590,
     "src/LibraryView.qml": 826,
     "src/PluginDetail.qml": 597,
@@ -25,7 +25,7 @@
     "src/graph.cpp": 1001,
     "src/graphbuilder.cpp": 697,
     "src/graphcanvas.cpp": 620,
-    "src/graphmodel.cpp": 963,
+    "src/graphmodel.cpp": 961,
     "src/graphtools.cpp": 885,
     "src/hardcover.cpp": 564,
     "src/librarian.cpp": 558,

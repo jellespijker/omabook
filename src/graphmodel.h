@@ -10,6 +10,7 @@
 #include <optional>
 
 #include "graph.h"
+#include "graphcut.h"
 #include "graphlayout.h"
 
 class Backend;
@@ -61,6 +62,12 @@ class GraphBrowser : public QObject {
     // is something a book told rather than the library's own (a book, an
     // author, a series, a tag).
     Q_PROPERTY(int knownCount READ knownCount NOTIFY changed)
+    // A whole scope, or what is around its centre, is cut at a limit: how
+    // many things and relations there are in what it was cut from, and how
+    // the ones shown were picked ("connected", "nearest"; "" when it is whole).
+    Q_PROPERTY(int wholeCount READ wholeCount NOTIFY changed)
+    Q_PROPERTY(int wholeEdges READ wholeEdges NOTIFY changed)
+    Q_PROPERTY(QString cut READ cut NOTIFY changed)
     // In a book's graph cut off at the reader's place: how many things are
     // known of it beyond that place.
     Q_PROPERTY(int hiddenCount READ hiddenCount NOTIFY changed)
@@ -140,6 +147,9 @@ public:
     int nodeCount() const noexcept { return int(m_shown.size()); }
     int edgeCount() const noexcept { return int(m_links.size()); }
     int knownCount() const noexcept { return m_knownCount; }
+    int wholeCount() const noexcept { return m_wholeCount; }
+    int wholeEdges() const noexcept { return m_wholeEdges; }
+    QString cut() const { return m_cut; }
     int hiddenCount() const noexcept { return m_hiddenCount; }
     // Shows all that is known of the book, past the reader's place too.
     Q_INVOKABLE void showWhole();
@@ -256,8 +266,11 @@ private:
     const Library *library() const;
     // Where a book's reader is, or nothing when the book is finished.
     std::optional<GraphPlace> placeIn(const Book &book) const;
-    // What may be shown at all, before the centre and the filters.
-    GraphView allowed() const;
+    // What may be shown at all, before the centre and the filters, and how
+    // much it was cut from.
+    GraphCut allowed() const;
+    // Shows what allowed() answered, and keeps how much it was cut from.
+    void take(GraphCut base);
     // Nodes as they may be shown without a warning: as far as each book was
     // read (see GraphContext::unspoiled).
     QList<GraphNode> unspoiled(QList<GraphNode> nodes) const;
@@ -286,6 +299,9 @@ private:
     // The graph before the kinds are filtered, for a node's relations and
     // the search, which the toggles don't narrow.
     GraphView m_base;
+    // What m_base was cut from (see GraphCut).
+    int m_wholeCount = 0, m_wholeEdges = 0;
+    QString m_cut;
     QList<Shown> m_shown;
     QList<Link> m_links;
     QHash<qint64, int> m_index;

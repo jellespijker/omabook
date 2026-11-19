@@ -1591,5 +1591,25 @@
   "On all your computers": "Sur tous vos ordinateurs",
   "A sync between your own computers carries the shared spaces you are in and the collections you subscribed to, sealed to you: subscribe or join on one, and the next sync brings it to the others. Unsubscribing on one unsubscribes them all.": "Une synchronisation entre vos propres ordinateurs emporte les espaces partagés dont vous êtes membre et les collections que vous suivez, scellés pour vous : abonnez-vous ou rejoignez sur l’un, et la synchronisation suivante l’apporte aux autres. Ne plus suivre sur l’un, c’est ne plus suivre sur tous.",
   "Removing a member": "Retirer un membre",
-  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Retirer quelqu'un d'un espace partagé en change la clé. Les membres qui restent reçoivent la nouvelle, et ce que la personne retirée écrit ensuite est refusé, même daté d'avant. Une synchronisation apporte toutes les clés que l'espace a eues à vos autres ordinateurs, pour que ce qui a été écrit avant y reste lisible."
+  "Removing someone from a shared space changes its key. The members who stay get the new one, and what the one removed writes after is refused, even when they date it before. A sync brings every key the space has had to your other computers, so what was written before stays readable there.": "Retirer quelqu'un d'un espace partagé en change la clé. Les membres qui restent reçoivent la nouvelle, et ce que la personne retirée écrit ensuite est refusé, même daté d'avant. Une synchronisation apporte toutes les clés que l'espace a eues à vos autres ordinateurs, pour que ce qui a été écrit avant y reste lisible.",
+  "%1 of %Ln things": {
+    "many": "%1 sur %Ln d’éléments",
+    "one": "%1 sur %Ln élément",
+    "other": "%1 sur %Ln éléments"
+  },
+  "%1 of %Ln relations": {
+    "many": "%1 sur %Ln de relations",
+    "one": "%1 sur %Ln relation",
+    "other": "%1 sur %Ln relations"
+  },
+  "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.": {
+    "many": "Les %Ln d’éléments les plus reliés sont affichés. Cherchez un élément, centrez-vous sur l’un d’eux ou choisissez un livre dans Filtrer pour atteindre le reste.",
+    "one": "L’élément le plus relié est affiché. Cherchez un élément, centrez-vous sur l’un d’eux ou choisissez un livre dans Filtrer pour atteindre le reste.",
+    "other": "Les %Ln éléments les plus reliés sont affichés. Cherchez un élément, centrez-vous sur l’un d’eux ou choisissez un livre dans Filtrer pour atteindre le reste."
+  },
+  "The %Ln nearest things are shown. Centre on one of them to see further.": {
+    "many": "Les %Ln d’éléments les plus proches sont affichés. Centrez-vous sur l’un d’eux pour voir plus loin.",
+    "one": "L’élément le plus proche est affiché. Centrez-vous sur lui pour voir plus loin.",
+    "other": "Les %Ln éléments les plus proches sont affichés. Centrez-vous sur l’un d’eux pour voir plus loin."
+  }
 }

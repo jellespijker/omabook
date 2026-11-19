@@ -11,5 +11,8 @@ namespace GraphWalk {
 // The nodes within `depth` edges of one, in the view's order, and the edges
 // among them.
 [[nodiscard]] GraphView within(const GraphView &view, qint64 centre, int depth);
+// Views laid over each other, as a series is its books' graphs: each node and
+// each edge once, in the order they first come.
+[[nodiscard]] GraphView together(const QList<GraphView> &views);
 
 } // namespace GraphWalk

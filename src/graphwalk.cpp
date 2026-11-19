@@ -25,3 +25,22 @@ GraphView GraphWalk::within(const GraphView &view, qint64 centre, int depth) {
             near.edges << edge;
     return near;
 }
+
+GraphView GraphWalk::together(const QList<GraphView> &views) {
+    GraphView all;
+    QSet<qint64> nodes;
+    QSet<qint64> edges;
+    for (const GraphView &view : views) {
+        for (const GraphNode &node : view.nodes)
+            if (!nodes.contains(node.id)) {
+                nodes << node.id;
+                all.nodes << node;
+            }
+        for (const GraphEdge &edge : view.edges)
+            if (!edges.contains(edge.id)) {
+                edges << edge.id;
+                all.edges << edge;
+            }
+    }
+    return all;
+}

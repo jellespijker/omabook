@@ -341,23 +341,11 @@ FocusScope {
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
             }
-            Label {
+            GraphCount {
                 objectName: "graphCount"
                 Layout.fillWidth: true
-                // "38 things · 52 relations", or "12 of 38" when some are left out.
-                text: {
-                    translator.language
-                    if (graph.knownCount === 0) return ""
-                    if (graph.nodeCount < graph.knownCount)
-                        return qsTr("%1 of %2").arg(graph.nodeCount.toLocaleString(Qt.locale(), 'f', 0))
-                                               .arg(graph.knownCount.toLocaleString(Qt.locale(), 'f', 0))
-                    return qsTr("%Ln things", "", graph.nodeCount) + (pane.compact ? "" : " · " + qsTr("%Ln relations", "", graph.edgeCount))
-                }
-                color: theme.colors.muted
-                elide: Text.ElideRight
-                // Whole or not at all: a count cut to "4…" says nothing,
-                // and the kinds under it carry the same numbers.
-                opacity: width >= implicitWidth - 1 ? 1 : 0
+                browser: graph
+                compact: pane.compact
             }
             // Some of what is known lies past the place the book was left.
             AppButton {
@@ -893,23 +881,26 @@ FocusScope {
                 elide: Text.ElideRight
             }
             // The library's graph before anything was read into it.
-            Label {
+            GraphNote {
+                id: grows
                 objectName: "graphGrows"
+                picture: canvas
                 visible: !pane.reading && graph.showing === "scope" && graph.scope === "" && graph.knownCount > 0 && !graph.storied
                          && !pane.listing
                          // Over a picture with room under it, not on top of a small one.
                          && canvas.height >= pane.pictureFloor
-                anchors.horizontalCenter: canvas.horizontalCenter
                 anchors.top: parent.top
-                anchors.topMargin: 4
-                width: Math.min(canvas.width - 32, 560)
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.Wrap
-                // No more of it than a small picture has room for over itself.
-                maximumLineCount: Math.max(1, Math.min(4, Math.floor((canvas.height - 8) / 18)))
-                elide: Text.ElideRight
-                color: theme.colors.muted
                 text: qsTr("These are your books, their authors, series and tags. The people, places and ideas in them join as you read, with the knowledge graph switched on in the settings.")
+            }
+            // A picture cut at a limit says how, and how to reach the rest.
+            GraphNote {
+                objectName: "graphCut"
+                picture: canvas
+                visible: !pane.reading && graph.cut !== "" && !pane.listing && canvas.height >= pane.pictureFloor
+                anchors.top: grows.visible ? grows.bottom : parent.top
+                text: graph.cut === "nearest"
+                      ? qsTr("The %Ln nearest things are shown. Centre on one of them to see further.", "", graph.knownCount)
+                      : qsTr("The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.", "", graph.knownCount)
             }
 
             // Nothing to show says why, and how the graph comes to be: in

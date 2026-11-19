@@ -55,6 +55,18 @@ void GraphPrint::printView(const QJsonObject &view) {
                           .arg(names.value(edge.value("source").toInteger()), edge.value("kind").toString(),
                                names.value(edge.value("target").toInteger())));
     }
+    // Cut at a limit, it says so: how many there are in all, and how to reach the rest.
+    if (const QString cut = view.value("cut").toString(); !cut.isEmpty()) {
+        const QJsonObject total = view.value("total").toObject();
+        print(stdout, QString("\nShown: the %1 %2 of %3 things, and %4 of %5 relations. %6")
+                          .arg(view.value("nodes").toArray().size())
+                          .arg(cut)
+                          .arg(total.value("nodes").toInteger())
+                          .arg(view.value("edges").toArray().size())
+                          .arg(total.value("edges").toInteger())
+                          .arg(cut == "nearest" ? "Look around one of them with: omabook graph node <id>"
+                                                : "Ask for more with --limit, or look around one thing with: omabook graph node <id>"));
+    }
     // A graph someone shared, after one's own and apart from it.
     for (const auto &value : view.value("layers").toArray()) {
         const QJsonObject layer = value.toObject();

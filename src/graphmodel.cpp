@@ -174,7 +174,7 @@ QList<GraphNode> GraphBrowser::unspoiled(QList<GraphNode> nodes) const {
     return nodes;
 }
 
-GraphView GraphBrowser::allowed() const {
+GraphCut GraphBrowser::allowed() const {
     const Library *books = library();
     if (!books)
         return {};
@@ -205,36 +205,34 @@ GraphView GraphBrowser::allowed() const {
                 in.kind = "appears in";
                 view.edges << in;
             }
-        return view;
+        return GraphCut(std::move(view));
     }
     if (m_what == What::Scope)
-        return m_centre > 0 && m_depth > 0 ? graph.around(m_centre, m_depth, 400) : graph.whole(m_scope, 2000);
+        return m_centre > 0 && m_depth > 0 ? GraphCut::around(*books, m_centre, m_depth, 400) : GraphCut::whole(*books, m_scope, 2000);
     // A book's graph, with the graphs someone shared as far as its reader has
     // read it, however much of it is shown (GraphContext::layers).
     if (m_what == What::Book)
-        return GraphLayers::with(graph.ofBook(m_bookId, m_upTo), GraphContext::layers(*books, m_upTo), m_bookId);
+        return GraphCut(GraphLayers::with(graph.ofBook(m_bookId, m_upTo), GraphContext::layers(*books, m_upTo), m_bookId));
     // A series, or a collection, is its books' graphs laid over each other.
-    GraphView all;
-    QSet<qint64> nodes, edges;
+    QList<GraphView> each;
     const QList<GraphLayers::Layer> layers = GraphContext::layers(*books);
     const auto collection = m_what == What::Collection ? books->collectionNamed(m_series) : std::nullopt;
     for (const Book &book : books->books()) {
         if (m_what == What::Collection ? !collection || !collection->contains(book)
                                        : book.meta.series.compare(m_series, Qt::CaseInsensitive) != 0)
             continue;
-        const GraphView one = GraphLayers::with(graph.ofBook(book.id, placeIn(book)), layers, book.id);
-        for (const GraphNode &node : one.nodes)
-            if (!nodes.contains(node.id)) {
-                nodes << node.id;
-                all.nodes << node;
-            }
-        for (const GraphEdge &edge : one.edges)
-            if (!edges.contains(edge.id)) {
-                edges << edge.id;
-                all.edges << edge;
-            }
+        each << GraphLayers::with(graph.ofBook(book.id, placeIn(book)), layers, book.id);
     }
-    return all;
+    return GraphCut(GraphWalk::together(each));
+}
+
+void GraphBrowser::take(GraphCut base) {
+    m_wholeCount = static_cast<int>(base.things);
+    m_wholeEdges = static_cast<int>(base.relations);
+    m_cut.clear();
+    if (base.cut())
+        m_cut = base.by == GraphCut::By::Nearest ? "nearest" : "connected";
+    m_base = std::move(base.view);
 }
 
 void GraphBrowser::show(What what) {
@@ -316,11 +314,11 @@ void GraphBrowser::load(bool keepPlaces) {
     for (const Link &link : std::as_const(m_links))
         edgesBefore << link.edge.id;
 
-    m_base = allowed();
+    take(allowed());
     // A centre that is gone (removed, merged away) is no centre.
     if (m_centre != 0 && !std::ranges::contains(m_base.nodes, m_centre, &GraphNode::id)) {
         m_centre = 0;
-        m_base = allowed();
+        take(allowed());
     }
     // A book cut at its reader's place is as it was known there already;
     // anything shown whole says of each thing only what its reader has
