@@ -622,9 +622,9 @@ void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) 
 }
 
 void Backend::remove(qint64 id) {
-    QString error;
-    if (m_library && !m_library->remove(id, &error))
-        say(error);
+    if (m_library)
+        if (const auto removed = m_library->remove(id); !removed)
+            say(removed.error());
     reload();
 }
 

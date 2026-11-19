@@ -155,11 +155,11 @@ void takeRemovals(Taking &taking, const QList<Book> &books) {
         taking.gone.insert(here.id);
         if (!std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(taking.library, here), *when)))
             continue;
-        QString error;
-        if (taking.peer.dryRun || taking.library.remove(here.id, &error, Hlc::seconds(*when)))
+        const auto removed = taking.peer.dryRun ? std::expected<void, QString>() : taking.library.remove(here.id, Hlc::seconds(*when));
+        if (removed)
             note(taking.summary.removedHere, taking.summary.titles.removedHere, here.meta.title);
         else
-            taking.summary.problems << here.meta.title + " could not be removed here: " + error;
+            taking.summary.problems << here.meta.title + " could not be removed here: " + removed.error();
     }
 }
 

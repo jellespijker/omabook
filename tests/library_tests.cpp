@@ -166,9 +166,8 @@ private slots:
         QVERIFY(!library.book(id));
         QCOMPARE(library.progress(id).section, 0);
         QVERIFY(QFile::exists(dir.filePath("a.epub")));
-        QString error;
-        QVERIFY(!library.remove(id, &error));
-        QVERIFY(!error.isEmpty());
+        const auto again = library.remove(id);
+        QVERIFY(!again && !again.error().isEmpty());
     }
 
     void aCalibreLibraryComesWithCalibresOwnDetails() {

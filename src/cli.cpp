@@ -631,8 +631,8 @@ int remove(const QStringList &arguments) {
         return 1;
     QString error;
     const auto library = command.library(&error);
-    if (!library || !library->remove(command.argument(0).toLongLong(), &error))
-        return fail(error);
+    if (const auto removed = library ? library->remove(command.argument(0).toLongLong()) : std::unexpected(error); !removed)
+        return fail(removed.error());
     if (command.json())
         printJson(QJsonObject{{"removed", command.argument(0).toLongLong()}});
     return 0;

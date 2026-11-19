@@ -491,11 +491,10 @@ public:
     Q_INVOKABLE bool libraryRemove(double id) {
         Library *library = this->library(true);
         const auto book = own(library, id, "removed");
-        QString error;
         if (!book)
             return false;
-        if (!library->remove(book->id, &error)) {
-            p->m_engine.throwError(error);
+        if (const auto removed = library->remove(book->id); !removed) {
+            p->m_engine.throwError(removed.error());
             return false;
         }
         emit p->touchedLibrary();

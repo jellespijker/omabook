@@ -620,10 +620,10 @@ qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) 
     return called != all.end() ? called->id : 0;
 }
 
-bool Library::remove(qint64 id, QString *error, std::optional<qint64> at) { // ast-grep-ignore: prefer-expected-over-error-out-param
+std::expected<void, QString> Library::remove(qint64 id, std::optional<qint64> at) {
     const QString folder = bookFolder(id);
     if (folder.isEmpty())
-        return failed(error, QString("There is no book %1.").arg(id));
+        return std::unexpected(QString("There is no book %1.").arg(id));
     const Batch batch(*this);
     const QList<FormatFile> formats = formatFiles(id);
     // A file another book holds too (the one a merge kept took it over)
@@ -638,9 +638,9 @@ bool Library::remove(qint64 id, QString *error, std::optional<qint64> at) { // a
     // To the trash, where a mistake can be undone; a filesystem with no
     // trash gets the folder removed, since the user asked for it to go.
     if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively())
-        return failed(error, "The book's folder can't be removed: " + folder);
+        return std::unexpected("The book's folder can't be removed: " + folder);
     QDir().rmdir(QFileInfo(folder).absolutePath()); // the author's folder, when it is now empty
-    return exec("DELETE FROM books WHERE id = ?", {id});
+    return insert("DELETE FROM books WHERE id = ?", {id}).transform([](qint64) {}); // what the database said, when it failed
 }
 
 QList<Book> Library::books(const QString &query) const {
@@ -932,8 +932,8 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
             exec("DELETE FROM graph_nodes WHERE id = ?", {node});
         }
     }
-    if (!remove(other, error))
-        return false;
+    if (const auto removed = remove(other); !removed)
+        return failed(error, removed.error());
     // The node says what the book is now: its status, stars and formats.
     Graph(*this).bookNode(keep);
     return true;

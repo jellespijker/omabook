@@ -578,9 +578,8 @@ QList<Tool> coreTools() {
                       if (!at)
                           return Result::fail(at.error);
                       const QString title = at.library->book(at.id)->meta.title;
-                      QString error;
-                      if (!at.library->remove(at.id, &error))
-                          return Result::fail(error);
+                      if (const auto removed = at.library->remove(at.id); !removed)
+                          return Result::fail(removed.error());
                       return Result::ok({{"removed", at.id}, {"title", title}});
                   }};
 

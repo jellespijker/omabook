@@ -254,13 +254,13 @@ void OlderPeer::removeHere(const Sync &sync, const Book &book, const QStringList
     });
     if (!sync.current || !when || !std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(sync.library, book), *when)))
         return;
-    QString error;
-    if (sync.options.dryRun || sync.library.remove(book.id, &error)) {
+    const auto removed = sync.options.dryRun ? std::expected<void, QString>() : sync.library.remove(book.id);
+    if (removed) {
         note(sync.summary.removedHere, sync.summary.titles.removedHere, book.meta.title);
         if (!sync.options.dryRun)
             qCInfo(lcSync).noquote() << "book" << book.id << "removed here, as it was on" << sync.remote.host();
     } else {
-        sync.summary.problems << book.meta.title + " could not be removed here: " + error;
+        sync.summary.problems << book.meta.title + " could not be removed here: " + removed.error();
     }
 }
 
