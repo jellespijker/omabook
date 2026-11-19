@@ -6,6 +6,7 @@
 #include <QJsonObject>
 #include <QSet>
 #include <QSqlQuery>
+#include <QStringList>
 #include <QVariant>
 #include <algorithm>
 #include <utility>
@@ -211,19 +212,32 @@ void logGoneBook(const Library &library, const QString &gid) {
         ChangeLog::append(library, {Spaces::personalSpace(library), u"book"_s, gid, u"removed"_s, gid.mid(2), Spaces::tickHlc(library)});
 }
 
+// A book this computer had rows of and has no more, found on opening: its
+// tombstone, unless this computer already said it removed it (a word since
+// that it is back is another computer's, and the next sync brings it here).
+void logLostBook(const Library &library, const QString &gid) {
+    const FieldMap existing = ChangeLogFields::logged(library, u"book"_s, gid);
+    const auto removed = existing.constFind(u"removed"_s);
+    const bool saidHere = removed != existing.cend() && removed->own && !removed->own->isEmpty() && *removed->own != "0"_L1;
+    if (!saidHere)
+        logGoneBook(library, gid);
+}
+
 void detectDeletedBooks(const Library &library) {
-    QSet<QString> currentBooks;
-    for (QSqlQuery query = ChangeLog::query(library, "SELECT id FROM books"); query.next();)
-        currentBooks.insert(Spaces::bookId(library, query.value(0).toLongLong()));
     for (const Library::Removal &removal : library.removals())
         ChangeLog::recordRemoval(library, removal.key, removal.at, false);
+    // Only the books whose rows this computer had (it gave them their ids,
+    // which stay when a row goes), never every book the log knows: one the
+    // log knows only from another computer (its file never came, or it came
+    // after the copy of this library that was put back) was never removed
+    // here, and the next sync brings it (#61).
+    QStringList lost;
     for (QSqlQuery query = ChangeLog::query(
-             library, "SELECT DISTINCT i.name FROM live_ops AS o JOIN log_ids AS i ON i.id = o.id WHERE o.entity = 'book'");
-         query.next();) {
-        const QString gid = query.value(0).toString();
-        if (!currentBooks.contains(gid))
-            logGoneBook(library, gid);
-    }
+             library, "SELECT global_id FROM global_ids WHERE entity = 'book' AND local_id NOT IN (SELECT id FROM books)");
+         query.next();)
+        lost << query.value(0).toString();
+    for (const QString &gid : std::as_const(lost))
+        logLostBook(library, gid);
 }
 
 // Takes the rows a write touched into the log, each as reconcile would.
