@@ -10,8 +10,8 @@ class Library;
 // #7), as this library knows it: the place a space published here was last
 // sent to, so that sending it again updates that place rather than making
 // another, and the place a subscription follows, so that it can be checked
-// for a newer version. Kept in `space_links`, this library's own: it never
-// travels, as a subscription doesn't.
+// for a newer version. Kept in `space_links`, this library's own; the place
+// a subscription follows goes with it to one's other computers (SpaceCarry, #51).
 //
 // A transport is named by its own word ("github", "folder") and an address
 // is whatever that transport goes by; nothing here reads either.

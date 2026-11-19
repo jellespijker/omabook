@@ -32,7 +32,10 @@ class Library;
 // shown beside it as far as they have read each book (GraphContext::layers,
 // #5). Copying chosen things of it into their own graph is for
 // later. Unsubscribing drops the layer and keeps the collection, with the
-// books and wishlist entries it holds: those are the subscriber's own.
+// books and wishlist entries it holds: those are the subscriber's own. Both
+// are the person's, not the computer's: subscribing on one of their
+// computers subscribes the others at their next sync with it, and
+// unsubscribing unsubscribes them (SubscribedSpace::follow, SpaceCarry; #51).
 namespace Subscriptions {
 
 struct Options {

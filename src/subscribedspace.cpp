@@ -151,6 +151,27 @@ bool SubscribedSpace::isSubscribed(const Library &library, const QString &space)
     return query.next();
 }
 
+void SubscribedSpace::follow(const Library &library, const QString &space, bool followed) {
+    ChangeLog::append(library, {.space = {},
+                                .entity = u"subscription"_s,
+                                .id = space,
+                                .field = u"followed"_s,
+                                .value = followed ? u"1"_s : u"0"_s,
+                                .hlc = std::nullopt});
+}
+
+std::optional<bool> SubscribedSpace::followed(const Library &library, const QString &space) {
+    // The latest word wins, a tie going to the larger device, as of any field.
+    QSqlQuery query = ChangeLog::query(library,
+                                       "SELECT o.value FROM live_ops AS o JOIN log_ids AS d ON d.id = o.device "
+                                       "WHERE o.entity = 'subscription' AND o.field = 'followed' "
+                                       "AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.hlc DESC, d.name DESC LIMIT 1",
+                                       {space});
+    if (!query.next())
+        return std::nullopt;
+    return query.value(0).toString() == "1"_L1;
+}
+
 QList<SubscribedSpace::Subscription> SubscribedSpace::list(const Library &library) {
     QList<Subscription> subscriptions;
     for (QSqlQuery query = ChangeLog::query(library,

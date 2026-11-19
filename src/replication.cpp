@@ -39,9 +39,9 @@ constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,   
         fields << u"'"_s + field + u"'"_s;
     return u"((o.entity = 'book' AND (o.field IN ("_s + fields.join(u", "_s)
            + u") OR o.field LIKE 'tag:%')) OR o.entity = 'collection' "
-             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log') AND s.name LIKE 'personal:%')) "
-             // A space this computer subscribes to is its own to follow (SubscribedSpace),
-             // and a shared one travels by its own transports, sealed (#38).
+             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log', 'subscription') AND s.name LIKE 'personal:%')) "
+             // A space this computer subscribes to, and a shared one, travel to one's
+             // other computers sealed beside the log (SpaceCarry, #51), never in it.
              "AND s.name NOT LIKE 'shared:%' AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
              "AND person = (SELECT global_id FROM global_ids WHERE entity = 'device' AND local_id = 0))"_s;
 }
@@ -108,7 +108,8 @@ bool Replication::travels(const SpaceOperation &op) {
         return false;
     if (op.entity == "collection"_L1)
         return true;
-    if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1)
+    if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1
+        || op.entity == "subscription"_L1)
         return op.space.startsWith("personal:"_L1);
     return op.entity == "book"_L1
            && (std::ranges::any_of(bookFields, [&op](QLatin1StringView field) { return op.field == field; })
@@ -218,6 +219,12 @@ QJsonArray Replication::toJson(std::span<const SpaceOperation> ops, bool signatu
 }
 
 QList<SpaceOperation> Replication::operationsFrom(const QJsonArray &array) {
+    QList<SpaceOperation> ops = anyOperationsFrom(array);
+    ops.removeIf([](const SpaceOperation &op) { return !travels(op); });
+    return ops;
+}
+
+QList<SpaceOperation> Replication::anyOperationsFrom(const QJsonArray &array) {
     QList<SpaceOperation> ops;
     for (const auto &value : array) {
         const QJsonArray op = value.toArray();
@@ -232,7 +239,7 @@ QList<SpaceOperation> Replication::operationsFrom(const QJsonArray &array) {
                                    .value = op.at(8).toString(),
                                    .signer = op.at(9).toString(),
                                    .signature = QByteArray::fromBase64(op.at(10).toString().toLatin1(), QByteArray::Base64UrlEncoding)};
-        if ((op.size() == 9 || op.size() == 11) && travels(taken) && !taken.space.isEmpty() && !taken.device.isEmpty() && taken.seq > 0
+        if ((op.size() == 9 || op.size() == 11) && !taken.space.isEmpty() && !taken.device.isEmpty() && taken.seq > 0
             && !taken.id.isEmpty())
             ops << taken;
     }

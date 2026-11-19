@@ -267,6 +267,9 @@ std::expected<Report, QString> Subscriptions::subscribe(Library &library, const 
     const auto accepted = SubscribedSpace::accept(library, snapshot);
     if (!accepted)
         return std::unexpected(accepted.error());
+    // Followed on every one of the person's computers from now on (#51).
+    if (!SubscribedSpace::followed(library, snapshot.space).value_or(false))
+        SubscribedSpace::follow(library, snapshot.space, true);
     auto report = file(library, filing, options);
     if (report)
         report->operations = *accepted;
@@ -330,9 +333,12 @@ std::expected<Dropped, QString> Subscriptions::unsubscribe(const Library &librar
         return std::unexpected(meant.error());
     const SubscribedSpace::Subscription &space = *meant;
     const auto kept = space.collection > 0 ? library.collection(space.collection) : std::nullopt;
+    const Library::Batch batch(library);
     const auto dropped = SubscribedSpace::drop(library, space.space);
     if (!dropped)
         return std::unexpected(dropped.error());
+    // And on the person's other computers, as their next sync with this one brings it (#51).
+    SubscribedSpace::follow(library, space.space, false);
     return Dropped{.space = space, .collection = kept ? kept->path : QString(), .operations = *dropped};
 }
 

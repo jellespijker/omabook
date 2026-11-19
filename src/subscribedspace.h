@@ -4,6 +4,7 @@
 #include <QString>
 #include <QtTypes>
 #include <expected>
+#include <optional>
 
 #include "spacereplay.h"
 #include "spacesnapshot.h"
@@ -18,8 +19,9 @@ class Library;
 // owner wrote them, and a published space's id ("published:…") keeps them out
 // of what the library's rows are made of (`live_ops`), so nothing of it merges
 // into the subscriber's books, collections or graph; they are read here, by
-// the space (`space_ops`). Nor does a subscription travel to the subscriber's
-// other computers (Replication): each subscribes itself. The space is
+// the space (`space_ops`). A subscription travels to the subscriber's other
+// computers beside the log, sealed to their person (SpaceCarry, #51), and
+// whether they follow it is said in their personal space (follow). The space is
 // recorded in `spaces` as published, its owner a writer by their person id
 // and this computer a reader by its device id, which is what makes it a
 // subscription rather than a space this library publishes.
@@ -51,6 +53,15 @@ struct Accepted {
 [[nodiscard]] std::expected<void, QString> verify(const Library &library, const SpaceSnapshot &snapshot);
 
 [[nodiscard]] bool isSubscribed(const Library &library, const QString &space);
+
+// Says in the personal space whether the person follows the space (#51), so
+// that subscribing, and unsubscribing, on one of their computers does the
+// same on the others: an operation (entity "subscription", the space's id,
+// field "followed", "1" or "0") like any other of theirs, the latest winning.
+void follow(const Library &library, const QString &space, bool followed);
+// What the personal space last said of following the space; nothing when it
+// never said (a subscription from before #51).
+[[nodiscard]] std::optional<bool> followed(const Library &library, const QString &space);
 [[nodiscard]] QList<Subscription> list(const Library &library);
 
 // Every operation held of the space, the snapshot and those after it.

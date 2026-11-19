@@ -19,7 +19,8 @@
 // What travels by the log so far is the books' reading places, details and
 // what is said of their reading, with the same-as operations that line up the
 // books where two computers' content ids don't (#36, #37), the collections
-// and the general knowledge graph; everything else
+// and the general knowledge graph, and whether one follows a subscribed space
+// (#51); everything else
 // still travels by the manifest, one kind moving over at a time. Two computers exchange what they have of it, per
 // space and device the last sequence number (`{laptop: 812, desktop: 77}`),
 // and send each other the operations after that. Taking an operation twice
@@ -67,6 +68,9 @@ public:
     [[nodiscard]] static QJsonArray toJson(std::span<const SpaceOperation> ops, bool signatures = true);
     // Only the operations that travel: anything else in `array` is left out.
     [[nodiscard]] static QList<SpaceOperation> operationsFrom(const QJsonArray &array);
+    // Every operation of `array` that is whole, of any space: what one's own
+    // computers carry of the shared and subscribed spaces (SpaceCarry, #51).
+    [[nodiscard]] static QList<SpaceOperation> anyOperationsFrom(const QJsonArray &array);
 
     // Of the operations a peer sent, those that may be taken in, and how many were refused.
     struct Admitted {

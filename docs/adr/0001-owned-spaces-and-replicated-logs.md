@@ -121,7 +121,7 @@ kept in `ops` under the space's id as its owner wrote them, the space recorded a
 owner a writer and this computer a reader (`subscribedspace.h`). What the library's rows are made of
 (`live_ops`) leaves every published space out by its id, so a layer never merges into the
 subscriber's books, collections or graph, and is read by itself from `space_ops` (every space, which
-compaction and replication read); a subscription doesn't travel to the subscriber's other computers.
+compaction and replication read); since #51 a subscription travels to the subscriber's other computers (below).
 What is new in a later snapshot is what the subscriber doesn't hold yet, by device, clock, thing,
 field and value, as a snapshot numbers its operations anew until publishing keeps them. The
 subscriber's own part is one collection, theirs like any other, linked to the space: their matched
@@ -244,8 +244,8 @@ As built (#38), shared spaces:
   the inviter, so only the invitee opens it and knows whom it is from. A space's key is kept per user
   beside the person's key (`spaces/<id>.key`, owner-only, written whole), never in a library folder.
 - **A layer, like a published space.** Its operations are in `ops` under its id, and `live_ops` leaves
-  `shared:` spaces out (format 19), so they never make a member's own rows; nor does ssh replication
-  carry them to one's other computers (each joins on its own). What a member gets is a collection of
+  `shared:` spaces out (format 19), so they never make a member's own rows; nor does ssh replication's
+  log carry them to one's other computers (since #51 they go beside it, below). What a member gets is a collection of
   their own linked to it, filed as a subscription is (`Subscriptions::file`). A writer's edits go the
   other way: their linked collection, read as publishing reads it, and of each field what they changed
   later than the space, written as theirs (`SharedCollection::contribute`).
@@ -285,6 +285,46 @@ As built (#50), what a computer was as a person it gave up at a pairing:
   not all its operations are its owner's; it is updated to follow on.
 - **A subscription stays as it is**: its reader is this computer (`space_members`, by device), not a
   person.
+
+As built (#51), what one's own computers carry to each other of the spaces one is in:
+
+- **Shared spaces and subscriptions go wherever one is.** The ssh replication between two of one's
+  computers carries, beside the log, each shared space one is in (its name, its key, the collection
+  linked to it here, and the operations the other lacks, by a version vector per space) and each
+  subscription (its operations, owner, linked collection and the place it is followed from, sent
+  when what the other holds of it differs). On arrival nothing is trusted for coming from oneself: a
+  shared space's operations go through its role rules and signatures (`SharedSpace::take`), a
+  subscription through the check of a snapshot (`Subscriptions::subscribe`), and each is filed into
+  a collection of the receiver's, matched to its own books, so a layer's graph is cut where the
+  receiver is in each book (`SpaceCarry`). It goes in the sync's last exchange of the log
+  (`SyncLog::finish`), once books have moved, so what is filed finds them there rather than making
+  wishes of them; and after any pairing in the same sync, as each side's answer says who it is by
+  then.
+- **Only to the same person, sealed and signed.** Each side says it carries and, sealed to its
+  person, what it holds. What is carried goes only to a side that says it is the same person, as one
+  sealed box to that person (`Person::sealFor`), signed by them; the receiver takes it only when the
+  signature is its own person's. So it opens only where the person's key is, and is taken only from
+  where it is: a peer that only claims the id opens nothing, and one not paired (its person another,
+  as at the first sync before the key goes over, or an Omabook from before, which doesn't say it
+  carries) is sent nothing of it. A key arrives for its owner alone and whole (`SecretFile`), never
+  over one there. Every generation of a space's key is a list's entry of its own (one today), so key
+  rotation (#49) adds its generations to the list, and keeping them, without a new format.
+- **Not a choice.** A subscription made on one computer is made on all, with no per-subscription
+  switch: one's computers are one person with one personal space, which carries everything else of
+  theirs without asking, and the collection a subscription fills and its wishlist entries travel in
+  it anyway, so a layer kept on one computer only would leave the others a collection without its
+  graph or its updates.
+- **Unsubscribing travels too, as an operation.** Whether one follows a subscription is said in the
+  personal space (entity `subscription`, the space's id, field `followed`, `1` or `0`), written at
+  subscribing and unsubscribing, the latest winning like any field. A computer that holds a
+  subscription the latest word says is given up drops it (`SubscribedSpace::drop`); one carried a
+  subscription given up doesn't take it; subscribing again later wins over the giving up. A
+  subscription from before says nothing and counts as followed. Kept as a field, it merges in any
+  order and survives compaction, which keeps the latest of each field; an Omabook from before
+  ignores it.
+- **Still open.** Leaving a shared space is not built, so there is nothing of it to carry. A member of
+  a space as a person given up at a pairing (#50) is carried the space and its key but not that
+  person: the computer it reaches is a member as the person now, once a writer makes it one.
 
 ### Book files
 

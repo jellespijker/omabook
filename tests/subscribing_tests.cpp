@@ -314,7 +314,9 @@ private slots:
         QVERIFY(!SubscribedSpace::isSubscribed(receiver.library, snapshot.space));
         QCOMPARE(heldOf(receiver.library, snapshot.space), qint64(0));
         QCOMPARE(count(receiver.library, "SELECT COUNT(*) FROM spaces WHERE id = ?", {snapshot.space}), qint64(0));
-        QCOMPARE(count(receiver.library, "SELECT COUNT(*) FROM live_ops"), personal);
+        // The personal space says it is given up, for one's other computers (#51), and is otherwise as it was.
+        QCOMPARE(count(receiver.library, "SELECT COUNT(*) FROM live_ops"), personal + 1);
+        QVERIFY(!SubscribedSpace::followed(receiver.library, snapshot.space).value_or(true));
         // The collection and its books are the receiver's own, and stay.
         QCOMPARE(receiver.library.collectionNamed("Sci-fi")->of(receiver.library.books()).size(), 3);
         QVERIFY(SubscribedSpace::list(receiver.library).isEmpty());

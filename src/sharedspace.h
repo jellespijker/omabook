@@ -38,9 +38,10 @@ class Library;
 //
 // Like a published space, a shared space is a layer beside the library: its
 // operations are kept under its id ("shared:…"), which keeps them out of
-// what the library's rows are made of (`live_ops`), and it never travels to
-// one's other computers by the ssh sync; it travels by its own transports,
-// sealed with its key (SpaceFolder).
+// what the library's rows are made of (`live_ops`). It travels by its own
+// transports, sealed with its key (SpaceFolder), and to one's other
+// computers beside the ssh sync's log, with its key, sealed to one's person
+// (SpaceCarry, #51); what arrives either way is taken by the rules below.
 namespace SharedSpace {
 
 inline constexpr auto kind = "shared";

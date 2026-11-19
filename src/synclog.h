@@ -2,6 +2,8 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
+#include <QtTypes>
 
 #include "library.h"
 #include "remote.h"
@@ -29,9 +31,27 @@ namespace SyncLog {
 // `summary`. Answers the manifest's books, each with what the log says the
 // other side holds of it, for the books this side lacks. A dry run changes
 // nothing on either side. Run again once books have moved, it carries what
-// their arrival wrote, and their places.
-SyncTake::Taken replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
-                          const SyncOptions &options);
+// their arrival wrote, and their places (finish()).
+//
+// With `carry`, it also carries the shared spaces and subscriptions one is in
+// to the other side, and takes in what it carries back, when it is another
+// of one's own computers (SpaceCarry, #51).
+struct Replicated {
+    // The manifest as it is now: its books each with what the log says the
+    // other side holds of it, for the books this side lacks; the vector both
+    // hold; and who the other side is once paired (SpaceCarry::introduction).
+    QJsonObject manifest;
+    QSet<qint64> gone; // the books here they removed (SyncTake::Taken)
+};
+Replicated replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary, const SyncOptions &options,
+                     bool carry = false);
+
+// Here, at the end of a sync whose log went first (replicate()), with the
+// manifest it answered: once more when books moved, for what their arrival
+// wrote, and when there is anything to carry to the other side, which is
+// another of one's own computers, once the books are where they go, so what
+// is filed on arrival finds them (SpaceCarry::worthCarrying).
+void finish(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary, const SyncOptions &options);
 
 // There: takes in a request from replicate() and answers it.
 [[nodiscard]] QJsonObject answer(Library &library, const QJsonObject &request);

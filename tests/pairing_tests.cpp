@@ -12,10 +12,14 @@
 #include <QtTest>
 #include <algorithm>
 #include <cstddef>
+#include <memory>
 #include <sodium.h>
 #include <utility>
 
+#include "crypto.h"
 #include "fixtures.h"
+#include "graph.h"
+#include "graphcontext.h"
 #include "hlc.h"
 #include "library.h"
 #include "pairing.h"
@@ -26,9 +30,13 @@
 #include "sharedspace.h"
 #include "sharedspaces.h"
 #include "signedops.h"
+#include "spacecarry.h"
+#include "spacekey.h"
+#include "spacelinks.h"
 #include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "subscribedspace.h"
 #include "subscriptions.h"
 #include "sync.h"
 #include "synclog.h"
@@ -60,6 +68,18 @@ using SharedSpace::Role;
 
 template <typename Answer> [[nodiscard]] QString whyNot(const Answer &answer) { return answer ? QString() : answer.error(); }
 
+// A book in the collection `collection` (made when there is none).
+void fileBook(Library &library, const QString &collection, const QString &title, const QString &isbn) {
+    BookMeta meta;
+    meta.title = title;
+    meta.authors = {"Bo Writer"};
+    meta.isbn = isbn;
+    const qint64 book = library.addEntry(meta, true).id;
+    const auto existing = library.collectionNamed(collection);
+    const auto into = existing ? std::expected<qint64, QString>(existing->id) : library.addCollection(collection);
+    QVERIFY2(into && library.putInCollection(*into, book, true), qPrintable(whyNot(into)));
+}
+
 // One person's computer: a library and the user's own Omabook data folder.
 struct Computer {
     Computer(const QTemporaryDir &dir, const QString &name) : library(dir.filePath(name + "/Library")) {
@@ -71,16 +91,7 @@ struct Computer {
     [[nodiscard]] QString id() const { return library.person()->id(); }
 
     // A book in the collection `collection` (made when there is none).
-    void file(const QString &collection, const QString &title, const QString &isbn) {
-        BookMeta meta;
-        meta.title = title;
-        meta.authors = {"Bo Writer"};
-        meta.isbn = isbn;
-        const qint64 book = library.addEntry(meta, true).id;
-        const auto existing = library.collectionNamed(collection);
-        const auto into = existing ? std::expected<qint64, QString>(existing->id) : library.addCollection(collection);
-        QVERIFY2(into && library.putInCollection(*into, book, true), qPrintable(whyNot(into)));
-    }
+    void file(const QString &collection, const QString &title, const QString &isbn) { fileBook(library, collection, title, isbn); }
 
     [[nodiscard]] SharedSpaces::Synced sync(const QString &space, const QString &folder) {
         auto done = SharedSpaces::sync(library, space, folder);
@@ -122,6 +133,82 @@ struct Computer {
         titles << book.fields.value("title").value;
     titles.sort();
     return titles;
+}
+
+// Two computers of one person, this one and the one the stand-in ssh reaches
+// (Fixtures::standInSsh), which runs Omabook there in a home of its own.
+struct OwnComputers {
+    explicit OwnComputers(const QTemporaryDir &dir)
+        : folder(dir.path()), remote("desktop:" + dir.filePath("There"), {Fixtures::standInSsh(dir.path(), OMABOOK_BINARY)}),
+          here(dir.filePath("Here")) {
+        here.usePersonFile(dir.filePath("here-home/omabook/person.key"));
+        QVERIFY(here.open());
+        QVERIFY(there() != nullptr);
+    }
+
+    // The library there as it is now, opened anew: a sync there may have made it another person.
+    [[nodiscard]] std::unique_ptr<Library> there() const {
+        auto library = std::make_unique<Library>(folder + "/There");
+        library->usePersonFile(folder + "/there-home/.local/share/omabook/person.key");
+        return library->open() ? std::move(library) : nullptr;
+    }
+
+    // Syncs here with there, as `omabook sync` does: what it said went wrong.
+    [[nodiscard]] QStringList sync() {
+        const SyncSummary summary = syncLibrary(here, remote);
+        return summary.error.isEmpty() ? summary.problems : QStringList{summary.error};
+    }
+
+    QString folder;
+    Remote remote;
+    Library here;
+};
+
+// A book of a file of its own, `title`, in `library`, as with `omabook add`.
+[[nodiscard]] qint64 bookOfFile(const QTemporaryDir &dir, Library &library, const QString &title) {
+    const QString file = dir.filePath(title + ".epub");
+    if (!QFile::exists(file) && !Fixtures::epub(file, title))
+        return 0;
+    return library.add(file).id;
+}
+
+[[nodiscard]] qint64 bookTitled(const Library &library, const QString &title) {
+    const QList<Book> books = library.books();
+    const auto found = std::ranges::find_if(books, [&title](const Book &book) { return book.meta.title == title; });
+    return found != books.cend() ? found->id : 0;
+}
+
+[[nodiscard]] QStringList layerNames(const Library &library, qint64 book) {
+    QStringList names;
+    for (const GraphLayers::Layer &layer : GraphContext::layers(library))
+        for (const GraphNode &node : layer.ofBook(book).nodes)
+            names << node.name;
+    names.sort();
+    return names;
+}
+
+[[nodiscard]] QString linkedPath(const Library &library, const QString &space) {
+    const auto collection = library.collection(SubscribedSpace::linkedCollection(library, space));
+    return collection ? collection->path : QString();
+}
+
+// A collection published by Cy, another person: "Out", with Dune, and what
+// Cy's graph says of it early on and later.
+[[nodiscard]] SpaceSnapshot cysCollection(const QTemporaryDir &dir) {
+    Computer cy(dir, "cy");
+    const qint64 dune = bookOfFile(dir, cy.library, "Dune");
+    const auto out = cy.library.addCollection("Out");
+    if (dune == 0 || !out || !cy.library.putInCollection(*out, dune, true))
+        qFatal("Cy's collection could not be made");
+    Graph graph(cy.library);
+    if (graph.upsert({}, "character", "Paul", "The duke's son.", {}, GraphPlace{dune, 0, 0.1}, "Paul") <= 0
+        || graph.upsert({}, "character", "Alia", "Born later.", {}, GraphPlace{dune, 0, 0.8}, "Alia") <= 0)
+        qFatal("Cy's graph could not be made");
+    cy.library.setProgress(dune, {.section = 0, .fraction = 1.0, .percent = 100}); // read through: all of it goes
+    auto snapshot = PublishedSpace::snapshot(cy.library, *out, {.graph = true}, {.name = "Cy", .person = cy.id()});
+    if (!snapshot)
+        qFatal("%s", qPrintable(snapshot.error()));
+    return *snapshot;
 }
 
 [[nodiscard]] QString roleShown(const Library &library, const QString &space) {
@@ -521,6 +608,195 @@ private slots:
         for (SpaceOperation &op : taken.operations)
             op.author = eve.id();
         QVERIFY(!SubscribedSpace::verify(cy.library, taken));
+    }
+
+    // #51: a space joined on one of one's computers is on the others after
+    // their next sync over ssh, key and all, and they read and write it.
+    void aSharedSpaceJoinedOnOneComputerIsOnTheOtherAfterASync() {
+        QTemporaryDir dir;
+        const QString folder = dir.filePath("Synced");
+        QVERIFY(QDir().mkpath(folder));
+        OwnComputers bo(dir);
+        QVERIFY2(bo.sync().isEmpty(), "the first sync pairs");
+        const QString person = bo.here.person()->id();
+        QCOMPARE(bo.there()->person()->id(), person);
+
+        Computer ada(dir, "ada");
+        ada.file("Home", "Dune", "9780441172719");
+        const auto created = SharedSpaces::create(ada.library, "Home", {});
+        QVERIFY2(created, qPrintable(whyNot(created)));
+        const QString space = created->space.space;
+        QVERIFY(SharedSpaces::invite(ada.library, space, person, Role::Writer, dir.filePath("bo.omabook-invite")).has_value());
+        std::ignore = ada.sync(space, folder);
+        QVERIFY(SharedSpaces::join(bo.here, dir.filePath("bo.omabook-invite"), "Our Home").has_value());
+        QVERIFY(SharedSpaces::sync(bo.here, space, folder)->refused.isEmpty());
+
+        const QStringList problems = bo.sync();
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+        const std::unique_ptr<Library> there = bo.there();
+        QVERIFY(SharedSpace::isShared(*there, space));
+        QCOMPARE(spaceTitles(*there, space), QStringList({"Dune"}));
+        // The key, kept there for its owner alone, the one here.
+        const QString key = SharedSpaces::keyFile(*there, space);
+        QVERIFY(key.startsWith(dir.filePath("there-home/.local/share/omabook/spaces/")));
+        QCOMPARE(QFile::permissions(key) & ~(QFile::ReadOwner | QFile::WriteOwner | QFile::ReadUser | QFile::WriteUser),
+                 QFile::Permissions());
+        const auto keptThere = SpaceKey::load(key);
+        const auto keptHere = SpaceKey::load(SharedSpaces::keyFile(bo.here, space));
+        QVERIFY(keptThere && keptHere && std::ranges::equal(keptThere->bytes(), keptHere->bytes()));
+        // Filed into the same collection of one's own, its book there once.
+        QCOMPARE(linkedPath(*there, space), QString("Our Home"));
+        const qint64 dune = bookTitled(*there, "Dune");
+        QVERIFY(dune > 0 && there->collectionNamed("Our Home")->contains(*there->book(dune)));
+        QCOMPARE(std::ranges::count(there->books(), QString("Dune"), [](const Book &book) { return book.meta.title; }), 1);
+
+        // There writes it, as the writer one is, and every member takes it.
+        fileBook(*there, "Our Home", "Persuasion", "9780141439686");
+        const auto wrote = SharedSpaces::sync(*there, space, folder);
+        QVERIFY2(wrote && wrote->written > 0 && wrote->refused.isEmpty(), qPrintable(whyNot(wrote)));
+        const SharedSpaces::Synced adas = ada.sync(space, folder);
+        QVERIFY2(adas.refused.isEmpty(), qPrintable(adas.refused.join('\n')));
+        QCOMPARE(spaceTitles(ada.library, space), QStringList({"Dune", "Persuasion"}));
+        // And what it wrote comes back here over ssh, taken by the space's rules.
+        QVERIFY(bo.sync().isEmpty());
+        QCOMPARE(spaceTitles(bo.here, space), QStringList({"Dune", "Persuasion"}));
+        QVERIFY(SharedSpace::state(bo.here, space).refused.isEmpty());
+    }
+
+    // #51: subscribing once is subscribing on all one's computers, the graph
+    // cut where each is in the book; unsubscribing on one is on all.
+    void aSubscriptionAndUnsubscribingTravelToOnesOtherComputers() {
+        QTemporaryDir dir;
+        const SpaceSnapshot out = cysCollection(dir);
+        OwnComputers bo(dir);
+        QVERIFY(bookOfFile(dir, bo.here, "Dune") > 0);
+        QVERIFY2(bo.sync().isEmpty(), "the first sync pairs, and the book goes there");
+        QVERIFY(Subscriptions::subscribe(bo.here, out, {.as = "From Cy", .dryRun = false}).has_value());
+        const SpaceLinks::Link followed{.space = out.space, .transport = "folder", .address = dir.filePath("cy-out")};
+        SpaceLinks::remember(bo.here, SpaceLinks::Role::Followed, followed);
+
+        QVERIFY(bo.sync().isEmpty());
+        std::unique_ptr<Library> there = bo.there();
+        QVERIFY(SubscribedSpace::isSubscribed(*there, out.space));
+        QCOMPARE(linkedPath(*there, out.space), QString("From Cy"));
+        QVERIFY(SpaceLinks::of(*there, out.space, SpaceLinks::Role::Followed) == followed);
+        // The layer's graph, there, as far as one has read there.
+        const qint64 dune = bookTitled(*there, "Dune");
+        QVERIFY(dune > 0);
+        there->setProgress(dune, {.section = 0, .fraction = 0.5, .percent = 50});
+        QCOMPARE(layerNames(*there, dune), QStringList({"Paul"}));
+
+        // Given up there: given up here too, the collection kept.
+        QVERIFY(Subscriptions::unsubscribe(*there, out.space).has_value());
+        there.reset();
+        QVERIFY(bo.sync().isEmpty());
+        QVERIFY(!SubscribedSpace::isSubscribed(bo.here, out.space));
+        QVERIFY(bo.here.collectionNamed("From Cy").has_value());
+        QVERIFY(!SubscribedSpace::isSubscribed(*bo.there(), out.space));
+        // Subscribing again later wins over that.
+        QVERIFY(Subscriptions::subscribe(bo.here, out, {}).has_value());
+        QVERIFY(bo.sync().isEmpty());
+        QVERIFY(SubscribedSpace::isSubscribed(*bo.there(), out.space));
+    }
+
+    // #51: a computer that isn't one's own person gets nothing of the spaces
+    // one is in; once it is, it does.
+    void nothingOfOnesSpacesGoesToAComputerThatIsNotOneself() {
+        QTemporaryDir dir;
+        const SpaceSnapshot out = cysCollection(dir);
+        const Person theirs = newPerson();
+        const Person mine = keptOver(theirs.id());
+        QVERIFY(mine.keepIn(dir.filePath("here-home/omabook/person.key")));
+        QVERIFY(theirs.keepIn(thereKey(dir)));
+        // There can't keep the person it would give up, so it stays who it is: not paired.
+        const QString formers = dir.filePath("there-home/.local/share/omabook/former-persons");
+        QFile blocking(formers);
+        QVERIFY(blocking.open(QIODevice::WriteOnly));
+        blocking.close();
+        OwnComputers bo(dir);
+        fileBook(bo.here, "Home", "Dune", "9780441172719");
+        const auto created = SharedSpaces::create(bo.here, "Home", {});
+        QVERIFY(created.has_value());
+        const QString space = created->space.space;
+        QVERIFY(Subscriptions::subscribe(bo.here, out, {}).has_value());
+
+        const QStringList problems = bo.sync();
+        QVERIFY2(problems.join('\n').contains("could not take on the person"), qPrintable(problems.join('\n')));
+        std::unique_ptr<Library> there = bo.there();
+        QCOMPARE(there->person()->id(), theirs.id());
+        QVERIFY(SharedSpace::spaces(*there).isEmpty());
+        QVERIFY(SharedSpace::held(*there, space).isEmpty());
+        QVERIFY(QDir(dir.filePath("there-home/.local/share/omabook/spaces")).isEmpty());
+        QVERIFY(SubscribedSpace::list(*there).isEmpty());
+        QVERIFY(SubscribedSpace::operations(*there, out.space).isEmpty());
+
+        // Paired, one person: the sync carries them.
+        QVERIFY(QFile::remove(formers));
+        QVERIFY(bo.sync().isEmpty());
+        there = bo.there();
+        QCOMPARE(there->person()->id(), mine.id());
+        QCOMPARE(SharedSpace::spaces(*there), QStringList{space});
+        QVERIFY(SpaceKey::load(SharedSpaces::keyFile(*there, space)).has_value());
+        QVERIFY(SubscribedSpace::isSubscribed(*there, out.space));
+    }
+
+    // #51: only one's own person opens what is carried, and only what they
+    // signed is taken.
+    void whatIsCarriedOpensOnlyForOneselfAndIsTakenOnlyFromOneself() {
+        QTemporaryDir dir;
+        Computer bo(dir, "bo");
+        bo.file("Home", "Dune", "9780441172719");
+        const auto created = SharedSpaces::create(bo.library, "Home", {});
+        QVERIFY(created.has_value());
+        const auto key = SpaceKey::load(SharedSpaces::keyFile(bo.library, created->space.space));
+        QVERIFY(key.has_value());
+        const QString keyText =
+            QString::fromLatin1(Crypto::toByteArray(key->bytes()).toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals));
+        const Person eve = newPerson();
+        const auto asked = [&bo](const QString &person) {
+            return SyncLog::answer(bo.library, {{"space", "personal:eve"},
+                                                {"device", "eve"},
+                                                {"vector", QJsonObject()},
+                                                {"ops", QJsonArray()},
+                                                {"signs", 1},
+                                                {"carries", 1},
+                                                {"person", person},
+                                                {"carrier", person},
+                                                {"carrying", true},
+                                                {"dry_run", false}});
+        };
+        // Someone else asking is carried nothing, nor is an Omabook from before, which doesn't carry.
+        QVERIFY(!asked(eve.id()).contains("carried"));
+        QVERIFY(SpaceCarry::offer(bo.library, {{"signs", 1}, {"person", bo.id()}, {"carrier", bo.id()}}).isEmpty());
+        // Someone saying they are Bo is, sealed: they can't open it, and the key is nowhere in it.
+        const QJsonObject claimed = asked(bo.id());
+        QVERIFY(claimed.contains("carried"));
+        const QByteArray box = QByteArray::fromBase64(claimed.value("carried").toString().toLatin1(), QByteArray::Base64UrlEncoding);
+        QVERIFY(!eve.openSealed(box));
+        QVERIFY(!QJsonDocument(claimed).toJson().contains(keyText.toLatin1()));
+        // Bo's other computer opens it, and takes the space.
+        QVERIFY(bo.library.person()->keepIn(dir.filePath("other/home/omabook/person.key")));
+        Computer other(dir, "other");
+        QCOMPARE(other.id(), bo.id());
+        const SpaceCarry::Taken taken = SpaceCarry::take(other.library, claimed);
+        QVERIFY2(taken.problems.isEmpty(), qPrintable(taken.problems.join('\n')));
+        QCOMPARE(taken.spaces, 1);
+        QCOMPARE(taken.keys, 1);
+        QVERIFY(SharedSpace::isShared(other.library, created->space.space));
+        QVERIFY(SpaceKey::load(SharedSpaces::keyFile(other.library, created->space.space)).has_value());
+
+        // Sealed to Bo, but signed by someone else: refused whole.
+        const QJsonObject forged{
+            {"shared", QJsonArray{QJsonObject{{"space", "shared:forged"}, {"name", "Forged"}, {"keys", QJsonArray()}}}}};
+        const auto sealed = Person::sealFor(bo.library.person()->publicKey(), QJsonDocument(forged).toJson(QJsonDocument::Compact));
+        QVERIFY(sealed.has_value());
+        const Person::Signature signature = eve.sign(Crypto::bytes(*sealed));
+        const SpaceCarry::Taken refused = SpaceCarry::take(
+            bo.library,
+            {{"carried", QString::fromLatin1(sealed->toBase64(QByteArray::Base64UrlEncoding))},
+             {"carried_signature", QString::fromLatin1(Crypto::toByteArray(signature).toBase64(QByteArray::Base64UrlEncoding))}});
+        QCOMPARE(refused.problems.size(), 1);
+        QVERIFY(!SharedSpace::isShared(bo.library, "shared:forged"));
     }
 };
 

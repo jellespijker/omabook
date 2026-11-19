@@ -11,6 +11,7 @@
 #include "log.h"
 #include "pairing.h"
 #include "replication.h"
+#include "spacecarry.h"
 #include "spacereplay.h"
 #include "spaces.h"
 #include "synctake.h"
@@ -70,6 +71,35 @@ void takePerson(Library &library, const QJsonObject &theirs, SyncSummary &summar
         summary.problems << "This computer could not take on the person it is paired with: " + taken.error();
 }
 
+// Takes what one's other computer carried of the spaces one is in (#51), and says what was refused.
+void takeCarried(Library &library, const QJsonObject &theirs, SyncSummary &summary) {
+    const SpaceCarry::Taken taken = SpaceCarry::take(library, theirs);
+    summary.refused += static_cast<int>(taken.refused);
+    summary.problems << taken.problems;
+    if (taken.spaces + taken.operations + taken.subscriptions + taken.dropped > 0)
+        qCInfo(lcSync).noquote() << "carried here:" << taken.spaces << "shared spaces," << taken.keys << "keys," << taken.operations
+                                 << "of their operations," << taken.subscriptions << "subscriptions;" << taken.dropped
+                                 << "subscriptions given up elsewhere dropped";
+}
+
+// The manifest, as the sync goes on with it: both now hold the same
+// operations, so what this side holds, they do.
+QJsonObject holding(const Library &library, QJsonObject manifest) {
+    manifest.insert("vector", Replication::toJson(Replication::vector(library)));
+    return manifest;
+}
+
+// What this side carries to the other, whose introduction is `theirs`, in
+// the exchange that carries (#51): only once the books have moved, so what
+// is filed on arrival finds them there.
+QJsonObject carried(Library &library, const QJsonObject &theirs, bool carry) {
+    if (!carry)
+        return {};
+    QJsonObject offer = SpaceCarry::offer(library, theirs);
+    offer.insert("carrying", true);
+    return offer;
+}
+
 QJsonObject with(QJsonObject object, const QJsonObject &more) {
     for (auto it = more.begin(); it != more.end(); ++it)
         object.insert(it.key(), it.value());
@@ -99,11 +129,11 @@ QJsonObject SyncLog::introduction(const Library &library) {
     return with({{"space", Spaces::personalSpace(library)},
                  {"device", Spaces::deviceId(library)},
                  {"vector", Replication::toJson(Replication::vector(library))}},
-                Pairing::introduction(library));
+                with(Pairing::introduction(library), SpaceCarry::introduction(library)));
 }
 
-SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
-                                   const SyncOptions &options) {
+SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
+                                       const SyncOptions &options, bool carry) {
     const bool dryRun = options.dryRun;
     const QJsonArray books = manifest.value("books").toArray();
     const QString theirDevice = manifest.value("device").toString();
@@ -124,11 +154,13 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
                                       {"details", SyncTake::otherSide(options.details)},
                                       {"held", QJsonArray::fromStringList(SyncTake::heldBy(library).values())},
                                       {"dry_run", dryRun}},
-                                     with(Pairing::introduction(library), dryRun ? QJsonObject() : Pairing::keyFor(library, manifest)));
+                                     with(with(Pairing::introduction(library), dryRun ? QJsonObject() : Pairing::keyFor(library, manifest)),
+                                          // The spaces one is in, to another of one's own computers alone (#51).
+                                          with(SpaceCarry::introduction(library), carried(library, manifest, carry && !dryRun))));
     const auto answer = remote.exchange(QJsonDocument(request), {"sync", "--replicate"});
     if (!answer) {
         summary.problems << "The change log could not be carried between here and " + remote.host() + ": " + answer.error();
-        return {.books = books, .gone = {}};
+        return {.manifest = holding(library, manifest), .gone = {}};
     }
     const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), theirDevice,
                                                     "%1 operations from " + remote.host() + " were refused and not taken in: %2.", summary);
@@ -157,10 +189,23 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
     if (!dryRun) {
         Compaction::compactWhenWorthIt(library);
         takePerson(library, *answer, summary);
+        takeCarried(library, *answer, summary);
     }
     qCInfo(lcSync).noquote() << "the log with" << remote.host() << ":" << lacking.size() << "operations sent," << incoming.size()
                              << "taken";
-    return described;
+    QJsonObject now = holding(library, manifest);
+    now.insert("books", described.books);
+    // Who they are now, once a pairing has made both one person (#51).
+    for (const char *said : {"carries", "carrier", "carry"})
+        now.insert(QLatin1StringView(said), answer->value(QLatin1StringView(said)));
+    return {.manifest = now, .gone = described.gone};
+}
+
+void SyncLog::finish(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
+                     const SyncOptions &options) {
+    const bool carrying = SpaceCarry::worthCarrying(library, manifest);
+    if (summary.received + summary.sent > 0 || carrying)
+        std::ignore = replicate(library, remote, manifest, summary, options, carrying); // their books were taken in already
 }
 
 QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
@@ -192,15 +237,18 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     if (!dryRun) {
         Compaction::compactWhenWorthIt(library);
         takePerson(library, request, taken);
+        takeCarried(library, request, taken);
     }
     // After taking theirs, so what was just written here goes back with the rest.
     const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(request.value("vector").toObject()));
-    return with({{"ops", Replication::toJson(lacking, request.value("signs").toInt() >= 1)},
-                 {"changed", static_cast<int>(changed.size())},
-                 {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
-                 {"taken", taken.toJson()},
-                 {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
-                                       {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
-                                       {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)}}}},
-                pairing);
+    return with(
+        {{"ops", Replication::toJson(lacking, request.value("signs").toInt() >= 1)},
+         {"changed", static_cast<int>(changed.size())},
+         {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
+         {"taken", taken.toJson()},
+         {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
+                               {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
+                               {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)}}}},
+        // Once this side is who it is to be: the person a pairing just made it may be theirs (#51).
+        with(pairing, with(SpaceCarry::introduction(library), carried(library, request, request.value("carrying").toBool() && !dryRun))));
 }

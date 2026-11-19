@@ -13,6 +13,7 @@
 #include <algorithm>
 #include <optional>
 #include <tuple>
+#include <utility>
 
 #include "collections.h"
 #include "formats.h"
@@ -114,11 +115,10 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // newer on the other, and the books this one lacks arrive with what it says.
     QSet<qint64> gone; // the books here they removed, which the log took care of
     if (peerHasLog) {
-        const SyncTake::Taken taken = SyncLog::replicate(library, remote, manifest, summary, options);
-        manifest.insert("books", taken.books);
-        gone = taken.gone;
-        // Both now hold the same operations: what this side holds, they do.
-        manifest.insert("vector", Replication::toJson(Replication::vector(library)));
+        SyncLog::Replicated replicated = SyncLog::replicate(library, remote, manifest, summary, options);
+        // Their books as the log says them, the vector both now hold, and who they are now.
+        manifest = std::move(replicated.manifest);
+        gone = std::move(replicated.gone);
     }
     QTemporaryDir scratch;
     int counter = 0;
@@ -353,9 +353,9 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     if (!dryRun)
         syncCollectionsAndGraph(library, remote, manifest, summary);
     // Books that moved arrived after the log went: once more for what their
-    // arrival wrote, and their reading places.
-    if (peerHasLog && !dryRun && summary.received + summary.sent > 0)
-        std::ignore = SyncLog::replicate(library, remote, manifest, summary, options); // their books were taken in already
+    // arrival wrote, and their reading places, and the spaces one is in.
+    if (peerHasLog && !dryRun)
+        SyncLog::finish(library, remote, manifest, summary, options);
     logSyncSummary(summary, remote.host());
     return summary;
 }
