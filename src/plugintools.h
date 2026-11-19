@@ -82,7 +82,9 @@ struct Limits {
 };
 
 struct InstallOptions {
-    QString name;         // the folder's name; taken from the package when empty
+    // The folder's name. When empty, it is made of the package's name as a
+    // repository's is (PluginSources::nameFor): "omabook-storyteller" is "storyteller".
+    QString name;
     bool enable = false;  // a new plugin stays off until its permissions were seen
     bool replace = false; // put it in the place of one of the same name, which goes to the trash
     Limits limits;
@@ -99,8 +101,11 @@ struct InstallOptions {
 // Reads a plugin that is not installed yet, from a folder or a .zip, and
 // says what it is without putting it anywhere: {name, title, version,
 // author, description, kind: "script" or "program", permissions, adds, files,
-// bytes, installed (one of that name is there already), source}. A program
-// plugin's one permission is "program": it runs as a program of its own.
+// bytes, installed (one of that name is there already), source}, and
+// `formerly` when the one there is this plugin under the name a folder or an
+// archive kept before ("omabook-storyteller"): installing replaces that one,
+// so it isn't there twice. A program plugin's one permission is "program":
+// it runs as a program of its own.
 // `adds` is what a script looks to register ("source", "catalog", "format",
 // "importer", "command", "panel", "hook"), found by reading its files: the
 // script is not run to find out, since nothing of a plugin runs before it

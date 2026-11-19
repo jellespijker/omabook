@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <array>
 #include <climits>
+#include <expected>
 #include <memory>
 #include <optional>
 
@@ -136,6 +137,17 @@ QJsonObject describePackage(const Staged &staged) {
             {"bytes", staged.tally.bytes}};
 }
 
+// The name a package is installed under when nobody gave one: the one a
+// repository of it gets (PluginSources::nameFor), so that the folder
+// omabook-storyteller, omabook-storyteller.zip and the repository
+// someone/omabook-storyteller are all "storyteller".
+QString defaultName(const Staged &staged, const PluginTools::InstallOptions &options) {
+    PluginSources::Address address;
+    address.repo = staged.suggested;
+    address.subfolder = options.subfolder;
+    return PluginSources::nameFor(address);
+}
+
 // The answer of inspect() for a staged package: what it is and what it
 // would be called.
 QJsonObject inspected(const Staged &staged, const QString &source, const QString &folder, const PluginTools::InstallOptions &options) {
@@ -144,7 +156,7 @@ QJsonObject inspected(const Staged &staged, const QString &source, const QString
     QJsonObject answer = describePackage(staged);
     if (ScriptTools::failed(answer))
         return answer;
-    const QString name = options.name.isEmpty() ? PluginTools::folderName(staged.suggested) : options.name;
+    const QString name = options.name.isEmpty() ? defaultName(staged, options) : options.name;
     if (!ScriptTools::validName(name))
         return problem(options.name.isEmpty()
                            ? "No name for the plugin can be made of \"" + staged.suggested + "\"; give it one."
@@ -153,7 +165,14 @@ QJsonObject inspected(const Staged &staged, const QString &source, const QString
         answer.insert("title", name);
     answer.insert("name", name);
     answer.insert("source", QFileInfo(source).absoluteFilePath());
-    answer.insert("installed", QFileInfo::exists(folder + "/" + name));
+    // A folder or an archive used to keep its own name ("omabook-storyteller").
+    // One installed so is the one this replaces, so that it isn't there twice.
+    const QString former = options.name.isEmpty() ? PluginTools::folderName(staged.suggested) : QString();
+    const bool renames =
+        !former.isEmpty() && former != name && QFileInfo::exists(folder + "/" + former) && !QFileInfo::exists(folder + "/" + name);
+    if (renames)
+        answer.insert("formerly", former);
+    answer.insert("installed", renames || QFileInfo::exists(folder + "/" + name));
     return answer;
 }
 
@@ -171,6 +190,24 @@ bool copyTree(const QString &from, const QString &into) {
     Tally unlimited;
     unlimited.limits = {INT_MAX, Q_INT64_C(1) << 60, Q_INT64_C(1) << 60};
     return copyFolder(from, into, unlimited).has_value();
+}
+
+// Moves the plugin at `replaced` out of the way of the one staged at `root`,
+// which takes what it kept of its own (its data folder). It goes to
+// `previous` when there is one, for one step back, and to the trash otherwise.
+[[nodiscard]] std::expected<void, QString> moveAside(const QString &replaced, const QString &root, const QString &previous) {
+    if (QFileInfo(replaced + "/data").isDir() && !QFileInfo::exists(root + "/data"))
+        copyTree(replaced + "/data", root + "/data");
+    bool moved = false;
+    if (!previous.isEmpty()) {
+        // Kept for one step back; the one kept before it has had its turn.
+        QDir(previous).removeRecursively();
+        moved = QDir().mkpath(QFileInfo(previous).absolutePath()) && QDir().rename(replaced, previous);
+    }
+    if (!moved && discard(replaced) == Discarded::No)
+        return std::unexpected("The plugin that is there, " + replaced + ", can't be moved out of the way.");
+    QFile::remove(replaced + ".error");
+    return {};
 }
 
 } // namespace
@@ -363,10 +400,15 @@ QJsonObject PluginTools::install(const Context &context, const QString &source, 
         return answer;
     const QString name = answer.value("name").toString();
     const QString target = where.folder + "/" + name;
-    const bool replaces = QFileInfo::exists(target);
+    // What it replaces: the one of its name, or the one it was installed as before.
+    const QString formerly = answer.value("formerly").toString();
+    const QString replaced = formerly.isEmpty() ? target : where.folder + "/" + formerly;
+    const bool replaces = QFileInfo::exists(replaced);
     if (replaces && !options.replace)
-        return problem("There already is a plugin " + name + ". To put this one in its place (the one there goes to the "
-                       "trash), say so: omabook plugin install --replace, or give it another --name.");
+        return problem("There already is a plugin " + QFileInfo(replaced).fileName()
+                       + (formerly.isEmpty() ? QString() : ", which this one replaces as " + name)
+                       + ". To put this one in its place (the one there goes to the trash), say so: omabook plugin install "
+                         "--replace, or give it another --name.");
 
     // Decided before it is in place: a running Omabook loads what appears
     // in the folder, and one that wasn't approved must not run even once.
@@ -375,17 +417,8 @@ QJsonObject PluginTools::install(const Context &context, const QString &source, 
     if (!options.keepState)
         where.settings->setPluginEnabled("folder:" + name, options.enable);
     if (replaces) {
-        // What the plugin kept of its own (its data folder) stays with it.
-        if (QFileInfo(target + "/data").isDir() && !QFileInfo::exists(staged.root + "/data"))
-            copyTree(target + "/data", staged.root + "/data");
-        bool moved = false;
-        if (!options.previous.isEmpty()) {
-            // Kept for one step back; the one kept before it has had its turn.
-            QDir(options.previous).removeRecursively();
-            moved = QDir().mkpath(QFileInfo(options.previous).absolutePath()) && QDir().rename(target, options.previous);
-        }
-        if (!moved && discard(target) == Discarded::No)
-            return problem("The plugin that is there, " + target + ", can't be moved out of the way.");
+        if (const auto aside = moveAside(replaced, staged.root, options.previous); !aside)
+            return problem(aside.error());
     }
     QFile::remove(target + ".error");
     if (!QDir().rename(staged.root, target))

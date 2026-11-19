@@ -365,7 +365,7 @@ AppPopup {
         Label {
             visible: sheet.fits && !sheet.updating && sheet.offer.installed === true
             Layout.fillWidth: true
-            text: sheet.fits ? qsTr("A plugin called %1 is already installed. This one takes its place, and the one there goes to the trash.").arg(sheet.offer.name) : ""
+            text: sheet.fits ? qsTr("A plugin called %1 is already installed. This one takes its place, and the one there goes to the trash.").arg(sheet.offer.formerly || sheet.offer.name) : ""
             wrapMode: Text.Wrap
         }
         Label {
