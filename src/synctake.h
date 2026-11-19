@@ -36,12 +36,13 @@ struct Peer {
     const Remote *remote = nullptr;
     QJsonArray books;
     // What the other side holds now: its files' hashes, and the entry keys
-    // of its books without a file. A book with one of them is still a book
-    // there, as the one a merge kept is, and is never removed here.
+    // of its books, with a file or not. A book with one of them is still a
+    // book there, as the one a merge kept is, or the copy kept of two that
+    // were one book (#58), and is never removed here.
     QSet<QString> held;
 };
 
-// The names (files' hashes, entry keys of books without a file) of what a library holds.
+// The names (files' hashes, every book's entry keys) of what a library holds.
 [[nodiscard]] QSet<QString> heldBy(const Library &library);
 // The same of a manifest's books.
 [[nodiscard]] QSet<QString> heldBy(const QJsonArray &books);

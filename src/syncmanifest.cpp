@@ -108,12 +108,14 @@ void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qin
 }
 
 // A book as an Omabook that speaks the log needs it: what names it (its global
-// id, and for a book without a file its entry keys), its files and cover to
-// fetch. Its details, its reading, its place and its removal are the log's.
+// id, its entry keys), its files and cover to fetch. Its details, its reading,
+// its place and its removal are the log's. The keys are a book's with a file
+// too, as an older Omabook makes them of its details: a book without a file
+// there that has one of them is this one, never sent here nor removed there (#58).
 QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files) {
     const QString cover = library.coverPath(book.id);
     return {{"id", book.id},  {"gid", Spaces::bookId(library, book.id)},
-            {"files", files}, {"keys", files.isEmpty() ? QJsonArray::fromStringList(Library::entryKeys(book)) : QJsonArray()},
+            {"files", files}, {"keys", QJsonArray::fromStringList(Library::entryKeys(book))},
             {"cover", cover}, {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)}};
 }
 

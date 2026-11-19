@@ -9,6 +9,7 @@
 #include <compare>
 #include <tuple>
 
+#include "changelog.h"
 #include "graph.h"
 #include "hlc.h"
 #include "readingformat.h"
@@ -55,7 +56,8 @@ struct Taking {
     QHash<QString, QString> canonical;
     ReducedState mine;
     ReducedState theirs;
-    ReducedState merged; // both sides' operations, as the log's rules merge them
+    ReducedState theirsByName; // the same, each book by the id its own operations name, links not followed
+    ReducedState merged;       // both sides' operations, as the log's rules merge them
     QHash<QString, QJsonObject> listed;
     QTemporaryDir scratch;
     QSet<qint64> gone; // the books here the other side removed
@@ -130,12 +132,15 @@ bool takeDetails(Taking &taking, const Book &here, const QJsonObject &theirs, co
 
 // When the other side removed what names this book here (`name`: a file's
 // hash, or an entry key), as the operations their device wrote say; none
-// when they hold it, or never had it.
+// when they hold it, or never had it. What they removed is what they removed
+// by that name, as the manifest sync decides it: never a tombstone of
+// another copy that a same-as link put beside it (a duplicate removed there,
+// #58).
 [[nodiscard]] std::optional<qint64> removedThere(const Taking &taking, const QString &name) {
     if (taking.peer.held.contains(name))
         return std::nullopt;
-    const auto book = taking.theirs.books.constFind(taking.standsFor(Spaces::removalGlobalId(name)));
-    if (book == taking.theirs.books.cend() || !SpaceReducer::isRemoved(book->alive, book->removed))
+    const auto book = taking.theirsByName.books.constFind(Spaces::removalGlobalId(name));
+    if (book == taking.theirsByName.books.cend() || !SpaceReducer::isRemoved(book->alive, book->removed))
         return std::nullopt;
     return SpaceReducer::fieldHlc(*book, u"removed"_s);
 }
@@ -272,18 +277,53 @@ void takeCollections(Taking &taking) {
     }
 }
 
+// A book here that this computer's own log says is removed: a same-as link
+// put it beside a copy removed here, by the id that copy had (a duplicate
+// without a file, #58), and the copy's tombstone stood for it too. It is
+// here, so the log says so again, at once, of each id this computer removed
+// it by: for every computer to take, and before that tombstone sends the
+// book's details nowhere or removes another computer's copy.
+[[nodiscard]] bool keepHeld(const Library &library, const QList<SpaceOperation> &ops) {
+    const QString device = Spaces::deviceId(library);
+    const QHash<QString, QString> canonical = SpaceReducer::sameAs(ops);
+    const ReducedState mine = SpaceReducer::reduce(ops, device);
+    QSet<QString> removedHeld;
+    for (const Book &book : library.books()) {
+        const QString gid = Spaces::bookId(library, book.id);
+        const auto reduced = mine.books.constFind(canonical.value(gid, gid));
+        if (reduced != mine.books.cend() && SpaceReducer::isRemoved(reduced->alive, reduced->removed))
+            removedHeld.insert(reduced.key());
+    }
+    if (removedHeld.isEmpty())
+        return false;
+    const ReducedState byName = SpaceReducer::reduceByName(ops, device);
+    const Library::Batch batch(library);
+    for (auto book = byName.books.cbegin(); book != byName.books.cend(); ++book)
+        if (removedHeld.contains(canonical.value(book.key(), book.key())) && SpaceReducer::isRemoved(book->alive, book->removed))
+            ChangeLog::append(library, {.space = Spaces::personalSpace(library),
+                                        .entity = u"book"_s,
+                                        .id = book.key(),
+                                        .field = u"removed"_s,
+                                        .value = u"0"_s,
+                                        .hlc = std::nullopt});
+    return true;
+}
+
 } // namespace
 
 SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary) {
     QList<SpaceOperation> ops = Replication::operations(library);
     if (peer.dryRun)
         ops.append(QList<SpaceOperation>(incoming.begin(), incoming.end()));
+    else if (keepHeld(library, ops))
+        ops = Replication::operations(library);
     Taking taking{.library = library,
                   .peer = peer,
                   .summary = summary,
                   .canonical = SpaceReducer::sameAs(ops),
                   .mine = SpaceReducer::reduce(ops, Spaces::deviceId(library)),
                   .theirs = SpaceReducer::reduce(ops, peer.device),
+                  .theirsByName = SpaceReducer::reduceByName(ops, peer.device),
                   .merged = SpaceReducer::reduce(ops),
                   .listed = {},
                   .scratch = {},
@@ -314,13 +354,14 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
 
 QSet<QString> SyncTake::heldBy(const Library &library) {
     QSet<QString> held;
+    // Of every book its entry keys too, a file or not: a book without a file
+    // that has one of them elsewhere is this one, as the manifest sync finds
+    // it, and was never removed here (#58).
     for (const Book &book : library.books()) {
-        const QList<FormatFile> files = library.formatFiles(book.id);
-        for (const FormatFile &file : files)
+        for (const FormatFile &file : library.formatFiles(book.id))
             held.insert(file.hash);
-        if (files.isEmpty())
-            for (const QString &key : Library::entryKeys(book))
-                held.insert(key);
+        for (const QString &key : Library::entryKeys(book))
+            held.insert(key);
     }
     return held;
 }
