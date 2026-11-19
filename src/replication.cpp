@@ -40,8 +40,9 @@ constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,   
     return u"((o.entity = 'book' AND (o.field IN ("_s + fields.join(u", "_s)
            + u") OR o.field LIKE 'tag:%')) OR o.entity = 'collection' "
              "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log') AND s.name LIKE 'personal:%')) "
-             // A space this computer subscribes to is its own to follow (SubscribedSpace).
-             "AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
+             // A space this computer subscribes to is its own to follow (SubscribedSpace),
+             // and a shared one travels by its own transports, sealed (#38).
+             "AND s.name NOT LIKE 'shared:%' AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
              "AND person = (SELECT global_id FROM global_ids WHERE entity = 'device' AND local_id = 0))"_s;
 }
 
@@ -103,6 +104,8 @@ void join(QHash<QString, QString> &canonical, const QString &one, const QString 
 } // namespace
 
 bool Replication::travels(const SpaceOperation &op) {
+    if (op.space.startsWith("shared:"_L1))
+        return false;
     if (op.entity == "collection"_L1)
         return true;
     if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1)

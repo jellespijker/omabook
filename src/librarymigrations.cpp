@@ -350,6 +350,16 @@ const QList<QStringList> migrations{
      "CREATE TABLE IF NOT EXISTS published_ops (space TEXT NOT NULL, device TEXT NOT NULL, seq INTEGER NOT NULL, hlc INTEGER NOT NULL, "
      "author TEXT NOT NULL, entity TEXT NOT NULL, id TEXT NOT NULL, field TEXT NOT NULL DEFAULT '', value TEXT NOT NULL DEFAULT '', "
      "PRIMARY KEY (space, device, seq)) WITHOUT ROWID"},
+    // A shared space (#38) is a layer beside the library as a published one
+    // is: its writers' operations never make the members' own rows.
+    {"DROP VIEW IF EXISTS live_ops",
+     "CREATE VIEW live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value, signer, signature FROM snapshot_ops "
+     "WHERE space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
+     "OR (name >= 'shared:' AND name < 'shared;')) "
+     "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
+     "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
+     "AND o.space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
+     "OR (name >= 'shared:' AND name < 'shared;'))"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
