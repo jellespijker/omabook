@@ -11,6 +11,7 @@
 #include "hlc.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "synclog.h"
 
 using namespace Qt::StringLiterals;
 
@@ -164,7 +165,8 @@ bool takeCollection(Library &library, const QJsonObject &object, QHash<QString, 
 
 } // namespace
 
-QJsonObject libraryManifest(const Library &library) {
+QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
+    const bool log = peer == ManifestFor::LogPeer;
     ChangeLog::reconcile(library);
     QJsonArray books;
     for (const Book &book : library.books()) {
@@ -178,9 +180,15 @@ QJsonObject libraryManifest(const Library &library) {
         object.insert("cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover));
         object.insert("added_at", book.added);
         const QHash<QString, qint64> fieldHlcs = SpaceReplay::bookFieldHlcs(library, book.id);
-        const Progress prog = library.progress(book.id);
-        const qint64 progHlc = stampedOrNormalizedHlc(prog.updated, fieldHlcs.value(u"progress"_s));
-        object.insert("progress", toJson(prog, progHlc));
+        if (log) {
+            // The place is the log's; when the book last changed, place and all,
+            // still decides whether a removal here reaches it there.
+            object.insert("gid", Spaces::bookId(library, book.id));
+            object.insert("changed_hlc", SyncManifest::lastChangeHlc(library, book));
+        } else {
+            const Progress prog = library.progress(book.id);
+            object.insert("progress", toJson(prog, stampedOrNormalizedHlc(prog.updated, fieldHlcs.value(u"progress"_s))));
+        }
         object.insert("shelf", book.shelf);
         object.insert("paper", book.paper);
         const qint64 detailsHlc =
@@ -203,15 +211,21 @@ QJsonObject libraryManifest(const Library &library) {
         const qint64 hlc = Hlc::seconds(loggedHlc) == removal.at ? loggedHlc : Hlc::normalize(removal.at);
         removals << QJsonObject{{"key", removal.key}, {"at", removal.at}, {"hlc", hlc}};
     }
-    return {{"version", manifestVersion},
-            {"log", 1},
-            {"hlc", Spaces::lastHlc(library)},
-            {"omabook", QStringLiteral(OMABOOK_VERSION)},
-            {"books", books},
-            {"removed", QJsonArray::fromStringList(library.removedHashes())},
-            {"removals", removals},
-            {"collections", Collections::manifest(library)},
-            {"graph", GraphSync::bundle(library)}};
+    QJsonObject manifest{{"version", manifestVersion},
+                         {"hlc", Spaces::lastHlc(library)},
+                         {"omabook", QStringLiteral(OMABOOK_VERSION)},
+                         {"books", books},
+                         {"removed", QJsonArray::fromStringList(library.removedHashes())},
+                         {"removals", removals},
+                         {"collections", Collections::manifest(library)},
+                         {"graph", GraphSync::bundle(library)}};
+    if (log) {
+        manifest.insert("log", 1);
+        const QJsonObject introduction = SyncLog::introduction(library);
+        for (auto it = introduction.begin(); it != introduction.end(); ++it)
+            manifest.insert(it.key(), it.value());
+    }
+    return manifest;
 }
 
 QJsonObject SyncSummary::toJson() const {
@@ -361,6 +375,8 @@ qint64 lastChangeHlc(const Library &library, const Book &book) {
 }
 
 qint64 lastChangeHlc(const QJsonObject &theirs) {
+    if (theirs.contains("changed_hlc"))
+        return Hlc::normalize(theirs.value("changed_hlc").toInteger());
     return std::max({Hlc::normalize(theirs.value("added_at").toInteger()), theirProgressHlc(theirs), theirDetailsHlc(theirs),
                      Hlc::normalize(theirs.value("reading_hlc").toInteger(theirs.value("reading_at").toInteger()))});
 }

@@ -1,6 +1,7 @@
 #include "synccommands.h"
 
 #include <QCommandLineParser>
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
@@ -13,6 +14,7 @@
 #include "remote.h"
 #include "settings.h"
 #include "sync.h"
+#include "synclog.h"
 
 namespace {
 
@@ -149,18 +151,32 @@ int printSyncResult(const SyncSummary &summary, const QString &computer, bool js
     return summary.problems.isEmpty() ? 0 : 1;
 }
 
+int answerReplication(const QCommandLineParser &parser) {
+    QFile file(parser.value("replicate"));
+    if (!file.open(QIODevice::ReadOnly))
+        return failLine(parser.value("replicate") + " can't be read.");
+    const QJsonObject request = QJsonDocument::fromJson(file.readAll()).object();
+    const auto library = openCliLibrary(parser);
+    if (!library)
+        return failLine(library.error());
+    printJsonObject(SyncLog::answer(**library, request));
+    return 0;
+}
+
 } // namespace
 
 int runManifestCli(const QStringList &arguments) {
     QCommandLineParser parser;
     addCommonOptions(parser, "Print everything the library holds as JSON: each book's details, files with their "
                              "hashes, cover and reading place. This is what omabook sync reads from the other computer.");
+    parser.addOption({"log", "For an Omabook that speaks the change log: say so, and leave out what the log carries "
+                             "(the reading places)."});
     if (!parseArguments(parser, "manifest", arguments, 0))
         return 1;
     const auto library = openCliLibrary(parser);
     if (!library)
         return failLine(library.error());
-    printJsonObject(libraryManifest(**library));
+    printJsonObject(libraryManifest(**library, parser.isSet("log") ? ManifestFor::LogPeer : ManifestFor::OlderPeer));
     return 0;
 }
 
@@ -179,8 +195,14 @@ int runSyncCli(const QStringList &arguments) {
                       "Omabook kept that time): take this computer's (mine) or the other's (theirs).",
                       "mine|theirs"});
     parser.addOption({"dry-run", "Change nothing on either side; list what would be received, sent, updated and removed on each."});
+    parser.addOption({"replicate",
+                      "What omabook sync asks of this computer from the other one: take in the change log's operations in "
+                      "this file, and print the ones the other computer lacks.",
+                      "file"});
     if (!parseArguments(parser, "sync", arguments, 1))
         return 1;
+    if (parser.isSet("replicate"))
+        return answerReplication(parser);
     const auto options = parseSyncOptions(parser);
     if (!options)
         return failLine(options.error());

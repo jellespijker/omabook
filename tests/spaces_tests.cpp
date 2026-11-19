@@ -839,9 +839,11 @@ private slots:
         metaHere.publisher = "Modern Press";
         QVERIFY(here.setMeta(sharedId, metaHere, nullptr, Hlc::pack(1794860400, 4)));
 
-        // Every time in our own manifest must remain plain seconds alongside `hlc`.
+        // Every time in the manifest for an older Omabook must remain plain
+        // seconds alongside `hlc`, and it says nothing of the log.
         const QJsonObject myManifest = libraryManifest(here);
-        QCOMPARE(myManifest.value("log").toInt(), 1);
+        QVERIFY(!myManifest.contains("log"));
+        QCOMPARE(libraryManifest(here, ManifestFor::LogPeer).value("log").toInt(), 1);
         QCOMPARE(myManifest.value("books").toArray().first().toObject().value("details_at").toInteger(), qint64(1794860400));
         QCOMPARE(myManifest.value("books").toArray().first().toObject().value("details_hlc").toInteger(), Hlc::pack(1794860400, 4));
         QCOMPARE(myManifest.value("books").toArray().first().toObject().value("progress").toObject().value("updated").toInteger(),

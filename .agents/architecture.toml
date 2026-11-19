@@ -48,7 +48,10 @@ modules = [
 [layers.operations]
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
-modules = ["bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "plugintools", "scripttools", "sync", "syncmanifest"]
+modules = [
+  "bookops", "collections", "graphbatch", "graphcommands", "graphprint", "graphtools", "olderpeer", "plugintools", "scripttools",
+  "sync", "synclog", "syncmanifest",
+]
 
 # The two front ends are peers: neither includes the other. What both need
 # belongs in operations or below.

@@ -68,6 +68,10 @@ std::expected<void, QString> Remote::send(const QString &localFile, const QStrin
 }
 
 std::expected<int, QString> Remote::handOver(const QJsonDocument &document, const QStringList &arguments) const {
+    return exchange(document, arguments).transform([](const QJsonObject &answer) { return answer.value("changed").toInt(); });
+}
+
+std::expected<QJsonObject, QString> Remote::exchange(const QJsonDocument &document, const QStringList &arguments) const {
     const QTemporaryDir here;
     QFile file(here.filePath("given.json"));
     if (!here.isValid() || !file.open(QIODevice::WriteOnly) || file.write(document.toJson(QJsonDocument::Compact)) <= 0)
@@ -82,5 +86,5 @@ std::expected<int, QString> Remote::handOver(const QJsonDocument &document, cons
     const Result taken = omabook(arguments + QStringList{folder + "/given.json"});
     if (!taken.ok())
         return std::unexpected(taken.error.isEmpty() ? QString("it was not taken") : taken.error.section('\n', -1));
-    return QJsonDocument::fromJson(taken.output).object().value("changed").toInt();
+    return QJsonDocument::fromJson(taken.output).object();
 }

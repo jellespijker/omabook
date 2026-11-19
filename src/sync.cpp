@@ -17,6 +17,8 @@
 #include "formats.h"
 #include "graphsync.h"
 #include "hlc.h"
+#include "olderpeer.h"
+#include "synclog.h"
 #include "syncmanifest.h"
 
 namespace {
@@ -216,7 +218,13 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     SyncSummary summary;
     summary.dryRun = options.dryRun;
     const bool dryRun = options.dryRun;
-    const Remote::Result listed = remote.omabook({"manifest"});
+    // An Omabook that speaks the log answers `manifest --log` with a manifest
+    // that says so and leaves out what the log carries; one from before
+    // refuses the option it doesn't know (exit code 1), and is asked for the
+    // manifest it has always given.
+    Remote::Result listed = remote.omabook({"manifest", "--log"});
+    if (listed.code == 1)
+        listed = remote.omabook({"manifest"});
     const QJsonObject manifest = QJsonDocument::fromJson(listed.output).object();
     if (!listed.ok() || !manifest.contains("books")) {
         summary.error = listed.code == 127 || listed.error.contains("not found")
@@ -270,7 +278,6 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         const qint64 theirId = theirs.value("id").toInteger();
         const QString title = theirs.value("title").toString();
         const QJsonArray files = theirs.value("files").toArray();
-        const Progress theirPlace = SyncManifest::progressFrom(theirs.value("progress").toObject());
         qint64 mine = 0;
         bool removedHere = false;
         QStringList hashes;
@@ -401,23 +408,8 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 summary.problems << error;
             QFile::remove(local);
         }
-
-        const Progress myPlace = library.progress(mine);
-        const qint64 theirPlaceHlc = SyncManifest::theirProgressHlc(theirs);
-        const qint64 myPlaceHlc = SyncManifest::myProgressHlc(library, mine, myPlace);
-        if (std::is_gt(Hlc::compare(theirPlaceHlc, myPlaceHlc))) {
-            if (!dryRun) {
-                Progress updatedPlace = theirPlace;
-                updatedPlace.updated = theirPlaceHlc;
-                library.setProgress(mine, updatedPlace);
-            }
-            note(summary.placesTaken, summary.titles.placesTaken, title);
-        } else if (std::is_gt(Hlc::compare(myPlaceHlc, theirPlaceHlc))) {
-            Progress sentPlace = myPlace;
-            sentPlace.updated = SyncManifest::wireTimestamp(myPlaceHlc, peerHasLog);
-            if (dryRun || remote.omabook(SyncManifest::progressArguments(theirId, sentPlace)).ok())
-                note(summary.placesSent, summary.titles.placesSent, title);
-        }
+        if (!peerHasLog)
+            OlderPeer::mergePlace(library, remote, mine, theirs, summary, dryRun);
     }
 
     // What they lack: send it, unless they removed it themselves; and when
@@ -515,10 +507,8 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         }
         for (const QString &file : sentFiles.mid(1))
             remote.omabook({"add", file, "--to", QString::number(theirId)});
-        if (Progress place = library.progress(book.id); place.updated > 0) {
-            place.updated = SyncManifest::wireTimestamp(SyncManifest::myProgressHlc(library, book.id, place), peerHasLog);
-            remote.omabook(SyncManifest::progressArguments(theirId, place));
-        }
+        if (!peerHasLog)
+            OlderPeer::givePlace(library, remote, book.id, theirId);
         // Its details there keep the time they have here.
         const qint64 myBookDetailsAt =
             book.detailsAt == 0 ? 0 : SyncManifest::wireTimestamp(SyncManifest::myDetailsHlc(library, book), peerHasLog);
@@ -531,6 +521,9 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // a dry run leaves them be.
     if (!dryRun)
         syncCollectionsAndGraph(library, remote, manifest, summary);
+    // The reading places, between two that speak the log, once both have every book.
+    if (peerHasLog)
+        SyncLog::replicate(library, remote, manifest, summary, dryRun);
     logSyncSummary(summary, remote.host());
     return summary;
 }

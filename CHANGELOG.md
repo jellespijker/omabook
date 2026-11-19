@@ -15,6 +15,7 @@ moves those lines under its version.
 ### Changed
 
 - Each library keeps global ids, a hybrid logical clock and a change log alongside its tables; `omabook sync` uses the clock across computers whose wall clocks differ and merges book details field by field (#35).
+- Between two computers with this Omabook, `omabook sync` carries reading places through the change log: the first sync makes their personal spaces one, only the places that changed travel, and the manifest leaves them out. With an older Omabook the sync works as before. A place that arrives this way is no longer counted as a day's reading on the computer it arrives at (#36).
 
 ### Fixed
 

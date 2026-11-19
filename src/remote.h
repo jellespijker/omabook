@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QJsonDocument>
+#include <QJsonObject>
 #include <QString>
 #include <QStringList>
 #include <expected>
@@ -35,6 +36,8 @@ public:
     // the folder. Answers how much it changed there (the command's
     // "changed"), or why it couldn't.
     std::expected<int, QString> handOver(const QJsonDocument &document, const QStringList &arguments) const;
+    // The same, answering what the command printed (a JSON object).
+    [[nodiscard]] std::expected<QJsonObject, QString> exchange(const QJsonDocument &document, const QStringList &arguments) const;
 
     // One argument, quoted for the shell on the other side.
     static QString quote(const QString &argument);

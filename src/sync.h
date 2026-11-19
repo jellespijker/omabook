@@ -30,8 +30,14 @@
 // refuses to sync and says to update, instead of acting on what it misread.
 inline constexpr int manifestVersion = 1;
 
+// Who a manifest is for: an Omabook from before the change log, or one that
+// speaks it (`omabook manifest --log`). The second's says so ("log": 1) with
+// its log's space, device and version vector, names each book by its global
+// id, and leaves out what travels by the log (the reading places).
+enum class ManifestFor { OlderPeer, LogPeer };
+
 // Everything a library holds, as the other side of a sync needs to see it.
-QJsonObject libraryManifest(const Library &library);
+QJsonObject libraryManifest(const Library &library, ManifestFor peer = ManifestFor::OlderPeer);
 
 struct SyncOptions {
     // Whose details a book both sides have takes where they differ and no
