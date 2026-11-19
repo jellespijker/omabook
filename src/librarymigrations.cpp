@@ -360,6 +360,11 @@ const QList<QStringList> migrations{
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
      "AND o.space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
      "OR (name >= 'shared:' AND name < 'shared;'))"},
+    // Where a space travels by a transport (#7): the place a space published
+    // here was last sent to (a gist, updated in place when it is sent again),
+    // and the place a subscription follows. This library's own, never sent.
+    {"CREATE TABLE IF NOT EXISTS space_links (space TEXT NOT NULL, role TEXT NOT NULL, transport TEXT NOT NULL, "
+     "address TEXT NOT NULL, PRIMARY KEY (space, role, transport)) WITHOUT ROWID"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
