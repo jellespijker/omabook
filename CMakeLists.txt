@@ -65,6 +65,8 @@ add_dependencies(graphsync_tests omabook)
 target_compile_definitions(graphsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 add_dependencies(spaces_tests omabook)
 target_compile_definitions(spaces_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+# The library samples of every release, for the tests of the change log.
+target_sources(spaces_tests PRIVATE tests/samples.cpp)
 
 # The Folio plugins are read from the source tree, as they are installed.
 target_compile_definitions(folio_tests PRIVATE OMABOOK_SOURCE="${CMAKE_SOURCE_DIR}")
