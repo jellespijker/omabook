@@ -50,7 +50,7 @@ modules = [
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "plugintools",
+  "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
 ]
 
