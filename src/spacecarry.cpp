@@ -15,15 +15,18 @@
 #include <utility>
 
 #include "crypto.h"
+#include "keyrotation.h"
 #include "library.h"
 #include "log.h"
 #include "person.h"
 #include "publishedspace.h"
 #include "replication.h"
 #include "sharedcollection.h"
+#include "sharedkeys.h"
 #include "sharedspace.h"
 #include "sharedspaces.h"
 #include "spacekey.h"
+#include "spacekeys.h"
 #include "spacelinks.h"
 #include "spacesnapshot.h"
 #include "subscribedspace.h"
@@ -100,39 +103,56 @@ void wipe(QByteArray &bytes) { sodium_memzero(bytes.data(), static_cast<std::siz
 }
 
 // Every generation of the space's key held here, oldest first, each an
-// object of its own. There is one so far; rotating a key (#49) adds the
-// later ones, each with its generation, and keepKeys keeps each.
-[[nodiscard]] QJsonArray keysOf(Library &library, const QString &space) {
-    QJsonArray keys;
-    if (const auto key = SpaceKey::load(SharedSpaces::keyFile(library, space))) {
-        QByteArray raw = Crypto::toByteArray(key->bytes());
+// object of its own: the key, its id and its generation (0 for the one the
+// space was founded with; that of the rotation that handed it, #49).
+[[nodiscard]] QJsonArray keysOf(const Library &library, const QString &space) {
+    const auto keys = SharedKeys::held(library, space);
+    if (!keys)
+        return {};
+    QHash<QString, qint64> generations;
+    for (const KeyRotation &rotation : SharedSpace::state(library, space).rotations)
+        generations.insert(rotation.key, rotation.generation);
+    QList<std::pair<qint64, QJsonObject>> entries;
+    for (const SpaceKey &key : *keys) {
+        QByteArray raw = Crypto::toByteArray(key.bytes());
         QByteArray encoded = raw.toBase64(base64);
-        keys << QJsonObject{{"key", QString::fromLatin1(encoded)}};
+        const qint64 generation = &key == &keys->front() ? 0 : generations.value(key.id(), 1);
+        entries.append({generation, QJsonObject{{"key", QString::fromLatin1(encoded)}, {"id", key.id()}, {"generation", generation}}});
         wipe(raw);
         wipe(encoded);
     }
-    return keys;
+    std::ranges::stable_sort(entries, {}, &std::pair<qint64, QJsonObject>::first);
+    QJsonArray array;
+    for (const auto &entry : std::as_const(entries))
+        array << entry.second;
+    return array;
 }
 
-// Keeps the newest of `keys` that is a key, unless a key of the space is here already.
-[[nodiscard]] qsizetype keepKeys(Library &library, const QString &space, const QJsonArray &keys, QStringList &problems) {
-    const QString file = SharedSpaces::keyFile(library, space);
-    if (SpaceKey::load(file))
-        return 0;
-    for (qsizetype at = keys.size() - 1; at >= 0; --at) {
-        QByteArray raw = decoded(keys.at(at).toObject().value("key"));
+// Keeps each of `keys` not here yet, oldest generation first, so that the
+// one the space was founded with is kept as that (SpaceKeys::keep), never
+// over one that is here. How many it kept.
+[[nodiscard]] qsizetype keepKeys(const Library &library, const QString &space, const QJsonArray &keys, QStringList &problems) {
+    QList<std::pair<qint64, QJsonObject>> entries;
+    for (const auto &entry : keys)
+        entries.append({entry.toObject().value("generation").toInteger(), entry.toObject()});
+    std::ranges::stable_sort(entries, {}, &std::pair<qint64, QJsonObject>::first);
+    qsizetype keptHere = 0;
+    for (const auto &entry : std::as_const(entries)) {
+        QByteArray raw = decoded(entry.second.value("key"));
         const auto key = SpaceKey::fromBytes(Crypto::bytes(raw));
         wipe(raw);
         if (!key)
             continue;
-        if (const auto kept = key->keepIn(file); !kept) {
+        const auto kept = SpaceKeys::keep(SharedKeys::folder(library), space, *key);
+        if (!kept) {
             problems << u"The key of %1 could not be kept here: %2"_s.arg(space, kept.error());
-            return 0;
+            return keptHere;
         }
-        return 1;
+        keptHere += *kept ? 1 : 0;
     }
-    problems << u"The key of %1 was not carried here, so its folder can't be read here yet."_s.arg(space);
-    return 0;
+    if (!SpaceKey::load(SharedSpaces::keyFile(library, space)))
+        problems << u"The key of %1 was not carried here, so its folder can't be read here yet."_s.arg(space);
+    return keptHere;
 }
 
 [[nodiscard]] QJsonArray sharedFor(Library &library, const QJsonObject &held) {

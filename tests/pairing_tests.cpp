@@ -3,6 +3,7 @@
 // spot in a temporary folder: no real key is ever read.
 
 #include <QDir>
+#include <QDirIterator>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -27,6 +28,7 @@
 #include "publishedspace.h"
 #include "remote.h"
 #include "replication.h"
+#include "sharedkeys.h"
 #include "sharedspace.h"
 #include "sharedspaces.h"
 #include "signedops.h"
@@ -661,6 +663,55 @@ private slots:
         QVERIFY(bo.sync().isEmpty());
         QCOMPARE(spaceTitles(bo.here, space), QStringList({"Dune", "Persuasion"}));
         QVERIFY(SharedSpace::state(bo.here, space).refused.isEmpty());
+    }
+
+    // #49: a key changed on one of one's computers reaches the others with
+    // every generation of it, and they read and write on with the new one.
+    void aKeyChangedOnOneComputerReachesTheOtherOverSsh() {
+        QTemporaryDir dir;
+        const QString folder = dir.filePath("Synced");
+        QVERIFY(QDir().mkpath(folder));
+        OwnComputers bo(dir);
+        QVERIFY2(bo.sync().isEmpty(), "the first sync pairs");
+        fileBook(bo.here, "Home", "Dune", "9780441172719");
+        const auto created = SharedSpaces::create(bo.here, "Home", {});
+        QVERIFY2(created, qPrintable(whyNot(created)));
+        const QString space = created->space.space;
+        Computer cy(dir, "cy");
+        QVERIFY(SharedSpaces::invite(bo.here, space, cy.id(), Role::Writer, dir.filePath("cy.omabook-invite")).has_value());
+        QVERIFY(SharedSpaces::sync(bo.here, space, folder).has_value());
+        QVERIFY(SharedSpaces::join(cy.library, dir.filePath("cy.omabook-invite")).has_value());
+        std::ignore = cy.sync(space, folder);
+        QVERIFY(bo.sync().isEmpty());
+
+        // Removed here: the key changes here, and goes there with the one before it.
+        QVERIFY(SharedSpaces::remove(bo.here, space, cy.id()).has_value());
+        QVERIFY(SharedSpaces::sync(bo.here, space, folder).has_value());
+        const QStringList problems = bo.sync();
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
+        const std::unique_ptr<Library> there = bo.there();
+        const auto idsOf = [&space](const Library &library) {
+            QStringList ids;
+            if (const auto keys = SharedKeys::held(library, space))
+                for (const SpaceKey &key : *keys)
+                    ids << key.id();
+            return ids;
+        };
+        QCOMPARE(idsOf(*there).size(), 2);
+        QCOMPARE(idsOf(*there), idsOf(bo.here));
+        QCOMPARE(idsOf(*there).first(), SpaceKey::load(SharedSpaces::keyFile(bo.here, space))->id());
+        for (QDirIterator files(SharedKeys::folder(*there), QDir::Files); files.hasNext();)
+            QCOMPARE(QFile::permissions(files.next()) & ~(QFile::ReadOwner | QFile::WriteOwner | QFile::ReadUser | QFile::WriteUser),
+                     QFile::Permissions());
+
+        // There writes on with the new key: here reads it, Cy, removed, doesn't.
+        fileBook(*there, "Home", "Persuasion", "9780141439686");
+        const auto wrote = SharedSpaces::sync(*there, space, folder);
+        QVERIFY2(wrote && wrote->written > 0 && wrote->refused.isEmpty(), qPrintable(whyNot(wrote)));
+        QVERIFY(SharedSpaces::sync(bo.here, space, folder).has_value());
+        QCOMPARE(spaceTitles(bo.here, space), QStringList({"Dune", "Persuasion"}));
+        std::ignore = cy.sync(space, folder);
+        QVERIFY(!spaceTitles(cy.library, space).contains("Persuasion"));
     }
 
     // #51: subscribing once is subscribing on all one's computers, the graph
