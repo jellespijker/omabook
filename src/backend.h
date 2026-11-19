@@ -72,7 +72,8 @@ class Backend : public QObject {
     // The library's collections (library.h), as a tree read from the top,
     // each as {"id", "name", "path", "parent", "depth", "children", "rule",
     // "count", "included", "excluded", "format", and of one a subscribed
-    // space fills "space" and "sharedBy", its owner's name}; and
+    // space fills "space", "sharedBy", its owner's name, and "followed",
+    // whether from a link}; and
     // the one the shelf shows, 0 for all the books. Each collection keeps
     // its own view, stacks and order, so going from one to another shows
     // each as it was left. Which one is shown is remembered per library.

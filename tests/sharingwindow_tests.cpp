@@ -15,10 +15,12 @@
 #include <QQuickWindow>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <memory>
 #include <optional>
 
 #include "assistant.h"
 #include "backend.h"
+#include "collectionshare.h"
 #include "customization.h"
 #include "fixtures.h"
 #include "graph.h"
@@ -40,6 +42,28 @@ class Picker : public FilePicker {
 public:
     QList<Purpose> asked;
     void pick(Purpose purpose, const QString &) override { asked << purpose; }
+};
+
+// A transport of links into a folder, in place of GitHub: a snapshot sent is
+// a file there, and its link names it.
+class FolderLink final : public SpaceTransport {
+public:
+    explicit FolderLink(QString folder) : m_folder(std::move(folder)) {}
+    [[nodiscard]] QString name() const override { return "test"; }
+    [[nodiscard]] bool handles(const QString &address) const override { return address.startsWith(prefix); }
+    [[nodiscard]] std::expected<SpaceSnapshot, QString> fetch(const QString &address) override {
+        return SpaceSnapshotFile::load(m_folder + "/" + address.mid(prefix.size()));
+    }
+    [[nodiscard]] std::expected<Sent, QString> publish(const SpaceSnapshot &snapshot, const Sending &sending) override {
+        const QString address = sending.previous.isEmpty() ? prefix + "shared.omabook-space" : sending.previous;
+        if (const auto saved = SpaceSnapshotFile::save(snapshot, m_folder + "/" + address.mid(prefix.size())); !saved)
+            return std::unexpected(saved.error());
+        return Sent{.address = address, .created = sending.previous.isEmpty(), .open = sending.open, .note = {}};
+    }
+
+private:
+    inline static const QString prefix = "https://link.test/";
+    QString m_folder;
 };
 
 // The whole window on a temp folder, as in ui_tests.cpp, with no AI.
@@ -218,7 +242,7 @@ private slots:
         QVERIFY(desk.value("publishRatings", "text").toString().contains("(1)"));
         // Every part of the user's own is off until switched on, and the
         // first time it asks the name the user goes by.
-        for (const QString part : {"publishGraph", "publishQuestions", "publishRatings", "publishReading"})
+        for (const QString part : {"publishGraph", "publishQuestions", "publishRatings", "publishReading", "publishLink"})
             QVERIFY2(!desk.value(part, "checked").toBool(), qPrintable(part));
         QVERIFY(desk.value("publishName", "visible").toBool());
         QVERIFY(desk.value("publishFile", "text").toString().endsWith("Tides.omabook-space"));
@@ -332,6 +356,54 @@ private slots:
         QCOMPARE(library.collection(tides)->of(library.books()).size(), 2);
         QTRY_VERIFY(!desk.find("collectionTab-" + QString::number(tides))->findChild<QQuickItem *>("collectionTabShared")->isVisible());
         QVERIFY(desk.backend->message().contains("The collection Tides stays"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void aLinkIsSubscribedToAndFollowed() {
+        Desk desk;
+        Library &library = *desk.backend->library();
+        const QString links = desk.dir.filePath("links");
+        QVERIFY(QDir().mkpath(links));
+        desk.backend->spaces()->setTransports([links] { return std::make_unique<FolderLink>(links); });
+        // Someone else's collection, published by link.
+        Library owner(desk.dir.filePath("Owner"));
+        QVERIFY(owner.open());
+        const qint64 tide = owner.addEntry(meta("The Long Tide", "Mira Okafor"), true).id;
+        const auto shelf = owner.addCollection("Tides");
+        QVERIFY(shelf && owner.putInCollection(*shelf, tide, true));
+        FolderLink sender(links);
+        const auto sent =
+            CollectionShare::publish(owner, *owner.collection(*shelf), {}, {.as = "Ada", .output = {}, .link = &sender, .open = false});
+        QVERIFY2(sent.has_value(), qPrintable(sent ? QString() : sent.error()));
+        const QString address = sent->value("sent").toObject().value("address").toString();
+        QVERIFY(address.startsWith("https://link.test/"));
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+
+        // Pasted into the subscribe dialog, read, and subscribed to.
+        QVERIFY(desk.run("library.subscribe"));
+        QTRY_VERIFY(desk.value("subscribeDialog", "opened").toBool());
+        QVERIFY(desk.set("subscribeLinkField", "text", address));
+        QVERIFY(desk.click("subscribeReadLink"));
+        QTRY_VERIFY(desk.value("subscribeDialog", "ready").toBool());
+        QVERIFY(desk.value("subscribeFollows", "visible").toBool());
+        QVERIFY(desk.click("subscribeConfirm"));
+        QTRY_COMPARE(SubscribedSpace::list(library).size(), 1);
+        const qint64 tides = library.collectionNamed("Tides")->id;
+
+        // The owner adds a book; the collection's dialog finds it, and takes it in only when asked.
+        const qint64 hers = owner.addEntry(meta("Only Hers", "Ann Other"), true).id;
+        QVERIFY(owner.putInCollection(*shelf, hers, true));
+        QVERIFY(CollectionShare::publish(owner, *owner.collection(*shelf), {}, {.as = {}, .output = {}, .link = &sender, .open = false}));
+        QTRY_VERIFY(desk.backend->collections().size() == 1);
+        QMetaObject::invokeMethod(desk.window, "editCollection", Q_ARG(QVariant, tides));
+        QTRY_VERIFY(desk.value("collectionDialog", "opened").toBool());
+        QTRY_VERIFY(desk.value("collectionLookForUpdates", "visible").toBool());
+        QVERIFY(desk.click("collectionLookForUpdates"));
+        QTRY_VERIFY(desk.value("collectionUpdates", "text").toString().contains("new there"));
+        QCOMPARE(library.collection(tides)->of(library.books()).size(), 1);
+        QVERIFY(desk.click("collectionTakeUpdates"));
+        QTRY_COMPARE(library.collection(tides)->of(library.books()).size(), 2);
+        QTRY_VERIFY(desk.backend->message().contains("up to date"));
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

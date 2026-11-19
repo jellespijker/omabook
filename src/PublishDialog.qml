@@ -8,8 +8,9 @@ import QtQuick.Layouts
 // counts it, what never goes (the books' files), and each part that is the
 // user's own with its switch, all off until switched on. The first time, it
 // asks the name the user goes by; and where to save the file that is given
-// to others. Publishing again is publishing the same space, which brings
-// what changed since.
+// to others, or that it goes as a link (a gist, secret unless asked, #7), or
+// both. Publishing again is publishing the same space, which brings what
+// changed since; by link, to the same gist.
 AppPopup {
     id: dialog
     objectName: "publishDialog"
@@ -21,14 +22,14 @@ AppPopup {
     readonly property bool counted: seen.collection === collectionId && seen.path !== undefined
     readonly property string problem: seen.collection === collectionId ? (seen.error || "") : ""
     readonly property bool firstTime: counted && (seen.name || "") === ""
-    readonly property bool canPublish: counted && problem === "" && !backend.spaces.working && file.text.trim() !== ""
+    readonly property bool canPublish: counted && problem === "" && !backend.spaces.working && (file.text.trim() !== "" || asLink.checked)
                                        && (!firstTime || name.text.trim() !== "")
     readonly property var parts: ({ graph: graph.checked, questions: questions.checked, ratings: ratings.checked, reading: reading.checked })
 
     function show(id) {
         const known = backend.collections.find(collection => collection.id === id)
         collectionId = known ? id : (backend.collections.length > 0 ? backend.collections[0].id : 0)
-        for (const part of [graph, questions, ratings, reading])
+        for (const part of [graph, questions, ratings, reading, asLink, openLink])
             part.checked = false
         name.text = ""
         file.text = ""
@@ -37,7 +38,7 @@ AppPopup {
     }
     function publish() {
         if (canPublish)
-            backend.spaces.publish(collectionId, parts, name.text.trim(), file.text.trim())
+            backend.spaces.publish(collectionId, parts, name.text.trim(), file.text.trim(), asLink.checked, asLink.checked && openLink.checked)
     }
     onOpened: (firstTime ? name : file).forceActiveFocus()
 
@@ -186,7 +187,7 @@ AppPopup {
             Material.roundedScale: theme.radius
             onAccepted: file.forceActiveFocus()
         }
-        // Where the file goes. A link to share in its place (#7) goes beside it.
+        // Where the file goes, and the link it can go by too.
         Label {
             Layout.fillWidth: true
             visible: dialog.counted
@@ -210,6 +211,17 @@ AppPopup {
                 text: qsTr("Choose…")
                 onClicked: backend.spaces.chooseFile(true, file.text)
             }
+        }
+        PartSwitch {
+            id: asLink
+            objectName: "publishLink"
+            text: qsTr("Also as a link: a gist on GitHub, sent through its gh command, that those you give it to can follow")
+        }
+        PartSwitch {
+            id: openLink
+            objectName: "publishLinkPublic"
+            visible: dialog.counted && asLink.checked
+            text: qsTr("Anyone may find it (a public gist); else only those given the link")
         }
         Label {
             objectName: "publishProblem"

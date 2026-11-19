@@ -19,6 +19,9 @@ AppPopup {
     property var parentId: 0
     property bool confirming: false
     property bool unsubscribing: false
+    // What following this collection's link found, when it was looked for.
+    readonly property var updates: dialog.editing !== null && backend.spaces.following.space === dialog.editing.space
+                                   ? backend.spaces.following : ({})
     // Where it can go: the top, or any collection but itself and those inside it.
     readonly property var places: {
         const self = editing
@@ -180,7 +183,20 @@ AppPopup {
                   : dialog.unsubscribing ? qsTr("Unsubscribe from %1's shared collection? This collection stays, with its books and wishlist entries; the shared graph goes.").arg(dialog.editing.sharedBy || "?")
                   : qsTr("Subscribed to, from %1's shared collection: what they add to it comes here too.").arg(dialog.editing.sharedBy || "?")
         }
-        RowLayout {
+        // What its link has that it hasn't, once looked for.
+        Label {
+            objectName: "collectionUpdates"
+            Layout.fillWidth: true
+            visible: text !== ""
+            wrapMode: Text.Wrap
+            color: dialog.updates.problem ? theme.colors.orange : theme.colors.muted
+            text: dialog.updates.space === undefined ? ""
+                  : dialog.updates.problem ? dialog.updates.problem
+                  : dialog.updates.operations === undefined ? qsTr("Looking for updates…")
+                  : dialog.updates.operations > 0 ? qsTr("%Ln changes are new there: %1.", "", dialog.updates.operations).arg(dialog.updates.changes)
+                  : qsTr("Nothing new there.")
+        }
+        Flow {
             Layout.fillWidth: true
             visible: dialog.collectionId !== 0
             spacing: 8
@@ -193,6 +209,18 @@ AppPopup {
                     dialog.close()
                     win.showPublish(id)
                 }
+            }
+            AppButton {
+                objectName: "collectionLookForUpdates"
+                visible: dialog.editing !== null && dialog.editing.followed === true
+                text: qsTr("Look for updates")
+                onClicked: backend.spaces.lookForUpdates(dialog.editing.space)
+            }
+            AppButton {
+                objectName: "collectionTakeUpdates"
+                visible: dialog.updates.operations > 0
+                text: qsTr("Take them in")
+                onClicked: backend.spaces.takeUpdates(dialog.editing.space)
             }
             AppButton {
                 objectName: "collectionUnsubscribe"

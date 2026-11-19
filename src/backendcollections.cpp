@@ -6,6 +6,7 @@
 
 #include <QJsonObject>
 
+#include "spacelinks.h"
 #include "subscribedspace.h"
 
 namespace {
@@ -40,9 +41,13 @@ void Backend::readCollections(const QList<Book> &books) {
     std::optional<QSet<qint64>> members;
     // A collection a subscribed space fills says whose space it is (#6).
     QHash<qint64, SubscribedSpace::Subscription> spaces;
+    QSet<QString> followed; // from a link, to look at for what is new
     for (const SubscribedSpace::Subscription &space :
-         m_library ? SubscribedSpace::list(*m_library) : QList<SubscribedSpace::Subscription>())
+         m_library ? SubscribedSpace::list(*m_library) : QList<SubscribedSpace::Subscription>()) {
         spaces.insert(space.collection, space);
+        if (SpaceLinks::of(*m_library, space.space, SpaceLinks::Role::Followed))
+            followed.insert(space.space);
+    }
     for (const Collection &collection : collections) {
         QSet<qint64> in;
         for (const Book &book : books)
@@ -60,7 +65,8 @@ void Backend::readCollections(const QList<Book> &books) {
                             {"excluded", int(collection.excluded.size())},
                             {"format", !collection.format.isEmpty()},
                             {"space", spaces.value(collection.id).space},
-                            {"sharedBy", spaces.value(collection.id).ownerName}};
+                            {"sharedBy", spaces.value(collection.id).ownerName},
+                            {"followed", followed.contains(spaces.value(collection.id).space)}};
         if (collection.id == m_collection)
             members = in;
     }

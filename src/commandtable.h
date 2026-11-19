@@ -35,7 +35,7 @@ struct BuiltIn {
 // it is shown (see Manual::commands).
 constexpr auto tr = [](const char *text) noexcept { return text; };
 
-inline constexpr BuiltIn builtIns[] = {
+inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"global.help", {"?", "F1"}, tr("Show or hide the help: every key, and how things work")},
     {"global.quit", {"Q", "Ctrl+Q"}, tr("Quit")},
     {"global.settings", {","}, tr("Open the settings")},
@@ -151,7 +151,7 @@ inline constexpr BuiltIn builtIns[] = {
     {"graph.edit", {"E"}, tr("Rename the selected thing, or rewrite what is said of it")},
     {"graph.merge", {"Shift+M"}, tr("Fold another thing into the selected one: they are the same")},
     {"graph.remove", {"D", "Delete"}, tr("Remove the selected thing from the graph (asks first)")},
-};
+});
 
 // A command is found by its id, which begins with the place it works in.
 [[nodiscard]] constexpr bool namedApart(std::span<const BuiltIn> commands) {
@@ -168,14 +168,20 @@ inline constexpr BuiltIn builtIns[] = {
 // A key does one thing where it is pressed: no two commands of one place
 // have the same key by default, and none has a key that works everywhere.
 // (The graph's keys are its own: it lies over the shelf or beside the page.)
-[[nodiscard]] constexpr bool keyedApart(std::span<const BuiltIn> commands) {
-    for (std::size_t one = 0; one < commands.size(); ++one)
-        for (std::size_t other = one + 1; other < commands.size(); ++other) {
-            const std::string_view here = placeOf(commands[one].id), there = placeOf(commands[other].id);
-            const bool together = here == there || here == "global" || there == "global";
-            const auto shared = [&](std::string_view key) { return std::ranges::contains(keysOf(commands[other]), key); };
-            if (together && std::ranges::any_of(keysOf(commands[one]), shared))
-                return false;
+// Each command's place is found once, as its number in `places` (global is
+// the first), not once for every pair: clang's constant evaluation stops at
+// a number of steps a table this long reaches otherwise.
+template <std::size_t Count> [[nodiscard]] constexpr bool keyedApart(const std::array<BuiltIn, Count> &commands) {
+    std::array<std::size_t, Count> placed{};
+    for (std::size_t at = 0; at < Count; ++at)
+        placed.at(at) = static_cast<std::size_t>(std::ranges::find(places, placeOf(commands.at(at).id)) - places.begin());
+    for (std::size_t one = 0; one < Count; ++one)
+        for (std::size_t other = one + 1; other < Count; ++other) {
+            if (placed.at(one) != placed.at(other) && placed.at(one) != 0 && placed.at(other) != 0)
+                continue;
+            for (const std::string_view key : commands.at(one).keys)
+                if (!key.empty() && std::ranges::contains(commands.at(other).keys, key))
+                    return false;
         }
     return true;
 }

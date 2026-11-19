@@ -60,9 +60,9 @@ void Backend::sync() {
     setStatus(tr("Syncing with %1…").arg(target.section(':', 0, 0)));
     const QString root = m_library->root();
     const QStringList ssh = m_ssh;
-    QPointer<Backend> self(this);
+    const QPointer<Backend> self(this);
     QThreadPool::globalInstance()->start([self, root, target, ssh] {
-        QEventLoopLocker locker;
+        const QEventLoopLocker locker;
         SyncSummary summary;
         Library library(root);
         if (!library.open(&summary.error))

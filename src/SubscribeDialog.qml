@@ -3,8 +3,9 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 
-// Subscribing to a collection someone published (#6), from its file: picked
-// from the ⋯ menu, or dropped on the window. Before anything is written it
+// Subscribing to a collection someone published (#6), from its file, picked
+// from the ⋯ menu or dropped on the window, or from a link (#7), which is
+// followed after. Before anything is written it
 // says what of it matched books of the library, what becomes wishlist
 // entries (books without a file, never downloaded), the collection its books
 // go in (its name changeable, an existing one of that name joined), and that
@@ -28,6 +29,7 @@ AppPopup {
     function show() {
         backend.spaces.read("")
         name.text = ""
+        link.text = ""
         open()
         backend.spaces.chooseFile(false)
     }
@@ -84,6 +86,26 @@ AppPopup {
             wrapMode: Text.Wrap
             color: theme.colors.muted
             text: qsTr("Choose the .omabook-space file someone gave you, or drop it on the window. Nothing is subscribed to before you say so here.")
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: !dialog.ready
+            spacing: 8
+            TextField {
+                id: link
+                objectName: "subscribeLinkField"
+                Layout.fillWidth: true
+                placeholderText: qsTr("Or paste a link: a gist, or a file on GitHub")
+                selectByMouse: true
+                Material.roundedScale: theme.radius
+                onAccepted: if (text.trim() !== "") backend.spaces.read(text.trim())
+            }
+            AppButton {
+                objectName: "subscribeReadLink"
+                enabled: link.text.trim() !== ""
+                text: qsTr("Read")
+                onClicked: backend.spaces.read(link.text.trim())
+            }
         }
         Thinking {
             active: dialog.opened && dialog.hasFile && !dialog.ready && dialog.problem === ""
@@ -167,6 +189,14 @@ AppPopup {
                   ? qsTr("Its graph (%1 things, %2 facts, %3 relations) stays a layer of its own, apart from yours, and shows only as far as you have read each book.")
                     .arg(dialog.seen.things).arg(dialog.seen.facts).arg(dialog.seen.relations)
                   : qsTr("No graph comes with it.")
+        }
+        Label {
+            objectName: "subscribeFollows"
+            Layout.fillWidth: true
+            visible: dialog.ready && dialog.seen.link === true
+            wrapMode: Text.Wrap
+            color: theme.colors.muted
+            text: qsTr("It is followed by its link: Look for updates, in its collection's dialog, shows what changed there, and takes it in when you say so.")
         }
         Label {
             objectName: "subscribeProblem"

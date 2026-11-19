@@ -1510,5 +1510,26 @@
   "You subscribe to it already: this brings what changed since.": "Vous la suivez déjà : ceci apporte ce qui a changé depuis.",
   "Your ratings (%1)": "Vos notes (%1)",
   "Your reading: how far you are in %1 books, and the %2 days you read": "Votre lecture : où vous en êtes dans %1 livres, et les %2 jours où vous avez lu",
-  "Yours, only if you switch it on": "À vous, seulement si vous l’activez"
+  "Yours, only if you switch it on": "À vous, seulement si vous l’activez",
+  "%1 is up to date: %Ln changes taken in.": {
+    "many": "%1 est à jour : %Ln changements repris.",
+    "one": "%1 est à jour : %Ln changement repris.",
+    "other": "%1 est à jour : %Ln changements repris."
+  },
+  "%Ln changes are new there: %1.": {
+    "many": "%Ln changements y sont nouveaux : %1.",
+    "one": "%Ln changement y est nouveau : %1.",
+    "other": "%Ln changements y sont nouveaux : %1."
+  },
+  "Also as a link: a gist on GitHub, sent through its gh command, that those you give it to can follow": "Aussi par un lien : un gist sur GitHub, envoyé par sa commande gh, que ceux à qui vous le donnez peuvent suivre",
+  "Anyone may find it (a public gist); else only those given the link": "Tout le monde peut le trouver (un gist public) ; sinon seuls ceux qui ont le lien",
+  "It follows no link.": "Elle ne suit aucun lien.",
+  "It is followed by its link: Look for updates, in its collection's dialog, shows what changed there, and takes it in when you say so.": "Elle est suivie par son lien : Chercher les nouveautés, dans la fenêtre de sa collection, montre ce qui y a changé, et le reprend quand vous le dites.",
+  "Look for updates": "Chercher les nouveautés",
+  "Looking for updates…": "Recherche des nouveautés…",
+  "Nothing new there.": "Rien de nouveau.",
+  "Or paste a link: a gist, or a file on GitHub": "Ou collez un lien : un gist, ou un fichier sur GitHub",
+  "Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.": "Publié en tant que %1, par le lien %2 (copié) : qui l’a peut la suivre.",
+  "Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.": "Publié en tant que %1, dans %2 et par le lien %3 (copié) : qui a l’un ou l’autre peut la suivre.",
+  "Take them in": "Les reprendre"
 }

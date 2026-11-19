@@ -21,6 +21,10 @@
   "%1 is on your shelf, not in a file. Add a file to it to read it here.": "%1 is on your shelf, not in a file. Add a file to it to read it here.",
   "%1 is only read. Details, covers and what you have read come along.": "%1 is only read. Details, covers and what you have read come along.",
   "%1 is up to date.": "%1 is up to date.",
+  "%1 is up to date: %Ln changes taken in.": {
+    "one": "%1 is up to date: %Ln change taken in.",
+    "other": "%1 is up to date: %Ln changes taken in."
+  },
   "%1 looks around it · %2 goes back · %3 edits it · %4 opens it": "%1 looks around it · %2 goes back · %3 edits it · %4 opens it",
   "%1 needs a newer Omabook than this": "%1 needs a newer Omabook than this",
   "%1 new, %2 updated, %3 unchanged, %4 kept as they are here.": "%1 new, %2 updated, %3 unchanged, %4 kept as they are here.",
@@ -110,6 +114,10 @@
   "%Ln books: title, authors, series, ISBN and their names on other sites": {
     "one": "%Ln book: title, authors, series, ISBN and its names on other sites",
     "other": "%Ln books: title, authors, series, ISBN and their names on other sites"
+  },
+  "%Ln changes are new there: %1.": {
+    "one": "%Ln change is new there: %1.",
+    "other": "%Ln changes are new there: %1."
   },
   "%Ln changes made": {
     "one": "%Ln change made",
@@ -306,6 +314,7 @@
   "All files": "All files",
   "All of %1": "All of %1",
   "Already in your library": "Already in your library",
+  "Also as a link: a gist on GitHub, sent through its gh command, that those you give it to can follow": "Also as a link: a gist on GitHub, sent through its gh command, that those you give it to can follow",
   "Also called %1": "Also called %1",
   "Also look up %1 with missing details": "Also look up %1 with missing details",
   "Also sort %Ln books into collections": {
@@ -319,6 +328,7 @@
   "Another file…": "Another file…",
   "Answers, catch-ups and suggestions come from the first. The second reads books into the knowledge graph, judges look-ups and finds series: a small, fast model makes building the graph much cheaper, and often faster. Pick from the list or type any name the AI takes.": "Answers, catch-ups and suggestions come from the first. The second reads books into the knowledge graph, judges look-ups and finds series: a small, fast model makes building the graph much cheaper, and often faster. Pick from the list or type any name the AI takes.",
   "Antigravity, with your subscription": "Antigravity, with your subscription",
+  "Anyone may find it (a public gist); else only those given the link": "Anyone may find it (a public gist); else only those given the link",
   "Anywhere": "Anywhere",
   "Arranging…": "Arranging…",
   "As far as read here": "As far as read here",
@@ -656,9 +666,11 @@
   },
   "It answered, and found nothing for “%1”.": "It answered, and found nothing for “%1”.",
   "It can't be read": "It can't be read",
+  "It follows no link.": "It follows no link.",
   "It gave no answer in half a minute.": "It gave no answer in half a minute.",
   "It is a program of its own: it can do whatever you can on this computer.": "It is a program of its own: it can do whatever you can on this computer.",
   "It is always there under %1.": "It is always there under %1.",
+  "It is followed by its link: Look for updates, in its collection's dialog, shows what changed there, and takes it in when you say so.": "It is followed by its link: Look for updates, in its collection's dialog, shows what changed there, and takes it in when you say so.",
   "It is not a book: %1 put it there to start something new. %1 can put it back.": "It is not a book: %1 put it there to start something new. %1 can put it back.",
   "It is off, or can't be used as it is, so there is nothing to ask.": "It is off, or can't be used as it is, so there is nothing to ask.",
   "It looks to add: %1": "It looks to add: %1",
@@ -727,6 +739,7 @@
   "Look Up": "Look Up",
   "Look around": "Look around",
   "Look for plugins on GitHub": "Look for plugins on GitHub",
+  "Look for updates": "Look for updates",
   "Look like Omarchy anywhere, follow Aether, or pick a theme.": "Look like Omarchy anywhere, follow Aether, or pick a theme.",
   "Look the selected book's details up": "Look the selected book's details up",
   "Look the whole library over for things to tidy": "Look the whole library over for things to tidy",
@@ -737,6 +750,7 @@
   "Looking at the books…": "Looking at the books…",
   "Looking for plugins…": "Looking for plugins…",
   "Looking for series…": "Looking for series…",
+  "Looking for updates…": "Looking for updates…",
   "Looking it up…": "Looking it up…",
   "Looking the library over…": "Looking the library over…",
   "Looking through %Ln books…": {
@@ -829,6 +843,7 @@
   "Nothing is marked in the text": "Nothing is marked in the text",
   "Nothing known goes by that": "Nothing known goes by that",
   "Nothing matches": "Nothing matches",
+  "Nothing new there.": "Nothing new there.",
   "Nothing noted yet": "Nothing noted yet",
   "Nothing of this book is noted in the graph yet": "Nothing of this book is noted in the graph yet",
   "Nothing of your own yet. N starts a plugin from a template; I installs one someone else wrote.": "Nothing of your own yet. N starts a plugin from a template; I installs one someone else wrote.",
@@ -882,6 +897,7 @@
   "Open the selected library": "Open the selected library",
   "Open the settings": "Open the settings",
   "Opening %1…": "Opening %1…",
+  "Or paste a link: a gist, or a file on GitHub": "Or paste a link: a gist, or a file on GitHub",
   "Order and filter": "Order and filter",
   "Order by": "Order by",
   "Other Folder": "Other Folder",
@@ -930,6 +946,8 @@
   "Publish the collection shown for others to subscribe to: says first what goes in, and what never does": "Publish the collection shown for others to subscribe to: says first what goes in, and what never does",
   "Published": "Published",
   "Published as %1, as before.": "Published as %1, as before.",
+  "Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.": "Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.",
+  "Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.": "Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.",
   "Published as %1. %2 holds it: give it to whoever you share the collection with.": "Published as %1. %2 holds it: give it to whoever you share the collection with.",
   "Published by %1.": "Published by %1.",
   "Published by someone who gave no name.": "Published by someone who gave no name.",
@@ -1131,6 +1149,7 @@
   "Take it out of %1": "Take it out of %1",
   "Take the Tour": "Take the Tour",
   "Take the tour": "Take the tour",
+  "Take them in": "Take them in",
   "Take “%1” off the shelf?": "Take “%1” off the shelf?",
   "Tell me about %1.": "Tell me about %1.",
   "Text": "Text",

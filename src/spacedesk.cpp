@@ -1,8 +1,10 @@
 #include "spacedesk.h"
 
+#include <QClipboard>
 #include <QCoreApplication>
 #include <QDir>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJsonObject>
 #include <QPointer>
 #include <QStandardPaths>
@@ -10,6 +12,8 @@
 
 #include "backend.h"
 #include "collectionshare.h"
+#include "following.h"
+#include "githublink.h"
 #include "spacesnapshot.h"
 #include "subscribedspace.h"
 #include "subscriptions.h"
@@ -71,15 +75,23 @@ using namespace Qt::StringLiterals;
 
 [[nodiscard]] QVariantMap bookOf(const Subscriptions::Placed &book) { return {{"title", book.title}, {"authors", book.authors}}; }
 
+// A link the transport goes by, rather than a file here.
+[[nodiscard]] bool isLink(const SpaceTransport &transport, const QString &source) {
+    return !QFileInfo::exists(source) && !source.startsWith("file:"_L1) && transport.handles(source);
+}
+
 // What subscribing to `source` would do here, as a dry run works it out.
-[[nodiscard]] QVariantMap readSpace(Library &library, const QString &source) {
-    const auto snapshot = Subscriptions::fetch(source);
+[[nodiscard]] QVariantMap readSpace(Library &library, const QString &source, SpaceTransport &transport) {
+    const bool link = isLink(transport, source);
+    const auto snapshot = link ? transport.fetch(source) : Subscriptions::fetch(source);
     if (!snapshot)
         return failed(snapshot.error());
     const auto report = Subscriptions::subscribe(library, *snapshot, {.as = {}, .dryRun = true});
     if (!report)
         return failed(report.error());
-    QVariantList matched, wishlist, skipped;
+    QVariantList matched;
+    QVariantList wishlist;
+    QVariantList skipped;
     for (const Subscriptions::Placed &book : report->books) {
         if (book.how == "wishlist"_L1)
             wishlist << bookOf(book);
@@ -101,12 +113,22 @@ using namespace Qt::StringLiterals;
             {"facts", static_cast<qint64>(report->facts)},
             {"relations", static_cast<qint64>(report->relations)},
             {"known", SubscribedSpace::isSubscribed(library, report->space.space)},
+            {"link", link},
             {"error", QString()}};
+}
+
+[[nodiscard]] std::expected<Subscriptions::Report, QString> subscribeToFile(Library &library, const QString &file,
+                                                                            const Subscriptions::Options &options) {
+    const auto snapshot = Subscriptions::fetch(file);
+    if (!snapshot)
+        return std::unexpected(snapshot.error());
+    return Subscriptions::subscribe(library, *snapshot, options);
 }
 
 } // namespace
 
-SpaceDesk::SpaceDesk(Backend &backend, FilePicker *picker) : m_backend(backend), m_picker(picker) {
+SpaceDesk::SpaceDesk(Backend &backend, FilePicker *picker)
+    : m_backend(backend), m_picker(picker), m_transports([] { return std::make_unique<GitHubLink>(); }) {
     if (m_picker)
         connect(m_picker, &FilePicker::picked, this, &SpaceDesk::picked);
 }
@@ -146,14 +168,16 @@ void SpaceDesk::look(qint64 collection) {
            });
 }
 
-void SpaceDesk::publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file) {
+void SpaceDesk::publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file, bool link, bool open) {
     const PublishedSpace::Parts chosen = partsOf(parts);
     beside(
-        [collection, chosen, as, file](Library &library) {
+        [collection, chosen, as, file, link, open, transports = m_transports](Library &library) {
             const auto shared = library.collection(collection);
             if (!shared)
                 return failed(tr("That collection is gone."));
-            const auto done = CollectionShare::publish(library, *shared, chosen, {.as = as, .output = file});
+            const std::unique_ptr<SpaceTransport> transport = link ? transports() : nullptr;
+            const auto done =
+                CollectionShare::publish(library, *shared, chosen, {.as = as, .output = file, .link = transport.get(), .open = open});
             return done ? done->toVariantMap() : failed(done.error());
         },
         [this, file](const QVariantMap &done) {
@@ -162,8 +186,21 @@ void SpaceDesk::publish(qint64 collection, const QVariantMap &parts, const QStri
                 return;
             }
             m_backend.reload();
-            m_backend.say(tr("Published as %1. %2 holds it: give it to whoever you share the collection with.")
-                              .arg(done.value("owner").toString(), QFileInfo(file).fileName()));
+            const QString address = done.value("sent").toMap().value("address").toString();
+            const QString owner = done.value("owner").toString();
+            m_publishing.insert("link", address);
+            // The link, ready to paste where it is given.
+            if (!address.isEmpty())
+                QGuiApplication::clipboard()->setText(address);
+            if (address.isEmpty())
+                m_backend.say(tr("Published as %1. %2 holds it: give it to whoever you share the collection with.")
+                                  .arg(owner, QFileInfo(file).fileName()));
+            else if (file.isEmpty())
+                m_backend.say(
+                    tr("Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.").arg(owner, address));
+            else
+                m_backend.say(tr("Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.")
+                                  .arg(owner, QFileInfo(file).fileName(), address));
             emit published(file);
         });
 }
@@ -173,7 +210,7 @@ void SpaceDesk::read(const QString &source) {
     emit changed();
     if (source.isEmpty())
         return;
-    beside([source](Library &library) { return readSpace(library, source); },
+    beside([source, transports = m_transports](Library &library) { return readSpace(library, source, *transports()); },
            [this, source](const QVariantMap &read) {
                if (m_subscribing.value("file").toString() == source)
                    m_subscribing = read;
@@ -182,11 +219,12 @@ void SpaceDesk::read(const QString &source) {
 
 void SpaceDesk::subscribe(const QString &source, const QString &as) {
     beside(
-        [source, as](Library &library) {
-            const auto snapshot = Subscriptions::fetch(source);
-            if (!snapshot)
-                return failed(snapshot.error());
-            const auto report = Subscriptions::subscribe(library, *snapshot, {.as = as.simplified(), .dryRun = false});
+        [source, as, transports = m_transports](Library &library) {
+            const Subscriptions::Options options{.as = as.simplified(), .dryRun = false};
+            const std::unique_ptr<SpaceTransport> transport = transports();
+            // By a link, the subscription follows it (Following).
+            const auto report = isLink(*transport, source) ? Following::subscribe(library, source, *transport, options)
+                                                           : subscribeToFile(library, source, options);
             if (!report)
                 return failed(report.error());
             return QVariantMap{{"collection", report->space.collection},
@@ -207,8 +245,52 @@ void SpaceDesk::subscribe(const QString &source, const QString &as) {
         });
 }
 
+void SpaceDesk::lookForUpdates(const QString &space) {
+    m_following = {{"space", space}};
+    emit changed();
+    beside(
+        [space, transports = m_transports](Library &library) {
+            const std::unique_ptr<SpaceTransport> transport = transports();
+            const auto offers = Following::check(library, space, {transport.get()}, false);
+            if (!offers || offers->isEmpty())
+                return QVariantMap{{"space", space}, {"problem", offers ? tr("It follows no link.") : offers.error()}};
+            const Following::Offer &offer = offers->first();
+            return QVariantMap{{"space", space},
+                               {"operations", static_cast<qint64>(offer.operations)},
+                               {"changes", SpaceDiff::describe(offer.changes)},
+                               {"problem", offer.problem}};
+        },
+        [this, space](const QVariantMap &found) {
+            if (m_following.value("space").toString() == space)
+                m_following = found;
+        });
+}
+
+void SpaceDesk::takeUpdates(const QString &space) {
+    beside(
+        [space, transports = m_transports](Library &library) {
+            const std::unique_ptr<SpaceTransport> transport = transports();
+            const auto offers = Following::check(library, space, {transport.get()}, true);
+            if (!offers || offers->isEmpty())
+                return failed(offers ? tr("It follows no link.") : offers.error());
+            if (!offers->first().problem.isEmpty())
+                return failed(offers->first().problem);
+            return QVariantMap{{"operations", static_cast<qint64>(offers->first().operations)}, {"name", offers->first().space.name}};
+        },
+        [this, space](const QVariantMap &done) {
+            m_following = {};
+            if (const QString error = done.value("error").toString(); !error.isEmpty()) {
+                m_following = {{"space", space}, {"problem", error}};
+                return;
+            }
+            m_backend.reload();
+            m_backend.say(
+                tr("%1 is up to date: %Ln changes taken in.", "", done.value("operations").toInt()).arg(done.value("name").toString()));
+        });
+}
+
 void SpaceDesk::unsubscribe(const QString &space) {
-    Library *library = m_backend.library();
+    const Library *library = m_backend.library();
     if (!library)
         return;
     const auto dropped = Subscriptions::unsubscribe(*library, space);

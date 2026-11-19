@@ -1448,5 +1448,24 @@
   "You subscribe to it already: this brings what changed since.": "Je bent er al op geabonneerd: dit brengt wat sindsdien veranderde.",
   "Your ratings (%1)": "Je beoordelingen (%1)",
   "Your reading: how far you are in %1 books, and the %2 days you read": "Je lezen: hoe ver je bent in %1 boeken, en de %2 dagen dat je las",
-  "Yours, only if you switch it on": "Van jou, alleen als je het aanzet"
+  "Yours, only if you switch it on": "Van jou, alleen als je het aanzet",
+  "%1 is up to date: %Ln changes taken in.": {
+    "one": "%1 is bijgewerkt: %Ln wijziging overgenomen.",
+    "other": "%1 is bijgewerkt: %Ln wijzigingen overgenomen."
+  },
+  "%Ln changes are new there: %1.": {
+    "one": "%Ln wijziging is daar nieuw: %1.",
+    "other": "%Ln wijzigingen zijn daar nieuw: %1."
+  },
+  "Also as a link: a gist on GitHub, sent through its gh command, that those you give it to can follow": "Ook als link: een gist op GitHub, verstuurd met het gh-commando, die wie je hem geeft kan volgen",
+  "Anyone may find it (a public gist); else only those given the link": "Iedereen mag hem vinden (een openbare gist); anders alleen wie de link krijgt",
+  "It follows no link.": "Ze volgt geen link.",
+  "It is followed by its link: Look for updates, in its collection's dialog, shows what changed there, and takes it in when you say so.": "Ze wordt gevolgd via haar link: Kijk naar updates, in het venster van haar collectie, toont wat daar veranderde, en neemt het over als je dat zegt.",
+  "Look for updates": "Kijk naar updates",
+  "Looking for updates…": "Zoeken naar updates…",
+  "Nothing new there.": "Daar is niets nieuws.",
+  "Or paste a link: a gist, or a file on GitHub": "Of plak een link: een gist, of een bestand op GitHub",
+  "Published as %1, by the link %2 (copied): whoever has it can subscribe and follow it.": "Gepubliceerd als %1, via de link %2 (gekopieerd): wie hem heeft, kan zich abonneren en volgen.",
+  "Published as %1, in %2 and by the link %3 (copied): whoever has either can subscribe.": "Gepubliceerd als %1, in %2 en via de link %3 (gekopieerd): wie een van beide heeft, kan zich abonneren.",
+  "Take them in": "Overnemen"
 }

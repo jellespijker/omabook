@@ -6,8 +6,10 @@
 #include <QUrl>
 #include <QVariantMap>
 #include <functional>
+#include <memory>
 
 #include "filepicker.h"
+#include "spacetransport.h"
 
 class Backend;
 class Library;
@@ -25,7 +27,7 @@ class SpaceDesk : public QObject {
     // "collections", "books", "things", "facts", "relations", "questions",
     // "ratings", "places", "days", "files" (never shared), "name" (gone by
     // before; empty the first time), "file" (where to write it, suggested),
-    // "error"}; empty until asked.
+    // "error", and once published by link "link", its address}; empty until asked.
     Q_PROPERTY(QVariantMap publishing READ publishing NOTIFY changed)
     // What subscribing to the file read (read) would do, nothing written yet:
     // {"file", "space", "name", "owner", "collection" (where its books go
@@ -33,28 +35,46 @@ class SpaceDesk : public QObject {
     // "authors"}]: books found here, and those that become wishlist entries),
     // "skipped" (books removed here before, which stay so), "things",
     // "facts", "relations", "known" (whether it is subscribed to already),
-    // "error"}; empty until asked.
+    // "link" (it came by a link, which subscribing follows), "error"}; empty
+    // until asked.
     Q_PROPERTY(QVariantMap subscribing READ subscribing NOTIFY changed)
+    // What following a subscription's link found (lookForUpdates), never
+    // taken in by itself: {"space", "operations" (new), "changes" (what they
+    // change, in words), "problem"}; empty until asked.
+    Q_PROPERTY(QVariantMap following READ following NOTIFY changed)
     // Something above is being worked out, or done.
     Q_PROPERTY(bool working READ working NOTIFY changed)
 
 public:
+    // Makes the transport a link goes by (GitHubLink), on the worker that uses it.
+    using Transports = std::function<std::unique_ptr<SpaceTransport>()>;
+
     SpaceDesk(Backend &backend, FilePicker *picker);
+    // Tests put a transport of their own in place of GitHub.
+    void setTransports(Transports transports) { m_transports = std::move(transports); }
 
     QVariantMap publishing() const { return m_publishing; }
     QVariantMap subscribing() const { return m_subscribing; }
+    QVariantMap following() const { return m_following; }
     bool working() const noexcept { return m_working > 0; }
 
     // Works out `publishing` for a collection.
     Q_INVOKABLE void look(qint64 collection);
     // Publishes it with the parts switched on ({"graph", "questions",
-    // "ratings", "reading"}), as `as`, and writes its snapshot to `file`.
-    Q_INVOKABLE void publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file);
-    // Works out `subscribing` for a space's file (a link, once there is a
-    // transport for one, #7); empty, forgets the one read before.
+    // "ratings", "reading"}), as `as`, writes its snapshot to `file` unless
+    // that is empty, and with `link` sends it as a link too (a gist, secret
+    // unless `open`), its address copied for pasting.
+    Q_INVOKABLE void publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file, bool link = false,
+                             bool open = false);
+    // Works out `subscribing` for a space's file or link (#7); empty,
+    // forgets the one read before.
     Q_INVOKABLE void read(const QString &source);
     // Subscribes to it, its books in the collection `as` (the space's name when empty).
     Q_INVOKABLE void subscribe(const QString &source, const QString &as);
+    // Looks at the link a subscription follows for what is new there
+    // (`following`), and takes that in, once asked to.
+    Q_INVOKABLE void lookForUpdates(const QString &space);
+    Q_INVOKABLE void takeUpdates(const QString &space);
     // Drops a subscribed space; the collection it filled stays the user's.
     Q_INVOKABLE void unsubscribe(const QString &space);
     // Asks where to write a snapshot (fileChosen), or for one to read (offered).
@@ -79,7 +99,9 @@ private:
 
     Backend &m_backend;
     FilePicker *m_picker;
+    Transports m_transports;
     QVariantMap m_publishing;
     QVariantMap m_subscribing;
+    QVariantMap m_following;
     int m_working = 0;
 };
