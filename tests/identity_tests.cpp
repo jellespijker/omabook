@@ -1,13 +1,18 @@
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
+#include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtEndian>
 #include <QtTest>
 #include <functional>
 #include <sys/stat.h>
 
+#include "fixtures.h"
+#include "library.h"
 #include "person.h"
+#include "scriptplugins.h"
+#include "settings.h"
 #include "signedops.h"
 #include "spacekey.h"
 
@@ -238,6 +243,32 @@ private slots:
         QVERIFY(written.resize(12));
         QVERIFY(!Person::load(file));
         QVERIFY(!Person::load(folder.path() + QStringLiteral("/nothing.key")));
+    }
+
+    // A test program runs in a home of its own, made in the temporary folder
+    // before main (Fixtures::home): the key a library signs with, the
+    // settings, the plugins and the caches are all kept there, so running a
+    // test never writes into the user's own home (#53).
+    void theTestsKeepTheKeyAndTheSettingsInAHomeOfTheirOwn() {
+        const QString &home = Fixtures::home();
+        QVERIFY2(home.startsWith(QDir::cleanPath(QDir::tempPath()) + u'/'), qPrintable(home));
+        QCOMPARE(QDir::homePath(), home);
+        const auto inHome = [&home](const QString &path) { return path.startsWith(home + u'/'); };
+        QVERIFY2(inHome(Settings::defaultFile()), qPrintable(Settings::defaultFile()));
+        QVERIFY2(inHome(ScriptPlugins::defaultFolder()), qPrintable(ScriptPlugins::defaultFolder()));
+        for (const auto location : {QStandardPaths::GenericDataLocation, QStandardPaths::GenericConfigLocation,
+                                    QStandardPaths::GenericCacheLocation, QStandardPaths::AppDataLocation}) {
+            const QString folder = QStandardPaths::writableLocation(location);
+            QVERIFY2(inHome(folder), qPrintable(folder));
+        }
+        QVERIFY(inHome(qEnvironmentVariable("XDG_STATE_HOME")));
+
+        const QTemporaryDir folder;
+        Library library(folder.filePath(QStringLiteral("Library")));
+        const QString key = library.personFile().file();
+        QCOMPARE(key, home + QStringLiteral("/.local/share/omabook/person.key"));
+        QVERIFY(library.personFile().get(library.root()) != nullptr);
+        QVERIFY(QFile::exists(key));
     }
 };
 

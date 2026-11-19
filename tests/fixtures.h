@@ -12,6 +12,13 @@
 
 namespace Fixtures {
 
+// The home every test program runs in: a folder of its own, made before main
+// and removed at the end, with HOME and the XDG data, config, cache and state
+// folders inside it. Whatever a test opens without saying where (the person's
+// key, config.json, the plugins, the caches, the log), and every omabook it
+// runs, finds this folder, never the user's own home.
+const QString &home();
+
 using Entries = QList<QPair<QString, QByteArray>>;
 
 bool write(const QString &path, const QByteArray &contents);

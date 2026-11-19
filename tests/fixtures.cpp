@@ -17,11 +17,47 @@
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QString>
+#include <QTemporaryDir>
 #include <QtEndian>
+#include <QtGlobal>
 #include <archive.h>
 #include <archive_entry.h>
 
 namespace Fixtures {
+
+namespace {
+
+QTemporaryDir &temporaryHome() {
+    static QTemporaryDir folder(QDir::tempPath() + "/omabook-test-home-XXXXXX");
+    return folder;
+}
+
+// Before main, so before the application or any library reads a folder.
+void moveIntoTemporaryHome() {
+    const QTemporaryDir &folder = temporaryHome();
+    if (!folder.isValid())
+        qFatal("No temporary home for the tests: %s", qPrintable(folder.errorString()));
+    const QDir root(folder.path());
+    const QList<QPair<const char *, QString>> folders{{"HOME", "."},
+                                                      {"XDG_DATA_HOME", ".local/share"},
+                                                      {"XDG_CONFIG_HOME", ".config"},
+                                                      {"XDG_CACHE_HOME", ".cache"},
+                                                      {"XDG_STATE_HOME", ".local/state"}};
+    for (const auto &[variable, path] : folders) {
+        if (!root.mkpath(path))
+            qFatal("Could not make %s in the tests' home", qPrintable(path));
+        qputenv(variable, QDir::cleanPath(root.filePath(path)).toUtf8());
+    }
+}
+
+} // namespace
+
+Q_CONSTRUCTOR_FUNCTION(moveIntoTemporaryHome)
+
+const QString &home() {
+    static const QString path = QDir::cleanPath(temporaryHome().path());
+    return path;
+}
 
 bool write(const QString &path, const QByteArray &contents) {
     QFile file(path);
