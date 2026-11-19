@@ -105,6 +105,10 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 [[nodiscard]] qint64 fieldHlc(const ReducedBook &book, const QString &field);
 [[nodiscard]] qint64 detailsHlc(const ReducedBook &book);
 [[nodiscard]] qint64 readingHlc(const ReducedBook &book);
+// The fields of which every operation counts, not only the latest: what was
+// met where, what was learned, how things relate, the days read, and the
+// links that line up ids.
+[[nodiscard]] bool grows(const QString &field);
 // Where two computers name one book by different ids, a same-as operation
 // (entity "book", field "same_as", the one id and the other as its value)
 // links them. Links only ever grow, so every id of a linked group stands

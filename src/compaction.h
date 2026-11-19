@@ -1,7 +1,9 @@
 #pragma once
 
+#include <QList>
 #include <QString>
 #include <QtTypes>
+#include <span>
 
 #include "replication.h"
 
@@ -40,6 +42,14 @@ Result compact(const Library &library);
 // thousand: what a sync runs after it, so reading the log stays about the
 // size of what it says.
 void compactWhenWorthIt(const Library &library);
+
+// What a snapshot of one owner's operations keeps of `ops` (a published
+// space's, #2): of each field of each thing the latest, all of those that
+// share its stamp, and every operation of what only grows
+// (SpaceReducer::grows), each value once. Across devices, where compact()
+// keeps each device's own: such a space is read only for what it says, never
+// for what one computer of it holds. It merges as `ops` does.
+[[nodiscard]] QList<SpaceOperation> latest(std::span<const SpaceOperation> ops);
 
 // What `member` (a computer's device id) held of the log when it synced: per
 // space and device, the last sequence number.

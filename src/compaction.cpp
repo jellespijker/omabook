@@ -1,10 +1,15 @@
 #include "compaction.h"
 
+#include <QHash>
 #include <QSqlQuery>
 #include <QVariant>
+#include <algorithm>
+#include <limits>
+#include <tuple>
 
 #include "changelog.h"
 #include "library.h"
+#include "spacereducer.h"
 #include "spaces.h"
 
 namespace {
@@ -18,6 +23,8 @@ constexpr auto growing = "(field LIKE 'seen:%' OR field IN ('revealed', 'link', 
     QSqlQuery query = ChangeLog::query(library, QString::fromLatin1(sql));
     return query.next() ? query.value(0).toLongLong() : 0;
 }
+
+[[nodiscard]] QString fieldOf(const SpaceOperation &op) { return op.entity + u'\x1f' + op.id + u'\x1f' + op.field; }
 
 } // namespace
 
@@ -78,4 +85,30 @@ void Compaction::rememberSeen(const Library &library, const QString &member, con
                 "INSERT INTO member_vectors (space, member, device, seq) VALUES (?, ?, ?, ?) "
                 "ON CONFLICT(space, member, device) DO UPDATE SET seq = MAX(seq, excluded.seq)",
                 {ChangeLog::internId(library, space.key()), member, ChangeLog::internId(library, device.key()), device.value()});
+}
+
+QList<SpaceOperation> Compaction::latest(std::span<const SpaceOperation> ops) {
+    QHash<QString, qint64> newest;
+    for (const SpaceOperation &op : ops)
+        if (!SpaceReducer::grows(op.field))
+            newest.insert(fieldOf(op), std::max(newest.value(fieldOf(op), std::numeric_limits<qint64>::min()), op.hlc));
+    // Of the same value of a field more than once (two computers that said
+    // the same, or a sighting written again), the one that merges as all of
+    // them do: the latest, and of a tie the larger device's.
+    QHash<QString, qsizetype> once;
+    QList<SpaceOperation> kept;
+    for (const SpaceOperation &op : ops) {
+        if (!SpaceReducer::grows(op.field) && op.hlc != newest.value(fieldOf(op)))
+            continue;
+        const QString same = fieldOf(op) + u'\x1f' + op.value;
+        if (const auto at = once.constFind(same); at != once.cend()) {
+            SpaceOperation &before = kept[*at];
+            if (std::tie(op.hlc, op.device) > std::tie(before.hlc, before.device))
+                before = op;
+            continue;
+        }
+        once.insert(same, kept.size());
+        kept << op;
+    }
+    return kept;
 }

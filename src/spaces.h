@@ -35,6 +35,11 @@ public:
     static void ensureSpaceForScope(const Library &library, const QString &scope);
     [[nodiscard]] static QString spaceForScope(const Library &library, const QString &scope);
 
+    // Records a published space (ADR 0001, *Spaces*): written only by its
+    // owner, the person `owner` (Person::id), who goes by `ownerName` in it.
+    static void ensurePublishedSpace(const Library &library, const QString &space, const QString &name, const QString &owner,
+                                     const QString &ownerName);
+
     // The library's persistent hybrid logical clock in `library_state`.
     [[nodiscard]] static qint64 lastHlc(const Library &library);
     [[nodiscard]] static qint64 tickHlc(const Library &library, std::optional<qint64> wallSeconds = std::nullopt);

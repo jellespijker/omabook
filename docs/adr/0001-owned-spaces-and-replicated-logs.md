@@ -107,6 +107,15 @@ their space has seen, as each said when it last synced (`member_vectors`). Compa
 that deletes from the log (rule `ops-deleted-only-by-compaction`); nothing ever updates an operation
 (`ops-append-only`). The freed pages go back to the file at the next VACUUM.
 
+Since #2 the snapshot takes the place of the operations it covers: those every member has seen are
+dropped from `ops` whether the snapshot keeps them or not, so only what came after the marks (and what
+a member hasn't seen yet) stays there, and the library is smaller after compacting than before. What
+looks up a thing's operations or a device's last number reads the snapshot and its marks too. A
+published space's snapshot is a file, `.omabook-space` (`spacesnapshot.h`): JSON, versioned
+major.minor, with the space's id and kind, its owner's chosen name and person id, the snapshot's clock,
+the Omabook that wrote it, and its operations compacted (`PublishedSpace`); samples of it in
+`tests/data/` must keep reading.
+
 ### Transports are adapters
 
 How operations move is not the model. They are append-only and can be encrypted with the space's

@@ -257,12 +257,11 @@ QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops
     return canonical;
 }
 
-namespace {
-
-// The fields of which every operation counts, not only the last.
-[[nodiscard]] bool grows(const QString &field) {
+bool SpaceReducer::grows(const QString &field) {
     return field.startsWith("seen:"_L1) || field == "revealed"_L1 || field == "link"_L1 || field == "range"_L1 || field == "same_as"_L1;
 }
+
+namespace {
 
 ReducedState reduceOf(std::span<const SpaceOperation> ops, std::span<const SpaceOperation> links, const QString &device) {
     ReducedState state;
@@ -300,7 +299,7 @@ ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QSt
     for (const SpaceOperation &op : ops) {
         if (op.device != device)
             continue;
-        if (grows(op.field)) {
+        if (SpaceReducer::grows(op.field)) {
             written << op;
             continue;
         }

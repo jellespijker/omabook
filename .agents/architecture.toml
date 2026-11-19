@@ -32,7 +32,8 @@ summary = "The library and the knowledge graph: storage, books, their sides and 
 uses = ["formats", "foundation"]
 modules = [
   "booksides", "catalog", "changelog", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphmatch", "graphsync", "knowledgesearch", "libraries",
-  "library", "librarymigrations", "replication", "signedops", "spacereducer", "spacereplay", "spaces", "textmarks",
+  "library", "librarymigrations", "publishedspace", "replication", "signedops", "spacereducer", "spacereplay", "spaces",
+  "spacesnapshot", "textmarks",
 ]
 
 [layers.services]

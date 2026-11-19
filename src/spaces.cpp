@@ -94,6 +94,18 @@ QString Spaces::spaceForScope(const Library &library, const QString &scope) {
     return trimmed;
 }
 
+void Spaces::ensurePublishedSpace(const Library &library, const QString &space, const QString &name, const QString &owner,
+                                  const QString &ownerName) {
+    if (!space.startsWith("published:"_L1) || owner.isEmpty())
+        return;
+    const qint64 created = lastHlc(library);
+    library.exec("INSERT OR IGNORE INTO spaces (id, kind, name, owner, created) VALUES (?, 'published', ?, ?, ?)",
+                 {space, name, owner, created});
+    library.exec("INSERT INTO space_members (space, person, role, name, added) VALUES (?, ?, 'writer', ?, ?) "
+                 "ON CONFLICT(space, person) DO UPDATE SET name = excluded.name",
+                 {space, owner, ownerName, created});
+}
+
 qint64 Spaces::lastHlc(const Library &library) {
     QSqlQuery query = library.query("SELECT value FROM library_state WHERE key = 'hlc'");
     return query.next() ? Hlc::normalize(query.value(0).toLongLong()) : 0;

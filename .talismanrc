@@ -6,5 +6,10 @@
 # the content that was reviewed, so a later change is scanned again. Add an
 # entry only after looking at the file (`talisman --checksum <file>`).
 threshold: medium
-fileignoreconfig: []
+fileignoreconfig:
+  # The shared-space sample (#2): made from the tests' fixtures; its hex ids
+  # are content hashes and device ids, its base64 the public key of a person
+  # generated for the test. No secret.
+  - filename: tests/data/space-1.0.omabook-space
+    checksum: 60b4339abd9b4f89173895dca3a15ae416db1c0a9622e79cf24079e3d1462ead
 version: "1.0"
