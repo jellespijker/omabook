@@ -231,6 +231,40 @@ void collectDays(const ReducedState &state, const Canon &canon, Members &members
     return op;
 }
 
+[[nodiscard]] QString hashed(const QString &one, const QString &other) {
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    hash.addData(one.toUtf8());
+    hash.addData(QByteArrayView("\x1f", 1));
+    hash.addData(other.toUtf8());
+    return QString::fromLatin1(hash.result().toHex().left(32));
+}
+
+// What the space shows of the owner's own. A collection by an id of this
+// space alone: its id at home is its path there, which names what holds it.
+// Each of the owner's computers by its place among them, which keeps how
+// their writes order (SpaceReducer breaks a tie by device) and says only
+// how many wrote it.
+void disguise(QList<SpaceOperation> &ops, const QString &space) {
+    QStringList devices;
+    for (const SpaceOperation &op : std::as_const(ops))
+        devices << op.device << op.author;
+    devices.sort();
+    devices.removeDuplicates();
+    QHash<QString, QString> alias;
+    for (qsizetype at = 0; at < devices.size(); ++at)
+        alias.insert(devices.at(at), u"device-%1"_s.arg(at + 1, 3, 10, QChar(u'0')));
+    const auto collection = [&space](const QString &home) { return u"c:"_s + hashed(space, home); };
+    for (SpaceOperation &op : ops) {
+        op.device = alias.value(op.device);
+        op.author = alias.value(op.author);
+        if (op.entity != "collection"_L1)
+            continue;
+        op.id = collection(op.id);
+        if (op.field == "parent"_L1 && !op.value.isEmpty())
+            op.value = collection(op.value);
+    }
+}
+
 } // namespace
 
 QStringList PublishedSpace::Parts::names() const {
@@ -250,11 +284,7 @@ PublishedSpace::Parts PublishedSpace::Parts::fromNames(const QStringList &names)
 }
 
 QString PublishedSpace::idFor(const QString &person, const QString &collectionGlobalId) {
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    hash.addData(person.toUtf8());
-    hash.addData(QByteArrayView("\x1f", 1));
-    hash.addData(collectionGlobalId.toUtf8());
-    return u"published:"_s + QString::fromLatin1(hash.result().toHex().left(32));
+    return u"published:"_s + hashed(person, collectionGlobalId);
 }
 
 std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const Library &library, qint64 collectionId, const Parts &parts,
@@ -283,6 +313,7 @@ std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const L
         }
     }
     QList<SpaceOperation> compacted = Compaction::latest(chosen);
+    disguise(compacted, space);
     std::ranges::sort(compacted, [](const SpaceOperation &one, const SpaceOperation &other) {
         return std::tie(one.device, one.hlc, one.entity, one.id, one.field, one.value)
                < std::tie(other.device, other.hlc, other.entity, other.id, other.field, other.value);
@@ -306,8 +337,11 @@ std::expected<SpaceSnapshot, QString> PublishedSpace::snapshot(const Library &li
         return std::unexpected(ops.error());
     Spaces::ensurePublishedSpace(library, space, collection->name, owner.person, owner.name);
     qint64 clock = Spaces::lastHlc(library);
-    for (const SpaceOperation &op : std::as_const(*ops))
+    // Written by the owner, whichever of their computers it was.
+    for (SpaceOperation &op : *ops) {
         clock = std::max(clock, op.hlc);
+        op.author = owner.person;
+    }
     return SpaceSnapshot{.space = space,
                          .kind = QString::fromLatin1(kind),
                          .name = collection->name,

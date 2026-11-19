@@ -11,5 +11,5 @@ fileignoreconfig:
   # are content hashes and device ids, its base64 the public key of a person
   # generated for the test. No secret.
   - filename: tests/data/space-1.0.omabook-space
-    checksum: 60b4339abd9b4f89173895dca3a15ae416db1c0a9622e79cf24079e3d1462ead
+    checksum: bebba8851674834e20ae79495ba515b64f7b17e7d901b56234877fd6a3d1953c
 version: "1.0"

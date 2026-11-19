@@ -49,13 +49,16 @@ struct Parts {
 [[nodiscard]] QString idFor(const QString &person, const QString &collectionGlobalId);
 
 // The operations of the published space `space` of the collection
-// `collectionId`, with `parts`, written by the devices that wrote them in the
-// personal space, numbered anew in this one.
+// `collectionId`, with `parts`, numbered anew in this space. Nothing in them
+// names what is above the collection at home or any of the owner's
+// computers: collections go by ids of this space, and each computer that
+// wrote one by its place among them ("device-001").
 [[nodiscard]] std::expected<QList<SpaceOperation>, QString> operations(const Library &library, qint64 collectionId, const Parts &parts,
                                                                        const QString &space);
 
 // The snapshot of the space `owner` publishes the collection as, taken now,
-// with the space recorded in the library's spaces as theirs.
+// with the space recorded in the library's spaces as theirs and each
+// operation's author the owner.
 [[nodiscard]] std::expected<SpaceSnapshot, QString> snapshot(const Library &library, qint64 collectionId, const Parts &parts,
                                                              const SpaceSnapshot::Owner &owner);
 

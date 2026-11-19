@@ -32,7 +32,8 @@ namespace {
 
 using Parts = PublishedSpace::Parts;
 
-// A small library made on the spot: a collection "Sci-fi" inside "Shelves",
+// A small library made on the spot: a collection "Sci-fi" inside one whose
+// name tells something of its owner,
 // with a series inside it, and books, reading and a graph in and outside it.
 struct Shelf {
     Shelf() : library(dir.filePath("Library")) {
@@ -44,13 +45,13 @@ struct Shelf {
         QVERIFY(library.setIdentifier(dune, "goodreads", "44767458"));
         QVERIFY(library.setIdentifier(dune, "openlibrary", "OL893415W"));
 
-        const auto top = library.addCollection("Shelves/Sci-fi");
+        const auto top = library.addCollection(QString(aboveName) + "/Sci-fi");
         QVERIFY(top.has_value());
         sciFi = *top;
         const auto saga = library.addCollection("Dune saga", "series:Dune", sciFi);
         QVERIFY(saga.has_value());
         series = *saga;
-        QVERIFY(library.addCollection("Shelves/Other").has_value());
+        QVERIFY(library.addCollection(QString(aboveName) + "/" + siblingName).has_value());
         QVERIFY(library.putInCollection(sciFi, picked, true));
         QVERIFY(library.setCollectionShelf(sciFi, {{"view", "grid"}, {"sort", "title"}}));
 
@@ -95,6 +96,9 @@ struct Shelf {
     [[nodiscard]] QString gid(qint64 bookId) const { return Spaces::bookId(library, bookId); }
     [[nodiscard]] QString node(qint64 nodeId) const { return Spaces::nodeId(library, nodeId); }
 
+    static constexpr auto aboveName = "Therapy Notes of Ada";
+    static constexpr auto siblingName = "Books Hidden From Bob";
+
     QTemporaryDir dir;
     Library library;
     qint64 dune = 0, messiah = 0, outside = 0, picked = 0;
@@ -116,6 +120,37 @@ struct Shelf {
         if (op.entity == entity)
             ids.insert(op.id);
     return ids;
+}
+
+[[nodiscard]] QString collectionNamed(const ReducedState &state, const QString &name) {
+    for (auto collection = state.collections.cbegin(); collection != state.collections.cend(); ++collection)
+        if (collection->fields.value("name").value == name)
+            return collection.key();
+    return {};
+}
+
+[[nodiscard]] SpaceSnapshot::Owner owner();
+
+void expectNothingOfHome(const Shelf &shelf) {
+    const auto snapshot =
+        PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true, .questions = true, .ratings = true, .reading = true}, owner());
+    QVERIFY2(snapshot.has_value(), qPrintable(snapshot.error()));
+    const QByteArray file = SpaceSnapshotFile::write(*snapshot);
+    const QStringList home{Shelf::aboveName,
+                           Shelf::siblingName,
+                           shelf.dir.path(),
+                           QDir::homePath(),
+                           ".epub",
+                           "Library/",
+                           Spaces::deviceId(shelf.library),
+                           Spaces::personalSpace(shelf.library),
+                           "c:" + QString(Shelf::aboveName)};
+    for (const QString &word : home)
+        QVERIFY2(!file.contains(word.toUtf8()), qPrintable(word));
+    for (const SpaceOperation &op : snapshot->operations) {
+        QVERIFY2(op.device.startsWith("device-") && op.author == snapshot->owner.person, qPrintable(op.device));
+        QVERIFY2(op.entity != "collection" || !op.id.contains('/'), qPrintable(op.id));
+    }
 }
 
 [[nodiscard]] SpaceSnapshot::Owner owner() {
@@ -157,16 +192,16 @@ private slots:
         QVERIFY(std::ranges::all_of(ops, [](const SpaceOperation &op) { return op.space == "published:test"; }));
 
         const ReducedState state = SpaceReducer::reduce(ops);
-        QCOMPARE(QSet<QString>(state.collections.keyBegin(), state.collections.keyEnd()),
-                 (QSet<QString>{Spaces::collectionId(shelf.library, shelf.sciFi), Spaces::collectionId(shelf.library, shelf.series)}));
-        const ReducedCollection top = state.collections.value(Spaces::collectionId(shelf.library, shelf.sciFi));
-        QCOMPARE(top.fields.value("name").value, QString("Sci-fi"));
-        QCOMPARE(top.fields.value("parent").value, QString()); // at the top of the space, not inside "Shelves"
+        QCOMPARE(state.collections.size(), 2);
+        const QString topId = collectionNamed(state, "Sci-fi");
+        const QString sagaId = collectionNamed(state, "Dune saga");
+        const ReducedCollection top = state.collections.value(topId);
+        QCOMPARE(top.fields.value("parent").value, QString()); // at the top of the space, not inside what holds it at home
         QCOMPARE(QJsonDocument::fromJson(top.fields.value("shelf").value.toUtf8()).object().value("view").toString(), QString("grid"));
         QCOMPARE(top.books.value(shelf.gid(shelf.picked)).value, QString("in"));
-        const ReducedCollection saga = state.collections.value(Spaces::collectionId(shelf.library, shelf.series));
+        const ReducedCollection saga = state.collections.value(sagaId);
         QCOMPARE(saga.fields.value("rule").value, QString("series:Dune"));
-        QCOMPARE(saga.fields.value("parent").value, Spaces::collectionId(shelf.library, shelf.sciFi));
+        QCOMPARE(saga.fields.value("parent").value, topId);
 
         QCOMPARE(QSet<QString>(state.books.keyBegin(), state.books.keyEnd()),
                  (QSet<QString>{shelf.gid(shelf.dune), shelf.gid(shelf.messiah), shelf.gid(shelf.picked)}));
@@ -187,6 +222,11 @@ private slots:
             QVERIFY2(!op.value.contains("Home Press") && !op.value.contains("Kept at home") && !op.value.contains(".epub")
                          && !op.value.contains(shelf.dir.path()),
                      qPrintable(op.field + ": " + op.value));
+
+        // Nothing in the file of what holds the collection at home or sits
+        // beside it, of where the library and its files are, or of the
+        // owner's computers.
+        expectNothingOfHome(shelf);
 
         // Numbered anew per device in this space, each number once.
         QHash<QString, QList<qint64>> numbers;
