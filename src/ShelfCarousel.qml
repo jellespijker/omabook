@@ -10,7 +10,6 @@ FocusScope {
     property alias currentRow: flow.currentIndex
     readonly property bool ownDetails: true
     signal opened(var bookId)
-    signal detailsWanted()
     readonly property var book: {
         backend.revision
         flow.count
@@ -120,7 +119,6 @@ FocusScope {
                         flow.forceActiveFocus()
                     }
                     onOpened: shelf.opened(slot.bookId)
-                    onHeld: shelf.detailsWanted()
                 }
             }
         }

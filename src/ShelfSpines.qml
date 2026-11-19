@@ -10,7 +10,6 @@ FocusScope {
     property int currentRow: -1
     readonly property bool ownDetails: false
     signal opened(var bookId)
-    signal detailsWanted()
 
     // A standing book is as tall as a cover in the grid is.
     readonly property real bookHeight: Math.round(settings.coverSize * 1.25)
@@ -231,7 +230,6 @@ FocusScope {
                             shelf.forceActiveFocus()
                         }
                         onOpened: shelf.opened(spine.book.bookId)
-                        onHeld: shelf.detailsWanted()
                     }
 
                     // Pulled out, the book shows its face, standing on the shelf
@@ -263,7 +261,6 @@ FocusScope {
                             }
                             BookTaps {
                                 onOpened: shelf.opened(spine.book.bookId)
-                                onHeld: shelf.detailsWanted()
                             }
                         }
                     }

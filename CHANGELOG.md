@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Changed
+
+- A long press on a book with a finger lists what can be done with it, as a right click does, beside where it was pressed, in every view of the shelf; its details are one of what is listed. Before, holding a book only opened its details, and the list was reached only from the details' *More* (#9).
+
 ## [0.1.6.1] - 2026-11-19
 
 ### Fixed

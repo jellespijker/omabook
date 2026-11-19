@@ -27,7 +27,7 @@ Your ebook library and reader for [Omarchy](https://omarchy.org). Add books of a
 
 ## Views
 
-The library is one shelf looked at five ways. `1` to `5` pick one, `V` goes to the next, and so do the small drawings beside the search; each library remembers its own. Whichever it is, the same keys move, open and edit, a click selects and a double click opens, and a finger opens with a tap.
+The library is one shelf looked at five ways. `1` to `5` pick one, `V` goes to the next, and so do the small drawings beside the search; each library remembers its own. Whichever it is, the same keys move, open and edit, a click selects and a double click opens, and a finger opens with a tap. A right click or a long press on a book lists what can be done with it, its details among them.
 
 | | |
 |---|---|

@@ -160,10 +160,6 @@ Item {
             if (bookId < 0) backend.scripts.launch(bookId)
             else reader.openBook(bookId)
         }
-        function onDetailsWanted() {
-            if (view.detailsFit) view.showDetails = true
-            else view.detailsOver = true
-        }
     }
     Connections {
         target: backend

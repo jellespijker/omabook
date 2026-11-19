@@ -8,14 +8,12 @@ import QtQuick.Controls
 // `currentRow` (the selected book's row in backend.books), `show(row)`,
 // `move("left" | "right" | "up" | "down")`, `activate()` (Space and Enter),
 // `back()` (Escape; true when it did something), `ownDetails` (the view
-// shows the selected book's details itself), and the signals `opened(id)`
-// and `detailsWanted()`.
+// shows the selected book's details itself), and the signal `opened(id)`.
 FocusScope {
     id: shelf
     property alias currentRow: grid.currentIndex
     readonly property bool ownDetails: false
     signal opened(var bookId)
-    signal detailsWanted()
 
     function show(row) { grid.currentIndex = row }
     function move(where) {
@@ -108,7 +106,6 @@ FocusScope {
                     grid.forceActiveFocus()
                 }
                 onOpened: shelf.opened(cell.bookId)
-                onHeld: shelf.detailsWanted()
             }
         }
     }

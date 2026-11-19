@@ -13,7 +13,6 @@ FocusScope {
     readonly property int currentRow: inPile ? covers.currentRow : -1
     readonly property bool ownDetails: false
     signal opened(var bookId)
-    signal detailsWanted()
     // The pile that is selected, by what it is a pile of: the piles are made
     // anew whenever the books change, and the selection is kept through it.
     property string lastPile
@@ -217,6 +216,5 @@ FocusScope {
         anchors.right: parent.right
         focus: shelf.inPile
         onOpened: (bookId) => shelf.opened(bookId)
-        onDetailsWanted: shelf.detailsWanted()
     }
 }

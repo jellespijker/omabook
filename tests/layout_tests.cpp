@@ -1770,8 +1770,8 @@ private slots:
             gather("shelf");
             inMenu("libraryMore", "library-menu");
             if (QTest::currentTestFailed()) return;
-            // What can be done with a book: a right click on it, and the
-            // details' "More", which is how a finger gets there.
+            // What can be done with a book: a right click on it (a long
+            // press, for a finger: touch_tests), and the details' "More".
             if (!touch) {
                 QQuickItem *grid = desk.item("grid");
                 QVERIFY(grid);

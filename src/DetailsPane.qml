@@ -223,7 +223,7 @@ Item {
                     onClicked: win.removeBook(pane.book.bookId)
                 }
                 // The rest of what can be done with it (save a copy, its
-                // collections...), as a right click on the book lists it.
+                // collections...), as a right click or a long press on the book lists it.
                 AppButton {
                     objectName: "bookMore"
                     visible: !pane.launcher

@@ -9,7 +9,6 @@ FocusScope {
     property alias currentRow: table.currentIndex
     readonly property bool ownDetails: false
     signal opened(var bookId)
-    signal detailsWanted()
 
     // Each column, the order its heading sorts by, its width (the title
     // takes what is left) and how much it matters: 1 is the last to go.
@@ -235,7 +234,6 @@ FocusScope {
                     table.forceActiveFocus()
                 }
                 onOpened: shelf.opened(line.bookId)
-                onHeld: shelf.detailsWanted()
             }
         }
     }

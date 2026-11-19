@@ -2,7 +2,8 @@ import QtQuick
 
 // How a book answers a pointer, the same in every view: a click selects and
 // a double click opens; a right click selects it and lists what can be done
-// with it; a finger opens with one tap, and selects by holding.
+// with it; a finger opens with one tap, and holding does what a right click
+// does. Its details are one of what is listed.
 Item {
     id: taps
     anchors.fill: parent
@@ -13,7 +14,12 @@ Item {
     property bool tapOpens: true
     signal picked()
     signal opened()
-    signal held()
+
+    // Selects the book and lists what can be done with it, beside where it was pressed.
+    function list(at) {
+        taps.picked()
+        win.showMenu("book", taps.mapToItem(null, at.x, at.y))
+    }
 
     TapHandler {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
@@ -23,12 +29,10 @@ Item {
     TapHandler {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad | PointerDevice.Stylus
         acceptedButtons: Qt.RightButton
-        onTapped: (point) => {
-            taps.picked()
-            win.showMenu("book", taps.mapToItem(null, point.position.x, point.position.y))
-        }
+        onTapped: (point) => taps.list(point.position)
     }
     TapHandler {
+        id: finger
         acceptedDevices: PointerDevice.TouchScreen
         onTapped: {
             win.touchSeen = true
@@ -40,8 +44,7 @@ Item {
         }
         onLongPressed: {
             win.touchSeen = true
-            taps.picked()
-            taps.held()
+            taps.list(finger.point.position)
         }
     }
 }
