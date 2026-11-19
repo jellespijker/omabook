@@ -210,7 +210,43 @@ const Person *PersonFile::get(const QString &libraryRoot) {
     return &*m_person;
 }
 
+QString PersonFile::formerFolder() const { return QFileInfo(m_file).absoluteDir().filePath(u"former-persons"_s); }
+
+QString PersonFile::formerFile(const QString &id) const { return QDir(formerFolder()).filePath(id + u".key"_s); }
+
+QStringList PersonFile::formerIds() const {
+    QStringList ids;
+    const QDir folder(formerFolder());
+    for (const QFileInfo &file : folder.entryInfoList({u"*.key"_s}, QDir::Files, QDir::Name))
+        if (Person::publicKeyFrom(file.completeBaseName()))
+            ids << file.completeBaseName();
+    return ids;
+}
+
+std::expected<Person, QString> PersonFile::former(const QString &id) const {
+    auto person = Person::load(formerFile(id));
+    if (person && person->id() != id)
+        return std::unexpected(u"%1 holds another person's key than its name says."_s.arg(formerFile(id)));
+    return person;
+}
+
+bool PersonFile::isMine(const QString &id) {
+    const Person *person = get();
+    return (person != nullptr && person->id() == id) || formerIds().contains(id);
+}
+
+std::expected<void, QString> PersonFile::keepFormer(const Person &person) const {
+    const QString file = formerFile(person.id());
+    // Given up here before (paired, and back to it by another pairing): the key there is the same.
+    if (QFileInfo(file).exists() || QFileInfo(file).isSymLink())
+        return former(person.id()).transform([](const Person &) {});
+    return Person::keep(file, person.seed(), Person::Placing::KeepWhatIsThere);
+}
+
 std::expected<void, QString> PersonFile::adopt(Person person) {
+    if (const Person *was = get(); was != nullptr && was->id() != person.id())
+        if (auto kept = keepFormer(*was); !kept)
+            return std::unexpected(u"The person this computer was could not be kept, so it stays who it was: %1"_s.arg(kept.error()));
     if (auto kept = person.keepIn(m_file); !kept)
         return kept;
     m_person.emplace(std::move(person));

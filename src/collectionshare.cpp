@@ -166,7 +166,7 @@ void printPreview(const QJsonObject &shown) {
         return std::unexpected(u"There is no person to publish the space as; omabook identity says why."_s);
     SpaceSnapshot::Owner owner{.name = parser.value(u"as"_s).trimmed(), .person = person->id()};
     if (owner.name.isEmpty()) {
-        const QString space = PublishedSpace::idFor(owner.person, Spaces::collectionId(library, collection.id));
+        const QString space = PublishedSpace::spaceFor(library, owner.person, Spaces::collectionId(library, collection.id));
         QSqlQuery named = ChangeLog::query(library, "SELECT name FROM space_members WHERE space = ? AND person = ?", {space, owner.person});
         owner.name = named.next() ? named.value(0).toString() : QString();
     }

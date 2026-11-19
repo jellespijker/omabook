@@ -256,6 +256,36 @@ As built (#38), shared spaces:
   with numbers past what is held of each device (a version vector); one changed, cut short or of another
   space is refused whole. WebDAV and S3 would carry the same files; they are not built.
 
+As built (#50), what a computer was as a person it gave up at a pairing:
+
+- **The key given up is kept.** Pairing keeps the person it gives up beside the person, in
+  `former-persons/<id>.key` (owner-only, written whole, never over one there), before the new key
+  takes its place; when that can't be done the computer stays who it was. With it what that person
+  was a member of goes on: an invite sealed to them still opens (`spaces join` tries each).
+- **A writer hands itself over, by the space's own rules.** In each shared space where a person given
+  up is a writer and the person now is not, the computer writes a role change making the person now a
+  writer, signed by the one given up: any writer may, so every member's Omabook takes it and
+  everything after it, with no one else to ask. It does so at the pairing and again at each sync
+  and join of the space, so the order doesn't matter: an invite to who it was, joined after the
+  pairing, hands over once the inviter's role change for it arrives. The one given up is not removed:
+  another of one's computers not yet paired may still be writing as it, and a removal would refuse
+  that for good.
+- **A reader stays the reader it was.** A reader makes nobody a member, and asking a writer to
+  confirm needs a way to ask that is not built. A reader writes nothing, and reading needs only the
+  space's key, which is per space, not per person; so the computer is that member as the person it
+  gave up (`SharedSpace::memberAs`) until a writer makes the person now one, or the one given up a
+  writer, which then hands over as above.
+- **A published space's owner moves.** Its id stays, since those who follow it know it by that, though
+  it was made from the person who first published it (`PublishedSpace::spaceFor` finds it again).
+  Its log says, as the last it writes as the one given up, that it is handed to the person now
+  (entity `owner`, the one before as its id, field `handed_to`, a field of its own per hand-over, so
+  compaction keeps each), and the person now is its owner and writes it from then on. A subscriber
+  takes the operations of the owner now and of each who handed it on to them, and refuses a space
+  whose owner changed without that. An Omabook from before refuses a snapshot after a hand-over, as
+  not all its operations are its owner's; it is updated to follow on.
+- **A subscription stays as it is**: its reader is this computer (`space_members`, by device), not a
+  person.
+
 ### Book files
 
 Files are referenced by their hash and fetched only when wanted. Between one's own computers they

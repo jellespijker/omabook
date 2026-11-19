@@ -264,3 +264,43 @@ qint64 PublishedLog::follow(const Library &library, const QString &space, std::s
     }
     return appends.size();
 }
+
+qint64 PublishedLog::handOver(const Library &library, const QString &from, const QString &to) {
+    if (from.isEmpty() || to.isEmpty() || from == to)
+        return 0;
+    const Library::Batch batch(library);
+    QStringList spaces;
+    for (QSqlQuery query = ChangeLog::query(library,
+                                            "SELECT s.id FROM spaces AS s JOIN published AS p ON p.space = s.id "
+                                            "WHERE s.kind = 'published' AND s.owner = ? ORDER BY s.id",
+                                            {from});
+         query.next();)
+        spaces << query.value(0).toString();
+    for (const QString &space : std::as_const(spaces)) {
+        const QString device = deviceIn(library, space);
+        ChangeLog::exec(library,
+                        "INSERT INTO published_ops (space, device, seq, hlc, author, entity, id, field, value) "
+                        "VALUES (?, ?, ?, ?, ?, 'owner', ?, 'handed_to', ?)",
+                        {space, device, lastSeq(library, space, device) + 1, Spaces::tickHlc(library), from, from, to});
+        ChangeLog::exec(library, "UPDATE spaces SET owner = ? WHERE id = ?", {to, space});
+        // The name they go by in it goes with it.
+        ChangeLog::exec(library,
+                        "INSERT INTO space_members (space, person, role, name, added) SELECT space, ?, role, name, ? FROM space_members "
+                        "WHERE space = ? AND person = ? ON CONFLICT(space, person) DO UPDATE SET name = excluded.name",
+                        {to, Spaces::lastHlc(library), space, from});
+    }
+    return spaces.size();
+}
+
+QSet<QString> PublishedLog::owners(const QString &owner, std::span<const SpaceOperation> ops) {
+    QSet<QString> owners{owner};
+    // Each hand-over is from whoever wrote it, to one who owned it later.
+    for (bool grew = true; grew;) {
+        const qsizetype before = owners.size();
+        for (const SpaceOperation &op : ops)
+            if (op.entity == "owner"_L1 && op.field == "handed_to"_L1 && op.author == op.id && owners.contains(op.value))
+                owners.insert(op.id);
+        grew = owners.size() != before;
+    }
+    return owners;
+}

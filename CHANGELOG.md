@@ -39,6 +39,7 @@ moves those lines under its version.
 ### Fixed
 
 - No `QSqlDatabase requires a QCoreApplication` warning after library commands (#31).
+- A computer that a sync paired into another person keeps what it was in spaces as the person it was: that person's key is kept (`former-persons/` in your Omabook data folder, readable only by you), so an invite sealed to it still opens; in a shared space where it was a writer it makes you, as you are now, a writer, and goes on writing; where it was a reader it goes on reading; and a collection it shared stays the same space, now yours as you are, so those who follow it take what is new (#50).
 - `omabook sync`, the window's sync status and the sync log now report knowledge graph changes taken and sent (#31).
 - Knowledge graph sync now settles in a single sync when two libraries call the same thing by different names, without merging separate local things that share another name (#31).
 

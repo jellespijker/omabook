@@ -13,6 +13,9 @@
 // given the person's key over the ssh the sync already runs on, and keeps it
 // in place of its own; from then on both sign as one person. What either
 // signed before stays signed by the key it was signed with, and verifies.
+// The person given up is kept (PersonFile::adopt), and what this computer
+// was in spaces as that person goes on as the one it is (#50): the spaces it
+// published are handed over, and so are the shared ones it is a writer of.
 //
 // Any two of one's computers that replicate settle on the same person this
 // way, also when two that were each paired with others meet: the smallest id

@@ -3,6 +3,7 @@
 #include <QByteArray>
 #include <QByteArrayView>
 #include <QString>
+#include <QStringList>
 #include <QStringView>
 #include <array>
 #include <cstddef>
@@ -110,10 +111,26 @@ public:
     // Why get() found no person, once it was asked.
     [[nodiscard]] const QString &problem() const noexcept { return m_problem; }
     // From now on the person is `person`, kept in the file in place of the
-    // one there: what pairing with another of one's own computers does.
+    // one there: what pairing with another of one's own computers does. The
+    // one there is kept first among the former persons (formerFile), and
+    // nothing changes when it can't be: a key given up still opens what was
+    // sealed to it and acts where it is a member (#50).
     [[nodiscard]] std::expected<void, QString> adopt(Person person);
 
+    // Where the person `id`, given up at a pairing, is kept: beside the
+    // person, in `former-persons/<id>.key`, for its owner alone.
+    [[nodiscard]] QString formerFile(const QString &id) const;
+    // The ids of the persons given up here, in the order of their ids.
+    [[nodiscard]] QStringList formerIds() const;
+    // The person `id` given up here, read from its file.
+    [[nodiscard]] std::expected<Person, QString> former(const QString &id) const;
+    // Whether `id` is the person, or one given up here.
+    [[nodiscard]] bool isMine(const QString &id);
+
 private:
+    [[nodiscard]] QString formerFolder() const;
+    [[nodiscard]] std::expected<void, QString> keepFormer(const Person &person) const;
+
     QString m_file;
     QString m_problem;
     std::optional<Person> m_person;

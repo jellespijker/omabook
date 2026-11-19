@@ -349,6 +349,15 @@ QString PublishedSpace::idFor(const QString &person, const QString &collectionGl
     return u"published:"_s + hashed(person, collectionGlobalId);
 }
 
+QString PublishedSpace::spaceFor(const Library &library, const QString &person, const QString &collectionGlobalId) {
+    const QString made = idFor(person, collectionGlobalId);
+    QSqlQuery query = ChangeLog::query(library,
+                                       "SELECT s.id FROM spaces AS s JOIN published AS p ON p.space = s.id WHERE s.kind = 'published' "
+                                       "AND s.owner = ? AND p.collection = ? ORDER BY s.id = ? DESC, s.id LIMIT 1",
+                                       {person, collectionGlobalId, made});
+    return query.next() ? query.value(0).toString() : made;
+}
+
 std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const Library &library, qint64 collectionId, const Parts &parts,
                                                                          const QString &space) {
     const std::optional<Collection> root = collectionOf(library, collectionId);
@@ -394,7 +403,7 @@ std::expected<PublishedSpace::Publication, QString> PublishedSpace::publish(cons
     if (!collection)
         return std::unexpected(u"There is no collection %1 to publish."_s.arg(collectionId));
     const QString home = Spaces::collectionId(library, collectionId);
-    const QString space = idFor(owner.person, home);
+    const QString space = spaceFor(library, owner.person, home);
     Spaces::ensurePublishedSpace(library, space, collection->name, owner.person, owner.name);
     PublishedLog::remember(library, space, {.collection = home, .parts = parts.names()});
     return follow(library, space);

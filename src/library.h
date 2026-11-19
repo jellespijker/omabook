@@ -187,7 +187,8 @@ public:
     // Nothing when there can be none; the operations then go unsigned.
     [[nodiscard]] const Person *person() const { return m_person.get(m_root); }
     // Where the person is kept: per user, or a test's or a pairing's own.
-    [[nodiscard]] PersonFile &personFile() noexcept { return m_person; }
+    // Held as person() holds it: what pairing changes, of a library read or written.
+    [[nodiscard]] PersonFile &personFile() const noexcept { return m_person; }
     void usePersonFile(const QString &file) { m_person = PersonFile(file); }
 
     struct Added {

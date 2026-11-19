@@ -292,6 +292,41 @@ std::expected<void, QString> SharedSpace::setRole(const Library &library, const 
     return write(library, space, std::span(&entry, 1));
 }
 
+QString SharedSpace::memberAs(const Library &library, const State &state) {
+    if (const Person *person = library.person(); person != nullptr && state.roleOf(person->id()) != Role::None)
+        return person->id();
+    QString reader;
+    for (const QString &was : library.personFile().formerIds()) {
+        const Role role = state.roleOf(was);
+        if (role == Role::Writer)
+            return was;
+        if (role == Role::Reader && reader.isEmpty())
+            reader = was;
+    }
+    return reader;
+}
+
+std::expected<bool, QString> SharedSpace::carryOver(const Library &library, const QString &space) {
+    const Person *person = library.person();
+    if (person == nullptr || !isShared(library, space))
+        return false;
+    const State now = state(library, space);
+    if (now.roleOf(person->id()) == Role::Writer)
+        return false;
+    const QStringList formers = library.personFile().formerIds();
+    const auto writer = std::ranges::find_if(formers, [&now](const QString &was) { return now.roleOf(was) == Role::Writer; });
+    if (writer == formers.cend())
+        return false;
+    const auto was = library.personFile().former(*writer);
+    if (!was)
+        return std::unexpected(u"The person this computer was in %1 can't sign any more: %2"_s.arg(now.name, was.error()));
+    const Library::Batch batch(library);
+    ChangeLog::append(
+        library,
+        {.space = space, .entity = u"member"_s, .id = person->id(), .field = u"role"_s, .value = roleName(Role::Writer), .hlc = {}}, *was);
+    return true;
+}
+
 SharedSpace::Taken SharedSpace::take(const Library &library, const QString &space, std::span<const SpaceOperation> incoming) {
     Taken taken;
     QList<SpaceOperation> all = held(library, space);

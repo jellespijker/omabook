@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QtTypes>
@@ -51,5 +52,16 @@ void remember(const Library &library, const QString &space, const Record &record
 // gone, and of a thing that is no longer in the space its removal, of a
 // field no longer said its clearing. One transaction. How many it appended.
 qint64 follow(const Library &library, const QString &space, std::span<const SpaceOperation> now, const QString &author);
+
+// Moves the spaces `from` publishes from here to `to` (#50: a pairing made
+// this computer `to`): each keeps its id, which those who follow it know it
+// by, and its log says, as the last it writes as `from`, that it is handed
+// to `to` (entity "owner", the one before as its id, field "handed_to"),
+// after which `to` is its owner and writes it. How many spaces moved.
+qint64 handOver(const Library &library, const QString &from, const QString &to);
+
+// Who has owned a space whose owner is `owner` now, by the hand-overs in
+// `ops`: `owner`, and each who handed it to one of them.
+[[nodiscard]] QSet<QString> owners(const QString &owner, std::span<const SpaceOperation> ops);
 
 } // namespace PublishedLog

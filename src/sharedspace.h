@@ -103,6 +103,21 @@ void record(const Library &library, const QString &space, const QString &name, c
 // Gives `person` the role `role` in the space (Role::None removes them).
 [[nodiscard]] std::expected<void, QString> setRole(const Library &library, const QString &space, const QString &person, Role role);
 
+// Who this library is in the space (#50): its person when a member, else a
+// person it was before a pairing made it another (PersonFile::formerIds)
+// that is, a writer before a reader. Empty when none of them is a member.
+[[nodiscard]] QString memberAs(const Library &library, const State &state);
+
+// Hands the space over from a person this library was before pairing to the
+// one it is (#50): when a person given up here is a writer of the space and
+// the person now is not, it writes, signed by the one given up, that the
+// person now is a writer, as the role rules let any writer do. The one given
+// up stays a member: another of one's computers not yet paired may still be
+// writing as it. A reader can't make anyone a member, so a reader given up
+// stays the reader it was, and this library reads the space as it (memberAs)
+// until a writer makes the person now a member. Whether it wrote one.
+[[nodiscard]] std::expected<bool, QString> carryOver(const Library &library, const QString &space);
+
 // What taking operations from elsewhere did.
 struct Taken {
     qsizetype added = 0; // kept here now

@@ -29,16 +29,17 @@ using SharedSpaces::Summary;
 
 [[nodiscard]] Summary sharedSummary(const Library &library, const QString &space, const QString &recordedName) {
     const SharedSpace::State state = SharedSpace::state(library, space);
-    const Person *person = library.person();
+    // As a person given up at a pairing, where that is who this library is in the space (#50).
+    const QString me = SharedSpace::memberAs(library, state);
     Summary summary{.space = space,
                     .kind = QString::fromLatin1(SharedSpace::kind),
                     .name = state.name.isEmpty() ? recordedName : state.name,
-                    .role = person != nullptr ? SharedSpace::roleName(state.roleOf(person->id())) : QString(),
+                    .role = me.isEmpty() ? QString() : SharedSpace::roleName(state.roleOf(me)),
                     .members = {},
                     .collection = collectionPath(library, space)};
     for (const SharedSpace::Member &member : state.members)
         summary.members << Member{.person = member.person,
-                                  .name = person != nullptr && member.person == person->id() ? u"you"_s : QString(),
+                                  .name = library.personFile().isMine(member.person) ? u"you"_s : QString(),
                                   .role = SharedSpace::roleName(member.role)};
     return summary;
 }
@@ -95,6 +96,20 @@ using SharedSpaces::Summary;
     mine.removeIf([&](const SpaceOperation &op) { return op.device != device || op.seq <= sent; });
     std::ranges::sort(mine, {}, &SpaceOperation::seq);
     return mine;
+}
+
+// The invite in `bytes`, opened by `me`, or by a person this library was
+// before a pairing: one sealed to who it was then is still for it (#50).
+[[nodiscard]] std::expected<SpaceInvites::Opened, QString> openInvite(const Library &library, const Person &me, const QByteArray &bytes) {
+    auto opened = SpaceInvites::open(me, bytes);
+    for (const QString &was : library.personFile().formerIds()) {
+        if (opened)
+            break;
+        if (const auto former = library.personFile().former(was))
+            if (auto byFormer = SpaceInvites::open(*former, bytes))
+                opened = std::move(byFormer);
+    }
+    return opened;
 }
 
 [[nodiscard]] QString refusal(const SharedSpace::Refused &refused) {
@@ -197,7 +212,7 @@ std::expected<Summary, QString> SharedSpaces::join(Library &library, const QStri
     QFile read(file);
     if (!read.open(QIODevice::ReadOnly))
         return std::unexpected(u"Can't read the invite %1: %2"_s.arg(file, read.errorString()));
-    const auto opened = SpaceInvites::open(*me, read.readAll());
+    const auto opened = openInvite(library, *me, read.readAll());
     if (!opened)
         return std::unexpected(opened.error());
     const QString &space = opened->invite.space;
@@ -207,6 +222,8 @@ std::expected<Summary, QString> SharedSpaces::join(Library &library, const QStri
     SharedSpace::record(library, space, opened->invite.name);
     if (const auto filed = SharedCollection::file(library, space, SharedSpace::state(library, space).accepted, as); !filed)
         return std::unexpected(filed.error());
+    if (const auto carried = SharedSpace::carryOver(library, space); !carried)
+        return std::unexpected(carried.error());
     Summary summary = sharedSummary(library, space, opened->invite.name);
     // Until the inviter's sync brings the operation that made them a member, the invite says what they are.
     if (summary.role.isEmpty())
@@ -233,6 +250,9 @@ std::expected<SharedSpaces::Synced, QString> SharedSpaces::sync(Library &library
     synced.known = taken.known;
     for (const SharedSpace::Refused &refused : taken.refused)
         synced.refused << refusal(refused);
+    // A membership of a person given up at a pairing, handed to the one now, once it is here (#50).
+    if (const auto carried = SharedSpace::carryOver(library, *space); !carried)
+        return std::unexpected(carried.error());
     auto filed = SharedCollection::file(library, *space, before);
     if (!filed)
         return std::unexpected(filed.error());

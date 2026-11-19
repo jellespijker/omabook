@@ -8,6 +8,8 @@
 
 #include "log.h"
 #include "person.h"
+#include "publishedlog.h"
+#include "sharedspace.h"
 
 namespace {
 
@@ -15,6 +17,19 @@ using namespace Qt::StringLiterals;
 
 // Whether the other side's person is the one both are to be.
 [[nodiscard]] bool theirsIsKept(const Person &mine, const QString &theirs) { return !theirs.isEmpty() && theirs < mine.id(); }
+
+// What this computer was in spaces as the person it gave up goes on as the
+// one it is (#50): the published spaces it owns are handed over, and in each
+// shared space where it was a writer the person it is now is made one. One
+// that can't be now (a key not readable) is tried again at the space's next
+// sync, which carries over too.
+void carryOver(const Library &library, const QString &was, const QString &now) {
+    if (const qint64 moved = PublishedLog::handOver(library, was, now); moved > 0)
+        qCInfo(lcSync).noquote() << moved << "published spaces handed over to" << now;
+    for (const QString &space : SharedSpace::spaces(library))
+        if (const auto carried = SharedSpace::carryOver(library, space); !carried)
+            qCWarning(lcSync).noquote() << "not handed over yet:" << carried.error();
+}
 
 } // namespace
 
@@ -55,5 +70,6 @@ std::expected<bool, QString> Pairing::take(Library &library, const QJsonObject &
     if (auto kept = library.personFile().adopt(std::move(*person)); !kept)
         return std::unexpected(kept.error());
     qCInfo(lcSync).noquote() << "paired: this computer is now person" << theirPerson << "and no longer" << was;
+    carryOver(library, was, theirPerson);
     return true;
 }

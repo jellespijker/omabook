@@ -340,7 +340,11 @@ qint64 ChangeLog::internId(const Library &library, const QString &name) {
     return ChangeLog::insert(library, "INSERT INTO log_ids (name) VALUES (?)", {name}).value_or(0);
 }
 
-void ChangeLog::append(const Library &library, const Entry &entry) {
+void ChangeLog::append(const Library &library, const Entry &entry) { appendAs(library, entry, library.person()); }
+
+void ChangeLog::append(const Library &library, const Entry &entry, const Person &signer) { appendAs(library, entry, &signer); }
+
+void ChangeLog::appendAs(const Library &library, const Entry &entry, const Person *person) {
     const Scope guard;
     if (entry.id.isEmpty())
         return;
@@ -365,7 +369,7 @@ void ChangeLog::append(const Library &library, const Entry &entry) {
     // every operation did before there were people.
     SpaceOperation op{targetSpace, device, seq, stamp, device, entry.entity, entry.id, entry.field, entry.value};
     QVariant signer;
-    if (const Person *person = library.person()) {
+    if (person != nullptr) {
         SignedOps::signAs(op, *person);
         signer = internId(library, op.signer);
     }

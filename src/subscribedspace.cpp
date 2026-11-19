@@ -12,6 +12,7 @@
 #include "hlc.h"
 #include "library.h"
 #include "person.h"
+#include "publishedlog.h"
 #include "publishedspace.h"
 #include "signedops.h"
 #include "spacelinks.h"
@@ -66,6 +67,12 @@ struct Held {
     return query.next();
 }
 
+// Whose the space is, as recorded here; empty for a space not known here.
+[[nodiscard]] QString ownerHere(const Library &library, const QString &space) {
+    QSqlQuery query = ChangeLog::query(library, "SELECT owner FROM spaces WHERE id = ?", {space});
+    return query.next() ? query.value(0).toString() : QString();
+}
+
 void keep(const Library &library, const SpaceOperation &op, qint64 seq) {
     const qint64 space = ChangeLog::internId(library, op.space);
     const qint64 device = ChangeLog::internId(library, op.device);
@@ -83,6 +90,30 @@ void keep(const Library &library, const SpaceOperation &op, qint64 seq) {
                     {space, device, seq, Hlc::normalize(op.hlc)});
 }
 
+// Whether every operation of the snapshot is of its space and by one of its
+// `owners`, and each one signed is as they signed it.
+[[nodiscard]] std::expected<void, QString> ownersAlone(const SpaceSnapshot &snapshot, const QSet<QString> &owners) {
+    const auto stranger = std::ranges::find_if(snapshot.operations, [&snapshot, &owners](const SpaceOperation &op) {
+        return op.space != snapshot.space || !owners.contains(op.author) || op.device.isEmpty() || op.seq <= 0 || op.entity.isEmpty()
+               || op.id.isEmpty();
+    });
+    if (stranger != snapshot.operations.cend())
+        return std::unexpected(u"Operation %1 of this space is not its owner's, so nothing of it was taken in."_s.arg(
+            std::ranges::distance(snapshot.operations.cbegin(), stranger) + 1));
+    // A signed operation must be the owner's and as they signed it, by the
+    // check replication makes of what a peer sends (SignedOps::verify). A
+    // published space's operations go unsigned for now (#48 publishes them
+    // without the signatures they had at home), and a subscribed space is
+    // read-only, never written back, so an unsigned one is taken in.
+    const auto forged = std::ranges::find_if(snapshot.operations, [&owners](const SpaceOperation &op) {
+        return !op.signature.isEmpty() && (!owners.contains(op.signer) || !SignedOps::verify(op));
+    });
+    if (forged != snapshot.operations.cend())
+        return std::unexpected(u"Operation %1 of this space is not as its owner signed it, so nothing of it was taken in."_s.arg(
+            std::ranges::distance(snapshot.operations.cbegin(), forged) + 1));
+    return {};
+}
+
 // Where the books of one space are here, apart from every other space's.
 [[nodiscard]] QString booksOf(const QString &space) { return u"subscribed-book:"_s + space; }
 
@@ -94,26 +125,14 @@ std::expected<void, QString> SubscribedSpace::verify(const Library &library, con
             u"This is not a published space (it is of the kind \"%1\"), so it can't be subscribed to."_s.arg(snapshot.kind));
     if (!Person::publicKeyFrom(snapshot.owner.person))
         return std::unexpected(u"This space doesn't say who publishes it: its owner's id is not a person's key."_s);
-    const auto stranger = std::ranges::find_if(snapshot.operations, [&snapshot](const SpaceOperation &op) {
-        return op.space != snapshot.space || op.author != snapshot.owner.person || op.device.isEmpty() || op.seq <= 0 || op.entity.isEmpty()
-               || op.id.isEmpty();
-    });
-    if (stranger != snapshot.operations.cend())
-        return std::unexpected(u"Operation %1 of this space is not its owner's, so nothing of it was taken in."_s.arg(
-            std::ranges::distance(snapshot.operations.cbegin(), stranger) + 1));
-    // A signed operation must be the owner's and as they signed it, by the
-    // check replication makes of what a peer sends (SignedOps::verify). A
-    // published space's operations go unsigned for now (#48 publishes them
-    // without the signatures they had at home), and a subscribed space is
-    // read-only, never written back, so an unsigned one is taken in.
-    const auto forged = std::ranges::find_if(snapshot.operations, [&snapshot](const SpaceOperation &op) {
-        return !op.signature.isEmpty() && (op.signer != snapshot.owner.person || !SignedOps::verify(op));
-    });
-    if (forged != snapshot.operations.cend())
-        return std::unexpected(u"Operation %1 of this space is not as its owner signed it, so nothing of it was taken in."_s.arg(
-            std::ranges::distance(snapshot.operations.cbegin(), forged) + 1));
+    // Its owner now, and each who owned it before and handed it on (#50).
+    const QSet<QString> owners = PublishedLog::owners(snapshot.owner.person, snapshot.operations);
+    if (const auto owned = ownersAlone(snapshot, owners); !owned)
+        return owned;
     if (spaceKnown(library, snapshot.space) && !isSubscribed(library, snapshot.space))
         return std::unexpected(u"%1 is a space this library publishes itself, so it can't be subscribed to here."_s.arg(snapshot.name));
+    if (const QString was = ownerHere(library, snapshot.space); !was.isEmpty() && !owners.contains(was))
+        return std::unexpected(u"%1 is published by someone else now, and its owner didn't hand it to them."_s.arg(snapshot.name));
     return {};
 }
 
@@ -180,8 +199,8 @@ std::expected<SubscribedSpace::Accepted, QString> SubscribedSpace::accept(const 
     const QList<SpaceOperation> lacking = SubscribedSpace::lacking(library, snapshot);
     const Library::Batch batch(library);
     Spaces::ensurePublishedSpace(library, snapshot.space, snapshot.name, snapshot.owner.person, snapshot.owner.name);
-    // The owner may have renamed the collection since.
-    ChangeLog::exec(library, "UPDATE spaces SET name = ? WHERE id = ?", {snapshot.name, snapshot.space});
+    // The owner may have renamed the collection since, or handed it on (verify).
+    ChangeLog::exec(library, "UPDATE spaces SET name = ?, owner = ? WHERE id = ?", {snapshot.name, snapshot.owner.person, snapshot.space});
     ChangeLog::exec(library, "INSERT OR IGNORE INTO space_members (space, person, role, added) VALUES (?, ?, ?, ?)",
                     {snapshot.space, Spaces::deviceId(library), QString::fromLatin1(readerRole), Spaces::lastHlc(library)});
     // The owner's clock is not this library's: nothing of the space merges

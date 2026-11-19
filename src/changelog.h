@@ -8,6 +8,7 @@
 
 struct Progress;
 class Library;
+class Person;
 class QSqlQuery;
 
 // The transactional outbox (ADR 0001): every write to a table that travels
@@ -50,6 +51,10 @@ public:
     // Appends one operation in `entry` (ticking the library's HLC when
     // `entry.hlc` is not given) and updates `seen`.
     static void append(const Library &library, const Entry &entry);
+    // The same, signed by `signer` in place of the library's person: a
+    // person this computer was before pairing made it another, handing its
+    // membership of a shared space over (#50).
+    static void append(const Library &library, const Entry &entry, const Person &signer);
     [[nodiscard]] static qint64 internId(const Library &library, const QString &name);
 
     // Records the current `library_state` counters as seen by the log.
@@ -66,4 +71,8 @@ public:
     [[nodiscard]] static QSqlQuery query(const Library &library, const QString &sql, const QVariantList &values = {});
     static bool exec(const Library &library, const QString &sql, const QVariantList &values = {});
     [[nodiscard]] static std::expected<qint64, QString> insert(const Library &library, const QString &sql, const QVariantList &values = {});
+
+private:
+    // Signed by `person`; unsigned, its author this computer, without one.
+    static void appendAs(const Library &library, const Entry &entry, const Person *person);
 };

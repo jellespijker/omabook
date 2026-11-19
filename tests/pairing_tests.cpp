@@ -11,18 +11,25 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <algorithm>
+#include <cstddef>
+#include <sodium.h>
 #include <utility>
 
 #include "fixtures.h"
 #include "hlc.h"
 #include "library.h"
+#include "pairing.h"
 #include "person.h"
 #include "publishedspace.h"
 #include "remote.h"
 #include "replication.h"
+#include "sharedspace.h"
+#include "sharedspaces.h"
 #include "signedops.h"
+#include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "subscriptions.h"
 #include "sync.h"
 #include "synclog.h"
 
@@ -47,6 +54,81 @@ SpaceOperation lastWritten(const Library &library, const QString &field = {}) {
                || (!field.isEmpty() && op.field != field);
     });
     return ops.isEmpty() ? SpaceOperation{} : *std::ranges::max_element(ops, {}, &SpaceOperation::seq);
+}
+
+using SharedSpace::Role;
+
+template <typename Answer> [[nodiscard]] QString whyNot(const Answer &answer) { return answer ? QString() : answer.error(); }
+
+// One person's computer: a library and the user's own Omabook data folder.
+struct Computer {
+    Computer(const QTemporaryDir &dir, const QString &name) : library(dir.filePath(name + "/Library")) {
+        library.usePersonFile(dir.filePath(name + "/home/omabook/person.key"));
+        QVERIFY(library.open());
+        QVERIFY(library.person() != nullptr);
+    }
+
+    [[nodiscard]] QString id() const { return library.person()->id(); }
+
+    // A book in the collection `collection` (made when there is none).
+    void file(const QString &collection, const QString &title, const QString &isbn) {
+        BookMeta meta;
+        meta.title = title;
+        meta.authors = {"Bo Writer"};
+        meta.isbn = isbn;
+        const qint64 book = library.addEntry(meta, true).id;
+        const auto existing = library.collectionNamed(collection);
+        const auto into = existing ? std::expected<qint64, QString>(existing->id) : library.addCollection(collection);
+        QVERIFY2(into && library.putInCollection(*into, book, true), qPrintable(whyNot(into)));
+    }
+
+    [[nodiscard]] SharedSpaces::Synced sync(const QString &space, const QString &folder) {
+        auto done = SharedSpaces::sync(library, space, folder);
+        if (!done)
+            qFatal("%s", qPrintable(done.error()));
+        return *done;
+    }
+
+    Library library;
+};
+
+[[nodiscard]] Person newPerson() {
+    auto person = Person::generate();
+    if (!person)
+        qFatal("%s", qPrintable(person.error()));
+    return std::move(*person);
+}
+
+// A person whose id is smaller than `than`: the one a pairing keeps.
+[[nodiscard]] Person keptOver(const QString &than) {
+    for (;;)
+        if (Person person = newPerson(); person.id() < than)
+            return person;
+}
+
+// Pairs `computer` with another of its person's, whose person `kept` is:
+// what the replication over ssh hands it (Pairing::take).
+[[nodiscard]] bool pairWith(Computer &computer, const Person &kept) {
+    QByteArray secret = kept.secretForPairing();
+    const auto taken = Pairing::take(computer.library, {{"signs", 1}, {"person", kept.id()}, {"person_key", QString::fromLatin1(secret)}});
+    sodium_memzero(secret.data(), static_cast<std::size_t>(secret.size()));
+    return taken && *taken && computer.id() == kept.id();
+}
+
+// The titles of the books a shared space holds, as a member reads it.
+[[nodiscard]] QStringList spaceTitles(const Library &library, const QString &space) {
+    QStringList titles;
+    for (const ReducedBook &book : SpaceReducer::reduce(SharedSpace::state(library, space).accepted).books)
+        titles << book.fields.value("title").value;
+    titles.sort();
+    return titles;
+}
+
+[[nodiscard]] QString roleShown(const Library &library, const QString &space) {
+    for (const SharedSpaces::Summary &summary : SharedSpaces::list(library))
+        if (summary.space == space)
+            return summary.role;
+    return {};
 }
 
 } // namespace
@@ -297,6 +379,148 @@ private slots:
             QCOMPARE(op.toArray().size(), 9);
         QVERIFY(!answer.contains("person_key"));
         QVERIFY(std::ranges::any_of(SpaceReplay::operations(library), [](const SpaceOperation &op) { return op.id == "c:From Before"; }));
+    }
+
+    // #50: a computer that joined a shared space, then was paired and took on
+    // another person, keeps its place there: a writer goes on writing (the
+    // person it was makes the one it is a writer), a reader goes on reading.
+    void aMemberOfASharedSpaceKeepsItsPlaceAfterPairing_data() {
+        QTest::addColumn<int>("role");
+        QTest::newRow("a writer") << static_cast<int>(Role::Writer);
+        QTest::newRow("a reader") << static_cast<int>(Role::Reader);
+    }
+
+    void aMemberOfASharedSpaceKeepsItsPlaceAfterPairing() {
+        QFETCH(int, role);
+        const auto given = static_cast<Role>(role);
+        QTemporaryDir dir;
+        const QString folder = dir.filePath("Synced");
+        QVERIFY(QDir().mkpath(folder));
+        Computer ada(dir, "ada");
+        Computer bo(dir, "bo");
+        ada.file("Home", "Dune", "9780441172719");
+        const auto created = SharedSpaces::create(ada.library, "Home", {});
+        QVERIFY2(created, qPrintable(whyNot(created)));
+        const QString space = created->space.space;
+        const QString boWas = bo.id();
+        QVERIFY(SharedSpaces::invite(ada.library, space, boWas, given, dir.filePath("bo.omabook-invite")).has_value());
+        std::ignore = ada.sync(space, folder);
+        QVERIFY(SharedSpaces::join(bo.library, dir.filePath("bo.omabook-invite")).has_value());
+        QVERIFY(bo.sync(space, folder).refused.isEmpty());
+
+        const Person kept = keptOver(boWas);
+        QVERIFY(pairWith(bo, kept));
+        // The person given up is kept, for its owner alone, and still opens and signs.
+        const QString former = bo.library.personFile().formerFile(boWas);
+        QCOMPARE(QFile::permissions(former) & (QFile::ReadGroup | QFile::WriteGroup | QFile::ReadOther | QFile::WriteOther),
+                 QFile::Permissions());
+        QCOMPARE(Person::load(former)->id(), boWas);
+        QCOMPARE(bo.library.personFile().formerIds(), QStringList{boWas});
+
+        // Bo goes on reading what Ada adds.
+        ada.file("Home", "Emma", "9780141439587");
+        std::ignore = ada.sync(space, folder);
+        const SharedSpaces::Synced bos = bo.sync(space, folder);
+        QVERIFY2(bos.refused.isEmpty(), qPrintable(bos.refused.join('\n')));
+        QCOMPARE(spaceTitles(bo.library, space), QStringList({"Dune", "Emma"}));
+        QCOMPARE(roleShown(bo.library, space), SharedSpace::roleName(given));
+
+        if (given == Role::Reader) {
+            // A reader can make nobody a member: Bo stays the reader he was, as who he was.
+            QCOMPARE(bos.sent, 0);
+            const SharedSpace::State state = SharedSpace::state(ada.library, space);
+            QCOMPARE(state.roleOf(boWas), Role::Reader);
+            QCOMPARE(state.roleOf(kept.id()), Role::None);
+            QCOMPARE(SharedSpace::memberAs(bo.library, SharedSpace::state(bo.library, space)), boWas);
+            const ChangeLog::Entry entry{.space = space, .entity = "book", .id = "b:x", .field = "title", .value = "Mine", .hlc = {}};
+            QVERIFY(!SharedSpace::write(bo.library, space, std::span(&entry, 1)));
+            return;
+        }
+        // A writer goes on writing, as the person he is now, and everyone takes it.
+        bo.file("Home", "Persuasion", "9780141439686");
+        const SharedSpaces::Synced wrote = bo.sync(space, folder);
+        QVERIFY(wrote.written > 0);
+        const SharedSpaces::Synced adas = ada.sync(space, folder);
+        QVERIFY2(adas.refused.isEmpty(), qPrintable(adas.refused.join('\n')));
+        QCOMPARE(spaceTitles(ada.library, space), QStringList({"Dune", "Emma", "Persuasion"}));
+        const SharedSpace::State state = SharedSpace::state(ada.library, space);
+        QCOMPARE(state.roleOf(kept.id()), Role::Writer);
+        QCOMPARE(state.roleOf(boWas), Role::Writer); // another of his computers may still be him
+        const auto persuasion = std::ranges::find(state.accepted, QString("Persuasion"), &SpaceOperation::value);
+        QVERIFY(persuasion != state.accepted.cend());
+        QCOMPARE(persuasion->author, kept.id());
+        // Once is enough: the next sync hands nothing over again.
+        QCOMPARE(SharedSpace::carryOver(bo.library, space).value_or(true), false);
+    }
+
+    // The other order: invited as who it was, it joins only after the pairing.
+    void anInviteToWhoAComputerWasIsJoinedAfterPairing() {
+        QTemporaryDir dir;
+        const QString folder = dir.filePath("Synced");
+        QVERIFY(QDir().mkpath(folder));
+        Computer ada(dir, "ada");
+        Computer bo(dir, "bo");
+        ada.file("Home", "Dune", "9780441172719");
+        const auto created = SharedSpaces::create(ada.library, "Home", {});
+        QVERIFY(created.has_value());
+        const QString space = created->space.space;
+        const QString boWas = bo.id();
+        QVERIFY(SharedSpaces::invite(ada.library, space, boWas, Role::Writer, dir.filePath("bo.omabook-invite")).has_value());
+        std::ignore = ada.sync(space, folder);
+
+        const Person kept = keptOver(boWas);
+        QVERIFY(pairWith(bo, kept));
+        const auto joined = SharedSpaces::join(bo.library, dir.filePath("bo.omabook-invite"));
+        QVERIFY2(joined, qPrintable(whyNot(joined)));
+        QVERIFY(bo.sync(space, folder).refused.isEmpty());
+        QCOMPARE(spaceTitles(bo.library, space), QStringList({"Dune"}));
+        bo.file("Home", "Persuasion", "9780141439686");
+        QVERIFY(bo.sync(space, folder).written > 0);
+        QVERIFY(ada.sync(space, folder).refused.isEmpty());
+        QCOMPARE(spaceTitles(ada.library, space), QStringList({"Dune", "Persuasion"}));
+        QCOMPARE(SharedSpace::state(ada.library, space).roleOf(kept.id()), Role::Writer);
+        // An invite to someone this computer never was still isn't opened.
+        const Person eve = newPerson();
+        QVERIFY(SharedSpaces::invite(ada.library, space, eve.id(), Role::Reader, dir.filePath("eve.omabook-invite")).has_value());
+        QVERIFY(!SharedSpaces::join(bo.library, dir.filePath("eve.omabook-invite")));
+    }
+
+    // A space published before pairing is the same space after it: its owner
+    // moves to the person kept, and those who follow it take what is new.
+    void aSpacePublishedBeforePairingIsStillSharedAfter() {
+        QTemporaryDir dir;
+        Computer bo(dir, "bo");
+        Computer cy(dir, "cy");
+        bo.file("Out", "Dune", "9780441172719");
+        const qint64 out = bo.library.collectionNamed("Out")->id;
+        const QString boWas = bo.id();
+        const auto first = PublishedSpace::snapshot(bo.library, out, {}, {.name = "Bo", .person = boWas});
+        QVERIFY2(first, qPrintable(whyNot(first)));
+        QVERIFY(Subscriptions::subscribe(cy.library, *first, {}).has_value());
+
+        const Person kept = keptOver(boWas);
+        QVERIFY(pairWith(bo, kept));
+        bo.file("Out", "Emma", "9780141439587");
+        const auto later = PublishedSpace::snapshot(bo.library, out, {}, {.name = "Bo", .person = kept.id()});
+        QVERIFY2(later, qPrintable(whyNot(later)));
+        QCOMPARE(later->space, first->space);
+        QCOMPARE(later->owner.person, kept.id());
+        QCOMPARE(later->owner.name, QString("Bo"));
+        const auto followed = Subscriptions::subscribe(cy.library, *later, {});
+        QVERIFY2(followed, qPrintable(whyNot(followed)));
+        QCOMPARE(followed->space.owner, kept.id());
+        QCOMPARE(SpaceReducer::reduce(SubscribedSpace::operations(cy.library, first->space)).books.size(), 2);
+        // Spaces::recorded names one space, owned by the person kept.
+        const QList<Spaces::Recorded> recorded = Spaces::recorded(bo.library);
+        QCOMPARE(std::ranges::count(recorded, QString("published"), &Spaces::Recorded::kind), 1);
+
+        // Someone else saying it is theirs now, without its owner handing it on, is refused.
+        SpaceSnapshot taken = *later;
+        const Person eve = newPerson();
+        taken.owner.person = eve.id();
+        for (SpaceOperation &op : taken.operations)
+            op.author = eve.id();
+        QVERIFY(!SubscribedSpace::verify(cy.library, taken));
     }
 };
 
