@@ -5,8 +5,12 @@
 #include <QTemporaryDir>
 #include <QtEndian>
 #include <QtTest>
+#include <array>
 #include <functional>
+#include <latch>
 #include <sys/stat.h>
+#include <thread>
+#include <vector>
 
 #include "fixtures.h"
 #include "library.h"
@@ -229,6 +233,33 @@ private slots:
         const auto loaded = Person::load(file);
         QVERIFY(loaded);
         QCOMPARE(loaded->id(), first->id());
+    }
+
+    // Two programs that start at once, before either has a key, end up with
+    // one: the one kept first, which the other reads back in place of its own.
+    void manyStartingAtOnceKeepOneKey() {
+        constexpr int starters = 6;
+        for (int round = 0; round < 20; ++round) {
+            const QTemporaryDir folder;
+            const QString file = Person::keyFile(folder.path());
+            std::latch start{starters};
+            std::array<QString, starters> ids;
+            {
+                std::vector<std::jthread> threads;
+                for (QString &id : ids)
+                    threads.emplace_back([&start, &file, &id] {
+                        start.arrive_and_wait();
+                        const auto person = Person::loadOrCreate(file);
+                        id = person ? person->id() : QStringLiteral("failed: ") + person.error();
+                    });
+            }
+            const auto loaded = Person::load(file);
+            QVERIFY(loaded);
+            for (const QString &id : ids)
+                QCOMPARE(id, loaded->id());
+            // Only the key is left: no other's temporary file beside it.
+            QCOMPARE(QDir(folder.path()).entryList(QDir::Files | QDir::Hidden).size(), 1);
+        }
     }
 
     void aFileThatIsNotAKeyIsRefused() {
