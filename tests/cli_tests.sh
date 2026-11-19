@@ -112,8 +112,8 @@ expect "export does not overwrite" 1 "already a file" "$omabook" export 2 "$work
 
 expect "another format joins a book" 0 '"formats"' "$omabook" add --library "$library" --to 2 "$work/Sea Story - Ann Sailor.txt" --json
 expect "the book now has both formats" 0 "epub, txt" "$omabook" show 2 --library "$library"
-expect "progress is set" 0 '"section": 3' "$omabook" progress 2 --library "$library" --section 3 --fraction 0.5 --percent 40 --updated 1234 --json
-expect "progress is kept, with its time" 0 '"updated": 1234' "$omabook" progress 2 --library "$library" --json
+expect "progress is set" 0 '"section": 3' "$omabook" progress 2 --library "$library" --section 3 --fraction 0.5 --percent 40 --updated 1700001234 --json
+expect "progress is kept, with its time" 0 '"updated": 1700001234' "$omabook" progress 2 --library "$library" --json
 expect "the manifest lists files by hash" 0 '"hash"' "$omabook" manifest --library "$library"
 printf '{"title": "Described", "authors": ["By Hand"], "tags": ["given"]}' > "$work/details.json"
 printf 'Another text.\n' > "$work/other.txt"

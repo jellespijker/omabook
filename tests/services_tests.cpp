@@ -1424,7 +1424,7 @@ private slots:
         Library here(dir.filePath("Here"));
         QVERIFY(here.open());
         const qint64 bothHere = here.add(dir.filePath("both.epub")).id;
-        here.setProgress(bothHere, {0, 0.5, 25, 1000});
+        here.setProgress(bothHere, {0, 0.5, 25, 1700001000});
         // Removed here, so it must not come back from there.
         QVERIFY(here.remove(here.add(dir.filePath("gone.epub")).id));
         // Only here, with details set by hand, two formats, a cover and a place.
@@ -1436,16 +1436,16 @@ private slots:
         mine.cover.fill(Qt::cyan);
         const qint64 mineHere = here.add(dir.filePath("mine.txt"), mine).id;
         QVERIFY(here.addFormat(mineHere, dir.filePath("mine.md")));
-        here.setProgress(mineHere, {0, 0.75, 75, 3000});
+        here.setProgress(mineHere, {0, 0.75, 75, 1700003000});
         {
             Library there(dir.filePath("There's Library"));
             QVERIFY(there.open());
-            there.setProgress(there.add(dir.filePath("both.epub")).id, {1, 0.25, 62, 2000});
+            there.setProgress(there.add(dir.filePath("both.epub")).id, {1, 0.25, 62, 1700002000});
             QVERIFY(there.add(dir.filePath("theirs.epub")).error.isEmpty());
             QVERIFY(there.add(dir.filePath("gone.epub")).error.isEmpty());
         }
         // Removed long before it was added there: there it stays.
-        QVERIFY(direct(here, "UPDATE removed SET removed_at = 500"));
+        QVERIFY(direct(here, "UPDATE removed SET removed_at = 1700000500"));
 
         QStringList carried;
         const SyncSummary summary = syncLibrary(here, remote, [&](const QString &title) { carried << title; });
@@ -1465,7 +1465,7 @@ private slots:
         QVERIFY(arrived.first().hasCover);
         QVERIFY(here.books("removed").isEmpty());
         QCOMPARE(here.progress(bothHere).section, 1);
-        QCOMPARE(here.progress(bothHere).updated, qint64(2000));
+        QCOMPARE(here.progress(bothHere).updated, qint64(1700002000));
 
         // There: this side's book arrived as it is here.
         Library there(dir.filePath("There's Library"));
@@ -1478,15 +1478,15 @@ private slots:
         QCOMPARE(sent.first().meta.tags, QStringList{"kept"});
         QCOMPARE(sent.first().formats, (QStringList{"md", "txt"}));
         QCOMPARE(QImage(there.coverPath(sent.first().id)).size(), QSize(40, 60));
-        QCOMPARE(there.progress(sent.first().id).updated, qint64(3000));
+        QCOMPARE(there.progress(sent.first().id).updated, qint64(1700003000));
         QCOMPARE(there.progress(sent.first().id).fraction, 0.75);
 
         // Reading on here, then syncing again: only the place moves, to there.
-        here.setProgress(bothHere, {1, 0.9, 95, 5000});
+        here.setProgress(bothHere, {1, 0.9, 95, 1700005000});
         const SyncSummary again = syncLibrary(here, remote);
         QCOMPARE(again.received + again.sent + again.placesTaken, 0);
         QCOMPARE(again.placesSent, 1);
-        QCOMPARE(there.progress(there.books("on both").first().id).updated, qint64(5000));
+        QCOMPARE(there.progress(there.books("on both").first().id).updated, qint64(1700005000));
         QCOMPARE(there.progress(there.books("on both").first().id).percent, 95.0);
         // And once more: nothing left to do.
         const SyncSummary settled = syncLibrary(here, remote);
@@ -1567,7 +1567,7 @@ private slots:
             QVERIFY(there.setReading(entry(there, "Thrown Away", "Cy Gone", false), "read", 2, {}));
         }
         // Removed here long before it was shelved there: there it stays.
-        QVERIFY(direct(here, "UPDATE removed SET removed_at = 500"));
+        QVERIFY(direct(here, "UPDATE removed SET removed_at = 1700000500"));
 
         const SyncSummary summary = syncLibrary(here, remote);
         QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
@@ -1626,7 +1626,7 @@ private slots:
         QVERIFY(here.open() && there.open());
         const qint64 a = here.add(dir.filePath("a.epub")).id, b = here.add(dir.filePath("b.epub")).id;
         const qint64 aThere = there.add(dir.filePath("a.epub")).id, bThere = there.add(dir.filePath("b.epub")).id;
-        QVERIFY(direct(here, "UPDATE books SET details_at = 1000") && direct(there, "UPDATE books SET details_at = 1000"));
+        QVERIFY(direct(here, "UPDATE books SET details_at = 1700001000") && direct(there, "UPDATE books SET details_at = 1700001000"));
 
         BookMeta mine = here.book(a)->meta;
         mine.title = "Changed Here, Looked Up";
@@ -1634,13 +1634,13 @@ private slots:
         mine.seriesIndex = 2;
         mine.tags = QStringList{"fantasy", "maps"};
         mine.description = "Looked up again.";
-        QVERIFY(here.setMeta(a, mine, nullptr, 2000));
+        QVERIFY(here.setMeta(a, mine, nullptr, 1700002000));
         BookMeta theirs = there.book(bThere)->meta;
         theirs.description = "Written there.";
         theirs.tags = QStringList{"history"};
         theirs.cover = QImage(50, 70, QImage::Format_RGB32);
         theirs.cover.fill(Qt::darkGreen);
-        QVERIFY(there.setMeta(bThere, theirs, nullptr, 3000));
+        QVERIFY(there.setMeta(bThere, theirs, nullptr, 1700003000));
 
         const SyncSummary summary = syncLibrary(here, remote);
         QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
@@ -1657,20 +1657,20 @@ private slots:
         QCOMPARE(given.meta.seriesIndex, 2.0);
         QCOMPARE(given.meta.tags, (QStringList{"fantasy", "maps"}));
         QCOMPARE(given.meta.description, QString("Looked up again."));
-        QCOMPARE(given.detailsAt, qint64(2000));
+        QCOMPARE(given.detailsAt, qint64(1700002000));
         // Here: theirs, cover and all.
         const Book taken = *here.book(b);
         QCOMPARE(taken.meta.description, QString("Written there."));
         QCOMPARE(taken.meta.tags, QStringList{"history"});
-        QCOMPARE(taken.detailsAt, qint64(3000));
+        QCOMPARE(taken.detailsAt, qint64(1700003000));
         QCOMPARE(QImage(here.coverPath(b)).size(), QSize(50, 70));
 
         // In step: nothing goes back and forth.
         const SyncSummary again = syncLibrary(here, remote);
         QVERIFY2(again.problems.isEmpty(), qPrintable(again.problems.join('\n')));
         QCOMPARE(again.detailsTaken + again.detailsSent + again.detailsUndecided + again.readingTaken + again.readingSent, 0);
-        QCOMPARE(here.book(b)->detailsAt, qint64(3000));
-        QCOMPARE(there.book(aThere)->detailsAt, qint64(2000));
+        QCOMPARE(here.book(b)->detailsAt, qint64(1700003000));
+        QCOMPARE(there.book(aThere)->detailsAt, qint64(1700002000));
     }
 
     // Books from before a library kept when its details changed are 0 on
@@ -1746,7 +1746,7 @@ private slots:
         QVERIFY(there.addEntry(wish, false).error.isEmpty());
         // Both had them long before either removed one.
         for (const Library *library : {&here, &there})
-            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+            QVERIFY(direct(*library, "UPDATE books SET added = 1700001000, details_at = 1700001000"));
         QVERIFY(here.remove(mine.value("x")) && here.remove(wishHere));
         QVERIFY(there.remove(theirs.value("y")));
 
@@ -1791,15 +1791,15 @@ private slots:
             theirs.insert(file, there.add(dir.filePath(QString(file) + ".epub")).id);
         }
         for (const Library *library : {&here, &there})
-            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+            QVERIFY(direct(*library, "UPDATE books SET added = 1700001000, details_at = 1700001000"));
         QVERIFY(here.remove(mine.value("read")) && here.remove(mine.value("edited")));
         QVERIFY(there.remove(theirs.value("shelved")));
         for (const Library *library : {&here, &there})
-            QVERIFY(direct(*library, "UPDATE removed SET removed_at = 1500"));
+            QVERIFY(direct(*library, "UPDATE removed SET removed_at = 1700001500"));
         // Since then: read on there, its details changed there, and put on a shelf here.
-        there.setProgress(theirs.value("read"), {.section = 1, .fraction = 0.5, .percent = 40, .updated = 2000});
-        QVERIFY(there.setDetailsAt(theirs.value("edited"), 2000));
-        QVERIFY(direct(here, QString("UPDATE books SET reading_at = 2000 WHERE id = %1").arg(mine.value("shelved"))));
+        there.setProgress(theirs.value("read"), {.section = 1, .fraction = 0.5, .percent = 40, .updated = 1700002000});
+        QVERIFY(there.setDetailsAt(theirs.value("edited"), 1700002000));
+        QVERIFY(direct(here, QString("UPDATE books SET reading_at = 1700002000 WHERE id = %1").arg(mine.value("shelved"))));
 
         const SyncSummary summary = syncLibrary(here, remote);
         QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
@@ -1831,7 +1831,7 @@ private slots:
             theirs.insert(file, there.add(dir.filePath(file)).id);
         }
         for (const Library *library : {&here, &there})
-            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+            QVERIFY(direct(*library, "UPDATE books SET added = 1700001000, details_at = 1700001000"));
         const qint64 kept = mine.value("kept.epub");
         // The kept book has an EPUB already, so the duplicate's goes with it;
         // the text is a format it lacks, so it takes that over.
@@ -1880,12 +1880,12 @@ private slots:
         const qint64 gone = here.add(dir.filePath("gone.epub")).id;
         QVERIFY(there.add(dir.filePath("gone.epub")).error.isEmpty());
         for (const Library *library : {&here, &there})
-            QVERIFY(direct(*library, "UPDATE books SET added = 1000, details_at = 1000"));
+            QVERIFY(direct(*library, "UPDATE books SET added = 1700001000, details_at = 1700001000"));
         BookMeta newer = here.book(both)->meta;
         newer.description = "Newer here.";
-        QVERIFY(here.setMeta(both, newer, nullptr, 2000));
+        QVERIFY(here.setMeta(both, newer, nullptr, 1700002000));
         QVERIFY(here.setReading(both, "reading", 4, {}));
-        there.setProgress(bothThere, {.section = 1, .fraction = 0.5, .percent = 50, .updated = 3000});
+        there.setProgress(bothThere, {.section = 1, .fraction = 0.5, .percent = 50, .updated = 1700003000});
         QVERIFY(here.remove(gone));
         const QByteArray before = snapshot(here), beforeThere = snapshot(there);
 
@@ -1915,7 +1915,7 @@ private slots:
         QCOMPARE(done.titles.readingSent, dry.titles.readingSent);
         QCOMPARE(done.titles.removedThere, dry.titles.removedThere);
         QCOMPARE(there.book(bothThere)->meta.description, QString("Newer here."));
-        QCOMPARE(here.progress(both).updated, qint64(3000));
+        QCOMPARE(here.progress(both).updated, qint64(1700003000));
         QVERIFY(there.books("removed here").isEmpty());
     }
 

@@ -939,15 +939,15 @@ private slots:
 
         // The same details again, the same picture again, the same name
         // again and the same reading again change no time.
-        QVERIFY(library.setDetailsAt(id, 100));
+        QVERIFY(library.setDetailsAt(id, 1700000100));
         QVERIFY(library.setMeta(id, library.book(id)->meta));
         QImage cover(30, 40, QImage::Format_RGB32);
         cover.fill(Qt::red);
-        QVERIFY(library.setCover(id, cover, 100));
+        QVERIFY(library.setCover(id, cover, 1700000100));
         QVERIFY(library.setCover(id, cover));
-        QVERIFY(library.setIdentifier(id, "goodreads", "1", 100));
+        QVERIFY(library.setIdentifier(id, "goodreads", "1", 1700000100));
         QVERIFY(library.setIdentifier(id, "goodreads", "1"));
-        QCOMPARE(library.book(id)->detailsAt, qint64(100));
+        QCOMPARE(library.book(id)->detailsAt, qint64(1700000100));
         QVERIFY(library.setReading(id, "read", 3, "2026-01-02"));
         const qint64 read = library.book(id)->readingAt;
         QVERIFY(read >= now - 5);
@@ -955,7 +955,7 @@ private slots:
         QVERIFY(library.setPaper(id, false));
         library.setProgress(id, {.section = 1, .fraction = 0.5, .percent = 20, .updated = 0});
         QCOMPARE(library.book(id)->readingAt, read);
-        QCOMPARE(library.book(id)->detailsAt, qint64(100));
+        QCOMPARE(library.book(id)->detailsAt, qint64(1700000100));
 
         // A change is stamped with now, or with the time it came with.
         BookMeta meta = library.book(id)->meta;
@@ -963,13 +963,13 @@ private slots:
         QVERIFY(library.setMeta(id, meta));
         QVERIFY(library.book(id)->detailsAt >= now - 5);
         meta.description = "Changed elsewhere.";
-        QVERIFY(library.setMeta(id, meta, nullptr, 200));
-        QCOMPARE(library.book(id)->detailsAt, qint64(200));
-        QVERIFY(library.setIdentifier(id, "goodreads", "2", 300));
-        QCOMPARE(library.book(id)->detailsAt, qint64(300));
+        QVERIFY(library.setMeta(id, meta, nullptr, 1700000200));
+        QCOMPARE(library.book(id)->detailsAt, qint64(1700000200));
+        QVERIFY(library.setIdentifier(id, "goodreads", "2", 1700000300));
+        QCOMPARE(library.book(id)->detailsAt, qint64(1700000300));
         QVERIFY(library.setIdentifier(id, "goodreads", ""));
         QVERIFY(library.book(id)->detailsAt >= now - 5);
-        QVERIFY(library.setDetailsAt(id, 100));
+        QVERIFY(library.setDetailsAt(id, 1700000100));
         cover.fill(Qt::blue);
         QVERIFY(library.setCover(id, cover));
         QVERIFY(library.book(id)->detailsAt >= now - 5);

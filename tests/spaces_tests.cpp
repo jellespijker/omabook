@@ -21,8 +21,10 @@
 #include "hlc.h"
 #include "library.h"
 #include "librarymigrations.h"
+#include "remote.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "sync.h"
 
 namespace {
 
@@ -198,6 +200,47 @@ QList<SpaceOperation> sampleOperations() {
     };
 }
 
+QJsonObject legacy0152Manifest(const QString &sharedPath, const QString &sharedHash, const QString &legacyPath, const QString &legacyHash) {
+    return {
+        {"version", 1},
+        {"omabook", "0.1.5.2"},
+        {"books",
+         QJsonArray{
+             QJsonObject{
+                 {"id", 1},
+                 {"title", "Wire Compat Book"},
+                 {"authors", QJsonArray{"Ann Author"}},
+                 {"publisher", "Old Press"},
+                 {"details_at", 1794860100},
+                 {"reading_at", 1794860100},
+                 {"added_at", 1794860000},
+                 {"shelf", ""},
+                 {"rating", 0},
+                 {"paper", false},
+                 {"cover_hash", ""},
+                 {"files", QJsonArray{QJsonObject{
+                               {"format", "epub"}, {"path", sharedPath}, {"hash", sharedHash}, {"size", QFileInfo(sharedPath).size()}}}},
+                 {"progress", QJsonObject{{"section", 1}, {"fraction", 0.2}, {"percent", 20.0}, {"updated", 1794860100}}},
+             },
+             QJsonObject{
+                 {"id", 2},
+                 {"title", "Only On 0.1.5.2"},
+                 {"authors", QJsonArray{"Bo Writer"}},
+                 {"details_at", 1794694143},
+                 {"reading_at", 0},
+                 {"added_at", 1794694143},
+                 {"shelf", ""},
+                 {"rating", 0},
+                 {"paper", false},
+                 {"cover_hash", ""},
+                 {"files", QJsonArray{QJsonObject{
+                               {"format", "epub"}, {"path", legacyPath}, {"hash", legacyHash}, {"size", QFileInfo(legacyPath).size()}}}},
+                 {"progress", QJsonObject{{"section", 0}, {"fraction", 0.0}, {"percent", 0.0}, {"updated", 0}}},
+             }}},
+        {"removed", QJsonArray{}},
+        {"removals", QJsonArray{}}};
+}
+
 } // namespace
 
 class SpacesTests : public QObject {
@@ -258,6 +301,12 @@ private slots:
 
         // Plain Unix-second timestamps from older libraries normalize to
         // counter 0 on the same scale, while 0 stays 0 (undecided).
+        QVERIFY(!Hlc::isPacked(0));
+        QVERIFY(!Hlc::isPacked(100'000));
+        QVERIFY(!Hlc::isPacked(500'000'000));
+        QVERIFY(!Hlc::isPacked(1794694143));
+        QVERIFY(Hlc::isPacked(Hlc::packedFloor));
+        QCOMPARE(Hlc::seconds(500'000'000), qint64(500'000'000));
         QCOMPARE(Hlc::normalize(0), qint64(0));
         QCOMPARE(Hlc::seconds(0), qint64(0));
         QCOMPARE(Hlc::normalize(1794694143), Hlc::pack(1794694143, 0));
@@ -319,8 +368,13 @@ private slots:
             QCOMPARE(backups.size(), 1);
 
             const QStringList tables = tableNames(library.databasePath());
-            for (const char *required : {"spaces", "space_members", "ops", "seen", "global_ids"})
+            for (const char *required : {"spaces", "space_members", "log_ids", "ops", "seen", "global_ids"})
                 QVERIFY2(tables.contains(QLatin1StringView(required)), qPrintable(dump + " missing table " + required));
+            QSqlQuery colTypes = ChangeLog::query(library, "SELECT typeof(o.space), typeof(o.device), typeof(o.author), typeof(o.id), "
+                                                           "typeof(s.space), typeof(s.device) FROM ops AS o, seen AS s LIMIT 1");
+            QVERIFY(colTypes.next());
+            for (int col = 0; col < 6; ++col)
+                QCOMPARE(colTypes.value(col).toString(), QString("integer"));
 
             // One device id and personal space per library, plus the story world space.
             const QString device = Spaces::deviceId(library);
@@ -513,6 +567,73 @@ private slots:
         QCOMPARE(SpaceReplay::operations(thirdOpen).size(), countAfterReconcile);
     }
 
+    void backdatedWritesAppendWithoutMutatingPriorOpsAndOpenTwiceIsIdempotent() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("one.epub"), "First Book"));
+        QVERIFY(Fixtures::epub(dir.filePath("two.epub"), "Second Book"));
+        const QString libPath = dir.filePath("Lib");
+
+        QList<SpaceOperation> opsBeforeBackdate;
+        {
+            Library library(libPath);
+            QVERIFY(library.open());
+            const qint64 b1 = library.add(dir.filePath("one.epub")).id;
+            const qint64 b2 = library.add(dir.filePath("two.epub")).id;
+            QVERIFY(b1 > 0 && b2 > 0);
+            library.setProgress(b1, {.section = 3, .fraction = 0.5, .percent = 50.0, .updated = 1794880000});
+            QVERIFY(library.remove(b2));
+            opsBeforeBackdate = SpaceReplay::operations(library);
+            QVERIFY(!opsBeforeBackdate.isEmpty());
+
+            // Backdate progress and details via ChangeLog APIs: every prior op stays untouched.
+            library.setProgress(b1, {.section = 1, .fraction = 0.2, .percent = 20.0, .updated = 1794800000});
+            QVERIFY(library.setDetailsAt(b1, 1794800000));
+            const QList<SpaceOperation> opsAfterApiBackdate = SpaceReplay::operations(library);
+            QVERIFY(opsAfterApiBackdate.size() > opsBeforeBackdate.size());
+            QCOMPARE(opsAfterApiBackdate.mid(0, opsBeforeBackdate.size()), opsBeforeBackdate);
+            opsBeforeBackdate = opsAfterApiBackdate;
+        }
+
+        // Backdate `added`, `details_at` and `removed_at` directly in SQLite (as tests do).
+        const QString conn = "backdate-" + QUuid::createUuid().toString(QUuid::Id128);
+        {
+            QSqlDatabase db = QSqlDatabase::addDatabase("QSQLITE", conn);
+            db.setDatabaseName(QDir(libPath).filePath("omabook.db"));
+            QVERIFY(db.open());
+            QSqlQuery query(db);
+            QVERIFY(query.exec("UPDATE books SET added = 1700001000, details_at = 1700001000"));
+            QVERIFY(query.exec("UPDATE removed SET removed_at = 1700000500"));
+            db.close();
+        }
+        QSqlDatabase::removeDatabase(conn);
+
+        // First open reconciles by appending new operations, never rewriting old ones.
+        QJsonObject snapshotAfterOpen;
+        QList<SpaceOperation> opsFirstOpen;
+        {
+            Library firstOpen(libPath);
+            QVERIFY(firstOpen.open());
+            opsFirstOpen = SpaceReplay::operations(firstOpen);
+            QVERIFY(opsFirstOpen.size() > opsBeforeBackdate.size());
+            QCOMPARE(opsFirstOpen.mid(0, opsBeforeBackdate.size()), opsBeforeBackdate);
+            QCOMPARE(firstOpen.book(1)->added, qint64(1700001000));
+            QCOMPARE(firstOpen.book(1)->detailsAt, qint64(1700001000));
+            QCOMPARE(firstOpen.progress(1).updated, qint64(1794800000));
+            QCOMPARE(firstOpen.removals().first().at, qint64(1700000500));
+            snapshotAfterOpen = librarySnapshot(firstOpen);
+
+            // Replaying the log produces the exact same row state.
+            QVERIFY(SpaceReplay::replay(firstOpen));
+            QCOMPARE(librarySnapshot(firstOpen), snapshotAfterOpen);
+        }
+
+        // Opening a second time in a row appends nothing.
+        Library secondOpen(libPath);
+        QVERIFY(secondOpen.open());
+        QCOMPARE(SpaceReplay::operations(secondOpen), opsFirstOpen);
+        QCOMPARE(librarySnapshot(secondOpen), snapshotAfterOpen);
+    }
+
     void twoComputersDeriveIdenticalGlobalIdsAndRetainBookIdAcrossFormats() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "The Shared Book"));
@@ -609,8 +730,6 @@ private slots:
         // 1. Applying the log to a brand-new empty library rebuilds every row.
         Library rebuilt(dir.filePath("Rebuilt"));
         QVERIFY(rebuilt.open());
-        ChangeLog::exec(rebuilt, "DELETE FROM ops");
-        ChangeLog::exec(rebuilt, "DELETE FROM seen");
         QVERIFY(SpaceReplay::apply(rebuilt, ops));
         QCOMPARE(librarySnapshot(rebuilt), expected);
 
@@ -633,7 +752,6 @@ private slots:
 
         Library canonical(dir.filePath("Canonical"));
         QVERIFY(canonical.open());
-        ChangeLog::exec(canonical, "DELETE FROM ops");
         QVERIFY(SpaceReplay::apply(canonical, baseOps));
         const QJsonObject expected = librarySnapshot(canonical);
 
@@ -673,10 +791,194 @@ private slots:
             }
             Library replica(dir.filePath(QString("Replica-%1").arg(run)));
             QVERIFY(replica.open());
-            ChangeLog::exec(replica, "DELETE FROM ops");
             QVERIFY(SpaceReplay::apply(replica, shuffled));
             QCOMPARE(librarySnapshot(replica), expected);
         }
+    }
+
+    void syncSurvivesTwoComputersWithClocksMinutesApart() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "Clock Drift Story"));
+        const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
+
+        Library desktop(dir.filePath("Desktop"));
+        Library laptop(dir.filePath("Laptop"));
+        QVERIFY(desktop.open() && laptop.open());
+        Spaces::setClockOffset(desktop, -600); // Desktop's clock is 10 minutes behind real time.
+        Spaces::setClockOffset(laptop, +600);  // Laptop's clock is 10 minutes ahead (20 minutes ahead of Desktop).
+
+        const qint64 bookDesktop = desktop.add(dir.filePath("shared.epub")).id;
+        const qint64 bookLaptop = laptop.add(dir.filePath("shared.epub")).id;
+        const auto colLaptop = laptop.addCollection("Drift/Reading", "tag:clock");
+        QVERIFY(bookDesktop > 0 && bookLaptop > 0 && colLaptop);
+        Graph(laptop).upsert({}, "character", "Mara", "Laptop summary v1.", {}, GraphPlace{bookLaptop, 1, 0.2});
+
+        const Remote remote("laptop:" + dir.filePath("Laptop"), {ssh});
+
+        // 1. Laptop edits while 20 minutes ahead of Desktop, then Desktop syncs.
+        BookMeta metaLaptop = laptop.book(bookLaptop)->meta;
+        metaLaptop.title = "Laptop Title v1";
+        QVERIFY(laptop.setMeta(bookLaptop, metaLaptop));
+        laptop.setProgress(bookLaptop, {.section = 2, .fraction = 0.3, .percent = 30.0});
+        const SyncSummary first = syncLibrary(desktop, remote);
+        QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
+        QCOMPARE(desktop.book(bookDesktop)->meta.title, QString("Laptop Title v1"));
+        QCOMPARE(desktop.progress(bookDesktop).section, 2);
+        QCOMPARE(desktop.collectionNamed("Drift/Reading")->rule, QString("tag:clock"));
+        QCOMPARE(Graph(desktop).node(Graph(desktop).named({}, "character", "Mara"))->summary, QString("Laptop summary v1."));
+
+        // 2. Desktop now edits everything while its wall clock is STILL 20 minutes behind Laptop.
+        BookMeta metaDesktop = desktop.book(bookDesktop)->meta;
+        metaDesktop.title = "Desktop Title v2";
+        QVERIFY(desktop.setMeta(bookDesktop, metaDesktop));
+        desktop.setProgress(bookDesktop, {.section = 5, .fraction = 0.8, .percent = 80.0});
+        const auto colDesktop = desktop.collectionNamed("Drift/Reading");
+        QVERIFY(colDesktop && desktop.setCollectionRule(colDesktop->id, "author:Desktop"));
+        {
+            Graph graph(desktop);
+            graph.logReading(bookDesktop, 30.0, 80.0);
+            const qint64 mara = graph.named({}, "character", "Mara");
+            QVERIFY(graph.learn(mara, "summary", "Desktop summary v2.", GraphMoment{{bookDesktop, 4, 0.5}, {}}) > 0);
+        }
+
+        // 3. Sync again: Desktop's edits ordered later on the HLC, so Laptop receives all of them.
+        const SyncSummary second = syncLibrary(desktop, remote);
+        QVERIFY2(second.problems.isEmpty(), qPrintable(second.problems.join('\n')));
+        QCOMPARE(laptop.book(bookLaptop)->meta.title, QString("Desktop Title v2"));
+        QCOMPARE(laptop.progress(bookLaptop).section, 5);
+        QCOMPARE(laptop.collectionNamed("Drift/Reading")->rule, QString("author:Desktop"));
+        QCOMPARE(Graph(laptop).node(Graph(laptop).named({}, "character", "Mara"))->summary, QString("Desktop summary v2."));
+
+        // 4. Third sync settles cleanly.
+        const SyncSummary settled = syncLibrary(desktop, remote);
+        QVERIFY2(settled.problems.isEmpty(), qPrintable(settled.problems.join('\n')));
+        QCOMPARE(settled.received, 0);
+        QCOMPARE(settled.sent, 0);
+        QCOMPARE(settled.detailsTaken, 0);
+        QCOMPARE(settled.detailsSent, 0);
+        QCOMPARE(settled.placesTaken, 0);
+        QCOMPARE(settled.placesSent, 0);
+        QCOMPARE(settled.collectionsTaken, 0);
+        QCOMPARE(settled.collectionsSent, 0);
+        QCOMPARE(settled.graphTaken, 0);
+        QCOMPARE(settled.graphSent, 0);
+    }
+
+    void syncMergesBookDetailsFieldByField() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "Shared Tome"));
+        const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
+
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 bookHere = here.add(dir.filePath("shared.epub")).id;
+        const qint64 bookThere = there.add(dir.filePath("shared.epub")).id;
+        const Remote remote("laptop:" + dir.filePath("There"), {ssh});
+
+        // Initial sync establishes equal baseline on both computers.
+        QVERIFY(here.setDetailsAt(bookHere, 1794800000));
+        QVERIFY(there.setDetailsAt(bookThere, 1794800000));
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+
+        // Computer A (Here) edits publisher and description; Computer B (There) edits series and tags.
+        BookMeta metaHere = here.book(bookHere)->meta;
+        metaHere.publisher = "Delta Press";
+        metaHere.description = "Edited on Here.";
+        QVERIFY(here.setMeta(bookHere, metaHere));
+
+        BookMeta metaThere = there.book(bookThere)->meta;
+        metaThere.series = "Nordic Noir";
+        metaThere.seriesIndex = 3.0;
+        metaThere.tags = QStringList{"mystery", "north"};
+        QVERIFY(there.setMeta(bookThere, metaThere));
+
+        // One sync combines all four edited fields onto both computers.
+        const SyncSummary merged = syncLibrary(here, remote);
+        QVERIFY2(merged.problems.isEmpty(), qPrintable(merged.problems.join('\n')));
+        QCOMPARE(merged.detailsTaken, 1);
+        QCOMPARE(merged.detailsSent, 1);
+
+        for (const Book &book : {*here.book(bookHere), *there.book(bookThere)}) {
+            QCOMPARE(book.meta.publisher, QString("Delta Press"));
+            QCOMPARE(book.meta.description, QString("Edited on Here."));
+            QCOMPARE(book.meta.series, QString("Nordic Noir"));
+            QCOMPARE(book.meta.seriesIndex, 3.0);
+            QCOMPARE(book.meta.tags, (QStringList{"mystery", "north"}));
+        }
+
+        // Second sync does nothing.
+        const SyncSummary settled = syncLibrary(here, remote);
+        QVERIFY2(settled.problems.isEmpty(), qPrintable(settled.problems.join('\n')));
+        QCOMPARE(settled.detailsTaken + settled.detailsSent + settled.detailsUndecided, 0);
+    }
+
+    void olderManifestFrom0152RoundTripsWithoutPackedHlcs() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "Wire Compat Book"));
+        QVERIFY(Fixtures::epub(dir.filePath("legacy.epub"), "Only On 0.1.5.2"));
+        const QString sharedHash = Library::hashFile(dir.filePath("shared.epub"));
+        const QString legacyHash = Library::hashFile(dir.filePath("legacy.epub"));
+
+        Library here(dir.filePath("Here"));
+        QVERIFY(here.open());
+        const qint64 sharedId = here.add(dir.filePath("shared.epub")).id;
+        // Advance local progress with an explicit sub-second HLC counter > 0.
+        here.setProgress(sharedId, {.section = 3, .fraction = 0.6, .percent = 65.0, .updated = Hlc::pack(1794860500, 9)});
+        BookMeta metaHere = here.book(sharedId)->meta;
+        metaHere.publisher = "Modern Press";
+        QVERIFY(here.setMeta(sharedId, metaHere, nullptr, Hlc::pack(1794860400, 4)));
+
+        // Every time in our own manifest must remain plain seconds alongside `hlc`.
+        const QJsonObject myManifest = libraryManifest(here);
+        QCOMPARE(myManifest.value("log").toInt(), 1);
+        QCOMPARE(myManifest.value("books").toArray().first().toObject().value("details_at").toInteger(), qint64(1794860400));
+        QCOMPARE(myManifest.value("books").toArray().first().toObject().value("details_hlc").toInteger(), Hlc::pack(1794860400, 4));
+        QCOMPARE(myManifest.value("books").toArray().first().toObject().value("progress").toObject().value("updated").toInteger(),
+                 qint64(1794860500));
+
+        // Craft a 0.1.5.2 manifest (no `"log"`, plain-second timestamps only).
+        const QJsonObject legacyManifest =
+            legacy0152Manifest(dir.filePath("shared.epub"), sharedHash, dir.filePath("legacy.epub"), legacyHash);
+        const QString manifestPath = dir.filePath("manifest-0.1.5.2.json");
+        const QString logPath = dir.filePath("remote-args.log");
+        QVERIFY(Fixtures::write(manifestPath, QJsonDocument(legacyManifest).toJson(QJsonDocument::Compact)));
+
+        const QString peerSsh = Fixtures::script(dir.filePath("peer-ssh"), "while [ \"$1\" != \"--\" ]; do shift; done\n"
+                                                                           "shift; shift\n"
+                                                                           "case \"$1\" in\n"
+                                                                           "  *\"omabook 'manifest'\"*) cat '"
+                                                                               + manifestPath.toUtf8()
+                                                                               + "' ;;\n"
+                                                                                 "  mktemp\\ -d*) mktemp -d '"
+                                                                               + dir.path().toUtf8()
+                                                                               + "/rmt-XXXXXX' ;;\n"
+                                                                                 "  rm\\ -rf\\ *) ;;\n"
+                                                                                 "  cat\\ *) eval \"$1\" ;;\n"
+                                                                                 "  *) echo \"$1\" >> '"
+                                                                               + logPath.toUtf8()
+                                                                               + "' ;;\n"
+                                                                                 "esac\n");
+
+        const SyncSummary summary = syncLibrary(here, Remote("legacy:" + dir.filePath("There"), {peerSsh}));
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.received, 1);
+        QCOMPARE(summary.detailsSent, 1);
+        QCOMPARE(summary.placesSent, 1);
+
+        // Verify the arrived 0.1.5.2 book kept its exact plain-second `detailsAt`.
+        const QList<Book> arrived = here.books("Only On 0.1.5.2");
+        QCOMPARE(arrived.size(), 1);
+        QCOMPARE(arrived.first().detailsAt, qint64(1794694143));
+
+        // Verify every timestamp passed on the CLI to the 0.1.5.2 peer is plain seconds (< Hlc::packedFloor).
+        QFile argsFile(logPath);
+        QVERIFY(argsFile.open(QIODevice::ReadOnly));
+        const QString logged = QString::fromUtf8(argsFile.readAll());
+        QVERIFY2(logged.contains("'--details-at' '1794860400'"), qPrintable(logged));
+        QVERIFY2(logged.contains("'--updated' '1794860500'"), qPrintable(logged));
+        QVERIFY2(!logged.contains(QString::number(Hlc::pack(1794860400, 4))), qPrintable(logged));
+        QVERIFY2(!logged.contains(QString::number(Hlc::pack(1794860500, 9))), qPrintable(logged));
     }
 };
 
