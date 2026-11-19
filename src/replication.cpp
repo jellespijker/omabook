@@ -137,7 +137,7 @@ QList<SpaceOperation> Replication::operations(const Library &library) {
     QList<SpaceOperation> list;
     for (QSqlQuery query =
              ChangeLog::query(library, QString("SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value, "
-                                               "g.name, o.signature FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space "
+                                               "g.name, o.signature FROM space_ops AS o JOIN log_ids AS s ON s.id = o.space "
                                                "JOIN log_ids AS d ON d.id = o.device JOIN log_ids AS a ON a.id = o.author "
                                                "JOIN log_ids AS i ON i.id = o.id LEFT JOIN log_ids AS g ON g.id = o.signer "
                                                "WHERE %1 ORDER BY s.name, d.name, o.seq")
@@ -162,7 +162,7 @@ Replication::Vector Replication::vector(const Library &library) {
     // Up to its mark at least, of a device the snapshot covers: what it
     // leaves out of that is held in the snapshot's place.
     for (QSqlQuery query =
-             ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(MAX(o.seq), COALESCE(m.seq, 0)) FROM live_ops AS o "
+             ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(MAX(o.seq), COALESCE(m.seq, 0)) FROM space_ops AS o "
                                                "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
                                                "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device "
                                                "WHERE %1 GROUP BY o.space, o.device")

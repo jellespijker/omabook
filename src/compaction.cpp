@@ -32,9 +32,9 @@ Compaction::Result Compaction::compact(const Library &library) {
     const Library::Batch batch(library);
     // Up to now, per space and device; the snapshot is made again of the
     // snapshot so far and what came after it, which is all that matters of `ops`.
-    ChangeLog::exec(library, "CREATE TEMP TABLE IF NOT EXISTS compacting AS SELECT * FROM live_ops WHERE 0");
+    ChangeLog::exec(library, "CREATE TEMP TABLE IF NOT EXISTS compacting AS SELECT * FROM space_ops WHERE 0");
     ChangeLog::exec(library, "DELETE FROM temp.compacting");
-    ChangeLog::exec(library, "INSERT INTO temp.compacting SELECT * FROM live_ops");
+    ChangeLog::exec(library, "INSERT INTO temp.compacting SELECT * FROM space_ops");
     ChangeLog::exec(library, "CREATE INDEX IF NOT EXISTS temp.compacting_field ON compacting (device, entity, id, field, hlc)");
     ChangeLog::exec(library, "DELETE FROM snapshot_ops");
     ChangeLog::exec(library, QString("INSERT INTO snapshot_ops SELECT * FROM temp.compacting AS c WHERE %1 OR NOT EXISTS ("
@@ -72,7 +72,7 @@ Compaction::Result Compaction::compact(const Library &library) {
     // The pages freed go back to the file only where the library vacuums incrementally.
     if (count(library, "PRAGMA auto_vacuum") == 2)
         ChangeLog::exec(library, "PRAGMA incremental_vacuum");
-    return {.operations = left, .live = count(library, "SELECT COUNT(*) FROM live_ops"), .dropped = before - left};
+    return {.operations = left, .live = count(library, "SELECT COUNT(*) FROM space_ops"), .dropped = before - left};
 }
 
 void Compaction::compactWhenWorthIt(const Library &library) {

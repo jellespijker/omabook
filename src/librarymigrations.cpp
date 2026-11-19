@@ -327,6 +327,20 @@ const QList<QStringList> migrations{
      "CREATE VIEW live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value, signer, signature FROM snapshot_ops "
      "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)"},
+    // A published space, one subscribed to (#4) or the owner's own copy, is a
+    // layer beside the library and never its rows: what reads the log for the
+    // rows (live_ops) leaves every "published:…" space out, by its id, and
+    // what reads every space (compaction, replication, a layer) reads space_ops.
+    {"CREATE VIEW IF NOT EXISTS space_ops AS "
+     "SELECT space, device, seq, hlc, author, entity, id, field, value, signer, signature FROM snapshot_ops "
+     "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
+     "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)",
+     "DROP VIEW IF EXISTS live_ops",
+     "CREATE VIEW live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value, signer, signature FROM snapshot_ops "
+     "WHERE space NOT IN (SELECT id FROM log_ids WHERE name >= 'published:' AND name < 'published;') "
+     "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
+     "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
+     "AND o.space NOT IN (SELECT id FROM log_ids WHERE name >= 'published:' AND name < 'published;')"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

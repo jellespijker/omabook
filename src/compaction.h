@@ -24,7 +24,9 @@
 // out alike, but only those every member of their space has seen, as it last
 // said when syncing (`member_vectors`), so no computer can still need one.
 // What reads one thing's operations, or a device's last number, reads the
-// snapshot and its marks with `ops`.
+// snapshot and its marks with `ops`. The snapshot and what came after it is
+// `space_ops`, of every space; `live_ops` is the same of the spaces the
+// library's rows are made of, without the published ones (#4).
 namespace Compaction {
 
 struct Result {
