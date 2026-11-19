@@ -142,6 +142,10 @@ expect "and takes what is in the folder" 0 '"taken": ' other spaces sync Club --
 expect "and is a writer of it" 0 '"role": "writer"' other spaces list --json --library "$work/Bo"
 ! grep -rqa "Club" "$work/synced" || fail "the folder holds plaintext"
 expect "spaces is in the help" 0 "spaces [create|invite" "$omabook" help
+# Its help is its usage, once, as collections --help is (#52).
+[ "$("$omabook" spaces --help | grep -c "Usage:")" = 1 ] || fail "spaces --help does not print exactly one usage line"
+"$omabook" spaces --help | grep -q "â" && fail "spaces --help is garbled: its UTF-8 was read as Latin-1"
+expect "spaces --help ends its usage line with an ellipsis" 0 "sync] …" "$omabook" spaces --help
 
 expect "the plugins are listed" 0 "builtin:Open Library" "$omabook" plugins
 expect "the plugins say what they bring" 0 '"fields"' "$omabook" plugins --json

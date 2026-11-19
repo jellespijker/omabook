@@ -35,7 +35,8 @@ constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sy
                        "  sync <space> --folder <dir>               Take what is new in a folder something else syncs (Syncthing,\n"
                        "                                            a mounted share), and write what is new here into it, sealed\n\n"
                        "A person's id is what omabook identity --export prints. Invite someone, then sync, so the operation that\n"
-                       "makes them a member reaches the folder before they write.";
+                       "makes them a member reaches the folder before they write. Every subcommand takes --json and\n"
+                       "--library <folder>.";
 
 void printLine(FILE *stream, const QString &text) {
     std::println(stream, "{}", qPrintable(text));
@@ -221,8 +222,7 @@ struct Command {
 int runSpacesCli(const QStringList &arguments) {
     Command command;
     QCommandLineParser &parser = command.parser;
-    parser.setApplicationDescription(QString::fromLatin1(usage));
-    parser.addHelpOption();
+    parser.addOption({{"h", "help"}, "Show this help."});
     parser.addPositionalArgument("command", "list, create, invite, remove, join or sync.", "[command]");
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
@@ -241,6 +241,11 @@ int runSpacesCli(const QStringList &arguments) {
     parser.process(withIdsAsArguments(rest));
     command.words = parser.positionalArguments();
     command.json = parser.isSet("json");
+    // The usage text is the help: Qt's own would add a second usage line above it.
+    if (parser.isSet("help")) {
+        printLine(stdout, QString::fromUtf8(usage));
+        return 0;
+    }
     const QString sub = command.words.value(0, u"list"_s);
     Library library(parser.isSet("library") ? parser.value("library") : Settings().libraryPath());
     QString error;
@@ -258,5 +263,5 @@ int runSpacesCli(const QStringList &arguments) {
         return join(library, command);
     if (sub == "sync"_L1)
         return sync(library, command);
-    return fail(QString::fromLatin1(usage));
+    return fail(QString::fromUtf8(usage));
 }

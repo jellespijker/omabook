@@ -41,6 +41,7 @@ moves those lines under its version.
 
 ### Fixed
 
+- `omabook spaces --help` prints its usage once, as `omabook collections --help` does, with the ellipsis no longer garbled (#52).
 - Removing a member from a shared space (`omabook spaces remove`, `space_remove_member`) changes the space's key: the new key is handed, sealed, to each member left, in the space itself, so that one who was away takes it at their next sync and reads on, and the one removed can't open what is written after. What they write past what the remover held of them then is refused and said, even when they date it before their removal. Older keys are kept (readable only by you) so what was written before stays readable, an invite hands over all of them, so does `omabook sync` to your other computers, and when two writers remove someone at the same time every member settles on the same key (#49).
 - No `QSqlDatabase requires a QCoreApplication` warning after library commands (#31).
 - A computer that a sync paired into another person keeps what it was in spaces as the person it was: that person's key is kept (`former-persons/` in your Omabook data folder, readable only by you), so an invite sealed to it still opens; in a shared space where it was a writer it makes you, as you are now, a writer, and goes on writing; where it was a reader it goes on reading; and a collection it shared stays the same space, now yours as you are, so those who follow it take what is new (#50).
