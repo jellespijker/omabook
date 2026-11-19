@@ -298,6 +298,17 @@ const QList<QStringList> migrations{
      "WHERE key = 'graph'; END",
      "CREATE TRIGGER IF NOT EXISTS reading_log_delete_counted AFTER DELETE ON reading_log BEGIN UPDATE library_state SET value = value + 1 "
      "WHERE key = 'graph'; END"},
+    // Compaction (ADR 0001): per space, a snapshot of the operations that still
+    // matter, up to a mark per device, and what reads the log reads that and
+    // the operations after the mark (live_ops). `ops` stays as it was written.
+    {"CREATE TABLE IF NOT EXISTS snapshot_ops (space INTEGER NOT NULL, device INTEGER NOT NULL, seq INTEGER NOT NULL, "
+     "hlc INTEGER NOT NULL, author INTEGER NOT NULL, entity TEXT NOT NULL, id INTEGER NOT NULL, field TEXT NOT NULL DEFAULT '', "
+     "value TEXT NOT NULL DEFAULT '', PRIMARY KEY (space, device, seq)) WITHOUT ROWID",
+     "CREATE TABLE IF NOT EXISTS snapshot_marks (space INTEGER NOT NULL, device INTEGER NOT NULL, seq INTEGER NOT NULL, "
+     "PRIMARY KEY (space, device)) WITHOUT ROWID",
+     "CREATE VIEW IF NOT EXISTS live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value FROM snapshot_ops "
+     "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value FROM ops AS o "
+     "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

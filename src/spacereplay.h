@@ -31,7 +31,8 @@ struct SpaceOperation {
 // earliest revealed moment, removals as tombstones that a later write revives).
 class SpaceReplay {
 public:
-    // Every operation kept in `ops`, ordered by space, device and seq.
+    // Every operation that still matters (Compaction: the snapshot and what came
+    // after it, which merge as all of `ops` do), ordered by space, device and seq.
     [[nodiscard]] static QList<SpaceOperation> operations(const Library &library);
 
     // Applies `ops` (in any order) to `library`, merging with any operations

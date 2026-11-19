@@ -327,7 +327,7 @@ void materializeDays(const Library &library, const QMap<QString, ReducedDay> &da
     ReducedBook reduced;
     for (QSqlQuery query = ChangeLog::query(library,
                                             "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value "
-                                            "FROM ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                                            "FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
                                             "JOIN log_ids AS a ON a.id = o.author JOIN log_ids AS i ON i.id = o.id "
                                             "WHERE o.entity = 'book' AND o.id = (SELECT id FROM log_ids WHERE name = ?)",
                                             {gid});
@@ -351,7 +351,7 @@ QList<SpaceOperation> SpaceReplay::operations(const Library &library) {
     QList<SpaceOperation> list;
     for (QSqlQuery query =
              ChangeLog::query(library, "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value "
-                                       "FROM ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                                       "FROM live_ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
                                        "JOIN log_ids AS a ON a.id = o.author JOIN log_ids AS i ON i.id = o.id "
                                        "ORDER BY s.name, d.name, o.seq");
          query.next();) {

@@ -5,6 +5,7 @@
 #include <QSet>
 #include <tuple>
 
+#include "compaction.h"
 #include "log.h"
 #include "replication.h"
 #include "spacereplay.h"
@@ -105,6 +106,8 @@ SyncTake::Taken SyncLog::replicate(Library &library, const Remote &remote, const
     QJsonObject there = answer->value("taken").toObject();
     there.insert("named", answer->value("named"));
     countThere(summary, there);
+    if (!dryRun)
+        Compaction::compactWhenWorthIt(library);
     qCInfo(lcSync).noquote() << "the log with" << remote.host() << ":" << lacking.size() << "operations sent," << incoming.size()
                              << "taken";
     return described;
@@ -129,6 +132,8 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
                                   .books = {},
                                   .held = heldIn(request.value("held").toArray())},
                                  taken);
+    if (!dryRun)
+        Compaction::compactWhenWorthIt(library);
     // After taking theirs, so what was just written here goes back with the rest.
     const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(request.value("vector").toObject()));
     return {{"ops", Replication::toJson(lacking)},

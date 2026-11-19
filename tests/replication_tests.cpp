@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <tuple>
 
+#include "compaction.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "hlc.h"
@@ -596,6 +597,65 @@ private slots:
         const SyncSummary settled = syncLibrary(here, remote);
         QCOMPARE(settled.graphTaken + settled.graphSent, 0);
         QCOMPARE(countOf(SpaceReplay::operations(here), "same_as"), 1);
+    }
+
+    // Compaction writes a snapshot and reads it with what came after: what that
+    // merges to is what all of `ops` merges to, on every computer and for each
+    // device, and `ops` itself is never cut (it is append-only).
+    void compactionReadsLessAndMergesTheSame() {
+        const QDir data(QFileInfo(QFINDTESTDATA("data/library-0.1.0.sql")).absolutePath());
+        for (const QString &dump : data.entryList({"library-*.sql"}, QDir::Files, QDir::Name)) {
+            SamplePairs p(data.filePath(dump), dump);
+            QVERIFY(!QTest::currentTestFailed());
+            // A while of reading and editing on both sides, synced now and then.
+            for (int round = 0; round < 20; ++round) {
+                for (Library *library : {&p.logHere, &p.logThere}) {
+                    library->setProgress(1, {.section = round, .fraction = 0.5, .percent = round * 4.0, .updated = 1794730000 + round});
+                    BookMeta meta = library->book(3)->meta;
+                    meta.description = QString("Draft %1 of %2").arg(round).arg(library->root().section('/', -1));
+                    QVERIFY(library->setMeta(3, meta, nullptr, Hlc::pack(1794730000 + (2 * round) + (library == &p.logHere ? 1 : 0), 0)));
+                }
+                if (round % 5 == 4)
+                    QVERIFY(syncLibrary(p.logHere, p.current).problems.isEmpty());
+            }
+            const QString file = p.logHere.databasePath();
+            const auto size = [&file] { return QFileInfo(file).size() + QFileInfo(file + "-wal").size(); };
+            const QList<SpaceOperation> all = SpaceReplay::operations(p.logHere);
+            const qint64 sizeBefore = size();
+            const QJsonObject merged = Samples::librarySnapshot(p.logHere);
+            const auto views = [](std::span<const SpaceOperation> ops, const QString &device) {
+                QJsonObject books;
+                const ReducedState state = SpaceReducer::reduce(ops, device);
+                for (auto book = state.books.cbegin(); book != state.books.cend(); ++book)
+                    books.insert(book.key(), Replication::bookView(*book));
+                return books;
+            };
+            const QString mine = Spaces::deviceId(p.logHere);
+            const QString theirs = Spaces::deviceId(p.logThere);
+
+            const Compaction::Result compacted = Compaction::compact(p.logHere);
+            const QList<SpaceOperation> live = SpaceReplay::operations(p.logHere);
+            QCOMPARE(compacted.operations, qint64(all.size()));
+            QCOMPARE(compacted.live, qint64(live.size()));
+            qInfo().noquote() << dump << ": ops" << all.size() << "read before," << live.size() << "after; database" << sizeBefore
+                              << "bytes before compaction," << size() << "after";
+            // Of the 20 places and descriptions each side wrote, only the last of each is read.
+            QVERIFY2(all.size() - live.size() >= 2 * 2 * 19, qPrintable(dump));
+            for (const QString &device : {mine, theirs})
+                QCOMPARE(views(live, device), views(all, device));
+            Library replayed(p.dir.filePath("Replayed"));
+            QVERIFY(replayed.open() && SpaceReplay::apply(replayed, live));
+            Library full(p.dir.filePath("Full"));
+            QVERIFY(full.open() && SpaceReplay::apply(full, all));
+            QCOMPARE(firstDifference(Samples::librarySnapshot(replayed), Samples::librarySnapshot(full)), QString());
+            QCOMPARE(Samples::librarySnapshot(p.logHere), merged);
+
+            // And syncing on: what changed after the snapshot travels, on top of it.
+            p.logThere.setProgress(1, {.section = 40, .fraction = 0.1, .percent = 99, .updated = 1794740000});
+            QVERIFY(syncLibrary(p.logHere, p.current).problems.isEmpty());
+            QCOMPARE(p.logHere.progress(1).section, 40);
+            QCOMPARE(p.logThere.book(3)->meta.description, p.logHere.book(3)->meta.description);
+        }
     }
 
     void anOlderOmabookStillSyncsByTheManifest() {
