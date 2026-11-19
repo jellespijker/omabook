@@ -43,7 +43,7 @@ modules = [
   "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
   "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
-  "readingsite", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "tour", "whatsnew",
+  "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "tour", "whatsnew",
 ]
 
 [layers.operations]

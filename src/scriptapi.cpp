@@ -43,7 +43,7 @@ const QList<Entry> &entries() {
          "may be left out, says whether a folder or a plain archive is a book of this format. `source` is that one "
          "book's files and nothing else, good only while the call runs: `source.name`, `source.isFolder`, "
          "`source.entries()`, `source.contains(file)`, `source.text(file)`, `source.bytes(file)` (base64, or `null`), "
-         "`source.resolve(fromFile, relativePath)`."},
+         "`source.resolve(fromFile, relativePath)`. A book whose every file is in this format, and in no other plugin's, is this plugin's own (`generated`), one synced from another computer included; a format Omabook reads itself (EPUB, PDF, ...) stays Omabook's."},
         {"markdown.toHtml", "markdown.toHtml(text)", "", "Markdown as HTML, for a format whose chapters are partly Markdown."},
         {"commands.register", "commands.register({id, title, place, key, when, run(context)})", "",
          "Adds a command. `place` is `library`, `reader` or `global`; `key` is its default key, written like `Ctrl+R` "

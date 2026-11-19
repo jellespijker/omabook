@@ -18,6 +18,9 @@ QStringList extensions();
 bool isBook(const QString &path);
 // Whether Omabook reads this format itself, without converting it.
 bool readable(const QString &extension);
+// Whether the format is one of Omabook's own, read or converted, which a
+// plugin's format never takes over.
+bool ownFormat(const QString &extension);
 // The display name, such as "EPUB" or "Kindle (AZW3)".
 QString name(const QString &extension);
 // Formats of one book in the order the reader prefers them.

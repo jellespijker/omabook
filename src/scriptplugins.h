@@ -180,6 +180,12 @@ private:
     QByteArray stamp(const QString &folder, bool enabled) const;
     void follow(const QString &event, const QJsonObject &payload);
     void syncFormats();
+    // Marks the books (the library's, for none) that are a running plugin's
+    // own as its (PluginClaims); only the window's set does. Whether any was.
+    bool claimBooks(const QList<Book> &books = {});
+    // The books after claimBooks: these, or the library's anew when it marked any.
+    QList<Book> claimed(const QList<Book> &books);
+    void listenTo(ScriptPlugin *plugin);
     void lookAtTheBook();
     bool applies(const QString &plugin, const QString &when, bool on) const;
     void settle(int id, const QJsonValue &text);
@@ -244,21 +250,3 @@ void loadOnDemand();
 // Forgets the plugins loaded that way, and stops loading them.
 void unload();
 } // namespace ScriptFormats
-
-// A source of details that is a script's `search` function.
-class ScriptMetadataSource : public MetadataSource {
-    Q_OBJECT
-
-public:
-    ScriptMetadataSource(ScriptPlugin *plugin, const QString &name, const QStringList &fields, QObject *parent = nullptr);
-
-    QString name() const override { return m_name; }
-    QStringList fields() const override { return m_fields; }
-    void search(const BookMeta &book) override;
-
-private:
-    // The plugin may be loaded anew, or switched off, while a look-up runs.
-    QPointer<ScriptPlugin> m_plugin;
-    QString m_name;
-    QStringList m_fields;
-};

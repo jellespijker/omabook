@@ -187,6 +187,11 @@ bool Formats::readable(const QString &extension) {
     return format ? format->open != nullptr : providerWith(extension).has_value();
 }
 
+bool Formats::ownFormat(const QString &extension) {
+    static const QStringList provided = markdownBookProvider().extensions;
+    return find(extension) != nullptr || provided.contains(extension);
+}
+
 QString Formats::name(const QString &extension) {
     if (const Format *format = find(extension))
         return format->name;

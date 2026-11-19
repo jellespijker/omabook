@@ -19,6 +19,8 @@
 
 #include "ai.h"
 #include "formatprovider.h"
+#include "pluginclaims.h"
+#include "scriptmetadatasource.h"
 #include "settings.h"
 
 namespace {
@@ -82,6 +84,7 @@ ScriptPlugins::ScriptPlugins(const ScriptServices &services, const QString &fold
     m_announce.setInterval(0);
     connect(&m_announce, &QTimer::timeout, this, [this] {
         syncFormats();
+        claimBooks();
         emit changed();
     });
     if (m_follow) {
@@ -190,6 +193,34 @@ void ScriptPlugins::adopt(std::unique_ptr<ScriptPlugin> plugin) {
     m_plugins[id] = std::move(plugin);
 }
 
+// What a plugin just made says, and asks of the window, is said on by the set.
+void ScriptPlugins::listenTo(ScriptPlugin *plugin) {
+    connect(plugin, &ScriptPlugin::said, this, &ScriptPlugins::said);
+    connect(plugin, &ScriptPlugin::dataChanged, this, &ScriptPlugins::dataChanged);
+    connect(plugin, &ScriptPlugin::touchedLibrary, this, &ScriptPlugins::touchedLibrary);
+    connect(plugin, &ScriptPlugin::openBookRequested, this, &ScriptPlugins::openBookRequested);
+    connect(plugin, &ScriptPlugin::graphRequested, this, &ScriptPlugins::graphRequested);
+    connect(plugin, &ScriptPlugin::reloadBookRequested, this, &ScriptPlugins::reloadBookRequested);
+    connect(plugin, &ScriptPlugin::askRequested, this,
+            [this, plugin](int token, const QString &title, const QString &placeholder, const QString &text) {
+                if (m_attending <= 0) {
+                    plugin->answerAsk(token, QJsonValue());
+                    return;
+                }
+                m_questions.append({m_nextQuestion++, plugin, token, title, placeholder, text, {}});
+                emit questionChanged();
+            });
+    connect(plugin, &ScriptPlugin::formRequested, this, [this, plugin](int token, const QJsonObject &form) {
+        if (m_attending <= 0) {
+            plugin->answerForm(token, QJsonValue());
+            return;
+        }
+        m_questions.append({m_nextQuestion++, plugin, token, form.value("title").toString(), {}, {}, form});
+        emit questionChanged();
+    });
+    connect(plugin, &ScriptPlugin::registered, &m_announce, qOverload<>(&QTimer::start));
+}
+
 void ScriptPlugins::reload() {
     watch();
     bool differs = false;
@@ -214,30 +245,7 @@ void ScriptPlugins::reload() {
         auto fresh = std::make_unique<ScriptPlugin>(manifest, m_services);
         ScriptPlugin *plugin = fresh.get();
         plugin->setTimeLimit(m_limit);
-        connect(plugin, &ScriptPlugin::said, this, &ScriptPlugins::said);
-        connect(plugin, &ScriptPlugin::dataChanged, this, &ScriptPlugins::dataChanged);
-        connect(plugin, &ScriptPlugin::touchedLibrary, this, &ScriptPlugins::touchedLibrary);
-        connect(plugin, &ScriptPlugin::openBookRequested, this, &ScriptPlugins::openBookRequested);
-        connect(plugin, &ScriptPlugin::graphRequested, this, &ScriptPlugins::graphRequested);
-        connect(plugin, &ScriptPlugin::reloadBookRequested, this, &ScriptPlugins::reloadBookRequested);
-        connect(plugin, &ScriptPlugin::askRequested, this,
-                [this, plugin](int token, const QString &title, const QString &placeholder, const QString &text) {
-                    if (m_attending <= 0) {
-                        plugin->answerAsk(token, QJsonValue());
-                        return;
-                    }
-                    m_questions.append({m_nextQuestion++, plugin, token, title, placeholder, text, {}});
-                    emit questionChanged();
-                });
-        connect(plugin, &ScriptPlugin::formRequested, this, [this, plugin](int token, const QJsonObject &form) {
-            if (m_attending <= 0) {
-                plugin->answerForm(token, QJsonValue());
-                return;
-            }
-            m_questions.append({m_nextQuestion++, plugin, token, form.value("title").toString(), {}, {}, form});
-            emit questionChanged();
-        });
-        connect(plugin, &ScriptPlugin::registered, &m_announce, qOverload<>(&QTimer::start));
+        listenTo(plugin);
         QString problem;
         if (plugin->load(&problem)) {
             // Only what goes wrong after it loaded is this version's doing.
@@ -267,6 +275,7 @@ void ScriptPlugins::reload() {
             m_stamps.remove(id);
     syncFormats();
     if (differs) {
+        claimBooks();
         // A question of a plugin that is gone has nobody left to answer.
         m_questions.removeIf([this](const Question &question) {
             return !question.plugin || plugin(question.plugin->manifest().id) != question.plugin;
@@ -460,10 +469,30 @@ void ScriptPlugins::emitEvent(const QString &event, const QJsonObject &payload) 
             plugin->emitEvent(event, payload);
 }
 
+// The books that came without their plugin's mark (by sync) are its own
+// again, once it is running: when it loads, and when they arrive.
+bool ScriptPlugins::claimBooks(const QList<Book> &books) {
+    Library *library = m_follow && m_services.library ? m_services.library() : nullptr;
+    PluginClaims::Registered registered;
+    for (const auto &[id, plugin] : m_plugins)
+        for (const ScriptPlugin::Format &format : plugin->formats())
+            registered[id] << format.extensions;
+    if (!library || registered.empty() || PluginClaims::claim(*library, books.isEmpty() ? library->books() : books, registered).isEmpty())
+        return false;
+    emit touchedLibrary();
+    return true;
+}
+
+QList<Book> ScriptPlugins::claimed(const QList<Book> &books) {
+    const Library *library = m_services.library ? m_services.library() : nullptr;
+    return claimBooks(books) && library ? library->books() : books;
+}
+
 void ScriptPlugins::libraryChanged(const QList<Book> &books, const QString &libraryPath) {
     QHash<qint64, QJsonObject> now;
     qint64 highest = 0;
-    for (const Book &book : books) {
+    // Those that came without their plugin's mark are told of as its own.
+    for (const Book &book : claimed(books)) {
         now.insert(book.id, told(book));
         highest = qMax(highest, book.id);
     }
@@ -801,36 +830,4 @@ void ScriptFormats::loadOnDemand() {
 void ScriptFormats::unload() {
     Formats::setProviderLoader({});
     delete onDemand;
-}
-
-ScriptMetadataSource::ScriptMetadataSource(ScriptPlugin *plugin, const QString &name, const QStringList &fields, QObject *parent)
-    : MetadataSource(parent), m_plugin(plugin), m_name(name), m_fields(fields) {}
-
-void ScriptMetadataSource::search(const BookMeta &book) {
-    // Answered through the event loop even when the script answers at once
-    // or isn't there: whoever asked is still connecting.
-    auto answer = [this](const QList<MetaCandidate> &candidates, const QString &problem) {
-        QTimer::singleShot(0, this, [this, candidates, problem] {
-            if (problem.isEmpty())
-                emit found(candidates);
-            else
-                emit failed(m_name + ": " + problem);
-        });
-    };
-    if (!m_plugin) {
-        answer({}, "The plugin was switched off or changed while it was being asked.");
-        return;
-    }
-    m_plugin->search(m_name, book.toJson(), [this, guard = QPointer<ScriptMetadataSource>(this), answer](const QJsonValue &result, const QString &problem) {
-        if (!guard)
-            return;
-        QList<MetaCandidate> candidates;
-        for (const QJsonValue &value : result.toArray()) {
-            const MetaCandidate candidate = MetaCandidate::fromJson(value.toObject(), m_name);
-            if (!candidate.meta.title.isEmpty())
-                candidates << candidate;
-        }
-        answer(candidates, problem.isEmpty() && !result.isArray() && !result.isNull() ? "search should answer a list of candidates."
-                                                                                        : problem);
-    });
 }
