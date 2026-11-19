@@ -716,8 +716,8 @@ int set(const QStringList &arguments) {
     if (meta.title.isEmpty())
         return fail("A book needs a title.");
     // First, since they are all or nothing: a scheme refused changes nothing.
-    if (!identifiers.isEmpty() && !BookOps::setIdentifiers(*library, id, identifiers, &error))
-        return fail(error);
+    if (const auto res = BookOps::setIdentifiers(*library, id, identifiers, detailsAt); !res)
+        return fail(res.error());
     if (!library->setMeta(id, meta, &error, detailsAt))
         return fail(error);
     if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {

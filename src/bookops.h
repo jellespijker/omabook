@@ -6,6 +6,7 @@
 #include <QPair>
 #include <QString>
 #include <QStringList>
+#include <expected>
 #include <functional>
 #include <memory>
 #include <optional>
@@ -81,7 +82,8 @@ bool applyCandidate(Library &library, qint64 id, const MetaCandidate &candidate,
 // "28507"); an empty value forgets that scheme. All or nothing: a scheme
 // that is empty, holds a space or "=", or is "generated" (which plugin made
 // the book, set by that plugin alone when it makes it) refuses the lot.
-bool setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers, QString *error);
+[[nodiscard]] std::expected<void, QString> setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers,
+                                                          std::optional<qint64> at = std::nullopt);
 
 // Converts a book with Calibre's ebook-convert and adds the result to it.
 // Empty `from` is the format the reader prefers. Returns the new file, or an

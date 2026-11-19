@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Changed
+
+- Each library keeps global ids, a hybrid logical clock and a change log alongside its tables; `omabook sync` uses the clock across computers whose wall clocks differ and merges book details field by field (#35).
+
 ### Fixed
 
 - No `QSqlDatabase requires a QCoreApplication` warning after library commands (#31).

@@ -8,7 +8,12 @@
 #include <optional>
 #include <tuple>
 
+#include "changelog.h"
+#include "changeloggraph.h"
 #include "graph.h"
+#include "hlc.h"
+#include "spacereplay.h"
+#include "spaces.h"
 
 namespace {
 
@@ -35,7 +40,8 @@ QJsonObject bookName(const Library &library, qint64 id) {
 
 // --- What goes ----------------------------------------------------------
 
-QJsonObject nodeJson(const Graph &graph, const GraphNode &node, const QList<GraphFact> &facts, QSet<qint64> &books) {
+QJsonObject nodeJson(const Library &library, const Graph &graph, const GraphNode &node, const QList<GraphFact> &facts,
+                     QSet<qint64> &books) {
     QJsonObject data = node.data;
     data.remove("aliases");
     QJsonArray seen;
@@ -51,11 +57,14 @@ QJsonObject nodeJson(const Graph &graph, const GraphNode &node, const QList<Grap
         learned << object;
         books << fact.revealed.place.bookId;
     }
+    const qint64 hlc =
+        std::max(Hlc::normalize(node.updated), SpaceReplay::entityHlc(library, QStringLiteral("node"), Spaces::nodeId(library, node.id)));
     return {{"id", node.id},
             {"kind", node.kind},
             {"name", node.name},
             {"summary", node.summary},
             {"updated", node.updated},
+            {"hlc", hlc},
             {"data", data},
             {"aliases", QJsonArray::fromStringList(node.aliases())},
             {"seen", seen},
@@ -75,10 +84,10 @@ QJsonArray edgesJson(const QList<GraphEdge> &edges, QSet<qint64> &books) {
     }
     return array;
 }
-
 } // namespace
 
 QJsonObject GraphSync::bundle(const Library &library) {
+    ChangeLog::reconcile(library);
     const Graph graph(library);
     const GraphView view = graph.whole({}, std::numeric_limits<int>::max());
     QList<qint64> ids;
@@ -93,7 +102,7 @@ QJsonObject GraphSync::bundle(const Library &library) {
     QJsonArray nodes;
     for (const GraphNode &node : view.nodes)
         if (!made.contains(node.id))
-            nodes << nodeJson(graph, node, facts.value(node.id), books);
+            nodes << nodeJson(library, graph, node, facts.value(node.id), books);
     // Relations between two made things are made on each side too; the
     // others travel, with the made things at their ends named for what they stand for.
     QList<GraphEdge> edges;
@@ -118,7 +127,8 @@ QJsonObject GraphSync::bundle(const Library &library) {
     for (const qint64 book : std::as_const(books))
         if (book > 0)
             named.insert(QString::number(book), bookName(library, book));
-    return {{"version", 1}, {"books", named}, {"nodes", nodes}, {"ends", ends}, {"edges", relations}, {"log", log}};
+    return {{"version", 1}, {"hlc", Spaces::lastHlc(library)}, {"books", named}, {"nodes", nodes}, {"ends", ends}, {"edges", relations},
+            {"log", log}};
 }
 
 // --- What comes ---------------------------------------------------------
@@ -128,12 +138,14 @@ namespace {
 // One bundle being taken in: their numbers, of books and things, as this
 // library's, and how much was new.
 struct Taking {
+    const Library &library; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members): short-lived stack context
     Graph graph;
     QHash<qint64, qint64> books; // their book: this library's
     QHash<qint64, qint64> nodes; // their thing: this library's
+    QHash<qint64, qint64> stampedNodes;
     int changed = 0;
 
-    explicit Taking(const Library &into) : graph(into) {}
+    explicit Taking(const Library &into) : library(into), graph(into) {}
 
     // Their book here: 0 for no book, nothing for a book this library doesn't have.
     std::optional<qint64> book(qint64 theirs) const {
@@ -336,21 +348,25 @@ void takeFacts(Taking &taking, qint64 id, const QJsonObject &node, bool primary)
         takeTheirName(taking, id, *now, mine, node);
 }
 
+[[nodiscard]] std::optional<GraphFact> findSummaryFact(const Graph &graph, qint64 id, const QString &wanted) {
+    for (const GraphFact &fact : graph.facts(id))
+        if (fact.kind == "summary" && fact.value == wanted)
+            return fact;
+    return std::nullopt;
+}
+
 // What is said of it now: theirs when it changed there last, or when this
 // one says nothing; each with the moment it was revealed, never a new one.
-void settleSummary(Taking &taking, qint64 id, const GraphNode &before, const QJsonObject &theirs, bool allowTheirs) {
+void settleSummary(Taking &taking, qint64 id, const GraphNode &before, qint64 beforeHlc, const QJsonObject &theirs, bool allowTheirs) {
     const QString said = theirs.value("summary").toString();
-    const bool takeTheirs =
-        allowTheirs && !said.isEmpty() && (before.summary.isEmpty() || theirs.value("updated").toInteger() > before.updated);
+    const qint64 theirHlc = Hlc::normalize(theirs.value("hlc").toInteger(theirs.value("updated").toInteger()));
+    const bool takeTheirs = allowTheirs && !said.isEmpty() && (before.summary.isEmpty() || std::is_gt(Hlc::compare(theirHlc, beforeHlc)));
     const QString wanted = takeTheirs ? said : before.summary;
     const std::optional<GraphNode> now = taking.graph.node(id);
     if (wanted.isEmpty() || !now || now->summary == wanted)
         return;
-    for (const GraphFact &fact : taking.graph.facts(id))
-        if (fact.kind == "summary" && fact.value == wanted) {
-            taking.graph.learn(id, "summary", wanted, fact.revealed.place.bookId > 0 ? std::optional(fact.revealed) : std::nullopt);
-            return;
-        }
+    if (const auto fact = findSummaryFact(taking.graph, id, wanted))
+        taking.graph.learn(id, "summary", wanted, fact->revealed.place.bookId > 0 ? std::optional(fact->revealed) : std::nullopt);
 }
 
 void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
@@ -358,6 +374,12 @@ void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
     const QJsonObject data = theirs.value("data").toObject();
     const qint64 known = matched > 0 ? matched : taking.graph.named({}, kind, theirs.value("name").toString());
     const std::optional<GraphNode> before = known > 0 ? taking.graph.node(known) : std::nullopt;
+    const qint64 beforeHlc =
+        before ? std::max(Hlc::normalize(before->updated),
+                          SpaceReplay::entityHlc(taking.library, QStringLiteral("node"), Spaces::nodeId(taking.library, before->id)))
+               : 0;
+    const qint64 theirHlc = Hlc::normalize(theirs.value("hlc").toInteger(theirs.value("updated").toInteger()));
+    Spaces::observeHlc(taking.library, theirHlc);
     const qint64 id = before ? before->id : taking.graph.upsert({}, kind, theirs.value("name").toString(), {}, missingData({}, data));
     const std::optional<GraphNode> node = taking.graph.node(id);
     if (!node)
@@ -368,11 +390,13 @@ void takeNode(Taking &taking, const QJsonObject &theirs, qint64 matched) {
         taking.graph.upsert({}, kind, before->name, {}, missing);
         ++taking.changed;
     }
+    if (const qint64 nodeHlc = std::max(beforeHlc, theirHlc); nodeHlc > 0)
+        taking.stampedNodes.insert(id, nodeHlc);
     const bool primary = matched > 0 || !before;
     taking.nodes.insert(theirs.value("id").toInteger(), id);
     takeSeen(taking, id, *node, theirs.value("seen").toArray());
     takeFacts(taking, id, theirs, primary);
-    settleSummary(taking, id, before.value_or(GraphNode{}), theirs, primary);
+    settleSummary(taking, id, before.value_or(GraphNode{}), beforeHlc, theirs, primary);
 }
 
 // Their end of a relation here: a thing taken in, or one this library makes itself.
@@ -450,6 +474,8 @@ void takeLog(Taking &taking, const QJsonArray &log) {
 int GraphSync::take(Library &library, const QJsonObject &bundle) {
     if (bundle.value("version").toInt() != 1)
         return 0;
+    ChangeLog::reconcile(library);
+    Spaces::observeHlc(library, bundle.value("hlc").toInteger());
     const Library::Batch batch(library);
     Taking taking(library);
     nameBooks(taking, library, bundle.value("books").toObject());
@@ -459,5 +485,7 @@ int GraphSync::take(Library &library, const QJsonObject &bundle) {
         takeNode(taking, nodes.at(i).toObject(), matched.at(i));
     takeEdges(taking, bundle.value("edges").toArray(), bundle.value("ends").toObject());
     takeLog(taking, bundle.value("log").toArray());
+    for (auto it = taking.stampedNodes.cbegin(); it != taking.stampedNodes.cend(); ++it)
+        ChangeLogGraph::syncNodeAt(library, it.key(), it.value());
     return taking.changed;
 }

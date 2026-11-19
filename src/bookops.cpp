@@ -295,28 +295,22 @@ bool BookOps::applyCandidate(Library &library, qint64 id, const MetaCandidate &c
     return library.setMeta(id, meta, error);
 }
 
-bool BookOps::setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers, QString *error) {
-    if (!library.book(id)) {
-        *error = QString("There is no book %1 in the library.").arg(id);
-        return false;
-    }
+std::expected<void, QString> BookOps::setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers,
+                                                     std::optional<qint64> at) {
+    if (!library.book(id))
+        return std::unexpected(QString("There is no book %1 in the library.").arg(id));
     static const QRegularExpression unfit("[\\s=]");
     for (const auto &[scheme, value] : identifiers) {
-        if (scheme.trimmed().isEmpty() || unfit.match(scheme.trimmed()).hasMatch()) {
-            *error = QString("\"%1\" is not a scheme: name one such as goodreads, isbn or calibre, without spaces.").arg(scheme);
-            return false;
-        }
-        if (scheme.trimmed().compare("generated", Qt::CaseInsensitive) == 0) {
-            *error = "\"generated\" says which plugin made a book, and only that plugin sets it, when it makes the book.";
-            return false;
-        }
+        if (scheme.trimmed().isEmpty() || unfit.match(scheme.trimmed()).hasMatch())
+            return std::unexpected(
+                QString("\"%1\" is not a scheme: name one such as goodreads, isbn or calibre, without spaces.").arg(scheme));
+        if (scheme.trimmed().compare("generated", Qt::CaseInsensitive) == 0)
+            return std::unexpected("\"generated\" says which plugin made a book, and only that plugin sets it, when it makes the book.");
     }
     for (const auto &[scheme, value] : identifiers)
-        if (!library.setIdentifier(id, scheme.trimmed(), value.trimmed())) {
-            *error = "The library can't be written.";
-            return false;
-        }
-    return true;
+        if (!library.setIdentifier(id, scheme.trimmed(), value.trimmed(), at))
+            return std::unexpected("The library can't be written.");
+    return {};
 }
 
 QString BookOps::convert(Library &library, qint64 id, const QString &to, const QString &from, QString *error) {

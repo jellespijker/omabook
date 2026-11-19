@@ -521,9 +521,8 @@ QList<Tool> coreTools() {
                           const QJsonObject given = arguments.value("identifiers").toObject();
                           for (auto it = given.begin(); it != given.end(); ++it)
                               identifiers.append({it.key(), it.value().isString() ? it.value().toString() : it.value().toVariant().toString()});
-                          QString error;
-                          if (!BookOps::setIdentifiers(*at.library, at.id, identifiers, &error))
-                              return Result::fail(error);
+                          if (const auto res = BookOps::setIdentifiers(*at.library, at.id, identifiers); !res)
+                              return Result::fail(res.error());
                       }
                       if (arguments.contains("cover_path")) {
                           QImageReader reader(arguments.value("cover_path").toString());
