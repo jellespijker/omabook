@@ -10,6 +10,7 @@
 #include <QSqlQuery>
 #include <QStringList>
 #include <chrono>
+#include <print>
 #include <ranges>
 
 #include "changelog.h"
@@ -75,8 +76,10 @@ std::expected<void, QString> LibraryMigrations::migrate(const Library &library) 
             return std::unexpected("The library needs bringing up to date, but a copy of it couldn't be kept first, so it was left alone: "
                                    + kept.error());
     }
-    if (schema < steps.size())
+    if (schema < steps.size()) {
         qCInfo(lcLibrary).noquote() << "bringing" << library.m_root << "from format" << schema << "to" << steps.size();
+        sayBringingUpToDate(library, schema);
+    }
     // Each step whole or not at all, inside the transaction of setUp.
     for (int step = schema; step < steps.size(); ++step) {
         library.exec("SAVEPOINT format_step");
@@ -140,3 +143,14 @@ Library::Changes Library::changes() const {
     }
     return changes;
 }
+
+void LibraryMigrations::sayBringingUpToDate(const Library &library, int schema) {
+    // A new library is only made; one from before is brought up to date, which takes a while when it is large.
+    if (schema > 0 && library.m_bringingUpToDate)
+        library.m_bringingUpToDate(QString("Bringing your library up to date (from format %1 to %2); this is done once, and can take "
+                                           "a minute for a large library…")
+                                       .arg(schema)
+                                       .arg(currentFormat()));
+}
+
+void LibraryMigrations::sayOnStandardError(const QString &said) { std::println(stderr, "{}", said.toStdString()); }

@@ -9,6 +9,7 @@
 #include <expected>
 #include <functional>
 #include <optional>
+#include <utility>
 
 #include "bookmeta.h"
 #include "person.h"
@@ -176,6 +177,10 @@ public:
     // every library the user named (Folio's folders after each command),
     // which must never change a library's format in passing.
     void keepFormat() noexcept { m_keepFormat = true; }
+    // Told, before it starts, when opening brings the library from an older
+    // format up to date (#54): a line to show while that runs, as a command
+    // prints it on standard error (LibraryMigrations::sayOnStandardError).
+    void onBringingUpToDate(std::function<void(const QString &)> say) { m_bringingUpToDate = std::move(say); }
     QString root() const noexcept { return m_root; }
     QString databasePath() const;
     // Where copies of the database are kept: one is made each time an
@@ -393,6 +398,7 @@ private:
 
     QString m_root;
     bool m_keepFormat = false;
+    std::function<void(const QString &)> m_bringingUpToDate;
     QString m_connection;
     mutable PersonFile m_person;
 };

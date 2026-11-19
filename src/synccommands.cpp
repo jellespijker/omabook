@@ -11,6 +11,7 @@
 #include <print>
 
 #include "library.h"
+#include "librarymigrations.h"
 #include "remote.h"
 #include "settings.h"
 #include "sync.h"
@@ -55,6 +56,7 @@ bool parseArguments(QCommandLineParser &parser, const QString &name, const QStri
 
 [[nodiscard]] std::expected<std::unique_ptr<Library>, QString> openCliLibrary(const QCommandLineParser &parser) {
     auto library = std::make_unique<Library>(parser.isSet("library") ? parser.value("library") : Settings().libraryPath());
+    library->onBringingUpToDate(LibraryMigrations::sayOnStandardError);
     QString error;
     if (!library->open(&error))
         return std::unexpected(error);

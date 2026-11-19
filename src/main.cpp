@@ -2,11 +2,15 @@
 
 #include <QCommandLineParser>
 #include <QDir>
+#include <QEventLoop>
 #include <QFileInfo>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QInputDevice>
 #include <algorithm>
+#include <memory>
+#include <optional>
+#include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -25,6 +29,7 @@
 #include "interface.h"
 #include "log.h"
 #include "librarian.h"
+#include "libraryupgrade.h"
 #include "manual.h"
 #include "pluginformats.h"
 #include "portalfilepicker.h"
@@ -43,6 +48,42 @@ void drawNoWindow() {
     if (!qEnvironmentVariableIsSet("OMABOOK_DESKTOP_QPA"))
         qputenv("OMABOOK_DESKTOP_QPA", qgetenv("QT_QPA_PLATFORM").isEmpty() ? QByteArray("-") : qgetenv("QT_QPA_PLATFORM"));
     qputenv("QT_QPA_PLATFORM", "offscreen");
+}
+
+// A library named here, or found by the book being opened, is this window's;
+// which library is in use from now on is changed only on purpose: in the
+// window's Libraries, or with omabook libraries --use. A book file that is in
+// a library (an entry of its view in the file manager, or a file in the
+// library's own folders) is that book, found by where it is: it opens in its
+// own library where it was left, without the file being read through to
+// recognise it.
+std::optional<Folio::Found> chooseLibrary(Settings &settings, const QCommandLineParser &arguments, const QString &book) {
+    if (arguments.isSet("library"))
+        settings.useLibraryForSession(arguments.value("library"));
+    const auto known = book.isEmpty() || arguments.isSet("library") ? std::nullopt : Folio::find(settings, book);
+    if (known && QDir::cleanPath(known->library) != QDir::cleanPath(QFileInfo(settings.libraryPath()).absoluteFilePath()))
+        settings.useLibraryForSession(known->library);
+    return known;
+}
+
+// A library in an older format is brought up to date before the window opens
+// it, on a worker, while a small window says so (#54): on a large library the
+// migration and the log's baseline take a while. Before there is any other
+// window or anything else on this thread, so nothing waits on the loop here
+// but this.
+void bringUpToDate(const QString &root, Look &theme) {
+    LibraryUpgrade upgrade;
+    if (!upgrade.start(root))
+        return;
+    QQmlEngine engine;
+    engine.rootContext()->setContextProperty("theme", &theme);
+    engine.rootContext()->setContextProperty("upgrade", &upgrade);
+    QQmlComponent message(&engine, QUrl("qrc:/Upgrading.qml"));
+    const std::unique_ptr<QObject> window(message.create());
+    QEventLoop waiting;
+    QObject::connect(&upgrade, &LibraryUpgrade::finished, &waiting, &QEventLoop::quit);
+    if (upgrade.running())
+        waiting.exec();
 }
 
 } // namespace
@@ -149,19 +190,9 @@ int main(int argc, char *argv[]) {
     Look theme(&desktopTheme, &themeChoice, &custom);
     Settings settings;
     PortalFilePicker picker;
-    // A library named here, or found by the book being opened, is this
-    // window's; which library is in use from now on is changed only on
-    // purpose: in the window's Libraries, or with omabook libraries --use.
-    if (arguments.isSet("library"))
-        settings.useLibraryForSession(arguments.value("library"));
-    // A book file that is in a library (an entry of its view in the file
-    // manager, or a file in the library's own folders) is that book, found
-    // by where it is: it opens in its own library where it was left, without
-    // the file being read through to recognise it.
     const QString book = arguments.positionalArguments().value(0);
-    const auto known = book.isEmpty() || arguments.isSet("library") ? std::nullopt : Folio::find(settings, book);
-    if (known && QDir::cleanPath(known->library) != QDir::cleanPath(QFileInfo(settings.libraryPath()).absoluteFilePath()))
-        settings.useLibraryForSession(known->library);
+    const auto known = chooseLibrary(settings, arguments, book);
+    bringUpToDate(settings.libraryPath(), theme);
     Backend backend(&settings, &picker);
     backend.fileManager()->setActive(true);
     // The help, the tour and what is new, which remember what was shown.

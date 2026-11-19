@@ -9,6 +9,7 @@
 #include <tuple>
 
 #include "library.h"
+#include "librarymigrations.h"
 #include "person.h"
 #include "settings.h"
 #include "sharedspaces.h"
@@ -248,6 +249,7 @@ int runSpacesCli(const QStringList &arguments) {
     }
     const QString sub = command.words.value(0, u"list"_s);
     Library library(parser.isSet("library") ? parser.value("library") : Settings().libraryPath());
+    library.onBringingUpToDate(LibraryMigrations::sayOnStandardError);
     QString error;
     if (!library.open(&error))
         return fail(error);

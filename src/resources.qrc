@@ -1,6 +1,7 @@
 <RCC>
     <qresource prefix="/">
         <file alias="Main.qml">Main.qml</file>
+        <file alias="Upgrading.qml">Upgrading.qml</file>
         <file alias="AppButton.qml">AppButton.qml</file>
         <file alias="AppPopup.qml">AppPopup.qml</file>
         <file alias="DialogActions.qml">DialogActions.qml</file>

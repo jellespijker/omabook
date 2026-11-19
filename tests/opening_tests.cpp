@@ -147,6 +147,30 @@ private slots:
             QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-%1-*.db").arg(older)}).size(), 1);
         }
     }
+
+    // A command that brings a library up to date says so on standard error
+    // while it does (#54), once: the next one finds it up to date.
+    void aCommandSaysWhenItBringsALibraryUpToDate() {
+        const QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString root = dir.filePath(QStringLiteral("Library"));
+        {
+            Library library(root);
+            QVERIFY(library.open());
+        }
+        QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = %1").arg(LibraryMigrations::currentFormat() - 1)), 0);
+        const auto said = [&root] {
+            QProcess command;
+            command.start(QStringLiteral(OMABOOK_BINARY), {QStringLiteral("list"), QStringLiteral("--library"), root});
+            command.waitForFinished(30'000);
+            return command.exitCode() == 0 ? QString::fromUtf8(command.readAllStandardError()) : QStringLiteral("failed");
+        };
+        const QString first = said();
+        QVERIFY2(first.contains(QStringLiteral("Bringing your library up to date")), qPrintable(first));
+        QCOMPARE(first.count(QStringLiteral("Bringing")), 1);
+        const QString second = said();
+        QVERIFY2(!second.contains(QStringLiteral("Bringing")) && second != QStringLiteral("failed"), qPrintable(second));
+    }
 };
 
 QTEST_GUILESS_MAIN(OpeningTests)

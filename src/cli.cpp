@@ -110,9 +110,8 @@ struct Command {
 
     std::unique_ptr<Library> library(QString *error) const {
         auto library = std::make_unique<Library>(parser.isSet("library") ? parser.value("library") : Settings().libraryPath());
-        if (!library->open(error))
-            return nullptr;
-        return library;
+        library->onBringingUpToDate([](const QString &said) { print(stderr, said); });
+        return library->open(error) ? std::move(library) : nullptr;
     }
 
     // Whether the library worked on is the one in use. What is remembered
