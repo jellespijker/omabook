@@ -5,6 +5,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <cstdint>
 #include <expected>
 #include <functional>
 #include <optional>
@@ -356,13 +357,20 @@ public:
     // inside another joins it.
     class Batch {
     public:
-        explicit Batch(const Library &library);
+        // When the database becomes the batch's alone: at its first write, or
+        // at once, so what it reads before it writes can't change under it
+        // (another program that wants it waits until the batch is done).
+        enum class Lock : std::uint8_t { AtFirstWrite, AtOnce };
+        explicit Batch(const Library &library, Lock lock = Lock::AtFirstWrite);
         ~Batch();
         Batch(const Batch &) = delete;
         Batch &operator=(const Batch &) = delete;
+        // Whether the transaction could be begun (one inside another: always).
+        [[nodiscard]] bool begun() const noexcept { return m_begun; }
 
     private:
         const Library &m_library;
+        bool m_begun = true;
     };
 
 private:

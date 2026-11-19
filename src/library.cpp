@@ -337,9 +337,10 @@ Library::~Library() {
     }
 }
 
-Library::Batch::Batch(const Library &library) : m_library(library) {
+Library::Batch::Batch(const Library &library, Lock lock) : m_library(library) {
     if (m_library.m_batches++ == 0)
-        QSqlDatabase::database(m_library.m_connection).transaction();
+        m_begun = lock == Lock::AtOnce ? QSqlQuery(QSqlDatabase::database(m_library.m_connection)).exec("BEGIN IMMEDIATE")
+                                       : QSqlDatabase::database(m_library.m_connection).transaction();
 }
 
 Library::Batch::~Batch() {
@@ -409,11 +410,8 @@ bool Library::open(QString *error) {
     exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
     exec("PRAGMA foreign_keys = ON");
 
-    if (const auto migrated = LibraryMigrations::migrate(*this); !migrated)
-        return fail(migrated.error());
-    if (!m_keepFormat)
-        ChangeLog::open(*this);
-    return true;
+    const auto setUp = LibraryMigrations::setUp(*this);
+    return setUp ? true : fail(setUp.error());
 }
 
 QString Library::bookFolder(qint64 id) const {
