@@ -12,6 +12,8 @@ ignores:
   - "src/changelog.cpp"
   - "src/spacereplay.cpp"
   - "src/librarymigrations.cpp"
+  # The schema's steps, moved out of librarymigrations.cpp (#54): its triggers write the counters.
+  - "src/libraryschema.cpp"
   - "src/library.cpp"
   - "src/graph.cpp"
   - "tests/**"
