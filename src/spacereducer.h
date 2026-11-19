@@ -114,8 +114,10 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 [[nodiscard]] QHash<QString, QString> sameAs(std::span<const SpaceOperation> ops, QLatin1StringView entity = QLatin1StringView("book"));
 // Books and things are folded under the id their same-as links stand for.
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops);
-// What one computer holds: only the operations its device wrote, which is what
-// its rows are (every write there appends one), with the links of all of them.
+// What one computer holds: of the operations its device wrote, each field's
+// last, which is what its rows are (every write there appends one, and one
+// taken from elsewhere keeps the stamp it had there), with the links of all
+// of them.
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops, const QString &device);
 
 } // namespace SpaceReducer

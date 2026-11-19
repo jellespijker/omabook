@@ -36,7 +36,8 @@ struct Context {
 // What the row says now of `field`, unless this device already wrote it: an
 // operation for every change of a row here, whatever another computer wrote
 // of it, so this device's operations are always what its rows are
-// (SpaceReducer::reduce). Stamped after what the log has of it.
+// (SpaceReducer::reduce). Stamped after what the log has of it, but for a
+// value taken from another device's operation, which keeps that one's stamp.
 void write(Context &context, const QString &field, const QString &value, qint64 rowHlc);
 
 } // namespace ChangeLogFields

@@ -223,7 +223,11 @@ void makeAndRemoveCollections(SamplePairs &p) {
     // 4. A collection made on each side, then one removed, each at a
     //    time of its own so the four copies do the same.
     const auto store = [](Library &library, const QString &path, qint64 parent, qint64 at, bool removed = false) {
-        Collection collection{.parent = parent, .name = path.section('/', -1), .rule = removed ? QString() : "rating:4", .updated = at};
+        Collection collection;
+        collection.parent = parent;
+        collection.name = path.section('/', -1);
+        collection.rule = removed ? QString() : "rating:4";
+        collection.updated = at;
         collection.id = library.collectionNamed(path) ? library.collectionNamed(path)->id : 0;
         collection.removed = removed;
         if (path == "Picks/Here" && !removed)
@@ -658,6 +662,41 @@ private slots:
         }
     }
 
+    // A value one side takes from the other keeps the time it was written
+    // there: taken with a newer one, it would win over a newer edit made
+    // meanwhile on the side it came from, by a clock that is behind.
+    void aValueTakenKeepsItsTimeSoANewerEditThereIsNotLost() {
+        QTemporaryDir dir;
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const Remote remote("laptop:" + dir.filePath("There"), {recordingSsh(dir, "ssh-echo", false)});
+        // Made here, so here wrote its name before.
+        QVERIFY(here.addCollection("Shelf", "rating:4"));
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        const qint64 made = there.collectionNamed("Shelf")->id;
+
+        // There renames it; here, its clock ten minutes ahead, takes that.
+        QVERIFY(there.renameCollection(made, "Taken"));
+        Spaces::setClockOffset(here, 600);
+        QCOMPARE(syncLibrary(here, remote).collectionsTaken, 1);
+        QVERIFY(here.collectionNamed("Taken"));
+        // Then, before it hears of here again, there renames it once more.
+        QVERIFY(there.renameCollection(made, "Newer"));
+
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        QVERIFY2(here.collectionNamed("Newer") && there.collectionNamed("Newer"), qPrintable(here.collections(true).first().name));
+
+        // Settled: syncing on writes no further operations on either side.
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        const qsizetype mine = SpaceReplay::operations(here).size();
+        const qsizetype theirs = SpaceReplay::operations(there).size();
+        for (int round = 0; round < 2; ++round)
+            QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        QCOMPARE(SpaceReplay::operations(here).size(), mine);
+        QCOMPARE(SpaceReplay::operations(there).size(), theirs);
+    }
+
     void anOlderOmabookStillSyncsByTheManifest() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "On Both"));
@@ -747,7 +786,7 @@ private slots:
         for (const QString &dump : dumps) {
             SamplePairs pairs(data.filePath(dump), dump);
             for (const auto step : {readFurtherAndChangeDetailsBothSides, readFurtherThere, changeDetailsWithNoTime,
-                                    makeAndRemoveCollections, removeOnEachSide})
+                                    makeAndRemoveCollections, removeOnEachSide, learnOnEachSide})
                 if (!QTest::currentTestFailed())
                     step(pairs);
             QVERIFY(!QTest::currentTestFailed());

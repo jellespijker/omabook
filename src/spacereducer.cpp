@@ -259,10 +259,15 @@ QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops
 
 namespace {
 
-ReducedState reduceOf(std::span<const SpaceOperation> ops, const QString &device) {
+// The fields of which every operation counts, not only the last.
+[[nodiscard]] bool grows(const QString &field) {
+    return field.startsWith("seen:"_L1) || field == "revealed"_L1 || field == "link"_L1 || field == "range"_L1 || field == "same_as"_L1;
+}
+
+ReducedState reduceOf(std::span<const SpaceOperation> ops, std::span<const SpaceOperation> links, const QString &device) {
     ReducedState state;
-    const QHash<QString, QString> canonical = SpaceReducer::sameAs(ops);
-    const QHash<QString, QString> things = SpaceReducer::sameAs(ops, "node"_L1);
+    const QHash<QString, QString> canonical = SpaceReducer::sameAs(links);
+    const QHash<QString, QString> things = SpaceReducer::sameAs(links, "node"_L1);
     for (const SpaceOperation &op : ops) {
         if (isSameAs(op) || (!device.isEmpty() && op.device != device))
             continue;
@@ -284,6 +289,32 @@ ReducedState reduceOf(std::span<const SpaceOperation> ops, const QString &device
 
 } // namespace
 
-ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) { return reduceOf(ops, {}); }
+ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) { return reduceOf(ops, ops, {}); }
 
-ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QString &device) { return reduceOf(ops, device); }
+ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QString &device) {
+    // What its rows are: of each field the last it wrote, whatever its stamp
+    // (one taken from elsewhere keeps the stamp it had there); of what only
+    // grows, all of it.
+    QHash<QString, qsizetype> last;
+    QList<SpaceOperation> written;
+    for (const SpaceOperation &op : ops) {
+        if (op.device != device)
+            continue;
+        if (grows(op.field)) {
+            written << op;
+            continue;
+        }
+        const QString key = op.entity + u'\x1f' + op.id + u'\x1f' + op.field;
+        const auto at = last.constFind(key);
+        if (at == last.cend()) {
+            last.insert(key, written.size());
+            written << op;
+            continue;
+        }
+        // In the order it wrote them: by sequence in one space, else by stamp.
+        const SpaceOperation &before = written.at(*at);
+        if (op.space == before.space ? op.seq > before.seq : op.hlc > before.hlc)
+            written[*at] = op;
+    }
+    return reduceOf(written, ops, device);
+}
