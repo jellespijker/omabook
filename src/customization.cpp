@@ -424,7 +424,7 @@ center`, or the reader's "Aa" panel), which win over these.
 | `pages` | Pages side by side in the reader: `"auto"` (as many as the window has room for, each with lines of at least 45 characters, up to three), or `1`, `2` or `3`, shown where each page keeps 45 characters (the most that do otherwise). An older `spread` is carried over | `"auto"` |
 | `pane_widths` | How wide each side pane was dragged, in pixels, by name (`details`, `contents`, `assistant`, `graph`, `graph_details`, `plugins`): `{"assistant": 440}`. A pane that isn't named is as wide as it comes | |
 | `sync_target` | The computer `sync` talks to: `name` or `name:folder` | |
-| `ai_provider` | `auto`, `claude`, `agy`, `anthropic`, `command` or `off` | `auto` |
+| `ai_provider` | `auto`, `claude`, `agy`, `anthropic`, `openai` (a server: `ai_endpoint` says which, `{"preset": "omarchy-local", "ollama", "openai" or "custom", "base_url": "..."}`; its key is kept in the keyring, never here), `command` or `off` | `auto` |
 | `ai_command` | The command for `command`; it is given `OMABOOK_AI_TIER` (`main` or `quick`) and `OMABOOK_AI_MODEL` | |
 | `ai_models` | The model for each kind of work, per AI: `{"claude": {"main": "opus", "quick": "haiku"}}`. `main` is for answers and writing, `quick` for reading and parsing (the knowledge graph, judging look-ups, finding series); a missing or empty name is the default. `ai_model` is the older name of the Anthropic API's main model | |
 | `plugins` | `{"<plugin id>": true or false}`; see `omabook plugins` | |

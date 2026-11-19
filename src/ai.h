@@ -264,6 +264,9 @@ private:
 //   "claude", "codex", "agy", "grok", "pi"   that harness, with the
 //                subscription its own command line is signed in with
 //   "anthropic"  the API, with the key from ANTHROPIC_API_KEY
+//   "openai"     a server that speaks the OpenAI-compatible API, the one
+//                `ai_endpoint` names (see AiEndpoints). Automatic never picks
+//                one by itself: where the text goes changes only when asked.
 //   "command"    the command in the settings
 //   "off"        none
 struct AiChoice {
@@ -276,13 +279,16 @@ struct AiChoice {
     };
     using enum Source; // AiChoice::Fallback, as it always read
     Source source = None;
-    QString id;             // "claude", "codex", "agy", "grok", "pi", "anthropic", "command"; empty for none
+    QString id;             // "claude", "codex", "agy", "grok", "pi", "anthropic", "openai", "command"; empty for none
     QString name;           // "Claude Code"
     QString program;        // the harness's executable, when it is one
     QString omarchyDefault; // the id Omarchy names, when it names one
     QString problem;        // English
+    QString modelsUnder;    // for "openai": the server's own, as AiEndpoints::modelsKey says
 
     bool available() const noexcept { return source != None; }
+    // What `ai_models` keeps this AI's two models under: its id, or the server's.
+    QString modelsKey() const { return modelsUnder.isEmpty() ? id : modelsUnder; }
     // {"provider", "name", "source", "omarchy_default", "problem"}, as `omabook info --json` reports it.
     QJsonObject toJson() const;
 };
@@ -372,6 +378,18 @@ class AiAgent : public QObject {
     Q_PROPERTY(QString quickDefault READ quickDefault NOTIFY changed)
     Q_PROPERTY(QString mainModel READ mainModel NOTIFY changed)
     Q_PROPERTY(QString quickModel READ quickModel NOTIFY changed)
+    // A server (the "openai" choice): its preset and address, whether a key
+    // is set for it, whether text goes to it unencrypted, and whether
+    // Omarchy's local models are here to be offered. `elsewhereModels` are
+    // those it lists that send the text on to another service (`...:cloud`),
+    // and `modelsProblem` why it listed none.
+    Q_PROPERTY(QString serverPreset READ serverPreset NOTIFY changed)
+    Q_PROPERTY(QString serverUrl READ serverUrl NOTIFY changed)
+    Q_PROPERTY(bool serverHasKey READ serverHasKey NOTIFY changed)
+    Q_PROPERTY(bool serverInTheClear READ serverInTheClear NOTIFY changed)
+    Q_PROPERTY(bool omarchyLocal READ omarchyLocal NOTIFY changed)
+    Q_PROPERTY(QStringList elsewhereModels READ elsewhereModels NOTIFY changed)
+    Q_PROPERTY(QString modelsProblem READ modelsProblem NOTIFY changed)
 
 public:
     explicit AiAgent(Settings *settings, const QString &defaultsFile = {}, QObject *parent = nullptr);
@@ -383,16 +401,30 @@ public:
     QString source() const;
     QString omarchyDefaultName() const;
     bool omarchyDefaultRuns() const;
-    QStringList knownModels() const { return Ai::catalog(m_choice.id).known; }
+    QStringList knownModels() const;
     QString mainChoice() const;
     QString quickChoice() const;
-    QString mainDefault() const { return Ai::catalog(m_choice.id).main; }
-    QString quickDefault() const { return Ai::catalog(m_choice.id).quick; }
+    QString mainDefault() const { return Ai::catalog(m_choice.modelsKey()).main; }
+    QString quickDefault() const { return Ai::catalog(m_choice.modelsKey()).quick; }
     QString mainModel() const { return m_models.main; }
     QString quickModel() const { return m_models.quick; }
     // Chooses the model for "main" or "quick" with the provider in use; an
     // empty name goes back to the default.
     Q_INVOKABLE void setModel(const QString &tier, const QString &name);
+
+    QString serverPreset() const;
+    QString serverUrl() const;
+    bool serverHasKey() const;
+    bool serverInTheClear() const;
+    bool omarchyLocal() const;
+    QStringList elsewhereModels() const;
+    QString modelsProblem() const { return m_modelsProblem; }
+    // Chooses the server: a preset, and the address typed in ("" for the
+    // preset's own). Its models are asked for again.
+    Q_INVOKABLE void setServer(const QString &preset, const QString &url);
+    // Keeps the key for the server in use in the keyring; "" forgets it.
+    // Says why when it couldn't be kept, else "".
+    Q_INVOKABLE QString setServerKey(const QString &key);
 
     std::unique_ptr<AiProvider> makeProvider(QString *why = nullptr) const;
 
@@ -401,12 +433,18 @@ signals:
 
 private:
     void reload();
+    // Asks the server in use for its models, on a thread of its own.
+    void listModels();
 
     Settings *m_settings;
     QString m_file;
     AiChoice m_choice;
     AiModels m_models;
     QStringList m_shown; // what the picker shows, to tell when it changed
+    QString m_listedFor; // the server `m_listed` came from
+    QStringList m_listed;
+    QString m_modelsProblem;
+    int m_listing = 0; // which listing is the latest, so an older one's answer is dropped
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
 };

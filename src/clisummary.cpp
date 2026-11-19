@@ -27,6 +27,7 @@ QString cliSummary() {
            "  convert <id> [--to format]      Convert a book and add the result to it\n"
            "  export <id> <folder>            Copy a book's file out of the library\n"
            "  ask <book|all> <question>       Ask the AI about a book, or about the whole library\n"
+           "  ai use|models|key               A server as the AI (Omarchy's local models, Ollama, OpenAI, ...)\n"
            "  graph show|find|node|build|...  The knowledge graph of what is read; see omabook graph --help\n"
            "  tidy [--ai] [--apply]           List duplicates, author spellings and series to tidy; make the changes\n"
            "  suggest [--no-check]            Have the AI suggest what to read next, checked against the reading sites\n"

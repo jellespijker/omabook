@@ -21,6 +21,7 @@
 #include <unistd.h>
 
 #include "ai.h"
+#include "aicommands.h"
 #include "aisearch.h"
 #include "bookops.h"
 #include "calibreplugin.h"
@@ -746,9 +747,9 @@ int info(const QStringList &arguments) {
         const QJsonObject described = Ai::describe(settings);
         const QString library = command.parser.isSet("library") ? QDir(command.parser.value("library")).absolutePath()
                                                                 : settings.libraryPath();
+        const Customization custom;
+        const ThemeSource theme = resolveTheme(custom.style().value("theme").toString(), ThemePlaces::here(custom.folder()));
         if (command.json()) {
-            const Customization custom;
-            const ThemeSource theme = resolveTheme(custom.style().value("theme").toString(), ThemePlaces::here(custom.folder()));
             printJson(QJsonObject{{"version", OMABOOK_VERSION}, {"library", library},
                                   {"config_folder", custom.folder()}, {"ai", described}, {"theme", theme.toJson()}});
         } else {
@@ -763,8 +764,6 @@ int info(const QStringList &arguments) {
             }
             if (ai.source == AiChoice::OmarchyDefault) print(stdout, "\tOmarchy's default agent");
             if (!ai.problem.isEmpty()) print(stdout, "\t" + ai.problem);
-            const Customization custom;
-            const ThemeSource theme = resolveTheme(custom.style().value("theme").toString(), ThemePlaces::here(custom.folder()));
             print(stdout, "theme:\t" + theme.name + "\n\t" + theme.why);
         }
         return 0;
@@ -2160,6 +2159,7 @@ constexpr std::array cliCommands{
     CliCommand{"convert"_L1, convert},
     CliCommand{"export"_L1, exportBook},
     CliCommand{"ask"_L1, ask},
+    CliCommand{"ai"_L1, runAiCli},
     CliCommand{"graph"_L1, runGraphCli},
     CliCommand{"progress"_L1, progress},
     CliCommand{"format"_L1, format},

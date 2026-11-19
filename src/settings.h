@@ -169,11 +169,16 @@ public:
     void setCalibreLibrary(const QString &folder, const QString &answer);
 
     // "auto" (Omarchy's default agent), a harness by name ("claude", "codex",
-    // "agy", "grok", "pi"), "anthropic", "command" or "off"; see AiChoice in ai.h.
+    // "agy", "grok", "pi"), "anthropic", "openai" (a server), "command" or
+    // "off"; see AiChoice in ai.h.
     QString aiProvider() const { return m_values.value("ai_provider").toString("auto"); }
     void setAiProvider(const QString &provider) { set("ai_provider", provider); }
     QString aiCommand() const { return m_values.value("ai_command").toString(); }
     void setAiCommand(const QString &command) { set("ai_command", command.trimmed()); }
+    // The server "openai" asks: {"preset": "ollama", "base_url": "..."}; see
+    // AiEndpoints. Never its key, which is kept in the keyring.
+    QJsonObject aiEndpoint() const { return m_values.value("ai_endpoint").toObject(); }
+    void setAiEndpoint(const QJsonObject &endpoint) { set("ai_endpoint", endpoint); }
     QString aiModel() const { return m_values.value("ai_model").toString(); }
     void setAiModel(const QString &model) { set("ai_model", model.trimmed()); }
     // The model chosen for a kind of work ("main" or "quick") with one

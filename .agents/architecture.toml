@@ -41,9 +41,9 @@ modules = [
 summary = "What talks to the outside or to a model: AI, metadata sources, reading sites, Calibre, plugins, the help's content."
 uses = ["library", "formats", "foundation"]
 modules = [
-  "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
+  "ai", "aichoice", "aiendpoint", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
-  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
+  "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "tour", "whatsnew",
 ]
 
@@ -60,7 +60,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
+modules = ["aicommands", "cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

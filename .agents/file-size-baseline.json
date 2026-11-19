@@ -13,7 +13,7 @@
     "src/PluginsDialog.qml": 704,
     "src/ReaderView.qml": 935,
     "src/ReadingSitesDialog.qml": 506,
-    "src/ai.cpp": 850,
+    "src/ai.cpp": 564,
     "src/backend.cpp": 587,
     "src/booklistmodel.cpp": 802,
     "src/calibreplugin.cpp": 567,
