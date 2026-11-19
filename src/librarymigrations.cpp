@@ -314,6 +314,9 @@ const QList<QStringList> migrations{
      "CREATE VIEW IF NOT EXISTS live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value FROM snapshot_ops "
      "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value FROM ops AS o "
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)"},
+    // The snapshot takes the place of the operations it covers (#2), so what
+    // looks up one thing's operations finds them there as it does in `ops`.
+    {"CREATE INDEX IF NOT EXISTS snapshot_ops_entity ON snapshot_ops(entity, id, field)"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
