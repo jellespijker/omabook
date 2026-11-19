@@ -112,6 +112,27 @@ Item {
                 }
                 color: theme.colors.muted
             }
+            // A book in the format of a plugin that isn't installed here (one
+            // a sync brought from a computer that has it): kept, and read
+            // once the plugin is installed.
+            Label {
+                objectName: "detailsNeedsPlugin"
+                Layout.fillWidth: true
+                visible: (pane.book.needsPlugin || "") !== ""
+                // "Needs the Storyteller plugin to be read here."
+                text: qsTr("Needs the %1 plugin to be read here.").arg(pane.book.needsPlugin || "")
+                textFormat: Text.PlainText
+                color: theme.accent
+                wrapMode: Text.Wrap
+            }
+            AppButton {
+                objectName: "installNeededPlugin"
+                visible: (pane.book.needsPlugin || "") !== ""
+                // "Install Storyteller"
+                text: qsTr("Install %1").arg(pane.book.needsPlugin || "")
+                focusPolicy: Qt.NoFocus
+                onClicked: win.installPlugin(pane.book.pluginAddress)
+            }
             // Found by the search through what is known of it rather than its
             // details: the thing that did, to see in the graph or to go back
             // to where it was learned.

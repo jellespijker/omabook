@@ -42,7 +42,7 @@ uses = ["library", "formats", "foundation"]
 modules = [
   "ai", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
-  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
+  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "tour", "whatsnew",
 ]
 

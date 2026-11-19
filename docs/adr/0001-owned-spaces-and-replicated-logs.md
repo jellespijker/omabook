@@ -374,6 +374,13 @@ travel as today. To other people a space carries a book's details, never its fil
 has the book is matched by hash or identifiers, and one who doesn't gets a wish. A household space
 can say its files travel too.
 
+As built (#25): a book in the format of a plugin that isn't installed (a Storyteller story) still
+travels between one's own computers and is kept there, saying which plugin reads it (the plugins'
+registry lists the formats each reads). The graph of its story world (its `world:…` space) goes
+with it by the log, between one's own computers only, and is taken there as the world's own, never
+matched with the general graph. The manifest sync with an Omabook from before the log carries no
+world.
+
 ## Migration of existing installs
 
 Every install today has a library written by the manifest sync, and some are kept in step with each

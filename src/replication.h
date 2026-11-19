@@ -19,7 +19,7 @@
 // What travels by the log so far is the books' reading places, details and
 // what is said of their reading, with the same-as operations that line up the
 // books where two computers' content ids don't (#36, #37), the collections
-// and the general knowledge graph, and whether one follows a subscribed space
+// and the general knowledge graph and story worlds' (#25), and whether one follows a subscribed space
 // (#51); everything else
 // still travels by the manifest, one kind moving over at a time. Two computers exchange what they have of it, per
 // space and device the last sequence number (`{laptop: 812, desktop: 77}`),

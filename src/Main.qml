@@ -198,6 +198,8 @@ ApplicationWindow {
         return !!key
     }
     function showPlugins() { pluginList.open() }
+    // The plugin at this address, fetched and shown for a yes or a no, as the plugins' own install does.
+    function installPlugin(address) { pluginList.open(); backend.pluginManager.lookUp(address) }
     // What can be done here, as a list for a pointer or a finger (see
     // CommandMenu.qml): "library", "book", "reader" or "graph"; beside `at`
     // when it is given, and the keyboard back to `focusAfter` before it runs.

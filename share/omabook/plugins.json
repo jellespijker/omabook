@@ -11,6 +11,7 @@
             "permissions": ["files", "http"],
             "omabook": "0.1.4",
             "kinds": ["format", "launcher", "command", "panel", "hook"],
+            "formats": [{"extension": "story", "name": "Storyteller story"}],
             "reviewed": true
         }
     ]

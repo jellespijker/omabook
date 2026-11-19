@@ -26,7 +26,8 @@ namespace {
 // that line up its ids. Never where its files are here (`path`, `formats`):
 // those are this computer's own. A book's removal travels as its tombstone.
 // Every field of a collection travels, and everything of the general graph
-// (the personal space's: a story world's belongs to its story).
+// (the personal space's) and of a story's world (its own space, `world:…`),
+// which goes where its story goes (#25).
 constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,      "authors"_L1,    "series"_L1,      "series_index"_L1,
                                 "publisher"_L1,   "language"_L1,  "isbn"_L1,       "published"_L1,  "description"_L1, "tags"_L1,
                                 "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
@@ -39,7 +40,8 @@ constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,   
         fields << u"'"_s + field + u"'"_s;
     return u"((o.entity = 'book' AND (o.field IN ("_s + fields.join(u", "_s)
            + u") OR o.field LIKE 'tag:%')) OR o.entity = 'collection' "
-             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log', 'subscription') AND s.name LIKE 'personal:%')) "
+             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log', 'subscription') "
+             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%'))) "
              // A space this computer subscribes to, and a shared one, travel to one's
              // other computers sealed beside the log (SpaceCarry, #51), never in it.
              "AND s.name NOT LIKE 'shared:%' AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
@@ -110,7 +112,7 @@ bool Replication::travels(const SpaceOperation &op) {
         return true;
     if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1
         || op.entity == "subscription"_L1)
-        return op.space.startsWith("personal:"_L1);
+        return op.space.startsWith("personal:"_L1) || op.space.startsWith("world:"_L1);
     return op.entity == "book"_L1
            && (std::ranges::any_of(bookFields, [&op](QLatin1StringView field) { return op.field == field; })
                || op.field.startsWith("tag:"_L1));

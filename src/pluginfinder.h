@@ -21,7 +21,11 @@
 //
 //   {"version": 1, "plugins": [{"name", "title", "description",
 //     "repository": "owner/repo", "subfolder", "ref", "author", "license",
-//     "permissions": [...], "omabook": "0.1.4", "kinds": [...], "reviewed"}]}
+//     "permissions": [...], "omabook": "0.1.4", "kinds": [...], "reviewed",
+//     "formats": [{"extension", "name"}]}]}
+//
+// `formats`, which may be left out, are the book formats the plugin reads: a
+// book in one is kept where the plugin isn't installed (pluginformats.h).
 //
 // Discovery: repositories on GitHub with the topic "omabook-plugin", found
 // with GitHub's search, each looked at before it is offered: its plugin.json

@@ -171,10 +171,7 @@ QVariantMap bookToMap(const Book &book, const QString &libraryRoot) {
             cover.setQuery(QString::number(file.lastModified().toSecsSinceEpoch()));
         }
     }
-    QStringList names;
-    for (const QString &format : book.formats)
-        if (!names.contains(Formats::name(format)))
-            names << Formats::name(format);
+    const std::optional<PluginFormat> needed = Formats::neededPlugin(book.formats);
     return {
         {"bookId", book.id},
         {"title", book.meta.title},
@@ -188,7 +185,10 @@ QVariantMap bookToMap(const Book &book, const QString &libraryRoot) {
         {"description", book.meta.description},
         {"tags", book.meta.tags.join(", ")},
         {"formats", book.formats},
-        {"formatNames", names.join(", ")},
+        {"formatNames", Formats::names(book.formats)},
+        // The plugin it needs to be read here, which isn't installed: its title and where it is installed from.
+        {"needsPlugin", needed ? needed->title : QString()},
+        {"pluginAddress", needed ? needed->address : QString()},
         {"cover", cover},
         {"percent", book.percent},
         {"folder", folder},

@@ -298,6 +298,8 @@
   "Import Your Shelves": "Importer vos étagères",
   "Import from Calibre": "Importer depuis Calibre",
   "Importing from Calibre": "Importation depuis Calibre",
+  "Install %1": "Installer %1",
+  "Needs the %1 plugin to be read here.": "Il faut le plugin %1 pour le lire ici.",
   "Install %1?": "Installer %1 ?",
   "Install a Plugin": "Installer un plugin",
   "Install a Plugin From a Folder": "Installer un plugin depuis un dossier",

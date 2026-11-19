@@ -32,6 +32,7 @@ struct Taking {
     const QHash<QString, QString> &names; // NOLINT(cppcoreguidelines-avoid-const-or-ref-data-members): short-lived stack context
     Graph graph;
     QHash<QString, qint64> nodes;
+    QSet<QString> worlds; // the scopes of the worlds things were taken of
     int changed = 0;
 
     [[nodiscard]] QString standsFor(const QString &gid) const { return same.value(gid, gid); }
@@ -118,7 +119,7 @@ void takeSeen(Taking &taking, qint64 id, const ReducedNode &node) {
         // By the name it has here: the log's may be the other side's.
         if (const std::optional<GraphNode> here = taking.graph.node(id)) {
             ++taking.changed;
-            taking.graph.upsert({}, here->kind, here->name, {}, {}, at, seen->anchor);
+            taking.graph.upsert(here->scope, here->kind, here->name, {}, {}, at, seen->anchor);
         }
     }
 }
@@ -156,6 +157,29 @@ void takeThings(Taking &taking) {
     for (auto node = taking.merged.nodes.cbegin(); node != taking.merged.nodes.cend(); ++node)
         if (isThing(*node))
             takeSeen(taking, taking.nodes.value(node.key()), *node);
+}
+
+// The things of a story's world (a scope of its own, `world:…`): the
+// world's alone, never matched with the general graph's, and known by the
+// same id on every computer, which is made of the scope, kind and name.
+void takeWorldThings(Taking &taking) {
+    for (auto node = taking.merged.nodes.cbegin(); node != taking.merged.nodes.cend(); ++node) {
+        const QString scope = fieldOf(*node, u"scope"_s);
+        const QString kind = fieldOf(*node, u"kind"_s);
+        const QString name = fieldOf(*node, u"name"_s);
+        if (SpaceReducer::isRemoved(node->alive, node->removed) || scope.isEmpty() || kind.isEmpty() || name.isEmpty() || madeHere(kind))
+            continue;
+        qint64 id = taking.graph.named(scope, kind, name);
+        if (id == 0) {
+            QJsonObject data = QJsonDocument::fromJson(fieldOf(*node, u"data"_s).toUtf8()).object();
+            data.remove("aliases");
+            id = taking.graph.upsert(scope, kind, name, {}, data);
+            ++taking.changed;
+        }
+        taking.nodes.insert(taking.standsFor(node.key()), id);
+        taking.worlds.insert(scope);
+        takeSeen(taking, id, *node);
+    }
 }
 
 // Every name a linked thing goes by on either side, it goes by here: last, once
@@ -229,8 +253,9 @@ void takeFacts(Taking &taking) {
 
 void takeEdges(Taking &taking) {
     QHash<QString, GraphEdge> here;
-    for (const GraphEdge &edge : taking.graph.whole({}, std::numeric_limits<int>::max()).edges)
-        here.insert(QString("%1 %2 %3").arg(edge.source).arg(edge.target).arg(edge.kind), edge);
+    for (const QString &scope : QStringList{QString()} + taking.worlds.values())
+        for (const GraphEdge &edge : taking.graph.whole(scope, std::numeric_limits<int>::max()).edges)
+            here.insert(QString("%1 %2 %3").arg(edge.source).arg(edge.target).arg(edge.kind), edge);
     for (const ReducedEdge &edge : taking.merged.edges) {
         if (!travels(taking, edge))
             continue;
@@ -275,8 +300,10 @@ int SyncTakeGraph::take(Library &library, const ReducedState &merged, const QHas
                   .names = things.names,
                   .graph = Graph(library),
                   .nodes = {},
+                  .worlds = {},
                   .changed = 0};
     takeThings(taking);
+    takeWorldThings(taking);
     takeFacts(taking);
     takeEdges(taking);
     takeDays(taking);

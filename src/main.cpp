@@ -26,12 +26,26 @@
 #include "log.h"
 #include "librarian.h"
 #include "manual.h"
+#include "pluginformats.h"
 #include "portalfilepicker.h"
 #include "reader.h"
 #include "settings.h"
 #include "theme.h"
 #include "themechoice.h"
 #include "translator.h"
+
+namespace {
+
+// A command draws no window: it needs no display, whatever the desktop says.
+void drawNoWindow() {
+    // What the desktop had set, for a command that opens a window of its
+    // own (Folio's "open"): that window must not inherit "offscreen".
+    if (!qEnvironmentVariableIsSet("OMABOOK_DESKTOP_QPA"))
+        qputenv("OMABOOK_DESKTOP_QPA", qgetenv("QT_QPA_PLATFORM").isEmpty() ? QByteArray("-") : qgetenv("QT_QPA_PLATFORM"));
+    qputenv("QT_QPA_PLATFORM", "offscreen");
+}
+
+} // namespace
 
 int main(int argc, char *argv[]) {
     // Omabook themes itself from Omarchy's palette; the desktop's Qt platform
@@ -68,13 +82,8 @@ int main(int argc, char *argv[]) {
             return 1;
         }
     }
-    if (windowless) {
-        // What the desktop had set, for a command that opens a window of its
-        // own (Folio's "open"): that window must not inherit "offscreen".
-        if (!qEnvironmentVariableIsSet("OMABOOK_DESKTOP_QPA"))
-            qputenv("OMABOOK_DESKTOP_QPA", qgetenv("QT_QPA_PLATFORM").isEmpty() ? QByteArray("-") : qgetenv("QT_QPA_PLATFORM"));
-        qputenv("QT_QPA_PLATFORM", "offscreen");
-    }
+    if (windowless)
+        drawNoWindow();
 
     QGuiApplication app(argc, argv);
     app.setApplicationName("omabook");
@@ -82,6 +91,9 @@ int main(int argc, char *argv[]) {
     // What happens is written to the log (omabook logs), from the window and
     // from every command alike.
     Log::install(command ? "cli" : "window");
+    // A book in the format of a plugin that isn't installed here is kept, and
+    // says which plugin reads it.
+    PluginFormats::know();
     if (!command)
         qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
     if (command)

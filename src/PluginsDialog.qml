@@ -630,12 +630,12 @@ AppPopup {
         interval: 0
         onTriggered: if (dialog.adrift) keyboard.forceActiveFocus()
     }
-    // An update that asks for more than the version installed is put on
-    // offer by the manager; it is shown for a yes or a no.
+    // What the manager puts on offer by itself (an update that asks for more
+    // than the version installed, a plugin a book needs) is shown for a yes or a no.
     Connections {
         target: dialog.manager
         function onOfferChanged() {
-            if (dialog.opened && dialog.manager.offer.update === true)
+            if (dialog.opened && Object.keys(dialog.manager.offer).length > 0)
                 installation.review()
         }
     }

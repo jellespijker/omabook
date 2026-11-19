@@ -40,6 +40,17 @@ QStringList entryKeysOf(const QJsonObject &theirs) {
                               BookMeta::fromJson(theirs).authors);
 }
 
+// Why a book in a plugin's format was refused by an Omabook where nothing
+// reads it: one from before it kept such a book for the plugin it needs, or
+// one that doesn't know that plugin.
+QString notReadThere(const QString &format) {
+    if (const std::optional<PluginFormat> plugin = Formats::pluginFormat(format))
+        return QString("there, nothing reads .%1 files, and Omabook there is too old to keep the book until it does: install the %2 "
+                       "plugin there (omabook plugin add %3), or update Omabook there")
+            .arg(format, plugin->title, plugin->plugin);
+    return QString("there, nothing reads .%1 files; install the plugin that made it there").arg(format);
+}
+
 // Counts one book in a summary, with its title for a terminal.
 void note(int &count, QStringList &titles, const QString &title) {
     ++count;
@@ -328,10 +339,9 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         else if (why.isEmpty() && theirId <= 0)
             why = "Omabook there added nothing: " + QString::fromUtf8(added.output).simplified().left(160);
         if (!why.isEmpty()) {
-            // A book in a format of a plugin there isn't: say which.
+            // A book in a format of a plugin there isn't, which that Omabook doesn't keep for it either: say which.
             if (why.contains("is not a book format Omabook knows"))
-                why = QString("there, nothing reads .%1 files; install the plugin that made it there (for a story: omabook plugin add "
-                              "storyteller)").arg(files.isEmpty() ? QString() : files.first().format);
+                why = notReadThere(files.isEmpty() ? QString() : files.first().format);
             summary.problems << book.meta.title + " could not be sent to " + remote.host() + ": " + why;
             qCWarning(lcSync).noquote() << "a book could not be sent:" << why.left(200);
             continue;
