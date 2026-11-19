@@ -142,9 +142,9 @@ As built (#47, #48):
   bytes `omabook-op` 1). Operations from before carry neither and are trusted as one's own. A snapshot
   (compaction) keeps each operation it holds as it was, signature and all, so what it holds can still
   be verified by whoever it is sent to; nothing is re-signed. A published space's operations are its
-  own (its space, its devices, its numbers), so they are signed afresh by the owner when the space is
-  taken (`PublishedSpace::snapshot`), when the owner is this library's person. The `.omabook-space`
-  file does not carry the signatures yet (a minor version of it can add them at each operation's end).
+  own (its space, its devices, its numbers), which is not what was signed at home, so they go without
+  those signatures. Signing them by the owner as the space has them, and carrying that in the
+  `.omabook-space` file (a minor version of it may add to each operation's end), is still to come.
 - **Verified before replaying.** Replication sends an operation's signer and signature after its nine
   parts to a peer that says it signs (`"signs": 1`), and only the nine to an Omabook from before. The
   side that takes operations verifies every signed one first: one that is not as its author signed it

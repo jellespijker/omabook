@@ -243,7 +243,7 @@ private slots:
         QCOMPARE(here.progress(sharedHere).section, 2);
     }
 
-    void aPublishedSpaceIsSignedByItsOwner() {
+    void aPublishedSpaceCarriesNoSignatureOfHome() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("book.epub"), "Shared Out"));
         Library library(dir.filePath("Library"));
@@ -252,21 +252,14 @@ private slots:
         QVERIFY(library.add(dir.filePath("book.epub")).error.isEmpty());
         const auto shelf = library.addCollection("Out", "Shared");
         QVERIFY(shelf);
+        QVERIFY(std::ranges::all_of(SpaceReplay::operations(library), [](const SpaceOperation &op) { return SignedOps::verify(op); }));
+        // Each operation as the space has it (its own space, devices and
+        // numbers) is not what was signed at home, so it goes without that signature.
         const auto published = PublishedSpace::snapshot(library, *shelf, {}, {.name = "Ada", .person = library.person()->id()});
         QVERIFY2(published, qPrintable(published ? QString() : published.error()));
         QVERIFY(!published->operations.isEmpty());
-        // Each as the space has it (its own space, devices and numbers), signed by the owner.
-        for (const SpaceOperation &op : published->operations) {
-            QCOMPARE(op.signer, library.person()->id());
-            QVERIFY(SignedOps::verify(op));
-        }
-        // Published as someone this library is not, nothing is signed in their name.
-        const auto other = Person::generate();
-        QVERIFY(other);
-        const auto unsignedSpace = PublishedSpace::snapshot(library, *shelf, {}, {.name = "Bo", .person = other->id()});
-        QVERIFY(unsignedSpace);
-        for (const SpaceOperation &op : unsignedSpace->operations)
-            QVERIFY(op.signature.isEmpty() && op.author == other->id());
+        for (const SpaceOperation &op : published->operations)
+            QVERIFY(op.signer.isEmpty() && op.signature.isEmpty() && op.author == library.person()->id());
     }
 
     void unsignedOperationsAreTakenOnlyFromOnesOwnComputers() {
