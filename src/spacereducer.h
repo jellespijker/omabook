@@ -128,5 +128,9 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 // taken from elsewhere keeps the stamp it had there), with the links of all
 // of them.
 [[nodiscard]] ReducedState reduce(std::span<const SpaceOperation> ops, const QString &device);
+// The same, each book and thing under the id its own operations name it by,
+// no same-as link followed: what that computer removed by name (a file's
+// hash, an entry key), which a link must not lend to another copy (#58).
+[[nodiscard]] ReducedState reduceByName(std::span<const SpaceOperation> ops, const QString &device);
 
 } // namespace SpaceReducer

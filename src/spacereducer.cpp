@@ -295,10 +295,12 @@ ReducedState reduceOf(std::span<const SpaceOperation> ops, std::span<const Space
 
 ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops) { return reduceOf(ops, ops, {}); }
 
-ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QString &device) {
-    // What its rows are: of each field the last it wrote, whatever its stamp
-    // (one taken from elsewhere keeps the stamp it had there); of what only
-    // grows, all of it.
+namespace {
+
+// What a computer's rows are: of each field the last its device wrote,
+// whatever its stamp (one taken from elsewhere keeps the stamp it had there);
+// of what only grows, all of it.
+[[nodiscard]] QList<SpaceOperation> writtenBy(std::span<const SpaceOperation> ops, const QString &device) {
     QHash<QString, qsizetype> last;
     QList<SpaceOperation> written;
     for (const SpaceOperation &op : ops) {
@@ -320,5 +322,15 @@ ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QSt
         if (op.space == before.space ? op.seq > before.seq : op.hlc > before.hlc)
             written[*at] = op;
     }
-    return reduceOf(written, ops, device);
+    return written;
+}
+
+} // namespace
+
+ReducedState SpaceReducer::reduce(std::span<const SpaceOperation> ops, const QString &device) {
+    return reduceOf(writtenBy(ops, device), ops, device);
+}
+
+ReducedState SpaceReducer::reduceByName(std::span<const SpaceOperation> ops, const QString &device) {
+    return reduceOf(writtenBy(ops, device), {}, device);
 }
