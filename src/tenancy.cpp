@@ -116,6 +116,7 @@ bool settle(const Library &library, const Placed &wanted) {
     // Written by hand in a tenant: in it, and giving its ends nothing (#109).
     const QString written = TenancySchema::writtenHere(u"e"_s);
     const QString writtenIn = u"SELECT key FROM json_each("_s + TenancySchema::notesOf(u"e"_s) + u", '$.tenants')"_s;
+    const QString both = TenancySchema::tenantOfBoth(u"s"_s, u"t"_s);
     return {
         u"DELETE FROM tenant_nodes"_s,
         u"DELETE FROM tenant_edges"_s,
@@ -161,11 +162,11 @@ bool settle(const Library &library, const Placed &wanted) {
             + inBook,
         // Relation by relation (CROSS JOIN keeps that order): what the planner
         // knows of a large library would otherwise have it go tenant by
-        // tenant through the things, several times slower (#104).
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, e.id FROM graph_edges AS e "
-        "CROSS JOIN tenant_nodes AS s ON s.node_id = e.source CROSS JOIN tenant_nodes AS t ON t.node_id = e.target AND t.tenant = s.tenant "
-        "WHERE "_s
-            + TenancySchema::whereEndsAre(u"e"_s, u"s.tenant"_s),
+        // tenant through the things, several times slower (#104). An end in
+        // tenant 0 is in each tenant.
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM graph_edges AS e "
+            "CROSS JOIN tenant_nodes AS s ON s.node_id = e.source CROSS JOIN tenant_nodes AS t ON t.node_id = e.target AND "_s
+            + TenancySchema::seenTogether(u"s"_s, u"t"_s) + u" WHERE "_s + TenancySchema::whereEndsAre(u"e"_s, both),
         u"INSERT OR IGNORE INTO tenants (gid) SELECT DISTINCT j.key FROM graph_edges AS e, json_each("_s + TenancySchema::notesOf(u"e"_s)
             + u", '$.tenants') AS j WHERE "_s + written + u" UNION SELECT 'library' WHERE EXISTS (SELECT 1 FROM graph_edges AS e WHERE "_s
             + written + u")"_s,

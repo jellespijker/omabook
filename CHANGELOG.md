@@ -23,6 +23,14 @@ moves those lines under its version.
 - A plugin can keep data of its own in the change log (ADR 0002, #76): `omabook.log.set(entity, id, fields)`, `omabook.log.add(entity, id, set, items, removed)` and `omabook.log.remove(entity, id, set, keys)` write it, signed as you, and `omabook.log.read(entity, id)` and `omabook.log.list(entity)` read it back. It goes to your other computers at a sync and merges there: of a field the later stays, and what two computers added to a set (the strokes of a page) is all kept, with an erasing, or a page torn out, going too. It is never a book, a collection or the graph, stays on your computers (no space takes it yet), is compacted like the rest, and is never sent to an Omabook from before, which would leave it out. A write of more than 64 KiB, or of more than 1000 items, throws; what comes over such limits from elsewhere is refused and said in the sync's summary. `omabook.log(...)` writes the plugin's log as before. The library's format goes up by one for it (a copy is kept first).
 - Justified text is hyphenated by the book's language: a long word is broken at the end of a line where its language's rules allow, as LibreOffice breaks it, so justified lines are no longer filled with wide gaps. It uses the hyphenation dictionaries LibreOffice uses (`hyphen-en`, `hyphen-de`, `hyphen-nl` and the other `hyphen-*` packages); a language without one is set as before. *Hyphenate* in the *Aa* panel (the `hyphenation` reading-format option, for every book, a collection or one book) turns it off. The hyphens are only on the page: selected and copied text, search, the graph's marks and the places in a chapter are as they are without them (#69).
 
+## [0.1.8.1] - 2026-11-20
+
+0.1.8 was tagged but its package never built; this is the first release of what 0.1.8 brought.
+
+### Fixed
+
+- A relation of no book between a thing of a top-level collection's graph and one that every collection sees (put in by hand before collections had graphs of their own, or a plugin's world) is seen again in that collection's graph, and counts there in the order of the graph's window. Such relations were in no collection's graph once one of their ends was met in a book: Storyteller's plan lost a person's ties to the rest of the cast as soon as a chapter mentioned that person (#112).
+
 ## [0.1.8] - 2026-11-20
 
 ### Fixed
@@ -237,7 +245,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.8.1...HEAD
+[0.1.8.1]: https://github.com/jellespijker/omabook/compare/v0.1.8...v0.1.8.1
 [0.1.8]: https://github.com/jellespijker/omabook/compare/v0.1.7.1...v0.1.8
 [0.1.7.1]: https://github.com/jellespijker/omabook/compare/v0.1.7...v0.1.7.1
 [0.1.7]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...v0.1.7

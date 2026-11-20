@@ -35,6 +35,7 @@ namespace {
     const QString inBook = u"NOT "_s + across(u"NEW"_s);
     // Written by hand in a tenant, it gives its ends nothing either.
     const QString notMade = written ? u" AND NOT "_s + TenancySchema::writtenHere(u"NEW"_s) : QString();
+    const QString both = TenancySchema::tenantOfBoth(u"s"_s, u"t"_s);
     QStringList all{
         // Learned in a book: both ends are that book's, and so is the relation.
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT tenant, NEW.source FROM tenant_books WHERE book_id = NEW.book_id "
@@ -57,12 +58,13 @@ namespace {
             + TenancySchema::madeHere(u"o"_s) + u"))"_s,
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT tenant, NEW.id FROM tenant_books WHERE book_id = NEW.book_id AND "_s
             + inBook,
-        // Across books, or of no book: where both ends are.
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, NEW.id FROM tenant_nodes AS s "
-        "JOIN tenant_nodes AS t ON t.tenant = s.tenant AND t.node_id = NEW.target WHERE s.node_id = NEW.source AND "_s
-            + (written ? TenancySchema::whereEndsAre(u"NEW"_s, u"s.tenant"_s)
-                       : u"(NEW.book_id = 0 OR ("_s + across(u"NEW"_s)
-                             + u" AND s.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = NEW.book_id)))"_s),
+        // Across books, or of no book: where both ends are (an end in tenant 0 is in each).
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", NEW.id FROM tenant_nodes AS s "
+            "JOIN tenant_nodes AS t ON t.node_id = NEW.target AND "_s + TenancySchema::seenTogether(u"s"_s, u"t"_s)
+            + u" WHERE s.node_id = NEW.source AND "_s
+            + (written ? TenancySchema::whereEndsAre(u"NEW"_s, both)
+                       : u"(NEW.book_id = 0 OR ("_s + across(u"NEW"_s) + u" AND "_s + both
+                             + u" IN (SELECT tenant FROM tenant_books WHERE book_id = NEW.book_id)))"_s),
     };
     if (written) {
         // Written by hand in tenants: in each, and in the whole library's.
@@ -97,10 +99,22 @@ namespace {
 // A thing in a tenant (NEW): no longer of no book, and what hangs on it alone
 // goes with it; `written`, not what was written by hand in another tenant.
 [[nodiscard]] QStringList followingNode(bool written) {
-    const QString shared = written ? TenancySchema::whereEndsAre(u"e"_s, u"NEW.tenant"_s)
-                                   : u"(e.book_id = 0 OR ("_s + across(u"e"_s)
-                                         + u" AND NEW.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = e.book_id)))"_s;
-    return {
+    // The tenant a relation of it is in with its other end (`o`): this one,
+    // or for a thing in tenant 0, which every tenant sees, the other end's.
+    const QString both = u"CASE WHEN NEW.tenant = 0 THEN o.tenant ELSE NEW.tenant END"_s;
+    const QString together = u"(o.tenant = NEW.tenant OR o.tenant = 0 OR NEW.tenant = 0)"_s;
+    const QString shared = written ? TenancySchema::whereEndsAre(u"e"_s, both)
+                                   : u"(e.book_id = 0 OR ("_s + across(u"e"_s) + u" AND "_s + both
+                                         + u" IN (SELECT tenant FROM tenant_books WHERE book_id = e.book_id)))"_s;
+    // In a tenant it had a relation in only through tenant 0, it no longer is:
+    // the relation is not there either, unless written there by hand.
+    const QStringList gone = written ? QStringList{u"DELETE FROM tenant_edges WHERE NEW.tenant <> 0 AND tenant NOT IN (0, NEW.tenant) "
+                                               "AND tenant NOT IN (SELECT tenant FROM tenant_nodes WHERE node_id = NEW.node_id) "
+                                               "AND edge_id IN (SELECT e.id FROM graph_edges AS e WHERE (e.source = NEW.node_id OR "
+                                               "e.target = NEW.node_id) AND NOT "_s
+                                               + TenancySchema::writtenHere(u"e"_s) + u")"_s}
+                                 : QStringList();
+    return gone + QStringList{
         u"DELETE FROM tenant_nodes WHERE NEW.tenant <> 0 AND tenant = 0 AND node_id = NEW.node_id"_s,
         u"DELETE FROM tenant_facts WHERE NEW.tenant <> 0 AND tenant = 0 AND fact_id IN (SELECT id FROM graph_facts WHERE node_id = "
         "NEW.node_id)"_s,
@@ -109,12 +123,10 @@ namespace {
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT NEW.tenant, id FROM graph_facts WHERE node_id = NEW.node_id "
         "AND COALESCE(book_id, 0) = 0"_s
             + (written ? u" AND tenant = ''"_s : QString()),
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_edges AS e "
-        "JOIN tenant_nodes AS o ON o.tenant = NEW.tenant AND o.node_id = e.target WHERE e.source = NEW.node_id AND "_s
-            + shared,
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_edges AS e "
-        "JOIN tenant_nodes AS o ON o.tenant = NEW.tenant AND o.node_id = e.source WHERE e.target = NEW.node_id AND "_s
-            + shared,
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM graph_edges AS e "
+            "JOIN tenant_nodes AS o ON o.node_id = e.target AND "_s + together + u" WHERE e.source = NEW.node_id AND "_s + shared,
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM graph_edges AS e "
+            "JOIN tenant_nodes AS o ON o.node_id = e.source AND "_s + together + u" WHERE e.target = NEW.node_id AND "_s + shared,
     };
 }
 
@@ -151,8 +163,8 @@ namespace {
         // Said in it, at the things met in it.
         for (const auto &[end, other] : {std::pair{u"source"_s, u"target"_s}, std::pair{u"target"_s, u"source"_s}})
             all << u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_seen AS m "
-                   "JOIN graph_edges AS e ON e.%1 = m.node_id JOIN tenant_nodes AS s ON s.tenant = NEW.tenant AND s.node_id = e.%2 "
-                   "JOIN tenant_nodes AS t ON t.tenant = NEW.tenant AND t.node_id = e.%1 WHERE m.book_id = NEW.book_id AND "_s.arg(end,
+                   "JOIN graph_edges AS e ON e.%1 = m.node_id JOIN tenant_nodes AS s ON s.tenant IN (NEW.tenant, 0) AND s.node_id = e.%2 "
+                   "JOIN tenant_nodes AS t ON t.tenant IN (NEW.tenant, 0) AND t.node_id = e.%1 WHERE m.book_id = NEW.book_id AND "_s.arg(end,
                                                                                                                                    other)
                        + TenancySchema::saidIn(u"e"_s, u"NEW.book_id"_s);
     return all;
@@ -354,6 +366,14 @@ QString TenancySchema::whereEndsAre(const QString &row, const QString &tenant) {
            "book_id = %1.book_id)) OR (%1.notes LIKE '%\"books\"%' AND %2 IN (SELECT b.tenant FROM json_each(%4, '$.books') AS j "
            "JOIN global_ids AS g ON g.entity = 'book' AND g.global_id = j.key JOIN tenant_books AS b ON b.book_id = g.local_id)))"_s.arg(
                row, tenant, writtenHere(row), notesOf(row));
+}
+
+QString TenancySchema::seenTogether(const QString &one, const QString &other) {
+    return u"(%2.tenant = %1.tenant OR %1.tenant = 0 OR %2.tenant = 0)"_s.arg(one, other);
+}
+
+QString TenancySchema::tenantOfBoth(const QString &one, const QString &other) {
+    return u"CASE WHEN %1.tenant = 0 THEN %2.tenant ELSE %1.tenant END"_s.arg(one, other);
 }
 
 const QStringList &TenancySchema::writtenColumns() {

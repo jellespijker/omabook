@@ -16,7 +16,8 @@
 //   no book (its authors, series, tags, a question), of that book;
 // - a fact: its book's tenants; of no book, its thing's;
 // - a relation: its book's tenants; across books, or of no book, the tenants
-//   both its ends are in (and its book is in, if it has one);
+//   both its ends are in (and its book is in, if it has one), an end in
+//   tenant 0 counting as in each;
 // - a thing made by hand in a tenant (its data's "tenants", Tenancy::madeInKey)
 //   is in that tenant, and in the whole library's; a relation of no book to a
 //   book's node gives it nothing more, so that a question asked of the
@@ -70,5 +71,10 @@ namespace TenancySchema {
 // in it: across books and in a tenant of its book, of no book and written by
 // no tenant, or said in another book of the tenant.
 [[nodiscard]] QString whereEndsAre(const QString &row, const QString &tenant);
+// Whether two ends' memberships (`one` and `other`, rows of tenant_nodes) are
+// seen together in a tenant: the same one, or one of them tenant 0, which
+// every tenant sees; and which tenant that is (the other's, for an end in 0).
+[[nodiscard]] QString seenTogether(const QString &one, const QString &other);
+[[nodiscard]] QString tenantOfBoth(const QString &one, const QString &other);
 
 } // namespace TenancySchema
