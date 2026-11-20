@@ -208,10 +208,10 @@ private slots:
     }
 
     // A library of 0.1.8.1, at format 32 (#112's step), takes the steps that
-    // came after it on main (#76's, format 33, #110's, 34, and #80's, 35) and not its
-    // own again: the steps are positional, so #112's is 32 on main too.
+    // came after it on main (#76's, format 33, #110's, 34, #80's, 35, and #81's, 36)
+    // and not its own again: the steps are positional, so #112's is 32 on main too.
     void aLibraryOf0181TakesTheStepsAfterItsOwn() {
-        QCOMPARE(LibraryMigrations::currentFormat(), 35);
+        QCOMPARE(LibraryMigrations::currentFormat(), 36);
         const QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString root = dir.filePath(QStringLiteral("Library"));
@@ -235,10 +235,10 @@ private slots:
             const auto restore = qScopeGuard([] { qInstallMessageHandler(s_previous); });
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 35);
+            QCOMPARE(library.formatVersion(), 36);
             QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-32-*.db")}).size(), 1);
         }
-        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 35")), qPrintable(s_brought));
+        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 36")), qPrintable(s_brought));
         QVERIFY(textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'")).contains(plugins));
         QCOMPARE(run(root, QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = 'graph_facts_names'")), 1);
     }

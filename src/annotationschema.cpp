@@ -3,21 +3,26 @@
 #include <QString>
 #include <utility>
 
-// The annotations table made anew with a passage's columns, as SQLite adds a
-// column only once: so the step can be taken again (a library put back to
+namespace {
+
+// The columns of a passage (#80), after the table's first ones.
+constexpr auto passageColumns =
+    "to_section INTEGER NOT NULL DEFAULT 0, to_fraction REAL NOT NULL DEFAULT 0, quote TEXT NOT NULL DEFAULT '', "
+    "quote_before TEXT NOT NULL DEFAULT '', quote_after TEXT NOT NULL DEFAULT '', anchored TEXT NOT NULL "
+    "DEFAULT '', confidence REAL NOT NULL DEFAULT 1, lost INTEGER NOT NULL DEFAULT 0";
+
+// The annotations table made anew with `columns` after its first ones, its
+// rows copied as `copied` lists them from the table as it was, as SQLite adds
+// a column only once: so the step can be taken again (a library put back to
 // the format before). Its rows keep their numbers, and the numbers it gave
 // out stay given (sqlite_sequence), so the change log's ids for removed ones
 // never come back; its triggers are made again with it.
-QStringList AnnotationSchema::passages() {
+QStringList madeAnew(const QString &columns, const QString &copied, const QString &from) {
     const QString table = "CREATE TABLE annotations_next (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                           "book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE, kind TEXT NOT NULL, section INTEGER NOT NULL, "
                           "fraction REAL NOT NULL, text TEXT NOT NULL DEFAULT '', note TEXT NOT NULL DEFAULT '', created INTEGER NOT NULL, "
-                          "to_section INTEGER NOT NULL DEFAULT 0, to_fraction REAL NOT NULL DEFAULT 0, quote TEXT NOT NULL DEFAULT '', "
-                          "quote_before TEXT NOT NULL DEFAULT '', quote_after TEXT NOT NULL DEFAULT '', anchored TEXT NOT NULL DEFAULT '', "
-                          "confidence REAL NOT NULL DEFAULT 1, lost INTEGER NOT NULL DEFAULT 0)";
-    const QString copy =
-        "INSERT INTO annotations_next (id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction) "
-        "SELECT id, book_id, kind, section, fraction, text, note, created, section, fraction FROM annotations";
+                          + columns + ")";
+    const QString copy = "INSERT INTO annotations_next (" + copied + ") SELECT " + from + " FROM annotations";
     const QString counted = "INSERT INTO sqlite_sequence (name, seq) SELECT 'annotations_next', 0 "
                             "WHERE NOT EXISTS (SELECT 1 FROM sqlite_sequence WHERE name = 'annotations_next')";
     const QString given = "UPDATE sqlite_sequence SET seq = (SELECT MAX(seq) FROM sqlite_sequence WHERE name IN ('annotations', "
@@ -39,4 +44,17 @@ QStringList AnnotationSchema::passages() {
                      .arg(when, QString(when).toUpper());
     }
     return steps;
+}
+
+} // namespace
+
+QStringList AnnotationSchema::passages() {
+    return madeAnew(passageColumns, "id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction",
+                    "id, book_id, kind, section, fraction, text, note, created, section, fraction");
+}
+
+QStringList AnnotationSchema::colors() {
+    const QString kept = "id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, quote_before, "
+                         "quote_after, anchored, confidence, lost";
+    return madeAnew(QString(passageColumns) + ", color TEXT NOT NULL DEFAULT ''", kept, kept);
 }

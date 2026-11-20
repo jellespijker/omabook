@@ -457,6 +457,9 @@ const QList<QStringList> migrations{
     // its book is opened (AnnotationAnchors); a bookmark ends where it starts
     // (an end before the start is the start: Annotation::passage).
     AnnotationSchema::passages(),
+    // A highlight's colour (#81, format 36), by its name; one of an older
+    // library is the first colour.
+    AnnotationSchema::colors(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
