@@ -26,7 +26,7 @@
     "src/graphbuilder.cpp": 603,
     "src/graphcanvas.cpp": 620,
     "src/graphmodel.cpp": 938,
-    "src/graphtools.cpp": 795,
+    "src/graphtools.cpp": 777,
     "src/hardcover.cpp": 564,
     "src/librarian.cpp": 558,
     "src/library.cpp": 1247,

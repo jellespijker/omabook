@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QList>
 #include <QString>
@@ -49,6 +50,23 @@ struct Layer {
 
 // The scopes there are in the graph's tenant (Graph::scopes) and the layers'.
 [[nodiscard]] QStringList scopes(const Graph &graph);
+// The scopes a reader that names no tenant reads, each in the tenant it is
+// read in (Graph::ofScope): a world of one tenant's books is there from any
+// other (#112). Those every tenant has, in their order, and the layers'.
+[[nodiscard]] QStringList scopes(const Library &library);
+// The graph a plugin writes a thing ({scope, book, ...}) in: a world's whole
+// (Graph::ofScope), or for the general graph that of the book it was met in.
+[[nodiscard]] Graph writing(const Library &library, const QJsonObject &thing);
+// The graph a plugin relates or merges two things in: the world (a scope of
+// its own) both are of, whole, whatever tenants the books they were met in
+// are in (#112); else that of the book given, or of the first thing.
+[[nodiscard]] Graph linking(const Library &library, qint64 one, qint64 other, qint64 bookId);
+// Two things merged as a plugin merges them, in the graph linking() gives.
+bool merge(const Library &library, qint64 keep, qint64 other);
+// The things a plugin finds (GraphOps::find): in a world whole, or in every
+// scope (`everywhere`) and the general graph in Tenancy::preferred's tenant.
+[[nodiscard]] QJsonArray find(const Library &library, const QString &words, const QString &kind, const QString &scope, bool everywhere,
+                              int limit);
 // A scope whole as the graph's tenant sees it (Graph::whole), a layer's as known.
 [[nodiscard]] GraphView whole(const Graph &graph, const QString &scope, int limit);
 // Copies a scope whole under a new name (Graph::copyScope), a layer's as

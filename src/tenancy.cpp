@@ -374,18 +374,6 @@ std::optional<Tenant> Tenancy::ofCollection(const Library &library, qint64 colle
     return Tenant::ofCollection(Spaces::collectionId(library, top));
 }
 
-std::optional<Tenant> Tenancy::ofScope(const Library &library, const QString &scope) {
-    if (scope.isEmpty())
-        return std::nullopt;
-    placedAsChosen(library);
-    QSqlQuery found = ChangeLog::query(library,
-                                       u"SELECT t.gid FROM graph_nodes AS n JOIN tenant_nodes AS m ON m.node_id = n.id "
-                                       "JOIN tenants AS t ON t.id = m.tenant WHERE n.scope = ? AND m.tenant <> 0 ORDER BY t.gid LIMIT 1"_s,
-                                       {scope});
-    const std::optional<Tenant> in = found.next() ? std::optional(Tenant::fromGlobalId(found.value(0).toString())) : std::nullopt;
-    return in && tenants(library).contains(*in) ? in : std::nullopt;
-}
-
 Tenant Tenancy::preferred(const Library &library) {
     const QList<Tenant> all = tenants(library);
     if (all.size() == 1)

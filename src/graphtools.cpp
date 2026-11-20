@@ -14,6 +14,7 @@
 #include <functional>
 
 #include "bookops.h"
+#include "graphchoice.h"
 #include "graphcontext.h"
 #include "graphcommands.h"
 #include "graphcut.h"
@@ -65,9 +66,11 @@ QJsonObject GraphOps::add(Graph graph, const QJsonObject &thing) {
     if (bookId > 0 && !graph.sees(bookId))
         return problem(QString("Book %1 is not in %2.").arg(bookId).arg(Tenancy::nameOf(library, graph.tenant().value_or(Tenant::unfiled()))));
     const qint64 id = graph.upsert(thing.value("scope").toString(), kind, name, thing.value("summary").toString(), data, seen);
-    if (id == 0)
+    // One known by that name in another tenant is brought up to date there, and not shown here.
+    const auto added = id == 0 ? std::nullopt : graph.node(id);
+    if (!added)
         return problem("The node could not be added.");
-    return {{"node", graph.node(id)->toJson()}};
+    return {{"node", added->toJson()}};
 }
 
 QJsonObject GraphOps::link(Graph graph, qint64 source, qint64 target, const QString &relation, const QString &note,
@@ -85,9 +88,10 @@ QJsonObject GraphOps::unlink(Graph graph, qint64 edge) {
 }
 
 QJsonObject GraphOps::merge(Graph graph, qint64 keep, qint64 other) {
-    if (!graph.merge(keep, other))
+    const auto kept = graph.merge(keep, other) ? graph.node(keep) : std::nullopt;
+    if (!kept)
         return problem("There are no two such nodes to merge.");
-    return {{"node", graph.node(keep)->toJson()}, {"folded_in", other}};
+    return {{"node", kept->toJson()}, {"folded_in", other}};
 }
 
 QJsonObject GraphOps::remove(Graph graph, qint64 id) {
@@ -215,30 +219,8 @@ constexpr auto usage =
     "Kinds: character, place, group, concept, item, event, thread, theme, topic, question, book, author, series, tag.\n"
     "chronology [book]: the events in the order they happen (omabook chronology). Every command takes --json and --library <folder>.\n\n"
     "The graph of a library kept apart by its top-level collections is read, and added to by hand, in one of them at a time:\n"
-    "--collection names it (or \"unfiled\"). Without it, that of the book or the thing named, or the library's only one.";
-
-// The tenant a command reads or writes in (Tenancy::chosen): the one named,
-// or that of the book given, or failing a book that of the thing, the
-// relation or the first thing named, when it is in one tenant alone.
-std::expected<Tenant, QString> tenantOf(const Library &library, const QCommandLineParser &parser, const QString &sub, qint64 first) {
-    const QString named = parser.value("collection");
-    const qint64 bookId = QStringList{"show", "export", "log"}.contains(sub) ? first : parser.value("book").toLongLong();
-    QList<Tenant> ofThing;
-    if (sub == "unlink")
-        ofThing = Tenancy::ofEdge(library, first);
-    else if (QStringList{"node", "link", "merge", "remove"}.contains(sub))
-        ofThing = Tenancy::ofNode(library, first);
-    if (named.isEmpty() && bookId <= 0 && ofThing.size() == 1 && ofThing.first() != Tenant::everyone()
-        && Tenancy::tenants(library).contains(ofThing.first()))
-        return ofThing.first();
-    return Tenancy::chosen(library, named, bookId);
-}
-
-// Why a command that reads or adds by hand can't: no tenant was named where one must be.
-std::optional<QString> refused(const std::expected<Tenant, QString> &tenant, const QString &sub) {
-    static const QStringList inTenant{"show", "find", "node", "add", "link", "unlink", "merge", "remove", "export", "scopes", "copy-scope", "log"};
-    return !tenant && inTenant.contains(sub) ? std::optional(tenant.error()) : std::nullopt;
-}
+    "--collection names it (or \"unfiled\"). Without it, that of the book or the thing named, or the library's only one;\n"
+    "a scope of its own (--scope) is read whole, and `scopes` lists those of every one.";
 
 // `connect`: one book, or every book read, each compared with the others once.
 GraphCommands::Kept connectBooks(Library &library, const QCommandLineParser &parser, const QStringList &words) {
@@ -337,13 +319,13 @@ int runGraphCli(const QStringList &arguments) {
     }
     const QString scope = parser.value("scope");
     const qint64 first = words.value(1).toLongLong(), second = words.value(2).toLongLong();
-    // The tenant, as each command names a book or a thing: needed only by those that read or add by hand.
-    const std::expected<Tenant, QString> tenant = tenantOf(library, parser, sub, first);
-    if (const auto why = refused(tenant, sub)) {
-        print(stderr, *why);
+    // The graph, as each command names a tenant, a book, a thing or a world.
+    const std::expected<GraphChoice::Chosen, QString> chosen = GraphChoice::of(library, parser, sub, first);
+    if (!chosen) {
+        print(stderr, chosen.error());
         return 1;
     }
-    const Graph graph = Graph::forTenant(library, tenant.value_or(Tenant::unfiled()));
+    const Graph &graph = chosen->graph;
     auto upTo = [&](qint64 bookId) { return GraphOps::place(bookId, parser.value("upto"), parser.value("fraction")); };
     auto wrong = [&] {
         print(stderr, usage);
@@ -528,7 +510,7 @@ int runGraphCli(const QStringList &arguments) {
             else
                 fputs(answer.value("content").toString().toUtf8().constData(), stdout);
         };
-    } else if (auto kept = GraphCommands::housekeeping(library, graph, sub, words)) {
+    } else if (auto kept = GraphCommands::housekeeping(library, graph, sub, words, chosen->everyTenant)) {
         answer = kept->answer;
         plain = [&answer, show = kept->show] { show(answer); };
     } else {

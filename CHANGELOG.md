@@ -30,6 +30,7 @@ moves those lines under its version.
 ### Fixed
 
 - A relation of no book between a thing of a top-level collection's graph and one that every collection sees (put in by hand before collections had graphs of their own, or a plugin's world) is seen again in that collection's graph, and counts there in the order of the graph's window. Such relations were in no collection's graph once one of their ends was met in a book: Storyteller's plan lost a person's ties to the rest of the cast as soon as a chapter mentioned that person (#112).
+- A plugin's world (Storyteller's story world and plan) is read and written whole, whatever top-level collections the books its things were met in are in: a sequel or a branch, whose world was met in the first story's book too, can go on when the two books are in different collections, and a plugin is told of the worlds of every collection, not only of the one with the most books. On the command line, `omabook graph show`, `find` and `add` with `--scope` read and add to a world without `--collection`, and `omabook graph scopes` without it lists the worlds of every collection (#112).
 
 ## [0.1.8] - 2026-11-20
 

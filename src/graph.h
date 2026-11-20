@@ -200,10 +200,12 @@ public:
                 return forTenant(library, tenant);
         return ofLibrary(library);
     }
-    // The graph a scope is read in: a world's, its tenant (Tenancy::ofScope),
-    // the general graph's, Tenancy::preferred's.
+    // The graph a scope is read in: a world (a scope of its own) whole, of
+    // no tenant, whatever tenants the books its things were met in are in (a
+    // sequel's world is met in its first story's book too, #112); the general
+    // graph, Tenancy::preferred's.
     [[nodiscard]] static Graph ofScope(const Library &library, const QString &scope) {
-        return forTenant(library, Tenancy::ofScope(library, scope).value_or(Tenancy::preferred(library)));
+        return scope.isEmpty() ? ofLibrary(library) : Graph(library);
     }
     // The graph read from a collection's view: its tenant's, or for none (the
     // whole shelf) Tenancy::preferred's, until the window says which (#96).

@@ -128,9 +128,6 @@ void rebuild(const Library &library);
 // collection the library doesn't have.
 [[nodiscard]] std::optional<Tenant> ofCollection(const Library &library, qint64 collectionId);
 
-// The tenant a scope of its own (a world) is in: that of the books its
-// things were met in; none for one of no book, or the general graph.
-[[nodiscard]] std::optional<Tenant> ofScope(const Library &library, const QString &scope);
 // The tenant read when nothing says which: the library's only one, or else
 // the one with the most books.
 [[nodiscard]] Tenant preferred(const Library &library);

@@ -1,6 +1,7 @@
 #include "worldlayers.h"
 
 #include <QHash>
+#include <QJsonArray>
 #include <QSqlQuery>
 #include <QVariant>
 #include <algorithm>
@@ -15,6 +16,7 @@
 #include "spacereducer.h"
 #include "spaceworlds.h"
 #include "subscribedspace.h"
+#include "tenancy.h"
 
 using namespace Qt::StringLiterals;
 
@@ -118,6 +120,40 @@ QStringList WorldLayers::scopes(const Graph &graph) {
         if (!scopes.contains(layer.scope))
             scopes << layer.scope;
     return scopes;
+}
+
+QStringList WorldLayers::scopes(const Library &library) {
+    QStringList all = scopes(Graph::ofLibrary(library));
+    for (const Tenant &tenant : Tenancy::tenants(library))
+        for (const QString &scope : Graph::forTenant(library, tenant).scopes())
+            if (!all.contains(scope))
+                all << scope;
+    return all;
+}
+
+Graph WorldLayers::writing(const Library &library, const QJsonObject &thing) {
+    const QString scope = thing.value("scope").toString();
+    return scope.isEmpty() ? Graph::ofReader(library, thing.value("book").toInteger()) : Graph::ofScope(library, scope);
+}
+
+Graph WorldLayers::linking(const Library &library, qint64 one, qint64 other, qint64 bookId) {
+    const Graph whole(library);
+    const auto first = whole.node(one);
+    const auto second = whole.node(other);
+    if (first && second && !first->scope.isEmpty() && first->scope == second->scope)
+        return Graph::ofScope(library, first->scope);
+    return bookId > 0 ? Graph::ofReader(library, bookId) : Graph::ofThing(library, one);
+}
+
+bool WorldLayers::merge(const Library &library, qint64 keep, qint64 other) { return linking(library, keep, other, 0).merge(keep, other); }
+
+QJsonArray WorldLayers::find(const Library &library, const QString &words, const QString &kind, const QString &scope, bool everywhere,
+                             int limit) {
+    const Graph graph = everywhere ? Graph::ofLibrary(library) : Graph::ofScope(library, scope);
+    QJsonArray nodes;
+    for (const GraphNode &node : graph.find(words, kind, everywhere ? std::nullopt : std::optional(scope), std::max(1, limit)))
+        nodes << node.toJson();
+    return nodes;
 }
 
 GraphView WorldLayers::whole(const Graph &graph, const QString &scope, int limit) {
