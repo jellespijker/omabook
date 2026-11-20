@@ -460,6 +460,12 @@ const QList<QStringList> migrations{
     // A highlight's colour (#81, format 36), by its name; one of an older
     // library is the first colour.
     AnnotationSchema::colors(),
+    // Operations of a kind this Omabook doesn't know yet (#118, format 37),
+    // each by its space, device and number: kept in the log as they came, to
+    // go on to other computers and be kept by compaction, and taken in once
+    // an Omabook that knows them opens the library (KeptOps).
+    {"CREATE TABLE IF NOT EXISTS kept_ops (space INTEGER NOT NULL, device INTEGER NOT NULL, seq INTEGER NOT NULL, "
+     "PRIMARY KEY (space, device, seq)) WITHOUT ROWID"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
