@@ -1684,5 +1684,9 @@
   "Show the graph of": "De graaf tonen van",
   "Show the graph of the next top-level collection": "De graaf van de volgende hoofdcollectie tonen",
   "Show the graph of the previous top-level collection": "De graaf van de vorige hoofdcollectie tonen",
-  "Unfiled": "Zonder collectie"
+  "Unfiled": "Zonder collectie",
+  "A graph for each collection": "Een graaf voor elke collectie",
+  "Each top-level collection has a knowledge graph of its own, and so do the books in none. In the graph, {graph.tenant} picks whose is shown, and {graph.tenant_next} and {graph.tenant_previous} step through them; one graph for the whole library is a choice in the settings ({global.settings}).": "Elke hoofdcollectie heeft een eigen kennisgraaf, en de boeken in geen enkele ook. In de graaf kiest {graph.tenant} welke je ziet, en {graph.tenant_next} en {graph.tenant_previous} gaan ze langs; één graaf voor de hele bibliotheek is een keuze in de instellingen ({global.settings}).",
+  "A large library, quick": "Een grote bibliotheek, snel",
+  "Search, the graph's window, syncing and the first opening after an update are much quicker on a library of thousands of books. A search word now finds what starts with it: mara finds Mára.": "Zoeken, het venster van de graaf, synchroniseren en het eerste openen na een update gaan veel sneller in een bibliotheek van duizenden boeken. Een zoekwoord vindt nu wat ermee begint: mara vindt Mára."
 }

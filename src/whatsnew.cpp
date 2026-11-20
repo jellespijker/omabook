@@ -95,6 +95,21 @@ QList<Manual::Step> sharingRelease() {
     };
 }
 
+// The 0.1.8 release's entries: a graph for each top-level collection, and a large library made quick.
+QList<Manual::Step> collectionsRelease() {
+    return {
+        {"graph-per-collection", "0.1.8", Manual::tr("A graph for each collection"),
+         Manual::tr("Each top-level collection has a knowledge graph of its own, and so do the books in none. In the graph, "
+                    "{graph.tenant} picks whose is shown, and {graph.tenant_next} and {graph.tenant_previous} step through them; "
+                    "one graph for the whole library is a choice in the settings ({global.settings})."),
+         "", "library.graph", "library", ""},
+        {"quick-library", "0.1.8", Manual::tr("A large library, quick"),
+         Manual::tr("Search, the graph's window, syncing and the first opening after an update are much quicker on a library of "
+                    "thousands of books. A search word now finds what starts with it: mara finds Mára."),
+         "", "library.search", "library", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -173,5 +188,5 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    };
+    } + collectionsRelease();
 }

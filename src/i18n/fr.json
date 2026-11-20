@@ -1761,5 +1761,9 @@
   "Show the graph of": "Afficher le graphe de",
   "Show the graph of the next top-level collection": "Afficher le graphe de la collection principale suivante",
   "Show the graph of the previous top-level collection": "Afficher le graphe de la collection principale précédente",
-  "Unfiled": "Sans collection"
+  "Unfiled": "Sans collection",
+  "A graph for each collection": "Un graphe par collection",
+  "Each top-level collection has a knowledge graph of its own, and so do the books in none. In the graph, {graph.tenant} picks whose is shown, and {graph.tenant_next} and {graph.tenant_previous} step through them; one graph for the whole library is a choice in the settings ({global.settings}).": "Chaque collection principale a son propre graphe de connaissances, et les livres qui ne sont dans aucune aussi. Dans le graphe, {graph.tenant} choisit lequel est montré, et {graph.tenant_next} et {graph.tenant_previous} passent de l'un à l'autre ; un seul graphe pour toute la bibliothèque est un choix des paramètres ({global.settings}).",
+  "A large library, quick": "Une grande bibliothèque, rapide",
+  "Search, the graph's window, syncing and the first opening after an update are much quicker on a library of thousands of books. A search word now finds what starts with it: mara finds Mára.": "La recherche, la fenêtre du graphe, la synchronisation et la première ouverture après une mise à jour sont bien plus rapides sur une bibliothèque de milliers de livres. Un mot cherché trouve maintenant ce qui commence par lui : mara trouve Mára."
 }
