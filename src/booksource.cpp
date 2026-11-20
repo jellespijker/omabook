@@ -1,6 +1,5 @@
 #include "booksource.h"
 
-#include <QCollator>
 #include <QDir>
 #include <QDirIterator>
 #include <QFile>
@@ -10,6 +9,7 @@
 #include <array>
 
 #include "bookarchive.h"
+#include "collation.h"
 #include "htmlclean.h"
 
 using namespace Qt::StringLiterals;
@@ -43,12 +43,7 @@ QString BookSource::name() const {
     return m_kind == Kind::Folder ? info.fileName() : info.completeBaseName();
 }
 
-void BookSource::sortNaturally(QStringList &names) {
-    QCollator natural;
-    natural.setNumericMode(true);
-    natural.setCaseSensitivity(Qt::CaseInsensitive);
-    std::ranges::sort(names, natural);
-}
+void BookSource::sortNaturally(QStringList &names) { std::ranges::sort(names, Collation::natural()); }
 
 QStringList BookSource::entries() const {
     QStringList names;

@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "backend.h"
+#include "collation.h"
 #include "graphcanvas.h"
 #include "graphcontext.h"
 #include "graphwalk.h"
@@ -33,14 +34,13 @@ QSet<QString> &opened() {
 }
 QString openedKey(const Library *library, qint64 node) { return (library ? library->root() : QString()) + "\n" + QString::number(node); }
 
-bool before(const GraphNode &a, const GraphNode &b) {
+bool before(const GraphNode &a, const GraphNode &b, const QCollator &collator) {
     const int ranks = rankOf(a.kind) - rankOf(b.kind);
     if (ranks != 0)
         return ranks < 0;
     if (a.kind != b.kind)
         return a.kind < b.kind;
-    const int names = QString::localeAwareCompare(a.name.toLower(), b.name.toLower());
-    return names != 0 ? names < 0 : a.id < b.id;
+    return std::pair{collator.compare(a.name, b.name), a.id} < std::pair{0, b.id};
 }
 
 // What of a view is one's own, not of a graph someone shared (GraphLayers).
@@ -397,8 +397,8 @@ void GraphBrowser::load(bool keepPlaces) {
 
     // The rows: the book's own by kind, then what is in other books.
     QList<GraphNode> ordered = view.nodes;
-    std::ranges::sort(ordered, [&outer](const GraphNode &a, const GraphNode &b) {
-        return outer.contains(a.id) != outer.contains(b.id) ? outer.contains(b.id) : before(a, b);
+    std::ranges::sort(ordered, [&outer, collator = Collation::natural()](const GraphNode &a, const GraphNode &b) {
+        return outer.contains(a.id) != outer.contains(b.id) ? outer.contains(b.id) : before(a, b, collator);
     });
     m_rows.clear();
     m_order.clear();
@@ -744,8 +744,8 @@ QVariantList GraphBrowser::find(const QString &typed) const {
     const auto rank = [&](const GraphNode &node) {
         return node.name.toLower() == whole ? 0 : node.name.toLower().startsWith(whole) ? 1 : 2;
     };
-    std::ranges::stable_sort(nodes, [&rank](const GraphNode &a, const GraphNode &b) {
-        return rank(a) != rank(b) ? rank(a) < rank(b) : QString::localeAwareCompare(a.name.toLower(), b.name.toLower()) < 0;
+    std::ranges::stable_sort(nodes, [&rank, collator = Collation::natural()](const GraphNode &a, const GraphNode &b) {
+        return rank(a) != rank(b) ? rank(a) < rank(b) : collator.compare(a.name, b.name) < 0;
     });
     for (const GraphNode &node : nodes.mid(0, 40))
         found << QVariantMap{{"id", node.id}, {"kind", node.kind}, {"name", node.name}, {"summary", node.summary}};

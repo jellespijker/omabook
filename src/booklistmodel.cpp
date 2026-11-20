@@ -22,6 +22,7 @@
 #include <type_traits>
 #include <utility>
 
+#include "collation.h"
 #include "customization.h"
 #include "formats.h"
 
@@ -488,9 +489,7 @@ QList<int> BookListModel::arranged(const QString &except) const {
                  })
                  | std::ranges::to<QList<int>>();
 
-    QCollator collator;
-    collator.setCaseSensitivity(Qt::CaseInsensitive);
-    collator.setNumericMode(true);
+    const QCollator collator = Collation::natural();
     const auto text = [&collator](const QString &a, const QString &b) -> std::weak_ordering { return collator.compare(a, b) <=> 0; };
     // A series together, in its order.
     const auto inSeries = [&text](const Book &a, const Book &b) {
@@ -596,8 +595,7 @@ QVariantList BookListModel::choices(const QString &kind) const {
         case Rating: break;
         }
     }
-    QCollator collator;
-    collator.setCaseSensitivity(Qt::CaseInsensitive);
+    const QCollator collator = Collation::natural();
     // The most common first, and those as common as each other by name.
     std::ranges::stable_sort(order, [&](const QString &a, const QString &b) {
         return counts.value(a) != counts.value(b) ? counts.value(a) > counts.value(b) : collator.compare(a, b) < 0;
@@ -640,9 +638,7 @@ QVariantList BookListModel::groups(const QString &kind) const {
                 pile.books << brief(m_maps.at(index));
         }
     }
-    QCollator collator;
-    collator.setCaseSensitivity(Qt::CaseInsensitive);
-    collator.setNumericMode(true);
+    const QCollator collator = Collation::natural();
     const QStringList statuses{"reading", "to-read", "read", none};
     if (by == Filter::Status) {
         std::ranges::stable_sort(order, {}, [&statuses](const QString &status) { return statuses.indexOf(status); });

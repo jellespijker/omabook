@@ -13,6 +13,7 @@
 #include "annotationanchors.h"
 #include "bookink.h"
 #include "changelog.h"
+#include "collation.h"
 #include "document.h"
 #include "formats.h"
 #include "highlightcolors.h"
@@ -180,8 +181,9 @@ QList<AnnotationExport::Marked> AnnotationExport::library(Library &library) {
     QList<Marked> books;
     for (const qint64 id : booksWithAnnotations(library))
         books << of(library, id, false);
-    std::ranges::stable_sort(
-        books, [](const Marked &one, const Marked &other) { return QString::localeAwareCompare(one.title, other.title) < 0; });
+    const QCollator collator = Collation::natural();
+    std::ranges::stable_sort(books,
+                             [&collator](const Marked &one, const Marked &other) { return collator.compare(one.title, other.title) < 0; });
     return books;
 }
 

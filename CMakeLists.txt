@@ -60,12 +60,20 @@ enable_testing()
 set(omabook_test_home "${CMAKE_BINARY_DIR}/test-home")
 file(MAKE_DIRECTORY "${omabook_test_home}/.config" "${omabook_test_home}/.local/share" "${omabook_test_home}/.cache")
 set(omabook_test_environment "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state;HOME=${omabook_test_home};XDG_CONFIG_HOME=${omabook_test_home}/.config;XDG_DATA_HOME=${omabook_test_home}/.local/share;XDG_CACHE_HOME=${omabook_test_home}/.cache")
-foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross plugindata hyphenation ink inksurface worldcli passages marginnotes highlights highlightview recognition bookink bookinkview audio pluginview failures handwrittennotes keptops annotations contentspane pagenotes)
+foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross plugindata hyphenation ink inksurface worldcli passages marginnotes highlights highlightview recognition bookink bookinkview audio pluginview failures handwrittennotes keptops annotations contentspane pagenotes collation)
   add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)
   set_tests_properties(${test}_tests PROPERTIES ENVIRONMENT "${omabook_test_environment}")
 endforeach()
+
+# Names sort the same under a C locale (a bare container, a desktop set to
+# C.UTF-8) as under a language's (#121): the tests that depend on it, again.
+set(omabook_c_locale_environment "${omabook_test_environment};LANG=C.UTF-8;LC_ALL=C.UTF-8")
+add_test(NAME library_c_locale_tests COMMAND library_tests theShelfFiltersAndSorts)
+add_test(NAME formats_c_locale_tests COMMAND formats_tests comicReadsItsPagesInOrder)
+add_test(NAME collation_c_locale_tests COMMAND collation_tests)
+set_tests_properties(library_c_locale_tests formats_c_locale_tests collation_c_locale_tests PROPERTIES ENVIRONMENT "${omabook_c_locale_environment}")
 
 # Syncing runs the other computer's omabook over ssh; the test's "other
 # computer" is this build's binary behind a stand-in ssh.
