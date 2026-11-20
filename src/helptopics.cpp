@@ -196,6 +196,12 @@ Manual::Topic readingTopic() {
                             "opens the note. {reader.notes} goes through the notes on the page: Enter edits one, Delete removes it, "
                             "and a note left without words is removed. Notes go with the book to your other computers, and stay "
                             "with their words in a new edition; those whose words are gone are listed at the foot of the page.")},
+                {Manual::tr("Ink on the pages"),
+                 Manual::tr("On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen "
+                            "or the mouse: the bar above the page picks the pen, the eraser and the ink, and the pen's other end "
+                            "erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and "
+                            "is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of "
+                            "the pen at a time; {reader.show_ink} puts it away to read the pages as they were.")},
                 {Manual::tr("The graph in the text"),
                  Manual::tr("The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors "
                             "they have there, always, unless you switch it off: {reader.marks} marks them only while the map is "

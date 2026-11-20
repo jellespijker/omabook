@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Added
+
+- Book ink (#83): on the pages of a PDF or a comic, D (or *Write* in the bar, or the menu) lets you write and draw on the page itself with a pen, or the mouse; a finger still scrolls and zooms, and a palm is ignored while the pen is near. The bar above the page picks the pen or the eraser and one of four inks, and the pen's other end erases. The ink stays where you put it at every zoom and in every layout, is undone and redone a pause of the pen at a time (Ctrl+Z, Ctrl+Shift+Z), on whichever page it was, and Shift+D puts it away to read the pages as they were. Each page with ink is listed under *Highlights* (Shift+B) with the part of the page it covers, to go there or erase it. It is kept in the change log, a few bytes a point, and goes to your other computers at a sync, where what each of them wrote on a page is all kept.
+
 ## [0.1.9] - 2026-11-20
 
 ### Added

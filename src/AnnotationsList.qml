@@ -8,7 +8,9 @@ import QtQuick.Layouts
 // reader gave them, to show one colour alone, and those names to change;
 // below, the ones that can no longer be found in this edition of the book,
 // each placed again on words selected on the page, or removed. What is
-// shown is copied as Markdown, to take elsewhere.
+// shown is copied as Markdown, to take elsewhere. Under them, on a PDF or a
+// comic, the pages with book ink (#83), each the part of the page its ink
+// covers, going there and taken away as a highlight is.
 //
 // Keys: Up and Down (J, K) walk the list, Enter goes, 1 to 5 colour the one
 // selected anew, Delete removes it, Escape leaves.
@@ -24,6 +26,7 @@ Item {
     readonly property var shown: reader.highlights.list.filter(one => only === "" || one.color === only)
     readonly property var found: shown.filter(one => !one.lost)
     readonly property var lost: shown.filter(one => one.lost)
+    readonly property var inked: reader.kind === "pages" && only === "" ? reader.ink.pages.map(one => Object.assign({ ink: true, lost: false, color: "", quote: "" }, one)) : []
     readonly property var looks: {
         const looks = {}
         for (const color of reader.highlights.colors) looks[color.key] = color
@@ -37,8 +40,13 @@ Item {
     }
     function go(row) {
         if (row.lost) return
+        if (row.ink) return reader.goToPlace(row.page, row.fraction)
         if (reader.kind === "pages") reader.goToPlace(row.section, row.fraction)
         else reader.marks.goToMoment(row.section, row.fraction, row.quote.slice(0, 120))
+    }
+    function remove(row) {
+        if (row.ink) reader.ink.erasePage(row.page)
+        else reader.highlights.remove(row.id)
     }
     function count(color) { return reader.highlights.list.filter(one => one.color === color).length }
     function place(row) {
@@ -143,7 +151,7 @@ Item {
 
         Label {
             objectName: "noHighlights"
-            visible: list.shown.length === 0 && !list.naming
+            visible: list.shown.length === 0 && list.inked.length === 0 && !list.naming
             Layout.fillWidth: true
             text: list.only === "" ? qsTr("No highlights yet. Select words and choose a colour, or draw a line under them with the pen.")
                                    : qsTr("No highlights in %1.").arg(words.name(list.only))
@@ -158,17 +166,17 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            model: list.found.concat(list.lost)
+            model: list.found.concat(list.lost).concat(list.inked)
             ScrollBar.vertical: ScrollBar {}
             readonly property var row: currentIndex >= 0 && currentIndex < model.length ? model[currentIndex] : null
             Keys.onReturnPressed: if (row) list.go(row)
             Keys.onEnterPressed: if (row) list.go(row)
-            Keys.onDeletePressed: if (row) reader.highlights.remove(row.id)
+            Keys.onDeletePressed: if (row) list.remove(row)
             Keys.onEscapePressed: list.done()
             Keys.onPressed: (event) => {
                 if (event.key === Qt.Key_J) incrementCurrentIndex()
                 else if (event.key === Qt.Key_K) decrementCurrentIndex()
-                else if (event.key >= Qt.Key_1 && event.key <= Qt.Key_5 && row && !row.lost)
+                else if (event.key >= Qt.Key_1 && event.key <= Qt.Key_5 && row && !row.lost && !row.ink)
                     reader.highlights.recolor(row.id, reader.highlights.colors[event.key - Qt.Key_1].key)
                 else return
                 event.accepted = true
@@ -180,8 +188,10 @@ Item {
                 required property var modelData
                 // The first of the lost ones says what they are.
                 readonly property bool firstLost: modelData.lost && (index === 0 || !rows.model[index - 1].lost)
+                readonly property bool firstInk: !!modelData.ink && (index === 0 || !rows.model[index - 1].ink)
+                readonly property real heading: firstLost ? lostHeading.height : firstInk ? inkHeading.height : 0
                 width: rows.width
-                height: (firstLost ? lostHeading.height : 0) + row.height
+                height: heading + row.height
                 Label {
                     id: lostHeading
                     objectName: "lostHeading"
@@ -194,13 +204,25 @@ Item {
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
                 }
+                Label {
+                    id: inkHeading
+                    objectName: "inkHeading"
+                    visible: entry.firstInk
+                    width: parent.width
+                    topPadding: 12
+                    bottomPadding: 4
+                    text: qsTr("Ink on the pages")
+                    color: theme.colors.muted
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
                 Rectangle {
                     id: row
                     readonly property int index: entry.index
                     readonly property var modelData: entry.modelData
                     readonly property var look: list.looks[modelData.color] || {}
-                    objectName: "highlightRow_" + modelData.id
-                    y: entry.firstLost ? lostHeading.height : 0
+                    objectName: (modelData.ink ? "inkRow_" : "highlightRow_") + modelData.id
+                    y: entry.heading
                     width: rows.width
                     height: Math.max(win.touch ? 56 : 44, body.implicitHeight + 14)
                     radius: Math.min(4, theme.radius)
@@ -212,7 +234,7 @@ Item {
                         width: 4
                         height: parent.height - 12
                         radius: 2
-                        color: row.look.line || theme.accent
+                        color: row.modelData.ink ? theme.foreground : row.look.line || theme.accent
                         opacity: row.modelData.lost ? 0.4 : 1
                     }
                     ColumnLayout {
@@ -223,9 +245,18 @@ Item {
                         anchors.leftMargin: 14
                         anchors.rightMargin: 4
                         spacing: 2
-                        Label {
+                        // A page's ink, small: the part of the page it covers.
+                        Loader {
+                            active: !!row.modelData.ink
+                            visible: active
                             Layout.fillWidth: true
-                            text: row.modelData.quote
+                            Layout.preferredHeight: active ? (win.touch ? 72 : 56) : 0
+                            sourceComponent: Component { InkThumb { region: row.modelData } }
+                        }
+                        Label {
+                            visible: !row.modelData.ink
+                            Layout.fillWidth: true
+                            text: row.modelData.quote || ""
                             color: row.modelData.lost ? theme.colors.muted : theme.foreground
                             wrapMode: Text.Wrap
                             maximumLineCount: 3
@@ -235,6 +266,8 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: {
+                                if (row.modelData.ink)
+                                    return qsTr("Page %1 · %Ln strokes", "", row.modelData.strokes).arg((row.modelData.page + 1).toLocaleString(Qt.locale(), 'f', 0))
                                 const where = row.modelData.page > 0 ? qsTr("Page %1").arg(row.modelData.page.toLocaleString(Qt.locale(), 'f', 0))
                                                                      : row.modelData.title
                                 return where !== "" ? "%1 · %2".arg(words.name(row.modelData.color)).arg(where) : words.name(row.modelData.color)
@@ -274,7 +307,7 @@ Item {
                             width: side
                             height: side
                             Accessible.role: Accessible.Button
-                            Accessible.name: qsTr("Remove the highlight")
+                            Accessible.name: row.modelData.ink ? qsTr("Erase the ink on this page") : qsTr("Remove the highlight")
                             Glyph {
                                 anchors.centerIn: parent
                                 name: "cross"
@@ -282,7 +315,7 @@ Item {
                                 color: removeHover.hovered ? theme.foreground : theme.colors.muted
                             }
                             HoverHandler { id: removeHover }
-                            TapHandler { onTapped: reader.highlights.remove(row.modelData.id) }
+                            TapHandler { onTapped: list.remove(row.modelData) }
                         }
                     }
                 }

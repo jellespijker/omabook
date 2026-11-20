@@ -43,7 +43,7 @@ AppPopup {
         "book": ["library.read", "library.details", "library.edit", "library.lookup", "library.collection_book",
                  "library.graph_book", "library.chronology_book", "library.found_graph", "library.found_moment", "library.export", "library.remove"],
         "reader": ["reader.back", "reader.contents", "reader.annotations", "reader.find", "reader.bookmark", "reader.ask", "reader.catch_up",
-                   "reader.cast", "reader.graph", "reader.chronology", "reader.marks", "reader.select", "reader.note", "reader.notes", "reader.format", "reader.pages", "reader.layout",
+                   "reader.cast", "reader.graph", "reader.chronology", "reader.marks", "reader.select", "reader.note", "reader.notes", "reader.ink", "reader.show_ink", "reader.format", "reader.pages", "reader.layout",
                    "reader.larger", "reader.smaller", "reader.expand", "reader.previous", "reader.next", "reader.start",
                    "reader.end", "global.settings", "global.change", "global.help", "global.quit"],
         "graph": ["graph.tenant", "graph.find", "graph.filter", "graph.list", "graph.details", "graph.open", "graph.moments", "graph.expand",

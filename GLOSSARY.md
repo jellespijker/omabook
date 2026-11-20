@@ -32,6 +32,10 @@ _Avoid_: Sidebar, notes pane, gutter (the space between pages)
 Handwriting or drawing directly on a page of a book whose pages don't reflow, such as a PDF or a comic.
 _Avoid_: Drawing, scribble, ink (alone, which is the notebook plugin's)
 
+**Page region**:
+A part of a page of a book whose pages don't reflow, measured across and down in the page's width, so it is the same part at any zoom: where book ink lies on its page (`PageRegion`).
+_Avoid_: Area, box, rectangle, selection
+
 **Ink surface**:
 Where a pen writes and draws, in Omabook or a plugin's panel: pressure makes the line wider, the pen's other end erases, a palm is ignored while the pen is near (`InkSurface`).
 _Avoid_: Canvas, drawing area

@@ -31,6 +31,7 @@ Rectangle {
         AppButton { objectName: "barFind"; runs: "reader.find"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: { barFrame.done(); barFrame.host.openFinder() } }
         AppButton { objectName: "barBookmark"; runs: "reader.bookmark"; text: qsTr("Bookmark"); focusPolicy: Qt.NoFocus; onClicked: { barFrame.done(); barFrame.host.bookmark() } }
         AppButton { objectName: "barHighlights"; runs: "reader.annotations"; text: qsTr("Highlights"); focusPolicy: Qt.NoFocus; onClicked: { barFrame.done(); barFrame.host.showList("annotations") } }
+        AppButton { objectName: "barInk"; runs: "reader.ink"; visible: reader.kind === "pages"; text: qsTr("Write"); focusPolicy: Qt.NoFocus; onClicked: { barFrame.done(); win.run("reader.ink") } }
         AppButton { objectName: "barGraph"; runs: "reader.graph"; text: qsTr("Graph"); focusPolicy: Qt.NoFocus; onClicked: { barFrame.done(); barFrame.host.toggleGraph() } }
         AppButton { objectName: "barAsk"; runs: "reader.ask"; text: qsTr("Ask AI"); focusPolicy: Qt.NoFocus; onClicked: { barFrame.done(); barFrame.host.askAssistant() } }
         AppButton { objectName: "barSmaller"; runs: "reader.smaller"; text: qsTr("Smaller"); focusPolicy: Qt.NoFocus; onClicked: if (barFrame.host.content) barFrame.host.content.zoom(-1) }

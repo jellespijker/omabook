@@ -129,6 +129,16 @@ QList<Manual::Step> annotationsRelease() {
     };
 }
 
+// The 0.1.10 release's entries: book ink (#83).
+QList<Manual::Step> inkRelease() {
+    return {
+        {"book-ink", "0.1.10", Manual::tr("Ink on the pages"),
+         Manual::tr("Write and draw on the pages of a PDF or a comic with a pen or the mouse: {reader.ink}. The ink stays where you "
+                    "put it at every zoom, and goes to your other computers."),
+         "", "reader.ink", "reader", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -207,5 +217,5 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    } + collectionsRelease() + annotationsRelease();
+    } + collectionsRelease() + annotationsRelease() + inkRelease();
 }

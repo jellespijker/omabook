@@ -1,5 +1,6 @@
 import QtQuick
 import QtQuick.Controls
+import Omabook
 
 // A book of fixed pages (a PDF, a comic), each drawn off the GUI thread at
 // the size it is shown. As the layout says (readingformat.h): one under
@@ -36,6 +37,18 @@ ListView {
     // While a mouse drag selects words, the pages hold still under it.
     property bool mouseSelecting: false
     signal selected()
+    // What lies over the pages (the ink's bar), where the pen doesn't write on them.
+    property Item covering: null
+    // Whether a point of a page's ink surface is one the pen writes on: on
+    // its page, in sight, and not under what lies over the pages.
+    function inkReaches(surface, point) {
+        if (point.x < 0 || point.y < 0 || point.x > surface.width || point.y > surface.height) return false
+        const at = surface.mapToItem(view, point.x, point.y)
+        if (at.x < 0 || at.y < 0 || at.x > width || at.y > height) return false
+        if (!covering || !covering.visible) return true
+        const over = surface.mapToItem(covering, point.x, point.y)
+        return !(over.x >= 0 && over.y >= 0 && over.x <= covering.width && over.y <= covering.height)
+    }
     // Between pages, across and down.
     readonly property real gap: 12
 
@@ -309,6 +322,30 @@ ListView {
                         }
                         onDraggingChanged: { if (dragging) view.choose(words); view.mouseSelecting = dragging }
                         onSelected: view.selected()
+                    }
+                    // The page's book ink (#83), at the page's zoom: ink units
+                    // across its width, so it stays where it was put. Written on
+                    // while the reader writes, the mouse too; a finger scrolls.
+                    InkSurface {
+                        id: ink
+                        objectName: "bookInk" + sheet.page
+                        anchors.fill: parent
+                        visible: reader.ink.shown
+                        readOnly: !reader.ink.inking
+                        inkScale: Math.max(0.01, width / reader.ink.pageUnits)
+                        fingers: InkSurface.Scroll
+                        mouseDraws: reader.ink.inking
+                        batchPause: 600
+                        penWidth: 2.4
+                        eraserWidth: 28
+                        color: reader.ink.penColor
+                        tool: reader.ink.erasing ? InkSurface.Eraser : InkSurface.Pen
+                        containmentMask: QtObject {
+                            function contains(point: point): bool { return view.inkReaches(ink, point) }
+                        }
+                        Component.onCompleted: reader.ink.show(ink, sheet.page)
+                        Component.onDestruction: reader.ink.forget(ink)
+                        onInked: (batch) => reader.ink.take(ink, batch)
                     }
                 }
             }

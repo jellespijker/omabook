@@ -39,7 +39,7 @@ modules = [
   "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
-  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights",
+  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights", "bookink",
 ]
 
 [layers.services]
@@ -75,7 +75,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes", "readinghighlights",
+  "inksurface", "inknodes", "readinghighlights", "readingink",
 ]
 
 [layers.app]

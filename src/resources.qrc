@@ -93,6 +93,8 @@
         <file alias="ReaderBar.qml">ReaderBar.qml</file>
         <file alias="ReaderHighlighting.qml">ReaderHighlighting.qml</file>
         <file alias="PenGestures.qml">PenGestures.qml</file>
+        <file alias="ReaderPen.qml">ReaderPen.qml</file>
+        <file alias="InkThumb.qml">InkThumb.qml</file>
         <file alias="AnnotationsList.qml">AnnotationsList.qml</file>
         <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>

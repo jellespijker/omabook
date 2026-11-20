@@ -54,6 +54,20 @@ BookPlace BookPlace::fromJson(const QJsonObject &object, const BookPlace &whenMi
             .fraction = object.contains("fraction") ? object.value("fraction").toDouble() : whenMissing.fraction};
 }
 
+BookPlace PageRegion::place(double aspect) const {
+    return {.section = page, .fraction = aspect > 0 ? qBound(0.0, area.top() / aspect, 1.0) : 0.0};
+}
+
+QJsonObject PageRegion::toJson() const {
+    return {{"page", page}, {"x", area.x()}, {"y", area.y()}, {"width", area.width()}, {"height", area.height()}};
+}
+
+PageRegion PageRegion::fromJson(const QJsonObject &object) {
+    return {.page = object.value("page").toInt(),
+            .area = QRectF(object.value("x").toDouble(), object.value("y").toDouble(), object.value("width").toDouble(),
+                           object.value("height").toDouble())};
+}
+
 QJsonObject Passage::toJson() const {
     QJsonObject object{{"from", from.toJson()}, {"to", to.toJson()}};
     for (const auto &[key, words] : {std::pair{"quote", quote}, std::pair{"before", before}, std::pair{"after", after}})

@@ -551,14 +551,8 @@ Item {
                 }
             }
 
-            // The pen over the page: a line under words, a loop round them or a
-            // bar beside them highlights them; a scribble takes highlights away.
-            PenGestures {
-                host: view
-                anchors.fill: contentLoader
-                z: 1
-                enabled: reader.open && !!view.content
-            }
+            // The pen over the page: gestures that highlight words, or book ink on a PDF's or a comic's pages.
+            ReaderPen { id: pen; host: view; anchors.fill: contentLoader; z: 1 }
 
             Loader {
                 id: contentLoader
@@ -581,7 +575,7 @@ Item {
                 sourceComponent: reader.kind === "flow" ? (paged ? spreadPages : flow) : reader.kind === "pages" ? pages : null
                 Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: finger.active; notes: notesLayer } }
                 Component { id: spreadPages; SpreadReader { marking: view.marksOn; notes: notesLayer } }
-                Component { id: pages; PageReader { layout: contentLoader.layout } }
+                Component { id: pages; PageReader { layout: contentLoader.layout; covering: pen.covering } }
             }
 
             ReadingNotes { id: notesLayer; anchors.fill: contentLoader; z: 2; host: view }

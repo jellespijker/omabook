@@ -17,6 +17,7 @@
 #include "metadatasource.h"
 #include "pageformat.h"
 #include "readinghighlights.h"
+#include "readingink.h"
 #include "readingmarks.h"
 
 class Backend;
@@ -70,6 +71,8 @@ class Reader : public QObject {
     Q_PROPERTY(ReadingMarks *marks READ marks CONSTANT)
     // The book's highlights, as the page shows them and the pen makes them (#81).
     Q_PROPERTY(ReadingHighlights *highlights READ highlights CONSTANT)
+    // The ink on the pages of a PDF or a comic, as they show it and the pen writes it (#83).
+    Q_PROPERTY(ReadingInk *ink READ ink CONSTANT)
     // How the text is set: the options in force, and the chapter set with them.
     Q_PROPERTY(PageFormat *format READ format CONSTANT)
 
@@ -110,6 +113,7 @@ public:
     QVariantList bookmarks() const;
     ReadingMarks *marks() const noexcept { return m_marks; }
     ReadingHighlights *highlights() const noexcept { return m_highlights; }
+    ReadingInk *ink() const noexcept { return m_ink; }
     // The opened book itself, none while none is open, and the backend it is read for.
     std::shared_ptr<const Document> document() const { return m_document; }
     Backend *backend() const noexcept { return m_backend; }
@@ -226,4 +230,5 @@ private:
     PageFormat *m_format = nullptr;
     // Made last, when the backend it follows is known; a child, gone with the reader.
     ReadingHighlights *m_highlights = new ReadingHighlights(this);
+    ReadingInk *m_ink = new ReadingInk(this);
 };

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QJsonObject>
+#include <QRectF>
 #include <QString>
 #include <QStringView>
 #include <compare>
@@ -80,6 +81,25 @@ struct Passage {
     // Where it is in a text showing its section (the reader's page, the
     // plain text of a laid-out chapter): its first character and the one past its last.
     [[nodiscard]] std::optional<std::pair<qsizetype, qsizetype>> spanIn(QStringView shown) const;
+};
+
+// A part of a page of a book whose pages don't reflow (a PDF, a comic): the
+// page (its section) and a rectangle on it, measured across and down in the
+// page's width, so that it is the same part of the page at any zoom, and is
+// known before the page's height is (a comic's page is measured once drawn).
+// Book ink is kept on its page in these terms (#83, BookInk); a highlight or a
+// note on a comic's panel, which has no words to find it by, is to be (#115).
+struct PageRegion {
+    int page = 0;
+    QRectF area; // 0 to 1 across; down, 0 to the page's height over its width
+
+    bool operator==(const PageRegion &) const = default;
+
+    // Where it starts as a place, on a page `aspect` (its height over its width) tall.
+    [[nodiscard]] BookPlace place(double aspect) const;
+    // {"page", "x", "y", "width", "height"}, as the plugins and the command line write it.
+    [[nodiscard]] QJsonObject toJson() const;
+    [[nodiscard]] static PageRegion fromJson(const QJsonObject &object);
 };
 
 // A passage found again, and how sure that is, from 0 to 1: 1 when its words

@@ -115,6 +115,8 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
      tr("Select words with the keyboard: the arrows or H J K L move, Shift widens, Enter shows what to do with them")},
     {"reader.note", {"Shift+N"}, tr("Write a margin note on the selected words, or select them first")},
     {"reader.notes", {"E"}, tr("Go through the margin notes on the page: Enter edits one, Delete removes it")},
+    {"reader.ink", {"D"}, tr("Write and draw on the pages of a PDF or a comic with the pen, or the mouse, and stop")},
+    {"reader.show_ink", {"Shift+D"}, tr("Show or put away the ink on the pages, to read them as they were")},
     {"reader.format",
      {"Shift+A"},
      tr("Show or hide how the text is set: the font, its size, the longest line, the pages side by side, the spacing, the margins and the "
