@@ -32,6 +32,7 @@ jobs:
             deps=("${depends[@]}" "${makedepends[@]}" "${checkdepends[@]}")
           else
             deps=(hicolor-icon-theme qt6-base qt6-declarative qt6-svg qt6-wayland xdg-desktop-portal libarchive poppler-qt6 libsodium
+                  qt6-multimedia qt6-multimedia-ffmpeg opus
                   cmake gcc make pkgconf ttf-dejavu zip hyphen-en hyphen-de hyphen-nl)
           fi
           pacman -S --noconfirm --needed base-devel cmake dbus "${deps[@]%%[<>=]*}"

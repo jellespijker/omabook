@@ -1817,5 +1817,11 @@
   "Notes in the margin": "Kanttekeningen in de marge",
   "{reader.note} writes a note on the selected words, beside them where the window has room, and {reader.notes} goes through the page's notes. Notes and highlights are found again by their words when a book's file changes.": "{reader.note} schrijft een kanttekening bij de geselecteerde woorden, ernaast waar het venster ruimte heeft, en {reader.notes} loopt de kanttekeningen op de pagina langs. Kanttekeningen en markeringen worden aan hun woorden teruggevonden als het bestand van een boek verandert.",
   "Justified, without wide gaps": "Uitgevuld, zonder brede gaten",
-  "Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. Hyphenate in the Aa panel ({reader.format}) turns it off.": "Uitgevulde tekst breekt een lang woord aan het eind van een regel af volgens de taal van het boek, zoals LibreOffice dat doet. Woordafbreking in het Aa-paneel ({reader.format}) zet het uit."
+  "Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. Hyphenate in the Aa panel ({reader.format}) turns it off.": "Uitgevulde tekst breekt een lang woord aan het eind van een regel af volgens de taal van het boek, zoals LibreOffice dat doet. Woordafbreking in het Aa-paneel ({reader.format}) zet het uit.",
+  "%1 is recording": "%1 neemt op",
+  "%1 paused recording": "%1 heeft de opname gepauzeerd",
+  "Allow": "Toestaan",
+  "It records what the microphone hears into its own folder until it stops. While it records, a red mark at the top of the window says so, with a button to stop it.": "Het neemt op wat de microfoon hoort, in zijn eigen map, tot het stopt. Zolang het opneemt, zegt een rood teken boven in het venster dat, met een knop om het te stoppen.",
+  "Let %1 use the microphone?": "Mag %1 de microfoon gebruiken?",
+  "the microphone": "de microfoon"
 }

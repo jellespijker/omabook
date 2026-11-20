@@ -75,6 +75,7 @@
         <file alias="PluginsDialog.qml">PluginsDialog.qml</file>
         <file alias="PluginDetail.qml">PluginDetail.qml</file>
         <file alias="PluginMark.qml">PluginMark.qml</file>
+        <file alias="RecordingMark.qml">RecordingMark.qml</file>
         <file alias="PluginNewSheet.qml">PluginNewSheet.qml</file>
         <file alias="PluginInstallSheet.qml">PluginInstallSheet.qml</file>
         <file alias="ReaderView.qml">ReaderView.qml</file>
@@ -111,6 +112,7 @@
         <file alias="skill/graph.md">skill/graph.md</file>
         <file alias="scriptprelude.js">scriptprelude.js</file>
         <file alias="scriptassist.js">scriptassist.js</file>
+        <file alias="scriptaudio.js">scriptaudio.js</file>
         <file>plugin-templates/metadata/plugin.json</file>
         <file>plugin-templates/metadata/main.js</file>
         <file>plugin-templates/command/plugin.json</file>

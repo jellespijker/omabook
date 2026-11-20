@@ -24,6 +24,7 @@
 #include "scriptwatchdog.h"
 
 class AiProvider;
+class AudioDevices;
 class QNetworkAccessManager;
 class Settings;
 
@@ -38,6 +39,9 @@ struct ScriptServices {
     QNetworkAccessManager *network = nullptr;
     // The book open in the reader: {id, section, fraction, percent}, or empty.
     std::function<QJsonObject()> reading;
+    // The microphone and speakers, and who records now (#79); without them
+    // the desktop's own, with no window to show a recording in.
+    AudioDevices *audio = nullptr;
 };
 
 // plugin.json of a script plugin:
@@ -238,6 +242,7 @@ private:
     friend class ScriptAi;
     friend class ScriptHost;
     friend class ScriptSharing;
+    friend class ScriptAudio;
 
     QJSValue fromJson(const QJsonValue &value);
     QString describe(const QJSValue &error) const;

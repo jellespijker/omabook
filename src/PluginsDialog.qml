@@ -70,7 +70,7 @@ AppPopup {
     // words; a program plugin is not held to any of it.
     readonly property var permissionNames: ({
         http: qsTr("the network"), files: qsTr("files in its own folder"), run: qsTr("programs on this computer"),
-        program: qsTr("everything you can: it is a program of its own, not held to permissions")
+        microphone: qsTr("the microphone"), program: qsTr("everything you can: it is a program of its own, not held to permissions")
     })
     readonly property var eventNames: ({
         "app.started": qsTr("Omabook starts"), "library.switched": qsTr("another library is opened"),

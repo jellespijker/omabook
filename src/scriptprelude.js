@@ -153,6 +153,7 @@
 
         say: function (words) { host.say(String(words)); },
         log: Object.assign(function () { host.log("log", text(arguments)); }, changeLog(shared.changeLog())),
+        audio: shared.audio(),
         on: function (event, handler) {
             need(event, "string", "The event");
             need(handler, "function", "The handler");
@@ -430,7 +431,7 @@
         };
     }
 
-    if (may("run")) {
+    if (may("run"))
         omabook.run = function (program, args, options) {
             need(program, "string", "The program");
             return new Promise(function (resolve, reject) {
@@ -438,7 +439,6 @@
                          function (answer) { resolve(parse(answer)); }, reject);
             });
         };
-    }
 
     // The script can't take the object apart, by accident or otherwise.
     Object.keys(omabook).forEach(function (key) {

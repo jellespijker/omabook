@@ -76,36 +76,8 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     connect(m_picker, &FilePicker::failed, this, &Backend::say);
     openLibrary(m_settings->libraryPath());
 
-    // The script plugins start once there is a library for them to read.
-    // What they say is said in the window, and a book they change shows.
-    ScriptServices services;
-    services.settings = m_settings;
-    services.library = [this] { return m_library.get(); };
-    services.ai = [this](QString *why) { return m_aiFactory(why); };
-    services.network = &m_network;
-    m_scripts = std::make_unique<ScriptPlugins>(services, pluginFolder);
-    // The book formats scripts add are read like Omabook's own.
-    m_scripts->provideFormats();
-    connect(m_scripts.get(), &ScriptPlugins::said, this, &Backend::say);
-    connect(m_scripts.get(), &ScriptPlugins::touchedLibrary, &m_reloadSoon, qOverload<>(&QTimer::start));
-    connect(m_scripts.get(), &ScriptPlugins::changed, this, &Backend::pluginsChanged);
-    // What plugins put on the shelf comes and goes with them.
-    connect(m_scripts.get(), &ScriptPlugins::changed, this, [this] {
-        m_model.setLaunchers(m_scripts->launchers());
-        ++m_revision;
-        emit revisionChanged();
-    });
-    // The plugin manager looks again whenever the plugins change, and says
-    // so when it changed them itself.
-    m_pluginManager = std::make_unique<PluginManager>(m_settings, &m_plugins, m_scripts.get(), m_picker, &m_network);
-    connect(this, &Backend::pluginsChanged, m_pluginManager.get(), &PluginManager::refresh);
+    startScripts(pluginFolder);
     m_graphJobs = new GraphJobs(this);
-    connect(m_pluginManager.get(), &PluginManager::touched, this, &Backend::pluginsChanged);
-    // A plugin that updated itself, or went back a version, says so once.
-    connect(m_pluginManager.get(), &PluginManager::said, this, &Backend::say);
-    if (m_library)
-        m_scripts->libraryChanged(m_library->books(), libraryPath());
-    QTimer::singleShot(0, m_scripts.get(), [this] { m_scripts->emitEvent("app.started"); });
 }
 
 Backend::~Backend() {

@@ -18,6 +18,7 @@ modules = [
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist",
+  "oggpages", "opuswriter", "opusreader", "scriptapireach",
 ]
 
 [layers.formats]
@@ -51,6 +52,7 @@ modules = [
   "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptchangelog", "scriptplugins", "scriptsharing", "scriptwatchdog", "sitedesk", "spacetransport", "thinkingfilter", "tour", "whatsnew",
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue", "scriptai",
+  "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
 ]
 
 [layers.operations]
@@ -75,7 +77,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes", "readinghighlights", "readingink",
+  "inksurface", "inknodes", "readinghighlights", "readingink", "backendplugins",
 ]
 
 [layers.app]

@@ -118,6 +118,12 @@ QObject *ScriptSharing::changeLog() {
     return m_changeLog.get();
 }
 
+QJSValue ScriptSharing::audio() {
+    if (!m_audio)
+        m_audio = std::make_unique<ScriptAudio>(m_plugin, m_plugin->m_services.audio);
+    return m_audio->api();
+}
+
 SpaceWorlds::Ask worldsOf(ScriptPlugins &plugins) {
     return [&plugins](const SpaceWorlds::Asked &asked) {
         QList<SpaceWorlds::Offer> offered;

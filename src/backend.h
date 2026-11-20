@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "ai.h"
+#include "audiodevices.h"
 #include "booklistmodel.h"
 #include "filepicker.h"
 #include "folio.h"
@@ -47,6 +48,9 @@ class Backend : public QObject {
     // The script plugins, for the window: their commands and panels, what
     // each set for its panels (`data`), and `run` and `call` into them.
     Q_PROPERTY(ScriptPlugins *scripts READ scripts CONSTANT)
+    // The plugins' microphone and speakers, and who records now, which the
+    // window shows (RecordingMark.qml).
+    Q_PROPERTY(AudioDevices *audio READ audio CONSTANT)
     // The plugin manager: every plugin sorted by what it does, what needs
     // attention, and installing, removing, ordering and trying them.
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
@@ -156,6 +160,7 @@ public:
     // The script plugins. Backend tells them what happens to the library;
     // the reader tells them what happens to the open book.
     ScriptPlugins *scripts() noexcept { return m_scripts.get(); }
+    AudioDevices *audio() noexcept { return &m_audio; }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
     SpaceDesk *spaces() noexcept { return &m_spaces; }
@@ -228,6 +233,8 @@ signals:
 
 private:
     void openLibrary(const QString &path);
+    // The script plugins, once there is a library (backendplugins.cpp).
+    void startScripts(const QString &pluginFolder);
     // Reads how the library's shelf was left from the settings, and writes it there.
     void takeShelf();
     void keepShelf();
@@ -305,6 +312,8 @@ private:
         QString problem;
     };
     Plugins m_plugins;
+    // Before the plugins, which use it until they go.
+    AudioDevices m_audio;
     std::unique_ptr<ScriptPlugins> m_scripts;
     std::unique_ptr<PluginManager> m_pluginManager;
     GraphJobs *m_graphJobs = nullptr; // a child of this, so it goes with it

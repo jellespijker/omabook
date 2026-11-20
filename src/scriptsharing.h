@@ -6,6 +6,7 @@
 #include <QString>
 #include <memory>
 
+#include "scriptaudio.h"
 #include "scriptchangelog.h"
 #include "spaceworlds.h"
 
@@ -48,6 +49,8 @@ public:
     // The plugin's own data in the change log, which travels between one's
     // computers (omabook.log.set and the rest, #76).
     Q_INVOKABLE QObject *changeLog();
+    // Recording and playing sound, `omabook.audio` (#79).
+    Q_INVOKABLE QJSValue audio();
 
 private:
     [[nodiscard]] Library *library();
@@ -56,6 +59,7 @@ private:
     ScriptPlugin *m_plugin;
     QJSValue m_worlds;
     std::unique_ptr<ScriptChangeLog> m_changeLog;
+    std::unique_ptr<ScriptAudio> m_audio;
 };
 
 // What every running plugin of `plugins` offers, as SpaceWorlds asks it.

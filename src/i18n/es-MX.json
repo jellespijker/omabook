@@ -1901,5 +1901,11 @@
   "Notes in the margin": "Notas al margen",
   "{reader.note} writes a note on the selected words, beside them where the window has room, and {reader.notes} goes through the page's notes. Notes and highlights are found again by their words when a book's file changes.": "{reader.note} escribe una nota sobre las palabras seleccionadas, a su lado donde la ventana tiene espacio, y {reader.notes} recorre las notas de la página. Las notas y los resaltados se vuelven a encontrar por sus palabras cuando cambia el archivo de un libro.",
   "Justified, without wide gaps": "Justificado, sin huecos anchos",
-  "Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. Hyphenate in the Aa panel ({reader.format}) turns it off.": "El texto justificado divide una palabra larga al final de la línea según el idioma del libro, como lo hace LibreOffice. Separación silábica en el panel Aa ({reader.format}) lo desactiva."
+  "Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. Hyphenate in the Aa panel ({reader.format}) turns it off.": "El texto justificado divide una palabra larga al final de la línea según el idioma del libro, como lo hace LibreOffice. Separación silábica en el panel Aa ({reader.format}) lo desactiva.",
+  "%1 is recording": "%1 está grabando",
+  "%1 paused recording": "%1 pausó la grabación",
+  "Allow": "Permitir",
+  "It records what the microphone hears into its own folder until it stops. While it records, a red mark at the top of the window says so, with a button to stop it.": "Graba lo que oye el micrófono en su propia carpeta hasta que se detiene. Mientras graba, una marca roja en la parte de arriba de la ventana lo indica, con un botón para detenerlo.",
+  "Let %1 use the microphone?": "¿Dejar que %1 use el micrófono?",
+  "the microphone": "el micrófono"
 }

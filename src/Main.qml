@@ -490,4 +490,5 @@ ApplicationWindow {
     }
 
     RemovalDialog { id: removal }
+    RecordingMark { devices: backend.audio }
 }
