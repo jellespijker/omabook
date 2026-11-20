@@ -57,8 +57,8 @@ QJsonObject librarySnapshot(const Library &library) {
                              {"paper", book.paper},
                              {"details_at", book.detailsAt},
                              {"reading_at", book.readingAt},
-                             {"section", prog.section},
-                             {"fraction", prog.fraction},
+                             {"section", prog.place.section},
+                             {"fraction", prog.place.fraction},
                              {"percent", prog.percent},
                              {"progress_updated", prog.updated}};
     }

@@ -16,7 +16,7 @@ qint64 Library::addAnnotation(qint64 bookId, const Annotation &annotation) {
 }
 
 std::optional<qint64> Library::storeAnnotation(qint64 bookId, const Annotation &annotation) {
-    const QVariantList values{bookId,          annotation.kind, annotation.section, annotation.fraction,
+    const QVariantList values{bookId,          annotation.kind, annotation.place.section, annotation.place.fraction,
                               annotation.text, annotation.note, annotation.created};
     if (annotation.id <= 0) {
         const auto made =
@@ -49,8 +49,7 @@ QList<Annotation> Library::annotations(qint64 bookId) const {
          found.next();)
         annotations.append({.id = found.value(0).toLongLong(),
                             .kind = found.value(1).toString(),
-                            .section = found.value(2).toInt(),
-                            .fraction = found.value(3).toDouble(),
+                            .place = {.section = found.value(2).toInt(), .fraction = found.value(3).toDouble()},
                             .text = found.value(4).toString(),
                             .note = found.value(5).toString(),
                             .created = found.value(6).toLongLong()});

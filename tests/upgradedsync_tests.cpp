@@ -122,14 +122,14 @@ private slots:
 
         // Then each side reads on, changes details, files a book and gets one the other lacks.
         const qint64 later = QDateTime::currentSecsSinceEpoch() + 60;
-        here.setProgress(1, {.section = 3, .fraction = 0.5, .percent = 60, .updated = later});
+        here.setProgress(1, {.place = {.section = 3, .fraction = 0.5}, .percent = 60, .updated = later});
         BookMeta meta = here.book(3)->meta;
         meta.publisher = "Here Press";
         QVERIFY(here.setMeta(3, meta, nullptr, Hlc::pack(later, 0)));
         QVERIFY(here.add(dir.filePath("here.epub")).id > 0);
         QVERIFY(there.setReading(1, "read", 5, "2026-11-01"));
         QVERIFY(there.addCollection("Lent Out", "rating:5"));
-        there.setProgress(3, {.section = 2, .fraction = 0.25, .percent = 30, .updated = later + 10});
+        there.setProgress(3, {.place = {.section = 2, .fraction = 0.25}, .percent = 30, .updated = later + 10});
         QVERIFY(there.add(dir.filePath("there.epub")).id > 0);
 
         const QMap<QString, QStringList> hereBefore = rowsOf(hereFile);

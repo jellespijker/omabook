@@ -162,7 +162,8 @@ private slots:
         }
         Compaction::compact(here);
         for (int round = 0; round < 200; ++round)
-            there.setProgress(1, {.section = round % 30, .fraction = 0.5, .percent = round / 2.0, .updated = 1794730000 + round});
+            there.setProgress(1,
+                              {.place = {.section = round % 30, .fraction = 0.5}, .percent = round / 2.0, .updated = 1794730000 + round});
         const qint64 snapshotHere = answer(here, "SELECT COUNT(*) FROM snapshot_ops");
 
         const Remote remote("laptop:" + dir.filePath("There"), {Fixtures::standInSsh(dir.path(), OMABOOK_BINARY)});
@@ -191,7 +192,7 @@ private slots:
         QCOMPARE(qint64(Replication::since(there, Replication::vector(here)).size()), qint64(0));
 
         // Syncing on, both ways, on top of the snapshot.
-        there.setProgress(1, {.section = 3, .fraction = 0.1, .percent = 99, .updated = 1794740000});
+        there.setProgress(1, {.place = {.section = 3, .fraction = 0.1}, .percent = 99, .updated = 1794740000});
         QVERIFY(Graph(here).upsert({}, "place", "The Lighthouse", {}, {}, GraphPlace{1, 3, 0.1}, "lighthouse") > 0);
         const SyncSummary on = syncLibrary(here, remote);
         QVERIFY2(on.problems.isEmpty(), qPrintable(on.problems.join('\n')));

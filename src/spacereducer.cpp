@@ -66,7 +66,7 @@ void foldNode(ReducedNode &node, const SpaceOperation &op) {
     if (op.field.startsWith("seen:"_L1)) {
         const QString bookGid = op.field.mid(5);
         const QJsonObject obj = parseObject(op.value);
-        const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
+        const SpaceMoment candidate{BookPlace::fromJson(obj), obj.value("anchor").toString()};
         if (!node.seen.contains(bookGid) || candidate.earlierThan(node.seen.value(bookGid)))
             node.seen.insert(bookGid, candidate);
         return;
@@ -95,7 +95,7 @@ void foldFact(ReducedFact &fact, const SpaceOperation &op) {
     fact.value = obj.value("value").toString();
     fact.bookGid = obj.value("book").toString();
     fact.tenant = obj.value("tenant").toString();
-    const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
+    const SpaceMoment candidate{BookPlace::fromJson(obj), obj.value("anchor").toString()};
     if (!fact.hasMoment || (!fact.bookGid.isEmpty() && candidate.earlierThan(fact.moment))) {
         fact.moment = candidate;
         fact.hasMoment = true;
@@ -118,7 +118,7 @@ void foldEdge(ReducedEdge &edge, const SpaceOperation &op) {
         takeMax(edge.note, {op.hlc, op.device, note.isEmpty() ? 0 : 1, note});
     takeMax(edge.notes, {op.hlc, op.device, 1, obj.value("notes").toString()});
     const QString bookGid = obj.value("book").toString();
-    const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
+    const SpaceMoment candidate{BookPlace::fromJson(obj), obj.value("anchor").toString()};
     if (!bookGid.isEmpty() && (!edge.hasLearned || edge.bookGid.isEmpty() || candidate.earlierThan(edge.learned))) {
         edge.bookGid = bookGid;
         edge.learned = candidate;
@@ -145,8 +145,7 @@ void foldDay(ReducedDay &day, const SpaceOperation &op) {
 } // namespace
 
 bool SpaceMoment::earlierThan(const SpaceMoment &other) const noexcept {
-    return std::tie(section, fraction) < std::tie(other.section, other.fraction)
-           || (std::tie(section, fraction) == std::tie(other.section, other.fraction) && anchor > other.anchor);
+    return place < other.place || (place == other.place && anchor > other.anchor);
 }
 
 bool SpaceReducer::isRemoved(const SpaceStamp &alive, const SpaceStamp &removed) noexcept {

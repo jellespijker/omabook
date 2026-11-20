@@ -15,7 +15,6 @@
 
 namespace {
 
-using GraphBuild::Passage;
 
 // The marker's text: a note with any other text is no marker.
 const QString builtMark = "built";
@@ -183,8 +182,8 @@ QStringList stringsOf(const QJsonValue &value, int most) {
 // The edges of an answer, but for those of order (graphtimes.h): each known
 // where the words the model quoted are, and failing those once both ends
 // have shown, the later of the two.
-int linkEdges(Graph &graph, qint64 bookId, const QList<Passage> &passages, const QJsonArray &edges, const GraphBuild::NodeOf &idOf,
-              const QHash<QString, QStringList> &calledAlso) {
+int linkEdges(Graph &graph, qint64 bookId, const QList<GraphBuild::Passage> &passages, const QJsonArray &edges,
+              const GraphBuild::NodeOf &idOf, const QHash<QString, QStringList> &calledAlso) {
     int linked = 0;
     for (qsizetype index = 0; index < edges.size() && index < GraphBuild::mostEdges; ++index) {
         const QJsonObject edge = edges.at(index).toObject();
@@ -208,12 +207,12 @@ int linkEdges(Graph &graph, qint64 bookId, const QList<Passage> &passages, const
 
 } // namespace
 
-QList<QList<Passage>> GraphBuild::chunks(const QList<Passage> &passages, qsizetype most) {
+QList<QList<GraphBuild::Passage>> GraphBuild::chunks(const QList<Passage> &passages, qsizetype most) {
     most = qMax<qsizetype>(most, 200);
     // A section longer than a request is cut where a paragraph ends, and
     // failing that between words.
-    QList<Passage> pieces;
-    for (const Passage &passage : passages) {
+    QList<GraphBuild::Passage> pieces;
+    for (const GraphBuild::Passage &passage : passages) {
         qsizetype start = 0;
         const qsizetype length = passage.text.size();
         while (length - start > most) {
@@ -229,11 +228,11 @@ QList<QList<Passage>> GraphBuild::chunks(const QList<Passage> &passages, qsizety
         pieces.append({passage.section, passage.from + (passage.to - passage.from) * double(start) / qMax<qsizetype>(1, length),
                        passage.to, passage.text.mid(start)});
     }
-    QList<QList<Passage>> chunks;
+    QList<QList<GraphBuild::Passage>> chunks;
     qsizetype filled = 0;
-    for (const Passage &piece : std::as_const(pieces)) {
+    for (const GraphBuild::Passage &piece : std::as_const(pieces)) {
         if (chunks.isEmpty() || filled + piece.text.size() > most) {
-            chunks.append(QList<Passage>());
+            chunks.append(QList<GraphBuild::Passage>());
             filled = 0;
         }
         chunks.last().append(piece);
@@ -246,14 +245,14 @@ std::optional<GraphPlace> GraphBuild::builtTo(const Library &library, qint64 boo
     const Recap marker = library.notes(bookId, "graph");
     if (marker.text != builtMark)
         return std::nullopt;
-    return GraphPlace{bookId, marker.section, marker.fraction};
+    return GraphPlace{bookId, marker.place};
 }
 
 void GraphBuild::setBuiltTo(Library &library, qint64 bookId, const GraphPlace &place) {
-    library.setNotes(bookId, "graph", {place.section, place.fraction, builtMark, 0});
+    library.setNotes(bookId, "graph", {.place = place.inBook(), .text = builtMark, .updated = 0});
 }
 
-void GraphBuild::forgetBuilt(Library &library, qint64 bookId) { library.setNotes(bookId, "graph", {0, 0, QString(""), 0}); }
+void GraphBuild::forgetBuilt(Library &library, qint64 bookId) { library.setNotes(bookId, "graph", {{}, QString(""), 0}); }
 
 QString GraphBuild::known(const Library &library, qint64 bookId, const QList<Passage> &passages) {
     // As things stood where these passages end: what a whole build of the
@@ -262,7 +261,7 @@ QString GraphBuild::known(const Library &library, qint64 bookId, const QList<Pas
                                                              : std::optional(GraphPlace{bookId, passages.last().section, passages.last().to});
     const Scene scene = sceneOf(library, bookId, end);
     QString text;
-    for (const Passage &passage : passages)
+    for (const GraphBuild::Passage &passage : passages)
         text += passage.text.toLower() + "\n";
     // The things the text names, and the threads still open (the text may
     // move one on without naming it), go with what is known of them; the
@@ -295,7 +294,7 @@ QString GraphBuild::elsewhere(const Library &library, qint64 bookId, const QList
     for (const GraphNode &node : scene.nodes)
         mine << node.id;
     QString text;
-    for (const Passage &passage : passages)
+    for (const GraphBuild::Passage &passage : passages)
         text += passage.text.toLower() + "\n";
 
     // Weighed by what the text says: a name that is in it counts most, a
@@ -354,7 +353,7 @@ QString GraphBuild::elsewhere(const Library &library, qint64 bookId, const QList
 
 AiRequest GraphBuild::request(const Library &library, qint64 bookId, const QList<Passage> &passages) {
     QString text;
-    for (const Passage &passage : passages)
+    for (const GraphBuild::Passage &passage : passages)
         text += QString("<section number=\"%1\">\n").arg(passage.section) + passage.text.trimmed() + "\n</section>\n";
     const auto book = library.book(bookId);
     return Prompts::graphExtraction(book ? book->meta : BookMeta(), known(library, bookId, passages), text,
@@ -479,7 +478,7 @@ GraphBuild::Built GraphBuild::build(Library &library, const Document &document, 
         built.complete = true;
         return built;
     }
-    for (const QList<Passage> &chunk : chunks(passages(document, after, goal))) {
+    for (const QList<GraphBuild::Passage> &chunk : chunks(passages(document, after, goal))) {
         QString answer, error;
         if (!ask(request(library, bookId, chunk), &answer, &error)) {
             built.problems << error;

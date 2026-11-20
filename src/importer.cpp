@@ -112,7 +112,7 @@ private:
     const bool byHand = said.readAt == 0 && said.percent > 0 && said.percent != before.value("percent").toDouble()
                         && (here.updated == 0 || here.updated == placedAt);
     if (newer || byHand) {
-        library.setProgress(id, {.section = said.section, .percent = said.percent, .updated = said.readAt});
+        library.setProgress(id, {.place = {.section = said.section, .fraction = 0}, .percent = said.percent, .updated = said.readAt});
         placedAt = library.progress(id).updated;
         changed = true;
     }
@@ -123,7 +123,8 @@ private:
     for (const Calibre::Note &note : said.notes) {
         if (notes.contains(note.id))
             continue;
-        const Annotation annotation{.id = 0, .kind = note.kind, .section = note.section, .fraction = 0, .text = note.text, .note = note.note};
+        const Annotation annotation{
+            .id = 0, .kind = note.kind, .place = {.section = note.section, .fraction = 0}, .text = note.text, .note = note.note};
         if (library.addAnnotation(id, annotation) > 0) {
             notes << note.id;
             changed = true;

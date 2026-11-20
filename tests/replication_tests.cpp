@@ -198,9 +198,11 @@ struct SamplePairs {
 void readFurtherAndChangeDetailsBothSides(SamplePairs &p) {
     // 1. Read further here, and the details changed both sides.
     for (Library *library : {&p.oldHere, &p.logHere})
-        readOn(*library, {.section = 2, .fraction = 0.25, .percent = 70, .updated = 1794700000}, Hlc::pack(1794700100, 0), "Here Press");
+        readOn(*library, {.place = {.section = 2, .fraction = 0.25}, .percent = 70, .updated = 1794700000}, Hlc::pack(1794700100, 0),
+               "Here Press");
     for (Library *library : {&p.oldThere, &p.logThere})
-        readOn(*library, {.section = 1, .fraction = 0.9, .percent = 65, .updated = 1794699000}, Hlc::pack(1794700200, 0), "There Press");
+        readOn(*library, {.place = {.section = 1, .fraction = 0.9}, .percent = 65, .updated = 1794699000}, Hlc::pack(1794700200, 0),
+               "There Press");
     const SyncSummary oldFirst = syncLibrary(p.oldHere, p.older);
     const SyncSummary logFirst = syncLibrary(p.logHere, p.current);
     QVERIFY2(oldFirst.problems.isEmpty() && logFirst.problems.isEmpty(),
@@ -216,13 +218,13 @@ void readFurtherAndChangeDetailsBothSides(SamplePairs &p) {
 void readFurtherThere(SamplePairs &p) {
     // 2. Then read further there.
     for (Library *library : {&p.oldThere, &p.logThere})
-        library->setProgress(1, {.section = 3, .fraction = 0.1, .percent = 80, .updated = 1794710000});
+        library->setProgress(1, {.place = {.section = 3, .fraction = 0.1}, .percent = 80, .updated = 1794710000});
     const SyncSummary oldSecond = syncLibrary(p.oldHere, p.older);
     const SyncSummary logSecond = syncLibrary(p.logHere, p.current);
     QCOMPARE(logSecond.placesTaken, oldSecond.placesTaken);
     QCOMPARE(logSecond.placesSent, oldSecond.placesSent);
     p.expectAlike("2");
-    QCOMPARE(p.logHere.progress(1).section, 3);
+    QCOMPARE(p.logHere.progress(1).place.section, 3);
 }
 
 void changeDetailsWithNoTime(SamplePairs &p) {
@@ -375,9 +377,9 @@ private slots:
         QVERIFY(there.addFormat(twoThere, dir.filePath("two.txt")));
         QVERIFY(Spaces::bookId(here, twoHere) != Spaces::bookId(there, twoThere));
 
-        there.setProgress(sharedThere, {.section = 2, .fraction = 0.5, .percent = 50, .updated = 1794860200});
-        here.setProgress(sharedHere, {.section = 1, .fraction = 0.1, .percent = 10, .updated = 1794860100});
-        here.setProgress(twoHere, {.section = 0, .fraction = 0.8, .percent = 80, .updated = 1794860300});
+        there.setProgress(sharedThere, {.place = {.section = 2, .fraction = 0.5}, .percent = 50, .updated = 1794860200});
+        here.setProgress(sharedHere, {.place = {.section = 1, .fraction = 0.1}, .percent = 10, .updated = 1794860100});
+        here.setProgress(twoHere, {.place = {.section = 0, .fraction = 0.8}, .percent = 80, .updated = 1794860300});
 
         // The manifest for a log peer says so, and leaves the places out.
         const QJsonObject manifest = libraryManifest(there, ManifestFor::LogPeer);
@@ -394,9 +396,9 @@ private slots:
         QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
         QCOMPARE(first.placesTaken, 1);
         QCOMPARE(first.placesSent, 1);
-        QCOMPARE(here.progress(sharedHere).section, 2);
+        QCOMPARE(here.progress(sharedHere).place.section, 2);
         QCOMPARE(here.progress(sharedHere).updated, qint64(1794860200));
-        QCOMPARE(there.progress(twoThere).fraction, 0.8);
+        QCOMPARE(there.progress(twoThere).place.fraction, 0.8);
         QCOMPARE(there.progress(twoThere).updated, qint64(1794860300));
 
         // Through the log, never by the manifest's commands.
@@ -421,7 +423,7 @@ private slots:
         QCOMPARE(Replication::since(here, Replication::vector(there)).size(), 0);
 
         // Reading on there, of the book known by another id: the place comes here.
-        there.setProgress(twoThere, {.section = 1, .fraction = 0.2, .percent = 90, .updated = 1794860400});
+        there.setProgress(twoThere, {.place = {.section = 1, .fraction = 0.2}, .percent = 90, .updated = 1794860400});
         const SyncSummary again = syncLibrary(here, remote, {}, SyncOptions{.dryRun = true});
         QCOMPARE(again.placesTaken, 1);
         QCOMPARE(again.titles.placesTaken, QStringList{here.book(twoHere)->meta.title});
@@ -626,7 +628,7 @@ private slots:
         QVERIFY(there.remove(theirs.value("Gone There")));
         QVERIFY(here.remove(mine.value("Read After")));
         const qint64 after = QDateTime::currentSecsSinceEpoch() + 60; // after the removal, whatever the two clocks say
-        there.setProgress(theirs.value("Read After"), {.section = 2, .fraction = 0.5, .percent = 40, .updated = after});
+        there.setProgress(theirs.value("Read After"), {.place = {.section = 2, .fraction = 0.5}, .percent = 40, .updated = after});
         const SyncSummary dry = syncLibrary(here, remote, {}, SyncOptions{.dryRun = true});
         QCOMPARE(dry.titles.removedHere, QStringList{"Gone There"});
         QCOMPARE(dry.titles.removedThere, QStringList{"Gone Both Ways"});
@@ -718,7 +720,7 @@ private slots:
                  qint64(0));
         QCOMPARE(count(pastMarks), qint64(0));
 
-        here.setProgress(1, {.section = 4, .fraction = 0.5, .percent = 70, .updated = 1794870000});
+        here.setProgress(1, {.place = {.section = 4, .fraction = 0.5}, .percent = 70, .updated = 1794870000});
         QVERIFY(count("SELECT COUNT(*) FROM ops") > 0 && count("SELECT COUNT(*) FROM ops") < 5);
         QCOMPARE(count("SELECT COUNT(*) FROM ops AS o JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device "
                        "WHERE o.seq <= m.seq"),
@@ -733,7 +735,7 @@ private slots:
         QCOMPARE(synced.refused, 0);
         Library there(dir.filePath("There"));
         QVERIFY(there.open());
-        QCOMPARE(there.progress(1).section, 4);
+        QCOMPARE(there.progress(1).place.section, 4);
         QCOMPARE(Replication::operations(there), Replication::operations(here));
         QCOMPARE(firstDifference(Samples::librarySnapshot(there), Samples::librarySnapshot(here)), QString());
         QCOMPARE(syncLibrary(here, remote).received + syncLibrary(here, remote).sent, 0);
@@ -756,7 +758,7 @@ private slots:
                 for (Library *library : {&p.logHere, &p.logThere}) {
                     if (round >= 20 && library == &p.logThere)
                         continue;
-                    library->setProgress(1, {.section = round, .fraction = 0.5, .percent = round * 4.0, .updated = 1794730000 + round});
+                    library->setProgress(1, {{round, 0.5}, round * 4.0, 1794730000 + round});
                     BookMeta meta = library->book(3)->meta;
                     meta.description = QString("Draft %1 of %2").arg(round).arg(library->root().section('/', -1));
                     QVERIFY(library->setMeta(3, meta, nullptr, Hlc::pack(1794730000 + (2 * round) + (library == &p.logHere ? 1 : 0), 0)));
@@ -826,15 +828,15 @@ private slots:
             QCOMPARE(Samples::librarySnapshot(p.logHere), merged);
 
             // Syncing on: what changed after the snapshot travels, on top of it.
-            p.logThere.setProgress(1, {.section = 40, .fraction = 0.1, .percent = 99, .updated = 1794740000});
+            p.logThere.setProgress(1, {.place = {.section = 40, .fraction = 0.1}, .percent = 99, .updated = 1794740000});
             QVERIFY(syncLibrary(p.logHere, p.current).problems.isEmpty());
-            QCOMPARE(p.logHere.progress(1).section, 40);
+            QCOMPARE(p.logHere.progress(1).place.section, 40);
             QCOMPARE(p.logThere.book(3)->meta.description, p.logHere.book(3)->meta.description);
             // And a computer that never synced before is given the snapshot, and ends alike.
             const Remote third("laptop:" + p.dir.filePath("OldThere"), {recordingSsh(p.dir, "ssh-third", false)});
             QVERIFY(syncLibrary(p.logHere, third).problems.isEmpty());
             QCOMPARE(p.oldThere.book(3)->meta.description, p.logHere.book(3)->meta.description);
-            QCOMPARE(p.oldThere.progress(1).section, 40);
+            QCOMPARE(p.oldThere.progress(1).place.section, 40);
             QCOMPARE(syncLibrary(p.logHere, third).detailsTaken + syncLibrary(p.logHere, third).detailsSent, 0);
         }
     }
@@ -855,7 +857,8 @@ private slots:
         QVERIFY(ChangeLog::exec(library, "INSERT INTO space_members (space, person, role) VALUES (?, 'laptop-not-synced', 'writer')",
                                 {personal}));
         for (int round = 0; round < 5; ++round) {
-            library.setProgress(book, {.section = round, .fraction = 0.1, .percent = round * 10.0, .updated = 1794730000 + round});
+            library.setProgress(book,
+                                {.place = {.section = round, .fraction = 0.1}, .percent = round * 10.0, .updated = 1794730000 + round});
             ChangeLog::append(library, {.space = published,
                                         .entity = "collection",
                                         .id = "c:kept",
@@ -899,8 +902,8 @@ private slots:
         const qint64 sharedThere = there.add(dir.filePath("shared.epub")).id;
         const qint64 otherHere = here.add(dir.filePath("other.epub")).id;
         const qint64 otherThere = there.add(dir.filePath("other.epub")).id;
-        here.setProgress(sharedHere, {.section = 3, .fraction = 0.3, .percent = 30, .updated = 1794860500});
-        there.setProgress(otherThere, {.section = 2, .fraction = 0.6, .percent = 60, .updated = 1794860600});
+        here.setProgress(sharedHere, {.place = {.section = 3, .fraction = 0.3}, .percent = 30, .updated = 1794860500});
+        there.setProgress(otherThere, {.place = {.section = 2, .fraction = 0.6}, .percent = 60, .updated = 1794860600});
         BookMeta meta = there.book(otherThere)->meta;
         meta.publisher = "Older Press";
         QVERIFY(there.setMeta(otherThere, meta, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0)));
@@ -924,9 +927,9 @@ private slots:
         QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
         QCOMPARE(summary.placesTaken, 1);
         QCOMPARE(summary.placesSent, 1);
-        QCOMPARE(here.progress(otherHere).section, 2);
+        QCOMPARE(here.progress(otherHere).place.section, 2);
         QCOMPARE(here.progress(otherHere).updated, qint64(1794860600));
-        QCOMPARE(there.progress(sharedThere).section, 3);
+        QCOMPARE(there.progress(sharedThere).place.section, 3);
         QCOMPARE(there.progress(sharedThere).updated, qint64(1794860500));
         QCOMPARE(summary.detailsTaken, 1);
         QCOMPARE(here.book(otherHere)->meta.publisher, QString("Older Press"));

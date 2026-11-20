@@ -7,6 +7,7 @@
 #include <span>
 #include <tuple>
 
+#include "bookplace.h"
 #include "spacereplay.h"
 
 // Pure CRDT state reduction for space operations (ADR 0001).
@@ -29,8 +30,7 @@ struct SpaceStamp {
 };
 
 struct SpaceMoment {
-    int section = 0;
-    double fraction = 0;
+    BookPlace place;
     QString anchor;
 
     [[nodiscard]] bool earlierThan(const SpaceMoment &other) const noexcept;

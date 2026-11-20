@@ -805,7 +805,7 @@ qint64 GraphBrowser::add(const QString &kind, const QString &name, const QString
     std::optional<GraphPlace> place;
     if (m_what == What::Book) {
         const Progress progress = library()->progress(m_bookId);
-        place = m_upTo ? *m_upTo : GraphPlace{m_bookId, progress.section, progress.fraction};
+        place = m_upTo ? *m_upTo : GraphPlace{m_bookId, progress.place};
     }
     const qint64 made = graph.upsert(m_what == What::Scope ? m_scope : QString(), kind, name, summary, {}, place);
     if (made == 0)

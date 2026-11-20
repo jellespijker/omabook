@@ -259,7 +259,7 @@ void writeNodeRow(const Library &library, const QString &gid, const ReducedNode 
             ChangeLog::exec(library,
                             "INSERT OR REPLACE INTO graph_seen (node_id, book_id, section, fraction, anchor) "
                             "VALUES (?, ?, ?, ?, ?)",
-                            {localId, seenBook, sit.value().section, sit.value().fraction, sit.value().anchor});
+                            {localId, seenBook, sit.value().place.section, sit.value().place.fraction, sit.value().anchor});
     }
 }
 
@@ -286,8 +286,8 @@ void materializeFacts(const Library &library, const QMap<QString, ReducedFact> &
                 ChangeLog::insert(library,
                                   "INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction, anchor, tenant) "
                                   "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                                  {nodeId, fact.kind, fact.value, bookCol, fact.moment.section, fact.moment.fraction, fact.moment.anchor,
-                                   bookId > 0 || fact.tenant.isNull() ? QString("") : fact.tenant}))
+                                  {nodeId, fact.kind, fact.value, bookCol, fact.moment.place.section, fact.moment.place.fraction,
+                                   fact.moment.anchor, bookId > 0 || fact.tenant.isNull() ? QString("") : fact.tenant}))
             Spaces::setGlobalId(library, u"fact"_s, *made, it.key());
     }
 }
@@ -308,8 +308,8 @@ void materializeEdges(const Library &library, const QMap<QString, ReducedEdge> &
                 library,
                 "INSERT OR REPLACE INTO graph_edges (source, target, kind, note, book_id, section, fraction, anchor, notes) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                {sourceId, targetId, edge.kind, edge.note.value, bookId, edge.learned.section, edge.learned.fraction, edge.learned.anchor,
-                 edge.notes.value.isNull() ? QString("") : edge.notes.value}))
+                {sourceId, targetId, edge.kind, edge.note.value, bookId, edge.learned.place.section, edge.learned.place.fraction,
+                 edge.learned.anchor, edge.notes.value.isNull() ? QString("") : edge.notes.value}))
             Spaces::setGlobalId(library, u"edge"_s, *made, it.key());
     }
 }
@@ -422,9 +422,9 @@ QList<qint64> SpaceReplay::takePlaces(Library &library, std::span<const SpaceOpe
     const Library::Batch batch(library);
     storeOperations(library, ops);
     QList<qint64> changed;
-    for (const auto &[book, place] : Replication::placeChanges(library)) {
+    for (const auto &[book, read] : Replication::placeChanges(library)) {
         ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
-                        {book, place.section, place.fraction, place.percent, place.updated});
+                        {book, read.place.section, read.place.fraction, read.percent, read.updated});
         // The place is the log's already, so it is no write for the log to take in.
         ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'book' AND local_id = ?", {book});
         changed << book;

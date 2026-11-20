@@ -1464,7 +1464,7 @@ private slots:
         QCOMPARE(arrived.first().meta.authors, (QStringList{"Ann Author", "Bo Writer"}));
         QVERIFY(arrived.first().hasCover);
         QVERIFY(here.books("removed").isEmpty());
-        QCOMPARE(here.progress(bothHere).section, 1);
+        QCOMPARE(here.progress(bothHere).place.section, 1);
         QCOMPARE(here.progress(bothHere).updated, qint64(1700002000));
 
         // There: this side's book arrived as it is here.
@@ -1479,7 +1479,7 @@ private slots:
         QCOMPARE(sent.first().formats, (QStringList{"md", "txt"}));
         QCOMPARE(QImage(there.coverPath(sent.first().id)).size(), QSize(40, 60));
         QCOMPARE(there.progress(sent.first().id).updated, qint64(1700003000));
-        QCOMPARE(there.progress(sent.first().id).fraction, 0.75);
+        QCOMPARE(there.progress(sent.first().id).place.fraction, 0.75);
 
         // Reading on here, then syncing again: only the place moves, to there.
         here.setProgress(bothHere, {1, 0.9, 95, 1700005000});
@@ -1797,7 +1797,7 @@ private slots:
         for (const Library *library : {&here, &there})
             QVERIFY(direct(*library, "UPDATE removed SET removed_at = 1700001500"));
         // Since then: read on there, its details changed there, and put on a shelf here.
-        there.setProgress(theirs.value("read"), {.section = 1, .fraction = 0.5, .percent = 40, .updated = 1700002000});
+        there.setProgress(theirs.value("read"), {.place = {.section = 1, .fraction = 0.5}, .percent = 40, .updated = 1700002000});
         QVERIFY(there.setDetailsAt(theirs.value("edited"), 1700002000));
         QVERIFY(direct(here, QString("UPDATE books SET reading_at = 1700002000 WHERE id = %1").arg(mine.value("shelved"))));
 
@@ -1885,7 +1885,7 @@ private slots:
         newer.description = "Newer here.";
         QVERIFY(here.setMeta(both, newer, nullptr, 1700002000));
         QVERIFY(here.setReading(both, "reading", 4, {}));
-        there.setProgress(bothThere, {.section = 1, .fraction = 0.5, .percent = 50, .updated = 1700003000});
+        there.setProgress(bothThere, {.place = {.section = 1, .fraction = 0.5}, .percent = 50, .updated = 1700003000});
         QVERIFY(here.remove(gone));
         const QByteArray before = snapshot(here), beforeThere = snapshot(there);
 

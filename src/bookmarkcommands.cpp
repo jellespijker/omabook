@@ -42,14 +42,13 @@ int failLine(const QString &why) {
 
 // A new bookmark, where `parser` says or else where the book was read to.
 [[nodiscard]] Annotation placed(const Library &library, qint64 book, const QCommandLineParser &parser) {
-    const Progress place = library.progress(book);
+    // The start of a section given without a fraction; where it was read to when neither is given.
     Annotation bookmark;
     bookmark.kind = "bookmark";
-    bookmark.section = parser.isSet("section") ? qMax(0, parser.value("section").toInt()) : place.section;
-    // The start of a section given without a fraction; where it was read to when neither is given.
-    bookmark.fraction = parser.isSet("section") ? 0.0 : place.fraction;
+    bookmark.place = parser.isSet("section") ? BookPlace{.section = qMax(0, parser.value("section").toInt()), .fraction = 0}
+                                             : library.progress(book).place;
     if (parser.isSet("fraction"))
-        bookmark.fraction = qBound(0.0, parser.value("fraction").toDouble(), 1.0);
+        bookmark.place.fraction = qBound(0.0, parser.value("fraction").toDouble(), 1.0);
     bookmark.text = parser.value("add").simplified();
     return bookmark;
 }
@@ -111,11 +110,13 @@ int runBookmarksCli(const QStringList &arguments) {
         return failLine(changed.error());
     QJsonArray array;
     for (const Annotation &note : (*library)->annotations(id)) {
-        array << QJsonObject{
-            {"id", note.id}, {"kind", note.kind}, {"section", note.section}, {"fraction", note.fraction}, {"text", note.text}};
+        array << note.place.toJson({{"id", note.id}, {"kind", note.kind}, {"text", note.text}});
         if (!parser.isSet("json"))
-            printLine(stdout,
-                      QString("%1\tsection %2, %3%\t%4").arg(note.id).arg(note.section).arg(qRound(note.fraction * 100)).arg(note.text));
+            printLine(stdout, QString("%1\tsection %2, %3%\t%4")
+                                  .arg(note.id)
+                                  .arg(note.place.section)
+                                  .arg(qRound(note.place.fraction * 100))
+                                  .arg(note.text));
     }
     if (parser.isSet("json"))
         printLine(stdout, QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Indented)).trimmed());

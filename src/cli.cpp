@@ -467,23 +467,23 @@ int progress(const QStringList &arguments) {
     if (!library->book(id))
         return fail("There is no book " + command.argument(0) + " in the library.");
     if (command.parser.isSet("section") || command.parser.isSet("fraction") || command.parser.isSet("percent")) {
-        Progress place = library->progress(id);
-        place.updated = command.parser.value("updated").toLongLong();
-        if (command.parser.isSet("section")) place.section = qMax(0, command.parser.value("section").toInt());
-        if (command.parser.isSet("fraction")) place.fraction = qBound(0.0, command.parser.value("fraction").toDouble(), 1.0);
-        if (command.parser.isSet("percent")) place.percent = qBound(0.0, command.parser.value("percent").toDouble(), 100.0);
+        Progress read = library->progress(id);
+        read.updated = command.parser.value("updated").toLongLong();
+        if (command.parser.isSet("section")) read.place.section = qMax(0, command.parser.value("section").toInt());
+        if (command.parser.isSet("fraction")) read.place.fraction = qBound(0.0, command.parser.value("fraction").toDouble(), 1.0);
+        if (command.parser.isSet("percent")) read.percent = qBound(0.0, command.parser.value("percent").toDouble(), 100.0);
         const double before = library->progress(id).percent;
-        library->setProgress(id, place);
+        library->setProgress(id, read);
         // Reading set by hand counts as reading: it goes in the log too.
-        if (place.percent > before)
-            Graph(*library).logReading(id, before, place.percent);
+        if (read.percent > before)
+            Graph(*library).logReading(id, before, read.percent);
         Graph(*library).bookNode(id);
     }
-    const Progress place = library->progress(id);
+    const Progress read = library->progress(id);
     if (command.json())
-        printJson(QJsonObject{{"section", place.section}, {"fraction", place.fraction}, {"percent", place.percent}, {"updated", place.updated}});
+        printJson(read.place.toJson({{"percent", read.percent}, {"updated", read.updated}}));
     else
-        print(stdout, QString("section %1, %2% of the book").arg(place.section).arg(qRound(place.percent)));
+        print(stdout, QString("section %1, %2% of the book").arg(read.place.section).arg(qRound(read.percent)));
     return 0;
 }
 
@@ -1170,8 +1170,8 @@ int notes(const QStringList &arguments) {
         const Recap kept = library->notes(id, kind);
         if (kept.text.isEmpty())
             continue;
-        object.insert(kind, QJsonObject{{"text", kept.text}, {"section", kept.section}, {"fraction", kept.fraction},
-                                        {"updated", QDateTime::fromSecsSinceEpoch(kept.updated).toString(Qt::ISODate)}});
+        object.insert(kind, kept.place.toJson({{"text", kept.text},
+                                               {"updated", QDateTime::fromSecsSinceEpoch(kept.updated).toString(Qt::ISODate)}}));
         if (!command.json())
             print(stdout, kind + ":\n" + kept.text + "\n");
     }

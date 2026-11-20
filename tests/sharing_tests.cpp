@@ -63,7 +63,7 @@ struct Shelf {
 
         QVERIFY(library.setReading(dune, "reading", 4, {}));
         QVERIFY(library.setReading(outside, "read", 2, "2026-10-01"));
-        library.setProgress(dune, {.section = 3, .fraction = 0.5, .percent = 40, .updated = 1794730000});
+        library.setProgress(dune, {.place = {.section = 3, .fraction = 0.5}, .percent = 40, .updated = 1794730000});
 
         Graph graph(library);
         paul = graph.upsert({}, "character", "Paul Atreides", "The duke's son.", {}, GraphPlace{dune, 1, 0.2}, "Paul");
@@ -506,7 +506,7 @@ private slots:
         const auto first = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true}, ada);
         QVERIFY2(first.has_value(), why(first).constData());
         QVERIFY(!idsOf(first->operations, "node").contains(shelf.node(leto)));
-        shelf.library.setProgress(shelf.dune, {.section = 7, .fraction = 0.1, .percent = 90, .updated = 1794740000});
+        shelf.library.setProgress(shelf.dune, {.place = {.section = 7, .fraction = 0.1}, .percent = 90, .updated = 1794740000});
         const auto later = PublishedSpace::snapshot(shelf.library, shelf.sciFi, {.graph = true}, ada);
         QVERIFY2(later.has_value(), why(later).constData());
         const ReducedState after = SpaceReducer::reduce(later->operations);

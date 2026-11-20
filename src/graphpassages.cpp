@@ -4,7 +4,6 @@
 
 namespace {
 
-using GraphBuild::Passage;
 
 // Words as the text may hold them: any case, and any run of white space
 // (a line break inside a quote) between them.
@@ -18,21 +17,21 @@ QRegularExpression phraseIn(const QString &words) {
 
 // The passages a model's section number points into: that section's, or
 // all of them when it named one that isn't there.
-QList<const Passage *> partsOf(const QList<Passage> &passages, int section) {
-    QList<const Passage *> within;
-    for (const Passage &passage : passages)
+QList<const GraphBuild::Passage *> partsOf(const QList<GraphBuild::Passage> &passages, int section) {
+    QList<const GraphBuild::Passage *> within;
+    for (const GraphBuild::Passage &passage : passages)
         if (passage.section == section)
             within << &passage;
     if (within.isEmpty())
-        for (const Passage &passage : passages)
+        for (const GraphBuild::Passage &passage : passages)
             within << &passage;
     return within;
 }
 
 } // namespace
 
-QList<Passage> GraphBuild::passages(const Document &document, const std::optional<GraphPlace> &after, const GraphPlace &upTo) {
-    QList<Passage> found;
+QList<GraphBuild::Passage> GraphBuild::passages(const Document &document, const std::optional<GraphPlace> &after, const GraphPlace &upTo) {
+    QList<GraphBuild::Passage> found;
     const bool flows = document.kind() == Document::Flow;
     // A flowing section read partly goes on where it was left; a page read is done.
     int first = 0;
@@ -60,7 +59,7 @@ QList<Passage> GraphBuild::passages(const Document &document, const std::optiona
 
 qsizetype GraphBuild::size(const QList<Passage> &passages) {
     qsizetype total = 0;
-    for (const Passage &passage : passages)
+    for (const GraphBuild::Passage &passage : passages)
         total += passage.text.size();
     return total;
 }
@@ -74,7 +73,7 @@ int GraphBuild::sectionOf(const QJsonValue &value) {
 }
 
 std::optional<GraphMoment> GraphBuild::momentOf(qint64 bookId, const QList<Passage> &passages, int section, const QStringList &phrases) {
-    for (const Passage *passage : partsOf(passages, section)) {
+    for (const GraphBuild::Passage *passage : partsOf(passages, section)) {
         qsizetype first = -1;
         qsizetype length = 0;
         for (const QString &phrase : phrases) {
@@ -99,8 +98,8 @@ std::optional<GraphMoment> GraphBuild::momentOf(qint64 bookId, const QList<Passa
 GraphMoment GraphBuild::placeOf(qint64 bookId, const QList<Passage> &passages, int section, const QStringList &names) {
     if (const auto found = momentOf(bookId, passages, section, names))
         return *found;
-    const QList<const Passage *> within = partsOf(passages, section);
-    const Passage *last = within.isEmpty() ? nullptr : within.last();
+    const QList<const GraphBuild::Passage *> within = partsOf(passages, section);
+    const GraphBuild::Passage *last = within.isEmpty() ? nullptr : within.last();
     return {last ? GraphPlace{bookId, last->section, last->to} : GraphPlace{bookId, 0, 0}, {}};
 }
 

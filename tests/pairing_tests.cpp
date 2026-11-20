@@ -206,7 +206,7 @@ struct OwnComputers {
     if (graph.upsert({}, "character", "Paul", "The duke's son.", {}, GraphPlace{dune, 0, 0.1}, "Paul") <= 0
         || graph.upsert({}, "character", "Alia", "Born later.", {}, GraphPlace{dune, 0, 0.8}, "Alia") <= 0)
         qFatal("Cy's graph could not be made");
-    cy.library.setProgress(dune, {.section = 0, .fraction = 1.0, .percent = 100}); // read through: all of it goes
+    cy.library.setProgress(dune, {.place = {.section = 0, .fraction = 1.0}, .percent = 100}); // read through: all of it goes
     auto snapshot = PublishedSpace::snapshot(cy.library, *out, {.graph = true}, {.name = "Cy", .person = cy.id()});
     if (!snapshot)
         qFatal("%s", qPrintable(snapshot.error()));
@@ -233,7 +233,7 @@ private slots:
         library.usePersonFile(dir.filePath("home/person.key"));
         QVERIFY(library.open());
         const qint64 book = library.add(dir.filePath("book.epub")).id;
-        library.setProgress(book, {.section = 2, .fraction = 0.25, .percent = 20, .updated = 1794860100});
+        library.setProgress(book, {.place = {.section = 2, .fraction = 0.25}, .percent = 20, .updated = 1794860100});
         const QList<SpaceOperation> ops = SpaceReplay::operations(library);
         QVERIFY(!ops.isEmpty());
         // The author is the person, the device this computer, and the bytes
@@ -316,13 +316,13 @@ private slots:
         const qint64 sharedHere = here.add(dir.filePath("shared.epub")).id;
         const qint64 sharedThere = there.add(dir.filePath("shared.epub")).id;
         QVERIFY(there.add(dir.filePath("there.epub")).error.isEmpty());
-        there.setProgress(sharedThere, {.section = 4, .fraction = 0.5, .percent = 40, .updated = 1794860200});
+        there.setProgress(sharedThere, {.place = {.section = 4, .fraction = 0.5}, .percent = 40, .updated = 1794860200});
 
         const SyncSummary paired = syncLibrary(here, remote);
         QVERIFY2(paired.error.isEmpty(), qPrintable(paired.error));
         QVERIFY2(paired.problems.isEmpty(), qPrintable(paired.problems.join('\n')));
         QCOMPARE(paired.refused, 0);
-        QCOMPARE(here.progress(sharedHere).section, 4);
+        QCOMPARE(here.progress(sharedHere).place.section, 4);
 
         // One personal space, and one person: the one of the two with the smaller id.
         const QString one = std::min(hereWas, thereWas);
@@ -342,16 +342,16 @@ private slots:
         }
 
         // From now on both sign as the one person.
-        here.setProgress(sharedHere, {.section = 5, .fraction = 0.1, .percent = 50, .updated = 1794860300});
+        here.setProgress(sharedHere, {.place = {.section = 5, .fraction = 0.1}, .percent = 50, .updated = 1794860300});
         QCOMPARE(lastWritten(here, "progress").signer, one);
         Library thereAgain(dir.filePath("There"));
         thereAgain.usePersonFile(thereKey(dir));
         QVERIFY(thereAgain.open());
-        thereAgain.setProgress(sharedThere, {.section = 6, .fraction = 0.1, .percent = 60, .updated = 1794860400});
+        thereAgain.setProgress(sharedThere, {.place = {.section = 6, .fraction = 0.1}, .percent = 60, .updated = 1794860400});
         QCOMPARE(lastWritten(thereAgain, "progress").signer, one);
         const SyncSummary settled = syncLibrary(here, remote);
         QVERIFY2(settled.problems.isEmpty(), qPrintable(settled.problems.join('\n')));
-        QCOMPARE(here.progress(sharedHere).section, 6);
+        QCOMPARE(here.progress(sharedHere).place.section, 6);
         QCOMPARE(Replication::operations(here), Replication::operations(thereAgain));
         QCOMPARE(Person::load(here.personFile().file())->id(), one);
 
@@ -379,9 +379,9 @@ private slots:
         QVERIFY(here.open() && there.open());
         const qint64 sharedHere = here.add(dir.filePath("shared.epub")).id;
         const qint64 sharedThere = there.add(dir.filePath("shared.epub")).id;
-        there.setProgress(sharedThere, {.section = 2, .fraction = 0.5, .percent = 20, .updated = 1794860200});
+        there.setProgress(sharedThere, {.place = {.section = 2, .fraction = 0.5}, .percent = 20, .updated = 1794860200});
         QVERIFY(syncLibrary(here, remote).problems.isEmpty());
-        QCOMPARE(here.progress(sharedHere).section, 2);
+        QCOMPARE(here.progress(sharedHere).place.section, 2);
 
         // An operation there that is not as it was signed: a later place,
         // signed, and then changed on its way.
@@ -406,12 +406,12 @@ private slots:
         QVERIFY2(summary.problems.first().contains("refused"), qPrintable(summary.problems.first()));
         QVERIFY(summary.toJson().value("refused").toInt() == 1);
         // Never taken in: not in the log here, and the place is as it was.
-        QCOMPARE(here.progress(sharedHere).section, 2);
+        QCOMPARE(here.progress(sharedHere).place.section, 2);
         const QList<SpaceOperation> taken = writtenBy(here, forged.device);
         QVERIFY(std::ranges::none_of(taken, [&forged](const SpaceOperation &op) { return op.seq == forged.seq; }));
         // And refused again the next time, never taken by being sent twice.
         QCOMPARE(syncLibrary(here, remote).refused, 1);
-        QCOMPARE(here.progress(sharedHere).section, 2);
+        QCOMPARE(here.progress(sharedHere).place.section, 2);
     }
 
     void aPublishedSpaceCarriesNoSignatureOfHome() {
@@ -734,7 +734,7 @@ private slots:
         // The layer's graph, there, as far as one has read there.
         const qint64 dune = bookTitled(*there, "Dune");
         QVERIFY(dune > 0);
-        there->setProgress(dune, {.section = 0, .fraction = 0.5, .percent = 50});
+        there->setProgress(dune, {.place = {.section = 0, .fraction = 0.5}, .percent = 50});
         QCOMPARE(layerNames(*there, dune), QStringList({"Paul"}));
 
         // Given up there: given up here too, the collection kept.

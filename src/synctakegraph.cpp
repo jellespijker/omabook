@@ -37,11 +37,11 @@ struct Taking {
 
     [[nodiscard]] QString standsFor(const QString &gid) const { return same.value(gid, gid); }
 
-    [[nodiscard]] std::optional<GraphPlace> place(const QString &bookGid, int section, double fraction) const {
+    [[nodiscard]] std::optional<GraphPlace> place(const QString &bookGid, const BookPlace &at) const {
         if (bookGid.isEmpty())
             return GraphPlace{};
         const qint64 book = books.value(bookGid);
-        return book > 0 ? std::optional(GraphPlace{book, section, fraction}) : std::nullopt;
+        return book > 0 ? std::optional(GraphPlace{book, at}) : std::nullopt;
     }
 };
 
@@ -110,7 +110,7 @@ qint64 thingFor(Taking &taking, const QString &gid, const ReducedNode &node, qin
 
 void takeSeen(Taking &taking, qint64 id, const ReducedNode &node) {
     for (auto seen = node.seen.cbegin(); seen != node.seen.cend(); ++seen) {
-        const std::optional<GraphPlace> at = taking.place(seen.key(), seen->section, seen->fraction);
+        const std::optional<GraphPlace> at = taking.place(seen.key(), seen->place);
         if (!at || at->bookId == 0)
             continue;
         const std::optional<GraphMoment> mine = id > 0 ? taking.graph.firstMet(id, at->bookId) : std::nullopt;
@@ -206,7 +206,7 @@ void takeFacts(Taking &taking) {
         const bool made = madeHere(fieldOf(taking.merged.nodes.value(gid), u"kind"_s));
         if (SpaceReducer::isRemoved(fact->alive, fact->removed) || node == 0 || made || fact->kind.isEmpty() || fact->value.isEmpty())
             continue;
-        const std::optional<GraphPlace> at = taking.place(fact->bookGid, fact->moment.section, fact->moment.fraction);
+        const std::optional<GraphPlace> at = taking.place(fact->bookGid, fact->moment.place);
         if (!at)
             continue; // of a book this library doesn't have
         const std::optional<GraphMoment> moment = at->bookId > 0 ? std::optional(GraphMoment{*at, fact->moment.anchor}) : std::nullopt;
@@ -261,7 +261,7 @@ void takeEdges(Taking &taking) {
             continue;
         const qint64 source = endOf(taking, edge.sourceGid);
         const qint64 target = endOf(taking, edge.targetGid);
-        const std::optional<GraphPlace> learned = taking.place(edge.bookGid, edge.learned.section, edge.learned.fraction);
+        const std::optional<GraphPlace> learned = taking.place(edge.bookGid, edge.learned.place);
         if (source == 0 || target == 0 || source == target || !learned)
             continue;
         const auto mine = here.constFind(QString("%1 %2 %3").arg(source).arg(target).arg(edge.kind.simplified().toLower()));

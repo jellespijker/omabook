@@ -359,7 +359,7 @@ private slots:
             Library beside(machine.library);
             QVERIFY(beside.open());
             Recap recap;
-            recap.section = 1;
+            recap.place.section = 1;
             recap.text = "A test happens.";
             beside.setNotes(epub, "recap", recap);
         }

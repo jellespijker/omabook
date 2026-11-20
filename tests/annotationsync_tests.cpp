@@ -74,7 +74,8 @@ private slots:
         QVERIFY(syncLibrary(two.here, remote).problems.isEmpty());
 
         const qint64 made = two.here.addAnnotation(
-            two.mine, {.id = 0, .kind = "bookmark", .section = 2, .fraction = 0.375, .text = "The storm", .note = {}, .created = 0});
+            two.mine,
+            {.id = 0, .kind = "bookmark", .place = {.section = 2, .fraction = 0.375}, .text = "The storm", .note = {}, .created = 0});
         QVERIFY(made > 0);
         const SyncSummary first = syncLibrary(two.here, remote);
         QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
@@ -82,8 +83,8 @@ private slots:
         const QList<Annotation> there = two.there.annotations(two.theirs);
         QCOMPARE(there.size(), 1);
         QCOMPARE(there.first().kind, QString("bookmark"));
-        QCOMPARE(there.first().section, 2);
-        QCOMPARE(there.first().fraction, 0.375);
+        QCOMPARE(there.first().place.section, 2);
+        QCOMPARE(there.first().place.fraction, 0.375);
         QCOMPARE(there.first().text, QString("The storm"));
         QCOMPARE(there.first().created, two.here.annotations(two.mine).first().created);
         // The same one on both, by one id.
@@ -203,7 +204,8 @@ private slots:
     void anOlderOmabookSyncsAsBeforeWithoutBookmarks() {
         TwoComputers two;
         QVERIFY(two.here.addAnnotation(
-                    two.mine, {.id = 0, .kind = "bookmark", .section = 1, .fraction = 0.5, .text = "Here only", .note = {}, .created = 0})
+                    two.mine,
+                    {.id = 0, .kind = "bookmark", .place = {.section = 1, .fraction = 0.5}, .text = "Here only", .note = {}, .created = 0})
                 > 0);
         const SyncSummary summary = syncLibrary(two.here, two.remote(true));
         QVERIFY2(summary.error.isEmpty(), qPrintable(summary.error));
@@ -219,9 +221,10 @@ private slots:
     void aComputerThatTookNoBookmarksYetIsSentThemWhenItDoes() {
         TwoComputers two;
         QVERIFY(two.here.addAnnotation(
-                    two.mine, {.id = 0, .kind = "bookmark", .section = 1, .fraction = 0.25, .text = "Before", .note = {}, .created = 0})
+                    two.mine,
+                    {.id = 0, .kind = "bookmark", .place = {.section = 1, .fraction = 0.25}, .text = "Before", .note = {}, .created = 0})
                 > 0);
-        two.here.setProgress(two.mine, {.section = 2, .fraction = 0.5, .percent = 40, .updated = 1794700000});
+        two.here.setProgress(two.mine, {.place = {.section = 2, .fraction = 0.5}, .percent = 40, .updated = 1794700000});
         const Replication::Vector all = Replication::vector(two.here);
         QVERIFY(Replication::since(two.here, all).isEmpty());
         const QList<SpaceOperation> lacking = Replication::since(two.here, all, {});

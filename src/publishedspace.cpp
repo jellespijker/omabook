@@ -68,13 +68,13 @@ struct Members {
     // Whether the owner has met a place of a book: nothing past where they
     // got in it, nothing of one not begun, all of one read. A place of no
     // book, or of a book the space doesn't hold, is not theirs to bound.
-    [[nodiscard]] bool met(const Canon &canon, const QString &bookGid, int section, double fraction) const {
+    [[nodiscard]] bool met(const Canon &canon, const QString &bookGid, const BookPlace &place) const {
         if (!holds(canon, bookGid))
             return true;
-        return reach.value(canon.book(bookGid)).covers(GraphPlace{.bookId = 0, .section = section, .fraction = fraction});
+        return reach.value(canon.book(bookGid)).covers(GraphPlace{0, place});
     }
     [[nodiscard]] bool met(const Canon &canon, const QString &bookGid, const SpaceMoment &moment) const {
-        return met(canon, bookGid, moment.section, moment.fraction);
+        return met(canon, bookGid, moment.place);
     }
 };
 
@@ -232,19 +232,16 @@ void collectDays(const ReducedState &state, const Canon &canon, Members &members
 // book (of a sighting, the field's) and the place in it.
 struct Place {
     QString book;
-    int section = 0;
-    double fraction = 0;
+    BookPlace at;
 };
 
 [[nodiscard]] Place placeIn(const QString &json, const QString &book = {}) {
     const QJsonObject object = QJsonDocument::fromJson(json.toUtf8()).object();
-    return {.book = book.isEmpty() ? object.value("book").toString() : book,
-            .section = object.value("section").toInt(),
-            .fraction = object.value("fraction").toDouble()};
+    return {.book = book.isEmpty() ? object.value("book").toString() : book, .at = BookPlace::fromJson(object)};
 }
 
 [[nodiscard]] bool metAt(const Members &members, const Canon &canon, const Place &place) {
-    return members.met(canon, place.book, place.section, place.fraction);
+    return members.met(canon, place.book, place.at);
 }
 
 // A book's files are said when the space carries its books' files, and of a

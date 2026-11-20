@@ -42,8 +42,8 @@ namespace {
 }
 
 [[nodiscard]] QJsonObject toJson(const Progress &progress, qint64 hlc) {
-    return {{"section", progress.section},
-            {"fraction", progress.fraction},
+    return {{"section", progress.place.section},
+            {"fraction", progress.place.fraction},
             {"percent", progress.percent},
             {"updated", progress.updated},
             {"hlc", hlc}};
@@ -362,8 +362,7 @@ MergedBookDetails decideDetails(const Book &here, const QJsonObject &mine, const
 
 Progress progressFrom(const QJsonObject &object) {
     Progress progress;
-    progress.section = object.value("section").toInt();
-    progress.fraction = object.value("fraction").toDouble();
+    progress.place = BookPlace::fromJson(object);
     progress.percent = object.value("percent").toDouble();
     progress.updated = object.value("updated").toInteger();
     return progress;
@@ -371,8 +370,8 @@ Progress progressFrom(const QJsonObject &object) {
 
 QStringList progressArguments(qint64 id, const Progress &progress) {
     return {"progress",   QString::number(id),
-            "--section",  QString::number(progress.section),
-            "--fraction", QString::number(progress.fraction, 'g', 12),
+            "--section",  QString::number(progress.place.section),
+            "--fraction", QString::number(progress.place.fraction, 'g', 12),
             "--percent",  QString::number(progress.percent, 'g', 12),
             "--updated",  QString::number(progress.updated)};
 }

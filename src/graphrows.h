@@ -36,9 +36,7 @@ constexpr QLatin1StringView nodeColumns{"id, scope, kind, name, summary, data, C
 
 // A place as three columns of a row hold it, the first of them at `column`.
 [[nodiscard]] inline GraphPlace placeFrom(const QSqlQuery &query, int column) {
-    return {.bookId = query.value(column).toLongLong(),
-            .section = query.value(column + 1).toInt(),
-            .fraction = query.value(column + 2).toDouble()};
+    return {query.value(column).toLongLong(), query.value(column + 1).toInt(), query.value(column + 2).toDouble()};
 }
 
 [[nodiscard]] inline GraphEdge edgeFrom(const QSqlQuery &query) {

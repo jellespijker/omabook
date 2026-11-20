@@ -281,7 +281,7 @@ private slots:
         Generated made(1500, 15);
         const QList<qint64> &books = made.books;
         for (const qint64 book : books.mid(0, 10))
-            made.library.setProgress(book, {.section = 5, .fraction = 0.5, .percent = 50, .updated = 0});
+            made.library.setProgress(book, {.place = {.section = 5, .fraction = 0.5}, .percent = 50, .updated = 0});
         const QStringList words = made.words.mid(0, 80)
                                   + (made.words.mid(80, 40) | std::views::transform([](const QString &word) { return word.left(3); })
                                      | std::ranges::to<QStringList>());
@@ -294,8 +294,8 @@ private slots:
             [&] { graph.upsert({}, u"character"_s, made.words.at(1) + u" newcomer"_s, {}, {}, GraphPlace{books.at(0), 1, 0.1}); },
             [&] { graph.learn(made.things.at(3), u"alias"_s, made.words.at(2) + u"son"_s, GraphMoment{{books.at(3), 0, 0.0}, {}}); },
             [&] { graph.learn(made.things.at(4), u"summary"_s, made.words.at(5) + u" again"_s, GraphMoment{{books.at(4), 0, 0.0}, {}}); },
-            [&] { made.library.setProgress(books.at(2), {.section = 9, .fraction = 0.9, .percent = 90, .updated = 0}); },
-            [&] { made.library.setProgress(books.at(12), {.section = 3, .fraction = 0.2, .percent = 30, .updated = 0}); },
+            [&] { made.library.setProgress(books.at(2), {.place = {.section = 9, .fraction = 0.9}, .percent = 90, .updated = 0}); },
+            [&] { made.library.setProgress(books.at(12), {.place = {.section = 3, .fraction = 0.2}, .percent = 30, .updated = 0}); },
             [&] { QVERIFY(graph.remove(made.things.at(6))); },
             [&] { graph.link(made.things.at(7), graph.bookNode(books.at(14)), u"appears in"_s, {}, GraphPlace{books.at(14), 0, 0.0}); },
             [&] { QVERIFY(made.library.setReading(books.at(11), u"read"_s, 0, {})); },
@@ -338,7 +338,7 @@ private slots:
     void aSearchReadsOnlyWhatItsWordsCanFind() {
         Generated made(1500, 15);
         for (const qint64 book : made.books)
-            made.library.setProgress(book, {.section = 6, .fraction = 0.5, .percent = 60, .updated = 0});
+            made.library.setProgress(book, {.place = {.section = 6, .fraction = 0.5}, .percent = 60, .updated = 0});
         const KnowledgeIndex whole = KnowledgeIndex::build(made.library);
         for (const QString &word : made.words.mid(0, 40)) {
             // Each search, and the word of it it asks of what is known.

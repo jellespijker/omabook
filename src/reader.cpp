@@ -260,12 +260,12 @@ void Reader::loaded() {
     }
     Progress progress = m_backend->library()->progress(m_bookId);
     if (m_wantedSection >= 0) {
-        progress.section = m_wantedSection;
-        progress.fraction = m_wantedFraction;
+        progress.place.section = m_wantedSection;
+        progress.place.fraction = m_wantedFraction;
         m_wantedSection = -1;
     }
-    m_section = qBound(0, progress.section, m_document->count() - 1);
-    m_fraction = qBound(0.0, progress.fraction, 1.0);
+    m_section = qBound(0, progress.place.section, m_document->count() - 1);
+    m_fraction = qBound(0.0, progress.place.fraction, 1.0);
     m_loggedPercent = percent();
     m_loading = false;
     refreshHtml();
@@ -494,7 +494,7 @@ QVariantList Reader::bookmarks() const {
     if (!m_document || !m_backend->library())
         return list;
     for (const Annotation &annotation : m_backend->library()->annotations(m_bookId))
-        list << QVariantMap{{"id", annotation.id}, {"section", annotation.section}, {"fraction", annotation.fraction},
+        list << QVariantMap{{"id", annotation.id}, {"section", annotation.place.section}, {"fraction", annotation.place.fraction},
                             {"text", annotation.text}};
     return list;
 }
@@ -504,8 +504,7 @@ void Reader::addBookmark(const QString &text) {
         return;
     Annotation bookmark;
     bookmark.kind = "bookmark";
-    bookmark.section = m_section;
-    bookmark.fraction = m_fraction;
+    bookmark.place = {.section = m_section, .fraction = m_fraction};
     bookmark.text = text.simplified().left(200);
     m_backend->library()->addAnnotation(m_bookId, bookmark);
     emit bookmarksChanged();

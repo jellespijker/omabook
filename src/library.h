@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "bookmeta.h"
+#include "bookplace.h"
 #include "person.h"
 
 class QSqlQuery;
@@ -78,9 +79,9 @@ struct Book {
     QJsonObject toJson() const;
 };
 
+// Where a book was read to.
 struct Progress {
-    int section = 0;
-    double fraction = 0;    // how far into the section, 0 to 1
+    BookPlace place;
     double percent = 0;     // how far into the book, 0 to 100
     qint64 updated = 0;     // when it was read to here, seconds since the epoch
 };
@@ -96,8 +97,7 @@ struct FormatFile {
 // The AI's running notes on a book up to a place: what the next catch-up
 // builds on, so only what was read since has to be sent.
 struct Recap {
-    int section = 0;
-    double fraction = 0;
+    BookPlace place; // what was read up to
     QString text;
     qint64 updated = 0;
 };
@@ -114,8 +114,7 @@ struct SeriesNotes {
 struct Annotation {
     qint64 id = 0;
     QString kind;           // "bookmark" or "highlight"
-    int section = 0;
-    double fraction = 0;
+    BookPlace place;
     QString text;
     QString note;
     qint64 created = 0;

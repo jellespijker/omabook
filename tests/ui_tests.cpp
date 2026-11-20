@@ -911,7 +911,7 @@ private slots:
         QCOMPARE(desk.reader->section(), 1);
         desk.key(Qt::Key_Escape);
         QTRY_VERIFY(!desk.reader->isOpen());
-        QCOMPARE(desk.backend->library()->progress(id).section, 1);
+        QCOMPARE(desk.backend->library()->progress(id).place.section, 1);
         QTRY_VERIFY(desk.value("grid", "activeFocus").toBool());
         desk.key(Qt::Key_Space);
         QTRY_VERIFY(desk.reader->isOpen());
@@ -992,7 +992,7 @@ private slots:
         QTRY_COMPARE(desk.value("conversation", "count").toInt(), 4);
         QTRY_VERIFY(!desk.assistant->busy());
         QCOMPARE(desk.backend->library()->recap(id).text, desk.ai.answer);
-        QCOMPARE(desk.backend->library()->recap(id).section, 1);
+        QCOMPARE(desk.backend->library()->recap(id).place.section, 1);
 
         // Asked again with nothing read since, it costs nothing: the notes
         // are shown as they are.

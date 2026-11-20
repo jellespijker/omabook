@@ -60,7 +60,7 @@ QJsonObject GraphOps::add(Graph graph, const QJsonObject &thing) {
         // Met where it is said to be, or where the book was read to.
         const Progress read = library.progress(bookId);
         seen = thing.contains("section") ? GraphPlace{bookId, thing.value("section").toInt(), thing.value("fraction").toDouble()}
-                                         : GraphPlace{bookId, read.section, read.fraction};
+                                         : GraphPlace{bookId, read.place};
     }
     if (bookId > 0 && !graph.sees(bookId))
         return problem(QString("Book %1 is not in %2.").arg(bookId).arg(Tenancy::nameOf(library, graph.tenant().value_or(Tenant::unfiled()))));
@@ -108,8 +108,7 @@ QJsonObject GraphOps::build(Library &library, qint64 bookId, const std::optional
     // As far as it was read, unless a place is named: the graph of a book
     // is not to run ahead of its reader by itself.
     const Progress read = library.progress(bookId);
-    const GraphPlace goal = whole ? GraphPlace{bookId, document->count() - 1, 1.0}
-                            : upTo ? *upTo : GraphPlace{bookId, read.section, read.fraction};
+    const GraphPlace goal = whole ? GraphPlace{bookId, document->count() - 1, 1.0} : upTo.value_or(GraphPlace{bookId, read.place});
     if (!whole && !upTo && read.percent <= 0)
         return problem("This book has not been read yet, and its graph goes no further than its reader. Name a section "
                        "with --upto, or take the whole book with --all.");
@@ -426,7 +425,7 @@ int runGraphCli(const QStringList &arguments) {
         std::optional<GraphPlace> learned;
         if (bookId > 0 && library.book(bookId))
             learned = parser.isSet("section") ? GraphOps::place(bookId, parser.value("section"), parser.value("fraction"))
-                                              : std::optional(GraphPlace{bookId, read.section, read.fraction});
+                                              : std::optional(GraphPlace{bookId, read.place});
         answer = GraphOps::link(graph, first, second, words.mid(3).join(' '), parser.value("note"), learned);
         plain = [&] { print(stdout, QString("Relation %1 is in the graph.").arg(answer.value("edge").toInteger())); };
     } else if (sub == "unlink" && words.size() == 2) {

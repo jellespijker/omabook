@@ -1637,7 +1637,7 @@ omabook.format.register({name: "Spins", extensions: ["spins"], claims: function 
         QCOMPARE(reader.toc().size(), 6);
         QVERIFY(reader.html().contains("chapter 2"));
         QTRY_COMPARE(texts(said), QStringList{QString("turned %1 teller teller 1 6 50 25 = %1 teller teller 1 6 50 25").arg(tale)});
-        QCOMPARE(bench.library.progress(tale).section, 1);
+        QCOMPARE(bench.library.progress(tale).place.section, 1);
         said.clear();
 
         // Asked for by hand, the same; a book that got shorter leaves the
@@ -2086,14 +2086,14 @@ omabook.format.register({name: "Spins", extensions: ["spins"], claims: function 
         const QVariantMap moved = plugins->call("teller", "move", {tale, 2, 0.5}).toMap();
         QCOMPARE(moved.value("section").toInt(), 2);
         QCOMPARE(moved.value("percent").toDouble(), 62.5);
-        QCOMPARE(bench.library.progress(tale).section, 2);
-        QCOMPARE(bench.library.progress(tale).fraction, 0.5);
+        QCOMPARE(bench.library.progress(tale).place.section, 2);
+        QCOMPARE(bench.library.progress(tale).place.fraction, 0.5);
         // Past the end is the last chapter.
         QCOMPARE(plugins->call("teller", "move", {tale, 40, 0}).toMap().value("section").toInt(), 3);
         // A person's book is where the person left it.
         bench.library.setProgress(human, {1, 0.25, 62});
         QVERIFY(plugins->call("teller", "moveOthers", {human}).toString().contains("was not made by this plugin"));
-        QCOMPARE(bench.library.progress(human).fraction, 0.25);
+        QCOMPARE(bench.library.progress(human).place.fraction, 0.25);
 
         // Opened plainly, a book opens where it was read to; opened at a
         // place, there, whoever's it is.

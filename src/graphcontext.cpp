@@ -147,16 +147,16 @@ GraphContext::Reach GraphContext::reachOf(const Library &library, qint64 bookId)
     // A place past the book's start is begun too, whatever percent was said
     // with it (`omabook progress --section` says none; a plugin's book in a
     // format not loaded has none worked out).
-    reach.any = reach.all || read.percent > 0 || read.section > 0 || read.fraction > 0;
+    reach.any = reach.all || read.percent > 0 || read.place.section > 0 || read.place.fraction > 0;
     return reach;
 }
 
 GraphPlace GraphContext::furthest(const Library &library, qint64 bookId) {
     const Progress read = library.progress(bookId);
-    const GraphPlace here{bookId, read.section, read.fraction};
+    const GraphPlace here{bookId, read.place};
     // Kept by the database as the reading place moves (Library::open).
     const Recap most = library.notes(bookId, "furthest");
-    const GraphPlace ever{bookId, most.section, most.fraction};
+    const GraphPlace ever{bookId, most.place};
     return most.updated > 0 && here.notAfter(ever) ? ever : here;
 }
 

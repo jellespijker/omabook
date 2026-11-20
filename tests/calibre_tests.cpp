@@ -216,7 +216,7 @@ private slots:
         QCOMPARE(first.status(), QString("read"));
         QCOMPARE(first.rating, 4);
         QCOMPARE(first.percent, 100.0);
-        QCOMPARE(library.progress(first.id).section, 1);
+        QCOMPARE(library.progress(first.id).place.section, 1);
         // When Calibre says it was read, not when it was imported.
         QCOMPARE(first.lastRead, qint64(1700001000));
         QCOMPARE(first.identifiers.value("goodreads").toString(), QString("4671"));

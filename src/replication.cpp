@@ -146,8 +146,7 @@ void join(QHash<QString, QString> &canonical, const QString &one, const QString 
 
 [[nodiscard]] Progress placeOf(const ReducedBook &book) {
     const QJsonObject value = QJsonDocument::fromJson(book.fields.value(u"progress"_s).value.toUtf8()).object();
-    return {.section = value.value("section").toInt(),
-            .fraction = value.value("fraction").toDouble(),
+    return {.place = BookPlace::fromJson(value),
             .percent = value.value("percent").toDouble(),
             .updated = Hlc::seconds(SpaceReducer::fieldHlc(book, u"progress"_s))};
 }
@@ -438,11 +437,11 @@ QList<Replication::PlaceChange> Replication::placeChanges(const Library &library
         const auto book = state.books.constFind(standsFor(canonical, query.value(1).toString()));
         if (book == state.books.cend() || book->fields.value(u"progress"_s).value.isEmpty())
             continue;
-        const Progress place = placeOf(*book);
+        const Progress read = placeOf(*book);
         const auto row =
             std::tuple{query.value(2).toInt(), query.value(3).toDouble(), query.value(4).toDouble(), query.value(5).toLongLong()};
-        if (query.value(2).isNull() || row != std::tuple{place.section, place.fraction, place.percent, place.updated})
-            changes << PlaceChange{.book = query.value(0).toLongLong(), .place = place};
+        if (query.value(2).isNull() || row != std::tuple{read.place.section, read.place.fraction, read.percent, read.updated})
+            changes << PlaceChange{.book = query.value(0).toLongLong(), .place = read};
     }
     return changes;
 }

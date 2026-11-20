@@ -63,8 +63,7 @@ GraphBatch::Plan GraphBatch::plan(Library &library, const Choice &choice) {
         } else if (!toTheEnd(*book, choice) && read.percent <= 0) {
             item.skipped = "It hasn't been read yet.";
         } else {
-            const GraphPlace upTo = toTheEnd(*book, choice) ? GraphPlace{id, document->count() - 1, 1.0}
-                                                             : GraphPlace{id, read.section, read.fraction};
+            const GraphPlace upTo = toTheEnd(*book, choice) ? GraphPlace{id, document->count() - 1, 1.0} : GraphPlace{id, read.place};
             const auto passages = GraphBuild::passages(*document, choice.again ? std::nullopt : GraphBuild::builtTo(library, id), upTo);
             item.characters = GraphBuild::size(passages);
             item.requests = int(GraphBuild::chunks(passages).size());

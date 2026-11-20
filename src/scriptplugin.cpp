@@ -472,19 +472,18 @@ public:
     Q_INVOKABLE QString libraryNotes(double id, const QString &kind) {
         const Library *library = this->library(false);
         const Recap notes = library ? library->notes(qint64(id), kind) : Recap();
-        return compact(QJsonObject{{"text", notes.text}, {"section", notes.section}, {"fraction", notes.fraction}, {"updated", notes.updated}});
+        return compact(notes.place.toJson({{"text", notes.text}, {"updated", notes.updated}}));
     }
     Q_INVOKABLE void librarySetNotes(double id, const QString &kind, const QString &text) {
         Library *library = this->library(true);
         if (const auto book = this->book(library, id)) {
-            const Progress place = library->progress(book->id);
-            library->setNotes(book->id, kind, {place.section, place.fraction, text, 0});
+            library->setNotes(book->id, kind, {.place = library->progress(book->id).place, .text = text, .updated = 0});
         }
     }
     Q_INVOKABLE QString libraryProgress(double id) {
         const Library *library = this->library(false);
-        const Progress place = library ? library->progress(qint64(id)) : Progress();
-        return compact(QJsonObject{{"section", place.section}, {"fraction", place.fraction}, {"percent", place.percent}, {"updated", place.updated}});
+        const Progress read = library ? library->progress(static_cast<qint64>(id)) : Progress();
+        return compact(read.place.toJson({{"percent", read.percent}, {"updated", read.updated}}));
     }
     Q_INVOKABLE QString librarySetProgress(double id, const QString &place) {
         Library *library = this->library(true);
@@ -493,16 +492,16 @@ public:
             return "null";
         const QJsonObject given = parsed(place).toObject();
         Progress progress = library->progress(book->id);
-        progress.section = qMax(0, given.value("section").toInt(progress.section));
-        progress.fraction = qBound(0.0, given.value("fraction").toDouble(0), 1.0);
+        progress.place.section = qMax(0, given.value("section").toInt(progress.place.section));
+        progress.place.fraction = qBound(0.0, given.value("fraction").toDouble(0), 1.0);
         progress.updated = 0;
         // How far into the book that is depends on how long the book is.
         for (const QString &format : book->formats) {
             if (!Formats::readable(format))
                 continue;
             if (const auto document = Formats::open(library->formatPath(book->id, format))) {
-                progress.section = qMin(progress.section, document->count() - 1);
-                progress.percent = 100.0 * (progress.section + progress.fraction) / document->count();
+                progress.place.section = qMin(progress.place.section, document->count() - 1);
+                progress.percent = 100.0 * (progress.place.section + progress.place.fraction) / document->count();
             }
             break;
         }
@@ -514,9 +513,8 @@ public:
         QJsonArray list;
         if (const Library *library = this->library(false))
             for (const Annotation &annotation : library->annotations(qint64(id)))
-                list << QJsonObject{{"id", annotation.id}, {"kind", annotation.kind}, {"section", annotation.section},
-                                    {"fraction", annotation.fraction}, {"text", annotation.text}, {"note", annotation.note},
-                                    {"created", annotation.created}};
+                list << annotation.place.toJson({{"id", annotation.id}, {"kind", annotation.kind}, {"text", annotation.text},
+                                                 {"note", annotation.note}, {"created", annotation.created}});
         return compact(list);
     }
     Q_INVOKABLE QString libraryToc(double id) {
@@ -555,7 +553,7 @@ public:
     static std::optional<GraphPlace> graphPlace(qint64 bookId, const QJsonObject &at) {
         if (bookId <= 0 || !at.contains("section"))
             return std::nullopt;
-        return GraphPlace{bookId, at.value("section").toInt(), at.contains("fraction") ? at.value("fraction").toDouble() : 1.0};
+        return GraphPlace{bookId, BookPlace::fromJson(at, {.section = 0, .fraction = 1.0})};
     }
     Q_INVOKABLE QString graphFind(const QString &words, const QString &kind, const QString &scope, bool everywhere, double limit) {
         const Library *library = this->library(false);

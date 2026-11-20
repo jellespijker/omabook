@@ -30,8 +30,7 @@ struct Row {
 [[nodiscard]] Annotation annotationFrom(const ReducedAnnotation &reduced, qint64 id) {
     return {.id = id,
             .kind = fieldOf(reduced, u"kind"_s),
-            .section = fieldOf(reduced, u"section"_s).toInt(),
-            .fraction = fieldOf(reduced, u"fraction"_s).toDouble(),
+            .place = {.section = fieldOf(reduced, u"section"_s).toInt(), .fraction = fieldOf(reduced, u"fraction"_s).toDouble()},
             .text = fieldOf(reduced, u"text"_s),
             .note = fieldOf(reduced, u"note"_s),
             .created = fieldOf(reduced, u"created"_s).toLongLong()};
@@ -39,8 +38,8 @@ struct Row {
 
 [[nodiscard]] bool unchanged(const Row &row, qint64 book, const Annotation &log) {
     const Annotation &here = row.annotation;
-    return std::tie(row.book, here.kind, here.section, here.fraction, here.text, here.note, here.created)
-           == std::tie(book, log.kind, log.section, log.fraction, log.text, log.note, log.created);
+    return std::tie(row.book, here.kind, here.place.section, here.place.fraction, here.text, here.note, here.created)
+           == std::tie(book, log.kind, log.place.section, log.place.fraction, log.text, log.note, log.created);
 }
 
 } // namespace

@@ -1599,7 +1599,7 @@ private slots:
             GraphBuild::apply(shelf.library, id, GraphBuild::passages(*document, upTo(id, 1), upTo(id, 2)), thirdAnswer);
         }
         // Read to the end of the second chapter; the other book never opened.
-        shelf.library.setProgress(book, {.section = 1, .fraction = 1.0, .percent = 60, .updated = 0});
+        shelf.library.setProgress(book, {.place = {.section = 1, .fraction = 1.0}, .percent = 60, .updated = 0});
         const auto found = [&](const QString &word, bool deep = false) { return KnowledgeIndex::build(shelf.library).find(word, deep); };
 
         // A thing met by then finds its book, by a word of its name, and says so.
@@ -1647,7 +1647,7 @@ private slots:
         GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(0), upTo(1)), secondAnswer);
         // The whole book was built (on request), but the reader is in the second chapter.
         GraphBuild::apply(shelf.library, book, GraphBuild::passages(*document, upTo(1), upTo(2)), thirdAnswer);
-        shelf.library.setProgress(book, {.section = 1, .fraction = 0.9, .percent = 60, .updated = 0});
+        shelf.library.setProgress(book, {.place = {.section = 1, .fraction = 0.9}, .percent = 60, .updated = 0});
         const GraphPlace here{book, 1, 0.9};
 
         const QString question = GraphContext::forQuestion(Graph::ofReader(shelf.library, book), book, here, "Who is Corin Ash, and what of the bell?");
@@ -1671,7 +1671,7 @@ private slots:
         QVERIFY(!asked.contains("Told Mara"));
 
         // The furthest the book was read stands when the reader goes back.
-        shelf.library.setProgress(book, {.section = 0, .fraction = 0.1, .percent = 5, .updated = 0});
+        shelf.library.setProgress(book, {.place = {.section = 0, .fraction = 0.1}, .percent = 5, .updated = 0});
         QCOMPARE(GraphContext::furthest(shelf.library, book).section, 1);
         QCOMPARE(GraphContext::spoilersAfter(shelf.library, book)->section, 1);
         QVERIFY(GraphContext::unspoiled(shelf.library)(GraphPlace{book, 1, 0.5}));
@@ -1695,7 +1695,7 @@ private slots:
             GraphBuild::apply(library, 1, GraphBuild::passages(*document, std::nullopt, upTo(0)), firstAnswer);
             GraphBuild::apply(library, 1, GraphBuild::passages(*document, upTo(0), upTo(1)), secondAnswer);
             GraphBuild::apply(library, 1, GraphBuild::passages(*document, upTo(1), upTo(2)), thirdAnswer);
-            library.setProgress(1, {.section = 1, .fraction = 1.0, .percent = 60, .updated = 0});
+            library.setProgress(1, {.place = {.section = 1, .fraction = 1.0}, .percent = 60, .updated = 0});
             corin = named(library, "character", "Corin Ash").id;
         }
         const QString id = QString::number(corin);

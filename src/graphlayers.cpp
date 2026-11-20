@@ -86,7 +86,7 @@ private:
         const QString book = m_books.value(bookGid, bookGid);
         if (!m_here.contains(book))
             m_here.insert(book, SubscribedSpace::bookHere(*m_library, m_space.space, book));
-        const GraphMoment at{{m_here.value(book), moment.section, moment.fraction}, moment.anchor};
+        const GraphMoment at{{m_here.value(book), moment.place}, moment.anchor};
         return at.place.bookId > 0 && (*m_known)(at.place) ? std::optional(at) : std::nullopt;
     }
 

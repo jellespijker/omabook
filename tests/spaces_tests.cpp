@@ -361,7 +361,7 @@ private slots:
         QVERIFY(countAfterAdd > 0);
 
         // 1. Reading place (`setProgress`).
-        library.setProgress(bookId, Progress{.section = 2, .fraction = 0.42, .percent = 42.0, .updated = 1794860100});
+        library.setProgress(bookId, Progress{.place = {.section = 2, .fraction = 0.42}, .percent = 42.0, .updated = 1794860100});
         QList<SpaceOperation> ops = SpaceReplay::operations(library);
         QVERIFY(ops.size() > countAfterAdd);
         QCOMPARE(ops.last().entity, QString("book"));
@@ -491,13 +491,13 @@ private slots:
             const qint64 b1 = library.add(dir.filePath("one.epub")).id;
             const qint64 b2 = library.add(dir.filePath("two.epub")).id;
             QVERIFY(b1 > 0 && b2 > 0);
-            library.setProgress(b1, {.section = 3, .fraction = 0.5, .percent = 50.0, .updated = 1794880000});
+            library.setProgress(b1, {.place = {.section = 3, .fraction = 0.5}, .percent = 50.0, .updated = 1794880000});
             QVERIFY(library.remove(b2));
             opsBeforeBackdate = SpaceReplay::operations(library);
             QVERIFY(!opsBeforeBackdate.isEmpty());
 
             // Backdate progress and details via ChangeLog APIs: every prior op stays untouched.
-            library.setProgress(b1, {.section = 1, .fraction = 0.2, .percent = 20.0, .updated = 1794800000});
+            library.setProgress(b1, {.place = {.section = 1, .fraction = 0.2}, .percent = 20.0, .updated = 1794800000});
             QVERIFY(library.setDetailsAt(b1, 1794800000));
             const QList<SpaceOperation> opsAfterApiBackdate = SpaceReplay::operations(library);
             QVERIFY(opsAfterApiBackdate.size() > opsBeforeBackdate.size());
@@ -628,7 +628,7 @@ private slots:
         Library source(dir.filePath("Source"));
         QVERIFY(source.open());
         // Add further mutations on top of the migrated library.
-        source.setProgress(1, {.section = 2, .fraction = 0.75, .percent = 85.0, .updated = 1794880000});
+        source.setProgress(1, {.place = {.section = 2, .fraction = 0.75}, .percent = 85.0, .updated = 1794880000});
         const auto extraCol = source.addCollection("Stories/Favourites", "rating:4");
         QVERIFY(extraCol.has_value());
         QVERIFY(source.putInCollection(*extraCol, 3, true));
@@ -674,7 +674,7 @@ private slots:
         QCOMPARE(book1.meta.title, QString("Title From B"));      // device tie-break at t2
         QCOMPARE(book1.meta.publisher, QString("Press B Later")); // later HLC t3
         QVERIFY(book1.meta.tags.contains("sea"));                 // add wins over concurrent remove at t2
-        QCOMPARE(canonical.progress(b1Local).section, 3);         // later progress at t3
+        QCOMPARE(canonical.progress(b1Local).place.section, 3);   // later progress at t3
         QVERIFY(canonical.wasRemoved("3333333333333333333333333333333333333333333333333333333333333333"));
         QVERIFY(canonical.collectionNamed("Favourites")->included.contains(b1Local));
 
@@ -730,11 +730,11 @@ private slots:
         BookMeta metaLaptop = laptop.book(bookLaptop)->meta;
         metaLaptop.title = "Laptop Title v1";
         QVERIFY(laptop.setMeta(bookLaptop, metaLaptop));
-        laptop.setProgress(bookLaptop, {.section = 2, .fraction = 0.3, .percent = 30.0});
+        laptop.setProgress(bookLaptop, {.place = {.section = 2, .fraction = 0.3}, .percent = 30.0});
         const SyncSummary first = syncLibrary(desktop, remote);
         QVERIFY2(first.problems.isEmpty(), qPrintable(first.problems.join('\n')));
         QCOMPARE(desktop.book(bookDesktop)->meta.title, QString("Laptop Title v1"));
-        QCOMPARE(desktop.progress(bookDesktop).section, 2);
+        QCOMPARE(desktop.progress(bookDesktop).place.section, 2);
         QCOMPARE(desktop.collectionNamed("Drift/Reading")->rule, QString("tag:clock"));
         QCOMPARE(Graph(desktop).node(Graph(desktop).named({}, "character", "Mara"))->summary, QString("Laptop summary v1."));
 
@@ -742,7 +742,7 @@ private slots:
         BookMeta metaDesktop = desktop.book(bookDesktop)->meta;
         metaDesktop.title = "Desktop Title v2";
         QVERIFY(desktop.setMeta(bookDesktop, metaDesktop));
-        desktop.setProgress(bookDesktop, {.section = 5, .fraction = 0.8, .percent = 80.0});
+        desktop.setProgress(bookDesktop, {.place = {.section = 5, .fraction = 0.8}, .percent = 80.0});
         const auto colDesktop = desktop.collectionNamed("Drift/Reading");
         QVERIFY(colDesktop && desktop.setCollectionRule(colDesktop->id, "author:Desktop"));
         {
@@ -756,7 +756,7 @@ private slots:
         const SyncSummary second = syncLibrary(desktop, remote);
         QVERIFY2(second.problems.isEmpty(), qPrintable(second.problems.join('\n')));
         QCOMPARE(laptop.book(bookLaptop)->meta.title, QString("Desktop Title v2"));
-        QCOMPARE(laptop.progress(bookLaptop).section, 5);
+        QCOMPARE(laptop.progress(bookLaptop).place.section, 5);
         QCOMPARE(laptop.collectionNamed("Drift/Reading")->rule, QString("author:Desktop"));
         QCOMPARE(Graph(laptop).node(Graph(laptop).named({}, "character", "Mara"))->summary, QString("Desktop summary v2."));
 
@@ -835,7 +835,7 @@ private slots:
         QVERIFY(here.open());
         const qint64 sharedId = here.add(dir.filePath("shared.epub")).id;
         // Advance local progress with an explicit sub-second HLC counter > 0.
-        here.setProgress(sharedId, {.section = 3, .fraction = 0.6, .percent = 65.0, .updated = Hlc::pack(1794860500, 9)});
+        here.setProgress(sharedId, {.place = {.section = 3, .fraction = 0.6}, .percent = 65.0, .updated = Hlc::pack(1794860500, 9)});
         BookMeta metaHere = here.book(sharedId)->meta;
         metaHere.publisher = "Modern Press";
         QVERIFY(here.setMeta(sharedId, metaHere, nullptr, Hlc::pack(1794860400, 4)));

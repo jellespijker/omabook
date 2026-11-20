@@ -730,8 +730,7 @@ Progress Library::progress(qint64 id) const {
     QSqlQuery found = query("SELECT section, fraction, percent, updated FROM progress WHERE book_id = ?", {id});
     if (!found.next())
         return {};
-    return {.section = found.value(0).toInt(),
-            .fraction = found.value(1).toDouble(),
+    return {.place = {.section = found.value(0).toInt(), .fraction = found.value(1).toDouble()},
             .percent = found.value(2).toDouble(),
             .updated = found.value(3).toLongLong()};
 }
@@ -760,8 +759,7 @@ Recap Library::notes(qint64 id, const QString &kind) const {
     QSqlQuery found = query("SELECT section, fraction, text, updated FROM notes WHERE book_id = ? AND kind = ?", {id, kind});
     if (!found.next())
         return {};
-    return {.section = found.value(0).toInt(),
-            .fraction = found.value(1).toDouble(),
+    return {.place = {.section = found.value(0).toInt(), .fraction = found.value(1).toDouble()},
             .text = found.value(2).toString(),
             .updated = found.value(3).toLongLong()};
 }
@@ -804,7 +802,7 @@ QList<SeriesNotes> Library::seriesNotes(qint64 id, const QString &kind) const {
 
 void Library::setNotes(qint64 id, const QString &kind, const Recap &notes) {
     exec("INSERT OR REPLACE INTO notes (book_id, kind, section, fraction, text, updated) VALUES (?, ?, ?, ?, ?, ?)",
-         {id, kind, notes.section, notes.fraction, notes.text, QDateTime::currentSecsSinceEpoch()});
+         {id, kind, notes.place.section, notes.place.fraction, notes.text, QDateTime::currentSecsSinceEpoch()});
 }
 
 bool Library::merge(qint64 keep, qint64 other, QString *error) {

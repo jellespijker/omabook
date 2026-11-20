@@ -153,7 +153,7 @@ void Assistant::askFromNotes(const QString &kind, const QString &asked) {
     if (!m_provider || m_busy || !m_reader->isOpen())
         return;
     const Recap notes = m_reader->notes(kind);
-    QString since = notes.text.isEmpty() ? m_reader->textSoFar() : m_reader->textSince(notes.section, notes.fraction);
+    QString since = notes.text.isEmpty() ? m_reader->textSoFar() : m_reader->textSince(notes.place.section, notes.place.fraction);
     // The first time, the knowledge graph stands in for the notes there
     // aren't yet: what it holds of the book goes, with only the pages read
     // since it was built, in place of the whole book so far.

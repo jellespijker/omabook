@@ -279,12 +279,11 @@ QJsonObject snapshot(const Library &library, const Book &book, const QString &tr
     const Progress progress = library.progress(book.id);
     QJsonArray annotations;
     for (const Annotation &annotation : library.annotations(book.id))
-        annotations.append(QJsonObject{{"kind", annotation.kind}, {"section", annotation.section},
-                                       {"fraction", annotation.fraction}, {"text", annotation.text},
-                                       {"note", annotation.note}, {"created", annotation.created}});
+        annotations.append(annotation.place.toJson(
+            {{"kind", annotation.kind}, {"text", annotation.text}, {"note", annotation.note}, {"created", annotation.created}}));
     return {{"meta", book.meta.toJson()}, {"shelf", book.shelf}, {"rating", book.rating}, {"finished", book.finished},
             {"paper", book.paper}, {"identifiers", book.identifiers},
-            {"progress", QJsonArray{progress.section, progress.fraction, progress.percent, progress.updated}},
+            {"progress", QJsonArray{progress.place.section, progress.place.fraction, progress.percent, progress.updated}},
             {"annotations", annotations}, {"trashed", trashed}, {"cover", trashed.isEmpty() ? QString() : trashed + "/cover.jpg"},
             {"at", QDateTime::currentSecsSinceEpoch()}};
 }
@@ -301,12 +300,12 @@ void restore(Library &library, qint64 id, const QJsonObject &kept) {
         library.setIdentifier(id, it.key(), it->toString());
     const QJsonArray progress = kept.value("progress").toArray();
     if (progress.at(2).toDouble() > 0)
-        library.setProgress(id, {progress.at(0).toInt(), progress.at(1).toDouble(), progress.at(2).toDouble(),
-                                 progress.at(3).toInteger()});
+        library.setProgress(id,
+                            {{progress.at(0).toInt(), progress.at(1).toDouble()}, progress.at(2).toDouble(), progress.at(3).toInteger()});
     for (const QJsonValue &value : kept.value("annotations").toArray()) {
         const QJsonObject a = value.toObject();
-        library.addAnnotation(id, {0, a.value("kind").toString(), a.value("section").toInt(), a.value("fraction").toDouble(),
-                                   a.value("text").toString(), a.value("note").toString(), a.value("created").toInteger()});
+        library.addAnnotation(id, {0, a.value("kind").toString(), BookPlace::fromJson(a), a.value("text").toString(),
+                                   a.value("note").toString(), a.value("created").toInteger()});
     }
 }
 

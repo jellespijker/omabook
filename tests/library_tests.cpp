@@ -164,7 +164,7 @@ private slots:
         QVERIFY(library.remove(id));
         QVERIFY(!QDir(folder).exists());
         QVERIFY(!library.book(id));
-        QCOMPARE(library.progress(id).section, 0);
+        QCOMPARE(library.progress(id).place.section, 0);
         QVERIFY(QFile::exists(dir.filePath("a.epub")));
         const auto again = library.remove(id);
         QVERIFY(!again && !again.error().isEmpty());
@@ -952,7 +952,7 @@ private slots:
         QVERIFY(read >= now - 5);
         QVERIFY(library.setReading(id, "read", 3, "2026-01-02"));
         QVERIFY(library.setPaper(id, false));
-        library.setProgress(id, {.section = 1, .fraction = 0.5, .percent = 20, .updated = 0});
+        library.setProgress(id, {.place = {.section = 1, .fraction = 0.5}, .percent = 20, .updated = 0});
         QCOMPARE(library.book(id)->readingAt, read);
         QCOMPARE(library.book(id)->detailsAt, qint64(1700000100));
 
@@ -1070,16 +1070,15 @@ private slots:
             library.setProgress(id, {1, 0.25, 62.5});
             Annotation bookmark;
             bookmark.kind = "bookmark";
-            bookmark.section = 1;
-            bookmark.fraction = 0.25;
+            bookmark.place = {.section = 1, .fraction = 0.25};
             bookmark.text = "The end.";
             QVERIFY(library.addAnnotation(id, bookmark) > 0);
         }
         // Another opening of the same folder finds it all again.
         Library library(dir.filePath("Library"));
         QVERIFY(library.open());
-        QCOMPARE(library.progress(id).section, 1);
-        QCOMPARE(library.progress(id).fraction, 0.25);
+        QCOMPARE(library.progress(id).place.section, 1);
+        QCOMPARE(library.progress(id).place.fraction, 0.25);
         // The AI's notes on the book are kept with it too.
         QVERIFY(library.recap(id).text.isEmpty());
         library.setRecap(id, {1, 0.25, "So far: a test.", 0});
@@ -1088,7 +1087,7 @@ private slots:
         library.setNotes(id, "cast", {1, 0.25, "Ann: the author.", 0});
         QCOMPARE(library.notes(id, "cast").text, QString("Ann: the author."));
         QCOMPARE(library.notes(id, "recap").text, QString("So far: a test."));
-        QCOMPARE(library.recap(id).section, 1);
+        QCOMPARE(library.recap(id).place.section, 1);
         QVERIFY(library.recap(id).updated > 0);
         QCOMPARE(library.book(id)->percent, 62.5);
         QVERIFY(library.book(id)->lastRead > 0);
@@ -1787,7 +1786,7 @@ private slots:
             QCOMPARE(wall.status(), QString("reading"));
             QCOMPARE(wall.rating, 4);
             QCOMPARE(qRound(wall.percent), 60);
-            QCOMPARE(library.progress(1).section, 1);
+            QCOMPARE(library.progress(1).place.section, 1);
             QCOMPARE(library.annotations(1).size(), 1);
             QCOMPARE(paper.held(), QString("paper"));
             QCOMPARE(paper.status(), QString("read"));
@@ -1825,7 +1824,7 @@ private slots:
                                 && fact.revealed.place.section == 1;
                      }), qPrintable(dump));
             QCOMPARE(summaryOf({1, 1, 0.5}), QString("Walks the sea wall."));
-            QCOMPARE(library.notes(1, "furthest").section, 1);
+            QCOMPARE(library.notes(1, "furthest").place.section, 1);
             // A later summary is known from where it was revealed, and not before.
             if (format >= 10) {
                 const qint64 later = graph.named({}, "character", "Ann");
@@ -1835,10 +1834,10 @@ private slots:
             QCOMPARE(summaryOf({1, 1, 0.6}), QString("Walks the sea wall."));
             QCOMPARE(summaryOf({1, 1, 0.9}), QString("Walks the sea wall, and keeps the lamps."));
             // Going back to an earlier page leaves the furthest place where it was.
-            library.setProgress(1, {.section = 0, .fraction = 0.2, .percent = 10, .updated = 0});
-            QCOMPARE(library.notes(1, "furthest").section, 1);
-            library.setProgress(1, {.section = 2, .fraction = 0.1, .percent = 80, .updated = 0});
-            QCOMPARE(library.notes(1, "furthest").section, 2);
+            library.setProgress(1, {.place = {.section = 0, .fraction = 0.2}, .percent = 10, .updated = 0});
+            QCOMPARE(library.notes(1, "furthest").place.section, 1);
+            library.setProgress(1, {.place = {.section = 2, .fraction = 0.1}, .percent = 80, .updated = 0});
+            QCOMPARE(library.notes(1, "furthest").place.section, 2);
             // From 0.1.4, collections, one inside another: a 0.1.4 library
             // keeps them; an older one has none and can be given some.
             if (format >= 11) {

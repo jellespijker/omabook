@@ -51,7 +51,7 @@ int &activeScopes() noexcept {
 }
 
 [[nodiscard]] QString progressJson(const Progress &progress) {
-    return compactJson({{"section", progress.section}, {"fraction", progress.fraction}, {"percent", progress.percent}});
+    return compactJson({{"section", progress.place.section}, {"fraction", progress.place.fraction}, {"percent", progress.percent}});
 }
 
 using FieldMap = ChangeLogFields::Map;
@@ -106,7 +106,8 @@ void writeProgress(EntityContext &ctx, const Progress &prog, bool explicitHlc) {
     const bool embedTargetHlc = Hlc::seconds(opHlc) != Hlc::seconds(targetHlc) || (explicitHlc && opHlc != targetHlc);
     const QString value =
         embedTargetHlc
-            ? compactJson({{"section", prog.section}, {"fraction", prog.fraction}, {"percent", prog.percent}, {"hlc", targetHlc}})
+            ? compactJson(
+                  {{"section", prog.place.section}, {"fraction", prog.place.fraction}, {"percent", prog.percent}, {"hlc", targetHlc}})
             : plainJson;
     ChangeLog::append(*ctx.library, {ctx.space, u"book"_s, ctx.gid, u"progress"_s, value, opHlc});
     ctx.existing.insert(u"progress"_s, {opHlc, Spaces::deviceId(*ctx.library), value, value});
@@ -118,7 +119,7 @@ void writeProgress(EntityContext &ctx, const Progress &prog, bool explicitHlc) {
 }
 
 [[nodiscard]] bool hasProgressFields(const Progress &prog) {
-    return prog.updated > 0 || prog.percent > 0 || prog.section > 0 || prog.fraction > 0;
+    return prog.updated > 0 || prog.percent > 0 || prog.place.section > 0 || prog.place.fraction > 0;
 }
 
 void syncBookReading(EntityContext &ctx, const Book &book) {
@@ -443,7 +444,7 @@ void ChangeLog::setProgress(Library &library, qint64 bookId, const Progress &pro
     if (progress.updated > 0)
         Spaces::observeHlc(library, hlc);
     ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
-                    {bookId, progress.section, progress.fraction, progress.percent, Hlc::seconds(hlc)});
+                    {bookId, progress.place.section, progress.place.fraction, progress.percent, Hlc::seconds(hlc)});
     const QString gid = Spaces::bookId(library, bookId);
     if (!gid.isEmpty()) {
         EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, ChangeLogFields::logged(library, u"book"_s, gid),

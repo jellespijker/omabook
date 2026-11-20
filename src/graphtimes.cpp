@@ -13,7 +13,6 @@ using namespace Qt::StringLiterals;
 namespace {
 
 using Chronology::Whose;
-using GraphBuild::Passage;
 using GraphBuild::Timed;
 
 // A part of a time left as the answer's template has it: not given.
@@ -64,7 +63,7 @@ using GraphBuild::Timed;
 // One answer's times, laid into the graph of one book.
 class Laying {
 public:
-    Laying(Graph &graph, const Library &library, qint64 bookId, const QList<Passage> &passages)
+    Laying(Graph &graph, const Library &library, qint64 bookId, const QList<GraphBuild::Passage> &passages)
         : m_graph(&graph), m_library(&library), m_bookId(bookId), m_passages(&passages) {}
 
     // An event's time and timeline, revealed where the text says them.
@@ -129,7 +128,7 @@ private:
     Graph *m_graph;
     const Library *m_library;
     qint64 m_bookId;
-    const QList<Passage> *m_passages;
+    const QList<GraphBuild::Passage> *m_passages;
 };
 
 } // namespace

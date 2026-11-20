@@ -202,9 +202,7 @@ QJsonObject full(const Library &library, const Book &book) {
     return object;
 }
 
-QJsonObject placeJson(const Progress &place) {
-    return {{"section", place.section}, {"fraction", place.fraction}, {"percent", place.percent}, {"updated", place.updated}};
-}
+QJsonObject placeJson(const Progress &read) { return read.place.toJson({{"percent", read.percent}, {"updated", read.updated}}); }
 
 // A schema of `more`, with the properties several tools share laid over it.
 QJsonObject schemaWith(const QJsonObject &shared, std::initializer_list<std::pair<QString, QJsonValue>> more,
@@ -710,8 +708,7 @@ QList<Tool> coreTools() {
                           return Result::fail("Give at least one of section, fraction and percent.");
                       Progress place = at.library->progress(at.id);
                       place.updated = 0; // stamped with now
-                      if (arguments.contains("section")) place.section = arguments.value("section").toInt();
-                      if (arguments.contains("fraction")) place.fraction = arguments.value("fraction").toDouble();
+                      place.place = BookPlace::fromJson(arguments, place.place);
                       if (arguments.contains("percent")) place.percent = arguments.value("percent").toDouble();
                       const double before = at.library->progress(at.id).percent;
                       at.library->setProgress(at.id, place);
@@ -731,8 +728,8 @@ QList<Tool> coreTools() {
                       QJsonArray bookmarks;
                       for (const Annotation &mark : at.library->annotations(at.id))
                           if (mark.kind == "bookmark")
-                              bookmarks << QJsonObject{{"bookmark_id", mark.id}, {"section", mark.section}, {"fraction", mark.fraction},
-                                                       {"text", mark.text}, {"note", mark.note}, {"created", mark.created}};
+                              bookmarks << mark.place.toJson(
+                                  {{"bookmark_id", mark.id}, {"text", mark.text}, {"note", mark.note}, {"created", mark.created}});
                       return Result::ok({{"bookmarks", bookmarks}});
                   }};
 
@@ -750,8 +747,7 @@ QList<Tool> coreTools() {
                           return Result::fail(at.error);
                       Annotation mark;
                       mark.kind = "bookmark";
-                      mark.section = arguments.value("section").toInt();
-                      mark.fraction = arguments.value("fraction").toDouble();
+                      mark.place = BookPlace::fromJson(arguments);
                       mark.text = arguments.value("text").toString().simplified();
                       mark.note = arguments.value("note").toString().trimmed();
                       const qint64 added = at.library->addAnnotation(at.id, mark);
@@ -793,8 +789,7 @@ QList<Tool> coreTools() {
                           if (arguments.contains("kind") && arguments.value("kind").toString() != kind)
                               continue;
                           const Recap kept = at.library->notes(at.id, kind);
-                          notes.insert(kind, QJsonObject{{"text", kept.text}, {"section", kept.section},
-                                                         {"fraction", kept.fraction}, {"updated", kept.updated}});
+                          notes.insert(kind, kept.place.toJson({{"text", kept.text}, {"updated", kept.updated}}));
                       }
                       return Result::ok(notes);
                   }};

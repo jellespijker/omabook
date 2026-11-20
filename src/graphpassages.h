@@ -14,7 +14,9 @@
 // what was sent, so the graph is never ahead of its reader (graphbuilder.h).
 namespace GraphBuild {
 
-// A stretch of one section's text: from where to where in it (0 to 1).
+// A stretch of one section's text, as it is sent to a model: from where to
+// where in it (0 to 1). Not an annotation's ::Passage (bookplace.h): all of
+// its text, and never found again.
 struct Passage {
     int section = 0;
     double from = 0, to = 1;

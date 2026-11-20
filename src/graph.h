@@ -10,6 +10,7 @@
 #include <optional>
 #include <utility>
 
+#include "bookplace.h"
 #include "eventtime.h"
 #include "library.h"
 #include "tenancy.h"
@@ -31,16 +32,22 @@
 // everything read. A made-up world (a story being written) keeps its own
 // under a name such as "world:42", apart from what real books say.
 
-// A place in a book: where a thing was first met or a fact was learned.
-struct GraphPlace {
+// A place in one of the library's books: where a thing was first met or a
+// fact was learned, and the place the graph is cut at for its reader.
+struct GraphPlace : BookPlace {
     qint64 bookId = 0;
-    int section = 0;
-    double fraction = 0;
 
+    constexpr GraphPlace() = default;
+    constexpr GraphPlace(qint64 bookId, BookPlace place) : BookPlace{place}, bookId{bookId} {}
+    constexpr GraphPlace(qint64 bookId, int section, double fraction) : GraphPlace{bookId, BookPlace{section, fraction}} {}
+
+    // Two places are the same in the same book only.
+    constexpr bool operator==(const GraphPlace &) const = default;
+
+    // The place in its book, whichever book that is.
+    [[nodiscard]] constexpr const BookPlace &inBook() const noexcept { return *this; }
     // Whether this place is at or before `other`, in the same book.
-    constexpr bool notAfter(const GraphPlace &other) const noexcept {
-        return std::pair{section, fraction} <= std::pair{other.section, other.fraction};
-    }
+    [[nodiscard]] constexpr bool notAfter(const GraphPlace &other) const noexcept { return inBook() <= other.inBook(); }
 };
 
 // A moment of a book: a place, and a few words of the text there (the
