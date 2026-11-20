@@ -28,7 +28,7 @@ constexpr auto keyVersion = "omabook-recognition/1"_L1;
 
 [[nodiscard]] QList<Recognition::Word> wordsOf(const QJsonArray &list) {
     QList<Recognition::Word> words;
-    for (const QJsonValue &value : list) {
+    for (const auto &value : list) {
         const QJsonObject word = value.toObject();
         words.append({.text = word.value("text"_L1).toString(),
                       .start = word.value("start"_L1).toInteger(),
@@ -72,7 +72,7 @@ std::optional<Recognition::Result> Recognition::Result::fromJson(const QJsonObje
                   .server = json.value("server"_L1).toString(),
                   .at = json.value("at"_L1).toInteger(),
                   .kept = json.value("kept"_L1).toBool()};
-    for (const QJsonValue &value : json.value("segments"_L1).toArray()) {
+    for (const auto &value : json.value("segments"_L1).toArray()) {
         const QJsonObject segment = value.toObject();
         result.segments.append({.text = segment.value("text"_L1).toString(),
                                 .start = segment.value("start"_L1).toInteger(),
@@ -91,6 +91,7 @@ std::expected<QString, QString> Recognition::key(const Input &input, const QStri
         // In the order they were written, whatever order they were kept in;
         // their ids are where they are kept, not what was written.
         std::vector<const Ink::Stroke *> written;
+        written.reserve(input.strokes.size());
         for (const Ink::Stroke &stroke : input.strokes)
             written.push_back(&stroke);
         std::ranges::stable_sort(written, {}, [](const Ink::Stroke *stroke) { return stroke->began; });

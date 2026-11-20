@@ -20,7 +20,7 @@ namespace {
 
 [[nodiscard]] QStringList ownServers(const Settings &settings) {
     QStringList own;
-    for (const QJsonValue &address : settings.recognition().value("own"_L1).toArray())
+    for (const auto &address : settings.recognition().value("own"_L1).toArray())
         own << address.toString();
     return own;
 }

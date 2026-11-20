@@ -101,7 +101,7 @@ void RecognitionQueue::next() {
         connect(way.get(), &Recognition::Recognizer::recognized, this, [this, &job](Recognition::Result result) {
             if (result.at == 0)
                 result.at = QDateTime::currentMSecsSinceEpoch();
-            if (Library *library = m_library ? m_library() : nullptr; library != nullptr && !job.request.owner.isEmpty())
+            if (const Library *library = m_library ? m_library() : nullptr; library != nullptr && !job.request.owner.isEmpty())
                 if (const auto kept = RecognitionStore::keep(*library, job.request.owner, job.key, result); !kept)
                     qCWarning(lcAi).noquote() << "A recognised" << Recognition::kindName(result.kind)
                                               << "couldn't be kept:" << kept.error();
@@ -135,7 +135,7 @@ void RecognitionQueue::resolved(Job &job) {
         return;
     }
     job.key = *key;
-    Library *library = m_library ? m_library() : nullptr;
+    const Library *library = m_library ? m_library() : nullptr;
     if (!job.request.again && library != nullptr && !job.request.owner.isEmpty())
         if (const auto kept = RecognitionStore::find(*library, job.request.owner, job.key)) {
             finish(*kept);

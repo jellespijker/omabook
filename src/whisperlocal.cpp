@@ -146,7 +146,7 @@ Recognition::Result Whisper::transcript(const QJsonObject &output) {
         open.end = open.words.last().end;
         result.segments.append(std::exchange(open, {}));
     };
-    for (const QJsonValue &value : output.value("transcription"_L1).toArray()) {
+    for (const auto &value : output.value("transcription"_L1).toArray()) {
         const QJsonObject entry = value.toObject();
         const QString text = entry.value("text"_L1).toString();
         const QJsonObject offsets = entry.value("offsets"_L1).toObject();

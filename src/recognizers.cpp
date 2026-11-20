@@ -61,7 +61,7 @@ constexpr auto inkPrompt = "The picture is handwriting. Write out exactly what i
 }
 
 // Why a request failed, in plain words, and what is done about it.
-[[nodiscard]] Failure failureOf(QNetworkReply &reply, const QByteArray &body, const QString &where, const QString &model,
+[[nodiscard]] Failure failureOf(const QNetworkReply &reply, const QByteArray &body, const QString &where, const QString &model,
                                 bool transcribing) {
     const int status = reply.attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (auto away = awayFailure(status, reply, where))
@@ -139,7 +139,7 @@ void Vision::resolve() {
             return;
         }
         QStringList listed;
-        for (const QJsonValue &model : QJsonDocument::fromJson(body).object().value("data"_L1).toArray())
+        for (const auto &model : QJsonDocument::fromJson(body).object().value("data"_L1).toArray())
             listed.append(model.toObject().value("id"_L1).toString());
         const auto model = OpenAiProvider::defaultModel(m_server, listed);
         if (!model) {
@@ -286,7 +286,7 @@ Recognition::Result transcript(const QJsonObject &answer) {
                                .server = {},
                                .at = QDateTime::currentMSecsSinceEpoch(),
                                .kept = false};
-    for (const QJsonValue &value : answer.value("segments"_L1).toArray()) {
+    for (const auto &value : answer.value("segments"_L1).toArray()) {
         const QJsonObject segment = value.toObject();
         result.segments.append({.text = segment.value("text"_L1).toString().trimmed(),
                                 .start = msOf(segment.value("start"_L1)),
@@ -301,7 +301,7 @@ Recognition::Result transcript(const QJsonObject &answer) {
                                 .words = {}});
     // Each word in the last segment that began at or before it.
     qsizetype at = 0;
-    for (const QJsonValue &value : words) {
+    for (const auto &value : words) {
         const QJsonObject word = value.toObject();
         const Recognition::Word said{
             .text = word.value("word"_L1).toString().trimmed(), .start = msOf(word.value("start"_L1)), .end = msOf(word.value("end"_L1))};

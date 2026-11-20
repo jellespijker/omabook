@@ -53,6 +53,6 @@ private:
                const QJSValue &reject);
     [[nodiscard]] RecognitionQueue *queue();
 
-    ScriptPlugin *p;
+    ScriptPlugin *m_plugin;
     std::unique_ptr<RecognitionQueue> m_queue;
 };

@@ -31,7 +31,7 @@ constexpr auto assistName = "omabook-api/assist";
                        .tilted = false,
                        .began = given.value("began"_L1).toInteger(index),
                        .points = {}};
-    for (const QJsonValue &value : given.value("points"_L1).toArray()) {
+    for (const auto &value : given.value("points"_L1).toArray()) {
         const QJsonObject point = value.toObject();
         stroke.pressured = stroke.pressured || point.contains("pressure"_L1);
         stroke.points.push_back({.at = {point.value("x"_L1).toDouble(), point.value("y"_L1).toDouble()},
@@ -72,7 +72,7 @@ constexpr auto assistName = "omabook-api/assist";
 
 } // namespace
 
-ScriptAi::ScriptAi(ScriptPlugin *plugin) : p(plugin) {}
+ScriptAi::ScriptAi(ScriptPlugin *plugin) : m_plugin(plugin) {}
 
 ScriptAi::~ScriptAi() = default;
 
@@ -84,32 +84,32 @@ QJSValue ScriptAi::build(QJSEngine &engine) {
     return engine.evaluate(QString::fromUtf8(bundled.readAll()), QString::fromLatin1(assistName)).call({engine.newQObject(this)});
 }
 
-bool ScriptAi::available() { return p->m_services.ai && p->m_services.ai(nullptr) != nullptr; }
+bool ScriptAi::available() { return m_plugin->m_services.ai && m_plugin->m_services.ai(nullptr) != nullptr; }
 
 void ScriptAi::ask(const QString &prompt, const QString &system, const QString &model, const QJSValue &onText, const QJSValue &resolve,
                    const QJSValue &reject) {
     QString why = u"No AI is set up."_s;
-    std::unique_ptr<AiProvider> provider = p->m_services.ai ? p->m_services.ai(&why) : nullptr;
+    std::unique_ptr<AiProvider> provider = m_plugin->m_services.ai ? m_plugin->m_services.ai(&why) : nullptr;
     if (!provider) {
         reject.call({why});
         return;
     }
-    auto *asking = new AiCall(std::move(provider), p);
-    p->busy(1);
-    auto finish = [this, asking](const QJSValue &callback, const QString &text) {
+    auto *asking = new AiCall(std::move(provider), m_plugin);
+    m_plugin->busy(1);
+    const auto finish = [this, asking](const QJSValue &callback, const QString &text) {
         callback.call({text});
         asking->deleteLater();
-        p->busy(-1);
+        m_plugin->busy(-1);
     };
-    connect(asking, &AiCall::done, p, [finish, resolve](const QString &answer) { finish(resolve, answer); });
-    connect(asking, &AiCall::failed, p, [finish, reject](const QString &problem) { finish(reject, problem); });
+    connect(asking, &AiCall::done, m_plugin, [finish, resolve](const QString &answer) { finish(resolve, answer); });
+    connect(asking, &AiCall::failed, m_plugin, [finish, reject](const QString &problem) { finish(reject, problem); });
     // The answer as it is written, for a script that shows it growing.
     if (onText.isCallable())
-        connect(asking, &AiCall::delta, p, [this, onText](const QString &piece) {
+        connect(asking, &AiCall::delta, m_plugin, [this, onText](const QString &piece) {
             QString problem;
-            p->call(onText, {piece}, &problem);
+            m_plugin->call(onText, {piece}, &problem);
             if (!problem.isEmpty())
-                p->report(problem);
+                m_plugin->report(problem);
         });
     AiRequest request;
     request.system = system;
@@ -123,7 +123,8 @@ void ScriptAi::ask(const QString &prompt, const QString &system, const QString &
 
 bool ScriptAi::recognizes(const QString &kind) {
     const auto named = Recognition::kindNamed(kind);
-    return named && p->m_services.settings != nullptr && RecognitionRoute::ways(*p->m_services.settings, *named, false).has_value();
+    return named && m_plugin->m_services.settings != nullptr
+           && RecognitionRoute::ways(*m_plugin->m_services.settings, *named, false).has_value();
 }
 
 int ScriptAi::ink(const QString &strokes, const QString &options, const QJSValue &onWaiting, const QJSValue &resolve,
@@ -139,7 +140,7 @@ int ScriptAi::ink(const QString &strokes, const QString &options, const QJSValue
 
 int ScriptAi::audio(const QString &file, const QString &options, const QJSValue &onWaiting, const QJSValue &resolve,
                     const QJSValue &reject) {
-    const QString path = p->inside(file, false);
+    const QString path = m_plugin->inside(file, false);
     if (path.isEmpty()) {
         reject.call({tr("The recording \"%1\" can't be read: it should be a file of the plugin's own folder.").arg(file)});
         return 0;
@@ -158,9 +159,9 @@ int ScriptAi::submit(Recognition::Input input, const QJsonObject &options, const
         return 0;
     }
     input.language = options.value("language"_L1).toString().trimmed();
-    p->busy(1);
+    m_plugin->busy(1);
     RecognitionQueue::Request request{.input = std::move(input),
-                                      .owner = p->manifest().id,
+                                      .owner = m_plugin->manifest().id,
                                       .hosted = options.value("hosted"_L1).toBool(),
                                       .again = options.value("again"_L1).toBool()};
     const auto done = [this, resolve, reject](const std::expected<Recognition::Result, QString> &outcome) {
@@ -168,21 +169,22 @@ int ScriptAi::submit(Recognition::Input input, const QJsonObject &options, const
             resolve.call({compact(outcome->toJson())});
         else
             reject.call({outcome.error()});
-        p->busy(-1);
+        m_plugin->busy(-1);
     };
     const auto waiting = [this, onWaiting](const QString &why) {
         if (!onWaiting.isCallable())
             return;
         QString problem;
-        p->call(onWaiting, {why}, &problem);
+        m_plugin->call(onWaiting, {why}, &problem);
         if (!problem.isEmpty())
-            p->report(problem);
+            m_plugin->report(problem);
     };
     return recognizing->submit(std::move(request), done, waiting);
 }
 
 RecognitionQueue *ScriptAi::queue() {
-    if (!m_queue && p->m_services.settings != nullptr)
-        m_queue = std::make_unique<RecognitionQueue>(RecognitionQueue::routeFor(*p->m_services.settings), p->m_services.library);
+    if (!m_queue && m_plugin->m_services.settings != nullptr)
+        m_queue =
+            std::make_unique<RecognitionQueue>(RecognitionQueue::routeFor(*m_plugin->m_services.settings), m_plugin->m_services.library);
     return m_queue.get();
 }

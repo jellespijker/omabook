@@ -44,7 +44,7 @@ constexpr qsizetype partBytes = qsizetype{48} * 1024;
         text.clear();
     };
     qsizetype bytes = 0;
-    for (const QJsonValue &word : words) {
+    for (const auto &word : words) {
         const qsizetype size = sizeOf(word.toObject()) * 2; // its text is said twice, in the piece's own
         if (bytes + size > partBytes) {
             close();
@@ -62,8 +62,8 @@ constexpr qsizetype partBytes = qsizetype{48} * 1024;
 [[nodiscard]] QList<QJsonArray> partsOf(const QJsonArray &segments) {
     QList<QJsonArray> parts{QJsonArray()};
     qsizetype bytes = 0;
-    for (const QJsonValue &whole : segments)
-        for (const QJsonValue &segment : piecesOf(whole.toObject())) {
+    for (const auto &whole : segments)
+        for (const auto &segment : piecesOf(whole.toObject())) {
             const qsizetype size = sizeOf(segment.toObject());
             if (bytes + size > partBytes && !parts.last().isEmpty()) {
                 parts.append(QJsonArray());
@@ -116,7 +116,7 @@ std::optional<Recognition::Result> RecognitionStore::find(const Library &library
         const QJsonValue part = parts.value(partKey(at, index));
         if (!part.isObject())
             return std::nullopt; // not all of it has come yet
-        for (const QJsonValue &segment : part.toObject().value("segments"_L1).toArray()) {
+        for (const auto &segment : part.toObject().value("segments"_L1).toArray()) {
             segments.append(segment);
             texts << segment.toObject().value("text"_L1).toString();
         }

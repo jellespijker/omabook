@@ -35,7 +35,7 @@ void draw(QPainter &painter, const Ink::Stroke &stroke, double scale) {
     // Each piece as wide as the pen was pressed where it begins.
     for (std::size_t i = 1; i < stroke.points.size(); ++i) {
         const Ink::Point &from = stroke.points[i - 1];
-        QPen pen(Qt::black, std::max(1.0, Ink::widthAt(stroke, from) * scale), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        const QPen pen(Qt::black, std::max(1.0, Ink::widthAt(stroke, from) * scale), Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
         painter.setPen(pen);
         painter.drawLine(from.at * scale, stroke.points[i].at * scale);
     }
