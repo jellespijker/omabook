@@ -426,8 +426,8 @@ inline void knownIn(Library &library, qint64 book, const QString &name) {
 // from the window's content down through its popups, noting:
 //
 //  - a text, a button or a field that lies outside the window, outside the
-//    popup it is in, or outside something that clips it, where it can't be
-//    scrolled into view;
+//    popup or the side pane it is in, or outside something that clips it,
+//    where it can't be scrolled into view;
 //  - a text wider than the width it was given that neither elides nor
 //    wraps, one that ran out of lines without an ellipsis to say so, and a
 //    button whose caption is cut;
@@ -525,6 +525,10 @@ struct Survey {
             room = rect & room;
             across = down = false;
         }
+        // A side pane is a room of its own: what is in it stays in it, and
+        // never runs over the page or the header beside it (#122).
+        if (QString::fromLatin1(item->metaObject()->className()).startsWith("SidePane_QML"))
+            room = rect & room;
         lookAt(item, rect, room, across, down);
         narrow(item, rect, room, across, down);
         overlaps(item);

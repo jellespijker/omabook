@@ -89,8 +89,15 @@ Item {
                     objectName: "paneTab_" + modelData.tab
                     readonly property string runs: modelData.runs
                     readonly property bool chosen: pane.tab === modelData.tab
+                    // A tab that doesn't fill would be fixed at its preferred
+                    // width, and the row, then the whole pane, wider than the
+                    // pane under fingers, where Close is there too (#122):
+                    // it fills up to its word, and narrows and elides below it.
+                    Layout.fillWidth: true
+                    // A fingertip wide at the least, at the narrowest pane too.
+                    Layout.minimumWidth: 40
                     Layout.preferredWidth: tabLabel.implicitWidth + 12
-                    Layout.maximumWidth: (pane.width - 32) / 2
+                    Layout.maximumWidth: tabLabel.implicitWidth + 12
                     Layout.preferredHeight: win.touch ? 44 : 30
                     Accessible.role: Accessible.PageTab
                     Accessible.name: modelData.text
@@ -124,6 +131,7 @@ Item {
             }
             Item { Layout.fillWidth: true }
             AppButton {
+                objectName: "contentsClose"
                 visible: win.touch
                 focusPolicy: Qt.NoFocus
                 text: qsTr("Close")
