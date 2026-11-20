@@ -1,5 +1,6 @@
 #include "libraryschema.h"
 
+#include "annotationschema.h"
 #include "graphindex.h"
 #include "tenancyschema.h"
 
@@ -449,6 +450,13 @@ const QList<QStringList> migrations{
     // #110, format 34): the name a tenant gave it found by the word index
     // and by the name (GraphIndex).
     GraphIndex::names(),
+    // Highlights and margin notes on a passage (#80, format 35): where it
+    // ends, its words with a few before and after, the file its places were
+    // found in, how sure that was, and whether it is lost. A highlight of an
+    // older library is still a place and its words, found again by them once
+    // its book is opened (AnnotationAnchors); a bookmark ends where it starts
+    // (an end before the start is the start: Annotation::passage).
+    AnnotationSchema::passages(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
