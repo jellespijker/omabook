@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "booksides.h"
+#include "eventtime.h"
 #include "library.h"
 
 // What is known, as a graph kept in the library's own database: the people,
@@ -50,16 +51,34 @@ struct GraphMoment {
 };
 
 // One thing learned of a node, with the moment it was revealed: what is
-// said of it ("summary"), or another name it goes by ("alias"). A node's
+// said of it ("summary"), another name it goes by ("alias"), or for an
+// event when it happens in its world ("when", chronology.h). A node's
 // summary changes as its book goes on, and each version is kept here, so
 // what was known at any place is known later too. A fact of no book (put
 // in by hand, or from another source) has a place whose bookId is 0.
 struct GraphFact {
     qint64 id = 0;
     qint64 node = 0;
-    QString kind;   // "summary" or "alias"
-    QString value;
+    QString kind;  // "summary", "alias" or "when"
+    QString value; // for "when", an EventTime as it is kept (EventTime::written)
     GraphMoment revealed;
+
+    // What a fact of `kind` keeps of `value`: a name on one line, a time as
+    // EventTime writes it (nothing when it is no time), the rest trimmed.
+    [[nodiscard]] static QString kept(const QString &kind, const QString &value) {
+        if (kind == "alias")
+            return value.simplified();
+        if (kind == "when")
+            return EventTime::kept(value);
+        return value.trimmed();
+    }
+    // The time a "when" fact says; nothing for another fact.
+    [[nodiscard]] std::optional<EventTime> when() const {
+        if (kind != "when")
+            return std::nullopt;
+        const auto time = EventTime::parse(value);
+        return time ? std::optional(*time) : std::nullopt;
+    }
 
     QJsonObject toJson() const;
 };
@@ -164,8 +183,9 @@ public:
     // keeps the earlier place it was learned at (with its anchor).
     qint64 link(qint64 source, qint64 target, const QString &kind, const QString &note = {},
                 const std::optional<GraphPlace> &learned = std::nullopt, const QString &anchor = {});
-    // Keeps a fact of a node: a summary (which becomes its summary now) or
-    // another name (which it goes by from now on), revealed at a moment, or
+    // Keeps a fact of a node: a summary (which becomes its summary now),
+    // another name (which it goes by from now on) or a time (kept as
+    // EventTime writes it, and only when it is one), revealed at a moment, or
     // at none. The same fact revealed again in the same book keeps the
     // earlier moment. Answers the fact's id, 0 when nothing was kept.
     qint64 learn(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed = std::nullopt);

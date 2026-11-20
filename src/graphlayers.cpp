@@ -120,7 +120,9 @@ private:
 
     void take(Layer &layer, const ReducedFact &fact) {
         const qint64 node = thing(fact.nodeGid);
-        if (!alive(fact) || node == 0 || (fact.kind != "summary"_L1 && fact.kind != "alias"_L1) || fact.value.isEmpty())
+        // What is said of a thing, its names, and when an event happens (chronology.h).
+        const bool told = fact.kind == "summary"_L1 || fact.kind == "alias"_L1 || fact.kind == "when"_L1;
+        if (!alive(fact) || node == 0 || !told || fact.value.isEmpty())
             return;
         if (const auto at = here(fact.bookGid, fact.moment))
             layer.facts[node] << GraphFact{.id = ++m_facts, .node = node, .kind = fact.kind, .value = fact.value, .revealed = *at};

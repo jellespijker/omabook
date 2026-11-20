@@ -322,18 +322,18 @@ qint64 Graph::recordFact(qint64 node, const QString &kind, const QString &value,
 }
 
 qint64 Graph::learn(qint64 id, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed) {
-    const QString said = kind == "alias" ? value.simplified() : value.trimmed();
+    const QString said = GraphFact::kept(kind, value);
     const auto known = node(id);
-    if (!known || said.isEmpty() || (kind != "summary" && kind != "alias"))
+    if (!known || said.isEmpty() || (kind != "summary" && kind != "alias" && kind != "when"))
         return 0;
     if (kind == "summary") {
         m_library->exec("UPDATE graph_nodes SET summary = ?, updated = ? WHERE id = ?", {said, Spaces::wallSeconds(*m_library), id});
-    } else if (known->name.compare(said, Qt::CaseInsensitive) != 0 && !known->aliases().contains(said, Qt::CaseInsensitive)) {
+    } else if (kind == "alias" && known->name.compare(said, Qt::CaseInsensitive) == 0) {
+        return 0; // its own name is no other name
+    } else if (kind == "alias" && !known->aliases().contains(said, Qt::CaseInsensitive)) {
         QJsonObject data = known->data;
         data.insert("aliases", QJsonArray::fromStringList(known->aliases() << said));
         m_library->exec("UPDATE graph_nodes SET data = ?, updated = ? WHERE id = ?", {compact(data), Spaces::wallSeconds(*m_library), id});
-    } else if (known->name.compare(said, Qt::CaseInsensitive) == 0) {
-        return 0; // its own name is no other name
     }
     return recordFact(id, kind, said, revealed);
 }
@@ -402,9 +402,9 @@ bool Graph::merge(qint64 keep, qint64 other) {
         if (!placed)
             learn(keep, "alias", alias);
     }
-    // What was said of it, with its moments, goes along; the summary of
+    // What was said of it and when it happens, with their moments, go along; the summary of
     // now only where the kept node had none.
-    m_library->exec("UPDATE graph_facts SET node_id = ? WHERE node_id = ? AND kind = 'summary'", {keep, other});
+    m_library->exec("UPDATE graph_facts SET node_id = ? WHERE node_id = ? AND kind IN ('summary', 'when')", {keep, other});
     if (kept->summary.isEmpty() && !folded->summary.isEmpty())
         m_library->exec("UPDATE graph_nodes SET summary = ? WHERE id = ?", {folded->summary, keep});
     for (const GraphMoment &moment : std::as_const(met))
