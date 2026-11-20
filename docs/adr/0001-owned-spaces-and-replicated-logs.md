@@ -501,6 +501,17 @@ one that hasn't.
    of them alone (`"annotations"`, `Replication::annotationVector`), and is sent those after it,
    whatever its vector says. One that doesn't say it is from before, and takes none.
 
+   As built (#118): from 0.1.10 on, an Omabook sent an operation of a kind it doesn't know (an
+   entity, or a field of a book, a newer Omabook writes: `OpKinds`) keeps it rather than leaving it
+   out, which its vector would then have said it held. It is stored in `ops` as it came, signed as
+   it was, and marked in `kept_ops` (format 37); what is taken in (`Replication::operations`) leaves
+   it out, so nothing is made of half of it, while what is held and sent (the vectors, `since`) has
+   it, so it goes on to a third computer, and compaction keeps every one of them whole. When an
+   Omabook that knows the kind sets the library up, after the copy an upgrade keeps, it takes them in
+   as a sync takes in what comes from the computer that wrote them, removing nothing
+   (`KeptOps::takeKnown`, by the taking the sync gives it at start-up), and unmarks them. A kind
+   that is known but doesn't travel (a book's `path`) is still left out, as is a shared space's.
+
 5. **Writes that bypass the log.** Something other than this Omabook that writes the database (a
    backup put back, a tool, a bug that writes a row without its operation) leaves rows the log doesn't
    know. On opening, the change counters (`library_state`) are compared with what the log last saw;

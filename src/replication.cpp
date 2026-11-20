@@ -7,7 +7,6 @@
 #include <QStringList>
 #include <QVariant>
 #include <algorithm>
-#include <array>
 #include <cstdint>
 #include <optional>
 #include <set>
@@ -16,6 +15,7 @@
 
 #include "changelog.h"
 #include "hlc.h"
+#include "opkinds.h"
 #include "plugindata.h"
 #include "signedops.h"
 #include "spacereducer.h"
@@ -24,19 +24,6 @@
 using namespace Qt::StringLiterals;
 
 namespace {
-
-// A book's fields that travel by the log: its reading place, its details and
-// what is said of its reading, each with the stamp of its time, and the links
-// that line up its ids. Never where its files are here (`path`, `formats`):
-// those are this computer's own. A book's removal travels as its tombstone.
-// Every field of a collection travels, and everything of the general graph
-// (the personal space's) and of a story's world (its own space, `world:…`),
-// which goes where its story goes (#25), the bookmarks and highlights (#66),
-// and a plugin's data, all of its own space (#76).
-constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,      "authors"_L1,    "series"_L1,      "series_index"_L1,
-                                "publisher"_L1,   "language"_L1,  "isbn"_L1,       "published"_L1,  "description"_L1, "tags"_L1,
-                                "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
-                                "finished"_L1,    "paper"_L1,     "reading_at"_L1, "removed"_L1,    "removed_at"_L1};
 
 // How a query reads the log: all of it, or by ranges of a space and device
 // alone, where what an operation is of must not make it read by thing instead.
@@ -50,18 +37,33 @@ enum class Reading : std::uint8_t { All, RangesOnly };
            "AND person = (SELECT global_id FROM global_ids WHERE entity = 'device' AND local_id = 0))"_s;
 }
 
+// Whether a query reads the log for what is taken in here, or for what is
+// held and sent on: what is kept of a kind this Omabook doesn't know yet
+// (KeptOps, #118) is held and sent on, never taken in.
+enum class Use : std::uint8_t { Taking, Sending };
+
+// An operation kept of a kind not known here, in SQL, of `o`.
+constexpr auto kept = "EXISTS (SELECT 1 FROM kept_ops AS k WHERE k.space = o.space AND k.device = o.device AND k.seq = o.seq)";
+
 // The operations that travel, in SQL, of `o` in a space `s`; Replication::travels says the same of one.
-[[nodiscard]] QString travelling(Reading reading = Reading::All) {
+// Of a book the fields OpKinds says, every field of a collection, and
+// everything of the general graph (the personal space's) and of a story's
+// world (its own space, `world:…`), which goes where its story goes (#25),
+// the bookmarks and highlights (#66), and a plugin's data, all of its own
+// space (#76).
+[[nodiscard]] QString travelling(Reading reading = Reading::All, Use use = Use::Taking) {
     QStringList fields;
-    for (const QLatin1StringView field : bookFields)
+    for (const QLatin1StringView field : OpKinds::travellingBookFields())
         fields << u"'"_s + field + u"'"_s;
     // A unary plus keeps SQLite from looking the thing up by its index.
     const QString entity = reading == Reading::RangesOnly ? u"+o.entity"_s : u"o.entity"_s;
-    return u"(("_s + entity + u" = 'book' AND (o.field IN ("_s + fields.join(u", "_s) + u") OR o.field LIKE 'tag:%')) OR "_s + entity
-           + u" = 'collection' OR ("_s + entity
-           + u" IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation') "
-             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%')) OR s.name LIKE 'plugin:%') AND "_s
-           + travellingSpace();
+    const QString kinds = u"(("_s + entity + u" = 'book' AND (o.field IN ("_s + fields.join(u", "_s) + u") OR o.field LIKE 'tag:%')) OR "_s
+                          + entity + u" = 'collection' OR ("_s + entity
+                          + u" IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation') "
+                            "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%')) OR s.name LIKE 'plugin:%')"_s;
+    const QString which = use == Use::Sending ? u"("_s + kinds + u" OR "_s + QLatin1StringView(kept) + u")"_s
+                                              : kinds + u" AND NOT "_s + QLatin1StringView(kept);
+    return which + u" AND "_s + travellingSpace();
 }
 
 // The names of an operation's space, device, author, thing and signer, for
@@ -165,9 +167,7 @@ bool Replication::travels(const SpaceOperation &op) {
     if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1
         || op.entity == "subscription"_L1 || op.entity == "annotation"_L1)
         return op.space.startsWith("personal:"_L1) || op.space.startsWith("world:"_L1);
-    return op.entity == "book"_L1
-           && (std::ranges::any_of(bookFields, [&op](QLatin1StringView field) { return op.field == field; })
-               || op.field.startsWith("tag:"_L1));
+    return op.entity == "book"_L1 && OpKinds::travelsOfABook(op.field);
 }
 
 QJsonObject Replication::bookView(const ReducedBook &book) {
@@ -213,7 +213,7 @@ Replication::Vector Replication::vector(const Library &library) {
                               "(SELECT MAX(o.seq, p.mark) FROM snapshot_ops AS o WHERE o.space = p.space AND o.device = p.device AND %1 "
                               "ORDER BY o.seq DESC LIMIT 1)) AS last FROM (%2) AS p "
                               "JOIN log_ids AS s ON s.id = p.space JOIN log_ids AS d ON d.id = p.device) WHERE last IS NOT NULL")
-                          .arg(travelling(Reading::RangesOnly), travellingPairs()));
+                          .arg(travelling(Reading::RangesOnly, Use::Sending), travellingPairs()));
          query.next();)
         known[query.value(0).toString()][query.value(1).toString()] = query.value(2).toLongLong();
     return known;
@@ -224,7 +224,7 @@ Replication::Vector Replication::annotationVector(const Library &library) {
     for (QSqlQuery query = ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(o.seq) FROM space_ops AS o "
                                                              "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
                                                              "WHERE %1 AND o.entity = 'annotation' GROUP BY o.space, o.device")
-                                                         .arg(travelling()));
+                                                         .arg(travelling(Reading::All, Use::Sending)));
          query.next();)
         known[query.value(0).toString()][query.value(1).toString()] = query.value(2).toLongLong();
     return known;
@@ -265,7 +265,7 @@ QList<SpaceOperation> Replication::since(const Library &library, const Vector &k
                 "AND x.seq > p.low WHERE p.low < p.mark) AS o %4 "
                 "WHERE %5 AND o.seq > (CASE WHEN o.entity = 'annotation' THEN o.peer_notes ELSE o.peer_seq END) "
                 "ORDER BY s.name, d.name, o.seq")
-            .arg(held, travellingPairs(), columns, QString::fromLatin1(namesJoined), travelling(Reading::RangesOnly)),
+            .arg(held, travellingPairs(), columns, QString::fromLatin1(namesJoined), travelling(Reading::RangesOnly, Use::Sending)),
         values);
 }
 
@@ -304,7 +304,7 @@ QJsonArray Replication::toJson(std::span<const SpaceOperation> ops, bool signatu
 
 QList<SpaceOperation> Replication::operationsFrom(const QJsonArray &array) {
     QList<SpaceOperation> ops = anyOperationsFrom(array);
-    ops.removeIf([](const SpaceOperation &op) { return !travels(op); });
+    ops.removeIf([](const SpaceOperation &op) { return !travels(op) && (op.space.startsWith("shared:"_L1) || OpKinds::known(op)); });
     return ops;
 }
 

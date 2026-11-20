@@ -41,7 +41,7 @@ modules = [
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights", "bookink",
-  "annotationink",
+  "annotationink", "opkinds", "keptops",
 ]
 
 [layers.services]

@@ -74,7 +74,9 @@ public:
     // signer and signature after them (an Omabook from before signing takes
     // only the nine, so it is sent only those).
     [[nodiscard]] static QJsonArray toJson(std::span<const SpaceOperation> ops, bool signatures = true);
-    // Only the operations that travel: anything else in `array` is left out.
+    // Only the operations that travel, and those of a kind this Omabook
+    // doesn't know (OpKinds), which it keeps (KeptOps): anything else in
+    // `array` is left out.
     [[nodiscard]] static QList<SpaceOperation> operationsFrom(const QJsonArray &array);
     // Every operation of `array` that is whole, of any space: what one's own
     // computers carry of the shared and subscribed spaces (SpaceCarry, #51).

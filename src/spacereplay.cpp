@@ -409,6 +409,8 @@ void storeOperations(const Library &library, std::span<const SpaceOperation> ops
 
 } // namespace
 
+void SpaceReplay::store(const Library &library, std::span<const SpaceOperation> ops) { storeOperations(library, ops); }
+
 bool SpaceReplay::apply(Library &library, std::span<const SpaceOperation> ops) {
     const ChangeLog::Scope guard;
     const Library::Batch batch(library);

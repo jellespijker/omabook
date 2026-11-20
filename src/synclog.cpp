@@ -4,10 +4,12 @@
 #include <QJsonDocument>
 #include <QSet>
 #include <algorithm>
+#include <span>
 #include <tuple>
 #include <utility>
 
 #include "compaction.h"
+#include "keptops.h"
 #include "log.h"
 #include "pairing.h"
 #include "plugindata.h"
@@ -155,6 +157,29 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
         summary.problems << problem.toString();
 }
 
+// Takes in what was kept until this Omabook knew its kind (KeptOps), as a
+// sync takes in what comes from each computer that wrote it: its places,
+// then what the log says of the books, collections, bookmarks and graph.
+// Nothing is removed here by it: every book here is still held there, as
+// far as it can say.
+void takeKept(Library &library, std::span<const SpaceOperation> ops) {
+    SyncSummary summary;
+    std::ignore = SpaceReplay::takePlaces(library, ops);
+    const QSet<QString> held = SyncTake::heldBy(library);
+    QSet<QString> devices;
+    for (const SpaceOperation &op : ops)
+        devices.insert(op.device);
+    for (const QString &device : std::as_const(devices))
+        std::ignore = SyncTake::take(
+            library, ops,
+            {.device = device, .details = SyncOptions::Details::Undecided, .dryRun = false, .remote = nullptr, .books = {}, .held = held},
+            summary);
+}
+
+// Given as the program starts: the library layer sets a library up, and
+// takes in there what it kept, by this.
+[[maybe_unused]] const bool takesKept = KeptOps::takeWith(takeKept);
+
 } // namespace
 
 QJsonObject SyncLog::introduction(const Library &library) {
@@ -198,8 +223,11 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
         summary.problems << "The change log could not be carried between here and " + remote.host() + ": " + answer.error();
         return {.manifest = holding(library, manifest), .gone = {}};
     }
-    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), manifest,
-                                                    "%1 operations from " + remote.host() + " were refused and not taken in: %2.", summary);
+    const QList<SpaceOperation> incoming =
+        KeptOps::keep(library,
+                      admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), manifest,
+                               "%1 operations from " + remote.host() + " were refused and not taken in: %2.", summary),
+                      dryRun);
     // They hold what they held, and now what was sent them.
     if (!dryRun)
         Compaction::rememberSeen(library, theirDevice,
@@ -260,8 +288,11 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     }
     SyncSummary taken;
     taken.dryRun = dryRun;
-    const QList<SpaceOperation> incoming = admitted(library, Replication::operationsFrom(request.value("ops").toArray()), request,
-                                                    "%1 operations sent from here were refused there and not taken in: %2.", taken);
+    const QList<SpaceOperation> incoming =
+        KeptOps::keep(library,
+                      admitted(library, Replication::operationsFrom(request.value("ops").toArray()), request,
+                               "%1 operations sent from here were refused there and not taken in: %2.", taken),
+                      dryRun);
     // What they held when they asked: whether the answer reaches them, this side can't know.
     if (!dryRun)
         Compaction::rememberSeen(library, theirDevice, Replication::vectorFrom(request.value("vector").toObject()));

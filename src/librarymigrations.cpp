@@ -19,6 +19,7 @@
 #include <tuple>
 
 #include "changelog.h"
+#include "keptops.h"
 #include "library.h"
 #include "libraryschema.h"
 #include "log.h"
@@ -164,7 +165,7 @@ void LibraryMigrations::closing(const Library &library) {
     library.m_statements->clear();
 }
 
-std::expected<void, QString> LibraryMigrations::setUp(const Library &library) {
+std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
     // Opened again on the thread that is setting it up, it is not waited for:
     // that wait could only end when it runs out.
     const QString file = databaseFile(library.m_root);
@@ -194,6 +195,10 @@ std::expected<void, QString> LibraryMigrations::setUp(const Library &library) {
         return migrated;
     if (!library.m_keepFormat) {
         ChangeLog::open(library);
+        // What was kept until this Omabook knew its kind (#118), taken in
+        // now that it does: after the copy an upgrade keeps, in the same
+        // transaction as the upgrade.
+        KeptOps::takeKnown(library);
         // The books' tenants as the collections and the user's choice say
         // now: the first time after the step that adds tenants, the whole
         // graph's (#94); after that, what changed while it was closed.

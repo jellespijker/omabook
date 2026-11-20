@@ -23,6 +23,10 @@ moves those lines under its version.
 
 - Why a book can't be opened, a catalog can't be reached or a file can't be added is said in the desktop's language in the window (Dutch, German, French, Spanish), not in English. Commands keep English for scripts; `--translated` says it in the desktop's language (#70).
 
+### Fixed
+
+- What a newer Omabook writes that this one doesn't know yet (a reading goal from a later version, say) is no longer lost at a sync: it is kept in the change log, shown nowhere, sent on to your other computers and kept through compaction, and once Omabook is updated it shows, taken in the first time the library is opened (after the copy an update keeps). Until now it was left out and never came, even after updating (#118). The library's format goes up by one for it (a copy is kept first).
+
 ## [0.1.9] - 2026-11-20
 
 ### Added

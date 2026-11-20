@@ -42,9 +42,12 @@ Compaction::Result Compaction::compact(const Library &library) {
     ChangeLog::exec(library, "CREATE INDEX IF NOT EXISTS temp.compacting_field ON compacting (device, entity, id, field, hlc)");
     ChangeLog::exec(library, "DELETE FROM snapshot_ops");
     // Of a shared space every operation stays (#38): whether one is taken
-    // depends on the roles before it, so none may stand for another.
+    // depends on the roles before it, so none may stand for another. So does
+    // every one kept of a kind this Omabook doesn't know (KeptOps, #118):
+    // whether a later one stands for it is for one that knows it to say.
     ChangeLog::exec(library, QString("INSERT INTO snapshot_ops SELECT * FROM temp.compacting AS c WHERE %1 OR c.space IN (SELECT id "
-                                     "FROM log_ids WHERE name >= 'shared:' AND name < 'shared;') OR NOT EXISTS ("
+                                     "FROM log_ids WHERE name >= 'shared:' AND name < 'shared;') OR EXISTS (SELECT 1 FROM kept_ops "
+                                     "AS k WHERE k.space = c.space AND k.device = c.device AND k.seq = c.seq) OR NOT EXISTS ("
                                      "SELECT 1 FROM temp.compacting AS later WHERE later.device = c.device AND later.entity = c.entity "
                                      "AND later.id = c.id AND later.field = c.field AND later.hlc > c.hlc)")
                                  .arg(QString::fromLatin1(growing).replace("field", "c.field")));

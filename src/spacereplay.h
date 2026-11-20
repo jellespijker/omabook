@@ -52,6 +52,10 @@ public:
     // in step with what the log now says. Answers the books whose place changed.
     static QList<qint64> takePlaces(Library &library, std::span<const SpaceOperation> ops);
 
+    // Keeps operations from elsewhere in `ops`, each once, and what of each
+    // space and device is now seen, without taking them in (KeptOps).
+    static void store(const Library &library, std::span<const SpaceOperation> ops);
+
     // Rebuilds all travelling rows of `library` solely from its `ops` log.
     static bool replay(Library &library);
 
