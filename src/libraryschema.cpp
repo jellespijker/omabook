@@ -410,6 +410,10 @@ const QList<QStringList> migrations{
     // book's range of graph_seen, in the order they were met, not the whole
     // graph; so do the tenants a book gives the things met in it.
     {"CREATE INDEX IF NOT EXISTS graph_seen_book ON graph_seen(book_id, section, fraction)"},
+    // A thing made by hand in a tenant stays in it (ADR 0003, #95, format 27):
+    // the tenancy triggers again, by the amended rules, and the membership
+    // placed again whole by them the next time the library is set up.
+    TenancySchema::madeInTheirTenant(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

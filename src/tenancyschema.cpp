@@ -36,11 +36,13 @@ namespace {
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.tenant, NEW.target FROM graph_nodes AS b "
         "JOIN tenant_books AS t ON t.book_id = b.book_id WHERE b.id = NEW.source AND "_s
             + bookNode(u"b"_s) + u" AND NEW.book_id = 0 AND "_s + inBook
-            + u" AND NOT EXISTS (SELECT 1 FROM graph_nodes AS o WHERE o.id = NEW.target AND "_s + bookNode(u"o"_s) + u")"_s,
+            + u" AND NOT EXISTS (SELECT 1 FROM graph_nodes AS o WHERE o.id = NEW.target AND ("_s + bookNode(u"o"_s) + u" OR "_s
+            + TenancySchema::madeHere(u"o"_s) + u"))"_s,
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.tenant, NEW.source FROM graph_nodes AS b "
         "JOIN tenant_books AS t ON t.book_id = b.book_id WHERE b.id = NEW.target AND "_s
             + bookNode(u"b"_s) + u" AND NEW.book_id = 0 AND "_s + inBook
-            + u" AND NOT EXISTS (SELECT 1 FROM graph_nodes AS o WHERE o.id = NEW.source AND "_s + bookNode(u"o"_s) + u")"_s,
+            + u" AND NOT EXISTS (SELECT 1 FROM graph_nodes AS o WHERE o.id = NEW.source AND ("_s + bookNode(u"o"_s) + u" OR "_s
+            + TenancySchema::madeHere(u"o"_s) + u"))"_s,
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT tenant, NEW.id FROM tenant_books WHERE book_id = NEW.book_id AND "_s
             + inBook,
         // Across books, or of no book: where both ends are.
@@ -94,10 +96,12 @@ namespace {
             + inBook + u" UNION SELECT NEW.tenant, e.target FROM graph_edges AS e WHERE e.book_id = NEW.book_id AND "_s + inBook,
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT NEW.tenant, e.target FROM graph_nodes AS b "
         "JOIN graph_edges AS e ON e.source = b.id JOIN graph_nodes AS o ON o.id = e.target WHERE b.book_id = NEW.book_id AND "_s
-            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook + u" AND NOT "_s + bookNode(u"o"_s)
+            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook + u" AND NOT "_s + bookNode(u"o"_s) + u" AND NOT "_s
+            + TenancySchema::madeHere(u"o"_s)
             + u" UNION SELECT NEW.tenant, e.source FROM graph_nodes AS b JOIN graph_edges AS e ON e.target = b.id "
               "JOIN graph_nodes AS o ON o.id = e.source WHERE b.book_id = NEW.book_id AND "_s
-            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook + u" AND NOT "_s + bookNode(u"o"_s),
+            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook + u" AND NOT "_s + bookNode(u"o"_s) + u" AND NOT "_s
+            + TenancySchema::madeHere(u"o"_s),
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT NEW.tenant, id FROM graph_facts WHERE book_id = NEW.book_id"_s,
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_edges AS e WHERE e.book_id = "
         "NEW.book_id AND "_s
@@ -118,6 +122,33 @@ namespace {
             u"CREATE INDEX IF NOT EXISTS %1_of ON %1(%2)"_s.arg(table, column)};
 }
 
+// A book's node is its book's.
+[[nodiscard]] QString ofBookNode() {
+    return u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT tenant, NEW.id FROM tenant_books WHERE book_id = NEW.book_id"_s;
+}
+
+// The data of a thing (NEW), as JSON functions take it.
+[[nodiscard]] QString dataOf() { return u"CASE WHEN json_valid(NEW.data) THEN NEW.data ELSE '{}' END"_s; }
+
+// A thing made by hand in tenants (NEW): in each it names, and in the whole
+// library's, which a library kept as one tenant reads.
+[[nodiscard]] QStringList madeIn() {
+    const QString named = u"SELECT value FROM json_each("_s + dataOf() + u", '$.tenants') WHERE type = 'text'"_s;
+    const QString made = TenancySchema::madeHere(u"NEW"_s);
+    return {
+        u"INSERT OR IGNORE INTO tenants (gid) "_s + named,
+        u"INSERT OR IGNORE INTO tenants (gid) SELECT 'library' WHERE "_s + made,
+        u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT id, NEW.id FROM tenants WHERE "_s + made + u" AND (gid IN ("_s + named
+            + u") OR gid = 'library')"_s,
+    };
+}
+
+// A new thing: of no book until one is behind it, a book's node its book's,
+// and one made by hand in a tenant that tenant's.
+[[nodiscard]] QStringList placingNode() {
+    return QStringList{u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) VALUES (0, NEW.id)"_s, ofBookNode()} + madeIn();
+}
+
 [[nodiscard]] QStringList statements() {
     QStringList all{
         // A tenant by its global id: a top-level collection's (Spaces::collectionId),
@@ -132,12 +163,8 @@ namespace {
     };
     all << membership(u"tenant_books"_s, u"book_id"_s, u"books"_s) << membership(u"tenant_nodes"_s, u"node_id"_s, u"graph_nodes"_s)
         << membership(u"tenant_edges"_s, u"edge_id"_s, u"graph_edges"_s) << membership(u"tenant_facts"_s, u"fact_id"_s, u"graph_facts"_s);
-    // A new thing is of no book until one is behind it; a book's node is its book's.
-    const QString ofBook = u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT tenant, NEW.id FROM tenant_books "
-                           "WHERE book_id = NEW.book_id"_s;
-    all << trigger(u"graph_nodes_tenant"_s, u"AFTER INSERT ON graph_nodes"_s,
-                   {u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) VALUES (0, NEW.id)"_s, ofBook})
-        << trigger(u"graph_nodes_book_tenant"_s, u"AFTER UPDATE OF book_id ON graph_nodes"_s, {ofBook});
+    all << trigger(u"graph_nodes_tenant"_s, u"AFTER INSERT ON graph_nodes"_s, placingNode())
+        << trigger(u"graph_nodes_book_tenant"_s, u"AFTER UPDATE OF book_id ON graph_nodes"_s, {ofBookNode()});
     const QString seen = u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT tenant, NEW.node_id FROM tenant_books "
                          "WHERE book_id = NEW.book_id"_s;
     all << trigger(u"graph_seen_tenant"_s, u"AFTER INSERT ON graph_seen"_s, {seen})
@@ -159,5 +186,29 @@ namespace {
 
 const QStringList &TenancySchema::step() {
     static const QStringList made = statements();
+    return made;
+}
+
+QString TenancySchema::madeHere(const QString &row) {
+    return u"(%1.data LIKE '%\"tenants\"%' AND json_type(CASE WHEN json_valid(%1.data) THEN %1.data ELSE '{}' END, '$.tenants') = 'array')"_s
+        .arg(row);
+}
+
+const QStringList &TenancySchema::madeInTheirTenant() {
+    static const QStringList made = [] {
+        QStringList all;
+        for (const QString &name :
+             {u"graph_nodes_tenant"_s, u"graph_edges_tenant"_s, u"graph_edges_moved_tenant"_s, u"tenant_books_follow"_s})
+            all << u"DROP TRIGGER IF EXISTS "_s + name;
+        all << trigger(u"graph_nodes_tenant"_s, u"AFTER INSERT ON graph_nodes"_s, placingNode())
+            << trigger(u"graph_nodes_made_tenant"_s, u"AFTER UPDATE OF data ON graph_nodes WHEN "_s + madeHere(u"NEW"_s), madeIn())
+            << trigger(u"graph_edges_tenant"_s, u"AFTER INSERT ON graph_edges"_s, placingEdge())
+            << trigger(u"graph_edges_moved_tenant"_s, u"AFTER UPDATE OF source, target, kind, book_id ON graph_edges"_s,
+                       QStringList{u"DELETE FROM tenant_edges WHERE edge_id = NEW.id"_s} + placingEdge())
+            << trigger(u"tenant_books_follow"_s, u"AFTER INSERT ON tenant_books "_s + notBulk(), followingBook());
+        // Placed again, whole, by the new rules the next time Tenancy follows the books.
+        all << u"UPDATE library_state SET value = -1 WHERE key = 'tenancy_one'"_s;
+        return all;
+    }();
     return made;
 }
