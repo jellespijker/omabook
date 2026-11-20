@@ -16,11 +16,13 @@
 #include <chrono>
 #include <print>
 #include <ranges>
+#include <tuple>
 
 #include "changelog.h"
 #include "library.h"
 #include "libraryschema.h"
 #include "log.h"
+#include "statements.h"
 #include "tenancy.h"
 
 int LibraryMigrations::currentFormat() noexcept { return static_cast<int>(LibrarySchema::steps().size()); }
@@ -136,7 +138,30 @@ void LibraryMigrations::configure(const Library &library) {
     const QByteArray fileSystem = QStorageInfo(library.m_root).fileSystemType();
     const bool local = !std::ranges::contains(remote, QByteArrayView(fileSystem));
     library.exec(local ? "PRAGMA journal_mode = WAL" : "PRAGMA journal_mode = DELETE");
+    // With the write-ahead log a commit that waits for the disk only at a
+    // checkpoint is as safe from a crash of the program (a loss of power can
+    // take the last commits back, never break the file) and half the waits.
+    if (local)
+        library.exec("PRAGMA synchronous = NORMAL");
     library.exec("PRAGMA foreign_keys = ON");
+}
+
+void LibraryMigrations::closing(const Library &library) {
+    // Only of a library large enough to need them: what a small one's tables
+    // say (one row, say) would lead the planner astray as it grows, while
+    // the log runs a statement for each of its rows (#104). A library brought
+    // up to date had none; one that grows 25 times over is looked at again.
+    static constexpr int worthIt = 10000;
+    if (QSqlDatabase::database(library.m_connection, false).isOpen()
+        && library.m_statements->first("SELECT 1 FROM global_ids LIMIT 1 OFFSET ?", {worthIt - 1})) {
+        // Never waited for: a library another program is writing is left to
+        // that one, which does the same as it closes, so whether this could
+        // is of no matter.
+        std::ignore = library.m_statements->run("PRAGMA busy_timeout = 0");
+        std::ignore = library.m_statements->run("PRAGMA analysis_limit = 1000");
+        std::ignore = library.m_statements->run("PRAGMA optimize");
+    }
+    library.m_statements->clear();
 }
 
 std::expected<void, QString> LibraryMigrations::setUp(const Library &library) {

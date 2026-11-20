@@ -137,8 +137,11 @@ bool settle(const Library &library, const Placed &wanted) {
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT t.tenant, e.id FROM graph_edges AS e "
         "JOIN tenant_books AS t ON t.book_id = e.book_id WHERE "_s
             + inBook,
+        // Relation by relation (CROSS JOIN keeps that order): what the planner
+        // knows of a large library would otherwise have it go tenant by
+        // tenant through the things, several times slower (#104).
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, e.id FROM graph_edges AS e "
-        "JOIN tenant_nodes AS s ON s.node_id = e.source JOIN tenant_nodes AS t ON t.node_id = e.target AND t.tenant = s.tenant "
+        "CROSS JOIN tenant_nodes AS s ON s.node_id = e.source CROSS JOIN tenant_nodes AS t ON t.node_id = e.target AND t.tenant = s.tenant "
         "WHERE e.book_id = 0 OR (substr(e.kind, 1, 8) = 'across: ' "
         "AND s.tenant IN (SELECT tenant FROM tenant_books AS b WHERE b.book_id = e.book_id))"_s,
     };
