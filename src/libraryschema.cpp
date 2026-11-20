@@ -405,6 +405,11 @@ const QList<QStringList> migrations{
     // are for the graph a library already has is filled in by Tenancy::follow
     // as the library is set up, after this step and the copy kept before it.
     TenancySchema::step(),
+    // A book's sightings looked up by the book (#99, format 26): a book's
+    // view, its spoiler cut and the graph palette's list of books read that
+    // book's range of graph_seen, in the order they were met, not the whole
+    // graph; so do the tenants a book gives the things met in it.
+    {"CREATE INDEX IF NOT EXISTS graph_seen_book ON graph_seen(book_id, section, fraction)"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
