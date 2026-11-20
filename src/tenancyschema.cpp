@@ -59,9 +59,10 @@ namespace {
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT tenant, NEW.id FROM tenant_books WHERE book_id = NEW.book_id AND "_s
             + inBook,
         // Across books, or of no book: where both ends are (an end in tenant 0 is in each).
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", NEW.id FROM tenant_nodes AS s "
-            "JOIN tenant_nodes AS t ON t.node_id = NEW.target AND "_s + TenancySchema::seenTogether(u"s"_s, u"t"_s)
-            + u" WHERE s.node_id = NEW.source AND "_s
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both
+            + u", NEW.id FROM tenant_nodes AS s "
+              "JOIN tenant_nodes AS t ON t.node_id = NEW.target AND "_s
+            + TenancySchema::seenTogether(u"s"_s, u"t"_s) + u" WHERE s.node_id = NEW.source AND "_s
             + (written ? TenancySchema::whereEndsAre(u"NEW"_s, both)
                        : u"(NEW.book_id = 0 OR ("_s + across(u"NEW"_s) + u" AND "_s + both
                              + u" IN (SELECT tenant FROM tenant_books WHERE book_id = NEW.book_id)))"_s),
@@ -109,25 +110,30 @@ namespace {
     // In a tenant it had a relation in only through tenant 0, it no longer is:
     // the relation is not there either, unless written there by hand.
     const QStringList gone = written ? QStringList{u"DELETE FROM tenant_edges WHERE NEW.tenant <> 0 AND tenant NOT IN (0, NEW.tenant) "
-                                               "AND tenant NOT IN (SELECT tenant FROM tenant_nodes WHERE node_id = NEW.node_id) "
-                                               "AND edge_id IN (SELECT e.id FROM graph_edges AS e WHERE (e.source = NEW.node_id OR "
-                                               "e.target = NEW.node_id) AND NOT "_s
-                                               + TenancySchema::writtenHere(u"e"_s) + u")"_s}
-                                 : QStringList();
-    return gone + QStringList{
-        u"DELETE FROM tenant_nodes WHERE NEW.tenant <> 0 AND tenant = 0 AND node_id = NEW.node_id"_s,
-        u"DELETE FROM tenant_facts WHERE NEW.tenant <> 0 AND tenant = 0 AND fact_id IN (SELECT id FROM graph_facts WHERE node_id = "
-        "NEW.node_id)"_s,
-        u"DELETE FROM tenant_edges WHERE NEW.tenant <> 0 AND tenant = 0 AND edge_id IN (SELECT id FROM graph_edges WHERE source = "
-        "NEW.node_id UNION ALL SELECT id FROM graph_edges WHERE target = NEW.node_id)"_s,
-        u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT NEW.tenant, id FROM graph_facts WHERE node_id = NEW.node_id "
-        "AND COALESCE(book_id, 0) = 0"_s
-            + (written ? u" AND tenant = ''"_s : QString()),
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM graph_edges AS e "
-            "JOIN tenant_nodes AS o ON o.node_id = e.target AND "_s + together + u" WHERE e.source = NEW.node_id AND "_s + shared,
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM graph_edges AS e "
-            "JOIN tenant_nodes AS o ON o.node_id = e.source AND "_s + together + u" WHERE e.target = NEW.node_id AND "_s + shared,
-    };
+                                                   "AND tenant NOT IN (SELECT tenant FROM tenant_nodes WHERE node_id = NEW.node_id) "
+                                                   "AND edge_id IN (SELECT e.id FROM graph_edges AS e WHERE (e.source = NEW.node_id OR "
+                                                   "e.target = NEW.node_id) AND NOT "_s
+                                                   + TenancySchema::writtenHere(u"e"_s) + u")"_s}
+                                     : QStringList();
+    return gone
+           + QStringList{
+               u"DELETE FROM tenant_nodes WHERE NEW.tenant <> 0 AND tenant = 0 AND node_id = NEW.node_id"_s,
+               u"DELETE FROM tenant_facts WHERE NEW.tenant <> 0 AND tenant = 0 AND fact_id IN (SELECT id FROM graph_facts WHERE node_id = "
+               "NEW.node_id)"_s,
+               u"DELETE FROM tenant_edges WHERE NEW.tenant <> 0 AND tenant = 0 AND edge_id IN (SELECT id FROM graph_edges WHERE source = "
+               "NEW.node_id UNION ALL SELECT id FROM graph_edges WHERE target = NEW.node_id)"_s,
+               u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT NEW.tenant, id FROM graph_facts WHERE node_id = NEW.node_id "
+               "AND COALESCE(book_id, 0) = 0"_s
+                   + (written ? u" AND tenant = ''"_s : QString()),
+               u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both
+                   + u", e.id FROM graph_edges AS e "
+                     "JOIN tenant_nodes AS o ON o.node_id = e.target AND "_s
+                   + together + u" WHERE e.source = NEW.node_id AND "_s + shared,
+               u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both
+                   + u", e.id FROM graph_edges AS e "
+                     "JOIN tenant_nodes AS o ON o.node_id = e.source AND "_s
+                   + together + u" WHERE e.target = NEW.node_id AND "_s + shared,
+           };
 }
 
 // A book in a tenant (NEW): what was learned from it is in it too; `written`,
@@ -164,8 +170,8 @@ namespace {
         for (const auto &[end, other] : {std::pair{u"source"_s, u"target"_s}, std::pair{u"target"_s, u"source"_s}})
             all << u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_seen AS m "
                    "JOIN graph_edges AS e ON e.%1 = m.node_id JOIN tenant_nodes AS s ON s.tenant IN (NEW.tenant, 0) AND s.node_id = e.%2 "
-                   "JOIN tenant_nodes AS t ON t.tenant IN (NEW.tenant, 0) AND t.node_id = e.%1 WHERE m.book_id = NEW.book_id AND "_s.arg(end,
-                                                                                                                                   other)
+                   "JOIN tenant_nodes AS t ON t.tenant IN (NEW.tenant, 0) AND t.node_id = e.%1 WHERE m.book_id = NEW.book_id AND "_s.arg(
+                       end, other)
                        + TenancySchema::saidIn(u"e"_s, u"NEW.book_id"_s);
     return all;
 }

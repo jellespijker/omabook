@@ -103,9 +103,10 @@ namespace {
             + inBook(u"e"_s),
         // Where both ends are, an end in tenant 0 in each: in :T or 0, or, for
         // an end back in 0, in the other end's tenant.
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM tenancy_leaving_edges AS x "
-            "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_nodes AS s ON s.node_id = e.source "
-            "JOIN tenant_nodes AS t ON t.node_id = e.target AND "_s
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both
+            + u", e.id FROM tenancy_leaving_edges AS x "
+              "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_nodes AS s ON s.node_id = e.source "
+              "JOIN tenant_nodes AS t ON t.node_id = e.target AND "_s
             + TenancySchema::seenTogether(u"s"_s, u"t"_s) + u" WHERE "_s + TenancySchema::whereEndsAre(u"e"_s, both),
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT m.id, e.id FROM tenancy_leaving_edges AS x "
         "JOIN graph_edges AS e ON e.id = x.id JOIN tenants AS m ON m.id = :T WHERE "_s

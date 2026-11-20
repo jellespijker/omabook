@@ -15,8 +15,8 @@
 
 #include "bookops.h"
 #include "graphchoice.h"
-#include "graphcontext.h"
 #include "graphcommands.h"
+#include "graphcontext.h"
 #include "graphcut.h"
 #include "graphlinks.h"
 #include "graphprint.h"

@@ -86,13 +86,15 @@ constexpr QLatin1StringView factOrder{"COALESCE(book_id, 0) = 0, book_id, sectio
     const QString columns =
         QStringLiteral("n.id, n.scope, n.kind, n.name, n.summary, n.data, COALESCE(n.book_id, 0), n.updated, m.degree + COALESCE(x.n, 0)");
     const QString held = QStringLiteral(
-        "SELECT o.node AS node, COUNT(*) AS n FROM (SELECT z.node_id AS node, e.id AS edge FROM tenant_nodes AS z CROSS JOIN graph_edges AS e "
+        "SELECT o.node AS node, COUNT(*) AS n FROM (SELECT z.node_id AS node, e.id AS edge FROM tenant_nodes AS z CROSS JOIN graph_edges "
+        "AS e "
         "ON e.source = z.node_id WHERE z.tenant = 0 UNION ALL SELECT z.node_id, e.id FROM tenant_nodes AS z CROSS JOIN graph_edges AS e "
         "ON e.target = z.node_id WHERE z.tenant = 0 AND e.target <> e.source) AS o "
         "CROSS JOIN tenant_edges AS h ON h.tenant = %1 AND h.edge_id = o.edge GROUP BY o.node");
-    return QStringLiteral("WITH x AS (%1) SELECT %2 FROM (SELECT id AS node FROM (%3) UNION SELECT node FROM x) AS c "
-                          "CROSS JOIN tenant_nodes AS m ON m.tenant = 0 AND m.node_id = c.node CROSS JOIN graph_nodes AS n ON n.id = c.node "
-                          "LEFT JOIN x ON x.node = c.node WHERE n.scope = ? ORDER BY 9 DESC, 1 LIMIT %4")
+    return QStringLiteral(
+               "WITH x AS (%1) SELECT %2 FROM (SELECT id AS node FROM (%3) UNION SELECT node FROM x) AS c "
+               "CROSS JOIN tenant_nodes AS m ON m.tenant = 0 AND m.node_id = c.node CROSS JOIN graph_nodes AS n ON n.id = c.node "
+               "LEFT JOIN x ON x.node = c.node WHERE n.scope = ? ORDER BY 9 DESC, 1 LIMIT %4")
         .arg(held.arg(tenant), columns, mostConnected(0, general, limit))
         .arg(std::max(1, limit));
 }

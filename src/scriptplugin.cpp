@@ -631,7 +631,7 @@ public:
         if (!library)
             return 0;
         const QJsonObject given = parsed(details).toObject();
-        const qint64 from = static_cast<qint64>(source), to = static_cast<qint64>(target), book = given.value("book").toInteger();
+        const auto [from, to, book] = std::tuple{static_cast<qint64>(source), static_cast<qint64>(target), given.value("book").toInteger()};
         const Graph graph = WorldLayers::linking(*library, from, to, book);
         return static_cast<double>(
             graphAnswer(GraphOps::link(graph, from, to, relation, given.value("note").toString(), graphPlace(book, given))).value("edge").toInteger());
