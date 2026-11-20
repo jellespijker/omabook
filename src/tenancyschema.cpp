@@ -182,7 +182,87 @@ namespace {
     return all;
 }
 
+// While Tenancy fills the tables whole (tenancy_bulk 2) the degrees are
+// counted once afterwards (TenancySchema::countDegrees), not a row at a time.
+[[nodiscard]] QString notWhole() { return u"WHEN (SELECT value FROM library_state WHERE key = 'tenancy_bulk') <> 2"_s; }
+
+// The things a relation in a tenant (`row`, NEW or OLD of tenant_edges) counts for there: its ends, once each.
+[[nodiscard]] QString endsOf(const QString &row) {
+    return u"tenant = %1.tenant AND node_id IN (SELECT source FROM graph_edges WHERE id = %1.edge_id "
+           "UNION SELECT target FROM graph_edges WHERE id = %1.edge_id)"_s.arg(row);
+}
+
+// The relations of `node` that `tenant` holds, counted through the relations'
+// indexes by end: what a thing's degree there is.
+[[nodiscard]] QString degreeOf(const QString &tenant, const QString &node) {
+    return u"(SELECT COUNT(*) FROM graph_edges AS e WHERE (e.source = %2 OR e.target = %2) "
+           "AND EXISTS (SELECT 1 FROM tenant_edges WHERE tenant = %1 AND edge_id = e.id))"_s.arg(tenant, node);
+}
+
+[[nodiscard]] QStringList degreeStatements() {
+    // Another relation of the same ends and kind (NEW's): the one an INSERT OR
+    // REPLACE puts it in place of, and an UPDATE OR IGNORE leaves it beside.
+    const QString same = u"SELECT id FROM graph_edges WHERE source = NEW.source AND target = NEW.target AND kind = NEW.kind"_s;
+    return {
+        // tenant_nodes made again with a degree (SQLite's way of changing a
+        // table, so that the step can be taken again where it was). The
+        // triggers of other tables name it, and keep doing so through the
+        // rename only as SQLite renamed before 3.26; its own go with it, and
+        // are made again.
+        u"DROP TABLE IF EXISTS tenant_nodes_degreed"_s,
+        u"CREATE TABLE tenant_nodes_degreed (tenant INTEGER NOT NULL REFERENCES tenants(id) ON DELETE CASCADE, "
+        "node_id INTEGER NOT NULL REFERENCES graph_nodes(id) ON DELETE CASCADE, degree INTEGER NOT NULL DEFAULT 0, "
+        "PRIMARY KEY (tenant, node_id)) WITHOUT ROWID"_s,
+        u"INSERT INTO tenant_nodes_degreed (tenant, node_id) SELECT tenant, node_id FROM tenant_nodes"_s,
+        u"DROP TABLE tenant_nodes"_s,
+        u"PRAGMA legacy_alter_table = ON"_s,
+        u"ALTER TABLE tenant_nodes_degreed RENAME TO tenant_nodes"_s,
+        u"PRAGMA legacy_alter_table = OFF"_s,
+        u"CREATE INDEX IF NOT EXISTS tenant_nodes_of ON tenant_nodes(node_id)"_s,
+        trigger(u"tenant_nodes_follow"_s, u"AFTER INSERT ON tenant_nodes "_s + notBulk(), followingNode()),
+        // The graph window's order: a tenant's most connected things first, as a range of this.
+        u"CREATE INDEX IF NOT EXISTS tenant_nodes_degree ON tenant_nodes(tenant, degree DESC, node_id)"_s,
+        trigger(u"tenant_edges_degree"_s, u"AFTER INSERT ON tenant_edges "_s + notWhole(),
+                {u"UPDATE tenant_nodes SET degree = degree + 1 WHERE "_s + endsOf(u"NEW"_s)}),
+        trigger(u"tenant_edges_degree_left"_s, u"AFTER DELETE ON tenant_edges "_s + notWhole(),
+                {u"UPDATE tenant_nodes SET degree = degree - 1 WHERE "_s + endsOf(u"OLD"_s)}),
+        // A thing that joins a tenant counts what the tenant already holds of its relations.
+        trigger(u"tenant_nodes_degree"_s, u"AFTER INSERT ON tenant_nodes "_s + notWhole(),
+                {u"UPDATE tenant_nodes SET degree = "_s + degreeOf(u"NEW.tenant"_s, u"NEW.node_id"_s)
+                 + u" WHERE tenant = NEW.tenant AND node_id = NEW.node_id"_s}),
+        // A relation's tenants are let go of while its ends are still the
+        // ones they were counted for: before it is removed (a cascade from
+        // graph_edges would come after, with the ends gone), moved to other
+        // ends (whose tenants graph_edges_moved_tenant then places again) or
+        // replaced by another of the same ends and kind (which removes it
+        // without its triggers).
+        trigger(u"graph_edges_degree_removed"_s, u"BEFORE DELETE ON graph_edges"_s,
+                {u"DELETE FROM tenant_edges WHERE edge_id = OLD.id"_s}),
+        trigger(u"graph_edges_degree_moved"_s,
+                u"BEFORE UPDATE OF source, target ON graph_edges WHEN (NEW.source <> OLD.source OR NEW.target <> OLD.target) "
+                "AND NOT EXISTS ("_s
+                    + same + u" AND id <> OLD.id)"_s,
+                {u"DELETE FROM tenant_edges WHERE edge_id = OLD.id"_s}),
+        trigger(u"graph_edges_degree_replaced"_s, u"BEFORE INSERT ON graph_edges WHEN EXISTS ("_s + same + u")"_s,
+                {u"DELETE FROM tenant_edges WHERE edge_id IN ("_s + same + u")"_s}),
+        TenancySchema::countDegrees(),
+    };
+}
+
 } // namespace
+
+const QStringList &TenancySchema::degrees() {
+    static const QStringList made = degreeStatements();
+    return made;
+}
+
+QString TenancySchema::countDegrees() {
+    // Each relation once for each end, a relation of a thing to itself once.
+    return u"UPDATE tenant_nodes SET degree = d.n FROM (SELECT tenant, node, COUNT(*) AS n FROM ("
+           "SELECT m.tenant AS tenant, e.source AS node FROM tenant_edges AS m JOIN graph_edges AS e ON e.id = m.edge_id "
+           "UNION ALL SELECT m.tenant, e.target FROM tenant_edges AS m JOIN graph_edges AS e ON e.id = m.edge_id WHERE e.target <> e.source) "
+           "GROUP BY tenant, node) AS d WHERE tenant_nodes.tenant = d.tenant AND tenant_nodes.node_id = d.node AND tenant_nodes.degree <> d.n"_s;
+}
 
 const QStringList &TenancySchema::step() {
     static const QStringList made = statements();

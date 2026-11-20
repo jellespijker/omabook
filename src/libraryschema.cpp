@@ -414,6 +414,11 @@ const QList<QStringList> migrations{
     // the tenancy triggers again, by the amended rules, and the membership
     // placed again whole by them the next time the library is set up.
     TenancySchema::madeInTheirTenant(),
+    // Each thing's degree in each of its tenants (#101, format 28), kept by
+    // triggers, for the graph window's order: a tenant's most connected
+    // things first, read as a range of an index rather than counted for
+    // every thing each time.
+    TenancySchema::degrees(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

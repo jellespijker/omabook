@@ -37,6 +37,15 @@ namespace TenancySchema {
 // again by those rules the next time Tenancy follows the books.
 [[nodiscard]] const QStringList &madeInTheirTenant();
 
+// The step after that (#101): each thing's degree in each tenant it is in
+// (tenant_nodes.degree), the relations of it that tenant holds, kept by
+// triggers as the membership and the relations change, with an index led by
+// the tenant that gives the graph window its most connected things first.
+[[nodiscard]] const QStringList &degrees();
+// Counts every degree whole, as Tenancy does after filling the tables whole
+// (with tenancy_bulk 2, while the triggers that count one row at a time stand aside).
+[[nodiscard]] QString countDegrees();
+
 // Whether the thing of `row` (a table's alias, or NEW) was made by hand in a tenant.
 [[nodiscard]] QString madeHere(const QString &row);
 

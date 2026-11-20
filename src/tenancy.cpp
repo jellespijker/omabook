@@ -161,12 +161,14 @@ bool settle(const Library &library, const Placed &wanted) {
 }
 
 // Fills the tables whole, statement by statement, with the triggers that
-// follow one row at a time standing aside.
+// follow one row at a time standing aside, those that count the things'
+// degrees too (2), which are counted once at the end.
 void inBulk(const Library &library, const auto &fill) {
-    setState(library, u"tenancy_bulk"_s, 1);
+    setState(library, u"tenancy_bulk"_s, 2);
     fill();
     for (const QString &statement : derived())
         ChangeLog::exec(library, statement);
+    ChangeLog::exec(library, TenancySchema::countDegrees());
     setState(library, u"tenancy_bulk"_s, 0);
     setState(library, u"tenancy_shrunk"_s, 0);
 }
