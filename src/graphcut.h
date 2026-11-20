@@ -32,7 +32,8 @@ struct GraphCut {
     // when it was cut, "cut": "most connected" or "nearest".
     [[nodiscard]] QJsonObject toJson() const;
 
-    // Graph::whole, with the scope's things and the relations among them.
+    // Graph::whole, with the scope's things and the relations among them; of
+    // a layer, a world shared here (WorldLayers), what the reader knows of it.
     [[nodiscard]] static GraphCut whole(const Library &library, const QString &scope, int limit);
     // Graph::around, with what is within `depth` relations of the node.
     // Where the library's sides are apart (BookSides), the count goes along

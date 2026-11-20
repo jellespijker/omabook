@@ -6,6 +6,9 @@
 #include <limits>
 #include <utility>
 
+#include "spaceworlds.h"
+#include "worldlayers.h"
+
 namespace {
 
 [[nodiscard]] qint64 countOf(QSqlQuery query) { return query.next() ? query.value(0).toLongLong() : 0; }
@@ -44,6 +47,10 @@ QJsonObject GraphCut::toJson() const {
 }
 
 GraphCut GraphCut::whole(const Library &library, const QString &scope, int limit) {
+    // A world shared with this library is read as a plugin reads it, cut
+    // where the reader is in its book, the same for the command line and the window.
+    if (SpaceWorlds::isLayerName(scope))
+        return GraphCut(WorldLayers::whole(library, scope, limit));
     const Graph graph(library);
     const QString in = scope.isNull() ? QString("") : scope;
     GraphCut made(graph.whole(in, limit));
