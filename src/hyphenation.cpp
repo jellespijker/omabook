@@ -12,6 +12,7 @@
 #include <memory>
 #include <numeric>
 #include <ranges>
+#include <utility>
 
 using namespace Qt::StringLiterals;
 
@@ -157,7 +158,9 @@ std::expected<Dictionary, QString> Dictionary::parse(const QByteArray &bytes) {
 
 namespace {
 
-constexpr std::uint64_t edge(std::int32_t state, char16_t letter) { return (static_cast<std::uint64_t>(state) << 16) | letter; }
+constexpr std::uint64_t edge(std::int32_t state, char16_t letter) {
+    return (static_cast<std::uint64_t>(state) << 16) | static_cast<std::uint64_t>(letter);
+}
 
 } // namespace
 
@@ -192,7 +195,7 @@ Dictionary::Level Dictionary::built(const Patterns &patterns) {
     // Where each falls back to, shallower states first, as in Aho and
     // Corasick's automaton: from the parent's fallback on by the same letter.
     std::vector<std::int32_t> order(parent.size());
-    std::iota(order.begin(), order.end(), 0);
+    std::ranges::iota(order, 0);
     std::ranges::stable_sort(order, {}, [&depth](std::int32_t state) { return depth[static_cast<size_t>(state)]; });
     level.fallback.assign(parent.size(), 0);
     level.fallback[0] = -1;
@@ -261,7 +264,7 @@ std::vector<bool> Dictionary::breaks(std::u16string_view word, bool start, bool 
     }
     std::vector<bool> syllables = m_levels.back().breaks(word);
     for (size_t at = 1; at < word.size(); ++at)
-        if ((!start && at < static_cast<size_t>(m_compoundLeft)) || (!end && word.size() - at < static_cast<size_t>(m_compoundRight)))
+        if ((!start && std::cmp_less(at, m_compoundLeft)) || (!end && std::cmp_less(word.size() - at, m_compoundRight)))
             syllables[at] = false;
     return syllables;
 }
