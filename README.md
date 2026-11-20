@@ -650,7 +650,7 @@ With no book it takes every book you read; `--collection` takes one collection's
 
 ## Commands
 
-Everything the window does with the library, with no display needed. Every command takes `--json`, prints errors to standard error, and exits 0 or 1.
+Everything the window does with the library, with no display needed. Every command takes `--json`, prints errors to standard error, in English for scripts (in the desktop's language with `--translated`), and exits 0 or 1.
 
 ```text
 omabook open [book]                     Open the window, and a book file or library number in it
@@ -863,7 +863,7 @@ For whoever changes the format: add a step to the list in `Library::open` (never
 - Goodreads can't be written to: Omabook's reading goes back as a file you upload on Goodreads' import page. Its live shelves are shown to almost nobody who isn't signed in; the export file always works. Reviews are not brought in.
 - Open Library's reading log has no word for half stars or re-reads, and its stars and finished dates come from an address its own pages use, which could change; the shelves themselves do not depend on it. Hardcover's half stars are rounded to whole ones here.
 - Signing in to Hardcover through its own sign-in page (rather than a pasted token) is not there yet.
-- Errors that come from the lower layers (a file that can't be read, a catalog that can't be reached) are shown in English whatever the desktop's language.
+- The reasons the window gives for a book that can't be opened, a catalog that can't be reached and a file that can't be added are in the desktop's language; some rarer ones from the layers below (the AI's, a sync's, a space's) are still in English.
 - The window ships in English, Dutch, German, French and Spanish; other Omarchy languages show English until someone adds a catalog under `src/i18n/` (`bin/i18n` regenerates `en.json` from the sources).
 
 ## Development

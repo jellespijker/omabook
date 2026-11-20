@@ -32,6 +32,14 @@ Omabook does not use exceptions (Qt doesn't either). Instead:
 | May have no answer, no reason needed | `std::optional<T>` |
 | A caller's bug | `Q_ASSERT`, or a clear early return in release |
 
+**Below the front ends a reason is a `Failure`, not a sentence** (`src/failure.h`, ADR 0005):
+`std::expected<T, Failure>`, a code and its arguments, worded by `text()` where it is shown, in the
+desktop's language in the window and in English on the command line. A new kind of failure is a code,
+its sentence in `failure.cpp` and the five catalogs (`bin/i18n`). Words from elsewhere (a plugin, a
+server, the system) travel as `Failure::said(words)`. `check_wording.py` flags a new English sentence
+handed on as a failure in `foundation` to `operations`. Where an interface still carries a `QString`,
+word the `Failure` at that seam with `text()`.
+
 **No new `QString *error` out-parameters.** Many existing functions have one;
 they are migrated to `std::expected` when they are touched for a reason, not in
 a sweep. (F.20, F.21: return what you make.) Mark functions whose result must not

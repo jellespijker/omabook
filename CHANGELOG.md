@@ -18,6 +18,10 @@ moves those lines under its version.
 - A plugin can record and play sound (#79): `omabook.audio.record({file, onLevel, onStopped})`, with the `microphone` permission, records from the microphone (through PipeWire) into an Opus file under the plugin's `data/` folder, about 4 KB a second of speech and sound for hours, written a second at a time so a recording cut short keeps all but its last second. It says the moment it began, pauses and resumes (each stretch with its own start, so a moment in it is a moment of the day), and how loud it is for a meter. The first time a plugin records you are asked in the window, and while it records a red mark at the top of the window says which plugin, for how long and how loud, with *Stop*. `omabook.audio.play(file, {at, onPosition, onEnded})` plays one from anywhere in it, seeks while it plays, and says where it is ten times a second; `omabook.audio.info(file)` says how long one is. Omabook now needs `qt6-multimedia` and `opus`.
 - A plugin can have a view of its own (#77): `omabook.ui.view({id, title, source, key})` shows a QML file of its folder in place of the shelf, or beside the page while a book is open, where it is a pane you drag wider or narrower and lies over the page in a narrow window. Its key, and its entry in the shelf's and the page's ⋯, open it and put it away; so can its own item on the shelf, or the plugin (`omabook.ui.showView`, `closeView`). Backspace goes back within it and then out, Escape closes it, and the plugin's commands for its view work while it has the keyboard, all in the help under *Plugin views*. Its header has the way back, its title and a ⋯ for a mouse and a finger, in your theme, and it can hold an `InkSurface` to write on. A book opened from it is read over it, and closing the book comes back to it.
 
+### Fixed
+
+- Why a book can't be opened, a catalog can't be reached or a file can't be added is said in the desktop's language in the window (Dutch, German, French, Spanish), not in English. Commands keep English for scripts; `--translated` says it in the desktop's language (#70).
+
 ## [0.1.9] - 2026-11-20
 
 ### Added
