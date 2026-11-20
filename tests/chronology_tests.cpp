@@ -221,8 +221,9 @@ private slots:
         QCOMPARE(relations(*reading.known(story.siege)), QStringList({"before The fall", "before The flood"}));
         QCOMPARE(relations(*reading.known(story.flood)), QStringList{"after The siege"});
         QCOMPARE(relations(*reading.known(story.fall)), QStringList{"after The siege"});
-        // Nothing of a book not begun.
-        reading.readTo(0);
+        // Nothing of a book not begun: back at its start, not 0.9 into its
+        // first section, which is past the siege already.
+        reading.library.setProgress(reading.book, {});
         QVERIFY(!reading.known(story.siege));
     }
 
