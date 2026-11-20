@@ -873,7 +873,6 @@
   "Select the nearest related thing to the right": "Het dichtstbijzijnde verbonden ding rechts selecteren",
   "Select the next thing in the list": "Het volgende ding in de lijst selecteren",
   "Select the previous thing in the list": "Het vorige ding in de lijst selecteren",
-  "Select words and pick a colour in the menu beside them, or draw a line under them with a pen. {reader.annotations} lists them by colour, under the names you give the colours.": "Selecteer woorden en kies een kleur in het menu ernaast, of trek er met een pen een lijn onder. {reader.annotations} toont ze per kleur, onder de namen die je de kleuren geeft.",
   "Select words and write a margin note on them: {reader.note}, or Write a margin note in the menu beside the selection. Where the window has room, notes stand in a margin column beside the text, each at the height of its words, and are edited where they stand; in a narrower window a mark where the words end opens the note. {reader.notes} goes through the notes on the page: Enter edits one, Delete removes it, and a note left without words is removed. Notes go with the book to your other computers, and stay with their words in a new edition; those whose words are gone are listed at the foot of the page.": "Selecteer woorden en schrijf er een kanttekening bij: {reader.note}, of Kanttekening schrijven in het menu naast de selectie. Waar het venster ruimte heeft, staan kanttekeningen in een kantlijn naast de tekst, elk op de hoogte van haar woorden, en worden ze bewerkt waar ze staan; in een smaller venster opent een teken aan het eind van de woorden de kanttekening. {reader.notes} gaat langs de kanttekeningen op de pagina: Enter bewerkt er een, Delete verwijdert hem, en een kanttekening zonder woorden wordt verwijderd. Kanttekeningen gaan met het boek mee naar je andere computers en blijven in een nieuwe uitgave bij hun woorden; die waarvan de woorden weg zijn, staan onder aan de pagina.",
   "Show everything again": "Alles weer tonen",
   "Show one step further around the centre of the graph": "Eén stap verder rond het midden van de graaf tonen",
@@ -1758,5 +1757,10 @@
     "other": "De %Ln verbanden tussen de meest verbonden dingen staan erin. Kies een boek onder Filteren voor de rest."
   },
   "Show More Connections": "Meer verbanden tonen",
-  "Show more connections between books": "Meer verbanden tussen boeken tonen"
+  "Show more connections between books": "Meer verbanden tussen boeken tonen",
+  "Select words, with the mouse or {reader.select} and the arrows, and press 1 to 5 for a colour, or pick one in the menu beside them; a pen's line under them does it too. {reader.annotations} lists them by colour.": "Selecteer woorden, met de muis of met {reader.select} en de pijltjes, en druk 1 tot 5 voor een kleur, of kies er een in het menu ernaast; een lijn eronder met een pen doet het ook. {reader.annotations} toont ze per kleur.",
+  "Notes in the margin": "Kanttekeningen in de marge",
+  "{reader.note} writes a note on the selected words, beside them where the window has room, and {reader.notes} goes through the page's notes. Notes and highlights are found again by their words when a book's file changes.": "{reader.note} schrijft een kanttekening bij de geselecteerde woorden, ernaast waar het venster ruimte heeft, en {reader.notes} loopt de kanttekeningen op de pagina langs. Kanttekeningen en markeringen worden aan hun woorden teruggevonden als het bestand van een boek verandert.",
+  "Justified, without wide gaps": "Uitgevuld, zonder brede gaten",
+  "Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. Hyphenate in the Aa panel ({reader.format}) turns it off.": "Uitgevulde tekst breekt een lang woord aan het eind van een regel af volgens de taal van het boek, zoals LibreOffice dat doet. Woordafbreking in het Aa-paneel ({reader.format}) zet het uit."
 }

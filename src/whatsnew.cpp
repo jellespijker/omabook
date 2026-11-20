@@ -110,13 +110,22 @@ QList<Manual::Step> collectionsRelease() {
     };
 }
 
-// The 0.1.9 release's entries: annotations in books (#67).
+// The 0.1.9 release's entries: highlights and margin notes in books, found again by their words (#67), and
+// justified text hyphenated (#69).
 QList<Manual::Step> annotationsRelease() {
     return {
         {"highlights", "0.1.9", Manual::tr("Highlights in five colours"),
-         Manual::tr("Select words and pick a colour in the menu beside them, or draw a line under them with a pen. "
-                    "{reader.annotations} lists them by colour, under the names you give the colours."),
+         Manual::tr("Select words, with the mouse or {reader.select} and the arrows, and press 1 to 5 for a colour, or pick one "
+                    "in the menu beside them; a pen's line under them does it too. {reader.annotations} lists them by colour."),
          "", "reader.annotations", "reader", ""},
+        {"margin-notes", "0.1.9", Manual::tr("Notes in the margin"),
+         Manual::tr("{reader.note} writes a note on the selected words, beside them where the window has room, and {reader.notes} "
+                    "goes through the page's notes. Notes and highlights are found again by their words when a book's file changes."),
+         "", "reader.note", "reader", ""},
+        {"hyphenation", "0.1.9", Manual::tr("Justified, without wide gaps"),
+         Manual::tr("Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. "
+                    "Hyphenate in the Aa panel ({reader.format}) turns it off."),
+         "", "reader.format", "reader", ""},
     };
 }
 
