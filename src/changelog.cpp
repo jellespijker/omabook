@@ -22,6 +22,7 @@
 #include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "tenancy.h"
 
 using namespace Qt::StringLiterals;
 
@@ -351,6 +352,7 @@ void ChangeLog::afterWrite(const Library &library) {
         return;
     const Library::Batch batch(library);
     logRows(library, dirty);
+    Tenancy::followWrite(library, dirty);
     ChangeLog::exec(library, "DELETE FROM log_dirty");
     markLogged(library);
 }

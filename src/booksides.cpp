@@ -1,9 +1,6 @@
 #include "booksides.h"
 
-#include <QDateTime>
-#include <QFileInfo>
-
-#include "settings.h"
+#include "tenancy.h"
 
 BookSides::BookSides(const QList<Collection> &collections, const QList<Book> &books) {
     if (collections.isEmpty())
@@ -34,18 +31,8 @@ BookSides::BookSides(const QList<Collection> &collections, const QList<Book> &bo
 }
 
 BookSides BookSides::of(const Library &library) {
-    // What the user chose, read again only when config.json changed.
-    struct Choice {
-        QString file;
-        QDateTime modified;
-        qint64 size = -1;
-        bool across = false;
-    };
-    thread_local Choice choice;
-    const QFileInfo config(Settings::defaultFile());
-    if (config.absoluteFilePath() != choice.file || config.lastModified() != choice.modified || config.size() != choice.size)
-        choice = {config.absoluteFilePath(), config.lastModified(), config.size(), Settings().graphOneTenant()};
-    if (choice.across)
+    // One tenant for the whole library is one side.
+    if (Tenancy::oneTenant())
         return {};
 
     // Any change to the books or the collections moves this counter.

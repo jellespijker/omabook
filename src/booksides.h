@@ -36,7 +36,7 @@ public:
     // The sides of these books, in this tree of collections (Library::collections).
     BookSides(const QList<Collection> &collections, const QList<Book> &books);
     // The library's sides as its collections are now, and as the user chose
-    // (Settings::graphAcrossCollections): one side when they link across.
+    // (Settings::graphOneTenant): one side when the graph is one tenant.
     // Read once and kept until the books, the collections or the choice change.
     [[nodiscard]] static BookSides of(const Library &library);
 

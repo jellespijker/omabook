@@ -21,6 +21,7 @@
 #include "library.h"
 #include "libraryschema.h"
 #include "log.h"
+#include "tenancy.h"
 
 int LibraryMigrations::currentFormat() noexcept { return static_cast<int>(LibrarySchema::steps().size()); }
 
@@ -166,8 +167,13 @@ std::expected<void, QString> LibraryMigrations::setUp(const Library &library) {
         return std::unexpected("The library is being set up by another program; try again when it is done.");
     if (auto migrated = migrate(library); !migrated)
         return migrated;
-    if (!library.m_keepFormat)
+    if (!library.m_keepFormat) {
         ChangeLog::open(library);
+        // The books' tenants as the collections and the user's choice say
+        // now: the first time after the step that adds tenants, the whole
+        // graph's (#94); after that, what changed while it was closed.
+        Tenancy::follow(library);
+    }
     return {};
 }
 

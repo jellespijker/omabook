@@ -15,6 +15,7 @@
 #include "replication.h"
 #include "spacereducer.h"
 #include "spaces.h"
+#include "tenancy.h"
 
 using namespace Qt::StringLiterals;
 
@@ -440,6 +441,7 @@ bool SpaceReplay::replay(Library &library) {
     materializeFacts(library, state.facts);
     materializeEdges(library, state.edges);
     materializeDays(library, state.days);
+    Tenancy::follow(library);
     ChangeLog::markLogged(library);
     return true;
 }

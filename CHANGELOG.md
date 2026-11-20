@@ -21,6 +21,7 @@ moves those lines under its version.
 ### Changed
 
 - Syncing a large library is quicker: each sync reads of the change log only what the other computer lacks, and what it says it holds, not all of it each time; and the log another computer brings in when it is paired is compacted in that same sync, of what both have seen, so it no longer sits beside the snapshot that says the same (#103).
+- The knowledge graph keeps, for each thing, fact and relation, which top-level collections see it: those of the books it came from, a book in two collections in both, and a theme or an author two collections' books share once, seen from both, with each fact only where its book is. It is worked out once as a library is brought up to date (a copy kept first), kept as the graph grows and as books go into collections, and taken by your other computers from what a sync already carries. Nothing shown changes yet. The setting that links the whole library is now *Knowledge graph: one for the whole library, not one per top-level collection* (`"graph_one_tenant"` in `config.json`; `"graph_across_collections"` from before still says so) (#94).
 
 ## [0.1.7.1] - 2026-11-20
 

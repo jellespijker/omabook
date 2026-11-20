@@ -12,6 +12,7 @@
 #include "booksides.h"
 #include "eventtime.h"
 #include "library.h"
+#include "tenancy.h"
 
 // What is known, as a graph kept in the library's own database: the people,
 // places, groups, ideas (a magic system, a technology), events and plot
@@ -168,6 +169,19 @@ struct ReadingDay {
 class Graph {
 public:
     explicit Graph(const Library &library);
+    // The graph as one tenant sees it (ADR 0003): what its readers keep to,
+    // with within(), so that nothing of another tenant is read (#95).
+    [[nodiscard]] static Graph forTenant(const Library &library, Tenant tenant) {
+        Graph graph(library);
+        graph.m_tenant = std::move(tenant);
+        return graph;
+    }
+    [[nodiscard]] const std::optional<Tenant> &tenant() const noexcept { return m_tenant; }
+    // The condition that keeps a query to the tenant (TenantFilter); none
+    // for the graph of no tenant, which reads all of it.
+    [[nodiscard]] std::optional<TenantFilter> within() const {
+        return m_tenant ? std::optional(Tenancy::filter(*m_library, *m_tenant)) : std::nullopt;
+    }
 
     // Adds a thing, or brings the one already known by that name (or one of
     // its aliases) in the same scope and of the same kind up to date: a
@@ -308,5 +322,6 @@ private:
     [[nodiscard]] QList<GraphEdge> withinSides(QList<GraphEdge> edges) const;
 
     const Library *m_library;
+    std::optional<Tenant> m_tenant;
     mutable std::optional<BookSides> m_sides;
 };

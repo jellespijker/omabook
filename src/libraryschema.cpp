@@ -1,5 +1,7 @@
 #include "libraryschema.h"
 
+#include "tenancyschema.h"
+
 namespace {
 
 // Each entry takes the database from the version of its index to the next.
@@ -398,6 +400,11 @@ const QList<QStringList> migrations{
     // lacks of it, the last a device wrote of it, and one space's operations
     // are a range of it, not a read of all of it.
     {"CREATE INDEX IF NOT EXISTS snapshot_ops_space ON snapshot_ops(space, device, seq)"},
+    // The tenants of the graph (ADR 0003, #94, format 25): which tenants see each thing,
+    // relation and fact, kept by triggers as the rows are written. What they
+    // are for the graph a library already has is filled in by Tenancy::follow
+    // as the library is set up, after this step and the copy kept before it.
+    TenancySchema::step(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

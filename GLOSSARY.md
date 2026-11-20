@@ -38,6 +38,10 @@ _Avoid_: Selection, range, quote
 A top-level collection's own part of the knowledge graph, kept entirely apart from every other: nothing in it is shared with, merged into or read from another tenant.
 _Avoid_: Side, book side, partition, scope (for this meaning)
 
+**Tenant membership**:
+Which tenants see a thing, a fact or a relation of the graph, each stored once: those of the books it was learned from.
+_Avoid_: Copy, partition, side
+
 **Unfiled**:
 The tenant of the books that are in no top-level collection.
 _Avoid_: None, default, uncategorised
