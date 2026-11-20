@@ -54,6 +54,8 @@ public:
         BookNeedsTitle,    // {}
         NotOneBook,        // {folder or archive name}
         NoBooksInside,     // {archive name}
+        NoSuchBook,        // {book's number}
+        InkNotKept,        // {page number, from 1}
         // Recognising handwriting and speech (services); "where" is a recognizer's own words.
         NoInk,                 // {}
         RecordingUnreadable,   // {recording}

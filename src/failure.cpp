@@ -52,6 +52,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::BookNeedsTitle, tr("A book needs a title.")},
     {Failure::Code::NotOneBook, tr("%1 couldn't be made into one book.")},
     {Failure::Code::NoBooksInside, tr("There are no books inside %1.")},
+    {Failure::Code::NoSuchBook, tr("There is no book %1 in the library.")},
+    {Failure::Code::InkNotKept, tr("The ink on page %1 could not be kept.")},
     {Failure::Code::NoInk, tr("There is no ink to recognise.")},
     {Failure::Code::RecordingUnreadable, tr("The recording %1 can't be read.")},
     {Failure::Code::RecordingEmpty, tr("The recording %1 is empty.")},

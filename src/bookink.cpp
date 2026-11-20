@@ -11,6 +11,7 @@
 #include <map>
 
 #include "changelog.h"
+#include "failure.h"
 #include "inkcodec.h"
 #include "library.h"
 #include "plugindata.h"
@@ -68,7 +69,7 @@ constexpr auto setField = "set:strokes"_L1;
 [[nodiscard]] std::expected<qint64, QString> makeAnnotation(Library &library, qint64 bookId, int page, const QString &fileHash) {
     const QString bookGid = Spaces::bookId(library, bookId);
     if (bookGid.isEmpty())
-        return std::unexpected(u"There is no book %1 in the library."_s.arg(bookId));
+        return std::unexpected(Failure(Failure::Code::NoSuchBook, {QString::number(bookId)}).text());
     Annotation ink{.id = 0,
                    .kind = QString::fromLatin1(BookInk::kind),
                    .place = {.section = page, .fraction = 0},
@@ -79,7 +80,7 @@ constexpr auto setField = "set:strokes"_L1;
     ink.anchored = fileHash;
     const qint64 made = library.addAnnotation(bookId, ink);
     if (made <= 0)
-        return std::unexpected(u"The ink on page %1 could not be kept."_s.arg(page + 1));
+        return std::unexpected(Failure(Failure::Code::InkNotKept, {QString::number(page + 1)}).text());
     // Made again after its last stroke was erased, it is the one it was: no copy of it.
     Spaces::setGlobalId(library, QString(entity), made, Spaces::annotationGlobalId(bookGid, ink.kind, page, 0, {}, {}));
     return made;
