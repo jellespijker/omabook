@@ -120,10 +120,9 @@ void Reader::openBook(qint64 id) {
     const auto book = library ? library->book(id) : std::nullopt;
     if (!book)
         return;
-    // A paper book, or one only on a list, has nothing to open.
+    // A paper book, or one only on a list, has nothing to open, unless a space it is in brings its file (#63).
     if (book->formats.isEmpty()) {
-        m_backend->say(book->paper ? tr("%1 is on your shelf, not in a file. Add a file to it to read it here.").arg(book->meta.title)
-                                   : tr("%1 is on your list, but you have no file of it yet.").arg(book->meta.title));
+        m_backend->spaces()->bring(*book, [this, id] { openBook(id); });
         return;
     }
     m_pendingId = id;

@@ -18,8 +18,10 @@ class Library;
 // rule, and how its shelf shows it: view, grouping and sort) and each of its
 // books' identity (title, authors, series, ISBN and the names it has
 // elsewhere: Goodreads, Open Library, Calibre), by the book's global id.
-// Never a book's file, nor where it lies, its formats, cover or tags. What
-// is the owner's own goes only as they choose, each part its own switch.
+// Never where a book's file lies, its cover or tags; its files only by
+// their hashes, and only when the owner lets them travel (Parts::files,
+// #63). What is the owner's own goes only as they choose, each part its own
+// switch.
 //
 // Its operations are those of the owner's personal space that say these
 // things, written into the published space and compacted: what the books
@@ -35,8 +37,11 @@ struct Parts {
     bool questions = false; // the questions asked of its books
     bool ratings = false;   // the stars given them
     bool reading = false;   // how far each was read, its shelf and finished day, and the days it was read on
+    // Which file each book has (format, hash and size, never where it lies),
+    // so that whoever the space reaches can fetch it (SpaceFiles, #63).
+    bool files = false;
 
-    // By name ("graph", "questions", "ratings", "reading"), as a snapshot keeps
+    // By name ("graph", "questions", "ratings", "reading", "files"), as a snapshot keeps
     // them; a name not known here is left out.
     [[nodiscard]] QStringList names() const;
     [[nodiscard]] static Parts fromNames(const QStringList &names);
@@ -97,5 +102,10 @@ struct Publication {
 // what a later snapshot of it is, also once its collection is gone at home
 // (then it holds only the removal of all it held).
 [[nodiscard]] std::expected<SpaceSnapshot, QString> snapshotOf(const Library &library, const QString &space);
+
+// What a space says of a book's files, of what the owner's log says of them
+// (a "formats" field: each file's format, place in the library, size and
+// hash): each file's format, hash and size, never where it lies.
+[[nodiscard]] QString filesSaid(const QString &formats);
 
 } // namespace PublishedSpace

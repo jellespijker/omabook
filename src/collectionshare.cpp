@@ -18,6 +18,7 @@
 #include "scriptplugins.h"
 #include "scriptsharing.h"
 #include "settings.h"
+#include "spacefiles.h"
 #include "spacelinks.h"
 #include "spacereducer.h"
 #include "spaces.h"
@@ -91,7 +92,9 @@ void countGraph(const ReducedState &state, Counts &counts) {
 }
 
 [[nodiscard]] QJsonArray leftOut(const Parts &parts, const Counts &every, int files) {
-    QJsonArray out{QJsonObject{{"part", "files"}, {"count", files}, {"never", true}}};
+    QJsonArray out;
+    if (!parts.files)
+        out << QJsonObject{{"part", "files"}, {"count", files}, {"switch", "--with files"}};
     if (!parts.graph)
         out << QJsonObject{{"part", "graph"},
                            {"things", every.things},
@@ -120,8 +123,10 @@ void countGraph(const ReducedState &state, Counts &counts) {
                 parts.reading = true;
             else if (part == "graph"_L1)
                 parts.graph = true;
+            else if (part == "files"_L1)
+                parts.files = true;
             else
-                return std::unexpected(u"--with takes questions, ratings and progress, and \"%1\" is none of them."_s.arg(given));
+                return std::unexpected(u"--with takes questions, ratings, progress and files, and \"%1\" is none of them."_s.arg(given));
         }
     return parts;
 }
@@ -149,6 +154,9 @@ void printPreview(const QJsonObject &shown) {
         say(stdout, u"  %1"_s.arg(counted(n("ratings"), u"rating", u"ratings")));
     if (parts.contains("reading"_L1))
         say(stdout, u"  your reading: %1, %2"_s.arg(counted(n("reading_places"), u"place", u"places"), counted(n("reading_days"), u"day", u"days")));
+    if (parts.contains("files"_L1))
+        say(stdout, u"  the books' files (%1), beside the space's file: to everyone it reaches, whoever you give it to and "
+                    "whoever they pass it to"_s.arg(counted(shown.value("files").toInteger(), u"file", u"files")));
     say(stdout, u"Left out:"_s);
     for (const QJsonValue value : shown.value("left_out").toArray()) {
         const QJsonObject part = value.toObject();
@@ -157,7 +165,8 @@ void printPreview(const QJsonObject &shown) {
             return counted(part.value(QLatin1StringView(key)).toInteger(), one, many);
         };
         if (name == "files"_L1)
-            say(stdout, u"  the books' files (%1): never shared"_s.arg(of("count", u"file", u"files")));
+            say(stdout,
+                u"  the books' files (%1): --with files, and they go to everyone the space reaches"_s.arg(of("count", u"file", u"files")));
         else if (name == "graph"_L1)
             say(stdout, u"  the graph (%1, %2, %3): --with-graph"_s.arg(of("things", u"thing", u"things"), of("facts", u"fact", u"facts"),
                                                                        of("relations", u"relation", u"relations")));
@@ -177,6 +186,9 @@ void printPublished(const QJsonObject &done) {
     if (done.contains("output"))
         say(stdout, u"Wrote %1 (%2 operations): give it to whoever you share the collection with."_s.arg(
                         done.value("output").toString(), QString::number(done.value("snapshot_operations").toInteger())));
+    if (const QJsonObject files = done.value("files").toObject(); !files.isEmpty())
+        say(stdout, u"The books' files are in %1 (%2 new): give it with the file, for those who subscribe to fetch them."_s.arg(
+                        files.value("folder").toString(), QString::number(files.value("copied").toInteger())));
     if (const QJsonObject sent = done.value("sent").toObject(); !sent.isEmpty()) {
         const QString link = sent.value("address").toString();
         const QString kind = sent.value("public").toBool() ? u"public"_s : u"secret"_s;
@@ -199,7 +211,9 @@ void printPublished(const QJsonObject &done) {
 
 void CollectionShare::addOptions(QCommandLineParser &parser) {
     parser.addOption({u"with-graph"_s, u"share: with what the knowledge graph knows of its books, up to where you have read."_s});
-    parser.addOption({u"with"_s, u"share: also these of yours: questions, ratings, progress."_s, u"parts"_s});
+    parser.addOption({u"with"_s,
+                      u"share: also these of yours: questions, ratings, progress, files (the books' own, to everyone it reaches)."_s,
+                      u"parts"_s});
     parser.addOption({u"output"_s, u"share: write the space's snapshot to this file."_s, u"file"_s});
     parser.addOption({u"gist"_s, u"share: send the space's snapshot to a gist, through GitHub's command line gh, and print its link; "
                                  "the same gist each time."_s});
@@ -216,9 +230,13 @@ std::expected<QJsonObject, QString> CollectionShare::send(const Library &library
     if (!sent)
         return std::unexpected(sent.error());
     SpaceLinks::remember(library, SpaceLinks::Role::Sent, {.space = space, .transport = transport.name(), .address = sent->address});
-    return QJsonObject{{"address", sent->address}, {"transport", transport.name()},
-                       {"created", sent->created}, {"public", sent->open},
-                       {"note", sent->note},       {"operations", snapshot->operations.size()}};
+    QStringList note{sent->note};
+    // A link carries the space, never its books' files: they go beside its file (SpaceFiles).
+    if (snapshot->parts.contains("files"_L1))
+        note << u"The books' files don't go by a link: write the space's file (--output) for them to go beside it."_s;
+    note.removeAll(QString());
+    return QJsonObject{{"address", sent->address}, {"transport", transport.name()}, {"created", sent->created},
+                       {"public", sent->open},     {"note", note.join(u' ')},       {"operations", snapshot->operations.size()}};
 }
 
 std::expected<QJsonObject, QString> CollectionShare::preview(const Library &library, const Collection &collection, const Parts &parts) {
@@ -237,6 +255,7 @@ std::expected<QJsonObject, QString> CollectionShare::preview(const Library &libr
     return QJsonObject{{"collection", collection.path},
                        {"parts", QJsonArray::fromStringList(parts.names())},
                        {"in", countsJson(countsOf(*chosen))},
+                       {"files", files},
                        {"left_out", leftOut(parts, countsOf(*every), files)}};
 }
 
@@ -289,6 +308,11 @@ std::expected<QJsonObject, QString> CollectionShare::publish(const Library &libr
             return std::unexpected(saved.error());
         done.insert("output", how.output);
         done.insert("snapshot_operations", snapshot->operations.size());
+        const auto beside = SpaceFiles::writeBeside(library, *snapshot, how.output);
+        if (!beside)
+            return std::unexpected(beside.error());
+        if (parts.files)
+            done.insert("files", QJsonObject{{"folder", SpaceFiles::besideOf(how.output)}, {"copied", *beside}});
     }
     if (how.link != nullptr) {
         const auto sent = send(library, published->space, *how.link, how.open);

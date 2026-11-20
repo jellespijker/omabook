@@ -9,12 +9,22 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-[[nodiscard]] QString nameOf(SpaceLinks::Role role) { return role == SpaceLinks::Role::Sent ? u"sent"_s : u"followed"_s; }
+[[nodiscard]] QString nameOf(SpaceLinks::Role role) {
+    switch (role) {
+    case SpaceLinks::Role::Sent:
+        return u"sent"_s;
+    case SpaceLinks::Role::Followed:
+        return u"followed"_s;
+    case SpaceLinks::Role::Files:
+        return u"files"_s;
+    }
+    return {};
+}
 
 } // namespace
 
 void SpaceLinks::remember(const Library &library, Role role, const Link &link) {
-    if (role == Role::Followed)
+    if (role != Role::Sent)
         ChangeLog::exec(library, "DELETE FROM space_links WHERE space = ? AND role = ?", {link.space, nameOf(role)});
     ChangeLog::exec(library,
                     "INSERT INTO space_links (space, role, transport, address) VALUES (?, ?, ?, ?) "

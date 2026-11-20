@@ -7,6 +7,7 @@
 #include <QtTypes>
 #include <expected>
 #include <span>
+#include <utility>
 
 #include "spacekey.h"
 #include "spacereplay.h"
@@ -27,6 +28,15 @@
 // operations newer than what is held of each device (a version vector).
 // Each batch is sealed with one of the space's keys; since a member was
 // removed, the newer ones with a key they don't hold (SharedKeys).
+//
+// When the space lets its books' files travel (#63), they are kept beside
+// the batches, in `files/`: each one sealed with the space's key as a batch
+// is (its parts the file in pieces, the space's id and the file's hash
+// their additional data), and named by a hash of the file's hash keyed with
+// the key the space was founded with, which every member holds, so the
+// folder says nothing of which file it is. Written once, whole, by whoever
+// has the file; opened only by a member who wants it, and checked against
+// its hash.
 //
 // WebDAV and S3 would carry the same files; they are not built.
 namespace SpaceFolder {
@@ -55,5 +65,18 @@ struct Read {
 // doesn't open: what comes after it waits, so that nothing is taken past
 // what is missing (a later key may open it).
 [[nodiscard]] Read read(const QString &folder, const QString &space, std::span<const SpaceKey> keys, const QHash<QString, qint64> &held);
+
+// Where the book's file of `hash` is kept in the folder of `space`, named
+// with `keys` (every generation of the space's key held, the founding one
+// first); empty without a key.
+[[nodiscard]] QString fileOf(const QString &folder, const QString &space, std::span<const SpaceKey> keys, const QString &hash);
+// Keeps the file at `path`, whose hash is `hash`, sealed with `sealing`,
+// unless it is there already. Whether it wrote it.
+[[nodiscard]] std::expected<bool, QString> writeFile(const QString &folder, const QString &space, std::span<const SpaceKey> keys,
+                                                     const SpaceKey &sealing, const std::pair<QString, QString> &hashAndPath);
+// Opens the file of `hash` into `into`, with whichever of `keys` it was
+// sealed with, refused unless it is whole and its content has that hash.
+[[nodiscard]] std::expected<void, QString> readFile(const QString &folder, const QString &space, std::span<const SpaceKey> keys,
+                                                    const QString &hash, const QString &into);
 
 } // namespace SpaceFolder

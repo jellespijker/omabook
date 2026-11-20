@@ -267,6 +267,22 @@ qint64 SubscribedSpace::bookHere(const Library &library, const QString &space, c
     return here > 0 && library.book(here) ? here : 0;
 }
 
+QString SubscribedSpace::bookIn(const Library &library, const QString &space, qint64 here) {
+    return Spaces::globalId(library, booksOf(space), here);
+}
+
+QHash<QString, qint64> SubscribedSpace::wishedFiles(const Library &library) {
+    QHash<QString, qint64> wished;
+    for (QSqlQuery query = ChangeLog::query(library,
+                                            "SELECT g.global_id, g.local_id FROM global_ids AS g WHERE g.entity LIKE 'subscribed-book:%' "
+                                            "AND g.global_id LIKE 'b:%' AND NOT EXISTS (SELECT 1 FROM formats WHERE book_id = g.local_id)",
+                                            {});
+         query.next();)
+        if (library.book(query.value(1).toLongLong()))
+            wished.insert(query.value(0).toString().mid(2), query.value(1).toLongLong());
+    return wished;
+}
+
 std::expected<qint64, QString> SubscribedSpace::drop(const Library &library, const QString &space) {
     if (!isSubscribed(library, space))
         return std::unexpected(u"This library doesn't subscribe to %1."_s.arg(space));

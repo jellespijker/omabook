@@ -107,6 +107,8 @@ void judge(const QList<SpaceOperation> &judged, qsizetype founding, State &state
             continue;
         }
         state.accepted << op;
+        if (op.entity == "space"_L1 && op.field == "files"_L1)
+            state.files = op.value == "1"_L1; // the latest by clock, as they are judged in that order
         if (const std::optional<Role> given = at == founding ? std::nullopt : roleGiven(op)) {
             if (!roles.contains(op.id))
                 order << op.id;
@@ -156,6 +158,7 @@ void judgeWithRotations(const QList<SpaceOperation> &judged, qsizetype founding,
         state.accepted.clear();
         state.members.clear();
         state.parts.clear();
+        state.files = false;
         state.refused = before;
         judge(judged, founding, state, KeyRotations::CutOffs(prevailing));
         const qsizetype was = standing.size();

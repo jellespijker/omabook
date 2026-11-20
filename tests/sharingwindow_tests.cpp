@@ -1,6 +1,6 @@
 // Publishing and subscribing in the window (#6): the publish dialog says what
-// goes in, counted as the command line counts it, what never goes, and each
-// part of the user's own with its switch, and writes the file; a file dropped
+// goes in, counted as the command line counts it, and each part of the
+// user's own with its switch, the books' files too (#63), and writes the file; a file dropped
 // on the window says what matched and what becomes a wish before anything is
 // written; the collection a subscribed space fills is marked as someone
 // else's, and unsubscribing from it keeps the collection. The keys are in the
@@ -31,6 +31,7 @@
 #include "publishedspace.h"
 #include "reader.h"
 #include "settings.h"
+#include "spacefiles.h"
 #include "spacesnapshot.h"
 #include "subscribedspace.h"
 #include "theme.h"
@@ -237,7 +238,7 @@ private slots:
         QCOMPARE(seen.value("ratings").toInt(), 1);
         QVERIFY(seen.value("places").toInt() >= 1);
         QVERIFY(desk.value("publishGoesIn", "text").toString().contains("2 books"));
-        QVERIFY(desk.value("publishNeverGoes", "text").toString().contains("files (1)"));
+        QVERIFY(desk.value("publishFiles", "text").toString().contains("files (1)"));
         // Counted in the singular and the plural, as the language has them.
         QCOMPARE(seen.value("things").toInt(), 1);
         QCOMPARE(seen.value("facts").toInt(), 1);
@@ -247,7 +248,7 @@ private slots:
         QVERIFY(desk.value("publishRatings", "text").toString().contains("(1)"));
         // Every part of the user's own is off until switched on, and the
         // first time it asks the name the user goes by.
-        for (const QString part : {"publishGraph", "publishQuestions", "publishRatings", "publishReading", "publishLink"})
+        for (const QString part : {"publishGraph", "publishQuestions", "publishRatings", "publishReading", "publishFiles", "publishLink"})
             QVERIFY2(!desk.value(part, "checked").toBool(), qPrintable(part));
         QVERIFY(desk.value("publishName", "visible").toBool());
         QVERIFY(desk.value("publishFile", "text").toString().endsWith("Tides.omabook-space"));
@@ -262,6 +263,11 @@ private slots:
         QCOMPARE(desk.value("publishFile", "text").toString(), file);
         QVERIFY(desk.set("publishName", "text", "Ada"));
         QVERIFY(desk.set("publishGraph", "checked", true));
+        // The books' files, once switched on, are said to go to everyone it reaches.
+        QVERIFY(!desk.value("publishFilesReach", "visible").toBool());
+        QVERIFY(desk.set("publishFiles", "checked", true));
+        QVERIFY(desk.value("publishFilesReach", "visible").toBool());
+        QVERIFY(desk.value("publishFilesReach", "text").toString().contains("everyone you give the saved file to"));
         QVERIFY(desk.click("publishConfirm"));
         QTRY_VERIFY(!desk.value("publishDialog", "opened").toBool());
         QTRY_VERIFY(desk.backend->message().contains("Published as Ada"));
@@ -270,11 +276,12 @@ private slots:
         const auto written = SpaceSnapshotFile::load(file);
         QVERIFY2(written.has_value(), qPrintable(Fixtures::whyNot(written)));
         QCOMPARE(written->owner.name, QString("Ada"));
-        QCOMPARE(written->parts, QStringList({"graph"}));
+        QCOMPARE(written->parts, QStringList({"graph", "files"}));
+        QCOMPARE(QDir(SpaceFiles::besideOf(file)).entryList(QDir::Files).size(), 1);
         const auto fields = [&written](const QString &field) {
             return std::ranges::count_if(written->operations, [&field](const SpaceOperation &op) { return op.field == field; });
         };
-        QVERIFY(fields("rating") == 0 && fields("progress") == 0);
+        QVERIFY(fields("rating") == 0 && fields("progress") == 0 && fields("formats") >= 1);
         QVERIFY(std::ranges::any_of(written->operations, [](const SpaceOperation &op) { return op.value.contains("Mara"); }));
 
         // Again, the name is the one gone by before.
@@ -282,6 +289,41 @@ private slots:
         QTRY_VERIFY(desk.value("publishDialog", "counted").toBool());
         QVERIFY(!desk.value("publishName", "visible").toBool());
         QCOMPARE(desk.backend->spaces()->publishing().value("name").toString(), QString("Ada"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    void openingAWishedForBookFetchesItsFileWhenTheSpaceCarriesIt() {
+        Desk desk;
+        // Someone else's collection, its book's file beside its file.
+        Library owner(desk.dir.filePath("Owner"));
+        QVERIFY(owner.open());
+        QVERIFY(Fixtures::epub(desk.dir.filePath("tide.epub"), "The Long Tide"));
+        const qint64 tide = owner.add(desk.dir.filePath("tide.epub")).id;
+        const auto shelf = owner.addCollection("Tides");
+        const auto person = Person::generate();
+        QVERIFY(shelf && person && owner.putInCollection(*shelf, tide, true));
+        const auto snapshot = PublishedSpace::snapshot(owner, *shelf, {.files = true}, {.name = "Ada Fixture", .person = person->id()});
+        const QString file = desk.dir.filePath("Tides.omabook-space");
+        QVERIFY(snapshot && SpaceSnapshotFile::save(*snapshot, file));
+        QCOMPARE(SpaceFiles::writeBeside(owner, *snapshot, file).value_or(0), 1);
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+
+        // Subscribing says the files come, and brings none of them.
+        desk.backend->spaces()->read(file);
+        QTRY_VERIFY(desk.backend->spaces()->subscribing().contains("space"));
+        QVERIFY(desk.backend->spaces()->subscribing().value("files").toBool());
+        desk.backend->spaces()->subscribe(file, {});
+        Library &library = *desk.backend->library();
+        QTRY_COMPARE(library.books().size(), 1);
+        const Book wish = library.books().first();
+        QVERIFY(wish.formats.isEmpty());
+
+        // Opening it fetches it, checked against its hash, and opens it.
+        desk.reader->openBook(wish.id);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QCOMPARE(desk.reader->bookId(), wish.id);
+        QCOMPARE(library.book(wish.id)->formats, QStringList{"epub"});
+        QCOMPARE(library.formatFiles(wish.id).first().hash, owner.formatFiles(tide).first().hash);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

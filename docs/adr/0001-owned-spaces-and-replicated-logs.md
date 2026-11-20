@@ -371,9 +371,42 @@ As built (#49), changing a shared space's key when a member is removed:
 ### Book files
 
 Files are referenced by their hash and fetched only when wanted. Between one's own computers they
-travel as today. To other people a space carries a book's details, never its file: a reader who
-has the book is matched by hash or identifiers, and one who doesn't gets a wish. A household space
-can say its files travel too.
+travel as today. To other people a space carries a book's details, and its file only when the
+space's owner says so: a reader who has the book is matched by hash or identifiers, and one who
+doesn't gets a wish. A household space can say its files travel too.
+
+As built (#63), a space's files, when its owner allows (owner's decision: books one owns may be
+shared with anyone the people sharing the space allow):
+
+- **A switch per space, off until turned on.** In a shared space any writer turns it, as an
+  operation (entity `space`, its id, field `files`, `1` or `0`) judged by the role rules, the latest by
+  clock winning (`SharedSpace::State::files`); in a published space its owner, as a part of it
+  (`PublishedSpace::Parts::files`, the part `files` in the snapshot, which a reader from before ignores).
+  Whoever turns it on is told that the files go to everyone the space reaches (`SpaceFiles::said`).
+- **Files by their hash.** With it on, the space says of each book its `formats` (each file's format,
+  hash and size, never where it lies: `PublishedSpace::filesSaid`), as the owner's log says them, or a
+  writer's (`SharedCollection::contribute`, which never says a book has none: a member who lacks it
+  says nothing of the others' files). Off, a published space clears the field, as any part switched off.
+- **Fetched only when wanted, never in place of one's own.** A member's book of the space (matched or a
+  wish) is given a file when it is opened, or with `spaces fetch` (`SpaceFiles::fetch`), and only when it
+  has none: a copy matched by file, identifier or title stays as it is. What arrives is taken only when
+  its content has the hash the space names.
+- **Per transport.** A shared space's folder keeps the files in `files/` beside the batches, each
+  sealed with the newest key as a batch is (the space's id and the file's hash its additional data),
+  named by the file's hash keyed with the founding key (`SpaceKey::nameFor`), so the folder says nothing
+  of which file it is; each member writes there, once, the files of the space's books they have, at their
+  sync, and the folder last synced through is where a member fetches from (`SpaceLinks::Role::Files`).
+  A published space's `.omabook-space` file stays as it was: the files go beside it, as they are, in
+  `<name>.omabook-files/<hash>.<format>`, so the snapshot stays small enough to mail and a subscriber
+  from the file fetches from beside it. A gist carries no files: it is no place for large binaries;
+  sending one says so, and a subscription that follows one is told to ask for the space's file. A
+  repository release could carry them later.
+- **A wish filled by its file.** Adding the very file of a book a space made a wishlist entry of fills
+  that entry (the space knows it by `b:` and the file's hash, `SubscribedSpace::wishedFiles`), whatever
+  the file's own details say, as an identifier or title and authors already did (`importBooks`).
+- **Still open.** Switching the files off doesn't take back what members fetched; nothing could. A
+  member removed from a shared space can still read the files sealed before the key changed, as with
+  everything else, and can tell from the names whether a file they know was written later.
 
 As built (#25): a book in the format of a plugin that isn't installed (a Storyteller story) still
 travels between one's own computers and is kept there, saying which plugin reads it (the plugins'

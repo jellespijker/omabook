@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QString>
 #include <QtTypes>
@@ -91,6 +92,13 @@ void link(const Library &library, const QString &space, qint64 collection);
 // (GraphLayers, #5).
 void placeBook(const Library &library, const QString &space, const QString &book, qint64 here);
 [[nodiscard]] qint64 bookHere(const Library &library, const QString &space, const QString &book);
+// The other way: the space's id of the book `here`, as placed; empty for none.
+[[nodiscard]] QString bookIn(const Library &library, const QString &space, qint64 here);
+// Of the books placed here for a space (also a shared one) that the space
+// knows by a file (its id "b:" and the file's hash) and that have no file
+// here, a wishlist entry: the hash and the book here. What adding that very
+// file fills, rather than making the book twice (importBooks, #63).
+[[nodiscard]] QHash<QString, qint64> wishedFiles(const Library &library);
 
 // Drops the layer: the space, its operations (Compaction::forgetSubscribed),
 // the link, where its books are here and where it was followed from

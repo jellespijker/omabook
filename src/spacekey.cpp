@@ -150,6 +150,14 @@ QString SpaceKey::id() const {
     return QString::fromLatin1(Crypto::toByteArray(hash).toHex());
 }
 
+QString SpaceKey::nameFor(QStringView what) const {
+    const QByteArray bytes = what.toUtf8();
+    std::array<std::byte, idBytes> hash{};
+    crypto_generichash(Crypto::writableUchars(hash), hash.size(), Crypto::uchars(Crypto::bytes(bytes)),
+                       static_cast<std::size_t>(bytes.size()), m_key.data(), size);
+    return QString::fromLatin1(Crypto::toByteArray(hash).toHex());
+}
+
 QString SpaceKey::fileFor(const QString &folder, QStringView space) {
     QString name;
     for (const QChar c : space)

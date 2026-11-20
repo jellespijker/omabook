@@ -15,19 +15,21 @@
 #include "scriptsharing.h"
 #include "settings.h"
 #include "sharedspaces.h"
+#include "spacefiles.h"
 
 namespace {
 
 using namespace Qt::StringLiterals;
 using SharedSpaces::Summary;
 
-constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sync] …\n\n"
+constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sync|files|fetch] …\n\n"
                        "Every piece of your library belongs to a space: your personal one (your own computers), a collection\n"
                        "you published or subscribed to, or a shared space several people write, as a household library or a\n"
-                       "book club. A shared space holds a collection (its tree and its books' details, never their files),\n"
-                       "and each member links a collection of their own to it. Writers change it by changing that collection;\n"
-                       "readers get every change and write nothing. Who is a member, and as what, travels in the space itself,\n"
-                       "signed: an operation by anyone who wasn't a writer at its time is refused.\n\n"
+                       "book club. A shared space holds a collection (its tree and its books' details; their files only when\n"
+                       "a writer switches them on), and each member links a collection of their own to it. Writers change it\n"
+                       "by changing that collection; readers get every change and write nothing. Who is a member, and as\n"
+                       "what, travels in the space itself, signed: an operation by anyone who wasn't a writer at its time\n"
+                       "is refused.\n\n"
                        "  list                                      The spaces you are in, their kind, your role and the members\n"
                        "  create <name> [--collection c] [--parts p]  Found a shared space of a collection (the name's, or c);\n"
                        "                                            p: graph,questions,ratings,reading, as for sharing one\n"
@@ -36,7 +38,11 @@ constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sy
                        "  remove <space> <person-id>                What they write from now on is refused; what they had stays theirs\n"
                        "  join <invite-file> [--as name]            Join the space an invite is for; its books go in a collection\n"
                        "  sync <space> --folder <dir>               Take what is new in a folder something else syncs (Syncthing,\n"
-                       "                                            a mounted share), and write what is new here into it, sealed\n\n"
+                       "                                            a mounted share), and write what is new here into it, sealed\n"
+                       "  files <space> on|off                      Let the books' files of a shared space (as a writer) or of one\n"
+                       "                                            you published travel to everyone it reaches; off unless switched\n"
+                       "  fetch <book>                              Fetch a book's file from the space that carries it, checked\n"
+                       "                                            against its hash; a book with a file of its own keeps it\n\n"
                        "A person's id is what omabook identity --export prints. Invite someone, then sync, so the operation that\n"
                        "makes them a member reaches the folder before they write. Every subcommand takes --json and\n"
                        "--library <folder>.";
@@ -60,14 +66,17 @@ void printJson(const QJsonValue &value) {
     QJsonArray members;
     for (const SharedSpaces::Member &member : space.members)
         members << QJsonObject{{"person", member.person}, {"name", member.name}, {"role", member.role}};
-    return {{"space", space.space}, {"kind", space.kind}, {"name", space.name},
-            {"role", space.role},   {"members", members}, {"collection", space.collection}};
+    return {{"space", space.space}, {"kind", space.kind},   {"name", space.name},
+            {"role", space.role},   {"members", members}, {"collection", space.collection},
+            {"files", space.files}};
 }
 
 [[nodiscard]] QStringList describe(const Summary &space) {
     QStringList lines{
         u"%1  (%2; you are %3)%4"_s.arg(space.name, space.kind, space.role.isEmpty() ? u"not a member yet"_s : u"a "_s + space.role,
                                         space.collection.isEmpty() ? QString() : u"  in the collection "_s + space.collection)};
+    if (space.files)
+        lines << u"  its books' files travel in it, to everyone it reaches"_s;
     lines << u"  "_s + space.space;
     for (const SharedSpaces::Member &member : space.members)
         lines << u"    %1  %2%3"_s.arg(member.role, member.person, member.name.isEmpty() ? QString() : u"  ("_s + member.name + u')');
@@ -204,6 +213,7 @@ struct Command {
                               {"known", synced->known},
                               {"written", synced->written},
                               {"sent", synced->sent},
+                              {"files", synced->files},
                               {"refused", QJsonArray::fromStringList(synced->refused)},
                               {"filed", Subscriptions::toJson(synced->filed)}});
         return 0;
@@ -215,6 +225,8 @@ struct Command {
                           .arg(synced->known)
                           .arg(synced->written)
                           .arg(synced->sent)};
+    if (synced->files > 0)
+        lines << u"%1 of the books' files written to the folder, sealed."_s.arg(synced->files);
     if (!synced->refused.isEmpty())
         lines << u"Refused, and not taken:"_s;
     for (const QString &why : synced->refused)
@@ -224,13 +236,55 @@ struct Command {
     return 0;
 }
 
+[[nodiscard]] int files(const Library &library, const Command &command) {
+    const QString to = command.words.value(2);
+    if (command.words.size() != 3 || (to != "on"_L1 && to != "off"_L1))
+        return fail(u"Name the space, and on or off: omabook spaces files <space> on|off"_s);
+    const auto switched = SpaceFiles::set(library, command.words.at(1), to == "on"_L1);
+    if (!switched)
+        return fail(switched.error());
+    if (command.json) {
+        printJson(QJsonObject{{"space", switched->space},
+                              {"kind", switched->kind},
+                              {"name", switched->name},
+                              {"files", switched->on},
+                              {"changed", switched->changed},
+                              {"said", SpaceFiles::said(*switched)}});
+        return 0;
+    }
+    printLine(stdout, (switched->changed ? QString() : u"It was so already. "_s) + SpaceFiles::said(*switched));
+    return 0;
+}
+
+[[nodiscard]] int fetch(Library &library, const Command &command) {
+    if (command.words.size() != 2)
+        return fail(u"Name the book by its number: omabook spaces fetch <book>"_s);
+    bool number = false;
+    const qint64 book = command.words.at(1).toLongLong(&number);
+    if (!number)
+        return fail(u"Name the book by its number (omabook list --json gives it)."_s);
+    const auto fetched = SpaceFiles::fetch(library, book);
+    if (!fetched)
+        return fail(fetched.error());
+    if (command.json) {
+        printJson(QJsonObject{{"book", book},
+                              {"space", fetched->space},
+                              {"format", fetched->format},
+                              {"hash", fetched->hash},
+                              {"size", fetched->size}});
+        return 0;
+    }
+    printLine(stdout, u"Fetched its %1 file from %2, checked against its hash."_s.arg(fetched->format.toUpper(), fetched->name));
+    return 0;
+}
+
 } // namespace
 
 int runSpacesCli(const QStringList &arguments) {
     Command command;
     QCommandLineParser &parser = command.parser;
     parser.addOption({{"h", "help"}, "Show this help."});
-    parser.addPositionalArgument("command", "list, create, invite, remove, join or sync.", "[command]");
+    parser.addPositionalArgument("command", "list, create, invite, remove, join, sync, files or fetch.", "[command]");
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
                       "Use the library in this folder instead of the current one, for this run only "
@@ -271,5 +325,9 @@ int runSpacesCli(const QStringList &arguments) {
         return join(library, command);
     if (sub == "sync"_L1)
         return sync(library, command);
+    if (sub == "files"_L1)
+        return files(library, command);
+    if (sub == "fetch"_L1)
+        return fetch(library, command);
     return fail(QString::fromUtf8(usage));
 }

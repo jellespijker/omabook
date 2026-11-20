@@ -707,7 +707,8 @@ private slots:
             out.insert(value.toObject().value("part").toString(), value.toObject());
         QCOMPARE(QSet<QString>(out.keyBegin(), out.keyEnd()), (QSet<QString>{"files", "questions", "ratings", "progress"}));
         QCOMPARE(out.value("files").value("count").toInt(), 3);
-        QVERIFY(out.value("files").value("never").toBool());
+        QCOMPARE(out.value("files").value("switch").toString(), QString("--with files"));
+        QCOMPARE(shown->value("files").toInt(), 3);
         QCOMPARE(out.value("questions").value("count").toInt(), 1);
         QCOMPARE(out.value("ratings").value("count").toInt(), 1);
         QCOMPARE(out.value("ratings").value("switch").toString(), QString("--with ratings"));
@@ -716,7 +717,7 @@ private slots:
         QVERIFY(days > 0);
         QCOMPARE(out.value("progress").value("days").toInt(), days);
 
-        // With every part: they go in, counted as they were left out, and only the files stay.
+        // With every part but the files: they go in, counted as they were left out, and only the files stay out.
         const auto all =
             CollectionShare::preview(shelf.library, sciFi, {.graph = true, .questions = true, .ratings = true, .reading = true});
         QVERIFY2(all.has_value(), why(all).constData());
@@ -741,7 +742,7 @@ private slots:
         const Ran dry =
             omabook({"collections", "share", path, "--with-graph", "--as", "Ada", "--output", file, "--dry-run", "--library", root});
         QVERIFY2(dry.code == 0, qPrintable(dry.errors));
-        for (const char *said : {"Goes in", "3 books", "Left out", "never shared", "--with ratings", "--dry-run"})
+        for (const char *said : {"Goes in", "3 books", "Left out", "--with files", "--with ratings", "--dry-run"})
             QVERIFY2(dry.output.contains(said), qPrintable(said + QString("\n") + dry.output));
         QVERIFY(!QFile::exists(file));
         QCOMPARE(rows(shelf.library, "SELECT COUNT(*) FROM spaces WHERE kind = 'published'"), 0);

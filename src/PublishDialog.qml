@@ -5,8 +5,9 @@ import QtQuick.Layouts
 
 // Publishing a collection, for others to subscribe to (#6): before anything
 // is written it says what goes in, counted as `omabook collections share`
-// counts it, what never goes (the books' files), and each part that is the
-// user's own with its switch, all off until switched on. The first time, it
+// counts it, and each part that is the user's own with its switch, all off
+// until switched on: the books' files too (#63), which then go to everyone
+// the space reaches, as the dialog says plainly when it is switched on. The first time, it
 // asks the name the user goes by; and where to save the file that is given
 // to others, or that it goes as a link (a gist, secret unless asked, #7), or
 // both. Publishing again is publishing the same space, which brings what
@@ -24,12 +25,13 @@ AppPopup {
     readonly property bool firstTime: counted && (seen.name || "") === ""
     readonly property bool canPublish: counted && problem === "" && !backend.spaces.working && (file.text.trim() !== "" || asLink.checked)
                                        && (!firstTime || name.text.trim() !== "")
-    readonly property var parts: ({ graph: graph.checked, questions: questions.checked, ratings: ratings.checked, reading: reading.checked })
+    readonly property var parts: ({ graph: graph.checked, questions: questions.checked, ratings: ratings.checked, reading: reading.checked,
+                                    files: files.checked })
 
     function show(id) {
         const known = backend.collections.find(collection => collection.id === id)
         collectionId = known ? id : (backend.collections.length > 0 ? backend.collections[0].id : 0)
-        for (const part of [graph, questions, ratings, reading, asLink, openLink])
+        for (const part of [graph, questions, ratings, reading, files, asLink, openLink])
             part.checked = false
         name.text = ""
         file.text = ""
@@ -124,21 +126,6 @@ AppPopup {
             text: qsTr("%Ln collections, with their names, rules and how their shelves show", "", dialog.seen.collections || 0) + "\n"
                   + qsTr("%Ln books: title, authors, series, ISBN and their names on other sites", "", dialog.seen.books || 0)
         }
-        // What never goes.
-        Label {
-            Layout.fillWidth: true
-            visible: dialog.counted
-            text: qsTr("Never goes")
-            font.bold: true
-        }
-        Label {
-            objectName: "publishNeverGoes"
-            Layout.fillWidth: true
-            visible: dialog.counted
-            wrapMode: Text.Wrap
-            color: theme.colors.muted
-            text: qsTr("The books' files (%1): those you share it with need their own copies.").arg(dialog.seen.files || 0)
-        }
         // What is the user's own goes only when switched on.
         Label {
             Layout.fillWidth: true
@@ -168,6 +155,21 @@ AppPopup {
             objectName: "publishReading"
             text: qsTr("Your reading: how far you are in %1, and %2 of reading")
                   .arg(qsTr("%Ln books", "", dialog.seen.places || 0)).arg(qsTr("%Ln days", "", dialog.seen.days || 0))
+        }
+        PartSwitch {
+            id: files
+            objectName: "publishFiles"
+            text: qsTr("The books' files (%1), beside the file you save").arg(dialog.seen.files || 0)
+        }
+        // Who gets them, said plainly before anything goes.
+        Label {
+            objectName: "publishFilesReach"
+            Layout.fillWidth: true
+            visible: dialog.counted && files.checked
+            wrapMode: Text.Wrap
+            color: theme.colors.orange
+            text: asLink.checked ? qsTr("The files go to everyone you give the saved file to, and everyone they pass it to: they are copied into a folder beside it. The link carries no files.")
+                                 : qsTr("The files go to everyone you give the saved file to, and everyone they pass it to: they are copied into a folder beside it.")
         }
 
         // Who it is from: asked the first time, and kept with the space.

@@ -37,6 +37,10 @@ public:
     // and a purpose), the same wherever it is held: what a key rotation names
     // the key it hands out by (KeyRotation, #49).
     [[nodiscard]] QString id() const;
+    // A name for `what` that only whoever holds the key can make (a BLAKE2b
+    // hash of it keyed with the key): what a book's file of the space goes by
+    // in a folder, so that the folder says nothing of which file it is (#63).
+    [[nodiscard]] QString nameFor(QStringView what) const;
 
     // Where the key of `space` is kept in `folder`: one file per space, named
     // by its id, so that only the key's owner holds it (the user's Omabook

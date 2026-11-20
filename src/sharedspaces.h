@@ -27,7 +27,9 @@ class Library;
 // new there is taken in by the role rules (SharedSpace), with each new key
 // handed over on the way (SharedKeys), filed into the linked collection
 // (SharedCollection), a writer's own edits of it written into the space, and
-// this computer's new operations written there as sealed batches.
+// this computer's new operations written there as sealed batches, and, when
+// the space lets them travel, the files of its books this computer has
+// (SpaceFiles, #63).
 namespace SharedSpaces {
 
 struct Member {
@@ -43,6 +45,7 @@ struct Summary {
     QString role; // this library's (its person's): "writer", "reader", or "" for none yet
     QList<Member> members;
     QString collection; // the collection here linked to it, when there is one
+    bool files = false; // its books' files travel in it (SpaceFiles, #63)
 };
 
 // Every space this library is in.
@@ -95,6 +98,7 @@ struct Synced {
     qsizetype known = 0;   // held already
     qsizetype written = 0; // of this writer's own edits, written into the space
     qsizetype sent = 0;    // operations written to the folder
+    qsizetype files = 0;   // books' files written to the folder, when the space lets them travel (#63)
     QStringList refused;   // each refused batch or operation, and why
     Subscriptions::Report filed;
 };

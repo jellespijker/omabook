@@ -329,14 +329,15 @@ const bool registered = [] {
                   "Publishes a collection as a space others can follow (it follows the collection as it changes) and, "
                   "with output, writes its snapshot, an .omabook-space file to give them. Answers first what goes in, "
                   "counted by kind (collections, books, things, facts and relations of the graph, questions, ratings, "
-                  "reading places and days), and what is left out: the books' files always, and each of the user's own "
-                  "parts that isn't switched on. Of the graph only what the user has read goes, nothing past their "
+                  "reading places and days), and what is left out: each of the user's own parts that isn't switched on, "
+                  "and the books' files unless switched on (then they go beside the output, to everyone it reaches: say so). Of the graph "
+                  "only what the user has read goes, nothing past their "
                   "place in a book. Show that to the user with dry_run before sharing, and ask them which parts to add "
                   "and the name they go by in it. With gist, it is sent to a gist through GitHub's command line (gh, "
                   "signed in) and the link is answered: secret unless public is asked, the same gist each time.",
                   schema({{"name", string("The collection's path, name, or number.")},
                           {"graph", boolean("With what the knowledge graph knows of its books.")},
-                          {"with", list("The user's own parts to add.", choice("A part.", {"questions", "ratings", "progress"}))},
+                          {"with", list("The user's own parts to add.", choice("A part.", {"questions", "ratings", "progress", "files"}))},
                           {"as", string("The name the user goes by in the space; needed the first time.")},
                           {"output", string("The file to write the snapshot to, ending in .omabook-space.")},
                           {"gist", boolean("Also send the snapshot to a gist and answer its link; sharing again updates it.")},

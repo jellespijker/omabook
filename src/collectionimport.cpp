@@ -13,6 +13,7 @@
 #include "following.h"
 #include "githublink.h"
 #include "library.h"
+#include "spacefiles.h"
 #include "subscriptions.h"
 
 using namespace Qt::StringLiterals;
@@ -50,6 +51,8 @@ Shown subscribe(Library &library, const QString &what, const Subscriptions::Opti
         const auto snapshot = Subscriptions::fetch(what);
         report = snapshot ? Subscriptions::subscribe(library, *snapshot, options)
                           : std::expected<Subscriptions::Report, QString>(std::unexpected(snapshot.error()));
+        if (report && !options.dryRun)
+            SpaceFiles::takenFrom(library, report->space.space, what); // its books' files, if it lets them travel, are beside it
     }
     if (!report)
         return std::unexpected(report.error());

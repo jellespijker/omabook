@@ -2,6 +2,7 @@
 
 #include <QDirIterator>
 #include <QFileInfo>
+#include <QHash>
 #include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -19,6 +20,7 @@
 #include "curation.h"
 #include "formatprovider.h"
 #include "formats.h"
+#include "subscribedspace.h"
 
 using namespace Qt::StringLiterals;
 
@@ -161,10 +163,18 @@ private:
 // rather than becoming the same book twice.
 class Fileless {
 public:
-    explicit Fileless(const Library &library) {
+    explicit Fileless(const Library &library) : m_wished(SubscribedSpace::wishedFiles(library)) {
         for (const Book &book : library.books())
             if (book.formats.isEmpty())
                 m_books << book;
+    }
+
+    // The one that the file `file`, described so, is: the wishlist entry a
+    // space made of this very file (#63), whatever its own details say, as
+    // the space knows the book by the file's hash; else as match() finds it.
+    [[nodiscard]] qint64 entryFor(const QString &file, const BookMeta &meta, const QMap<QString, QString> &identifiers) const {
+        const qint64 wished = m_wished.isEmpty() ? 0 : m_wished.value(Library::hashFile(file));
+        return wished != 0 ? wished : match(meta, identifiers);
     }
 
     // The one that is this book, if any: called the same elsewhere, else the
@@ -206,10 +216,12 @@ public:
     // It has a file now.
     void joined(qint64 id) {
         m_books.removeIf([id](const Book &book) { return book.id == id; });
+        m_wished.removeIf([id](const QHash<QString, qint64>::iterator &wish) { return wish.value() == id; });
     }
 
 private:
     QList<Book> m_books;
+    QHash<QString, qint64> m_wished; // a file's hash, the wishlist entry of it
 };
 
 // Gives a book that had no file this one. Its details stay as they were,
@@ -353,7 +365,7 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
             // The first file makes the book, unless it is a book here without
             // a file; the others join it as more formats.
             const BookMeta described = meta ? *meta : Formats::readMeta(first);
-            const qint64 entry = fileless.match(described, identifiersOf(described, book.calibre));
+            const qint64 entry = fileless.entryFor(first, described, identifiersOf(described, book.calibre));
             if (entry == 0) {
                 added = library.add(first, described);
             } else if (const qint64 same = library.bookWithHash(Library::hashFile(first)); same != 0) {

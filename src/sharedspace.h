@@ -71,6 +71,9 @@ struct State {
     QString founder;
     QString name;
     QStringList parts; // the optional parts it holds (PublishedSpace::Parts), as founded
+    // Whether its books' files travel in it (#63): as its writers last said
+    // (entity "space", its id, field "files", "1" or "0"); off until one did.
+    bool files = false;
     QList<SpaceOperation> accepted;
     QList<Refused> refused;
     QList<Member> members; // as of the last operation, removed ones left out, in the order they joined

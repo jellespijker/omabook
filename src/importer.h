@@ -47,8 +47,9 @@ struct ImportOptions {
 // counted as already here, and only the formats it lacks are copied in. A
 // book with none of its files here that is the same as a book here without
 // a file (on a paper shelf, wished for, known from a reading site) gives
-// that book its file instead of becoming a second one: the same by an
-// identifier (an ISBN, a Goodreads or Calibre id), else by title and author
+// that book its file instead of becoming a second one: the wishlist entry a
+// space made of this very file (it knows the book by the file's hash, #63),
+// else the same by an identifier (an ISBN, a Goodreads or Calibre id), else by title and author
 // as tidy finds sure duplicates (Curation::duplicates). The book keeps its
 // shelf, stars, identifiers and paper copy; what the import knows fills
 // only the details it lacks.

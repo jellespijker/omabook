@@ -16,8 +16,10 @@
 #include "collectionshare.h"
 #include "following.h"
 #include "githublink.h"
+#include "library.h"
 #include "person.h"
 #include "scriptsharing.h"
+#include "spacefiles.h"
 #include "spacesnapshot.h"
 #include "subscribedspace.h"
 #include "subscriptions.h"
@@ -32,7 +34,8 @@ using namespace Qt::StringLiterals;
     return {.graph = parts.value("graph").toBool(),
             .questions = parts.value("questions").toBool(),
             .ratings = parts.value("ratings").toBool(),
-            .reading = parts.value("reading").toBool()};
+            .reading = parts.value("reading").toBool(),
+            .files = parts.value("files").toBool()};
 }
 
 // Where a collection's snapshot is offered to be written: among the user's
@@ -56,10 +59,7 @@ using namespace Qt::StringLiterals;
     if (!shown)
         return failed(shown.error());
     const QJsonObject in = shown->value("in").toObject();
-    int files = 0;
-    for (const QJsonValue part : shown->value("left_out").toArray())
-        if (part.toObject().value("part").toString() == "files"_L1)
-            files = part.toObject().value("count").toInt();
+    const int files = shown->value("files").toInt();
     return {{"collection", id},
             {"path", collection->path},
             {"collections", in.value("collections").toInt()},
@@ -116,6 +116,7 @@ using namespace Qt::StringLiterals;
             {"things", static_cast<qint64>(report->things)},
             {"facts", static_cast<qint64>(report->facts)},
             {"relations", static_cast<qint64>(report->relations)},
+            {"files", snapshot->parts.contains("files"_L1)},
             {"known", SubscribedSpace::isSubscribed(library, report->space.space)},
             {"link", link},
             {"error", QString()}};
@@ -126,7 +127,10 @@ using namespace Qt::StringLiterals;
     const auto snapshot = Subscriptions::fetch(file);
     if (!snapshot)
         return std::unexpected(snapshot.error());
-    return Subscriptions::subscribe(library, *snapshot, options);
+    auto report = Subscriptions::subscribe(library, *snapshot, options);
+    if (report)
+        SpaceFiles::takenFrom(library, report->space.space, file); // its books' files, if it lets them travel, are beside it
+    return report;
 }
 
 // What following a link would change, in the window's language: "Books: 2
@@ -340,6 +344,30 @@ void SpaceDesk::unsubscribe(const QString &space) {
                       ? tr("Unsubscribed from %1.").arg(dropped->space.name)
                       : tr("Unsubscribed from %1. The collection %2 stays, with its books and wishlist entries: it is yours.")
                             .arg(dropped->space.name, dropped->collection));
+}
+
+void SpaceDesk::bring(const Book &book, std::function<void()> opened) {
+    const Library *library = m_backend.library();
+    const QList<SpaceFiles::Carried> carried = library ? SpaceFiles::of(*library, book.id) : QList<SpaceFiles::Carried>{};
+    if (carried.isEmpty()) {
+        m_backend.say(book.paper ? tr("%1 is on your shelf, not in a file. Add a file to it to read it here.").arg(book.meta.title)
+                                 : tr("%1 is on your list, but you have no file of it yet.").arg(book.meta.title));
+        return;
+    }
+    m_backend.say(tr("Fetching the file of %1 from %2…").arg(book.meta.title, carried.first().name));
+    beside(
+        [id = book.id](Library &library) {
+            const auto fetched = SpaceFiles::fetch(library, id);
+            return fetched ? QVariantMap{{"name", fetched->name}} : failed(fetched.error());
+        },
+        [this, opened = std::move(opened)](const QVariantMap &done) {
+            if (const QString error = done.value("error").toString(); !error.isEmpty()) {
+                m_backend.say(error);
+                return;
+            }
+            m_backend.reload();
+            opened();
+        });
 }
 
 void SpaceDesk::chooseFile(bool save, const QString &suggested) {

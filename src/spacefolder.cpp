@@ -1,5 +1,6 @@
 #include "spacefolder.h"
 
+#include <QCryptographicHash>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -16,6 +17,16 @@ using namespace Qt::StringLiterals;
 namespace {
 
 constexpr int digits = 12;
+// The pieces a book's file is sealed in: each a part of the sealed stream.
+constexpr qsizetype piece = qsizetype{1024} * 1024;
+constexpr auto filesFolder = "files"_L1;
+
+// What each piece of a book's file is sealed for: this space, this file.
+[[nodiscard]] QString sealedFor(const QString &space, const QString &hash) { return space + u"\x1f"_s + u"file:"_s + hash; }
+
+[[nodiscard]] QString sha256(QByteArrayView bytes) {
+    return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex());
+}
 
 struct Named {
     QString device;
@@ -149,4 +160,64 @@ SpaceFolder::Read SpaceFolder::read(const QString &folder, const QString &space,
         read.ops += *ops;
     }
     return read;
+}
+
+QString SpaceFolder::fileOf(const QString &folder, const QString &space, std::span<const SpaceKey> keys, const QString &hash) {
+    if (keys.empty() || hash.isEmpty())
+        return {};
+    return QDir(of(folder, space))
+        .absoluteFilePath(filesFolder + u'/' + keys.front().nameFor(u"file:"_s + hash) + QLatin1StringView(suffix));
+}
+
+std::expected<bool, QString> SpaceFolder::writeFile(const QString &folder, const QString &space, std::span<const SpaceKey> keys,
+                                                    const SpaceKey &sealing, const std::pair<QString, QString> &hashAndPath) {
+    const auto &[hash, path] = hashAndPath;
+    const QString target = fileOf(folder, space, keys, hash);
+    if (target.isEmpty())
+        return std::unexpected(u"This computer holds no key of the space."_s);
+    if (QFileInfo::exists(target))
+        return false;
+    QFile source(path);
+    if (!source.open(QIODevice::ReadOnly))
+        return std::unexpected(u"Can't read %1: %2"_s.arg(path, source.errorString()));
+    const QByteArray bytes = source.readAll();
+    if (sha256(bytes) != hash)
+        return std::unexpected(u"%1 is not the file it should be: its content changed."_s.arg(path));
+    QList<QByteArray> pieces;
+    for (qsizetype at = 0; at < bytes.size(); at += piece)
+        pieces << bytes.mid(at, piece);
+    if (!QDir().mkpath(QFileInfo(target).absolutePath()))
+        return std::unexpected(u"Can't make the folder %1."_s.arg(QFileInfo(target).absolutePath()));
+    // Whole or not at all, as a batch.
+    QSaveFile file(target);
+    if (!file.open(QIODevice::WriteOnly) || file.write(sealing.seal(sealedFor(space, hash), pieces)) < 0 || !file.commit())
+        return std::unexpected(u"Can't write %1: %2"_s.arg(target, file.errorString()));
+    return true;
+}
+
+std::expected<void, QString> SpaceFolder::readFile(const QString &folder, const QString &space, std::span<const SpaceKey> keys,
+                                                   const QString &hash, const QString &into) {
+    const QString from = fileOf(folder, space, keys, hash);
+    QFile file(from);
+    if (from.isEmpty() || !file.open(QIODevice::ReadOnly))
+        return std::unexpected(
+            u"The space's folder %1 doesn't hold the file yet: whoever has it puts it there at their next sync."_s.arg(of(folder, space)));
+    const QByteArray sealed = file.readAll();
+    std::expected<QList<QByteArray>, QString> opened = std::unexpected(u"This computer holds no key of the space."_s);
+    for (const SpaceKey &key : keys) {
+        opened = key.open(sealedFor(space, hash), sealed);
+        if (opened)
+            break;
+    }
+    if (!opened)
+        return std::unexpected(u"The file in the space's folder doesn't open: %1"_s.arg(opened.error()));
+    QByteArray bytes;
+    for (const QByteArray &part : std::as_const(*opened))
+        bytes += part;
+    if (sha256(bytes) != hash)
+        return std::unexpected(u"The file in the space's folder is not the one the space names: its hash differs."_s);
+    QSaveFile out(into);
+    if (!out.open(QIODevice::WriteOnly) || out.write(bytes) < 0 || !out.commit())
+        return std::unexpected(u"Can't write %1: %2"_s.arg(into, out.errorString()));
+    return {};
 }

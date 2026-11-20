@@ -21,7 +21,7 @@ namespace CollectionShare {
 // kind, and what it leaves out: {"collection", "parts", "in": {"collections",
 // "books", "things", "facts", "relations", "questions", "ratings",
 // "reading_places", "reading_days"}, "left_out": [{"part", counts…,
-// "switch"}]}. The books' files are always left out; each part not switched
+// "switch"}]}, "files" (how many the books have). Each part not switched
 // on says what it would add. Writes nothing.
 [[nodiscard]] std::expected<QJsonObject, QString> preview(const Library &library, const Collection &collection,
                                                           const PublishedSpace::Parts &parts);

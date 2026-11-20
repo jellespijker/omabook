@@ -60,7 +60,7 @@ omabook remove 12                  # to the trash; ask the user before removing
 
 Collections are the user's own named parts of the library, nested as they like (`omabook collections`, `omabook list --collection <path>`); see library.md before making or sorting them.
 
-A collection can be shared: published as a space others subscribe to (`omabook collections share`, `collections import`), or kept by several people together (`omabook spaces`). The books' files never go, and the user's own reading (graph, questions, stars, progress) only when they switch it on; read library.md and show the user what would go before sharing anything.
+A collection can be shared: published as a space others subscribe to (`omabook collections share`, `collections import`), or kept by several people together (`omabook spaces`). The books' files go only when the space's owner switches them on, to everyone it reaches, and the user's own reading (graph, questions, stars, progress) only when they switch it on; read library.md and show the user what would go before sharing anything.
 
 ## The window and the library folder
 

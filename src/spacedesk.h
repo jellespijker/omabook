@@ -13,6 +13,7 @@
 
 class Backend;
 class Library;
+struct Book;
 
 // Publishing a collection and subscribing to one, as the window's dialogs do
 // it (#6): the same operations the command line and the MCP server run
@@ -25,7 +26,7 @@ class SpaceDesk : public QObject {
     // space, counted as the command line's summary counts it, with every
     // part of the user's own: {"collection" (its number), "path",
     // "collections", "books", "things", "facts", "relations", "questions",
-    // "ratings", "places", "days", "files" (never shared), "name" (gone by
+    // "ratings", "places", "days", "files" (the books', a part of its own), "name" (gone by
     // before; empty the first time), "file" (where to write it, suggested),
     // "error", and once published by link "link", its address}; empty until asked.
     Q_PROPERTY(QVariantMap publishing READ publishing NOTIFY changed)
@@ -34,7 +35,8 @@ class SpaceDesk : public QObject {
     // here), "newCollection", "matched" and "wishlist" ([{"title",
     // "authors"}]: books found here, and those that become wishlist entries),
     // "skipped" (books removed here before, which stay so), "things",
-    // "facts", "relations", "known" (whether it is subscribed to already),
+    // "facts", "relations", "files" (its owner lets the books' files come,
+    // each as its book is opened), "known" (whether it is subscribed to already),
     // "link" (it came by a link, which subscribing follows), "error"}; empty
     // until asked.
     Q_PROPERTY(QVariantMap subscribing READ subscribing NOTIFY changed)
@@ -61,7 +63,7 @@ public:
     // Works out `publishing` for a collection.
     Q_INVOKABLE void look(qint64 collection);
     // Publishes it with the parts switched on ({"graph", "questions",
-    // "ratings", "reading"}), as `as`, writes its snapshot to `file` unless
+    // "ratings", "reading", "files"}), as `as`, writes its snapshot to `file` unless
     // that is empty, and with `link` sends it as a link too (a gist, secret
     // unless `open`), its address copied for pasting.
     Q_INVOKABLE void publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file, bool link = false,
@@ -79,6 +81,11 @@ public:
     Q_INVOKABLE void unsubscribe(const QString &space);
     // Asks where to write a snapshot (fileChosen), or for one to read (offered).
     Q_INVOKABLE void chooseFile(bool save, const QString &suggested = {});
+    // Opening a book that has no file here (#63): when a space it is in lets
+    // its files travel, fetches one beside the window and then calls
+    // `opened`; else says why there is nothing to open, as of a paper book or
+    // a wish.
+    void bring(const Book &book, std::function<void()> opened);
     // Of files dropped on the window, the first space's is read (offered);
     // the others are handed back, to be added as books.
     Q_INVOKABLE QList<QUrl> takeSpaces(const QList<QUrl> &urls);

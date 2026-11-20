@@ -1,6 +1,7 @@
 #include "sharedcollection.h"
 
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QSet>
 #include <QStringList>
@@ -126,6 +127,17 @@ struct Said {
     return op;
 }
 
+// Whether a writer's operation, as the space names things, goes into it.
+// The space's top is called as it was founded and sits at the top; each
+// member's own may go by another name, or sit elsewhere, here. And a member
+// who lacks a book's file (a wishlist entry of the space's book) says
+// nothing of the files others have (#63).
+[[nodiscard]] bool goes(const std::optional<SpaceOperation> &op, const QString &top) {
+    if (!op || (op->id == top && (op->field == "name"_L1 || op->field == "parent"_L1)))
+        return false;
+    return op->entity != "book"_L1 || op->field != "formats"_L1 || !QJsonDocument::fromJson(op->value.toUtf8()).array().isEmpty();
+}
+
 } // namespace
 
 std::expected<Subscriptions::Report, QString> SharedCollection::file(Library &library, const QString &space,
@@ -152,7 +164,9 @@ std::expected<qsizetype, QString> SharedCollection::contribute(const Library &li
     if (root == 0)
         return std::unexpected(u"No collection here is linked to %1."_s.arg(space));
     const SharedSpace::State now = SharedSpace::state(library, space);
-    const auto home = PublishedSpace::operations(library, root, PublishedSpace::Parts::fromNames(now.parts), space);
+    PublishedSpace::Parts parts = PublishedSpace::Parts::fromNames(now.parts);
+    parts.files = now.files;
+    const auto home = PublishedSpace::operations(library, root, parts, space);
     if (!home)
         return std::unexpected(home.error());
     QHash<QString, QString> books;
@@ -167,9 +181,7 @@ std::expected<qsizetype, QString> SharedCollection::contribute(const Library &li
     QList<ChangeLog::Entry> entries;
     for (const SpaceOperation &op : *home) {
         const std::optional<SpaceOperation> theirs = inSpace(op, books, collections);
-        // The space's top is called as it was founded and sits at the top;
-        // each member's own may go by another name, or sit elsewhere, here.
-        if (!theirs || (theirs->id == top && (theirs->field == "name"_L1 || theirs->field == "parent"_L1)))
+        if (!goes(theirs, top))
             continue;
         if (said.isNews(*theirs))
             entries << ChangeLog::Entry{

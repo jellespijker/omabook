@@ -55,7 +55,7 @@ summary = "What the command line, the MCP server and the window all do, each wri
 uses = ["services", "library", "formats", "foundation"]
 modules = [
   "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
-  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
+  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

@@ -191,6 +191,16 @@ AppPopup {
                     .arg(qsTr("%Ln relations", "", dialog.seen.relations))
                   : qsTr("No graph comes with it.")
         }
+        // The books' files, when its owner lets them come (#63).
+        Label {
+            objectName: "subscribeFiles"
+            Layout.fillWidth: true
+            visible: dialog.ready && dialog.seen.files === true
+            wrapMode: Text.Wrap
+            text: dialog.seen.link === true
+                  ? qsTr("Its owner lets the books' files come, but a link carries none: they come only from beside its file.")
+                  : qsTr("Its owner lets the books' files come: the file of a book you don't have comes from beside this one when you open it. Yours stay as they are.")
+        }
         Label {
             objectName: "subscribeFollows"
             Layout.fillWidth: true

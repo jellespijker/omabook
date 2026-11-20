@@ -18,7 +18,8 @@ const bool registered = [] {
 
     registerTool({"space_create", "Found a shared space",
                   "Founds a shared space of a collection, with the user its first writer: the collection's tree and its "
-                  "books' details (never their files) are written into it, and its key is made and kept for the user "
+                  "books' details (their files only once space_files lets them travel) are written into it, and its key is made and kept "
+                  "for the user "
                   "alone. Members are then invited with space_invite and it syncs through a shared folder with space_sync.",
                   schema({{"name", string("The space's name.")},
                           {"collection", string("The collection to share; the space's name when not given (made when there is none).")},
@@ -86,6 +87,24 @@ const bool registered = [] {
                   Changes, [](const QJsonObject &arguments) {
                       return command(
                           {"spaces", "sync", arguments.value("space").toString(), "--folder", arguments.value("folder").toString()});
+                  }});
+    registerTool({"space_files", "Let a space's book files travel, or stop them",
+                  "Switches whether the books' files of a space travel to everyone it reaches: a shared space, as one of its "
+                  "writers (every member gets them, and whoever is made one later), or a space the user published (whoever has "
+                  "its file or link, and whoever they pass it to). Off unless switched on. Before turning it on, tell the user "
+                  "plainly who will get the files and ask. Each member fetches a file only when opening the book (space_fetch_file).",
+                  schema({{"space", string("The space's name or id.")}, {"on", boolean("Whether the files travel.")}}, {"space", "on"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command(
+                          {"spaces", "files", arguments.value("space").toString(), arguments.value("on").toBool() ? "on" : "off"});
+                  }});
+
+    registerTool({"space_fetch_file", "Fetch a book's file from a space",
+                  "Fetches the file of a book that has none here from a space that lets its files travel (its shared folder, "
+                  "or beside the space's file it was subscribed from), checks it against the hash the space names, and gives "
+                  "it to the book. A book with a file of its own keeps it.",
+                  schema({{"book", integer("The book's number.")}}, {"book"}), Changes, [](const QJsonObject &arguments) {
+                      return command({"spaces", "fetch", QString::number(arguments.value("book").toInteger())});
                   }});
     return true;
 }();

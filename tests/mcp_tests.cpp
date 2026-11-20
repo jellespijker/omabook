@@ -123,7 +123,7 @@ private slots:
             {"collection_put", "collections"}, {"collection_remove", "collections"}, {"collection_format", "collections"},
             {"collections_sort", "collections"}, {"collections_sort_apply", "collections"}, {"books_find", "search"},
             {"spaces_list", "spaces"}, {"space_create", "spaces"}, {"space_invite", "spaces"}, {"space_remove_member", "spaces"},
-            {"space_join", "spaces"}, {"space_sync", "spaces"},
+            {"space_join", "spaces"}, {"space_sync", "spaces"}, {"space_files", "spaces"}, {"space_fetch_file", "spaces"},
         };
         const Machine machine;
         Server server(machine);

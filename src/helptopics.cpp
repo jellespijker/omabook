@@ -51,14 +51,21 @@ Manual::Topic sharingTopic() {
             {
                 {Manual::tr("Publishing a collection"),
                  Manual::tr("With a collection shown, {library.publish} publishes it for others to subscribe to. It says "
-                            "first what goes in and what never does, then saves an .omabook-space file to give them, or "
+                            "first what goes in and what you may switch on, then saves an .omabook-space file to give them, or "
                             "sends it as a link: a gist, secret unless you say so. Publish it again after a change, and "
                             "those who follow it get what changed. `omabook collections share <path>` does the same from "
                             "a terminal.")},
                 {Manual::tr("What is never shared"),
-                 Manual::tr("The books' files never go. Your graph, questions, stars, reading places and reading days go "
-                            "only when you switch each on. Nothing outside the collection goes, not the collections it sits "
-                            "in, and not the names of your computers.")},
+                 Manual::tr("The books' files go only when the space's owner switches them on. Your graph, questions, "
+                            "stars, reading places and reading days go only when you switch each on. Nothing outside the "
+                            "collection goes, not the collections it sits in, not where your files lie, and not the names "
+                            "of your computers.")},
+                {Manual::tr("The books' files"),
+                 Manual::tr("The books you own you may share with anyone you allow. Switched on (in the publish dialog, "
+                            "`--with files`, or `omabook spaces files <space> on` by a writer of a shared space), they go "
+                            "to everyone the space reaches. Each is fetched only when its book is opened, checked against "
+                            "its hash, and never in place of a copy of your own. A shared space's folder carries them "
+                            "sealed, a published space's file beside it; a gist carries none.")},
                 {Manual::tr("Subscribing"),
                  Manual::tr("{library.subscribe} takes such a file, one dropped on the window, or a link. Before anything is "
                             "written it says which of its books you have and which become wishlist entries, in a collection "

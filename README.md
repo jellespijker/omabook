@@ -395,7 +395,7 @@ A collection can be shared with other people who use Omabook. You publish it, an
 
 ### Publishing a collection
 
-With a collection shown, `Shift+P` publishes it; so do the ⋯ menu, the list of collections (`C`) and the collection's own dialog. First it says what goes in, counted, and what never does, with a switch for each part of your own, all off until you switch them on. The first time, it asks the name you go by. Then it saves an `.omabook-space` file to give by mail or chat, or sends it as a link: a gist, secret unless you say so, its link copied for pasting.
+With a collection shown, `Shift+P` publishes it; so do the ⋯ menu, the list of collections (`C`) and the collection's own dialog. First it says what goes in, counted, with a switch for each part of your own and one for the books' files, all off until you switch them on. The first time, it asks the name you go by. Then it saves an `.omabook-space` file to give by mail or chat, or sends it as a link: a gist, secret unless you say so, its link copied for pasting.
 
 ```bash
 omabook collections share Fiction --dry-run                          # what would go in and what stays out; writes nothing
@@ -407,10 +407,29 @@ The space follows the collection. Rename it, put books in or take them out, chan
 
 ### What is never shared
 
-- **The books' files.** Never, whatever you switch on. Whoever subscribes is matched against the books they have.
+- **The books' files, unless you switch them on** (below). Whoever subscribes is matched against the books they have, and the ones they don't have become wishes.
 - **Your own reading**, unless you switch it on, each part by itself: your knowledge graph (`--with-graph`), the questions you asked, your stars, and your reading places and days (`--with questions,ratings,progress`).
 - **Anything outside the collection.** The collections it sits in at home don't go: in the space it is at the top. Nor does the rest of your library.
 - **Your computers.** Their names don't go. The space numbers them instead, which says only how many wrote it.
+- **Where your files lie**, nor the books' covers or tags, even with their files switched on.
+
+### The books' files
+
+The books you own you may share with anyone you allow, so a space can carry its books' files too, when its owner switches them on: you, for a collection you publish (the dialog's *The books' files*, or `--with files`), and any writer of a shared space (`omabook spaces files <space> on`). It is off until someone does, and when it is on the files go to everyone the space reaches: whoever you give the space's file to and whoever they pass it on to, or every member of a shared space and whoever is made one later. Omabook says so before anything goes, and `omabook spaces` shows which spaces carry them.
+
+```bash
+omabook collections share Fiction --with files --as Ada --output Fiction.omabook-space   # its files go in Fiction.omabook-files
+omabook spaces files "Book club" on            # as a writer; off again with off
+omabook spaces fetch 42                        # a book's file, now, rather than when you open it
+```
+
+A space names each file by its format, its hash and its size, never by where it lies. A file is fetched only when you want it: when you open the book, or with `spaces fetch`, never all at once. It is taken only when it has the hash the space names, and only for a book of yours with no file: a copy you have already, found as subscribing finds it, stays as it is. How the files go depends on how the space goes:
+
+- **A shared space's folder.** Each member who has a book's file puts it beside the space's batches at their next sync, sealed with the space's key like everything else there and named so that the folder says nothing of which file it is.
+- **A published space's file.** The files go beside it, in a folder of their own (`Fiction.omabook-files` beside `Fiction.omabook-space`), never inside it, so the space's file stays small enough to mail. Give the folder with it; whoever subscribes from the file fetches from beside it.
+- **A gist** carries no files: it is no place for books. Publishing by link with the files on says so; whoever follows the link is told to ask for the space's file.
+
+Switching it off stops it: nothing more goes, and the space no longer names the files. What a member fetched before stays theirs.
 
 ### No spoilers
 
@@ -430,7 +449,7 @@ omabook collections import https://gist.github.com/ada/<id> --as "Ada's fiction"
 omabook collections unsubscribe "Ada's fiction"                   # drop the space, keep the collection
 ```
 
-- **Matched, or wished for.** A book you have is found by its file, an identifier or ISBN, or its title and authors, as the tidy finds them. The others become wishlist entries. They go in a collection of yours, with a collection inside it for each shared one. One of that name already there is added to, never emptied.
+- **Matched, or wished for.** A book you have is found by its file, an identifier or ISBN, or its title and authors, as the tidy finds them. The others become wishlist entries. They go in a collection of yours, with a collection inside it for each shared one. One of that name already there is added to, never emptied. Add a wished-for book's file later and it fills the wish, found the same way (the very file, even when its own details say otherwise), rather than becoming a second copy beside it.
 - **A layer, read-only.** The shared space is kept beside your library. Its graph shows beside yours, saying whose it is ("From Ada's shared graph"): in the graph's window, as marks on the page, in a search by what is known (`knows:`), in `omabook graph show` and the MCP server, and in what the AI is told. None of it is written into your own graph. The collection is marked as someone else's, on its tab and in the list.
 - **Unsubscribing**, in the collection's dialog or with `collections unsubscribe`, drops the space and its graph, and keeps your collection.
 
@@ -445,7 +464,7 @@ omabook collections import --follow --yes     # take it in
 
 ### Shared spaces: a household, a book club
 
-A published collection has one writer. A shared space has several: a household library, or a book club's list. Each member links a collection of their own to it. Writers change the space by changing that collection; readers get every change and write nothing. Who is a member, and as what, travels in the space itself, and whatever isn't signed by someone who was a writer at its time is refused, and said. The space never changes your own books, only your collection of it.
+A published collection has one writer. A shared space has several: a household library, or a book club's list. Each member links a collection of their own to it, and its books' files go too once a writer switches them on (see [The books' files](#the-books-files)). Writers change the space by changing that collection; readers get every change and write nothing. Who is a member, and as what, travels in the space itself, and whatever isn't signed by someone who was a writer at its time is refused, and said. The space never changes your own books, only your collection of it.
 
 ```bash
 omabook identity --export                                     # your id: give it to whoever invites you

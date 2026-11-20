@@ -20,6 +20,10 @@ namespace SpaceLinks {
 enum class Role {
     Sent,     // a space published here, and where it was sent
     Followed, // a space subscribed to, and where it is followed from
+    // Where a space's book files are fetched from, when it lets them travel
+    // (#63): the folder a shared space last synced through, or the file a
+    // subscription was taken from, its files beside it. This computer's own.
+    Files,
 };
 
 struct Link {

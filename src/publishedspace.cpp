@@ -2,6 +2,7 @@
 
 #include <QCryptographicHash>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -244,7 +245,7 @@ struct Place {
 
 [[nodiscard]] bool bookFieldIn(const SpaceOperation &op, const PublishedSpace::Parts &parts) {
     return among(identityFields, op.field) || op.field == "same_as"_L1 || (parts.ratings && op.field == "rating"_L1)
-           || (parts.reading && among(readingFields, op.field));
+           || (parts.reading && among(readingFields, op.field)) || (parts.files && op.field == "formats"_L1);
 }
 
 [[nodiscard]] bool nodeFieldIn(const SpaceOperation &op, const Members &members, const Canon &canon) {
@@ -289,6 +290,8 @@ struct Place {
 [[nodiscard]] std::optional<SpaceOperation> published(SpaceOperation op, const Members &members, const Canon &canon) {
     if (op.entity == "collection"_L1 && op.id == members.root && op.field == "parent"_L1)
         op.value.clear();
+    if (op.entity == "book"_L1 && op.field == "formats"_L1)
+        op.value = PublishedSpace::filesSaid(op.value);
     if (op.entity == "node"_L1 && op.field == "data"_L1) {
         const QString kind = members.kinds.value(canon.thing(op.id));
         if (kind == "book"_L1)
@@ -346,7 +349,7 @@ void disguise(QList<SpaceOperation> &ops, const QString &space) {
 QStringList PublishedSpace::Parts::names() const {
     QStringList names;
     for (const auto &[on, name] :
-         {std::pair{graph, u"graph"_s}, {questions, u"questions"_s}, {ratings, u"ratings"_s}, {reading, u"reading"_s}})
+         {std::pair{graph, u"graph"_s}, {questions, u"questions"_s}, {ratings, u"ratings"_s}, {reading, u"reading"_s}, {files, u"files"_s}})
         if (on)
             names << name;
     return names;
@@ -356,7 +359,15 @@ PublishedSpace::Parts PublishedSpace::Parts::fromNames(const QStringList &names)
     return {.graph = names.contains("graph"_L1),
             .questions = names.contains("questions"_L1),
             .ratings = names.contains("ratings"_L1),
-            .reading = names.contains("reading"_L1)};
+            .reading = names.contains("reading"_L1),
+            .files = names.contains("files"_L1)};
+}
+
+QString PublishedSpace::filesSaid(const QString &formats) {
+    QJsonArray said;
+    for (const QJsonValue file : QJsonDocument::fromJson(formats.toUtf8()).array())
+        said << QJsonObject{{"format", file["format"]}, {"hash", file["hash"]}, {"size", file["size"]}};
+    return QString::fromUtf8(QJsonDocument(said).toJson(QJsonDocument::Compact));
 }
 
 QString PublishedSpace::collectionIdIn(const QString &space, const QString &homeGid) { return u"c:"_s + hashed(space, homeGid); }

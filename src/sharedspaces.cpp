@@ -10,6 +10,7 @@
 #include "person.h"
 #include "sharedcollection.h"
 #include "sharedkeys.h"
+#include "spacefiles.h"
 #include "spacefolder.h"
 #include "spaceinvite.h"
 #include "spacekey.h"
@@ -38,7 +39,8 @@ using SharedSpaces::Summary;
                     .name = state.name.isEmpty() ? recordedName : state.name,
                     .role = me.isEmpty() ? QString() : SharedSpace::roleName(state.roleOf(me)),
                     .members = {},
-                    .collection = collectionPath(library, space)};
+                    .collection = collectionPath(library, space),
+                    .files = state.files};
     for (const SharedSpace::Member &member : state.members)
         summary.members << Member{.person = member.person,
                                   .name = library.personFile().isMine(member.person) ? u"you"_s : QString(),
@@ -52,7 +54,8 @@ using SharedSpaces::Summary;
                     .name = u"Personal"_s,
                     .role = u"writer"_s,
                     .members = {},
-                    .collection = {}};
+                    .collection = {},
+                    .files = false};
     for (const Spaces::Computer &computer : Spaces::computers(library))
         summary.members << Member{.person = computer.device,
                                   .name = computer.device == Spaces::deviceId(library) ? u"this computer"_s : computer.name,
@@ -67,7 +70,8 @@ using SharedSpaces::Summary;
             .name = space.name,
             .role = subscribed ? u"reader"_s : u"writer"_s,
             .members = {Member{.person = space.owner, .name = subscribed ? QString() : u"you"_s, .role = u"writer"_s}},
-            .collection = subscribed ? collectionPath(library, space.id) : QString()};
+            .collection = subscribed ? collectionPath(library, space.id) : QString(),
+            .files = SpaceFiles::on(library, space.id)};
 }
 
 [[nodiscard]] std::expected<QString, QString> writeInvite(const QString &out, const SpaceInvite &invite, const QByteArray &bytes) {
@@ -325,6 +329,10 @@ std::expected<SharedSpaces::Synced, QString> SharedSpaces::sync(Library &library
     if (!sent)
         return std::unexpected(sent.error());
     synced.sent = *sent;
+    const auto files = SpaceFiles::send(library, *space, folder);
+    if (!files)
+        return std::unexpected(files.error());
+    synced.files = *files;
     synced.space = sharedSummary(library, *space, which);
     return synced;
 }

@@ -77,6 +77,24 @@ QList<Manual::Step> firstRelease() {
     };
 }
 
+// The 0.1.6 release's entries: sharing a collection, by publishing it, subscribing to it, or keeping it together.
+QList<Manual::Step> sharingRelease() {
+    return {
+        {"publish", "0.1.6", Manual::tr("Share a collection"),
+         Manual::tr("{library.publish} publishes the collection shown, as a file or a link, and says first what goes in. The "
+                    "books' files never do, and nothing of your own reading goes unless you switch it on."),
+         "", "library.publish", "library", ""},
+        {"subscribe", "0.1.6", Manual::tr("Subscribe to one"),
+         Manual::tr("{library.subscribe} takes a collection someone shared: the books you have are matched, the others become "
+                    "wishes, and its graph shows only as far as you have read each book yourself."),
+         "", "library.subscribe", "library", ""},
+        {"shared-spaces", "0.1.6", Manual::tr("A collection kept together"),
+         Manual::tr("For a household or a book club, `omabook spaces` makes a collection several people write, kept in step "
+                    "through a folder you already sync."),
+         "", "", "", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -141,21 +159,15 @@ QList<Manual::Step> Manual::features() {
          tr("{reader.layout} reads a book as pages, each chapter starting on a page of its own and a PDF page shown whole, "
             "or as one column that runs on from chapter to chapter. A turn never shows a line twice."),
          "", "reader.layout", "reader", ""},
-        {"publish", "0.1.6", tr("Share a collection"),
-         tr("{library.publish} publishes the collection shown, as a file or a link, and says first what goes in. The "
-            "books' files never do, and nothing of your own reading goes unless you switch it on."),
-         "", "library.publish", "library", ""},
-        {"subscribe", "0.1.6", tr("Subscribe to one"),
-         tr("{library.subscribe} takes a collection someone shared: the books you have are matched, the others become "
-            "wishes, and its graph shows only as far as you have read each book yourself."),
-         "", "library.subscribe", "library", ""},
-        {"shared-spaces", "0.1.6", tr("A collection kept together"),
-         tr("For a household or a book club, `omabook spaces` makes a collection several people write, kept in step "
-            "through a folder you already sync."),
-         "", "", "", ""},
+    } + sharingRelease() + QList<Step>{
         {"ai-servers", "0.1.7", tr("Your own AI server"),
          tr("Under {global.settings}, the AI can be a server: Omarchy's local models, Ollama on this computer or another "
             "one, OpenAI, or any other by its address. Its models are listed to pick from."),
          "", "global.settings", "", ""},
+        {"book-files", "0.1.7", tr("The books' files, when you allow"),
+         tr("{library.publish} can send the books' files too, beside the file you give, to everyone it reaches; a shared "
+            "space carries them once a writer says so. A file comes only when its book is opened, and never in place of "
+            "your own copy."),
+         "", "library.publish", "library", ""},
     };
 }
