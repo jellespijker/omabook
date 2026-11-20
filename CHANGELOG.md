@@ -12,6 +12,12 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.7.1] - 2026-11-20
+
+### Fixed
+
+- A book a plugin made and marked to travel with its world (`file: true` from `omabook.sharing.register`'s `worlds`) now carries its file, also when the space's files switch is off: only that book's file, and only of a book the plugin made, never a person's. It goes as the space's book files do, sealed in a shared space's folder or beside a published space's file, checked against its hash, and comes to a member with the space, at their `omabook spaces sync` or as they import the space's file, when their copy of the book has no file of its own (#107).
+
 ## [0.1.7] - 2026-11-20
 
 ### Added
@@ -202,7 +208,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.7.1...HEAD
+[0.1.7.1]: https://github.com/jellespijker/omabook/compare/v0.1.7...v0.1.7.1
 [0.1.7]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...v0.1.7
 [0.1.6.1]: https://github.com/jellespijker/omabook/compare/v0.1.6...v0.1.6.1
 [0.1.6]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...v0.1.6

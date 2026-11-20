@@ -311,7 +311,7 @@ std::expected<QJsonObject, QString> CollectionShare::publish(const Library &libr
         const auto beside = SpaceFiles::writeBeside(library, *snapshot, how.output);
         if (!beside)
             return std::unexpected(beside.error());
-        if (parts.files)
+        if (parts.files || *beside > 0)
             done.insert("files", QJsonObject{{"folder", SpaceFiles::besideOf(how.output)}, {"copied", *beside}});
     }
     if (how.link != nullptr) {

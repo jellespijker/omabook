@@ -51,8 +51,10 @@ Shown subscribe(Library &library, const QString &what, const Subscriptions::Opti
         const auto snapshot = Subscriptions::fetch(what);
         report = snapshot ? Subscriptions::subscribe(library, *snapshot, options)
                           : std::expected<Subscriptions::Report, QString>(std::unexpected(snapshot.error()));
-        if (report && !options.dryRun)
+        if (report && !options.dryRun) {
             SpaceFiles::takenFrom(library, report->space.space, what); // its books' files, if it lets them travel, are beside it
+            SpaceFiles::bringWorldFiles(library, report->space.space); // and the files a plugin gave with their worlds
+        }
     }
     if (!report)
         return std::unexpected(report.error());

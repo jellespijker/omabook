@@ -3,9 +3,12 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
+#include <QSet>
 #include <QTemporaryDir>
 #include <QUrl>
 #include <algorithm>
@@ -24,6 +27,7 @@
 #include "spacelinks.h"
 #include "spacereducer.h"
 #include "spaces.h"
+#include "spaceworlds.h"
 #include "subscribedspace.h"
 
 using namespace Qt::StringLiterals;
@@ -53,14 +57,32 @@ constexpr auto byFile = "file"_L1;
     return files;
 }
 
+// Of the space's books, only those a plugin made whose file it gave the
+// space with its world (#107): the space says the world with its file, and
+// says the book is that plugin's (`generated`). A book a person made never
+// travels so, whoever said its world.
+[[nodiscard]] ReducedState withWorldFilesOnly(ReducedState state, const QList<SpaceOperation> &ops) {
+    const QHash<QString, QString> same = SpaceReducer::sameAs(ops);
+    QSet<QString> given;
+    for (const SpaceWorlds::Declared &world : SpaceWorlds::declared(ops)) {
+        const QString book = same.value(world.book, world.book);
+        const QJsonObject identifiers =
+            QJsonDocument::fromJson(state.books.value(book).fields.value(u"identifiers"_s).value.toUtf8()).object();
+        if (world.file && !world.plugin.isEmpty() && identifiers.value("generated").toString() == world.plugin)
+            given.insert(book);
+    }
+    state.books.removeIf([&given](const QMap<QString, ReducedBook>::iterator &book) { return !given.contains(book.key()); });
+    return state;
+}
+
 // What the space says now, of a space this library is a member of or
-// subscribes to and that lets its files travel; none otherwise.
+// subscribes to: of every book when it lets its files travel, else of those
+// whose plugin gave their file with their world; none of any other space.
 [[nodiscard]] std::optional<ReducedState> sayingFiles(const Library &library, const Spaces::Recorded &space) {
     if (isShared(space)) {
         const SharedSpace::State state = SharedSpace::state(library, space.id);
-        if (!state.files)
-            return std::nullopt;
-        return SpaceReducer::reduce(state.accepted);
+        ReducedState reduced = SpaceReducer::reduce(state.accepted);
+        return state.files ? reduced : withWorldFilesOnly(std::move(reduced), state.accepted);
     }
     if (isPublished(space) && SubscribedSpace::isSubscribed(library, space.id))
         return SpaceReducer::reduce(SubscribedSpace::operations(library, space.id));
@@ -203,8 +225,10 @@ bool SpaceFiles::on(const Library &library, const QString &space) {
     if (isShared(*record))
         return SharedSpace::state(library, space).files;
     if (SubscribedSpace::isSubscribed(library, space)) {
-        const ReducedState state = SpaceReducer::reduce(SubscribedSpace::operations(library, space));
-        return !everyFile(state, *record).isEmpty();
+        // Its owner's switch, as the files of books other than those a plugin gave with their worlds say it.
+        const QList<SpaceOperation> ops = SubscribedSpace::operations(library, space);
+        const ReducedState state = SpaceReducer::reduce(ops);
+        return everyFile(state, *record).size() > everyFile(withWorldFilesOnly(state, ops), *record).size();
     }
     const auto published = PublishedLog::recorded(library, space);
     return published && published->parts.contains(filesPart);
@@ -266,19 +290,40 @@ std::expected<Carried, QString> SpaceFiles::fetch(Library &library, qint64 book)
     return std::unexpected(problems.join(u' '));
 }
 
+qsizetype SpaceFiles::bringWorldFiles(Library &library, const QString &space) {
+    const auto record = recordedAs(library, space);
+    if (!record || !(isShared(*record) || SubscribedSpace::isSubscribed(library, space)))
+        return 0;
+    const QList<SpaceOperation> ops =
+        isShared(*record) ? SharedSpace::state(library, space).accepted : SubscribedSpace::operations(library, space);
+    const ReducedState given = withWorldFilesOnly(SpaceReducer::reduce(ops), ops);
+    qsizetype brought = 0;
+    for (auto book = given.books.cbegin(); book != given.books.cend(); ++book) {
+        const qint64 here = SubscribedSpace::bookHere(library, space, book.key());
+        const auto held = here > 0 ? library.book(here) : std::nullopt;
+        if (!held || !held->formats.isEmpty())
+            continue;
+        const QList<Carried> files = filesOf(*book, *record);
+        brought += std::ranges::any_of(files, [&](const Carried &file) { return fetchOne(library, here, file).has_value(); }) ? 1 : 0;
+    }
+    return brought;
+}
+
 std::expected<qsizetype, QString> SpaceFiles::send(const Library &library, const QString &space, const QString &folder) {
     SpaceLinks::remember(library, SpaceLinks::Role::Files,
                          {.space = space, .transport = QString(byFolder), .address = QFileInfo(folder).absoluteFilePath()});
-    const SharedSpace::State state = SharedSpace::state(library, space);
     const auto record = recordedAs(library, space);
-    if (!state.files || !record)
+    const auto saying = record && isShared(*record) ? sayingFiles(library, *record) : std::nullopt;
+    const QList<Carried> files = saying ? everyFile(*saying, *record) : QList<Carried>{};
+    if (files.isEmpty())
         return 0;
     const auto keys = SharedKeys::held(library, space);
     if (!keys)
         return std::unexpected(keys.error());
+    const SharedSpace::State state = SharedSpace::state(library, space);
     const SpaceKey &sealing = newest(state, *keys);
     qsizetype written = 0;
-    for (const Carried &file : everyFile(SpaceReducer::reduce(state.accepted), *record)) {
+    for (const Carried &file : files) {
         const auto mine = fileHere(library, file.hash);
         if (!mine)
             continue;
@@ -301,14 +346,18 @@ QString SpaceFiles::besideOf(const QString &snapshotFile) {
 
 std::expected<qsizetype, QString> SpaceFiles::writeBeside(const Library &library, const SpaceSnapshot &snapshot,
                                                           const QString &snapshotFile) {
-    if (!snapshot.parts.contains(filesPart))
-        return 0;
     const Spaces::Recorded space{.id = snapshot.space, .kind = snapshot.kind, .name = snapshot.name, .owner = snapshot.owner.person};
+    ReducedState state = SpaceReducer::reduce(snapshot.operations);
+    if (!snapshot.parts.contains(filesPart))
+        state = withWorldFilesOnly(std::move(state), snapshot.operations);
+    const QList<Carried> files = everyFile(state, space);
+    if (files.isEmpty())
+        return 0;
     const QDir beside(besideOf(snapshotFile));
     if (!beside.mkpath(u"."_s))
         return std::unexpected(u"Can't make the folder %1 for the books' files."_s.arg(beside.path()));
     qsizetype copied = 0;
-    for (const Carried &file : everyFile(SpaceReducer::reduce(snapshot.operations), space)) {
+    for (const Carried &file : files) {
         const QString target = beside.filePath(file.hash + u'.' + file.format);
         const auto mine = fileHere(library, file.hash);
         if (!mine || QFileInfo::exists(target))

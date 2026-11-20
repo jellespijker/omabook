@@ -64,7 +64,8 @@ QList<Entry> spaceEntries() {
              "first) goes, of a book it made (`generated`), with the graph; never a book by a person, never a scope it "
              "didn't name (a plan kept beside a world stays home). Each thing of it goes as met in the book where its "
              "owner has read, so mark what a world holds as met there (`graph.upsert` with `book` and `section`). "
-             "`file: true` asks for the book's file to go too, as a space's book files go."},
+             "`file: true` sends the book's file too, as a space's book files go, also when the space's files switch is "
+             "off: a member gets it with the space, at their sync or import."},
             {"spaces.add", "spaces.add(space, id)", "",
              "Puts a book the plugin made into the collection linked to a shared space this library writes, with what "
              "`worlds` answers of it: it goes into the space, signed as the person, at the space's next sync. Throws for a "

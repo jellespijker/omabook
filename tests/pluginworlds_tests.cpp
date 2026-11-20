@@ -14,7 +14,9 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <memory>
+#include <optional>
 
+#include "changelog.h"
 #include "collectionshare.h"
 #include "fixtures.h"
 #include "graph.h"
@@ -25,6 +27,8 @@
 #include "scriptsharing.h"
 #include "sharedspace.h"
 #include "sharedspaces.h"
+#include "spacefiles.h"
+#include "spaces.h"
 #include "spaceworlds.h"
 #include "subscriptions.h"
 
@@ -123,6 +127,20 @@ struct Someone {
 }
 
 [[nodiscard]] QJsonArray strings(const QStringList &list) { return QJsonArray::fromStringList(list); }
+
+// The book called `title` in the library, if it is there.
+[[nodiscard]] std::optional<Book> titled(const Library &library, const QString &title) {
+    for (const Book &book : library.books())
+        if (book.meta.title == title)
+            return book;
+    return std::nullopt;
+}
+
+// The hash of the book's one file, or nothing when it has none.
+[[nodiscard]] QString hashOf(const Library &library, qint64 book) {
+    const QList<FormatFile> files = library.formatFiles(book);
+    return files.size() == 1 ? files.first().hash : QString();
+}
 
 } // namespace
 
@@ -322,6 +340,110 @@ private slots:
         const QList<SpaceOperation> held = SharedSpace::state(ann.library, space).accepted;
         QVERIFY(namesIn(held).contains("Hollow"));
         QVERIFY(!namesIn(held).contains("PLANSECRET"));
+    }
+
+    // A book the plugin made and marked to go with its world takes its file
+    // to the members of a shared space whose files switch is off, and only
+    // it: a person's book never goes so, not even when a writer says its
+    // world goes with its file (#107).
+    void aStorysFileGoesWithItsWorldToASharedSpace() {
+        QTemporaryDir dir;
+        const QString folder = dir.filePath("space-folder");
+        QVERIFY(QDir().mkpath(folder));
+        QVERIFY(threeChapters(dir.filePath("story.epub"), "The Drowned Map"));
+        QVERIFY(Fixtures::epub(dir.filePath("person.epub"), "By A Person"));
+        Someone ann(dir, "Ann");
+        Someone bo(dir, "Bo");
+        const qint64 story = ann.story(dir.filePath("story.epub"), "story.epub");
+        const qint64 person = ann.library.add(dir.filePath("person.epub")).id;
+        QVERIFY(story > 0 && person > 0 && ann.call("build", {"world:s1", story}).toBool());
+        const auto shelf = ann.library.addCollection("Shelf");
+        QVERIFY(shelf && ann.library.putInCollection(*shelf, story, true) && ann.library.putInCollection(*shelf, person, true));
+        QVERIFY(ann.offer(QJsonArray{QJsonObject{{"book", story}, {"scope", "world:s1"}, {"file", true}},
+                                     QJsonObject{{"book", person}, {"file", true}}}));
+        const auto created = SharedSpaces::create(ann.library, "Shelf", {"graph"}, "Shelf", worldsOf(*ann.plugins));
+        QVERIFY2(created.has_value(), qPrintable(whyNot(created)));
+        const QString space = created->space.space;
+        QVERIFY(!SpaceFiles::on(ann.library, space));
+        const auto invited =
+            SharedSpaces::invite(ann.library, space, bo.library.person()->id(), SharedSpace::Role::Writer, dir.filePath("invite-bo"));
+        QVERIFY2(invited.has_value(), qPrintable(whyNot(invited)));
+        const auto annSynced = SharedSpaces::sync(ann.library, space, folder);
+        QVERIFY2(annSynced.has_value(), qPrintable(whyNot(annSynced)));
+        QCOMPARE(annSynced->files, 1);
+        QVERIFY(SharedSpaces::join(bo.library, invited->file).has_value());
+        const auto boSynced = SharedSpaces::sync(bo.library, space, folder);
+        QVERIFY2(boSynced.has_value(), qPrintable(whyNot(boSynced)));
+
+        // Bo has the story with its file, the one Ann has, and the person's book without one.
+        QCOMPARE(boSynced->fetched, 1);
+        const std::optional<Book> theirs = titled(bo.library, "The Drowned Map");
+        QVERIFY(theirs.has_value());
+        QCOMPARE(theirs->formats, QStringList{"epub"});
+        QCOMPARE(hashOf(bo.library, theirs->id), hashOf(ann.library, story));
+        const std::optional<Book> notTheirs = titled(bo.library, "By A Person");
+        QVERIFY(notTheirs.has_value());
+        QVERIFY(notTheirs->formats.isEmpty());
+        QVERIFY(SpaceFiles::of(bo.library, notTheirs->id).isEmpty());
+        QCOMPARE(bo.call("layers").toArray().at(0).toObject().value("book").toInteger(), theirs->id);
+
+        // A writer who says the person's book goes with a world, and its file with it, carries nothing of it.
+        const QString personId = Spaces::bookId(ann.library, person);
+        QJsonArray formats;
+        for (const FormatFile &one : ann.library.formatFiles(person))
+            formats << QJsonObject{{"format", one.format}, {"hash", one.hash}, {"size", one.size}};
+        const QString said = QString::fromUtf8(QJsonDocument(formats).toJson(QJsonDocument::Compact));
+        QList<ChangeLog::Entry> forged{{.space = space, .entity = "book", .id = personId, .field = "formats", .value = said, .hlc = {}}};
+        for (const auto &[field, value] :
+             {std::pair<QString, QString>{"scope", "world:s1"}, {"plugin", "teller"}, {"book", personId}, {"file", "1"}})
+            forged << ChangeLog::Entry{.space = space, .entity = "world", .id = "w:forged", .field = field, .value = value, .hlc = {}};
+        QVERIFY(SharedSpace::write(ann.library, space, forged).has_value());
+        const auto again = SharedSpaces::sync(ann.library, space, folder);
+        QVERIFY2(again.has_value(), qPrintable(whyNot(again)));
+        QCOMPARE(again->files, 0);
+        const auto boAgain = SharedSpaces::sync(bo.library, space, folder);
+        QVERIFY2(boAgain.has_value(), qPrintable(whyNot(boAgain)));
+        QCOMPARE(boAgain->fetched, 0);
+        QVERIFY(SpaceFiles::of(bo.library, notTheirs->id).isEmpty());
+        QVERIFY(bo.library.book(notTheirs->id)->formats.isEmpty());
+    }
+
+    // Published to a file with no book files, the story's file still goes
+    // beside it when the plugin marked it, and a subscriber has it (#107).
+    void aStorysFileGoesBesideAPublishedSpacesFile() {
+        QTemporaryDir dir;
+        Someone ann(dir, "Ann");
+        QVERIFY(threeChapters(dir.filePath("story.epub"), "The Drowned Map"));
+        QVERIFY(Fixtures::epub(dir.filePath("person.epub"), "By A Person"));
+        const qint64 story = ann.story(dir.filePath("story.epub"), "story.epub");
+        const qint64 person = ann.library.add(dir.filePath("person.epub")).id;
+        QVERIFY(story > 0 && person > 0 && ann.call("build", {"world:s1", story}).toBool());
+        const auto shelf = ann.library.addCollection("Shelf");
+        QVERIFY(shelf && ann.library.putInCollection(*shelf, story, true) && ann.library.putInCollection(*shelf, person, true));
+        QVERIFY(ann.offer(QJsonArray{QJsonObject{{"book", story}, {"scope", "world:s1"}, {"file", true}},
+                                     QJsonObject{{"book", person}, {"file", true}}}));
+        const QString file = dir.filePath("shelf.omabook-space");
+        const auto done = CollectionShare::publish(ann.library, *ann.library.collection(*shelf), {.graph = true},
+                                                   {.as = "Ann", .output = file, .worlds = worldsOf(*ann.plugins)});
+        QVERIFY2(done.has_value(), qPrintable(whyNot(done)));
+        QCOMPARE(done->value("files").toObject().value("copied").toInteger(), 1);
+        const QStringList beside = QDir(SpaceFiles::besideOf(file)).entryList(QDir::Files);
+        QCOMPARE(beside, QStringList{hashOf(ann.library, story) + ".epub"});
+
+        Someone bo(dir, "Bo");
+        const auto fetched = Subscriptions::fetch(file);
+        QVERIFY2(fetched.has_value(), qPrintable(whyNot(fetched)));
+        QVERIFY(Subscriptions::subscribe(bo.library, *fetched, {.as = "From Ann", .dryRun = false}).has_value());
+        const QString space = done->value("space").toString();
+        SpaceFiles::takenFrom(bo.library, space, file);
+        QVERIFY(!SpaceFiles::on(bo.library, space));
+        QCOMPARE(SpaceFiles::bringWorldFiles(bo.library, space), 1);
+        const std::optional<Book> theirs = titled(bo.library, "The Drowned Map");
+        QVERIFY(theirs.has_value());
+        QCOMPARE(hashOf(bo.library, theirs->id), hashOf(ann.library, story));
+        const std::optional<Book> notTheirs = titled(bo.library, "By A Person");
+        QVERIFY(notTheirs.has_value() && notTheirs->formats.isEmpty());
+        QVERIFY(SpaceFiles::of(bo.library, notTheirs->id).isEmpty());
     }
 };
 

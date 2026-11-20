@@ -214,6 +214,7 @@ struct Command {
                               {"written", synced->written},
                               {"sent", synced->sent},
                               {"files", synced->files},
+                              {"fetched", synced->fetched},
                               {"refused", QJsonArray::fromStringList(synced->refused)},
                               {"filed", Subscriptions::toJson(synced->filed)}});
         return 0;
@@ -227,6 +228,8 @@ struct Command {
                           .arg(synced->sent)};
     if (synced->files > 0)
         lines << u"%1 of the books' files written to the folder, sealed."_s.arg(synced->files);
+    if (synced->fetched > 0)
+        lines << u"%1 of the books' files that came with their worlds fetched from it, checked."_s.arg(synced->fetched);
     if (!synced->refused.isEmpty())
         lines << u"Refused, and not taken:"_s;
     for (const QString &why : synced->refused)
