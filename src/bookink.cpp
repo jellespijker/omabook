@@ -125,6 +125,17 @@ std::expected<void, QString> BookInk::write(Library &library, qint64 bookId, int
     return {};
 }
 
+bool BookInk::setWords(Library &library, qint64 bookId, int page, const QString &words) {
+    const QList<Annotation> on = inkOn(library, bookId, page);
+    if (on.isEmpty())
+        return false;
+    // On the page's first annotation; another (two computers' first strokes, met) keeps none.
+    for (qsizetype index = 0; index < on.size(); ++index)
+        if (const QString wanted = index == 0 ? words.simplified() : QString(); on.at(index).text != wanted)
+            library.renameAnnotation(on.at(index).id, wanted);
+    return true;
+}
+
 void BookInk::inOrder(std::vector<Ink::Stroke> &strokes) {
     std::ranges::stable_sort(
         strokes, [](const Ink::Stroke &a, const Ink::Stroke &b) { return a.began != b.began ? a.began < b.began : a.id < b.id; });

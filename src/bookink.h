@@ -52,6 +52,11 @@ struct Page {
 // Why not, when it can't be written.
 std::expected<void, QString> write(Library &library, qint64 bookId, int page, const Ink::Change &change, const QString &fileHash = {});
 
+// The words a page's handwriting was recognised as (#84), kept as the text of
+// its annotation, which is what a search finds it by (#115, AnnotationWords)
+// and which travels with it. Whether the page has ink to keep them on.
+bool setWords(Library &library, qint64 bookId, int page, const QString &words);
+
 // Strokes one over the other as they began (a tie by id, the same on every computer).
 void inOrder(std::vector<Ink::Stroke> &strokes);
 

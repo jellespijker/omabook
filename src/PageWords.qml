@@ -5,10 +5,19 @@ import QtQuick
 // colour; and its words selected by the mouse (a drag that starts on a
 // word), a finger (a long press on one, see PageReader) or the keyboard, as
 // a chapter's are, to highlight them or do the rest of what the menu offers.
-// A page of pictures (a comic) has no words, and this nothing to do.
+// A page of pictures (a comic) has no words: there a part of it is chosen
+// instead (#115), a panel, by a drag of the mouse, a long press (a part
+// around the finger) or the keyboard (the arrows move it, Shift makes it
+// larger or smaller), and highlighted or noted as words are. Its margin
+// notes are marked on it (PageNotes).
 Item {
     id: layer
     property int page: 0
+    // The page's height over its width, and the margin notes (ReadingNotes).
+    property real aspect: height > 0 && width > 0 ? height / width : 1.414
+    property var reading: null
+    // A note's mark was clicked or tapped: its rectangle, in this item.
+    signal noteOpened(var id, rect around)
     // The words, where they stand at the page's size: loaded when first needed.
     property var words: null
     function wordsNow() {
@@ -19,7 +28,13 @@ Item {
     // What is selected, by its words' places in the list; -1 for nothing.
     property int anchorAt: -1
     property int activeAt: -1
-    readonly property bool hasSelection: anchorAt >= 0 && activeAt >= 0
+    readonly property bool hasWords: anchorAt >= 0 && activeAt >= 0
+    // A part of a page without words, in pixels: none while it is empty.
+    property rect part: Qt.rect(0, 0, 0, 0)
+    readonly property bool hasPart: part.width > 0 && part.height > 0
+    readonly property bool hasSelection: hasWords || hasPart
+    // Where a drag for a part started.
+    property point partFrom: Qt.point(-1, -1)
     readonly property int firstWord: Math.min(anchorAt, activeAt)
     readonly property int lastWord: Math.max(anchorAt, activeAt)
     // A mouse press on a word, and where the last one was.
@@ -30,10 +45,14 @@ Item {
     property var spans: []
     // One a line of each highlight, with how it is drawn on paper.
     property var pieces: []
+    // The highlights on a part of the page: [{id, color, x, y, width, height, tint, line}].
+    property var parts: []
     function lay() {
         spans = width > 0 ? reader.highlights.pageSpans(page, Qt.size(width, height)) : []
         const looks = {}
         for (const one of reader.highlights.colors) looks[one.key] = one
+        parts = width > 0 ? reader.highlights.pageParts(page, width).map(one => Object.assign({ tint: (looks[one.color] || {}).paperTint,
+                                                                                                line: (looks[one.color] || {}).paperLine }, one)) : []
         const made = []
         for (const span of spans) {
             const look = looks[span.color] || {}
@@ -59,16 +78,31 @@ Item {
         }
         return -1
     }
-    function clear() { anchorAt = -1; activeAt = -1 }
+    function clear() { anchorAt = -1; activeAt = -1; part = Qt.rect(0, 0, 0, 0) }
+    // A part within the page, at least a little of it.
+    function within(r) {
+        const w = Math.max(16, Math.min(width, r.width)), h = Math.max(16, Math.min(height, r.height))
+        return Qt.rect(Math.max(0, Math.min(width - w, r.x)), Math.max(0, Math.min(height - h, r.y)), w, h)
+    }
     function selectWordAt(x, y) {
+        // A finger on a page of pictures: the part around it.
+        if (wordsNow().length === 0) {
+            const side = width / 3
+            part = within(Qt.rect(x - side / 2, y - side / 2, side, side))
+            return true
+        }
         const at = wordAt(x, y)
         anchorAt = at
         activeAt = at
         return at >= 0
     }
-    // The selection: its words, where it is (in this item), and its characters on the page.
+    // The selection: its words, where it is (in this item), and its characters on the page;
+    // or a part of the page, measured in its width too (PageRegion).
     function selection() {
-        if (!hasSelection) return null
+        if (hasPart)
+            return { text: "", paragraph: "", rect: part, aspect: aspect,
+                     region: { page: page, x: part.x / width, y: part.y / width, width: part.width / width, height: part.height / width } }
+        if (!hasWords) return null
         const all = wordsNow()
         const a = all[firstWord], b = all[lastWord]
         let left = a.x, top = a.y, right = a.x + a.width, bottom = a.y + a.height
@@ -81,21 +115,35 @@ Item {
     }
     // The highlight under a point: {id, color, rect}, or null.
     function highlightAt(x, y) {
+        for (const one of parts)
+            if (x >= one.x && x <= one.x + one.width && y >= one.y && y <= one.y + one.height)
+                return { id: one.id, color: one.color, rect: Qt.rect(one.x, one.y, one.width, one.height) }
         for (const span of spans)
             for (const r of span.rects)
                 if (x >= r.x && x <= r.x + r.width && y >= r.y && y <= r.y + r.height) return { id: span.id, color: span.color, rect: r }
         return null
     }
-    // The keyboard's selection: the first word, then words or lines on (or back).
+    // The keyboard's selection: the first word, then words or lines on (or
+    // back); on a page of pictures, a part in its middle, moved or (`extend`)
+    // made larger or smaller a twentieth of the page at a time.
     function begin() {
         const all = wordsNow()
+        if (all.length === 0 && width > 0) {
+            part = within(Qt.rect(width * 0.25, height * 0.35, width * 0.5, height * 0.3))
+            return true
+        }
         anchorAt = all.length > 0 ? 0 : -1
         activeAt = anchorAt
         return anchorAt >= 0
     }
     function step(count, lines, extend) {
+        if (hasPart) {
+            const dx = count * width / 20, dy = lines * height / 20
+            part = within(extend ? Qt.rect(part.x, part.y, part.width + dx, part.height + dy) : Qt.rect(part.x + dx, part.y + dy, part.width, part.height))
+            return
+        }
         const all = wordsNow()
-        if (!hasSelection || all.length === 0) return
+        if (!hasWords || all.length === 0) return
         let at = count > 0 || lines > 0 || extend ? activeAt : anchorAt
         at = Math.max(0, Math.min(all.length - 1, at + count))
         if (lines !== 0) {
@@ -114,6 +162,7 @@ Item {
         if (!extend) anchorAt = at
     }
     function activeRect() {
+        if (hasPart) return part
         const all = wordsNow()
         const w = all[Math.max(0, activeAt)]
         return w ? Qt.rect(w.x, w.y, w.width, w.height) : Qt.rect(0, 0, 0, 0)
@@ -139,9 +188,37 @@ Item {
             }
         }
     }
+    // Highlights on a part of the page: a wash over it, in a frame of its colour's line.
+    Repeater {
+        model: layer.parts
+        delegate: Rectangle {
+            required property var modelData
+            objectName: "pagePartHighlight"
+            x: modelData.x
+            y: modelData.y
+            width: modelData.width
+            height: modelData.height
+            color: Qt.alpha(modelData.tint || "transparent", 0.3)
+            border.color: modelData.line || "transparent"
+            border.width: 2
+            radius: 2
+        }
+    }
+    // The part chosen, in the accent.
+    Rectangle {
+        objectName: "pagePartSelection"
+        visible: layer.hasPart
+        x: layer.part.x
+        y: layer.part.y
+        width: layer.part.width
+        height: layer.part.height
+        color: Qt.alpha(theme.accent, 0.18)
+        border.color: theme.accent
+        border.width: 2
+    }
     // The selected words, one box each, in the accent.
     Repeater {
-        model: layer.hasSelection ? layer.lastWord - layer.firstWord + 1 : 0
+        model: layer.hasWords ? layer.lastWord - layer.firstWord + 1 : 0
         delegate: Rectangle {
             required property int index
             readonly property var word: layer.words ? layer.words[layer.firstWord + index] : null
@@ -157,6 +234,7 @@ Item {
 
     // A drag of the mouse that starts on a word selects from it to the word
     // under the pointer; one that starts beside the words scrolls, as ever.
+    // On a page with no words a drag chooses the part of it it goes over.
     PointHandler {
         id: mouse
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -164,6 +242,12 @@ Item {
         onActiveChanged: {
             if (active) {
                 layer.pressedAt = point.pressPosition
+                layer.part = Qt.rect(0, 0, 0, 0)
+                if (layer.wordsNow().length === 0) {
+                    layer.partFrom = point.pressPosition
+                    layer.dragging = true
+                    return
+                }
                 const at = layer.wordAt(point.pressPosition.x, point.pressPosition.y)
                 layer.dragging = at >= 0
                 layer.anchorAt = at
@@ -172,6 +256,9 @@ Item {
                 return
             }
             // A click, not a drag, selects nothing: it is for a highlight, or nothing.
+            if (layer.partFrom.x >= 0 && (layer.part.width < 12 || layer.part.height < 12))
+                layer.part = Qt.rect(0, 0, 0, 0)
+            layer.partFrom = Qt.point(-1, -1)
             if (layer.dragging && layer.anchorAt === layer.activeAt
                     && Math.abs(point.position.x - layer.pressedAt.x) + Math.abs(point.position.y - layer.pressedAt.y) < 4)
                 layer.clear()
@@ -180,8 +267,26 @@ Item {
         }
         onPointChanged: {
             if (!active || !layer.dragging) return
+            if (layer.partFrom.x >= 0) {
+                const a = layer.partFrom, b = point.position
+                layer.part = Qt.rect(Math.max(0, Math.min(a.x, b.x)), Math.max(0, Math.min(a.y, b.y)),
+                                     Math.min(layer.width, Math.max(a.x, b.x)) - Math.max(0, Math.min(a.x, b.x)),
+                                     Math.min(layer.height, Math.max(a.y, b.y)) - Math.max(0, Math.min(a.y, b.y)))
+                return
+            }
             const at = layer.wordAt(point.position.x, point.position.y)
             if (at >= 0) layer.activeAt = at
         }
     }
+
+    // Its margin notes, over the rest.
+    PageNotes {
+        id: noteMarks
+        anchors.fill: parent
+        page: layer.page
+        reading: layer.reading
+        onOpened: (id, around) => layer.noteOpened(id, around)
+    }
+    // Its notes top to bottom, for going through them: [{id, rect}], in this item.
+    function noteSpots() { return noteMarks.inOrder() }
 }

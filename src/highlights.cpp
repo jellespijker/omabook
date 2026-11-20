@@ -50,6 +50,17 @@ std::expected<qint64, QString> Highlights::make(Library &library, qint64 bookId,
     return made;
 }
 
+std::optional<qint64> Highlights::makeOn(Library &library, qint64 bookId, const PageRegion &region, double aspect, QStringView color,
+                                         const QString &fileHash) {
+    Annotation highlight = Annotation::on(kind, region, aspect);
+    if (!HighlightColors::known(color) || highlight.area.isEmpty())
+        return std::nullopt;
+    highlight.color = HighlightColors::stored(color);
+    highlight.anchored = fileHash;
+    const qint64 made = library.addAnnotation(bookId, highlight);
+    return made > 0 ? std::optional(made) : std::nullopt;
+}
+
 bool Highlights::recolor(Library &library, qint64 id, QStringView color) {
     std::optional<std::pair<qint64, Annotation>> found = find(library, id);
     if (!found || found->second.kind != kind || !HighlightColors::known(color))

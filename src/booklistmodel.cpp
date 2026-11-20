@@ -474,7 +474,7 @@ QList<int> BookListModel::arranged(const QString &except) const {
             narrowings.append({*kind, value});
     const bool searching = this->searching();
     m_known.forgetWhy();
-    const Book::Knows knows = m_known.hasIndex() ? m_known.asker() : Book::Knows();
+    const Book::Lookups knows = m_known.lookups(m_root);
     auto shown = std::views::iota(0, int(m_books.size())) | std::views::filter([this, searching, &narrowings, &knows](int index) {
                      const Book &book = m_books.at(index);
                      // A launcher is on the whole shelf, and in a search

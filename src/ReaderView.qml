@@ -205,11 +205,11 @@ Item {
         interval: 400
         onTriggered: if (menu.passing && !menu.hovering && !view.pointedThing) menu.close()
     }
-    // A press of the mouse ended: on selected words, their menu; on a
+    // A press of the mouse ended: on selected words (or a part of a comic's page), their menu; on a
     // marked thing, its card, which stays.
     function released() {
         const chosen = content && content.selection ? content.selection() : null
-        if (chosen && chosen.text.trim() !== "") {
+        if (chosen && (chosen.text.trim() !== "" || !!chosen.region)) {
             showSoon.stop()
             chosen.rect = fromContent(chosen.rect)
             chosen.highlight = typeof content.selectionHighlight === "function" ? content.selectionHighlight() : ({})
@@ -557,7 +557,7 @@ Item {
                 sourceComponent: reader.kind === "flow" ? (paged ? spreadPages : flow) : reader.kind === "pages" ? pages : null
                 Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: finger.active; notes: notesLayer } }
                 Component { id: spreadPages; SpreadReader { marking: view.marksOn; notes: notesLayer } }
-                Component { id: pages; PageReader { layout: contentLoader.layout; covering: pen.covering } }
+                Component { id: pages; PageReader { layout: contentLoader.layout; covering: pen.covering; notes: notesLayer } }
             }
 
             ReadingNotes { id: notesLayer; anchors.fill: contentLoader; z: 2; host: view }
@@ -876,5 +876,5 @@ Item {
         }
     }
 
-    FindPopup { id: finder; notes: notesLayer.notes }
+    FindPopup { id: finder }
 }

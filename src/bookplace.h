@@ -87,8 +87,9 @@ struct Passage {
 // page (its section) and a rectangle on it, measured across and down in the
 // page's width, so that it is the same part of the page at any zoom, and is
 // known before the page's height is (a comic's page is measured once drawn).
-// Book ink is kept on its page in these terms (#83, BookInk); a highlight or a
-// note on a comic's panel, which has no words to find it by, is to be (#115).
+// Book ink is kept on its page in these terms (#83, BookInk), and so is a
+// highlight or a margin note on a comic's panel, which has no words to find
+// it by (#115, Annotation::area).
 struct PageRegion {
     int page = 0;
     QRectF area; // 0 to 1 across; down, 0 to the page's height over its width
@@ -100,6 +101,11 @@ struct PageRegion {
     // {"page", "x", "y", "width", "height"}, as the plugins and the command line write it.
     [[nodiscard]] QJsonObject toJson() const;
     [[nodiscard]] static PageRegion fromJson(const QJsonObject &object);
+    // A rectangle as the annotations table and the change log keep it, "x y
+    // width height" in the shortest numbers that read back the same; '' for
+    // none (an empty one). And read back: an empty one for anything else.
+    [[nodiscard]] static QString areaText(const QRectF &area);
+    [[nodiscard]] static QRectF areaOf(QStringView text);
 };
 
 // A passage found again, and how sure that is, from 0 to 1: 1 when its words

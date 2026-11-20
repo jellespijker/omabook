@@ -97,15 +97,19 @@ void ReadingHighlights::setCurrent(const QString &color) {
 QVariantList ReadingHighlights::list() const {
     const bool pages = m_reader->kind() == "pages";
     QVariantList list;
-    for (const Annotation &highlight : m_highlights)
-        list << QVariantMap{{"id", highlight.id},
-                            {"color", HighlightColors::of(highlight.color).key},
-                            {"quote", shownWords(highlight.passage().quote)},
-                            {"section", highlight.place.section},
-                            {"fraction", highlight.place.fraction},
-                            {"title", pages ? QString() : titleOf(highlight.place.section)},
-                            {"page", pages ? highlight.place.section + 1 : 0},
-                            {"lost", highlight.lost}};
+    for (const Annotation &highlight : m_highlights) {
+        QVariantMap row{{"id", highlight.id},
+                        {"color", HighlightColors::of(highlight.color).key},
+                        {"quote", shownWords(highlight.passage().quote)},
+                        {"section", highlight.place.section},
+                        {"fraction", highlight.place.fraction},
+                        {"title", pages ? QString() : titleOf(highlight.place.section)},
+                        {"page", pages ? highlight.place.section + 1 : 0},
+                        {"lost", highlight.lost}};
+        if (const std::optional<PageRegion> region = highlight.region())
+            row.insert("region", region->toJson().toVariantMap());
+        list << row;
+    }
     return list;
 }
 
@@ -305,6 +309,36 @@ QString ReadingHighlights::pageText(int page, int start, int end) const {
     return document ? shownWords(document->text(page).mid(start, std::max(0, end - start))) : QString();
 }
 
+QVariantList ReadingHighlights::pageParts(int page, double width) const {
+    QVariantList parts;
+    for (const Annotation &highlight : m_highlights)
+        if (const std::optional<PageRegion> region = highlight.region(); region && region->page == page)
+            parts << QVariantMap{{"id", highlight.id},
+                                 {"color", HighlightColors::of(highlight.color).key},
+                                 {"x", region->area.x() * width},
+                                 {"y", region->area.y() * width},
+                                 {"width", region->area.width() * width},
+                                 {"height", region->area.height() * width}};
+    return parts;
+}
+
+qint64 ReadingHighlights::highlightPart(int page, const QRectF &area, double aspect, const QString &color) {
+    Library *library = m_reader->library();
+    const qint64 bookId = m_reader->bookId();
+    if (!library || bookId <= 0)
+        return 0;
+    const QString chosen = color.isEmpty() ? m_current : color;
+    const std::optional<FormatFile> file = AnnotationAnchors::readableFile(*library, bookId);
+    const auto made = Highlights::makeOn(*library, bookId, {.page = page, .area = area}, aspect, chosen, file ? file->hash : QString());
+    if (!made) {
+        qCWarning(lcLibrary).noquote() << "a highlight on page" << page + 1 << "of book" << bookId << "couldn't be made in" << chosen;
+        return 0;
+    }
+    setCurrent(chosen);
+    refresh();
+    return *made;
+}
+
 QVariantList ReadingHighlights::takeStrokes(QQuickItem *surface) {
     auto *ink = qobject_cast<InkSurface *>(surface);
     if (!ink)
@@ -347,8 +381,9 @@ QString ReadingHighlights::exported(const QString &color, const QVariantMap &nam
         if (title != chapter && !title.isEmpty())
             lines << "## " + title << QString();
         chapter = title;
-        lines << "> " + highlight.value("quote").toString() << QString()
-              << "— " + names.value(highlight.value("color").toString(), highlight.value("color")).toString() << QString();
+        const QString quote = highlight.contains("region") ? tr("A part of the page") : highlight.value("quote").toString();
+        lines << "> " + quote << QString() << "— " + names.value(highlight.value("color").toString(), highlight.value("color")).toString()
+              << QString();
     }
     return lines.join('\n').trimmed() + '\n';
 }

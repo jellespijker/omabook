@@ -30,6 +30,12 @@ inline constexpr auto kind = "highlight";
 // it, it is placed the next time the book is opened. Its number, or why not.
 [[nodiscard]] std::expected<qint64, QString> make(Library &library, qint64 bookId, const Passage &passage, QStringView color,
                                                   const BookText *text = nullptr, const QString &fileHash = {});
+// A new highlight on a part of a page, a comic's panel, which has no words
+// to find it by (#115): the page `aspect` (its height over its width) tall,
+// and drawn from the file of `fileHash`. Its number; none for a colour there
+// isn't, a part beside the page, or when it can't be kept.
+[[nodiscard]] std::optional<qint64> makeOn(Library &library, qint64 bookId, const PageRegion &region, double aspect, QStringView color,
+                                           const QString &fileHash = {});
 // Another colour for one; whether there is a highlight of that number.
 bool recolor(Library &library, qint64 id, QStringView color);
 

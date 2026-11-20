@@ -36,7 +36,8 @@ class ReadingHighlights : public QObject {
     Q_PROPERTY(QVariantList colors READ colors NOTIFY lookChanged)
     // The colour new ones are made in: the last one chosen.
     Q_PROPERTY(QString current READ current WRITE setCurrent NOTIFY currentChanged)
-    // The open book's, in its order: [{id, color, quote, section, fraction, title, lost}].
+    // The open book's, in its order: [{id, color, quote, section, fraction, title, page, lost}], and
+    // one on a part of a page its `region` too ({page, x, y, width, height}, PageRegion).
     Q_PROPERTY(QVariantList list READ list NOTIFY changed)
     Q_PROPERTY(int lostCount READ lostCount NOTIFY changed)
 
@@ -77,6 +78,13 @@ public:
     Q_INVOKABLE QVariantList pageWords(int page, QSizeF shown) const;
     // The words of a page from one character to another.
     Q_INVOKABLE QString pageText(int page, int start, int end) const;
+
+    // On a part of a page, a comic's panel, which has no words (#115): those
+    // of a page shown `width` pixels wide, where they stand: [{id, color, x,
+    // y, width, height}]; and a new one on a part (in the page's width,
+    // PageRegion) of a page `aspect` tall, its number, 0 when it can't be made.
+    Q_INVOKABLE QVariantList pageParts(int page, double width) const;
+    Q_INVOKABLE qint64 highlightPart(int page, const QRectF &area, double aspect, const QString &color);
 
     // The strokes an ink surface over the page holds, each its points in the
     // surface's coordinates, taken off it: the pen's gestures are acted on, not kept.

@@ -1,5 +1,8 @@
 #include "bookplace.h"
 
+#include <QList>
+#include <QLocale>
+#include <QStringList>
 #include <QtGlobal>
 #include <cstdlib>
 #include <utility>
@@ -66,6 +69,29 @@ PageRegion PageRegion::fromJson(const QJsonObject &object) {
     return {.page = object.value("page").toInt(),
             .area = QRectF(object.value("x").toDouble(), object.value("y").toDouble(), object.value("width").toDouble(),
                            object.value("height").toDouble())};
+}
+
+QString PageRegion::areaText(const QRectF &area) {
+    if (area.isEmpty())
+        return {};
+    QStringList numbers;
+    for (const double number : {area.x(), area.y(), area.width(), area.height()})
+        numbers << QString::number(number, 'g', QLocale::FloatingPointShortest);
+    return numbers.join(u' ');
+}
+
+QRectF PageRegion::areaOf(QStringView text) {
+    QList<double> numbers;
+    for (const QStringView part : text.split(u' ', Qt::SkipEmptyParts)) {
+        bool read = false;
+        numbers << part.toDouble(&read);
+        if (!read)
+            return {};
+    }
+    if (numbers.size() != 4)
+        return {};
+    const QRectF area(numbers.at(0), numbers.at(1), numbers.at(2), numbers.at(3));
+    return area.isEmpty() ? QRectF() : area;
 }
 
 QJsonObject Passage::toJson() const {

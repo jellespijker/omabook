@@ -147,6 +147,10 @@ public:
     [[nodiscard]] std::optional<KnownMatch> why(qint64 bookId) const;
     // A Book::Knows that asks this; it must not outlive it.
     [[nodiscard]] Book::Knows asker();
+    // What a search of the library in the folder `root` is given (Book::matches):
+    // this, while there is an index, and what the reader wrote in the books
+    // (notes:, AnnotationWords), asked anew each time. It must not outlive this.
+    [[nodiscard]] Book::Lookups lookups(const QString &root);
 
 private:
     std::shared_ptr<const KnowledgeIndex> m_index;
@@ -164,7 +168,8 @@ struct Found {
     std::optional<KnownMatch> why;
 };
 // The books a search finds: by their details as Book::matches reads them,
-// and by what is known of them. The index is read here when none is given.
+// by what is known of them, and by what the reader wrote in them (notes:).
+// The index is read here when none is given.
 QList<Found> search(const Library &library, const QList<Book> &books, const QString &query,
                     const std::shared_ptr<const KnowledgeIndex> &index = {});
 

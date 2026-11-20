@@ -13,7 +13,7 @@
 namespace {
 
 constexpr auto columns = "id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, quote_before, quote_after, "
-                         "anchored, confidence, lost, color";
+                         "anchored, confidence, lost, color, area";
 
 } // namespace
 
@@ -34,7 +34,21 @@ void Annotation::setPassage(const Passage &passage) {
     after = passage.after;
 }
 
-bool Annotation::hasPassage() const { return !passage().quote.trimmed().isEmpty() && kind != "bookmark"; }
+bool Annotation::hasPassage() const { return !passage().quote.trimmed().isEmpty() && kind != "bookmark" && area.isEmpty(); }
+
+std::optional<PageRegion> Annotation::region() const {
+    return area.isEmpty() ? std::nullopt : std::optional(PageRegion{.page = place.section, .area = area});
+}
+
+Annotation Annotation::on(const QString &kind, const PageRegion &region, double aspect) {
+    // Within the page across, and below its top: a part beside it is none.
+    const QRectF area = region.area.intersected(QRectF(0, 0, 1, std::max(region.area.bottom(), 0.0)));
+    Annotation made{.id = 0, .kind = kind, .place = PageRegion{.page = region.page, .area = area}.place(aspect), .text = {}, .note = {}};
+    // Its place is where it starts, and the part says how far it goes.
+    made.to = made.place;
+    made.area = area;
+    return made;
+}
 
 QJsonObject Annotation::toJson(QJsonObject alongside) const {
     for (const auto &[key, value] : {std::pair{"kind", QJsonValue(kind)}, std::pair{"text", QJsonValue(text)},
@@ -48,6 +62,9 @@ QJsonObject Annotation::toJson(QJsonObject alongside) const {
         alongside.insert("confidence", confidence);
         alongside.insert("lost", lost);
     }
+    // One on a part of its page says which (#115).
+    if (const std::optional<PageRegion> on = region())
+        alongside.insert("region", on->toJson());
     return place.toJson(alongside);
 }
 
@@ -64,6 +81,10 @@ Annotation Annotation::fromJson(const QJsonObject &object) {
         annotation.setPassage(Passage::fromJson(passage));
         annotation.confidence = object.value("confidence").toDouble(1);
         annotation.lost = object.value("lost").toBool();
+    }
+    if (const QJsonObject region = object.value("region").toObject(); !region.isEmpty()) {
+        const PageRegion on = PageRegion::fromJson(region);
+        annotation.area = on.area.isEmpty() ? QRectF() : on.area;
     }
     return annotation;
 }
@@ -93,19 +114,20 @@ std::optional<qint64> Library::storeAnnotation(qint64 bookId, const Annotation &
                         annotation.anchored,
                         annotation.confidence,
                         annotation.lost ? 1 : 0,
-                        annotation.color};
+                        annotation.color,
+                        PageRegion::areaText(annotation.area)};
     if (annotation.id <= 0) {
         const auto made = insert("INSERT INTO annotations (book_id, kind, section, fraction, text, note, created, to_section, to_fraction, "
-                                 "quote, quote_before, quote_after, anchored, confidence, lost, color) "
-                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                 "quote, quote_before, quote_after, anchored, confidence, lost, color, area) "
+                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                  values);
         return made ? std::optional<qint64>(*made) : std::nullopt;
     }
     values << annotation.id;
-    if (!exec(
-            "UPDATE annotations SET book_id = ?, kind = ?, section = ?, fraction = ?, text = ?, note = ?, created = ?, to_section = ?, "
-            "to_fraction = ?, quote = ?, quote_before = ?, quote_after = ?, anchored = ?, confidence = ?, lost = ?, color = ? WHERE id = ?",
-            values))
+    if (!exec("UPDATE annotations SET book_id = ?, kind = ?, section = ?, fraction = ?, text = ?, note = ?, created = ?, to_section = ?, "
+              "to_fraction = ?, quote = ?, quote_before = ?, quote_after = ?, anchored = ?, confidence = ?, lost = ?, color = ?, area = ? "
+              "WHERE id = ?",
+              values))
         return std::nullopt;
     return annotation.id;
 }
@@ -142,6 +164,7 @@ QList<Annotation> Library::annotations(qint64 bookId, const QString &kind) const
                             .anchored = found.value(12).toString(),
                             .confidence = found.value(13).toDouble(),
                             .lost = found.value(14).toBool(),
-                            .color = found.value(15).toString()});
+                            .color = found.value(15).toString(),
+                            .area = PageRegion::areaOf(found.value(16).toString())});
     return annotations;
 }

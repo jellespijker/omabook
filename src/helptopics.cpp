@@ -159,9 +159,26 @@ Manual::Topic chronologyTopic() {
             }};
 }
 
+// Notes and highlights on the pages of a PDF or a comic, and finding what
+// was written by its words (#115).
+QList<Manual::Section> pageNoteSections() {
+    return {
+        {Manual::tr("Notes and highlights on pages"),
+         Manual::tr("On a PDF's page, select words as in any book to highlight them or write a margin note on them. A "
+                    "comic's pages are pictures: drag over a panel with the mouse, press and hold it with a finger, or press "
+                    "{reader.select} and move the part with the arrows (Shift makes it larger or smaller), then choose a "
+                    "colour or Write a margin note. A mark on the page opens its note.")},
+        {Manual::tr("Searching your notes"),
+         Manual::tr("{reader.find} finds the words in your highlights, margin notes and bookmarks too, listed before the "
+                    "book's own; start with `notes:` to look only there. In the library, `notes:` finds the books you wrote "
+                    "the words in. Where a model reads your handwriting (recognition, in the settings), ink on the pages is "
+                    "found by its words as well; it goes only to your own servers.")},
+    };
+}
+
 // Reading a book: turning pages, finding one's place, margin notes, the
 // graph in the text, and making the page comfortable.
-Manual::Topic readingTopic() {
+Manual::Topic readingBasics() {
     return {"reading",
             Manual::tr("Reading"),
             Manual::tr("Turn pages, find your place, and make the page comfortable."),
@@ -239,6 +256,12 @@ Manual::Topic readingTopic() {
                             "page. Kindle, Word and the other formats Calibre knows are converted the first time you open them, "
                             "which needs Calibre installed.")},
             }};
+}
+
+Manual::Topic readingTopic() {
+    Manual::Topic topic = readingBasics();
+    topic.sections << pageNoteSections();
+    return topic;
 }
 
 } // namespace

@@ -18,6 +18,10 @@ import Omabook
 // or in the margin column, writes a note by hand on the line beside it: its
 // first strokes are what the pen wrote there, and the pen goes on writing on
 // its card, which stands in the column (or, without one, beside the line).
+//
+// On the pages of a PDF or a comic (#115), which stand still, a note is on
+// words of a PDF's page or on a part of a comic's (a panel, chosen as words
+// are selected), marked where it is (PageNotes) and opened on a card beside it.
 Item {
     id: layer
     objectName: "readingNotes"
@@ -33,7 +37,7 @@ Item {
     property int draftSection: -1
     readonly property bool draftHere: !!draft && draftSection === reader.section
     // Whether the notes stand in a margin column here, or are marks in the text.
-    readonly property bool beside: reader.format.noteWidth > 0
+    readonly property bool beside: reader.kind === "flow" && reader.format.noteWidth > 0
     // The keyboard is going through the notes on the page.
     property bool going: false
     // While it is, a card is up, or the lost ones are listed, the keys are the notes'.
@@ -62,10 +66,7 @@ Item {
     // and the note is written once Enter says they are the ones.
     function write() {
         if (!content) return
-        if (reader.kind !== "flow") {
-            backend.say(qsTr("These pages are pictures, so there are no words to write a margin note on."))
-            return
-        }
+        if (reader.kind !== "flow") return writeOnPage()
         const chosen = typeof content.selectionSpan === "function" ? content.selectionSpan() : null
         if (!chosen) {
             host.startSelecting("note")
@@ -103,6 +104,34 @@ Item {
         if (!beside) Qt.callLater(() => layer.open(made, line.text, line.start, line.end))
         return true
     }
+    // On a page that stands still: the words selected on it, or the part of it chosen.
+    function writeOnPage() {
+        const chosen = typeof content.pageSelection === "function" ? content.pageSelection() : null
+        if (!chosen) {
+            host.startSelecting("note")
+            return
+        }
+        content.clearSelection()
+        card.close()
+        going = false
+        draftSection = chosen.page
+        draft = chosen
+        current = 0
+        Qt.callLater(() => card.openAround(0, "", fromContent(chosen.rect)))
+    }
+    // A rectangle of the page (content) in this layer.
+    function fromContent(rect) {
+        const at = content.mapToItem(layer, rect.x, rect.y)
+        return Qt.rect(at.x, at.y, rect.width, rect.height)
+    }
+    // The note being written, with these words: on a chapter's words, a page's, or a part of a page.
+    function writeDraft(words) {
+        if (words.trim() === "") return 0
+        if (draft.region)
+            return model.writeOnPart(draft.page, Qt.rect(draft.region.x, draft.region.y, draft.region.width, draft.region.height), draft.aspect, words)
+        if (draft.page !== undefined) return model.writeOnPage(draft.page, draft.start, draft.end, words)
+        return model.write(draft.text.textDocument, draft.start, draft.end, words)
+    }
     // Done writing or editing a note: the words kept, or none (removed, never written).
     function finish(id, words) {
         const entry = id ? model.notes.find(note => note.id === id) : null
@@ -114,7 +143,7 @@ Item {
             return
         }
         if (id === 0 && draft) {
-            const made = words.trim() !== "" ? model.write(draft.text.textDocument, draft.start, draft.end, words) : 0
+            const made = writeDraft(words)
             draft = null
             model.drafting = false
             if (made > 0) {
@@ -129,6 +158,8 @@ Item {
         editing = 0
         card.close()
         back()
+        // Done writing, the keyboard is the page's again, once the key that finished it is done.
+        if (!going) Qt.callLater(() => { if (content && !writing && !focused) content.forceActiveFocus() })
     }
     function removeNote(id) {
         if (id === 0) {
@@ -162,6 +193,12 @@ Item {
     }
     // The notes on the page, top to bottom: [{id, text, start, end}].
     function inSight() { return content && typeof content.notesInSight === "function" ? content.notesInSight() : [] }
+    // A note opened from its mark on a page that stands still, its rectangle the page's (content's).
+    function openAt(id, rect) {
+        current = id
+        const entry = model.notes.find(note => note.id === id)
+        card.openAround(id, entry ? entry.note : "", fromContent(rect), false, entry ? entry.ink : false)
+    }
     // A note opened from its mark in the text, or gone to with the keyboard.
     function open(id, text, start, end) {
         current = id
@@ -195,16 +232,17 @@ Item {
         let at = seen.findIndex(one => one.id === current)
         at = at < 0 ? 0 : Math.max(0, Math.min(seen.length - 1, at + by))
         current = seen[at].id
+        const entry = model.notes.find(note => note.id === seen[at].id)
+        const words = entry.note
         if (beside) keys.forceActiveFocus()
-        else {
-            const entry = model.notes.find(note => note.id === seen[at].id)
-            card.openOn(seen[at].id, entry.note, seen[at].text, seen[at].start, seen[at].end, true, entry.ink)
-        }
+        else if (seen[at].rect) card.openAround(seen[at].id, words, fromContent(seen[at].rect), true, entry.ink)
+        else card.openOn(seen[at].id, words, seen[at].text, seen[at].start, seen[at].end, true, entry.ink)
     }
     function editCurrent() {
         if (!current) return
         const seen = inSight().find(one => one.id === current)
-        if (seen) open(current, seen.text, seen.start, seen.end)
+        if (seen && seen.rect) openAt(current, seen.rect)
+        else if (seen) open(current, seen.text, seen.start, seen.end)
     }
 
     // Going through the notes in the margin column.
@@ -232,13 +270,18 @@ Item {
         property bool ink: false
         property rect around: Qt.rect(0, 0, 0, 0)
         function openOn(id, words, text, start, end, browsing, handwritten) {
-            noteId = id
-            ink = !!handwritten
-            note.words = words
             const a = text.positionToRectangle(start)
             const b = text.positionToRectangle(end)
             const at = text.mapToItem(layer, Math.min(a.x, b.x), a.y)
-            around = Qt.rect(at.x, at.y, a.y === b.y ? Math.max(4, b.x - a.x) : text.width, b.y + b.height - a.y)
+            openAround(id, words, Qt.rect(at.x, at.y, a.y === b.y ? Math.max(4, b.x - a.x) : text.width, b.y + b.height - a.y), browsing,
+                       handwritten)
+        }
+        // Beside what it is about, a rectangle of this layer.
+        function openAround(id, words, rect, browsing, handwritten) {
+            noteId = id
+            ink = !!handwritten
+            note.words = words
+            around = rect
             shown = true
             if (id === 0 || !browsing) {
                 layer.editing = id
@@ -316,6 +359,20 @@ Item {
         objectName: "lostNotesList"
         widest: 520
         onClosed: if (layer.content) layer.content.forceActiveFocus()
+        // The words selected, a chapter's or a page's, to place a lost note on; null for none.
+        function selectedWords() {
+            const content = layer.content
+            if (!content) return null
+            if (typeof content.selectionSpan === "function") return content.selectionSpan()
+            const chosen = typeof content.pageSelection === "function" ? content.pageSelection() : null
+            return chosen && !chosen.region ? chosen : null
+        }
+        function placeOnSelected(id) {
+            const chosen = selectedWords()
+            if (!chosen) return false
+            return chosen.page !== undefined ? layer.notes.placeAgainOnPage(id, chosen.page, chosen.start, chosen.end)
+                                             : layer.notes.placeAgain(id, chosen.text.textDocument, chosen.start, chosen.end)
+        }
         DialogBody {
             Label {
                 Layout.fillWidth: true
@@ -368,12 +425,8 @@ Item {
                         AppButton {
                             objectName: "lostNotePlace"
                             text: qsTr("Place on the selected words")
-                            enabled: !!layer.content && typeof layer.content.selectionSpan === "function" && !!layer.content.selectionSpan()
-                            onClicked: {
-                                const chosen = layer.content.selectionSpan()
-                                if (chosen && layer.notes.placeAgain(lostNote.modelData.id, chosen.text.textDocument, chosen.start, chosen.end))
-                                    backend.say(qsTr("Margin note placed"))
-                            }
+                            enabled: !!lostList.selectedWords()
+                            onClicked: if (lostList.placeOnSelected(lostNote.modelData.id)) backend.say(qsTr("Margin note placed"))
                         }
                     }
                 }

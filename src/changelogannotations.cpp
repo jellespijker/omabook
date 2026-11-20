@@ -45,7 +45,8 @@ void writePassage(ChangeLogFields::Context &ctx, const QSqlQuery &row, qint64 hl
             ChangeLogFields::write(ctx, field, value, hlc);
 }
 
-// One row of `SELECT id, book_id, kind, section, fraction, text, note, created`, the passage's fields and the colour after them.
+// One row of `SELECT id, book_id, kind, section, fraction, text, note, created`, the passage's fields, the colour and the part
+// of the page after them.
 void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
     const QString gid = Spaces::annotationId(library, row.value(0).toLongLong());
     const QString bookGid = Spaces::bookId(library, row.value(1).toLongLong());
@@ -70,6 +71,9 @@ void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
     // from before colours is not written anew.
     if (const QString color = row.value(16).toString(); !color.isEmpty() || ctx.existing.contains(u"color"_s))
         ChangeLogFields::write(ctx, u"color"_s, color, hlc);
+    // The part of its page one on a comic's panel is on (#115): written only for one that has been on one.
+    if (const QString area = row.value(17).toString(); !area.isEmpty() || ctx.existing.contains(u"area"_s))
+        ChangeLogFields::write(ctx, u"area"_s, area, hlc);
     if (isRemoved(ctx.existing))
         ChangeLog::append(library, {ctx.space, QString(entity), gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
 }
@@ -88,7 +92,7 @@ void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
 void syncRows(const Library &library, bool baseline, const std::optional<QList<qint64>> &ids) {
     for (QSqlQuery row =
              ChangeLog::query(library, u"SELECT id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, "
-                                       "quote_before, quote_after, anchored, confidence, lost, color FROM annotations"_s
+                                       "quote_before, quote_after, anchored, confidence, lost, color, area FROM annotations"_s
                                            + onlyThese(ids) + u" ORDER BY id"_s);
          row.next();)
         syncRowToLog(library, row, baseline);

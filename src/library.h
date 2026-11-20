@@ -72,9 +72,18 @@ struct Book {
     // give here (knowledgesearch.h); without it "knows:" finds nothing.
     using Knows = std::function<bool(const Book &book, const QString &word, bool only)>;
     bool matches(const QString &query, const Knows &knows) const;
+    // And what "notes:" looks in: what the reader wrote in the book, its
+    // highlights' words, margin notes, bookmarks' names and its ink's
+    // recognised text (#115, AnnotationWords); without it "notes:" finds nothing.
+    using Noted = std::function<bool(const Book &book, const QString &words)>;
+    struct Lookups {
+        Knows knows;
+        Noted noted;
+    };
+    bool matches(const QString &query, const Lookups &lookups) const;
     // What is wrong with a search as a collection's rule, in English: a
-    // field it doesn't know ("auther:"), a quote left open, or "knows:",
-    // which is for a search and not a rule. Empty when it is fine.
+    // field it doesn't know ("auther:"), a quote left open, or "knows:" and
+    // "notes:", which are for a search and not a rule. Empty when it is fine.
     static QString searchProblem(const QString &query);
     QJsonObject toJson() const;
 };
@@ -129,8 +138,16 @@ struct Annotation {
     double confidence = 1; // how sure that place is (FoundPassage::confidence)
     bool lost = false;     // not found in that file: kept for the reader to place again or remove
     QString color;         // a highlight's colour, by its name (HighlightColors); '' for the first
+    // A part of its page (PageRegion's measure) for one on a comic's panel,
+    // which has no words: the page is its place (#115). Empty for one on words.
+    QRectF area;
 
     [[nodiscard]] Passage passage() const;
+    // The part of its page it is on, when it is on one.
+    [[nodiscard]] std::optional<PageRegion> region() const;
+    // A new one of this kind on a part of a page `aspect` (its height over
+    // its width) tall, which says how far down the page it starts.
+    [[nodiscard]] static Annotation on(const QString &kind, const PageRegion &region, double aspect);
     void setPassage(const Passage &passage);
     // Whether it is on a passage found by its words: not a bookmark's place.
     [[nodiscard]] bool hasPassage() const;
@@ -204,6 +221,8 @@ public:
     void onBringingUpToDate(std::function<void(const QString &)> say) { m_bringingUpToDate = std::move(say); }
     QString root() const noexcept { return m_root; }
     QString databasePath() const;
+    // The database of the library in that folder.
+    static QString databaseIn(const QString &root);
     // Where copies of the database are kept: one is made each time an
     // Omabook update changes the library's format, before anything changes.
     QString backupFolder() const;

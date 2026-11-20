@@ -8,6 +8,7 @@
 #include <ranges>
 #include <tuple>
 
+#include "annotationwords.h"
 #include "changelog.h"
 #include "graphcontext.h"
 #include "graphindex.h"
@@ -322,13 +323,17 @@ Book::Knows KnownWords::asker() {
     return [this](const Book &book, const QString &word, bool only) { return (*this)(book, word, only); };
 }
 
+Book::Lookups KnownWords::lookups(const QString &root) {
+    return {.knows = hasIndex() ? asker() : Book::Knows(), .noted = AnnotationWords::noted(root)};
+}
+
 QList<KnowledgeSearch::Found> KnowledgeSearch::search(const Library &library, const QList<Book> &books, const QString &query,
                                                       const std::shared_ptr<const KnowledgeIndex> &index) {
     KnownWords words(index ? index : std::make_shared<const KnowledgeIndex>(KnowledgeIndex::forSearch(library, query)));
-    const Book::Knows knows = words.asker();
+    const Book::Lookups lookups{.knows = words.asker(), .noted = AnnotationWords::noted(library)};
     QList<Found> found;
     for (const Book &book : books)
-        if (book.matches(query, knows))
+        if (book.matches(query, lookups))
             found.append({book, words.why(book.id)});
     return found;
 }

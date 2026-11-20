@@ -42,6 +42,7 @@ modules = [
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights", "bookink",
   "annotationink", "opkinds", "keptops",
+  "booksearch", "annotationwords",
 ]
 
 [layers.services]
@@ -53,7 +54,7 @@ modules = [
   "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptchangelog", "scriptplugins", "scriptpluginviews", "scriptsharing", "scriptwatchdog", "scriptwindow", "sitedesk", "spacetransport", "thinkingfilter", "tour", "whatsnew",
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue",
-  "scriptai", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio", "annotationcontext",
+  "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio", "annotationcontext",
   "aifailures",
 ]
 
@@ -80,7 +81,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes", "readinghighlights", "readingink", "backendplugins",
+  "inksurface", "inknodes", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
 ]
 
 [layers.app]

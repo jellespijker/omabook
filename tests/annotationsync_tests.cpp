@@ -12,6 +12,7 @@
 
 #include "annotationanchors.h"
 #include "annotationink.h"
+#include "annotationwords.h"
 #include "booktext.h"
 #include "changelog.h"
 #include "document.h"
@@ -361,6 +362,46 @@ private slots:
         QCOMPARE(kinds, (QStringList{"bookmark:Where I stopped:", "highlight:Half Way.:", "margin-note:Half Way.:Remember this"}));
         QCOMPARE(changed(syncLibrary(here, remote)), 0);
         QCOMPARE(there.annotations(halfThere.first().id).size(), 3);
+    }
+
+    // A highlight and a margin note on a part of a comic's page (#115) go to
+    // the other computer with that part, are found there by their words, and
+    // a part moved there comes back; a second sync changes nothing.
+    void aPartOfAComicsPageTravelsWithItsHighlightAndNote() {
+        QTemporaryDir dir;
+        const QString comic = dir.filePath("panels.cbz");
+        QVERIFY(
+            Fixtures::zip(comic, {{"001.png", Fixtures::picture(80, 120, Qt::white)}, {"002.png", Fixtures::picture(80, 120, Qt::white)}}));
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 mine = here.add(comic).id;
+        const qint64 theirs = there.add(comic).id;
+        QVERIFY(mine > 0 && theirs > 0);
+        const Remote remote("laptop:" + dir.filePath("There"), {ssh(dir, "ssh-log", false)});
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        const QRectF panel(0.1, 0.2, 0.5, 0.25);
+        QVERIFY(Highlights::makeOn(here, mine, {.page = 1, .area = panel}, 1.5, u"blue"));
+        Annotation note = Annotation::on("margin-note", {.page = 0, .area = QRectF(0.25, 0.5, 0.5, 0.5)}, 1.5);
+        note.note = "Lighthouse keepers";
+        QVERIFY(here.addAnnotation(mine, note) > 0);
+        const SyncSummary summary = syncLibrary(here, remote);
+        QVERIFY2(summary.problems.isEmpty(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(there.annotations(theirs, "highlight").size(), 1);
+        const Annotation highlight = there.annotations(theirs, "highlight").first();
+        QCOMPARE(highlight.area, panel);
+        QCOMPARE(highlight.place.section, 1);
+        QCOMPARE(highlight.color, QString("blue"));
+        QCOMPARE(there.annotations(theirs, "margin-note").first().area, QRectF(0.25, 0.5, 0.5, 0.5));
+        QCOMPARE(AnnotationWords::in(there, theirs, {"lighthouse"}).size(), 1);
+        QCOMPARE(changed(syncLibrary(here, remote)), 0);
+        // Moved there, it comes back moved.
+        Annotation moved = highlight;
+        moved.area = QRectF(0.3, 0.2, 0.5, 0.25);
+        QVERIFY(there.storeAnnotation(theirs, moved));
+        QVERIFY(syncLibrary(here, remote).problems.isEmpty());
+        QCOMPARE(here.annotations(mine, "highlight").first().area, moved.area);
+        QCOMPARE(changed(syncLibrary(here, remote)), 0);
     }
 
     // Two copies of one library (a sample from 0.1.5, with a bookmark) each

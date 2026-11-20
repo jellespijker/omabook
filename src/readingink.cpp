@@ -11,6 +11,7 @@
 #include "annotationanchors.h"
 #include "backend.h"
 #include "bookink.h"
+#include "bookinkwords.h"
 #include "inkcodec.h"
 #include "inksurface.h"
 #include "reader.h"
@@ -64,6 +65,8 @@ ReadingInk::ReadingInk(Reader *reader) : QObject(reader), m_reader(reader) {
     });
     if (const Backend *backend = reader->backend())
         connect(backend, &Backend::revisionChanged, this, &ReadingInk::refresh);
+    if (Backend *backend = reader->backend(); backend && backend->settings())
+        m_words = new BookInkWords(*backend->settings(), [reader] { return reader->library(); }, this);
 }
 
 void ReadingInk::setInking(bool inking) {
@@ -250,6 +253,9 @@ bool ReadingInk::keep(int page, const Ink::Change &change, const InkSurface *fro
         if (shownPage == page && surface && surface != from)
             surface->applyChange(change);
     readList();
+    // Its words read again once the pen rests, where recognition is set up (#115).
+    if (m_words)
+        m_words->changed(m_reader->bookId(), page);
     return true;
 }
 

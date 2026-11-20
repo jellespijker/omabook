@@ -9,8 +9,8 @@ class Library;
 // kind of it: one entity, "annotation", for all of them, #66) into the
 // personal space's log, by a global id each (Spaces::annotationId). Each
 // field (its book's id, kind, section, fraction, words, note, when it was
-// made, a highlight's passage, #80, and its colour, #81) is a field of the log, the latest
-// winning; one removed is a
+// made, a highlight's passage, #80, its colour, #81, and the part of its
+// page, #115) is a field of the log, the latest winning; one removed is a
 // tombstone, unless its book went with it: a book removed here and kept
 // elsewhere keeps its bookmarks there.
 namespace ChangeLogAnnotations {

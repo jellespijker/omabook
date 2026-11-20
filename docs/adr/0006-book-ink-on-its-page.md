@@ -25,7 +25,7 @@ page of handwriting is thousands of strokes that change a few at a time.
 - Points are in **ink units across the page's width** (1000, `BookInk::pageUnits`, and as many down), the
   page's own measure, so the same strokes are drawn at every zoom and screen. The part of a page ink
   covers is a **page region** (`PageRegion`), in the same measure; a highlight or note on a comic's
-  panel is meant to use it (#115).
+  panel is on one too (#115, the annotation's `area`), its page its place as ink's is.
 - The page is the place. The annotation keeps the hash of the file it was drawn on; nothing more is
   guessed when the book's file changes.
 
@@ -39,6 +39,7 @@ page of handwriting is thousands of strokes that change a few at a time.
 
 - An Omabook from before takes the annotation and leaves its strokes in the log, where they are read
   once it is updated; it shows no ink.
-- Ink found by search waits for handwriting recognition (shared with the notebook plugin), which would
-  write its words into the annotation's text.
+- Ink is found by search through handwriting recognition (#84, #115): where a model is chosen to read
+  it, a page is read once the pen rests, only by one's own servers, and its words are written into the
+  annotation's text, which the annotations' word index holds (`BookInkWords`, `AnnotationWords`).
 - Undo goes a batch at a time over every page (`ReadingInk`), not a stroke at a time.

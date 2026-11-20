@@ -365,7 +365,8 @@ const bool registered = [] {
     registerTool({"books_find", "Find books by what is known of them, or by a question",
                   "Searches as the window's search box does: the words of books_search, where a bare word also finds a "
                   "book by the characters, places, ideas, events, plot threads, themes, topics and questions the "
-                  "knowledge graph met in it, and knows:<word> looks only there. Only what the user has read counts: "
+                  "knowledge graph met in it, and knows:<word> looks only there; notes:<word> looks in what the user "
+                  "wrote in a book (highlights, margin notes, bookmarks, recognised ink). Only what the user has read counts: "
                   "nothing from past their furthest page, and nothing of a book they haven't begun. A book found that "
                   "way says what found it under \"known\" (the node, its kind, and where it was met). With ai, the "
                   "words are a question in the user's own words (\"the books where a mentor dies\", \"something "

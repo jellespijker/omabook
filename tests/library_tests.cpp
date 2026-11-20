@@ -1014,7 +1014,7 @@ private slots:
             model.setDatabaseName(dir.filePath("fresh/omabook.db"));
             QVERIFY(model.open());
             QSqlQuery tables(model);
-            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND name NOT LIKE 'collection%' AND type != 'trigger' AND tbl_name NOT IN ('ops', 'snapshot_ops', 'live_ops', 'space_ops')");
+            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND name NOT LIKE 'annotation_words%' AND name NOT LIKE 'collection%' AND type != 'trigger' AND tbl_name NOT IN ('ops', 'snapshot_ops', 'live_ops', 'space_ops')");
             while (tables.next())
                 QVERIFY(QSqlQuery(database).exec(tables.value(0).toString()));
             // The columns that came later are not there yet either, nor the change log's tables (left out above) they are added to.
@@ -2090,7 +2090,7 @@ private slots:
         const QStringList presentation{"backend.h", "backend.cpp", "backendcollections.cpp", "backendlookup.cpp", "backendpicker.cpp", "backendsync.cpp", "backendplugins.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp", "graphtenants.h", "graphtenants.cpp", "graphtypes.cpp",
-                                       "readingmarks.h", "readingmarks.cpp", "readingpassages.cpp", "marginnotes.h", "marginnotes.cpp", "readinghighlights.h", "readinghighlights.cpp", "readingink.h", "readingink.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",
+                                       "readingmarks.h", "readingmarks.cpp", "readingpassages.cpp", "marginnotes.h", "marginnotes.cpp", "readinghighlights.h", "readinghighlights.cpp", "readingink.h", "readingink.cpp", "annotationfinder.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",
                                        "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianfind.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h", "inksurface.h", "inksurface.cpp",
                                        "portalfilepicker.cpp", "chronologycanvas.h", "chronologycanvas.cpp", "chronologymodel.h", "chronologymodel.cpp"};

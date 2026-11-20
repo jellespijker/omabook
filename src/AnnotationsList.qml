@@ -10,7 +10,8 @@ import QtQuick.Layouts
 // each placed again on words selected on the page, or removed. What is
 // shown is copied as Markdown, to take elsewhere. Under them, on a PDF or a
 // comic, the pages with book ink (#83), each the part of the page its ink
-// covers, going there and taken away as a highlight is.
+// covers, going there and taken away as a highlight is; a highlight on a
+// part of a comic's page (#115) shows that part, as small.
 //
 // Keys: Up and Down (J, K) walk the list, Enter goes, 1 to 5 colour the one
 // selected anew, Delete removes it, Escape leaves.
@@ -245,16 +246,16 @@ Item {
                         anchors.leftMargin: 14
                         anchors.rightMargin: 4
                         spacing: 2
-                        // A page's ink, small: the part of the page it covers.
+                        // A page's ink, small: the part of the page it covers; or the part a highlight is on (#115).
                         Loader {
-                            active: !!row.modelData.ink
+                            active: !!row.modelData.ink || !!row.modelData.region
                             visible: active
                             Layout.fillWidth: true
                             Layout.preferredHeight: active ? (win.touch ? 72 : 56) : 0
-                            sourceComponent: Component { InkThumb { region: row.modelData } }
+                            sourceComponent: Component { InkThumb { region: row.modelData.region || row.modelData } }
                         }
                         Label {
-                            visible: !row.modelData.ink
+                            visible: !row.modelData.ink && !row.modelData.region
                             Layout.fillWidth: true
                             text: row.modelData.quote || ""
                             color: row.modelData.lost ? theme.colors.muted : theme.foreground

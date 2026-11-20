@@ -11,10 +11,12 @@
 #include "inksurface.h"
 #include "noterecognition.h"
 #include "pagelayout.h"
+#include "pagetext.h"
 #include "passagematch.h"
 #include "reader.h"
 #include "readingpassages.h"
 #include "settings.h"
+#include "textgeometry.h"
 
 namespace {
 
@@ -84,7 +86,10 @@ void MarginNotes::setReader(QObject *reader) {
         disconnect(m_reader, nullptr, this, nullptr);
     m_reader = given;
     if (given) {
-        connect(given, &Reader::bookChanged, this, &MarginNotes::read);
+        connect(given, &Reader::bookChanged, this, [this] {
+            m_words.clear();
+            read();
+        });
         // Another chapter's notes are spanned; any that came meanwhile are read too.
         connect(given, &Reader::sectionChanged, this, &MarginNotes::read);
         // Found again in the file the book is read from, some moved and some may be lost.
@@ -204,14 +209,97 @@ std::optional<std::pair<Passage, double>> MarginNotes::passageIn(const QString &
 }
 
 std::optional<qint64> MarginNotes::write(const QString &shown, qsizetype start, qsizetype end, const QString &words) {
-    Library *own = library();
     const QString said = words.trimmed();
-    const auto passage = said.isEmpty() || !own ? std::nullopt : passageIn(shown, start, end);
+    const auto passage = said.isEmpty() || !library() ? std::nullopt : passageIn(shown, start, end);
     if (!passage)
         return std::nullopt;
-    const qint64 id = own->addAnnotation(m_reader->bookId(), noteOn(*passage, said));
-    read();
+    const qint64 id = add(noteOn(*passage, said));
     return id > 0 ? std::optional(id) : std::nullopt;
+}
+
+qint64 MarginNotes::add(const Annotation &note) {
+    Library *own = library();
+    if (!own)
+        return 0;
+    const qint64 id = own->addAnnotation(m_reader->bookId(), note);
+    read();
+    return id;
+}
+
+std::optional<Passage> MarginNotes::passageOnPage(int page, int start, int end) const {
+    const std::shared_ptr<const Document> document = m_reader ? m_reader->document() : nullptr;
+    if (!document || page < 0 || page >= document->count())
+        return std::nullopt;
+    // A PDF's page's text is the book's own text of it: its places are exact.
+    const QString text = document->text(page);
+    const auto [from, to] = TextGeometry::wholeWords(text, start, end);
+    if (to <= from)
+        return std::nullopt;
+    const Passage passage = Passage::of(text, page, from, to);
+    return PassageMatch::words(passage.quote).isEmpty() ? std::nullopt : std::optional(passage);
+}
+
+qint64 MarginNotes::writeOnPage(int page, int start, int end, const QString &words) {
+    const QString said = words.trimmed();
+    const std::optional<Passage> passage = said.isEmpty() ? std::nullopt : passageOnPage(page, start, end);
+    if (!passage)
+        return 0;
+    // Its places are those of the book's own text of the page: exact.
+    return add(noteOn({*passage, 1.0}, said));
+}
+
+qint64 MarginNotes::writeOnPart(int page, const QRectF &area, double aspect, const QString &words) {
+    Annotation note = Annotation::on(kind, {.page = page, .area = area}, aspect);
+    note.note = words.trimmed();
+    if (note.note.isEmpty() || note.area.isEmpty())
+        return 0;
+    // The page is its place, in the file it was written on (ADR 0006).
+    note.anchored = m_fileHash;
+    return add(note);
+}
+
+bool MarginNotes::placeAgainOnPage(qint64 id, int page, int start, int end) {
+    Library *own = library();
+    const std::optional<Passage> passage = own && find(id) ? passageOnPage(page, start, end) : std::nullopt;
+    const bool placed = passage && AnnotationAnchors::placeAgain(*own, id, *passage, m_fileHash);
+    read();
+    return placed;
+}
+
+QVariantList MarginNotes::pageNotes(int page, QSizeF shown) {
+    const std::shared_ptr<const Document> document = m_reader ? m_reader->document() : nullptr;
+    QVariantList found;
+    if (!document || page < 0 || page >= document->count() || shown.isEmpty())
+        return found;
+    const QString text = document->text(page);
+    const auto standing = [&found](const Annotation &note, bool part, const QRectF &around, const QRectF &end) {
+        found << QVariantMap{
+            {"id", note.id},           {"note", note.note},         {"part", part},        {"x", around.x()},      {"y", around.y()},
+            {"width", around.width()}, {"height", around.height()}, {"endX", end.right()}, {"endY", end.bottom()}, {"endTop", end.top()}};
+    };
+    for (const Annotation &note : std::as_const(m_notes)) {
+        if (note.place.section != page)
+            continue;
+        if (const std::optional<PageRegion> region = note.region()) {
+            const QRectF part(region->area.topLeft() * shown.width(), region->area.size() * shown.width());
+            standing(note, true, part, part);
+            continue;
+        }
+        const auto span = text.isEmpty() ? std::nullopt : note.passage().spanIn(text);
+        if (!span)
+            continue;
+        if (!m_words.contains(page))
+            m_words.insert(page, document->words(page));
+        const QList<QRectF> rects =
+            PageText::rects(m_words.value(page), static_cast<int>(span->first), static_cast<int>(span->second), shown);
+        if (rects.isEmpty())
+            continue;
+        QRectF around;
+        for (const QRectF &rect : rects)
+            around |= rect;
+        standing(note, false, around, rects.last());
+    }
+    return found;
 }
 
 Annotation MarginNotes::noteOn(const std::pair<Passage, double> &passage, const QString &words) const {

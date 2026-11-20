@@ -37,7 +37,7 @@ Handwriting or drawing directly on a page of a book whose pages don't reflow, su
 _Avoid_: Drawing, scribble, ink (alone, which is the notebook plugin's)
 
 **Page region**:
-A part of a page of a book whose pages don't reflow, measured across and down in the page's width, so it is the same part at any zoom: where book ink lies on its page (`PageRegion`).
+A part of a page of a book whose pages don't reflow, measured across and down in the page's width, so it is the same part at any zoom: where book ink lies on its page, and what a highlight or a margin note on a comic's panel is on, which has no words to find it by (`PageRegion`, `Annotation::area`).
 _Avoid_: Area, box, rectangle, selection
 
 **Ink surface**:

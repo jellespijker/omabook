@@ -13,6 +13,7 @@
 
 #include "inkstroke.h"
 
+class BookInkWords;
 class InkSurface;
 class Reader;
 
@@ -28,6 +29,9 @@ class Reader;
 // pages (the pen's other end erases, as the eraser tool does), and the pen's
 // gestures that highlight rest; fingers still scroll and zoom. `shown` puts
 // the ink away, for reading the pages as they were.
+//
+// Where recognition is set up for handwriting, each page written on is read
+// once the pen rests (BookInkWords), so a search finds it by its words.
 class ReadingInk : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool inking READ inking WRITE setInking NOTIFY modeChanged)
@@ -117,4 +121,6 @@ private:
     // The file the open book is read from, which new ink is placed in.
     QString m_fileHash;
     qint64 m_hashOf = 0;
+    // Reads the words of the pages written on, where recognition is set up (#115).
+    BookInkWords *m_words = nullptr;
 };

@@ -34,11 +34,15 @@ ListView {
     // that holds them; a comic's pages have none.
     readonly property string selectedText: chosen && chosen.hasSelection && chosen.selection() ? chosen.selection().text : ""
     property Item chosen: null
+    // The selection is a part of a page of pictures (#115), not words.
+    readonly property bool choosingPart: !!chosen && chosen.hasPart
     // While a mouse drag selects words, the pages hold still under it.
     property bool mouseSelecting: false
     signal selected()
     // What lies over the pages (the ink's bar), where the pen doesn't write on them.
     property Item covering: null
+    // The margin notes (ReadingNotes), marked on the pages (#115).
+    property Item notes: null
     // Whether a point of a page's ink surface is one the pen writes on: on
     // its page, in sight, and not under what lies over the pages.
     function inkReaches(surface, point) {
@@ -212,22 +216,42 @@ ListView {
     function endSelecting() {}
     function clearSelection() { if (chosen) chosen.clear() }
     function copySelection() { if (selectedText !== "") plainCopy.copyText(selectedText) }
-    function pageSelection() { const chose = chosen ? chosen.selection() : null; return chose ? { page: chosen.page, start: chose.start, end: chose.end } : null }
+    // The words selected on a page ({page, start, end, rect}), or the part of
+    // a page chosen ({page, region, aspect, rect}), its rectangle in this item.
+    function pageSelection() {
+        const chose = chosen ? chosen.selection() : null
+        if (!chose) return null
+        const rect = fromLayer(chosen, chose.rect)
+        return chose.region ? { page: chosen.page, region: chose.region, aspect: chose.aspect, rect: rect }
+                            : { page: chosen.page, start: chose.start, end: chose.end, rect: rect }
+    }
     function highlightSelection(color) {
         const span = pageSelection()
-        const made = span ? reader.highlights.highlightPage(span.page, span.start, span.end, color) : 0
+        const area = span && span.region ? Qt.rect(span.region.x, span.region.y, span.region.width, span.region.height) : null
+        const made = !span ? 0 : area ? reader.highlights.highlightPart(span.page, area, span.aspect, color)
+                                      : reader.highlights.highlightPage(span.page, span.start, span.end, color)
         clearSelection()
         return made
     }
     function selectionHighlight() {
         const span = pageSelection()
-        return span ? reader.highlights.pageAt(span.page, span.start, span.end) : ({})
+        return span && !span.region ? reader.highlights.pageAt(span.page, span.start, span.end) : ({})
     }
     function placeSelection(id) {
         const span = pageSelection()
-        const placed = span ? reader.highlights.placeAgainOnPage(id, span.page, span.start, span.end) : false
+        const placed = span && !span.region ? reader.highlights.placeAgainOnPage(id, span.page, span.start, span.end) : false
         clearSelection()
         return placed
+    }
+    // The margin notes on the pages in sight, top to bottom: [{id, rect}], in this item.
+    function notesInSight() {
+        const seen = []
+        for (const page in layers)
+            for (const one of layers[page].noteSpots()) {
+                const r = fromLayer(layers[page], one.rect)
+                if (r.y + r.height >= 0 && r.y <= height) seen.push({ id: one.id, rect: r })
+            }
+        return seen.sort((a, b) => a.rect.y - b.rect.y || a.rect.x - b.rect.x)
     }
     // A stroke of the pen, its points in this item's coordinates, on the page it starts on.
     function penStroke(points) {
@@ -314,6 +338,9 @@ ListView {
                         id: words
                         anchors.fill: parent
                         page: sheet.page
+                        aspect: sheet.aspect
+                        reading: view.notes
+                        onNoteOpened: (id, around) => { if (view.notes) view.notes.openAt(id, view.fromLayer(words, around)) }
                         Component.onCompleted: { const all = view.layers; all[page] = words; view.layers = all }
                         Component.onDestruction: {
                             if (view.chosen === words) view.chosen = null

@@ -20,7 +20,6 @@
 #include <functional>
 #include <atomic>
 #include <ranges>
-#include <span>
 
 #include "booksides.h"
 #include "changelog.h"
@@ -119,136 +118,6 @@ QString Book::held() const {
     return !formats.isEmpty() ? (paper ? "both" : "digital") : paper ? "paper" : "none";
 }
 
-namespace {
-
-// The fields a search can look in one at a time, as "key:value".
-constexpr std::array searchKeys{"author"_L1, "title"_L1, "series"_L1, "tag"_L1, "genre"_L1, "format"_L1, "lang"_L1,
-                                "publisher"_L1, "about"_L1, "status"_L1, "is"_L1, "rating"_L1, "knows"_L1};
-
-// The words of a search, a quoted phrase as one: `tag:"science fiction"`
-// is one word, and so is `"the hobbit"`.
-[[nodiscard]] QStringList searchWords(const QString &query, bool *open = nullptr) {
-    QStringList words;
-    QString word;
-    bool quoted = false;
-    for (const QChar c : query) {
-        if (c == '"') {
-            quoted = !quoted;
-        } else if (c.isSpace() && !quoted) {
-            if (!word.isEmpty())
-                words << std::exchange(word, {});
-        } else {
-            word += c;
-        }
-    }
-    if (!word.isEmpty())
-        words << word;
-    if (open)
-        *open = quoted;
-    return words;
-}
-
-// What tags say a book is a story, and what tags say it is about the world.
-// A tag that is both ("Historical Fiction", "Science Fiction") is a story.
-constexpr std::array storyWords{"fiction"_L1, "novel"_L1, "fantasy"_L1, "sci-fi"_L1, "mystery"_L1, "mysteries"_L1,
-                                "thriller"_L1, "romance"_L1, "horror"_L1, "crime"_L1, "adventure"_L1, "short stories"_L1,
-                                "fairy tale"_L1, "dystopia"_L1, "fables"_L1, "graphic novel"_L1, "detective"_L1};
-constexpr std::array worldWords{"nonfiction"_L1, "non-fiction"_L1, "history"_L1, "biography"_L1, "memoir"_L1,
-                                "science"_L1, "programming"_L1, "computer"_L1, "software"_L1, "technology"_L1,
-                                "philosophy"_L1, "business"_L1, "economics"_L1, "reference"_L1, "textbook"_L1,
-                                "self-help"_L1, "psychology"_L1, "mathematics"_L1, "politics"_L1, "essays"_L1,
-                                "travel"_L1, "cooking"_L1, "health"_L1, "education"_L1, "engineering"_L1,
-                                "management"_L1, "design"_L1, "language"_L1, "religion"_L1, "law"_L1,
-                                "nature"_L1, "cookbook"_L1, "parenting"_L1, "medicine"_L1};
-
-[[nodiscard]] bool tagHas(const QString &tag, std::span<const QLatin1StringView> words) {
-    return std::ranges::any_of(words, [&tag](QLatin1StringView word) { return tag.contains(word, Qt::CaseInsensitive); });
-}
-
-[[nodiscard]] bool storyTag(const QString &tag) {
-    return tagHas(tag, storyWords) && !tag.contains("nonfiction"_L1, Qt::CaseInsensitive)
-           && !tag.contains("non-fiction"_L1, Qt::CaseInsensitive);
-}
-
-[[nodiscard]] bool genreOf(const QStringList &tags, const QString &genre) {
-    const QString wanted = genre.toLower().remove(' ');
-    if (wanted == "fiction"_L1)
-        return std::ranges::any_of(tags, storyTag);
-    if (wanted == "nonfiction"_L1 || wanted == "non-fiction"_L1)
-        return std::ranges::any_of(tags, [](const QString &tag) { return tagHas(tag, worldWords) && !storyTag(tag); });
-    return std::ranges::any_of(tags, [&genre](const QString &tag) { return tag.contains(genre, Qt::CaseInsensitive); });
-}
-
-} // namespace
-
-bool Book::matches(const QString &query) const { return matches(query, {}); }
-
-bool Book::matches(const QString &query, const Knows &knows) const {
-    const QString everything = meta.title + "\n" + meta.authorText() + "\n" + meta.series + "\n" + meta.tags.join("\n");
-    const auto found = [this, &everything, &knows](const QString &word) {
-        const QString key = word.section(':', 0, 0).toLower(), value = word.section(':', 1);
-        if (word.contains(':')) {
-            if (key == "author") return meta.authorText().contains(value, Qt::CaseInsensitive);
-            if (key == "title") return meta.title.contains(value, Qt::CaseInsensitive);
-            if (key == "series") return meta.series.contains(value, Qt::CaseInsensitive);
-            if (key == "tag") return meta.tags.join("\n").contains(value, Qt::CaseInsensitive);
-            if (key == "genre") return genreOf(meta.tags, value);
-            if (key == "format") return formats.contains(value.toLower());
-            if (key == "lang") return meta.language.startsWith(value, Qt::CaseInsensitive);
-            if (key == "publisher") return meta.publisher.contains(value, Qt::CaseInsensitive);
-            if (key == "about") return meta.description.contains(value, Qt::CaseInsensitive);
-            if (key == "status")
-                return value.toLower() == "unread" ? status() != "read" && status() != "reading" : status() == value.toLower();
-            if (key == "is")
-                return value.toLower() == "digital" ? !formats.isEmpty() : value.toLower() == "paper" ? paper
-                       : value.toLower() == "wishlist" && held() == "none";
-            if (key == "rating") return rating >= value.toInt() && rating > 0;
-            if (key == "knows") return knows && knows(*this, value, true);
-        }
-        return everything.contains(word, Qt::CaseInsensitive) || (knows && knows(*this, word, false));
-    };
-    // A word with a minus in front is one the book must not match.
-    const auto holds = [&found](const QString &word) {
-        return word.size() > 1 && word.startsWith('-') ? !found(word.mid(1)) : found(word);
-    };
-    // Words joined by OR are alternatives: any one group of words, each of
-    // which matches, is enough.
-    QList<QStringList> groups{{}};
-    for (const QString &word : searchWords(query)) {
-        if (word == "OR"_L1)
-            groups.append(QStringList{});
-        else
-            groups.last() << word;
-    }
-    groups.removeIf([](const QStringList &group) { return group.isEmpty(); });
-    return groups.isEmpty()
-           || std::ranges::any_of(groups, [&holds](const QStringList &group) { return std::ranges::all_of(group, holds); });
-}
-
-QString Book::searchProblem(const QString &query) {
-    bool open = false;
-    const QStringList words = searchWords(query, &open);
-    if (open)
-        return "A quote is left open; close it with another \".";
-    static const QRegularExpression keyed(u"^-?([A-Za-z]+):"_s);
-    for (const QString &word : words) {
-        const QRegularExpressionMatch match = keyed.match(word);
-        const QString key = match.captured(1).toLower();
-        // What is known of a book grows as it is read, and a rule holds the
-        // same books for everyone who opens the library.
-        if (match.hasMatch() && key == "knows"_L1)
-            return "A collection's rule goes by the books' own details; knows: is for the search, where what you have read counts.";
-        if (match.hasMatch() && std::ranges::none_of(searchKeys, [&key](QLatin1StringView known) { return key == known; })) {
-            QStringList keys;
-            for (const QLatin1StringView known : searchKeys)
-                if (known != "knows"_L1)
-                    keys << known + ':';
-            return QString("\"%1:\" isn't a field a search looks in; it can be %2.").arg(match.captured(1), keys.join(", "));
-        }
-    }
-    return {};
-}
-
 bool Collection::Part::holds(const Book &book) const {
     if (excluded.contains(book.id))
         return false;
@@ -337,7 +206,9 @@ Library::Batch::~Batch() {
         QSqlDatabase::database(m_library.m_connection).commit();
 }
 
-QString Library::databasePath() const { return m_root + "/omabook.db"; }
+QString Library::databasePath() const { return databaseIn(m_root); }
+
+QString Library::databaseIn(const QString &root) { return root + "/omabook.db"; }
 
 QString Library::backupFolder() const { return m_root + "/.backups"; }
 

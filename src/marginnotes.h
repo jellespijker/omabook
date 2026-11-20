@@ -1,10 +1,13 @@
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QQuickTextDocument>
 #include <QSet>
+#include <QRectF>
+#include <QSizeF>
 #include <QString>
 #include <QVariantList>
 #include <memory>
@@ -13,6 +16,7 @@
 #include <vector>
 
 #include "inkstroke.h"
+#include "document.h"
 #include "library.h"
 
 class NoteRecognition;
@@ -92,6 +96,21 @@ public:
     Q_INVOKABLE void remove(qint64 id);
     // A lost note placed on that passage, where the reader selected it.
     Q_INVOKABLE bool placeAgain(qint64 id, QQuickTextDocument *chapter, int start, int end);
+    // On the pages of a PDF or a comic (#115), which stand still: the notes of
+    // a page shown `shown` pixels, where they are on it: [{id, note, part,
+    // x, y, width, height, endX, endTop, endY}], the rectangle around the
+    // words of the passage and where its last word ends (endX, from the top
+    // to the foot of its line), or the part of the page (`part`) a note on a
+    // panel is on.
+    Q_INVOKABLE QVariantList pageNotes(int page, QSizeF shown);
+    // A note with these words on the words of a PDF's page from character
+    // `start` to `end` of the page's text, widened to whole words; or on a
+    // part of a page `aspect` tall (in the page's width, PageRegion), such
+    // as a comic's panel. Its number, or 0.
+    Q_INVOKABLE qint64 writeOnPage(int page, int start, int end, const QString &words);
+    Q_INVOKABLE qint64 writeOnPart(int page, const QRectF &area, double aspect, const QString &words);
+    // A lost note placed on words of a PDF's page.
+    Q_INVOKABLE bool placeAgainOnPage(qint64 id, int page, int start, int end);
     // Where notes stand in the margin column (PageLayout::stack), each given
     // as {top, height}: their tops, in the order given. A `bottom` under 0 is none.
     Q_INVOKABLE QVariantList stack(const QVariantList &wanted, double spacing, double bottom) const;
@@ -144,6 +163,10 @@ private:
     [[nodiscard]] std::optional<std::pair<Passage, double>> passageIn(const QString &shown, qsizetype start, qsizetype end) const;
     // A note on that passage, placed in the file the book is read from.
     [[nodiscard]] Annotation noteOn(const std::pair<Passage, double> &passage, const QString &words) const;
+    // The passage of a page of the book from character `start` to `end` of its text, widened to whole words.
+    [[nodiscard]] std::optional<Passage> passageOnPage(int page, int start, int end) const;
+    // A new note kept, its number; 0 when it can't be.
+    [[nodiscard]] qint64 add(const Annotation &note);
     void read();
     void announce();
 
@@ -160,4 +183,6 @@ private:
     size_t m_spannedText = 0;
     int m_spannedRevision = -1;
     QVariantList m_spans;
+    // The words of the pages of a PDF asked about, as Poppler found them.
+    QHash<int, QList<PageWord>> m_words;
 };

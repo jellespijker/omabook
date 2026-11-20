@@ -17,7 +17,8 @@ import Omabook
 FocusScope {
     id: menu
     objectName: "readingMenu"
-    // "card" for a thing, "menu" for selected words, "highlight" for a highlight.
+    // "card" for a thing, "menu" for selected words, "part" for a part of a
+    // comic's page chosen (#115), "highlight" for a highlight.
     property string mode: "card"
     // The highlight the words are on, or that was clicked; 0 for none.
     property var highlightId: 0
@@ -77,7 +78,7 @@ FocusScope {
         if (!passing) forceActiveFocus()
     }
     function openMenu(chosen) {
-        mode = "menu"
+        mode = chosen.region ? "part" : "menu"
         words = chosen.text.trim()
         paragraph = chosen.paragraph || ""
         const named = reader.marks.named(words)
@@ -146,13 +147,19 @@ FocusScope {
             rows.push({ id: "highlights", text: qsTr("All highlights") })
             return rows
         }
+        // A part of a page has no words to ask about: a colour, or a note.
+        if (mode === "part") {
+            rows.push({ id: "note", text: qsTr("Write a margin note") })
+            rows.push({ id: "highlights", text: qsTr("All highlights") })
+            return rows
+        }
         if (highlightId) rows.push({ id: "unhighlight", text: qsTr("Remove highlight") })
         rows.push({ id: "ask", text: qsTr("Ask about this") })
         rows.push({ id: "who", text: qsTr("Who or what is this?") })
         rows.push(known ? { id: "graph", text: qsTr("Show in graph") } : { id: "add", text: qsTr("Add to the graph") })
         rows.push({ id: "find", text: qsTr("Find in book") })
         rows.push({ id: "copy", text: qsTr("Copy") })
-        if (reader.kind === "flow") rows.push({ id: "note", text: qsTr("Write a margin note") })
+        rows.push({ id: "note", text: qsTr("Write a margin note") })
         for (const one of suggestions) rows.push({ id: "question", text: one.text, question: true })
         if (assistant.available && !reader.marks.suggested(key) && !assistant.suggesting)
             rows.push({ id: "more", text: suggestions.length > 0 ? qsTr("More suggestions") : qsTr("Suggest questions"), question: true })
@@ -287,8 +294,8 @@ FocusScope {
                     Layout.leftMargin: 6
                     Layout.rightMargin: 6
                     Layout.topMargin: 4
-                    visible: !menu.known && menu.words !== ""
-                    text: qsTr("“%1”").arg(menu.words.replace(/\s+/g, " "))
+                    visible: !menu.known && (menu.words !== "" || menu.mode === "part")
+                    text: menu.mode === "part" ? qsTr("A part of the page") : qsTr("“%1”").arg(menu.words.replace(/\s+/g, " "))
                     font.italic: true
                     wrapMode: Text.Wrap
                     maximumLineCount: 2

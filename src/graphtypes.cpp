@@ -1,5 +1,6 @@
 #include <QQmlEngine>
 
+#include "annotationfinder.h"
 #include "chronologycanvas.h"
 #include "chronologymodel.h"
 #include "graphcanvas.h"
@@ -22,6 +23,8 @@ void registerGraphTypes() {
         registerInkTypes();
         // The open book's margin notes, for the reading view (#82).
         qmlRegisterType<MarginNotes>("Omabook", 1, 0, "MarginNotes");
+        // What was written in the open book, found by its words, for the reader's Find (#115).
+        qmlRegisterType<AnnotationFinder>("Omabook", 1, 0, "AnnotationFinder");
         return true;
     }();
 }

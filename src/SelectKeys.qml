@@ -2,7 +2,8 @@ import QtQuick
 import QtQuick.Controls
 
 // Words selected with the keyboard in the reading view (V, or Shift+N for a
-// margin note): the keys that move and widen the selection, and a line
+// margin note), or a part of a comic's page (#115): the keys that move and
+// widen the selection, and a line
 // saying how, while it lasts. Enter is done: the menu of what to do with the
 // words, or the note on them; 1 to 5 highlight them in that colour (#81);
 // Escape (or V) stops.
@@ -54,7 +55,12 @@ Item {
             id: hint
             anchors.centerIn: parent
             width: Math.min(implicitWidth, parent.width - 24)
-            text: keys.purpose === "note"
+            // A part of a comic's page (#115) is moved and sized, not widened by words.
+            readonly property bool part: !!keys.view.content && !!keys.view.content.choosingPart
+            text: part ? (keys.purpose === "note"
+                          ? qsTr("H J K L or the arrows move the part of the page; Shift makes it larger or smaller. Enter writes a margin note on it, Esc stops.")
+                          : qsTr("H J K L or the arrows move the part of the page; Shift makes it larger or smaller. 1 to 5 highlight it, Enter shows what else to do with it, Esc stops."))
+                  : keys.purpose === "note"
                   ? qsTr("H L or the arrows move a word, J K a line; Shift widens. Enter writes a margin note on it, Esc stops.")
                   : qsTr("H L or the arrows move a word, J K a line; Shift widens. 1 to 5 highlight it, Enter shows what else to do with it, Esc stops.")
             color: theme.colors.muted

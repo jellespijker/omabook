@@ -94,6 +94,7 @@
         <file alias="PageHighlights.qml">PageHighlights.qml</file>
         <file alias="HighlightLine.qml">HighlightLine.qml</file>
         <file alias="PageWords.qml">PageWords.qml</file>
+        <file alias="PageNotes.qml">PageNotes.qml</file>
         <file alias="HighlightWords.qml">HighlightWords.qml</file>
         <file alias="HighlightSwatches.qml">HighlightSwatches.qml</file>
         <file alias="ReaderBar.qml">ReaderBar.qml</file>

@@ -133,13 +133,17 @@ QList<Manual::Step> annotationsRelease() {
     };
 }
 
-// The 0.1.10 release's entries: book ink (#83).
+// The 0.1.10 release's entries: book ink (#83), notes on fixed pages (#115), and asking about what was marked (#86).
 QList<Manual::Step> inkRelease() {
     return {
         {"book-ink", "0.1.10", Manual::tr("Ink on the pages"),
          Manual::tr("Write and draw on the pages of a PDF or a comic with a pen or the mouse: {reader.ink}. The ink stays where you "
                     "put it at every zoom, and goes to your other computers."),
          "", "reader.ink", "reader", ""},
+        {"page-notes", "0.1.10", Manual::tr("Notes on PDFs and comics"),
+         Manual::tr("Highlight and write margin notes on a PDF's words, and on a part of a comic's page: drag over a panel, or "
+                    "{reader.select}. {reader.find} finds the words of your notes too, and `notes:` searches them in the library."),
+         "", "reader.find", "reader", ""},
         {"ask-highlights", "0.1.10", Manual::tr("Ask about what you marked"),
          Manual::tr("With an AI of your own, {reader.ask} is given your highlights and notes up to where you are, never past "
                     "it: ask what you highlighted about something. Calibre's come across in their colours, with their notes."),
