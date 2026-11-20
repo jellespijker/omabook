@@ -28,9 +28,13 @@ _Avoid_: Orphan, broken annotation
 Someone else's annotations on a book, shown beside one's own and cut at one's own place.
 _Avoid_: Shared highlights, overlay
 
+**Place**:
+A point in a book in the book's own terms: its section (a chapter, or a page of a PDF or comic) and how far into it, so it is the same text in any window. Where a book was read to, where the graph met a thing, and where a bookmark is are all places (`BookPlace`).
+_Avoid_: Position (alone), location, offset
+
 **Passage**:
-A stretch of a book's text that an annotation is attached to, found again by its words when the book's layout changes.
-_Avoid_: Selection, range, quote
+A stretch of a book's text that an annotation is attached to: two places and the words between, with a few before and after, found again by its words when the book's layout changes (`Passage`).
+_Avoid_: Selection, range, quote, excerpt (the text the graph is built from)
 
 ## Collections and the graph
 
