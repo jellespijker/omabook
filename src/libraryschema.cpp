@@ -377,6 +377,23 @@ const QList<QStringList> migrations{
     {"CREATE TABLE IF NOT EXISTS plugin_scopes (scope TEXT PRIMARY KEY, plugin TEXT NOT NULL) WITHOUT ROWID",
      "CREATE TABLE IF NOT EXISTS space_worlds (space TEXT NOT NULL, book TEXT NOT NULL, scope TEXT NOT NULL, plugin TEXT NOT NULL, "
      "file INTEGER NOT NULL DEFAULT 0, hlc INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (space, book, scope)) WITHOUT ROWID"},
+    // Bookmarks and highlights travel by the log (#66): which of them a write
+    // touched, and a counter of their own, so a write that bypassed the log is
+    // found on opening without the shelf reading every book again for it. The
+    // log has none of them yet, so the next opening takes them all in.
+    {"CREATE TRIGGER IF NOT EXISTS annotations_insert_dirty AFTER INSERT ON annotations BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('annotation', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS annotations_update_dirty AFTER UPDATE ON annotations BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('annotation', NEW.id); END",
+     "CREATE TRIGGER IF NOT EXISTS annotations_delete_dirty AFTER DELETE ON annotations BEGIN INSERT OR IGNORE INTO log_dirty VALUES "
+     "('annotation', OLD.id); END",
+     "INSERT OR IGNORE INTO library_state (key, value) VALUES ('annotations', 0), ('logged_annotations', -1)",
+     "CREATE TRIGGER IF NOT EXISTS annotations_insert_counted AFTER INSERT ON annotations BEGIN UPDATE library_state SET value = value + 1 "
+     "WHERE key = 'annotations'; END",
+     "CREATE TRIGGER IF NOT EXISTS annotations_update_counted AFTER UPDATE ON annotations BEGIN UPDATE library_state SET value = value + 1 "
+     "WHERE key = 'annotations'; END",
+     "CREATE TRIGGER IF NOT EXISTS annotations_delete_counted AFTER DELETE ON annotations BEGIN UPDATE library_state SET value = value + 1 "
+     "WHERE key = 'annotations'; END"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
