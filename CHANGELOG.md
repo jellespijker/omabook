@@ -16,6 +16,7 @@ moves those lines under its version.
 
 ### Fixed
 
+- A book a plugin made and marked to travel with its world (`file: true` from `omabook.sharing.register`'s `worlds`) now carries its file, also when the space's files switch is off: only that book's file, and only of a book the plugin made, never a person's. It goes as the space's book files do, sealed in a shared space's folder or beside a published space's file, checked against its hash, and comes to a member with the space, at their `omabook spaces sync` or as they import the space's file, when their copy of the book has no file of its own. `omabook graph show --scope` and the window's graph show a world shared with you by its layer's name (`<space>/<scope>`), cut where you are in its book, as a plugin reads it (#107).
 
 ## [0.1.7] - 2026-11-20
 
