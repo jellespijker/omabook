@@ -228,8 +228,8 @@ int search(const QStringList &arguments) {
     }
     const QString words = command.parser.positionalArguments().join(' ');
     // What is known of the books, unless the graph is switched off.
-    const auto known = std::make_shared<const KnowledgeIndex>(Settings().graph() != "off" ? KnowledgeIndex::build(*library)
-                                                                                         : KnowledgeIndex());
+    const auto known = std::make_shared<const KnowledgeIndex>(
+        Settings().graph() == "off" ? KnowledgeIndex() : KnowledgeIndex::forSearch(*library, words, command.parser.isSet("ai")));
     if (!command.parser.isSet("ai")) {
         const QList<KnowledgeSearch::Found> found = KnowledgeSearch::search(*library, books, words, known);
         if (command.json()) {

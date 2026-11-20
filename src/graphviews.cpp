@@ -56,7 +56,7 @@ void Graph::told(QList<GraphNode> &nodes) const {
     }
 }
 
-QList<Graph::Sighting> Graph::sightings(const QStringList &kinds) const {
+QList<Graph::Sighting> Graph::sightings(const QStringList &kinds, const std::optional<QList<qint64>> &only) const {
     QList<Sighting> found;
     if (kinds.isEmpty())
         return found;
@@ -82,34 +82,45 @@ QList<Graph::Sighting> Graph::sightings(const QStringList &kinds) const {
         node.updated = query.value(7).toLongLong();
         return *nodes.insert(id, node);
     };
-    // Met in a book, through the primary key of graph_seen from each node.
-    for (QSqlQuery query = m_library->query(QString("SELECT %1, s.book_id, s.section, s.fraction, s.anchor FROM graph_nodes AS n "
-                                                    "JOIN graph_seen AS s ON s.node_id = n.id WHERE n.scope = '' AND n.kind IN (%2)%3")
-                                                .arg(columns, kindList, andWithin(&TenantFilter::books, u"s.book_id")),
-                                            kindValues);
-         query.next();)
-        found.append({nodeOf(query), query.value(8).toLongLong(), {placeFrom(query, 8), query.value(11).toString()}});
-    // Related to a book's own node, either way round.
-    for (const auto &[thing, book] : {std::pair{"source"_L1, "target"_L1}, std::pair{"target"_L1, "source"_L1}})
+    // Of the things asked for alone, when they are named (`also` keeps the
+    // statements to a batch of them).
+    const auto read = [&](const QString &also, const QVariantList &alsoValues) {
+        // Met in a book, through the primary key of graph_seen from each node.
         for (QSqlQuery query =
-                 m_library->query(QString("SELECT %1, b.book_id, e.book_id, e.section, e.fraction, e.anchor FROM graph_edges AS e "
-                                          "JOIN graph_nodes AS n ON n.id = e.%2 JOIN graph_nodes AS b ON b.id = e.%3 "
-                                          "WHERE b.kind = 'book' AND b.book_id IS NOT NULL AND n.scope = '' AND n.kind IN (%4)%5%6")
-                                      .arg(columns, thing, book, kindList, andWithin(&TenantFilter::books, u"b.book_id"),
-                                           andWithin(&TenantFilter::hasEdge, u"e.id")),
-                                  kindValues);
+                 m_library->query(QString("SELECT %1, s.book_id, s.section, s.fraction, s.anchor FROM graph_nodes AS n "
+                                          "JOIN graph_seen AS s ON s.node_id = n.id WHERE n.scope = '' AND n.kind IN (%2)%3%4")
+                                      .arg(columns, kindList, andWithin(&TenantFilter::books, u"s.book_id"), also),
+                                  kindValues + alsoValues);
              query.next();)
-            found.append({nodeOf(query), query.value(8).toLongLong(), {placeFrom(query, 9), query.value(12).toString()}});
-    // A question asked of a book with no place in it.
-    for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_nodes AS n WHERE n.scope = '' AND n.kind = 'question' "
-                                                    "AND n.data LIKE '%\"book\"%' AND NOT EXISTS (SELECT 1 FROM graph_seen "
-                                                    "WHERE node_id = n.id)%2")
-                                                .arg(columns, andWithin(&TenantFilter::nodes, u"n.id")));
-         query.next();) {
-        GraphNode node = nodeFrom(query);
-        if (const qint64 book = node.data.value("book").toInteger(); book > 0 && kinds.contains(node.kind) && sees(book))
-            found.append({std::move(node), book, {}});
-    }
+            found.append({nodeOf(query), query.value(8).toLongLong(), {placeFrom(query, 8), query.value(11).toString()}});
+        // Related to a book's own node, either way round.
+        for (const auto &[thing, book] : {std::pair{"source"_L1, "target"_L1}, std::pair{"target"_L1, "source"_L1}})
+            for (QSqlQuery query =
+                     m_library->query(QString("SELECT %1, b.book_id, e.book_id, e.section, e.fraction, e.anchor FROM graph_edges AS e "
+                                              "JOIN graph_nodes AS n ON n.id = e.%2 JOIN graph_nodes AS b ON b.id = e.%3 "
+                                              "WHERE b.kind = 'book' AND b.book_id IS NOT NULL AND n.scope = '' AND n.kind IN (%4)%5%6%7")
+                                          .arg(columns, thing, book, kindList, andWithin(&TenantFilter::books, u"b.book_id"),
+                                               andWithin(&TenantFilter::hasEdge, u"e.id"), also),
+                                      kindValues + alsoValues);
+                 query.next();)
+                found.append({nodeOf(query), query.value(8).toLongLong(), {placeFrom(query, 9), query.value(12).toString()}});
+        // A question asked of a book with no place in it.
+        for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_nodes AS n WHERE n.scope = '' AND n.kind = 'question' "
+                                                        "AND n.data LIKE '%\"book\"%' AND NOT EXISTS (SELECT 1 FROM graph_seen "
+                                                        "WHERE node_id = n.id)%2%3")
+                                                    .arg(columns, andWithin(&TenantFilter::nodes, u"n.id"), also),
+                                                alsoValues);
+             query.next();) {
+            GraphNode node = nodeFrom(query);
+            if (const qint64 book = node.data.value("book").toInteger(); book > 0 && kinds.contains(node.kind) && sees(book))
+                found.append({std::move(node), book, {}});
+        }
+    };
+    if (!only)
+        read({}, {});
+    else
+        for (const auto batch : *only | std::views::chunk(500))
+            read(u" AND n.id IN (%1)"_s.arg(marks(std::ranges::ssize(batch))), batch | std::ranges::to<QVariantList>());
     // Each as the tenant knows it.
     QList<GraphNode> unique = nodes.values();
     told(unique);
@@ -120,19 +131,26 @@ QList<Graph::Sighting> Graph::sightings(const QStringList &kinds) const {
     return found;
 }
 
-QHash<qint64, QList<GraphFact>> Graph::factsOfKinds(const QStringList &kinds) const {
+QHash<qint64, QList<GraphFact>> Graph::factsOfKinds(const QStringList &kinds, const std::optional<QList<qint64>> &only) const {
     QHash<qint64, QList<GraphFact>> facts;
     if (kinds.isEmpty())
         return facts;
-    for (QSqlQuery query = m_library->query(
-             QString("SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor "
-                     "FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id WHERE n.scope = '' AND n.kind IN (%1)%2")
-                 .arg(marks(kinds.size()), andWithin(&TenantFilter::facts, u"f.id")),
-             kinds | std::ranges::to<QVariantList>());
-         query.next();) {
-        GraphFact fact = factFrom(query);
-        facts[fact.node].append(std::move(fact));
-    }
+    const auto read = [&](const QString &also, const QVariantList &alsoValues) {
+        for (QSqlQuery query = m_library->query(
+                 QString("SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor "
+                         "FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id WHERE n.scope = '' AND n.kind IN (%1)%2%3")
+                     .arg(marks(kinds.size()), andWithin(&TenantFilter::hasFact, u"f.id"), also),
+                 (kinds | std::ranges::to<QVariantList>()) + alsoValues);
+             query.next();) {
+            GraphFact fact = factFrom(query);
+            facts[fact.node].append(std::move(fact));
+        }
+    };
+    if (!only)
+        read({}, {});
+    else
+        for (const auto batch : *only | std::views::chunk(500))
+            read(u" AND n.id IN (%1)"_s.arg(marks(std::ranges::ssize(batch))), batch | std::ranges::to<QVariantList>());
     return facts;
 }
 
@@ -194,25 +212,6 @@ QList<GraphReveal> Graph::timeline(qint64 id, qint64 bookId) const {
     };
     std::ranges::stable_sort(steps, [&order](const GraphReveal &a, const GraphReveal &b) { return order(a) < order(b); });
     return steps;
-}
-
-QList<GraphNode> Graph::find(const QString &words, const QString &kind, const std::optional<QString> &scope, int limit) const {
-    QString where = "1 = 1";
-    QVariantList values;
-    if (!kind.isEmpty()) {
-        where += " AND kind = ?";
-        values << kind.toLower();
-    }
-    if (scope) {
-        where += " AND scope = ?";
-        values << text(*scope);
-    }
-    for (const QString &word : words.split(' ', Qt::SkipEmptyParts)) {
-        where += " AND (name LIKE ? OR summary LIKE ? OR data LIKE ?)";
-        const QString pattern = "%" + word + "%";
-        values << pattern << pattern << pattern;
-    }
-    return collect(where, values, limit, "name COLLATE NOCASE").nodes;
 }
 
 GraphView Graph::collect(const QString &nodesWhere, const QVariantList &values, int limit, const QString &order) const {

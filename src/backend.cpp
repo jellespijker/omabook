@@ -309,11 +309,11 @@ void Backend::readKnowledge() {
     m_knowing = true;
     const QString root = m_library->root();
     const QPointer<Backend> self(this);
-    QThreadPool::globalInstance()->start([self, root] {
+    QThreadPool::globalInstance()->start([self, root, before = m_model.knowledge()] {
         QElapsedTimer took;
         took.start();
         Library own(root);
-        auto index = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::build(own) : KnowledgeIndex());
+        const auto index = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::since(own, before.get()) : KnowledgeIndex());
         QMetaObject::invokeMethod(qApp, [self, root, index, took = took.elapsed()] {
             if (!self)
                 return;

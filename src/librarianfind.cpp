@@ -70,9 +70,9 @@ void Librarian::find(const QString &question) {
     const int asking = ++m_findAsked;
     const QString root = library->root();
     const QPointer<Librarian> self(this);
-    QThreadPool::globalInstance()->start([self, root, asking, books, key] {
+    QThreadPool::globalInstance()->start([self, root, asking, before = m_backend->books()->knowledge(), books, key] {
         Library own(root);
-        auto known = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::build(own) : KnowledgeIndex());
+        const auto known = std::make_shared<const KnowledgeIndex>(own.open() ? KnowledgeIndex::since(own, before.get()) : KnowledgeIndex());
         QMetaObject::invokeMethod(qApp, [self, asking, known, books, key] {
             if (self && self->m_finding && asking == self->m_findAsked)
                 self->startFinding(known, books, key);

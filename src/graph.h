@@ -280,9 +280,12 @@ public:
     // Every such tie of the things of these kinds (of whose data only the
     // other names are read), and the facts of those things by node: what a
     // search over what is known reads, in a few statements however large
-    // the graph.
-    QList<Sighting> sightings(const QStringList &kinds) const;
-    QHash<qint64, QList<GraphFact>> factsOfKinds(const QStringList &kinds) const;
+    // the graph; with `only`, of those things alone.
+    QList<Sighting> sightings(const QStringList &kinds, const std::optional<QList<qint64>> &only = std::nullopt) const;
+    QHash<qint64, QList<GraphFact>> factsOfKinds(const QStringList &kinds, const std::optional<QList<qint64>> &only = std::nullopt) const;
+    // The things with a place in these books: met there, or a fact or a
+    // relation learned there. What a reader who read on there may know more of.
+    [[nodiscard]] QSet<qint64> placedIn(const QList<qint64> &books) const;
     // A node as it is known to whoever `known` says knows a place: its
     // summary the latest it had by then, and only the names it was known by
     // by then. The facts of `bookId` come first, by place; a fact of no book
@@ -298,8 +301,11 @@ public:
     QList<GraphReveal> timeline(qint64 node, qint64 bookId = 0) const;
     // The node known by a name or alias; 0 when there is none.
     qint64 named(const QString &scope, const QString &kind, const QString &name) const;
-    // Nodes whose name, aliases or summary hold every word; `kind` and
-    // `scope` narrow it when given (scope: nothing for every scope).
+    // Nodes whose name, aliases or summary hold every word, each as the start
+    // of one of their words, case and accents aside (through the graph's
+    // word index, GraphIndex), by name; `kind` and `scope` narrow it when
+    // given (scope: nothing for every scope). A word of no letter or digit
+    // narrows nothing.
     QList<GraphNode> find(const QString &words, const QString &kind = {}, const std::optional<QString> &scope = QString(),
                           int limit = 50) const;
 
@@ -378,6 +384,9 @@ private:
     // called, only what the tenant was told (its facts). A thing another
     // tenant was told nothing of is as it is.
     void told(QList<GraphNode> &nodes) const;
+    // Of a page of things the word index found for these phrases (find()),
+    // those that hold the words as the tenant was told of them.
+    [[nodiscard]] QList<GraphNode> holding(QList<GraphNode> page, const QStringList &phrases, const QStringList &words) const;
 
     const Library *m_library;
     std::optional<Tenant> m_tenant;

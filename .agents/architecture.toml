@@ -38,7 +38,7 @@ modules = [
   "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
-  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex",
+  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch",
 ]
 
 [layers.services]

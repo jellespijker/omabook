@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QVariantMap>
 #include <memory>
@@ -10,6 +11,7 @@
 #include <vector>
 
 #include "graph.h"
+#include "graphcontext.h"
 #include "library.h"
 
 // Finding books by what the knowledge graph knows of them: the people,
@@ -29,6 +31,8 @@
 //
 // The graph is read once into memory, in a few statements, and a search
 // then looks through that: nothing is read from the database per keystroke.
+// After a change only what it touched is read again (since()); a search
+// that knows its words reads only what they can find (forSearch()).
 
 // Why a book was found: the thing, and where in the book it was met (a
 // place of no book when it was asked or put in by hand without one).
@@ -60,6 +64,17 @@ public:
     // when none are named.
     static KnowledgeIndex build(const Library &library);
     static KnowledgeIndex build(const Library &library, const QList<Tenant> &tenants);
+    // The same, brought up to date from what was read before, of this
+    // library (`before`): only the things touched since (GraphIndex), and
+    // those with a place in a book read on or back in since, are read again.
+    // Read whole when nothing was, or the tenants or their books changed.
+    static KnowledgeIndex since(const Library &library, const KnowledgeIndex *before);
+    // What a search for `query` can find (Book::matches): only the things the
+    // graph's word index says hold one of its words, which are all a word of
+    // it can find by what is known; read whole when the words are too many
+    // or too short to narrow it. With `whole`, all of it, as build() reads
+    // it: what the AI is told of each book (of()) as it looks for the words.
+    static KnowledgeIndex forSearch(const Library &library, const QString &query, bool whole = false);
 
     [[nodiscard]] bool empty() const noexcept { return m_entries.empty(); }
     // How many (thing, book) pairs are known.
@@ -86,12 +101,30 @@ private:
         GraphMoment met;
         QString from; // a graph someone shared it is of
     };
-    // Takes in what a tenant's graph knows of its books; a thing and book
-    // already taken (a book in two tenants) is not taken again.
-    void take(const Graph &graph, const GraphKnown &known, QHash<std::pair<qint64, qint64>, qsizetype> &taken);
+    // Takes in what a tenant's graph knows of its books (with `only`, of
+    // those things alone), and what the graphs it subscribes to do; a thing
+    // and book already taken (a book in two tenants) is not taken again.
+    void take(const Graph &graph, const GraphKnown &known, const std::optional<QList<qint64>> &only);
+    // Takes those things in again, and the subscribed graphs whole.
+    void retake(const Library &library, const QList<Tenant> &tenants, const QSet<qint64> &things);
+    // What a reader knows of a place: by how far its book was read, asked
+    // once per book and remembered, so that what is read again later asks
+    // again only of the books read on in.
+    [[nodiscard]] GraphKnown knownBy(const Library &library);
+    // The books of each tenant, to see them change.
+    [[nodiscard]] static QList<std::pair<qint64, qint64>> tenantBooks(const Library &library);
 
     std::vector<Entry> m_entries;
     QHash<qint64, QList<qsizetype>> m_byBook;
+    QHash<std::pair<qint64, qint64>, qsizetype> m_taken; // by thing and book
+    // What it was read from: the library (none when only a search's part
+    // was), its tenants and their books, how often those were placed whole,
+    // and how far each book asked of had been read.
+    QString m_root;
+    QStringList m_tenants;
+    QList<std::pair<qint64, qint64>> m_tenantBooks;
+    qint64 m_refills = 0;
+    QHash<qint64, GraphContext::Reach> m_reaches;
 };
 
 // The words of one search, looked up in an index the first time each is
