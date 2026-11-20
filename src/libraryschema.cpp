@@ -1,5 +1,6 @@
 #include "libraryschema.h"
 
+#include "graphindex.h"
 #include "tenancyschema.h"
 
 namespace {
@@ -425,6 +426,10 @@ const QList<QStringList> migrations{
     // those rules, with the membership placed again whole (format 30).
     TenancySchema::writtenColumns(),
     TenancySchema::writtenInTheirTenant(),
+    // The graph searched by its words, and followed by what changed (#102,
+    // format 31): a full-text index of its things, and the things touched
+    // since a count of the graph, both kept by triggers (GraphIndex).
+    GraphIndex::step(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
