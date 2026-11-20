@@ -108,6 +108,7 @@
         <file alias="skill/library.md">skill/library.md</file>
         <file alias="skill/graph.md">skill/graph.md</file>
         <file alias="scriptprelude.js">scriptprelude.js</file>
+        <file alias="scriptassist.js">scriptassist.js</file>
         <file>plugin-templates/metadata/plugin.json</file>
         <file>plugin-templates/metadata/main.js</file>
         <file>plugin-templates/command/plugin.json</file>

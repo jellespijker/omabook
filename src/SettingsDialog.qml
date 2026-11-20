@@ -193,6 +193,24 @@ AppPopup {
             color: theme.colors.muted
             text: aiAgent.modelsProblem
         }
+        // Handwriting and speech go only to one's own servers unless this is
+        // on, and then only where a plugin asks for it (#84).
+        CheckBox {
+            objectName: "recognitionHosted"
+            Layout.fillWidth: true
+            text: qsTr("Recognise handwriting and speech on hosted servers too, where I choose it")
+            checked: settings.recognitionHosted
+            onToggled: settings.recognitionHosted = checked
+        }
+        Label {
+            objectName: "recognitionHostedNote"
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: settings.recognitionHosted ? theme.colors.orange : theme.colors.muted
+            text: settings.recognitionHosted
+                  ? qsTr("Careful: what you write by hand and record then goes to someone else's computer wherever you choose it, such as for one notebook, and they can read it.")
+                  : qsTr("What you write by hand and record is recognised only on this computer and your tailnet.")
+        }
         // The model picker: one model for what you read, a smaller one for
         // what Omabook reads. The lists are those of the AI in use.
         ModelPicker {

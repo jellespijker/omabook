@@ -39,6 +39,8 @@ const QList<Entry> &entries();
 QList<Entry> graphEntries();
 QList<Entry> spaceEntries();
 QList<Entry> laterEntries();
+// Asking the model and recognising ink and speech (scriptapiassist.cpp).
+QList<Entry> assistEntries();
 const QList<Event> &events();
 const QList<Permission> &permissions();
 QStringList eventNames();

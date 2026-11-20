@@ -44,6 +44,18 @@ _Avoid_: Path, line (alone), scribble
 What an ink surface did between two pauses of the pen, strokes added and removed, kept as one change wherever its strokes are kept; erasing part of a stroke is its removal and its pieces' addition (`Ink::Change`).
 _Avoid_: Diff, delta, update
 
+**Recognised text**:
+The words of handwriting as a vision model read them, kept with the strokes they came from by the hash of the ink and the model, so it is read once and found by search on every computer (`RecognitionStore`).
+_Avoid_: OCR (alone), transcription (for ink)
+
+**Transcript**:
+The words of a recording, each with its moment, written out by a transcription server or by whisper.cpp on this computer (`Recognition::Result`).
+_Avoid_: Captions, subtitles
+
+**Own server**:
+A server what is written and said may be sent to without asking: on this computer, on the tailnet, or at an address the person marked as theirs. Any other is hosted, and is sent it only where chosen twice over: allowed in the settings and asked for (`RecognitionRoute::whyNot`).
+_Avoid_: Local server (for the tailnet), trusted server
+
 **Lost annotation**:
 An annotation whose passage can no longer be found in its book, kept until the reader places or removes it.
 _Avoid_: Orphan, broken annotation

@@ -1,14 +1,16 @@
 // What a plugin's script sees: the `omabook` object, built here from the
 // host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp,
 // and ScriptSharing in scriptsharing.cpp, which it hands over, for what goes
-// into spaces). The hosts are only ever reachable through these functions:
-// the host is an argument of this one, never a global, so a script can call what is listed in
+// into spaces, and what scriptassist.js builds from ScriptAi). The hosts are
+// only ever reachable through these functions: the host is an argument of
+// this one, never a global, so a script can call what is listed in
 // scriptapi.cpp and nothing else. A test holds this object and that table to
 // each other.
 (function (host, info) {
     "use strict";
 
     var shared = host.sharing();
+    var assisted = host.assistant();
 
     function may(permission) { return info.permissions.indexOf(permission) >= 0; }
 
@@ -378,20 +380,9 @@
             setOption: function (key, value) { return host.setOption(String(key), JSON.stringify(value)); }
         },
 
-        ai: {
-            available: function () { return host.aiAvailable(); },
-            ask: function (prompt, options) {
-                need(prompt, "string", "The prompt");
-                // The system prompt alone, as a string, is still understood.
-                options = typeof options === "string" ? {system: options} : (options || {});
-                if (options.onText !== undefined && options.onText !== null)
-                    need(options.onText, "function", "onText");
-                return new Promise(function (resolve, reject) {
-                    host.aiAsk(prompt, String(options.system || ""), String(options.model || ""), options.onText || null,
-                               resolve, reject);
-                });
-            }
-        }
+        // Asking the model, and recognising ink and speech (scriptassist.js).
+        ai: assisted.ai,
+        recognize: assisted.recognize
     };
 
     if (may("http")) {

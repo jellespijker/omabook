@@ -37,6 +37,7 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiCommand READ aiCommand WRITE setAiCommand NOTIFY changed)
     Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY changed)
     Q_PROPERTY(QString graph READ graph WRITE setGraph NOTIFY changed)
+    Q_PROPERTY(bool recognitionHosted READ recognitionHosted WRITE setRecognitionHosted NOTIFY changed)
     Q_PROPERTY(bool graphOneTenant READ graphOneTenant WRITE setGraphOneTenant NOTIFY changed)
     Q_PROPERTY(QString marks READ marks WRITE setMarks NOTIFY changed)
     Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
@@ -193,6 +194,18 @@ public:
     // The older "ai_model" is still read as the Anthropic API's main model.
     QString aiModelFor(const QString &provider, const QString &tier) const;
     void setAiModelFor(const QString &provider, const QString &tier, const QString &model);
+
+    // How handwriting and speech are recognised (#84): the models and servers
+    // chosen for it, which addresses are one's own, and whether a hosted
+    // server may be sent them at all; see RecognitionRoute.
+    QJsonObject recognition() const { return m_values.value("recognition").toObject(); }
+    void setRecognition(const QJsonObject &chosen) { set("recognition", chosen); }
+    bool recognitionHosted() const { return recognition().value("hosted").toBool(false); }
+    void setRecognitionHosted(bool on) {
+        QJsonObject chosen = recognition();
+        chosen.insert("hosted", on);
+        setRecognition(chosen);
+    }
 
     // How the knowledge graph of a book grows: "auto" (by itself, as chapters
     // are finished and with every catch-up, which costs AI calls), "ask"

@@ -57,6 +57,7 @@ struct ScriptManifest {
     QString dataFolder() const { return folder + "/data"; }
 };
 
+class ScriptAi;
 class ScriptHost;
 class ScriptPlugin;
 class ScriptSharing;
@@ -234,6 +235,7 @@ signals:
     void settled();
 
 private:
+    friend class ScriptAi;
     friend class ScriptHost;
     friend class ScriptSharing;
 
@@ -259,6 +261,7 @@ private:
     QJSEngine m_engine;
     std::unique_ptr<ScriptHost> m_host;
     std::unique_ptr<ScriptSharing> m_sharing;
+    std::unique_ptr<ScriptAi> m_ai;
     QJSValue m_settle, m_parse;
     int m_depth = 0;
     // The library write the code running now makes, as one transaction.

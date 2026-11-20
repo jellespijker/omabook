@@ -143,7 +143,7 @@ const QList<Entry> &entries() {
          "Moves a book this plugin made to the trash. Any other book throws: those are the reader's to remove."},
     };
     // After the library's, the graph's and what goes into spaces, then the rest.
-    static const QList<Entry> entries = library + graphEntries() + spaceEntries() + laterEntries();
+    static const QList<Entry> entries = library + graphEntries() + spaceEntries() + laterEntries() + assistEntries();
     return entries;
 }
 
@@ -169,13 +169,6 @@ QList<Entry> laterEntries() {
                                                         "`margins`, `align`, `font_family`, `pages`, `sort`). These are "
                                                         "the defaults; a book can have its own (`omabook format`)."},
         {"settings.setOption", "settings.setOption(key, value)", "", "Changes one of those; false when the value doesn't fit."},
-
-        {"ai.available", "ai.available()", "", "Whether a model is set up to ask."},
-        {"ai.ask", "ai.ask(prompt, {system, onText, model})", "",
-         "Asks the model the user chose in the settings; a promise of its whole answer as text, however long it takes "
-         "to write. `onText(piece)` is called with each piece as it arrives. `model` is `\"main\"` (the default: the "
-         "model for what a person reads), `\"quick\"` (the small, fast one, for reading text into structure) or a "
-         "model's own name. (A string in place of the options is the system prompt.)"},
 
         {"http.get", "http.get(url, {headers})", "http",
          "Fetches an http or https address; a promise of `{status, ok, text, headers, json()}`."},

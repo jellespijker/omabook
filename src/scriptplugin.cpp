@@ -24,6 +24,7 @@
 #include "graphlinks.h"
 #include "graphtools.h"
 #include "library.h"
+#include "scriptai.h"
 #include "scriptapi.h"
 #include "scriptform.h"
 #include "scriptsharing.h"
@@ -729,41 +730,7 @@ public:
         return p->m_services.settings && p->m_services.settings->setOption(key, parsed(json));
     }
 
-    Q_INVOKABLE bool aiAvailable() { return p->m_services.ai && p->m_services.ai(nullptr) != nullptr; }
-    Q_INVOKABLE void aiAsk(const QString &prompt, const QString &system, const QString &model, const QJSValue &onText,
-                           const QJSValue &resolve, const QJSValue &reject) {
-        QString why = "No AI is set up.";
-        std::unique_ptr<AiProvider> provider = p->m_services.ai ? p->m_services.ai(&why) : nullptr;
-        if (!provider) {
-            reject.call({why});
-            return;
-        }
-        auto *asking = new AiCall(std::move(provider), p);
-        p->busy(1);
-        auto finish = [this, asking](const QJSValue &callback, const QString &text) {
-            callback.call({text});
-            asking->deleteLater();
-            p->busy(-1);
-        };
-        connect(asking, &AiCall::done, p, [finish, resolve](const QString &answer) { finish(resolve, answer); });
-        connect(asking, &AiCall::failed, p, [finish, reject](const QString &problem) { finish(reject, problem); });
-        // The answer as it is written, for a script that shows it growing.
-        if (onText.isCallable())
-            connect(asking, &AiCall::delta, p, [this, onText](const QString &piece) {
-                QString problem;
-                p->call(onText, {piece}, &problem);
-                if (!problem.isEmpty())
-                    p->report(problem);
-            });
-        AiRequest request;
-        request.system = system;
-        request.messages.append({"user", prompt});
-        // What a plugin writes is for a person to read, so the main model
-        // unless it says otherwise: "quick", or a model by name.
-        if (!model.isEmpty())
-            Ai::useModel(request, model);
-        asking->ask(request);
-    }
+    Q_INVOKABLE QJSValue assistant() { return p->m_ai->build(p->m_engine); }
 
     Q_INVOKABLE void http(const QString &method, const QString &address, const QString &body, const QString &headers,
                           const QJSValue &resolve, const QJSValue &reject) {
@@ -1021,7 +988,8 @@ bool ScriptGate::run(const std::function<void(ScriptPlugin &)> &work, std::chron
 
 ScriptPlugin::ScriptPlugin(const ScriptManifest &manifest, const ScriptServices &services, QObject *parent)
     : QObject(parent), m_manifest(manifest), m_services(services), m_host(std::make_unique<ScriptHost>(this)),
-      m_sharing(std::make_unique<ScriptSharing>(this)), m_gate(std::make_shared<ScriptGate>(this)), m_watchdog(&m_engine, [this] {
+      m_sharing(std::make_unique<ScriptSharing>(this)), m_ai(std::make_unique<ScriptAi>(this)), m_gate(std::make_shared<ScriptGate>(this)),
+      m_watchdog(&m_engine, [this] {
           // On the watchdog's thread: the plugin hears of it on its own.
           QMetaObject::invokeMethod(this, [this] { interrupted(); }, Qt::QueuedConnection);
       }) {
