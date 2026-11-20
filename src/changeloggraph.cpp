@@ -72,49 +72,53 @@ void syncFactsToLog(const Library &library, const std::optional<QList<qint64>> &
     const auto makeCtx = [&](const QString &space, const QString &entity, const QString &gid) {
         return GraphContext{&library, space, entity, gid, ChangeLogFields::logged(library, entity, gid), true};
     };
-    for (QSqlQuery query =
-             ChangeLog::query(library, u"SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor, "
-                                       "n.scope, n.updated FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id WHERE 1"_s
-                                           + onlyThese(u"f.id"_s, ids) + u" ORDER BY f.id"_s);
+    for (QSqlQuery query = ChangeLog::query(
+             library, u"SELECT f.id, f.node_id, f.kind, f.value, COALESCE(f.book_id, 0), f.section, f.fraction, f.anchor, "
+                      "n.scope, n.updated, f.tenant FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id WHERE 1"_s
+                          + onlyThese(u"f.id"_s, ids) + u" ORDER BY f.id"_s);
          query.next();) {
         const QString gid = Spaces::factId(library, query.value(0).toLongLong());
         const qint64 bookId = query.value(4).toLongLong();
         const QString space = Spaces::spaceForScope(library, query.value(8).toString());
         GraphContext ctx = makeCtx(space, u"fact"_s, gid);
-        ChangeLogFields::write(ctx, u"revealed"_s,
-                               compactJson({{"node", Spaces::nodeId(library, query.value(1).toLongLong())},
-                                            {"kind", query.value(2).toString()},
-                                            {"value", query.value(3).toString()},
-                                            {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
-                                            {"section", query.value(5).toInt()},
-                                            {"fraction", query.value(6).toDouble()},
-                                            {"anchor", query.value(7).toString()}}),
-                               Hlc::normalize(query.value(9).toLongLong()));
+        QJsonObject revealed{{"node", Spaces::nodeId(library, query.value(1).toLongLong())},
+                             {"kind", query.value(2).toString()},
+                             {"value", query.value(3).toString()},
+                             {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
+                             {"section", query.value(5).toInt()},
+                             {"fraction", query.value(6).toDouble()},
+                             {"anchor", query.value(7).toString()}};
+        // The tenant it was written in by hand (#109), only when it was.
+        if (const QString tenant = query.value(10).toString(); !tenant.isEmpty())
+            revealed.insert("tenant", tenant);
+        ChangeLogFields::write(ctx, u"revealed"_s, compactJson(revealed), Hlc::normalize(query.value(9).toLongLong()));
     }
 }
 
 void syncEdgesToLog(const Library &library, const std::optional<QList<qint64>> &ids = std::nullopt) {
     if (ids && ids->isEmpty())
         return;
-    for (QSqlQuery query =
-             ChangeLog::query(library, u"SELECT e.id, e.source, e.target, e.kind, e.note, e.book_id, e.section, e.fraction, e.anchor, "
-                                       "n.scope, n.updated FROM graph_edges AS e JOIN graph_nodes AS n ON n.id = e.source WHERE 1"_s
-                                           + onlyThese(u"e.id"_s, ids) + u" ORDER BY e.id"_s);
+    for (QSqlQuery query = ChangeLog::query(
+             library, u"SELECT e.id, e.source, e.target, e.kind, e.note, e.book_id, e.section, e.fraction, e.anchor, "
+                      "n.scope, n.updated, e.notes FROM graph_edges AS e JOIN graph_nodes AS n ON n.id = e.source WHERE 1"_s
+                          + onlyThese(u"e.id"_s, ids) + u" ORDER BY e.id"_s);
          query.next();) {
         const QString gid = Spaces::edgeId(library, query.value(0).toLongLong());
         const qint64 bookId = query.value(5).toLongLong();
         const QString space = Spaces::spaceForScope(library, query.value(9).toString());
         GraphContext ctx{&library, space, u"edge"_s, gid, ChangeLogFields::logged(library, u"edge"_s, gid), true};
-        ChangeLogFields::write(ctx, u"link"_s,
-                               compactJson({{"source", Spaces::nodeId(library, query.value(1).toLongLong())},
-                                            {"target", Spaces::nodeId(library, query.value(2).toLongLong())},
-                                            {"kind", query.value(3).toString()},
-                                            {"note", query.value(4).toString()},
-                                            {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
-                                            {"section", query.value(6).toInt()},
-                                            {"fraction", query.value(7).toDouble()},
-                                            {"anchor", query.value(8).toString()}}),
-                               Hlc::normalize(query.value(10).toLongLong()));
+        QJsonObject link{{"source", Spaces::nodeId(library, query.value(1).toLongLong())},
+                         {"target", Spaces::nodeId(library, query.value(2).toLongLong())},
+                         {"kind", query.value(3).toString()},
+                         {"note", query.value(4).toString()},
+                         {"book", bookId > 0 ? Spaces::bookId(library, bookId) : QString()},
+                         {"section", query.value(6).toInt()},
+                         {"fraction", query.value(7).toDouble()},
+                         {"anchor", query.value(8).toString()}};
+        // What the other books that said it, and the tenants that wrote it by hand, noted (#109), only when any did.
+        if (const QString notes = query.value(11).toString(); !notes.isEmpty())
+            link.insert("notes", notes);
+        ChangeLogFields::write(ctx, u"link"_s, compactJson(link), Hlc::normalize(query.value(10).toLongLong()));
         if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
             ChangeLog::append(library, {space, u"edge"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
     }

@@ -337,19 +337,25 @@ void Spaces::ensureFactId(const Library &library, qint64 localId) {
     QString kind;
     QString value;
     qint64 book = 0;
-    library.m_statements->each("SELECT node_id, kind, value, COALESCE(book_id, 0) FROM graph_facts WHERE id = ?", {localId},
+    QString tenant;
+    library.m_statements->each("SELECT node_id, kind, value, COALESCE(book_id, 0), tenant FROM graph_facts WHERE id = ?", {localId},
                                [&](const QSqlQuery &query) {
                                    found = true;
                                    node = query.value(0).toLongLong();
                                    kind = query.value(1).toString();
                                    value = query.value(2).toString();
                                    book = query.value(3).toLongLong();
+                                   tenant = query.value(4).toString();
                                });
     if (!found)
         return;
+    // Written by hand in a tenant, it is a fact of its own there (#109).
+    QString from = tenant.isEmpty() ? QString() : u"tenant "_s + tenant;
+    if (book > 0)
+        from = bookId(library, book);
     const QString nodeGid = nodeId(library, node);
     if (!nodeGid.isEmpty())
-        setGlobalId(library, u"fact"_s, localId, factGlobalId(nodeGid, kind, value, book > 0 ? bookId(library, book) : QString()));
+        setGlobalId(library, u"fact"_s, localId, factGlobalId(nodeGid, kind, value, from));
 }
 
 QString Spaces::factId(const Library &library, qint64 localId) {

@@ -15,6 +15,10 @@ namespace {
 // Whether relation `row` is learned in its book (not a connection across books, GraphEdge::across).
 [[nodiscard]] QString inBook(const QString &row) { return u"substr(%1.kind, 1, 8) <> 'across: '"_s.arg(row); }
 
+// Whether relation `row`, of no book and learned in one, ties a thing to a
+// book's node: not when it was written by hand in a tenant (#109).
+[[nodiscard]] QString tying(const QString &row) { return inBook(row) + u" AND NOT "_s + TenancySchema::writtenHere(row); }
+
 // A thing that stands for a book (Graph::bookNode).
 [[nodiscard]] QString bookNode(const QString &row) { return u"(%1.kind = 'book' AND %1.book_id IS NOT NULL)"_s.arg(row); }
 
@@ -28,16 +32,16 @@ namespace {
            "UNION SELECT e.source FROM graph_edges AS e WHERE e.book_id = :B AND "_s
            + inBook(u"e"_s) + u" UNION SELECT e.target FROM graph_edges AS e WHERE e.book_id = :B AND "_s + inBook(u"e"_s)
            + u" UNION SELECT e.target FROM graph_nodes AS b JOIN graph_edges AS e ON e.source = b.id WHERE b.book_id = :B AND "_s
-           + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook(u"e"_s)
+           + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + tying(u"e"_s)
            + u" UNION SELECT e.source FROM graph_nodes AS b JOIN graph_edges AS e ON e.target = b.id WHERE b.book_id = :B AND "_s
-           + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook(u"e"_s);
+           + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + tying(u"e"_s);
 }
 
 // Whether another of tenant `T`'s books is still behind thing `c`, by the same rules.
 [[nodiscard]] QString stillBehind(const QString &c) {
     const QString ofTenant = u"JOIN tenant_books AS t ON t.tenant = :T AND t.book_id = "_s;
     const QString tied = u"SELECT 1 FROM graph_edges AS e JOIN graph_nodes AS b ON b.id = e.%1 "_s + ofTenant
-                         + u"b.book_id JOIN graph_nodes AS o ON o.id = %3 WHERE e.%2 = %3 AND e.book_id = 0 AND "_s + inBook(u"e"_s)
+                         + u"b.book_id JOIN graph_nodes AS o ON o.id = %3 WHERE e.%2 = %3 AND e.book_id = 0 AND "_s + tying(u"e"_s)
                          + u" AND "_s + bookNode(u"b"_s) + u" AND NOT "_s + bookNode(u"o"_s);
     const QStringList ways{
         u"SELECT 1 FROM graph_nodes AS n "_s + ofTenant + u"n.book_id WHERE n.id = %1"_s.arg(c),
@@ -60,7 +64,7 @@ namespace {
 
 // The statements of a leave, with `:T` for the tenant and `:B` for the book.
 [[nodiscard]] QStringList statements() {
-    const QString shared = u"(e.book_id = 0 OR substr(e.kind, 1, 8) = 'across: ')"_s;
+    const QString writtenIn = u"SELECT key FROM json_each("_s + TenancySchema::notesOf(u"e"_s) + u", '$.tenants')"_s;
     return {
         u"CREATE TEMP TABLE IF NOT EXISTS tenancy_leaving (id INTEGER PRIMARY KEY)"_s,
         u"CREATE TEMP TABLE IF NOT EXISTS tenancy_leaving_edges (id INTEGER PRIMARY KEY)"_s,
@@ -74,24 +78,35 @@ namespace {
         u"DELETE FROM tenant_nodes WHERE tenant = :T AND node_id IN (SELECT id FROM tenancy_leaving)"_s,
         // One no book is behind any more is seen from every tenant.
         u"INSERT INTO tenant_nodes (tenant, node_id) SELECT 0, id FROM tenancy_leaving WHERE id NOT IN (SELECT node_id FROM tenant_nodes)"_s,
-        // The book's facts, and those of no book of the things that left, which are where their things are.
+        // The book's facts, and those of no book of the things that left, which
+        // are where their things are; not those written by hand in a tenant.
         u"DELETE FROM tenant_facts WHERE tenant = :T AND fact_id IN (SELECT id FROM graph_facts WHERE book_id = :B)"_s,
         u"DELETE FROM tenant_facts WHERE tenant IN (:T, 0) AND fact_id IN (SELECT f.id FROM tenancy_leaving AS c "
-        "JOIN graph_facts AS f ON f.node_id = c.id WHERE COALESCE(f.book_id, 0) = 0)"_s,
+        "JOIN graph_facts AS f ON f.node_id = c.id WHERE COALESCE(f.book_id, 0) = 0 AND f.tenant = '')"_s,
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT m.tenant, f.id FROM tenancy_leaving AS c "
         "JOIN graph_facts AS f ON f.node_id = c.id JOIN tenant_nodes AS m ON m.node_id = c.id AND m.tenant IN (:T, 0) "
-        "WHERE COALESCE(f.book_id, 0) = 0"_s,
-        // The book's relations, and those of no book or across books at the things
-        // that left, which are only where both their ends are.
-        u"DELETE FROM tenant_edges WHERE tenant = :T AND edge_id IN (SELECT id FROM graph_edges WHERE book_id = :B)"_s,
+        "WHERE COALESCE(f.book_id, 0) = 0 AND f.tenant = ''"_s,
+        // The book's relations, those it said at the things met in it, and
+        // those at the things that left: placed in the tenant again by the rules.
+        u"INSERT OR IGNORE INTO tenancy_leaving_edges (id) SELECT id FROM graph_edges WHERE book_id = :B"_s,
+        u"INSERT OR IGNORE INTO tenancy_leaving_edges (id) SELECT e.id FROM graph_seen AS m JOIN graph_edges AS e ON e.source = m.node_id "
+        "WHERE m.book_id = :B AND "_s
+            + TenancySchema::saidIn(u"e"_s, u":B"_s)
+            + u" UNION SELECT e.id FROM graph_seen AS m JOIN graph_edges AS e ON e.target = m.node_id WHERE m.book_id = :B AND "_s
+            + TenancySchema::saidIn(u"e"_s, u":B"_s),
         u"INSERT OR IGNORE INTO tenancy_leaving_edges (id) SELECT e.id FROM tenancy_leaving AS c JOIN graph_edges AS e ON e.source = c.id "
-        "WHERE "_s
-            + shared + u" UNION SELECT e.id FROM tenancy_leaving AS c JOIN graph_edges AS e ON e.target = c.id WHERE "_s + shared,
+        "UNION SELECT e.id FROM tenancy_leaving AS c JOIN graph_edges AS e ON e.target = c.id"_s,
         u"DELETE FROM tenant_edges WHERE tenant IN (:T, 0) AND edge_id IN (SELECT id FROM tenancy_leaving_edges)"_s,
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT b.tenant, e.id FROM tenancy_leaving_edges AS x "
+        "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_books AS b ON b.book_id = e.book_id AND b.tenant = :T WHERE "_s
+            + inBook(u"e"_s),
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, e.id FROM tenancy_leaving_edges AS x "
         "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_nodes AS s ON s.node_id = e.source AND s.tenant IN (:T, 0) "
-        "JOIN tenant_nodes AS t ON t.tenant = s.tenant AND t.node_id = e.target WHERE e.book_id = 0 "
-        "OR (substr(e.kind, 1, 8) = 'across: ' AND s.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = e.book_id))"_s,
+        "JOIN tenant_nodes AS t ON t.tenant = s.tenant AND t.node_id = e.target WHERE "_s
+            + TenancySchema::whereEndsAre(u"e"_s, u"s.tenant"_s),
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT m.id, e.id FROM tenancy_leaving_edges AS x "
+        "JOIN graph_edges AS e ON e.id = x.id JOIN tenants AS m ON m.id = :T WHERE "_s
+            + TenancySchema::writtenHere(u"e"_s) + u" AND (m.gid = 'library' OR m.gid IN ("_s + writtenIn + u"))"_s,
     };
 }
 

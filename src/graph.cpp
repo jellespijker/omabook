@@ -29,9 +29,6 @@ namespace {
 // is not tied to one, and a book's facts go with it when it is removed.
 [[nodiscard]] QVariant bookColumn(qint64 bookId) { return bookId > 0 ? QVariant(bookId) : QVariant(QMetaType(QMetaType::LongLong)); }
 
-// A few words of the text, as an anchor keeps them: on one line, and short.
-[[nodiscard]] QString anchorText(const QString &words) { return words.simplified().left(160); }
-
 // Later in the same book: a place further on, or the same place kept later.
 [[nodiscard]] bool laterThan(const GraphFact &a, const GraphFact &b) {
     const GraphPlace &x = a.revealed.place, &y = b.revealed.place;
@@ -251,11 +248,14 @@ qint64 Graph::recordFact(qint64 node, const QString &kind, const QString &value,
     const qint64 bookId = revealed ? revealed->place.bookId : 0;
     const GraphPlace place = revealed && bookId > 0 ? revealed->place : GraphPlace();
     const QString anchor = revealed && bookId > 0 ? anchorText(revealed->anchor) : QString("");
+    // Of no book and written by hand in a tenant, it is that tenant's (#109).
+    const QString tenant = bookId > 0 ? QString("") : writtenIn(node);
     // Revealed again in the same book: the earlier moment stands. Of no
-    // book, the fact is kept anew as the latest word.
+    // book, the fact is kept anew as the latest word (in its tenant).
     QSqlQuery before = m_library->query(QString("SELECT %1 FROM graph_facts WHERE node_id = ? AND kind = ? AND value = ? "
-                                                "AND COALESCE(book_id, 0) = ?").arg(factColumns),
-                                        {node, kind, value, bookId});
+                                                "AND COALESCE(book_id, 0) = ? AND tenant = ?")
+                                            .arg(factColumns),
+                                        {node, kind, value, bookId, tenant});
     if (before.next()) {
         const GraphFact known = factFrom(before);
         before.finish();
@@ -270,8 +270,9 @@ qint64 Graph::recordFact(qint64 node, const QString &kind, const QString &value,
                        : 0;
     }
     return m_library
-        ->insert("INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction, anchor) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                 {node, kind, value, bookColumn(bookId), place.section, place.fraction, anchor})
+        ->insert(
+            "INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction, anchor, tenant) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            {node, kind, value, bookColumn(bookId), place.section, place.fraction, anchor, tenant})
         .value_or(0);
 }
 
@@ -292,32 +293,6 @@ qint64 Graph::learn(qint64 id, const QString &kind, const QString &value, const 
     return recordFact(id, kind, said, revealed);
 }
 
-qint64 Graph::link(qint64 source, qint64 target, const QString &kind, const QString &note, const std::optional<GraphPlace> &learned,
-                   const QString &anchor) {
-    const QString relation = kind.simplified().toLower();
-    if (source == 0 || target == 0 || source == target || relation.isEmpty() || !node(source) || !node(target))
-        return 0;
-    QSqlQuery existing = m_library->query(QString("SELECT %1 FROM graph_edges WHERE source = ? AND target = ? AND kind = ?").arg(edgeColumns),
-                                          {source, target, relation});
-    if (existing.next()) {
-        const GraphEdge edge = edgeFrom(existing);
-        const bool earlier = learned && learned->bookId > 0
-                             && (edge.learned.bookId != learned->bookId || learned->notAfter(edge.learned));
-        const GraphPlace place = earlier ? *learned : edge.learned;
-        existing.finish();
-        m_library->exec("UPDATE graph_edges SET note = ?, book_id = ?, section = ?, fraction = ?, anchor = ? WHERE id = ?",
-                        {note.trimmed().isEmpty() ? edge.note : note.trimmed(), place.bookId, place.section, place.fraction,
-                         earlier ? anchorText(anchor) : edge.anchor, edge.id});
-        return edge.id;
-    }
-    const GraphPlace place = learned.value_or(GraphPlace());
-    return m_library
-        ->insert("INSERT INTO graph_edges (source, target, kind, note, book_id, section, fraction, anchor) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                 {source, target, relation, note.trimmed(), place.bookId, place.section, place.fraction,
-                  place.bookId > 0 ? anchorText(anchor) : QString("")})
-        .value_or(0);
-}
-
 bool Graph::remove(qint64 id) { return node(id) && m_library->exec("DELETE FROM graph_nodes WHERE id = ?", {id}); }
 bool Graph::unlink(qint64 edge) {
     // Only a relation the tenant sees is the tenant's to take away.
@@ -335,8 +310,7 @@ bool Graph::merge(qint64 keep, qint64 other) {
          edges.next();)
         moving << edgeFrom(edges);
     for (const GraphEdge &edge : std::as_const(moving))
-        link(edge.source == other ? keep : edge.source, edge.target == other ? keep : edge.target, edge.kind, edge.note,
-             learnedIn(edge), edge.anchor);
+        relink(edge, edge.source == other ? keep : edge.source, edge.target == other ? keep : edge.target);
     // Its names, each known from where it was: its own name from where it
     // was met, the others from the moments they were revealed, so a name
     // learned late in a book stays out of what an earlier page knows.
@@ -432,18 +406,6 @@ std::optional<GraphMoment> Graph::firstMet(qint64 id, qint64 bookId) const {
     QSqlQuery query = m_library->query("SELECT book_id, section, fraction, anchor FROM graph_seen WHERE node_id = ? AND book_id = ?",
                                        {id, bookId});
     return query.next() ? std::optional(GraphMoment{placeFrom(query, 0), query.value(3).toString()}) : std::nullopt;
-}
-
-QJsonObject Graph::madeIn(QJsonObject data, qint64 id, const QString &scope, const std::optional<GraphPlace> &seen) const {
-    // Made by hand in a tenant, met in no book, it is that tenant's: the
-    // whole library's is every tenant's, and a world keeps a scope of its own.
-    if (!scope.isEmpty() || (seen && seen->bookId > 0) || !m_tenant || *m_tenant == Tenant::wholeLibrary())
-        return data;
-    const auto known = Graph(*m_library).node(id);
-    QStringList tenants = known ? known->data.value(Tenancy::madeInKey()).toVariant().toStringList() : QStringList();
-    if (!tenants.contains(m_tenant->globalId()))
-        data.insert(Tenancy::madeInKey(), QJsonArray::fromStringList(tenants << m_tenant->globalId()));
-    return data;
 }
 
 bool Graph::sees(qint64 bookId) const {

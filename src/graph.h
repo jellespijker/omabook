@@ -235,7 +235,9 @@ public:
                   const QJsonObject &data = {}, const std::optional<GraphPlace> &seen = std::nullopt,
                   const QString &anchor = {}, const std::optional<GraphMoment> &revealed = std::nullopt);
     // Relates two things; saying the same again only updates the note, and
-    // keeps the earlier place it was learned at (with its anchor).
+    // keeps the earlier place it was learned at in its book (with its
+    // anchor). Said in another book, it keeps that book's note beside its
+    // own; written by hand in a tenant, that tenant's (#109).
     qint64 link(qint64 source, qint64 target, const QString &kind, const QString &note = {},
                 const std::optional<GraphPlace> &learned = std::nullopt, const QString &anchor = {});
     // Keeps a fact of a node: a summary (which becomes its summary now),
@@ -360,6 +362,15 @@ private:
     // `data` of a thing put in (upsert), kept in the graph's tenant
     // (Tenancy::madeInKey) when it was put in there by hand.
     [[nodiscard]] QJsonObject madeIn(QJsonObject data, qint64 id, const QString &scope, const std::optional<GraphPlace> &seen) const;
+    // The tenant a fact or a relation of no book at a thing is written in by
+    // hand (its global id), "" when it is not one tenant's: the graph of no
+    // tenant's, the whole library's, or a world's (#109).
+    [[nodiscard]] QString writtenIn(qint64 node) const;
+    // Relations as the tenant knows them: each with the note it was told
+    // there, by hand or by one of its books, never another tenant's (#109).
+    void told(QList<GraphEdge> &edges) const;
+    // A relation of one thing moved to others (merge), with all it was noted.
+    void relink(const GraphEdge &edge, qint64 source, qint64 target);
     // " AND " the tenant's condition on a column (TenantFilter), or nothing
     // for the graph of no tenant.
     [[nodiscard]] QString andWithin(QString (TenantFilter::*condition)(QStringView) const, QStringView column) const;

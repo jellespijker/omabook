@@ -113,6 +113,9 @@ bool settle(const Library &library, const Placed &wanted) {
     const QString made = TenancySchema::madeHere(u"n"_s);
     const QString others = TenancySchema::madeHere(u"o"_s);
     const QString dataOf = u"CASE WHEN json_valid(n.data) THEN n.data ELSE '{}' END"_s;
+    // Written by hand in a tenant: in it, and giving its ends nothing (#109).
+    const QString written = TenancySchema::writtenHere(u"e"_s);
+    const QString writtenIn = u"SELECT key FROM json_each("_s + TenancySchema::notesOf(u"e"_s) + u", '$.tenants')"_s;
     return {
         u"DELETE FROM tenant_nodes"_s,
         u"DELETE FROM tenant_edges"_s,
@@ -130,10 +133,12 @@ bool settle(const Library &library, const Placed &wanted) {
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.tenant, e.target FROM graph_edges AS e "
         "JOIN graph_nodes AS b ON b.id = e.source JOIN graph_nodes AS o ON o.id = e.target JOIN tenant_books AS t ON t.book_id = b.book_id "
         "WHERE e.book_id = 0 AND "_s
-            + inBook + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s) + u" AND NOT "_s + others
+            + inBook + u" AND NOT "_s + written + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s) + u" AND NOT "_s
+            + others
             + u" UNION SELECT t.tenant, e.source FROM graph_edges AS e JOIN graph_nodes AS b ON b.id = e.target "
               "JOIN graph_nodes AS o ON o.id = e.source JOIN tenant_books AS t ON t.book_id = b.book_id WHERE e.book_id = 0 AND "_s
-            + inBook + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s) + u" AND NOT "_s + others,
+            + inBook + u" AND NOT "_s + written + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s) + u" AND NOT "_s
+            + others,
         u"INSERT OR IGNORE INTO tenants (gid) SELECT DISTINCT j.value FROM graph_nodes AS n, json_each("_s + dataOf
             + u", '$.tenants') AS j "
               "WHERE j.type = 'text' AND "_s
@@ -146,7 +151,11 @@ bool settle(const Library &library, const Placed &wanted) {
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT t.tenant, f.id FROM graph_facts AS f "
         "JOIN tenant_books AS t ON t.book_id = f.book_id"_s,
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT m.tenant, f.id FROM graph_facts AS f "
-        "JOIN tenant_nodes AS m ON m.node_id = f.node_id WHERE COALESCE(f.book_id, 0) = 0"_s,
+        "JOIN tenant_nodes AS m ON m.node_id = f.node_id WHERE COALESCE(f.book_id, 0) = 0 AND f.tenant = ''"_s,
+        u"INSERT OR IGNORE INTO tenants (gid) SELECT DISTINCT tenant FROM graph_facts WHERE COALESCE(book_id, 0) = 0 AND tenant <> '' "
+        "UNION SELECT 'library' WHERE EXISTS (SELECT 1 FROM graph_facts WHERE COALESCE(book_id, 0) = 0 AND tenant <> '')"_s,
+        u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT t.id, f.id FROM graph_facts AS f JOIN tenants AS t "
+        "ON t.gid IN (f.tenant, 'library') WHERE COALESCE(f.book_id, 0) = 0 AND f.tenant <> ''"_s,
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT t.tenant, e.id FROM graph_edges AS e "
         "JOIN tenant_books AS t ON t.book_id = e.book_id WHERE "_s
             + inBook,
@@ -155,8 +164,14 @@ bool settle(const Library &library, const Placed &wanted) {
         // tenant through the things, several times slower (#104).
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, e.id FROM graph_edges AS e "
         "CROSS JOIN tenant_nodes AS s ON s.node_id = e.source CROSS JOIN tenant_nodes AS t ON t.node_id = e.target AND t.tenant = s.tenant "
-        "WHERE e.book_id = 0 OR (substr(e.kind, 1, 8) = 'across: ' "
-        "AND s.tenant IN (SELECT tenant FROM tenant_books AS b WHERE b.book_id = e.book_id))"_s,
+        "WHERE "_s
+            + TenancySchema::whereEndsAre(u"e"_s, u"s.tenant"_s),
+        u"INSERT OR IGNORE INTO tenants (gid) SELECT DISTINCT j.key FROM graph_edges AS e, json_each("_s + TenancySchema::notesOf(u"e"_s)
+            + u", '$.tenants') AS j WHERE "_s + written + u" UNION SELECT 'library' WHERE EXISTS (SELECT 1 FROM graph_edges AS e WHERE "_s
+            + written + u")"_s,
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT t.id, e.id FROM graph_edges AS e JOIN tenants AS t "
+        "ON t.gid = 'library' OR t.gid IN ("_s
+            + writtenIn + u") WHERE "_s + written,
     };
 }
 

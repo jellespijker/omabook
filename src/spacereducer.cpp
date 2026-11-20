@@ -94,6 +94,7 @@ void foldFact(ReducedFact &fact, const SpaceOperation &op) {
     fact.kind = obj.value("kind").toString();
     fact.value = obj.value("value").toString();
     fact.bookGid = obj.value("book").toString();
+    fact.tenant = obj.value("tenant").toString();
     const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
     if (!fact.hasMoment || (!fact.bookGid.isEmpty() && candidate.earlierThan(fact.moment))) {
         fact.moment = candidate;
@@ -115,6 +116,7 @@ void foldEdge(ReducedEdge &edge, const SpaceOperation &op) {
     edge.kind = obj.value("kind").toString();
     if (const QString note = obj.value("note").toString(); !note.isEmpty() || edge.note.hlc < 0)
         takeMax(edge.note, {op.hlc, op.device, note.isEmpty() ? 0 : 1, note});
+    takeMax(edge.notes, {op.hlc, op.device, 1, obj.value("notes").toString()});
     const QString bookGid = obj.value("book").toString();
     const SpaceMoment candidate{obj.value("section").toInt(), obj.value("fraction").toDouble(), obj.value("anchor").toString()};
     if (!bookGid.isEmpty() && (!edge.hasLearned || edge.bookGid.isEmpty() || candidate.earlierThan(edge.learned))) {

@@ -19,6 +19,7 @@ moves those lines under its version.
 - The graph centred on a thing in a large library counts what is around it at once: four steps out took over a second on a library of 1,500 books, and now takes a few hundredths of one (#100).
 - The graph's window opens quicker on a large library: it shows a collection's most connected things first by how many relations each has there, which the library now keeps as the graph changes rather than counting for every thing each time it opens, five times quicker on a library of 15,000 books (#101).
 - An answer from a model that wraps it in HTML-like tags (`<panel>…</panel>`, `<div>`s, a stray `<span>`) is shown without them: in the reading companion, the library's answers, `omabook ask` and the MCP tools that answer questions, whichever AI answers. Markdown stays as it is, and so does a tag written in a code span or a code block. The companion and the librarian are also told to answer in plain text or Markdown (#105).
+- What is written by hand on a thing two top-level collections share, a summary, another name or a relation, is seen only in the collection's graph it was written in, and a relation two collections' books both tell keeps each book's note: one collection's book or hand no longer changes what the other reads of it. A book in two top-level collections is offered the things of the other books of both to connect to, each connection seen only where both its ends are (#109).
 
 ### Changed
 

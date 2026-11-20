@@ -284,9 +284,10 @@ void materializeFacts(const Library &library, const QMap<QString, ReducedFact> &
         const QVariant bookCol = bookId > 0 ? QVariant(bookId) : QVariant(QMetaType(QMetaType::LongLong));
         if (const auto made =
                 ChangeLog::insert(library,
-                                  "INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction, anchor) "
-                                  "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                                  {nodeId, fact.kind, fact.value, bookCol, fact.moment.section, fact.moment.fraction, fact.moment.anchor}))
+                                  "INSERT INTO graph_facts (node_id, kind, value, book_id, section, fraction, anchor, tenant) "
+                                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                                  {nodeId, fact.kind, fact.value, bookCol, fact.moment.section, fact.moment.fraction, fact.moment.anchor,
+                                   bookId > 0 || fact.tenant.isNull() ? QString("") : fact.tenant}))
             Spaces::setGlobalId(library, u"fact"_s, *made, it.key());
     }
 }
@@ -305,9 +306,10 @@ void materializeEdges(const Library &library, const QMap<QString, ReducedEdge> &
         const qint64 bookId = edge.bookGid.isEmpty() ? 0 : Spaces::localId(library, u"book"_s, edge.bookGid);
         if (const auto made = ChangeLog::insert(
                 library,
-                "INSERT OR REPLACE INTO graph_edges (source, target, kind, note, book_id, section, fraction, anchor) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                {sourceId, targetId, edge.kind, edge.note.value, bookId, edge.learned.section, edge.learned.fraction, edge.learned.anchor}))
+                "INSERT OR REPLACE INTO graph_edges (source, target, kind, note, book_id, section, fraction, anchor, notes) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                {sourceId, targetId, edge.kind, edge.note.value, bookId, edge.learned.section, edge.learned.fraction, edge.learned.anchor,
+                 edge.notes.value.isNull() ? QString("") : edge.notes.value}))
             Spaces::setGlobalId(library, u"edge"_s, *made, it.key());
     }
 }

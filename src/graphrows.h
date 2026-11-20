@@ -11,7 +11,7 @@
 
 // How the graph's rows read into its types, for the two halves of Graph:
 // what writes it (graph.cpp) and what reads it as a tenant sees it
-// (graphviews.cpp). Each reads the columns its *Columns names, in order.
+// (graphviews.cpp), and what keeps a relation's notes (graphnotes.cpp). Each reads the columns its *Columns names, in order.
 namespace GraphRows {
 
 // A null string binds as SQL NULL, which a scope, a summary and a note may not be.
@@ -30,6 +30,9 @@ namespace GraphRows {
     return node;
 }
 constexpr QLatin1StringView nodeColumns{"id, scope, kind, name, summary, data, COALESCE(book_id, 0), updated"};
+
+// A few words of the text, as an anchor keeps them: on one line, and short.
+[[nodiscard]] inline QString anchorText(const QString &words) { return words.simplified().left(160); }
 
 // A place as three columns of a row hold it, the first of them at `column`.
 [[nodiscard]] inline GraphPlace placeFrom(const QSqlQuery &query, int column) {

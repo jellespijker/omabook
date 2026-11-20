@@ -3,10 +3,13 @@
 // A library split in two tenants for the tests of tenancy (#94) and of what
 // reads the graph in one (#95).
 
+#include <QSqlQuery>
+#include <QStringList>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <initializer_list>
 
+#include "changelog.h"
 #include "graph.h"
 #include "library.h"
 #include "spaces.h"
@@ -84,3 +87,28 @@ struct Split {
     // Both Shores out of Physics, and so of Study: in Fiction alone.
     [[nodiscard]] bool takeBothOutOfStudy() { return library.putInCollection(library.collectionNamed("Study/Physics")->id, both, false); }
 };
+
+// Every membership row, by the global ids of both sides, in a stable order:
+// what two libraries that hold the same rows must agree on.
+[[nodiscard]] inline QStringList memberships(const Library &library) {
+    QStringList rows;
+    const QList<std::pair<QString, QString>> tables{{"tenant_nodes", "node"}, {"tenant_edges", "edge"}, {"tenant_facts", "fact"}};
+    for (const auto &[table, entity] : tables) {
+        const QString column = entity + "_id";
+        for (QSqlQuery query = ChangeLog::query(
+                 library, QString("SELECT t.gid, m.%1 FROM %2 AS m JOIN tenants AS t ON t.id = m.tenant").arg(column, table));
+             query.next();)
+            rows << entity + " " + Spaces::globalId(library, entity, query.value(1).toLongLong()) + " " + query.value(0).toString();
+    }
+    for (QSqlQuery query = ChangeLog::query(library, "SELECT t.gid, m.book_id FROM tenant_books AS m JOIN tenants AS t ON t.id = m.tenant");
+         query.next();)
+        rows << "book " + Spaces::bookId(library, query.value(1).toLongLong()) + " " + query.value(0).toString();
+    rows.sort();
+    return rows;
+}
+
+// The membership after a rebuild, which recomputes it all from the books' tenants.
+[[nodiscard]] inline QStringList rebuilt(const Library &library) {
+    Tenancy::rebuild(library);
+    return memberships(library);
+}

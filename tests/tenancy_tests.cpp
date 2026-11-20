@@ -45,31 +45,6 @@ namespace {
     return books;
 }
 
-// Every membership row, by the global ids of both sides, in a stable order:
-// what two libraries that hold the same rows must agree on.
-[[nodiscard]] QStringList memberships(const Library &library) {
-    QStringList rows;
-    const QList<std::pair<QString, QString>> tables{{"tenant_nodes", "node"}, {"tenant_edges", "edge"}, {"tenant_facts", "fact"}};
-    for (const auto &[table, entity] : tables) {
-        const QString column = entity + "_id";
-        for (QSqlQuery query = ChangeLog::query(
-                 library, QString("SELECT t.gid, m.%1 FROM %2 AS m JOIN tenants AS t ON t.id = m.tenant").arg(column, table));
-             query.next();)
-            rows << entity + " " + Spaces::globalId(library, entity, query.value(1).toLongLong()) + " " + query.value(0).toString();
-    }
-    for (QSqlQuery query = ChangeLog::query(library, "SELECT t.gid, m.book_id FROM tenant_books AS m JOIN tenants AS t ON t.id = m.tenant");
-         query.next();)
-        rows << "book " + Spaces::bookId(library, query.value(1).toLongLong()) + " " + query.value(0).toString();
-    rows.sort();
-    return rows;
-}
-
-// The membership after a rebuild, which recomputes it all from the books' tenants.
-[[nodiscard]] QStringList rebuilt(const Library &library) {
-    Tenancy::rebuild(library);
-    return memberships(library);
-}
-
 } // namespace
 
 class TenancyTests : public QObject {

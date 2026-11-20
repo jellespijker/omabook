@@ -11,8 +11,10 @@
 #include <utility>
 
 #include "booksides.h"
+#include "graph.h"
 #include "graphcontext.h"
 #include "prompts.h"
+#include "tenancy.h"
 
 namespace {
 
@@ -80,6 +82,36 @@ QSet<QPair<qint64, qint64>> connected(const Graph &graph, qint64 bookId) {
 
 const QString linksNote = "graphlinks";
 
+// The graph of each of a book's tenants, by their global ids; the reader's one for a book in none.
+QList<Graph> graphsOf(const Library &library, qint64 bookId) {
+    QList<Graph> graphs;
+    for (const Tenant &tenant : Tenancy::ofBook(library, bookId))
+        graphs << Graph::forTenant(library, tenant);
+    if (graphs.isEmpty())
+        graphs << Graph::ofReader(library, bookId);
+    return graphs;
+}
+
+// The first of these graphs a book is in; none when it shares none of them.
+const Graph *sharing(const QList<Graph> &graphs, qint64 bookId) {
+    const auto found = std::ranges::find_if(graphs, [bookId](const Graph &graph) { return graph.sees(bookId); });
+    return found == graphs.cend() ? nullptr : &*found;
+}
+
+// A book's story as far as its reader has reached, read in the first of these graphs it is in.
+GraphView storyIn(const Library &library, const QList<Graph> &graphs, qint64 bookId) {
+    const Graph *in = sharing(graphs, bookId);
+    return in ? GraphContext::story(*in, bookId, GraphContext::reachOf(library, bookId).upTo()) : GraphView();
+}
+
+// The pairs connected already, in any of these graphs.
+QSet<QPair<qint64, qint64>> connectedIn(const QList<Graph> &graphs, qint64 bookId) {
+    QSet<QPair<qint64, qint64>> pairs;
+    for (const Graph &graph : graphs)
+        pairs += connected(graph, bookId);
+    return pairs;
+}
+
 } // namespace
 
 QString GraphLinks::Offer::mark() const {
@@ -97,9 +129,12 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     const auto book = library.book(bookId);
     if (!book)
         return offer;
-    // All of it in the book's tenant: the model is never shown another's.
-    const Graph graph = Graph::ofReader(library, bookId);
-    const GraphView mine = GraphContext::story(graph, bookId, upTo);
+    // All of it in the book's tenants: the model is never shown another's.
+    // A book in two is read in the first of them by global id, and offered
+    // the things of the other books of each, each read in a tenant it shares
+    // with this one; what is linked is then seen only where both ends are (#109).
+    const QList<Graph> ofEach = graphsOf(library, bookId);
+    const GraphView mine = GraphContext::story(ofEach.first(), bookId, upTo);
     const QHash<qint64, int> ties = tiesOf(mine);
     // What a book is about and how its world works say most; then what it
     // leaves open, and who carries it.
@@ -124,7 +159,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     };
     QList<Near> near;
     for (const Book &other : library.books()) {
-        if (other.id == bookId || !graph.sees(other.id) || !GraphBuild::builtTo(library, other.id)
+        if (other.id == bookId || !sharing(ofEach, other.id) || !GraphBuild::builtTo(library, other.id)
             || !GraphContext::reachOf(library, other.id).any)
             continue;
         int score = 0;
@@ -152,7 +187,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     QList<Candidate> candidates;
     QSet<qint64> taken;
     for (const Near &other : near.mid(0, mostBooks)) {
-        const GraphView theirs = GraphContext::story(graph, other.book.id, GraphContext::reachOf(library, other.book.id).upTo());
+        const GraphView theirs = storyIn(library, ofEach, other.book.id);
         const QHash<qint64, int> theirTies = tiesOf(theirs);
         const QList<GraphNode> telling = pick(theirs, theirTies, "theme", 10) + pick(theirs, theirTies, "concept", 8)
                                          + pick(theirs, theirTies, "thread", 5) + pick(theirs, theirTies, "topic", 5)
@@ -183,7 +218,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     }
 
     QStringList known;
-    for (const QPair<qint64, qint64> &pair : connected(graph, bookId))
+    for (const QPair<qint64, qint64> &pair : connectedIn(ofEach, bookId))
         known << QString("#%1 and #%2").arg(pair.first).arg(pair.second);
     known.sort();
     offer.already = known.mid(0, 60).join('\n');

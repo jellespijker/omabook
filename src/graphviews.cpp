@@ -242,6 +242,7 @@ QList<GraphEdge> Graph::edgesAmong(const QList<GraphNode> &nodes) const {
                 edges << edgeFrom(query);
     }
     std::ranges::sort(edges, {}, &GraphEdge::id);
+    told(edges);
     return edges;
 }
 
@@ -354,6 +355,7 @@ GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) co
             view.nodes << other;
         }
     }
+    told(view.edges);
     return view;
 }
 
@@ -372,6 +374,7 @@ GraphView Graph::acrossBooks(int limit) const {
                 view.nodes << *end;
             }
     }
+    told(view.edges);
     return view;
 }
 

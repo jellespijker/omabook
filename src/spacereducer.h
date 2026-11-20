@@ -63,6 +63,7 @@ struct ReducedFact {
     QString kind;
     QString value;
     QString bookGid;
+    QString tenant; // written by hand in it (#109)
     SpaceMoment moment;
     bool hasMoment = false;
     SpaceStamp alive;
@@ -74,6 +75,8 @@ struct ReducedEdge {
     QString targetGid;
     QString kind;
     SpaceStamp note;
+    // What other books and tenants noted of it (graph_edges.notes, #109), the latest said.
+    SpaceStamp notes;
     QString bookGid;
     SpaceMoment learned;
     bool hasLearned = false;

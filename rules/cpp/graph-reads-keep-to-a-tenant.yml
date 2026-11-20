@@ -30,6 +30,8 @@ ignores:
   # The graph's writing half, and the lookups by name its writes are made of;
   # what reads the graph is in graphviews.cpp, which the rule does look at.
   - "src/graph.cpp"
+  # And what writes a relation's notes; its reader of them keeps to the tenant (Graph::told).
+  - "src/graphnotes.cpp"
   - "tests/**"
 rule:
   kind: string_literal

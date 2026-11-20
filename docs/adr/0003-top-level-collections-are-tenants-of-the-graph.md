@@ -106,6 +106,29 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
 - **A harness rule** (`rules/cpp/graph-reads-keep-to-a-tenant.yml`) flags a query that reads the graph's
   tables without the tenant's condition, outside the storage and the log.
 
+### As built (#109)
+
+- **Written by hand in a tenant, a fact or a relation is that tenant's.** A fact of no book keeps the
+  tenant it was written in (`graph_facts.tenant`, a fact of its own there, with its own global id), and
+  a relation the tenants that wrote it (the `"tenants"` of `graph_edges.notes`); each is in those
+  tenants and the whole library's, and gives its thing or its ends nothing more. So a summary, another
+  name or a relation written on a thing two tenants share is seen from the one it was written in.
+- **A relation is one row however many books say it, and keeps a note per book.** Its row keeps the
+  book it was first learned in, with that book's note and place (a later book no longer takes the row
+  over, which moved it out of the first book's tenants); `notes` keeps, by book global id, what each
+  other book that said it noted (`"books"`), and by tenant what was written there by hand. A relation
+  said in another book is in that book's tenants too, where both its ends are. A tenant reads the note
+  written in it by hand, else its own book's, else that of the first of its books (by global id) that
+  said it (`Graph::told`), so one tenant's book never changes the note another reads. Both travel in
+  the log with the fact and the relation (formats 29 and 30: the columns, then the triggers again).
+- **A book in two tenants draws on both.** Its knowledge is stored once and seen from each, so what
+  builds its graph draws on the books of each of its tenants (`Graph::together`), and so does the AI
+  linker: it is offered the things of the other books of each of the book's tenants, each read in a
+  tenant it shares with the book, in one deterministic offer; a link made is seen only where both its
+  ends are, so its links to other things differ per tenant.
+- **Still shared**: a thing's own name, renamed by hand (`Graph::edit`), is one column for every
+  tenant that sees it.
+
 ## Considered options
 
 - **Filtering at read time** (until now): one graph, no duplication; but every reader has to remember
