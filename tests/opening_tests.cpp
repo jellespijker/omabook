@@ -210,9 +210,10 @@ private slots:
 
     // A library of 0.1.8.1, at format 32 (#112's step), takes the steps that
     // came after it on main (#76's, format 33, #110's, 34, #80's, 35, #81's, 36,
-    // and #118's, 37) and not its own again: the steps are positional, so #112's is 32 on main too.
+    // #118's, 37, and #115's, 38) and not its own again: the steps are positional,
+    // so #112's is 32 on main too.
     void aLibraryOf0181TakesTheStepsAfterItsOwn() {
-        QCOMPARE(LibraryMigrations::currentFormat(), 37);
+        QCOMPARE(LibraryMigrations::currentFormat(), 38);
         const QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString root = dir.filePath(QStringLiteral("Library"));
@@ -236,10 +237,10 @@ private slots:
             const auto restore = qScopeGuard([] { qInstallMessageHandler(s_previous); });
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 37);
+            QCOMPARE(library.formatVersion(), 38);
             QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-32-*.db")}).size(), 1);
         }
-        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 37")), qPrintable(s_brought));
+        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 38")), qPrintable(s_brought));
         QVERIFY(textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'")).contains(plugins));
         QCOMPARE(run(root, QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = 'graph_facts_names'")), 1);
     }
@@ -271,11 +272,59 @@ private slots:
             QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 35")), 0);
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 37);
+            QCOMPARE(library.formatVersion(), 38);
             QCOMPARE(textOf(root, QStringLiteral("SELECT quote FROM annotations WHERE id = %1").arg(id)),
                      QStringLiteral("the ferry came back"));
             QCOMPARE(textOf(root, QStringLiteral("SELECT color FROM annotations WHERE id = %1").arg(id)), QString());
         }
+    }
+
+    // A library of format 37 takes #115's step: its highlights and notes keep
+    // their numbers, are on no part of a page, and their words are in the
+    // word index, which follows what is written after; and the step can be
+    // taken again, by a library put back to 37.
+    void theNotesOfFormat37AreFoundByTheirWords() {
+        const QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString root = dir.filePath(QStringLiteral("Library"));
+        QVERIFY(Fixtures::epub(dir.filePath(QStringLiteral("Book.epub"))));
+        qint64 book = 0, id = 0;
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            book = library.add(dir.filePath(QStringLiteral("Book.epub"))).id;
+            QVERIFY(book > 0);
+            Annotation note;
+            note.kind = QStringLiteral("margin-note");
+            note.quote = QStringLiteral("the ferry came back");
+            note.note = QStringLiteral("Lighthouse keepers");
+            id = library.addAnnotation(book, note);
+            QVERIFY(id > 0);
+        }
+        const auto found = [&root](const QString &word) {
+            return run(root, QStringLiteral("SELECT COUNT(*) FROM annotation_words WHERE annotation_words MATCH '%1'").arg(word));
+        };
+        for (const bool putBack : {false, true}) {
+            if (!putBack) {
+                QCOMPARE(run(root, QStringLiteral("ALTER TABLE annotations DROP COLUMN area")), 0);
+                QCOMPARE(run(root, QStringLiteral("DROP TABLE annotation_words")), 0);
+            }
+            QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 37")), 0);
+            Library library(root);
+            QVERIFY(library.open());
+            QCOMPARE(library.formatVersion(), 38);
+            QCOMPARE(textOf(root, QStringLiteral("SELECT note FROM annotations WHERE id = %1").arg(id)),
+                     QStringLiteral("Lighthouse keepers"));
+            QCOMPARE(textOf(root, QStringLiteral("SELECT area FROM annotations WHERE id = %1").arg(id)), QString());
+            QCOMPARE(found(QStringLiteral("lighthouse")), 1);
+            QCOMPARE(found(QStringLiteral("ferry")), 1);
+        }
+        Library library(root);
+        QVERIFY(library.open());
+        QVERIFY(library.renameAnnotation(id, QStringLiteral("Harbour")));
+        QCOMPARE(found(QStringLiteral("harbour")), 1);
+        library.removeAnnotation(id);
+        QCOMPARE(found(QStringLiteral("ferry")), 0);
     }
 
     // A command that brings a library up to date says so on standard error

@@ -466,6 +466,9 @@ const QList<QStringList> migrations{
     // an Omabook that knows them opens the library (KeptOps).
     {"CREATE TABLE IF NOT EXISTS kept_ops (space INTEGER NOT NULL, device INTEGER NOT NULL, seq INTEGER NOT NULL, "
      "PRIMARY KEY (space, device, seq)) WITHOUT ROWID"},
+    // A highlight or a note on a part of a comic's page (#115, format 38), and
+    // the word index of what the reader wrote in a book, kept by triggers.
+    AnnotationSchema::regions(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

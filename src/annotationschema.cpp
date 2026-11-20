@@ -16,7 +16,8 @@ constexpr auto passageColumns =
 // a column only once: so the step can be taken again (a library put back to
 // the format before). Its rows keep their numbers, and the numbers it gave
 // out stay given (sqlite_sequence), so the change log's ids for removed ones
-// never come back; its triggers are made again with it.
+// never come back; its change log's triggers are made again with it (those
+// of its word index, from format 38, are wordTriggers()).
 QStringList madeAnew(const QString &columns, const QString &copied, const QString &from) {
     const QString table = "CREATE TABLE annotations_next (id INTEGER PRIMARY KEY AUTOINCREMENT, "
                           "book_id INTEGER NOT NULL REFERENCES books(id) ON DELETE CASCADE, kind TEXT NOT NULL, section INTEGER NOT NULL, "
@@ -57,4 +58,30 @@ QStringList AnnotationSchema::colors() {
     const QString kept = "id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, quote_before, "
                          "quote_after, anchored, confidence, lost";
     return madeAnew(QString(passageColumns) + ", color TEXT NOT NULL DEFAULT ''", kept, kept);
+}
+
+QStringList AnnotationSchema::regions() {
+    const QString kept = "id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, quote_before, "
+                         "quote_after, anchored, confidence, lost, color";
+    QStringList steps = madeAnew(QString(passageColumns) + ", color TEXT NOT NULL DEFAULT '', area TEXT NOT NULL DEFAULT ''", kept, kept);
+    // The words of a highlight's passage, a note, and a bookmark's name or
+    // the recognised text of a page's ink (#84), folded as the graph's word
+    // index folds them (GraphIndex), and contentless: the rows stay where
+    // they are. Made anew whole, so the step can be taken again.
+    steps << QString("DROP TABLE IF EXISTS annotation_words")
+          << QString("CREATE VIRTUAL TABLE annotation_words USING fts5(quote, note, text, content='', contentless_delete=1, "
+                     "tokenize=\"unicode61 remove_diacritics 2 categories 'L* N* Co M*'\", prefix='2 3')")
+          << QString("INSERT INTO annotation_words (rowid, quote, note, text) SELECT id, quote, note, text FROM annotations");
+    return steps + wordTriggers();
+}
+
+QStringList AnnotationSchema::wordTriggers() {
+    // FTS5 keeps no copy of what it was given: a row's words are put in again whole.
+    constexpr auto words =
+        "INSERT OR REPLACE INTO annotation_words (rowid, quote, note, text) VALUES (NEW.id, NEW.quote, NEW.note, NEW.text)";
+    return {QString("CREATE TRIGGER IF NOT EXISTS annotations_words_insert AFTER INSERT ON annotations BEGIN %1; END").arg(words),
+            QString("CREATE TRIGGER IF NOT EXISTS annotations_words_update AFTER UPDATE OF quote, note, text ON annotations BEGIN %1; END")
+                .arg(words),
+            QString("CREATE TRIGGER IF NOT EXISTS annotations_words_delete AFTER DELETE ON annotations BEGIN DELETE FROM annotation_words "
+                    "WHERE rowid = OLD.id; END")};
 }
