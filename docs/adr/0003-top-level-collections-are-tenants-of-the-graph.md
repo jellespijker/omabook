@@ -98,7 +98,11 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
 - **Where a reader doesn't say its tenant** it is that of the book, collection or view it was opened
   from; the command line and the MCP tools take `--collection` (`collection`), and otherwise use the
   book's or the thing's tenant, or the library's only one, and else say which tenants there are and ask
-  rather than mix (`Tenancy::chosen`). The window chooses among them (#96).
+  rather than mix (`Tenancy::chosen`). The window chooses among them (#96). A scope of its own (a world)
+  is read whole (`Graph::ofScope`), by the command line as by a plugin: it is not part of one tenant's
+  graph, and its things may be met in books of several (a sequel's world in its first story's book
+  too). `omabook.graph.scopes` and `graph scopes` with no tenant named list the worlds of every
+  tenant (#112).
 - **Made by hand in a tenant**: a thing's data keeps the tenants it was made in (`"tenants"`), which
   travels with it, and the membership follows from it as from the rest (format 27, which places the
   whole graph again by the amended rules). It is in the whole library's tenant too, so the one-tenant

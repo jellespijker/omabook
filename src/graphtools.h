@@ -80,6 +80,11 @@ QJsonObject exported(const Graph &graph, qint64 bookId, const QString &scope, co
                      const QString &output = {});
 
 QJsonObject scopes(const Graph &graph);
+// The scopes of their own of every tenant, when none is named in a library of
+// several: each with how many things it holds, read whole (Graph::ofScope)
+// as `show --scope` reads it (#112). Not the general graph, which is one for
+// each tenant.
+QJsonObject everyScope(const Library &library);
 // A world forked from what the tenant sees.
 QJsonObject copyScope(Graph graph, const QString &from, const QString &to);
 QJsonObject removeScope(Library &library, const QString &scope);

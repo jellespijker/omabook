@@ -201,6 +201,21 @@ QJsonObject GraphOps::scopes(const Graph &graph) {
     return {{"scopes", list}, {"tenant", tenantJson(graph)}};
 }
 
+QJsonObject GraphOps::everyScope(const Library &library) {
+    QStringList all;
+    for (const Tenant &tenant : Tenancy::tenants(library))
+        for (const QString &scope : Graph::forTenant(library, tenant).scopes())
+            if (!scope.isEmpty() && !all.contains(scope))
+                all << scope;
+    all.sort();
+    QJsonArray list;
+    for (const QString &scope : all) {
+        const Graph graph = Graph::ofScope(library, scope);
+        list << QJsonObject{{"scope", scope}, {"nodes", GraphCut::whole(graph, scope, 1).things}};
+    }
+    return {{"scopes", list}};
+}
+
 QJsonObject GraphOps::log(const Graph &graph, qint64 bookId) {
     if (const auto why = refused(graph, bookId))
         return *why;

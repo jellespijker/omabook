@@ -22,6 +22,8 @@ struct Kept {
 // Runs `omabook graph <words>` when its first word is one of these; nothing
 // when it isn't. The scopes, a copy of one and the reading log are of the
 // graph's tenant.
-std::optional<Kept> housekeeping(Library &library, const Graph &graph, const QString &sub, const QStringList &words);
+// `scopes` of `everyTenant` lists those of every tenant (GraphOps::everyScope).
+std::optional<Kept> housekeeping(Library &library, const Graph &graph, const QString &sub, const QStringList &words,
+                                 bool everyTenant = false);
 
 } // namespace GraphCommands

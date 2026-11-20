@@ -75,6 +75,9 @@ function plan(scope, book) {
     omabook.graph.link(ilse, teodor, "owes");
     return true;
 }
+// A relation in a world, learned in a book.
+function tie(source, target, relation, book) { return omabook.graph.link(source, target, relation, {book: book, section: 1, fraction: 0.5}); }
+function thing(scope, name, book) { return omabook.graph.upsert({scope: scope, kind: "character", name: name, book: book, section: 0, fraction: 0}); }
 )";
 
 void writePlugin(const QString &folder) {
@@ -163,6 +166,16 @@ struct Someone {
 // The relations a plugin reads of a scope, sorted.
 [[nodiscard]] QStringList relationsOf(Someone &someone, const QString &scope) {
     QStringList kinds = someone.call("relations", {scope}).toVariant().toStringList();
+    kinds.sort();
+    return kinds;
+}
+
+// The relations of a scope a reader of the book's tenant sees (the graph's
+// window, the MCP tools), sorted.
+[[nodiscard]] QStringList relationsFor(const Library &library, qint64 book, const QString &scope) {
+    QStringList kinds;
+    for (const GraphEdge &edge : Graph::ofReader(library, book).whole(scope, 1000).edges)
+        kinds << edge.kind;
     kinds.sort();
     return kinds;
 }
@@ -504,6 +517,7 @@ private slots:
         const QStringList all{"godfather of", "keeps tallies for", "owes", "sits in", "works in"};
         QCOMPARE(ann.call("plan", {"world:s1:plan", story}).toBool(), true);
         QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+        QCOMPARE(relationsFor(ann.library, story, "world:s1:plan"), all);
         const QStringList kept = memberships(ann.library);
         QCOMPARE(rebuilt(ann.library), kept);
         QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
@@ -513,12 +527,53 @@ private slots:
             const auto study = ann.library.collectionNamed("Study");
             QVERIFY(stories && study);
             QVERIFY(ann.library.putInCollection(stories->id, story, false) && ann.library.putInCollection(study->id, story, true));
-            QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+            QCOMPARE(relationsFor(ann.library, story, "world:s1:plan"), all);
             QVERIFY(ann.library.putInCollection(study->id, story, false));
-            QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+            QCOMPARE(relationsFor(ann.library, story, "world:s1:plan"), all);
             const QStringList moved = memberships(ann.library);
             QCOMPARE(rebuilt(ann.library), moved);
         }
+    }
+
+    // A world of a story in a collection other than the largest is among the
+    // scopes a plugin is told of, as it is read whole, in its own tenant.
+    void aWorldInASmallerCollectionIsAmongTheScopes() {
+        QTemporaryDir dir;
+        Someone ann(dir, "Ann");
+        QVERIFY(threeChapters(dir.filePath("story.epub"), "The Glass Tithe"));
+        QVERIFY(Fixtures::epub(dir.filePath("one.epub"), "A Person's Book"));
+        QVERIFY(Fixtures::epub(dir.filePath("two.epub"), "Another Person's Book"));
+        const qint64 story = ann.story(dir.filePath("story.epub"), "story.epub");
+        const qint64 one = ann.library.add(dir.filePath("one.epub")).id;
+        const qint64 two = ann.library.add(dir.filePath("two.epub")).id;
+        QVERIFY(story > 0 && one > 0 && two > 0);
+        QCOMPARE(ann.call("build", {"world:s1", story}).toBool(), true);
+        const auto shelf = ann.library.addCollection("Shelf");
+        QVERIFY(shelf && ann.library.putInCollection(*shelf, story, true));
+        QVERIFY(Tenancy::preferred(ann.library) == Tenant::unfiled());
+        QVERIFY(ann.call("scopes").toVariant().toStringList().contains("world:s1"));
+        QCOMPARE(ann.call("names", {"world:s1"}).toVariant().toStringList(), QStringList({"Hollow", "Ilse"}));
+    }
+
+    // A sequel's world, whose things were met in the first story's book in a
+    // collection, is written on in the sequel's book in none: a relation the
+    // sequel teaches ties two of them whatever tenant each is in (#112).
+    void aWorldIsWrittenOnFromABookOfAnotherTenant() {
+        QTemporaryDir dir;
+        Someone ann(dir, "Ann");
+        QVERIFY(threeChapters(dir.filePath("story.epub"), "The Glass Tithe"));
+        QVERIFY(threeChapters(dir.filePath("sequel.epub"), "The Glass Debt"));
+        const qint64 first = ann.story(dir.filePath("story.epub"), "story.epub");
+        const qint64 sequel = ann.story(dir.filePath("sequel.epub"), "sequel.epub");
+        QVERIFY(first > 0 && sequel > 0);
+        const auto shelf = ann.library.addCollection("Shelf");
+        QVERIFY(shelf && ann.library.putInCollection(*shelf, first, true));
+        const double ilse = ann.call("thing", {"world:s2:plan", "Ilse", first}).toDouble();
+        const double teodor = ann.call("thing", {"world:s2:plan", "Teodor", sequel}).toDouble();
+        QVERIFY(ilse > 0 && teodor > 0);
+        QVERIFY2(ann.call("tie", {ilse, teodor, "owes", sequel}).toDouble() > 0, qPrintable(ann.last));
+        QVERIFY2(ann.call("tie", {teodor, ilse, "godfather of", first}).toDouble() > 0, qPrintable(ann.last));
+        QCOMPARE(relationsOf(ann, "world:s2:plan"), QStringList({"godfather of", "owes"}));
     }
 
     // A library of format 31, whose plan lost those relations, has them back
@@ -526,6 +581,7 @@ private slots:
     void aPlanThatLostItsRelationsHasThemBackAsTheLibraryIsBroughtUpToDate() {
         QTemporaryDir dir;
         QString root;
+        qint64 book = 0;
         {
             Someone ann(dir, "Ann");
             QVERIFY(threeChapters(dir.filePath("story.epub"), "The Glass Tithe"));
@@ -536,18 +592,15 @@ private slots:
             QVERIFY(ChangeLog::exec(ann.library,
                                     "DELETE FROM tenant_edges WHERE edge_id IN (SELECT e.id FROM graph_edges AS e JOIN tenant_nodes AS s "
                                     "ON s.node_id = e.source JOIN tenant_nodes AS t ON t.node_id = e.target WHERE (s.tenant = 0) <> (t.tenant = 0))"));
-            QCOMPARE(relationsOf(ann, "world:s1:plan"), QStringList({"sits in", "works in"}));
+            QCOMPARE(relationsFor(ann.library, story, "world:s1:plan"), QStringList({"sits in", "works in"}));
             QVERIFY(ChangeLog::exec(ann.library, QString("PRAGMA user_version = %1").arg(LibraryMigrations::currentFormat() - 1)));
             root = ann.library.root();
+            book = story;
         }
         Library library(root);
         QVERIFY(library.open());
         QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
-        QStringList kinds;
-        for (const GraphEdge &edge : Graph::ofScope(library, "world:s1:plan").whole("world:s1:plan", 100).edges)
-            kinds << edge.kind;
-        kinds.sort();
-        QCOMPARE(kinds, QStringList({"godfather of", "keeps tallies for", "owes", "sits in", "works in"}));
+        QCOMPARE(relationsFor(library, book, "world:s1:plan"), QStringList({"godfather of", "keeps tallies for", "owes", "sits in", "works in"}));
     }
 };
 

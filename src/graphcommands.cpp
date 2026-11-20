@@ -12,16 +12,14 @@ namespace {
 
 using GraphPrint::print;
 
-GraphCommands::Kept scopes(const Graph &graph) {
-    return {
-        GraphOps::scopes(graph), [](const QJsonObject &answer) {
-            for (const auto &value : answer.value("scopes").toArray()) {
-                const QString scope = value.toObject().value("scope").toString();
-                print(stdout,
-                      QString("%1\t%2").arg(value.toObject().value("nodes").toInt()).arg(scope.isEmpty() ? "(the general graph)" : scope));
-            }
-        }};
+void printScopes(const QJsonObject &answer) {
+    for (const auto &value : answer.value("scopes").toArray()) {
+        const QString scope = value.toObject().value("scope").toString();
+        print(stdout, QString("%1\t%2").arg(value.toObject().value("nodes").toInt()).arg(scope.isEmpty() ? "(the general graph)" : scope));
+    }
 }
+
+GraphCommands::Kept scopes(const Graph &graph) { return {GraphOps::scopes(graph), printScopes}; }
 
 GraphCommands::Kept log(const Graph &graph, qint64 bookId) {
     return {GraphOps::log(graph, bookId), [](const QJsonObject &answer) {
@@ -48,9 +46,9 @@ GraphCommands::Kept take(Library &library, const QString &path) {
 } // namespace
 
 std::optional<GraphCommands::Kept> GraphCommands::housekeeping(Library &library, const Graph &graph, const QString &sub,
-                                                               const QStringList &words) {
+                                                               const QStringList &words, bool everyTenant) {
     if (sub == "scopes")
-        return scopes(graph);
+        return everyTenant ? Kept{GraphOps::everyScope(library), printScopes} : scopes(graph);
     if (sub == "copy-scope" && words.size() == 3)
         return Kept{GraphOps::copyScope(graph, words.at(1), words.at(2)),
                     [to = words.at(2)](const QJsonObject &) { print(stdout, "Copied to " + to + "."); }};
