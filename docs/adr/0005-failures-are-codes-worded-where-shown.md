@@ -40,6 +40,7 @@ agents, which read them as English and should keep doing so.
 
 - A new kind of failure is a code, its sentence in `failure.cpp`, and the sentence in the five catalogs.
 - Opening a book, asking a catalog or a plugin's source for a book's details, and adding books are
-  converted. Other modules keep their English until they are touched; the AI's failures are matched on
-  their English words (whether to try the main model) and are converted when that matching is not.
+  converted. Other modules keep their English until they are touched. The AI's failures are codes too
+  (#119), read once from what the server or the program said (`aifailures`), and whether another model is
+  asked goes by the code, never by the words.
 - Logs stay English: they are for whoever reads the log, not the person at the window.

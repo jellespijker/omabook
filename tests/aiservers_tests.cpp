@@ -111,6 +111,7 @@ AiRequest asking(const QString &question, AiRequest::Tier tier = AiRequest::Main
 // Asks and waits for the end: the whole answer, or why it failed.
 struct Outcome {
     QString answer, failure;
+    Failure::Code code = Failure::Code::Said; // the failure's
     QStringList notes;
 };
 
@@ -120,10 +121,11 @@ Outcome ask(AiProvider &provider, const AiRequest &request) {
     const QMetaObject::Connection pieces =
         QObject::connect(&provider, &AiProvider::delta, &provider, [&](const QString &text) { outcome.answer += text; });
     const QMetaObject::Connection notes =
-        QObject::connect(&provider, &AiProvider::noted, &provider, [&](const QString &note) { outcome.notes << note; });
+        QObject::connect(&provider, &AiProvider::noted, &provider, [&](const Failure &note) { outcome.notes << note.text(); });
     const QMetaObject::Connection end = QObject::connect(&provider, &AiProvider::finished, &provider, [&] { over = true; });
-    const QMetaObject::Connection failing = QObject::connect(&provider, &AiProvider::failed, &provider, [&](const QString &why) {
-        outcome.failure = why;
+    const QMetaObject::Connection failing = QObject::connect(&provider, &AiProvider::failed, &provider, [&](const Failure &why) {
+        outcome.failure = why.text();
+        outcome.code = why.code();
         over = true;
     });
     provider.ask(request);
@@ -366,6 +368,7 @@ private slots:
         fake.refuse("404 Not Found", R"({"error":{"message":"The model `first` does not exist","code":"model_not_found"}})");
         const Outcome refused = ask(provider, asking("q"));
         QVERIFY2(refused.failure.contains("has no model \"first\""), qPrintable(refused.failure));
+        QCOMPARE(refused.code, Failure::Code::AiNoModelSaid);
         QCOMPARE(fake.received.size(), 5);
         QVERIFY(fake.received.at(3).line.startsWith("GET /v1/models"));
     }
@@ -437,6 +440,14 @@ private slots:
         const QString wrongKey = ask(provider, asking("q", AiRequest::Quick)).failure;
         QVERIFY2(wrongKey.contains("didn't accept the key"), qPrintable(wrongKey));
         QCOMPARE(fake.received.size(), 1);
+
+        // Nor is a limit: it says so, by its code, and asks no other model.
+        fake.refuse("429 Too Many Requests", R"({"error":{"message":"Rate limit reached for model gpt","code":"rate_limit_exceeded"}})");
+        const Outcome limited = ask(provider, asking("q", AiRequest::Quick));
+        QCOMPARE(limited.code, Failure::Code::AiLimited);
+        QVERIFY2(limited.failure.contains("Rate limit reached for model gpt"), qPrintable(limited.failure));
+        QVERIFY(limited.notes.isEmpty());
+        QCOMPARE(fake.received.size(), 2);
 
         // An error the server sends in the middle of its stream.
         fake.answer({});

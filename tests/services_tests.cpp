@@ -196,7 +196,7 @@ private slots:
         QSignalSpy failed(&provider, &AiProvider::failed);
         provider.ask(asking("s", {{"user", "q"}}));
         QVERIFY(failed.wait(5000));
-        QVERIFY2(failed.first().first().toString().contains("ANTHROPIC_API_KEY"), qPrintable(failed.first().first().toString()));
+        QVERIFY2(failed.first().first().value<Failure>().text().contains("ANTHROPIC_API_KEY"), qPrintable(failed.first().first().value<Failure>().text()));
         // A model that has no server-side fallback isn't sent the option.
         QVERIFY(!api.request().contains("fallbacks"));
         QCOMPARE(api.request().value("model").toString(), QString("claude-haiku-5-5"));
@@ -209,7 +209,7 @@ private slots:
         QSignalSpy failed(&provider, &AiProvider::failed);
         provider.ask(asking("s", {{"user", "q"}}));
         QVERIFY(failed.wait(5000));
-        QVERIFY(failed.first().first().toString().contains("declined"));
+        QVERIFY(failed.first().first().value<Failure>().text().contains("declined"));
 
         FakeApi overloaded;
         overloaded.body = sse("{\"type\":\"error\",\"error\":{\"type\":\"overloaded_error\",\"message\":\"Overloaded\"}}");
@@ -217,7 +217,7 @@ private slots:
         QSignalSpy secondFailed(&second, &AiProvider::failed);
         second.ask(asking("s", {{"user", "q"}}));
         QVERIFY(secondFailed.wait(5000));
-        QVERIFY(secondFailed.first().first().toString().contains("Overloaded"));
+        QVERIFY(secondFailed.first().first().value<Failure>().text().contains("Overloaded"));
     }
 
     void aCommandIsHandedThePromptAndAnswers() {
@@ -241,13 +241,13 @@ private slots:
         QSignalSpy failed(&failing, &AiProvider::failed);
         failing.ask(asking("s", {{"user", "q"}}));
         QVERIFY(failed.wait(5000));
-        QVERIFY2(failed.first().first().toString().contains("no model loaded"), qPrintable(failed.first().first().toString()));
+        QVERIFY2(failed.first().first().value<Failure>().text().contains("no model loaded"), qPrintable(failed.first().first().value<Failure>().text()));
 
         CommandProvider missing({dir.filePath("not-there")});
         QSignalSpy missingFailed(&missing, &AiProvider::failed);
         missing.ask(asking("s", {{"user", "q"}}));
         QVERIFY(missingFailed.wait(5000));
-        QVERIFY(missingFailed.first().first().toString().contains("can't be started"));
+        QVERIFY(missingFailed.first().first().value<Failure>().text().contains("can't be started"));
     }
 
     void antigravityAnswersThroughItsOwnProtocol() {
@@ -298,13 +298,13 @@ private slots:
         QSignalSpy failed(&failing, &AiProvider::failed);
         failing.ask(asking("s", {{"user", "q"}}));
         QVERIFY(failed.wait(5000));
-        QVERIFY2(failed.first().first().toString().contains("quota exceeded"), qPrintable(failed.first().first().toString()));
+        QVERIFY2(failed.first().first().value<Failure>().text().contains("quota exceeded"), qPrintable(failed.first().first().value<Failure>().text()));
 
         AntigravityProvider silent(script(dir.filePath("quiet"), "cat > /dev/null\n"));
         QSignalSpy silentFailed(&silent, &AiProvider::failed);
         silent.ask(asking("s", {{"user", "q"}}));
         QVERIFY(silentFailed.wait(5000));
-        QVERIFY(silentFailed.first().first().toString().contains("sign in"));
+        QVERIFY(silentFailed.first().first().value<Failure>().text().contains("sign in"));
     }
 
     void claudeCodeRunsWithEveryToolOff() {
@@ -437,7 +437,7 @@ private slots:
             QSignalSpy finished(&provider, &AiProvider::finished), failed(&provider, &AiProvider::failed);
             provider.ask(request);
             if (!finished.wait(5000))
-                answer = QString("failed: ") + (failed.isEmpty() ? QString("no answer") : failed.first().first().toString());
+                answer = QString("failed: ") + (failed.isEmpty() ? QString("no answer") : failed.first().first().value<Failure>().text());
             disconnect(pieces);
             return answer;
         };
@@ -729,12 +729,12 @@ private slots:
             request.messages.append(AiMessage{"user", "q"});
             request.tier = tier;
             const auto pieces = connect(&provider, &AiProvider::delta, this, [&](const QString &text) { outcome.answer += text; });
-            const auto notes = connect(&provider, &AiProvider::noted, this, [&](const QString &note) { outcome.notes << note; });
+            const auto notes = connect(&provider, &AiProvider::noted, this, [&](const Failure &note) { outcome.notes << note.text(); });
             QSignalSpy finished(&provider, &AiProvider::finished), failed(&provider, &AiProvider::failed);
             provider.ask(request);
             const bool ended = QTest::qWaitFor([&] { return !finished.isEmpty() || !failed.isEmpty(); }, 5000);
             if (!failed.isEmpty())
-                outcome.error = failed.first().first().toString();
+                outcome.error = failed.first().first().value<Failure>().text();
             else if (!ended)
                 outcome.error = "The provider neither answered nor failed in time.";
             disconnect(pieces);
@@ -809,7 +809,7 @@ private slots:
         QCOMPARE(outcome.notes.size(), 2);
         QVERIFY2(outcome.notes.first().contains("\"claude-hiaku-5-5\"") && outcome.notes.first().contains("\"claude-opus-5-5\" answered instead"),
                  qPrintable(outcome.notes.first()));
-        QVERIFY2(outcome.error.contains("no such model"), qPrintable(outcome.error));
+        QVERIFY2(outcome.error.contains("has no model \"claude-opus-5-5\""), qPrintable(outcome.error));
     }
 
     void theSettingsPickModelsForTheAiInUse() {

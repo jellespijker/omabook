@@ -428,7 +428,8 @@ void AiAgent::listModels() {
     // and it is dropped with this object.
     std::ignore = QtConcurrent::run([local, server] -> std::expected<QStringList, QString> {
                       if (!local)
-                          return server ? OpenAiProvider::listModels(*server) : std::unexpected(server.error());
+                          return server ? OpenAiProvider::listModels(*server).transform_error(&Failure::text)
+                                        : std::unexpected(server.error());
                       const auto running = OmarchyLocal::running();
                       if (!running)
                           return std::unexpected(running.error());

@@ -4,6 +4,10 @@
 #include <algorithm>
 #include <array>
 
+#include "translator.h"
+
+using namespace Qt::StringLiterals;
+
 namespace {
 
 // Marks a sentence for the catalogs (bin/i18n reads what tr() is handed) and
@@ -92,6 +96,41 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::FfmpegFailed, tr("ffmpeg couldn't read the recording: %1")},
     {Failure::Code::WhisperFailed, tr("whisper.cpp couldn't transcribe the recording: %1")},
     {Failure::Code::WhisperNoTranscript, tr("whisper.cpp wrote no transcript.")},
+    {Failure::Code::AiUnreachable, tr("Can't reach the AI server at %1 (%2).")},
+    {Failure::Code::AiTimedOut, tr("The AI server at %1 took too long to answer.")},
+    {Failure::Code::AiWantsKey, tr("The AI server at %1 wants a key: put one in the settings.")},
+    {Failure::Code::AiRefusedKey, tr("The AI server at %1 didn't accept the key.")},
+    {Failure::Code::AnthropicRefusedKey, tr("The Anthropic API didn't accept the key in ANTHROPIC_API_KEY.")},
+    {Failure::Code::AiLimited, tr("The AI server at %1 is busy or past its limit for now: %2")},
+    {Failure::Code::AiNoModel, tr("The AI server at %1 has no model \"%2\".")},
+    {Failure::Code::AiNoModelSaid, tr("The AI server at %1 has no model \"%2\": %3")},
+    {Failure::Code::AiAnswered, tr("The AI server at %1 answered: %2")},
+    {Failure::Code::AiError, tr("The AI server at %1 answered with an error (%2).")},
+    {Failure::Code::AiDeclined, tr("The model declined to answer this.")},
+    {Failure::Code::AiListsNoModels, tr("The AI server at %1 lists no models.")},
+    {Failure::Code::AiModelsElsewhere,
+     tr("Every model the AI server at %1 lists runs elsewhere; pick one in the settings to send your text there.")},
+    {Failure::Code::AiNoCommand, tr("No AI command is set.")},
+    {Failure::Code::AiPromptUnwritten, tr("The question can't be written to a temporary file.")},
+    {Failure::Code::AiStopped, tr("%1 stopped with an error.")},
+    {Failure::Code::AiProgramSaid, tr("%1: %2")},
+    {Failure::Code::AiModelRefused, tr("%1 didn't take the model \"%2\": %3")},
+    {Failure::Code::AgentReachedForTool,
+     tr("Antigravity tried to use one of its tools instead of answering, and Omabook doesn't let it. Asking again usually "
+        "works; choosing another AI in the settings always does.")},
+    {Failure::Code::AgentNoAnswer, tr("Antigravity gave no answer. Run agy once in a terminal to sign in.")},
+    {Failure::Code::AiMainModelReplaced,
+     // NOLINTNEXTLINE(modernize-raw-string-literal): bin/i18n and the catalogs read plain literals.
+     tr("The model \"%1\", chosen for answers and writing, was refused, so \"%2\" answered instead. Check its name in the settings.")},
+    {Failure::Code::AiMainModelToDefault,
+     tr("The model \"%1\", chosen for answers and writing, was refused, so the default model answered instead. Check its name in "
+        "the settings.")},
+    {Failure::Code::AiQuickModelReplaced,
+     // NOLINTNEXTLINE(modernize-raw-string-literal): bin/i18n and the catalogs read plain literals.
+     tr("The model \"%1\", chosen for reading and parsing, was refused, so \"%2\" answered instead. Check its name in the settings.")},
+    {Failure::Code::AiQuickModelToDefault,
+     tr("The model \"%1\", chosen for reading and parsing, was refused, so the default model answered instead. Check its name in "
+        "the settings.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an
@@ -118,5 +157,19 @@ QString Failure::text() const {
     const auto *const wording = std::ranges::find(wordings, m_code, &Wording::code);
     if (m_code == Code::Said || wording == wordings.end())
         return m_arguments.join(' ');
-    return filled(QCoreApplication::translate("Failure", wording->text, nullptr, static_cast<int>(m_count)), m_arguments);
+    const int count = static_cast<int>(m_count);
+    const QString sentence = QCoreApplication::translate("Failure", wording->text, nullptr, count);
+    // Without a translator (the command line, the MCP server) Qt hands back the
+    // English source, which is a counted sentence's other form ("1 seconds");
+    // the English catalog has its one form too.
+    if (m_count >= 0 && sentence == QString::fromUtf8(wording->text).replace(u"%n"_s, QString::number(count)))
+        return english();
+    return filled(sentence, m_arguments);
+}
+
+QString Failure::english() const {
+    const auto *const wording = std::ranges::find(wordings, m_code, &Wording::code);
+    if (m_code == Code::Said || wording == wordings.end())
+        return m_arguments.join(' ');
+    return filled(Translator::english(wording->text, static_cast<int>(m_count)).replace(u"%n"_s, QString::number(m_count)), m_arguments);
 }

@@ -145,7 +145,7 @@ void Vision::resolve() {
             listed.append(model.toObject().value("id"_L1).toString());
         const auto model = OpenAiProvider::defaultModel(m_server, listed);
         if (!model) {
-            emit failed({.why = Why::Refused, .message = model.error()});
+            emit failed({.why = Why::Refused, .message = model.error().text()});
             return;
         }
         m_model = *model;

@@ -552,12 +552,12 @@ void GraphBuilder::next() {
         }
         next();
     });
-    connect(m_call.get(), &AiCall::failed, this, [this](const QString &error) {
+    connect(m_call.get(), &AiCall::failed, this, [this](const Failure &failure) {
         // Nothing is marked as built, so the same pages go again next time.
         m_chunks.clear();
         m_connect = false;
         next();
-        emit failed(error);
+        emit failed(failure.text());
     });
     emit busyChanged();
     m_call->ask(GraphBuild::request(*library, m_bookId, chunk));

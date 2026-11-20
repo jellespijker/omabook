@@ -58,13 +58,13 @@ void Assistant::refresh() {
             setBusy(false);
         });
         // A model that was refused, and which answered instead.
-        connect(m_provider.get(), &AiProvider::noted, this, [this](const QString &note) {
-            m_note = note;
+        connect(m_provider.get(), &AiProvider::noted, this, [this](const Failure &note) {
+            m_note = note.text();
             emit messagesChanged();
         });
-        connect(m_provider.get(), &AiProvider::failed, this, [this](const QString &error) {
+        connect(m_provider.get(), &AiProvider::failed, this, [this](const Failure &failure) {
             m_failed = true;
-            m_note = error;
+            m_note = failure.text();
             finishAnswer();
             setBusy(false);
         });

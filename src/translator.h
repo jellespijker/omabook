@@ -30,6 +30,10 @@ public:
 
     static QString readLanguage(const QString &path);
     static QString pluralCategory(const QString &language, long long count);
+    // The English catalog's form of a counted text for this count, its %n
+    // left in: for a process that installs no translator, where Qt would
+    // give the source's other form for every count.
+    static QString english(const char *sourceText, int count);
     static QLocale formatLocale(const QString &language);
 
 signals:

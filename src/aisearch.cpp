@@ -224,11 +224,11 @@ void AiSearch::Run::next() {
         }
         next();
     });
-    connect(asking, &AiCall::failed, this, [this](const QString &error) {
+    connect(asking, &AiCall::failed, this, [this](const Failure &failure) {
         if (m_over)
             return;
         cancel();
-        emit failed(error);
+        emit failed(failure.text());
     });
     m_calls.push_back(std::move(call));
     asking->ask(request(m_question, batch, m_known.get()));

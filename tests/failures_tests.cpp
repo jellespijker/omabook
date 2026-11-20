@@ -8,6 +8,8 @@
 #include <QRegularExpression>
 #include <QtTest>
 
+#include "ai.h"
+#include "aifailures.h"
 #include "desk.h"
 #include "failure.h"
 #include "formats.h"
@@ -45,13 +47,19 @@ struct Speaking {
     QFile file(QFINDTESTDATA("../src/failure.cpp"));
     if (!file.open(QIODevice::ReadOnly))
         return {};
-    static const QRegularExpression marked(R"(\btr\("((?:[^"\\]|\\.)*)\")");
+    // A sentence may be split over several literals, which bin/i18n joins.
+    static const QRegularExpression marked(R"re(\btr\(((?:\s*"(?:[^"\\]|\\.)*")+))re");
+    static const QRegularExpression literal(R"re("((?:[^"\\]|\\.)*)")re");
     QStringList found;
     // Comments are skipped, as bin/i18n skips them.
     static const QRegularExpression comment("//[^\n]*");
     const QString code = QString::fromUtf8(file.readAll()).remove(comment);
-    for (const QRegularExpressionMatch &match : marked.globalMatch(code))
-        found << match.captured(1).replace("\\\"", "\"");
+    for (const QRegularExpressionMatch &match : marked.globalMatch(code)) {
+        QString sentence;
+        for (const QRegularExpressionMatch &part : literal.globalMatch(match.captured(1)))
+            sentence += part.captured(1);
+        found << sentence.replace("\\\"", "\"");
+    }
     return found;
 }
 
@@ -178,6 +186,8 @@ private slots:
     void aCountedFailureTakesTheLanguagesPluralForm() {
         const Failure slow(Failure::Code::SourceTooSlow, {"Shelf Helper"}, 45);
         QCOMPARE(slow.text(), QString("Shelf Helper didn't answer within 45 seconds."));
+        // With no translator, as on the command line, English keeps its one form.
+        QCOMPARE(Failure(Failure::Code::SourceTooSlow, {"Shelf Helper"}, 1).text(), QString("Shelf Helper didn't answer within 1 second."));
         {
             // English's own one form is in en.json, which a translator reads.
             const Speaking english("en");
@@ -188,6 +198,53 @@ private slots:
         QCOMPARE(slow.text(), QString("Shelf Helper antwoordde niet binnen 45 seconden."));
         QCOMPARE(Failure(Failure::Code::SourceTooSlow, {"Shelf Helper"}, 1).text(),
                  QString("Shelf Helper antwoordde niet binnen 1 seconde."));
+    }
+
+    void theAiSaysWhyByCodeAndTriesAnotherModelByCode() {
+        QTemporaryDir dir;
+        // A harness that takes no model it is named, and answers without one.
+        const QString claude =
+            Fixtures::script(dir.filePath("claude"), "cat > /dev/null\n"
+                                                     "case \" $* \" in\n"
+                                                     "  *' --model '*) echo 'There is no model like that.' >&2; exit 1;;\n"
+                                                     "  *) echo 'main answer';;\n"
+                                                     "esac\n");
+        // The window speaks French here, and the retry still goes by the code, never by the words.
+        const Speaking french("fr");
+        const auto provider = CommandProvider::agent("claude", claude);
+        provider->setModels({"", "hiaku"});
+        QSignalSpy noted(provider.get(), &AiProvider::noted), finished(provider.get(), &AiProvider::finished);
+        AiRequest request;
+        request.messages.append(AiMessage{"user", "q"});
+        request.tier = AiRequest::Quick;
+        provider->ask(request);
+        QVERIFY(finished.wait(5000));
+        QCOMPARE(noted.size(), 1);
+        const auto note = noted.first().first().value<Failure>();
+        QCOMPARE(note, Failure(Failure::Code::AiQuickModelToDefault, {"hiaku"}));
+        const QString expected = catalog("fr")
+                                     .value("The model \"%1\", chosen for reading and parsing, was refused, so the default model answered "
+                                            "instead. Check its name in "
+                                            "the settings.")
+                                     .toString();
+        QVERIFY(!expected.isEmpty());
+        QCOMPARE(note.text(), QString(expected).replace("%1", "hiaku"));
+
+        // A limit is not about the model: said, in French, and not asked again.
+        CommandProvider limited({Fixtures::script(dir.filePath("limited"), "cat > /dev/null\necho 'rate limited' >&2\nexit 1\n")});
+        limited.setModelFlag("--model");
+        limited.setModels({"", "haiku"});
+        QSignalSpy failed(&limited, &AiProvider::failed), limitedNoted(&limited, &AiProvider::noted);
+        limited.ask(request);
+        QVERIFY(failed.wait(5000));
+        QVERIFY(limitedNoted.isEmpty());
+        QCOMPARE(failed.first().first().value<Failure>(), Failure(Failure::Code::AiProgramSaid, {"limited", "rate limited"}));
+
+        // A harness that speaks of the model it was named refused it, and the sentence names it.
+        const Failure refused = AiFailures::ofProgram("stubborn", "x1", "unknown model");
+        QCOMPARE(refused.code(), Failure::Code::AiModelRefused);
+        QCOMPARE(refused.text(), QString("stubborn n'a pas accepté le modèle « x1 » : unknown model"));
+        QCOMPARE(AiFailures::ofProgram("stubborn", {}, "unknown model").code(), Failure::Code::AiProgramSaid);
     }
 
     void theCommandLineSaysWhyInEnglishUnlessAsked() {

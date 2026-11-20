@@ -103,7 +103,7 @@ void ScriptAi::ask(const QString &prompt, const QString &system, const QString &
         m_plugin->busy(-1);
     };
     connect(asking, &AiCall::done, m_plugin, [finish, resolve](const QString &answer) { finish(resolve, answer); });
-    connect(asking, &AiCall::failed, m_plugin, [finish, reject](const QString &problem) { finish(reject, problem); });
+    connect(asking, &AiCall::failed, m_plugin, [finish, reject](const Failure &problem) { finish(reject, problem.text()); });
     // The answer as it is written, for a script that shows it growing.
     if (onText.isCallable())
         connect(asking, &AiCall::delta, m_plugin, [this, onText](const QString &piece) {

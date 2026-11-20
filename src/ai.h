@@ -14,6 +14,8 @@
 #include <memory>
 #include <optional>
 
+#include "failure.h"
+
 class QNetworkReply;
 class Settings;
 
@@ -76,24 +78,24 @@ public:
 signals:
     void delta(const QString &text);
     void finished();
-    void failed(const QString &error);
-    // Something the asker should know although the answer came, in English:
-    // a model that was refused and which one answered instead.
-    void noted(const QString &note);
+    // Why there is no answer, by a code (ADR 0005), worded where it is shown.
+    void failed(const Failure &failure);
+    // Something the asker should know although the answer came: a model that
+    // was refused and which one answered instead.
+    void noted(const Failure &note);
 
 protected:
     // Called by each provider as it sends a request (also a retry).
     void began(const AiRequest &request, const QString &model);
 
     // A model that was refused must never break reading. After a failure
-    // that is about the model, before anything was answered, this is the
-    // model to ask once more: the main one, or the provider's default when
-    // it was the main one that was refused. Nothing when there is none to try.
-    [[nodiscard]] std::optional<QString> modelToRetry(const QString &refused, const QString &error) const;
-    // The failure, saying which model it was and what it was asked for.
-    static QString withModel(const QString &error, const QString &model, const AiRequest &request);
+    // that is about the model (AiFailures::aboutTheModel), before anything was
+    // answered, this is the model to ask once more: the main one, or the
+    // provider's default when it was the main one that was refused. Nothing
+    // when there is none to try.
+    [[nodiscard]] std::optional<QString> modelToRetry(const QString &refused, const Failure &failure) const;
     // What is noted when another model answered in place of a refused one.
-    static QString retryNote(const QString &refused, const QString &instead, const AiRequest &request);
+    static Failure retryNote(const QString &refused, const QString &instead, const AiRequest &request);
 
 private:
     AiModels m_models;
@@ -129,7 +131,8 @@ private:
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_reply;
     QByteArray m_buffer, m_body;
-    QString m_stopReason, m_streamError;
+    QString m_stopReason;
+    QJsonObject m_streamError; // an error event in the stream
 };
 
 // Any program that reads a prompt on standard input and writes its answer to

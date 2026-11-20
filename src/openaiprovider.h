@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QByteArray>
+#include <QJsonObject>
 #include <QNetworkAccessManager>
 #include <QPointer>
 #include <QString>
@@ -32,13 +33,13 @@ public:
 
     // The models the server lists (GET /models), in its order, waiting at
     // most `timeout`. The command line waits for it; the window asks it on
-    // a thread of its own. Fails, in English, saying why.
-    [[nodiscard]] static std::expected<QStringList, QString> listModels(const AiServer &server,
+    // a thread of its own. Fails saying why.
+    [[nodiscard]] static std::expected<QStringList, Failure> listModels(const AiServer &server,
                                                                         std::chrono::milliseconds timeout = std::chrono::seconds(5));
     // The model asked when none is chosen: what the server is known to
     // serve, else the first it lists that runs on it (never one whose name
     // says it sends the text on elsewhere; see AiEndpoints::runsElsewhere).
-    [[nodiscard]] static std::expected<QString, QString> defaultModel(const AiServer &server, const QStringList &listed);
+    [[nodiscard]] static std::expected<QString, Failure> defaultModel(const AiServer &server, const QStringList &listed);
 
 private:
     // Asks for this model, or for the default (found first) when it is empty.
@@ -55,6 +56,6 @@ private:
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_reply;
     QByteArray m_buffer, m_body;
-    QString m_streamError;
+    QJsonObject m_streamError; // an error event in the stream
     ThinkingFilter m_thinking; // for servers that send it inside the answer
 };

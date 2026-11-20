@@ -556,8 +556,8 @@ public:
             asking->deleteLater();
             p->busy(-1);
         });
-        connect(asking, &AiCall::failed, p, [this, asking, reject](const QString &problem) {
-            reject.call({problem});
+        connect(asking, &AiCall::failed, p, [this, asking, reject](const Failure &problem) {
+            reject.call({problem.text()});
             asking->deleteLater();
             p->busy(-1);
         });

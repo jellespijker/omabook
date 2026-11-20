@@ -22,6 +22,8 @@ moves those lines under its version.
 ### Fixed
 
 - Why a book can't be opened, a catalog can't be reached or a file can't be added is said in the desktop's language in the window (Dutch, German, French, Spanish), not in English. Commands keep English for scripts; `--translated` says it in the desktop's language (#70).
+- Why the AI couldn't answer (a server out of reach, a key refused, a limit reached, a model it doesn't have) and which model answered in place of a refused one are said in the desktop's language in the window too; a server past its rate limit or quota is no longer asked again on another model because its message mentions one (#119).
+- A sentence that counts one says it in the singular on the command line: "1 second", not "1 seconds" (#119).
 
 ### Fixed
 

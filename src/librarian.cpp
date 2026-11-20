@@ -173,8 +173,8 @@ void Librarian::askCollections() {
         add(Curation::collectionsFrom(answer, batch, collections));
         askCollections();
     });
-    connect(m_tidyCall.get(), &AiCall::failed, this, [this](const QString &error) {
-        m_backend->say(error);
+    connect(m_tidyCall.get(), &AiCall::failed, this, [this](const Failure &failure) {
+        m_backend->say(failure.text());
         m_toSort.clear();
         setBusy(false);
     });
@@ -213,8 +213,8 @@ void Librarian::askSeries() {
         add(series);
         finishTidy();
     });
-    connect(m_tidyCall.get(), &AiCall::failed, this, [this](const QString &error) {
-        m_backend->say(error);
+    connect(m_tidyCall.get(), &AiCall::failed, this, [this](const Failure &failure) {
+        m_backend->say(failure.text());
         finishTidy();
     });
     m_tidyCall->ask(Curation::seriesRequest(books));
@@ -383,8 +383,8 @@ void Librarian::startAnswer(std::unique_ptr<AiProvider> provider, const AiReques
         m_answering = false;
         emit answerChanged();
     });
-    connect(m_askCall.get(), &AiCall::failed, this, [this](const QString &error) {
-        m_answer = error;
+    connect(m_askCall.get(), &AiCall::failed, this, [this](const Failure &failure) {
+        m_answer = failure.text();
         m_answering = false;
         emit answerChanged();
     });
@@ -420,8 +420,8 @@ void Librarian::suggest() {
         if (!suggested.books.isEmpty())
             checkSuggestions(suggested);
     });
-    connect(m_askCall.get(), &AiCall::failed, this, [this](const QString &error) {
-        m_answer = error;
+    connect(m_askCall.get(), &AiCall::failed, this, [this](const Failure &failure) {
+        m_answer = failure.text();
         m_answering = false;
         emit answerChanged();
     });
@@ -541,8 +541,8 @@ void Librarian::change(const QString &wish) {
         m_changing = false;
         emit changeChanged();
     });
-    connect(m_changeCall.get(), &AiCall::failed, this, [this](const QString &error) {
-        m_changeNote = error;
+    connect(m_changeCall.get(), &AiCall::failed, this, [this](const Failure &failure) {
+        m_changeNote = failure.text();
         m_changing = false;
         emit changeChanged();
     });

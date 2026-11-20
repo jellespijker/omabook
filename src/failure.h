@@ -95,6 +95,33 @@ public:
         FfmpegFailed,          // {what it said}
         WhisperFailed,         // {what it said}
         WhisperNoTranscript,   // {}
+        // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
+        // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
+        AiUnreachable,       // {where, the network's reason}
+        AiTimedOut,          // {where}
+        AiWantsKey,          // {where}
+        AiRefusedKey,        // {where}
+        AnthropicRefusedKey, // {}
+        AiLimited,           // {where, what it said}: busy, or over a rate or a quota
+        AiNoModel,           // {where, model}
+        AiNoModelSaid,       // {where, model, what it said}
+        AiAnswered,          // {where, what it said}
+        AiError,             // {where, HTTP status}
+        AiDeclined,          // {}
+        AiListsNoModels,     // {where}
+        AiModelsElsewhere,   // {where}
+        AiNoCommand,         // {}
+        AiPromptUnwritten,   // {}
+        AiStopped,           // {name}
+        AiProgramSaid,       // {name, what it said}
+        AiModelRefused,      // {name, model, what it said}
+        AgentReachedForTool, // {}
+        AgentNoAnswer,       // {}
+        // Not failures but notes on the way: a refused model, and the one that answered instead.
+        AiMainModelReplaced,   // {refused, instead}
+        AiMainModelToDefault,  // {refused}
+        AiQuickModelReplaced,  // {refused, instead}
+        AiQuickModelToDefault, // {refused}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.
@@ -107,6 +134,8 @@ public:
     [[nodiscard]] const QStringList &arguments() const { return m_arguments; }
     // The sentence, in the language of the translator installed (English without one).
     [[nodiscard]] QString text() const;
+    // The sentence in English whatever translator is installed, for the log.
+    [[nodiscard]] QString english() const;
 
     bool operator==(const Failure &) const = default;
 

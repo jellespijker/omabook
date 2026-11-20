@@ -28,8 +28,8 @@ namespace {
             ok = true;
             loop.quit();
         });
-        QObject::connect(&call, &AiCall::failed, &loop, [&](const QString &problem) {
-            *error = problem;
+        QObject::connect(&call, &AiCall::failed, &loop, [&](const Failure &problem) {
+            *error = problem.text();
             loop.quit();
         });
         call.ask(request);

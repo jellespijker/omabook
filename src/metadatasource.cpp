@@ -354,7 +354,7 @@ QList<MetaCandidate> CalibreMetadataSource::read(const QByteArray &output, QStri
 AiMetadataSource::AiMetadataSource(AiProvider *provider, const QString &fileName, const QString &opening, QObject *parent)
     : MetadataSource(parent), m_provider(provider), m_fileName(fileName), m_opening(opening) {
     connect(provider, &AiProvider::delta, this, [this](const QString &text) { m_answer += text; });
-    connect(provider, &AiProvider::failed, this, [this](const QString &error) { emit failed(Failure::said(error)); });
+    connect(provider, &AiProvider::failed, this, &MetadataSource::failed);
     connect(provider, &AiProvider::finished, this, [this] {
         MetaCandidate candidate = Prompts::parseMetadata(m_answer, m_found);
         candidate.source = name();

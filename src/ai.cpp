@@ -14,9 +14,11 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QStandardPaths>
+#include <QUrl>
 #include <algorithm>
 #include <array>
 
+#include "aifailures.h"
 #include "settings.h"
 
 namespace {
@@ -52,10 +54,8 @@ QString AiProvider::modelFor(const AiRequest &request) const {
     return quick ? m_models.quick : m_models.main;
 }
 
-std::optional<QString> AiProvider::modelToRetry(const QString &refused, const QString &error) const {
-    // Only a failure that is about the model: one about the network or a
-    // limit would fail the same way again, on a dearer model.
-    if (refused.isEmpty() || !error.contains("model", Qt::CaseInsensitive))
+std::optional<QString> AiProvider::modelToRetry(const QString &refused, const Failure &failure) const {
+    if (refused.isEmpty() || !AiFailures::aboutTheModel(failure))
         return std::nullopt;
     const QString instead = refused != m_models.main ? m_models.main : QString();
     if (instead == refused)
@@ -63,15 +63,12 @@ std::optional<QString> AiProvider::modelToRetry(const QString &refused, const QS
     return instead;
 }
 
-QString AiProvider::withModel(const QString &error, const QString &model, const AiRequest &request) {
-    if (model.isEmpty() || !error.contains("model", Qt::CaseInsensitive))
-        return error;
-    return QString("%1 (The model was \"%2\", %3.)").arg(error, model, Ai::tierName(request.tier));
-}
-
-QString AiProvider::retryNote(const QString &refused, const QString &instead, const AiRequest &request) {
-    return QString("The model \"%1\", chosen %2, was refused, so %3 answered instead. Check its name in the settings.")
-        .arg(refused, Ai::tierName(request.tier), instead.isEmpty() ? QString("the default model") : "\"" + instead + "\"");
+Failure AiProvider::retryNote(const QString &refused, const QString &instead, const AiRequest &request) {
+    using enum Failure::Code;
+    const bool quick = request.tier == AiRequest::Quick;
+    if (instead.isEmpty())
+        return {quick ? AiQuickModelToDefault : AiMainModelToDefault, {refused}};
+    return {quick ? AiQuickModelReplaced : AiMainModelReplaced, {refused, instead}};
 }
 
 AnthropicProvider::AnthropicProvider(const QString &apiKey, const QString &model, const QString &baseUrl, QObject *parent)
@@ -86,10 +83,12 @@ AiProvider::AiProvider(QObject *parent) : QObject(parent) {
         qCInfo(lcAi).noquote() << name() << "answered:" << m_received << "characters in"
                                << (QDateTime::currentMSecsSinceEpoch() - m_began) << "ms";
     });
-    connect(this, &AiProvider::failed, this, [this](const QString &error) {
-        qCWarning(lcAi).noquote() << name() << "failed after" << (QDateTime::currentMSecsSinceEpoch() - m_began) << "ms:" << error;
+    // Logs stay English: they are for whoever reads the log (ADR 0005).
+    connect(this, &AiProvider::failed, this, [this](const Failure &failure) {
+        qCWarning(lcAi).noquote() << name() << "failed after" << (QDateTime::currentMSecsSinceEpoch() - m_began)
+                                  << "ms:" << failure.english();
     });
-    connect(this, &AiProvider::noted, this, [this](const QString &note) { qCInfo(lcAi).noquote() << name() << note; });
+    connect(this, &AiProvider::noted, this, [this](const Failure &note) { qCInfo(lcAi).noquote() << name() << note.english(); });
 }
 
 void AiProvider::began(const AiRequest &request, const QString &model) {
@@ -143,7 +142,7 @@ void AnthropicProvider::send(const QString &named) {
     m_buffer.clear();
     m_body.clear();
     m_stopReason.clear();
-    m_streamError.clear();
+    m_streamError = {};
     m_reply = m_network.post(http, QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(m_reply, &QNetworkReply::readyRead, this, &AnthropicProvider::read);
     connect(m_reply, &QNetworkReply::finished, this, &AnthropicProvider::done);
@@ -183,7 +182,7 @@ void AnthropicProvider::read() {
             if (!reason.isEmpty())
                 m_stopReason = reason;
         } else if (type == "error") {
-            m_streamError = event.value("error").toObject().value("message").toString();
+            m_streamError = event;
         }
     }
 }
@@ -196,37 +195,30 @@ void AnthropicProvider::done() {
     m_reply = nullptr;
     reply->deleteLater();
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
-    QString problem;
-    if (status != 200) {
-        const QJsonObject error = QJsonDocument::fromJson(m_body).object().value("error").toObject();
-        const QString message = error.value("message").toString();
-        if (status == 401)
-            problem = "The Anthropic API didn't accept the key in ANTHROPIC_API_KEY.";
-        else if (status == 404 && error.value("type").toString() == "not_found_error")
-            problem = "The Anthropic API knows no such model: " + message;
-        else if (!message.isEmpty())
-            problem = "The Anthropic API answered: " + message;
-        else if (status == 0)
-            problem = "The Anthropic API can't be reached: " + reply->errorString();
+    if (status == 200 && m_streamError.isEmpty()) {
+        // A refusal is not about which model it was, so not something another try mends.
+        if (m_stopReason == "refusal")
+            emit failed(Failure(Failure::Code::AiDeclined));
         else
-            problem = QString("The Anthropic API answered with an error (%1).").arg(status);
-    } else if (!m_streamError.isEmpty()) {
-        problem = "The Anthropic API answered: " + m_streamError;
-    } else if (m_stopReason == "refusal") {
-        // Not about which model it was, so not something another try mends.
-        emit failed("The model declined to answer this.");
+            emit finished();
         return;
     }
-    if (problem.isEmpty()) {
-        emit finished();
-        return;
-    }
-    if (const auto next = !m_answered && status != 401 ? modelToRetry(m_sent, problem) : std::nullopt) {
+    const Failure problem =
+        status == 401 ? Failure(Failure::Code::AnthropicRefusedKey)
+                      : AiFailures::ofServer(
+                            {.where = QUrl(m_baseUrl).authority(),
+                             .status = status,
+                             .error = reply->error(),
+                             .errorString = reply->errorString(),
+                             .said = AiFailures::serverSaid(status == 200 ? m_streamError : QJsonDocument::fromJson(m_body).object()),
+                             .model = m_sent.isEmpty() ? m_model : m_sent,
+                             .keySet = true});
+    if (const auto next = !m_answered ? modelToRetry(m_sent, problem) : std::nullopt) {
         emit noted(retryNote(m_sent, *next, m_request));
         send(*next);
         return;
     }
-    emit failed(withModel(problem, m_sent, m_request));
+    emit failed(problem);
 }
 
 CommandProvider::CommandProvider(const QStringList &command, QObject *parent) : AiProvider(parent), m_command(command) {
@@ -259,7 +251,7 @@ CommandProvider::CommandProvider(const QStringList &command, QObject *parent) : 
         }
         // What it said in place of an answer is the reason, where it gave one.
         const QString said = held.trimmed().isEmpty() ? errors : held.trimmed();
-        const QString problem = said.isEmpty() ? name() + " stopped with an error." : name() + ": " + said.right(400);
+        const Failure problem = AiFailures::ofProgram(name(), m_model, said.right(400));
         // A model the harness doesn't take is asked for once more without it.
         if (const auto next = !m_answered ? modelToRetry(m_model, problem) : std::nullopt) {
             emit noted(retryNote(m_model, *next, m_request));
@@ -267,11 +259,11 @@ CommandProvider::CommandProvider(const QStringList &command, QObject *parent) : 
             begin();
             return;
         }
-        emit failed(withModel(problem, m_model, m_request));
+        emit failed(problem);
     });
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
-            emit failed("The AI command can't be started: " + m_command.value(0));
+            emit failed(Failure(Failure::Code::ProgramWontStart, {name(), m_command.value(0)}));
     });
     // The account is asked for first, and the answer starts the program. A
     // helper that fails or says nothing means the harness's own default.
@@ -342,7 +334,7 @@ void CommandProvider::ask(const AiRequest &request) {
     cancel();
     m_cancelled = false;
     if (m_command.isEmpty()) {
-        emit failed("No AI command is set.");
+        emit failed(Failure(Failure::Code::AiNoCommand));
         return;
     }
     // One prompt: the instructions, then the conversation.
@@ -384,7 +376,7 @@ void CommandProvider::start(const QString &accountHome) {
             // Named .md so a harness that goes by the extension reads it as text.
             m_promptFile = std::make_unique<QTemporaryFile>(QDir::tempPath() + "/omabook-prompt-XXXXXX.md");
             if (!m_promptFile->open() || m_promptFile->write(m_prompt.toUtf8()) < 0 || !m_promptFile->flush()) {
-                emit failed("The question can't be written to a temporary file.");
+                emit failed(Failure(Failure::Code::AiPromptUnwritten));
                 return;
             }
             fromFile = true;
@@ -429,26 +421,24 @@ AntigravityProvider::AntigravityProvider(const QString &program, QObject *parent
         // A turn that only reached for a tool says so in Antigravity's terms
         // (settings files and allow-rules), which mean nothing here.
         const bool reachedForTool = m_error.contains("permission", Qt::CaseInsensitive) && !m_answered;
-        const QString failure = reachedForTool ? QString("Antigravity tried to use one of its tools instead of answering, and Omabook doesn't "
-                                                         "let it. Asking again usually works; choosing another AI in the settings always does.")
-                                : !m_error.isEmpty() ? "Antigravity: " + m_error
-                                : code == 0 && status == QProcess::NormalExit && m_answered ? QString()
-                                : problem.isEmpty() ? QString("Antigravity gave no answer. Run agy once in a terminal to sign in.")
-                                                    : "Antigravity: " + problem.right(400);
-        if (failure.isEmpty()) {
+        if (!reachedForTool && m_error.isEmpty() && code == 0 && status == QProcess::NormalExit && m_answered) {
             emit finished();
             return;
         }
+        const QString said = m_error.isEmpty() ? problem.right(400) : m_error;
+        Failure failure(Failure::Code::AgentReachedForTool);
+        if (!reachedForTool)
+            failure = said.isEmpty() ? Failure(Failure::Code::AgentNoAnswer) : AiFailures::ofProgram(name(), m_model, said);
         if (const auto next = !m_answered ? modelToRetry(m_model, failure) : std::nullopt) {
             emit noted(retryNote(m_model, *next, m_request));
             start(*next);
             return;
         }
-        emit failed(withModel(failure, m_model, m_request));
+        emit failed(failure);
     });
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
-            emit failed("Antigravity can't be started: " + m_program);
+            emit failed(Failure(Failure::Code::ProgramWontStart, {name(), m_program}));
     });
 }
 

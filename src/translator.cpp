@@ -98,6 +98,17 @@ QLocale Translator::formatLocale(const QString &language) {
     return QLocale(language);
 }
 
+QString Translator::english(const char *sourceText, int count) {
+    static const QJsonObject catalog = [] {
+        QFile file(":/i18n/en.json");
+        return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject();
+    }();
+    const QString source = QString::fromUtf8(sourceText);
+    const QJsonObject forms = catalog.value(source).toObject();
+    const QString form = forms.value(count < 0 ? "other" : pluralCategory("en", count)).toString();
+    return form.isEmpty() ? source : form;
+}
+
 QString Translator::translate(const char *, const char *sourceText, const char *, int n) const {
     // A null string tells Qt there is no translation, so it shows the English.
     QReadLocker locker(&m_lock);

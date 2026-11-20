@@ -72,7 +72,7 @@ int models(bool json) {
         return fail(server.error());
     const auto listed = OpenAiProvider::listModels(*server);
     if (!listed)
-        return fail(listed.error());
+        return fail(listed.error().text());
     QJsonArray rows;
     for (const QString &model : *listed) {
         const bool elsewhere = AiEndpoints::runsElsewhere(model);

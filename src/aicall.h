@@ -23,8 +23,8 @@ public:
 signals:
     void delta(const QString &text);
     void done(const QString &answer);
-    void failed(const QString &error);
-    void noted(const QString &note);
+    void failed(const Failure &failure);
+    void noted(const Failure &note);
 
 private:
     void gather(const QString &text);

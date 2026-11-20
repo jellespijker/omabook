@@ -13,7 +13,7 @@
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <algorithm>
-#include <cstdio>
+#include <print>
 
 #include "aicall.h"
 #include "annotationcontext.h"
@@ -102,16 +102,16 @@ bool BookOps::ask(const AiRequest &request, QString *answer, QString *error, con
         ok = true;
         loop.quit();
     });
-    QObject::connect(&call, &AiCall::failed, &loop, [error, &loop](const QString &problem) {
-        *error = problem;
+    QObject::connect(&call, &AiCall::failed, &loop, [error, &loop](const Failure &problem) {
+        *error = problem.text();
         loop.quit();
     });
-    QObject::connect(&call, &AiCall::noted, &loop, [note](const QString &said) {
+    QObject::connect(&call, &AiCall::noted, &loop, [note](const Failure &said) {
         // Never lost: with nobody to hand it to, it goes to standard error.
         if (note)
-            *note = said;
+            *note = said.text();
         else
-            fprintf(stderr, "%s\n", qPrintable(said));
+            std::println(stderr, "{}", said.text().toStdString());
     });
     call.ask(request);
     loop.exec();
