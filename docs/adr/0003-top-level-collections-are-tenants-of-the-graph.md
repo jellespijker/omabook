@@ -74,6 +74,14 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
   after the copy every step keeps, and the first `Tenancy::follow` as the library is then set up, which
   fills the membership of the whole graph at once.
 
+### As built (#96)
+
+- **The window shows one tenant at a time.** `GraphTenants` (one for the window) lists the tenants to switch
+  between, the top-level collections and then Unfiled while a book is in it, keeps the one shown, and
+  remembers it per library (`graph_tenants` in `config.json`). The graph and the chronology take it as
+  their `tenant` property, which their readers keep to (#95); a book's graph or chronology opens in a
+  tenant of the book's own. With one tenant for the whole library there is that one and no switch.
+
 ## Considered options
 
 - **Filtering at read time** (until now): one graph, no duplication; but every reader has to remember
