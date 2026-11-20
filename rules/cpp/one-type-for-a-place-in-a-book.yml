@@ -1,0 +1,41 @@
+id: one-type-for-a-place-in-a-book
+language: cpp
+severity: error
+message: A new section and fraction pair; a place in a book is a BookPlace (bookplace.h), a stretch of its text a Passage.
+note: |
+  A place in a book was said several ways (the reading place, the graph's
+  moments, bookmarks and highlights), each a section and a fraction of its own,
+  compared and written out each in its own way (#88). It is one type now:
+  BookPlace, ordered as the book is read and written as {"section", "fraction"}
+  everywhere; a stretch of text is a Passage, two places and its words. Keep a
+  BookPlace (or a GraphPlace, which is one in a given book) instead of the two
+  numbers, and take one as a parameter. What QML calls with two numbers makes
+  the BookPlace at once.
+rule:
+  any:
+    # A struct or class that keeps the two numbers side by side.
+    - kind: field_declaration
+      regex: '^double\s+fraction\b'
+      any:
+        - follows: { kind: field_declaration, regex: '^int\s+section\b', stopBy: end }
+        - precedes: { kind: field_declaration, regex: '^int\s+section\b', stopBy: end }
+      not: { matches: the-place-types }
+    # A function that takes them as two parameters.
+    - all:
+        - matches: parameter
+        - regex: '^double\s+fraction\b'
+        - any:
+            - follows: { matches: section-parameter, stopBy: end }
+            - precedes: { matches: section-parameter, stopBy: end }
+        - not: { matches: the-place-types }
+utils:
+  # The types themselves, and GraphPlace's constructor from the two numbers.
+  the-place-types:
+    inside: { kind: struct_specifier, has: { field: name, regex: '^(BookPlace|GraphPlace)$' }, stopBy: end }
+  parameter:
+    any:
+      - kind: parameter_declaration
+      - kind: optional_parameter_declaration
+  section-parameter:
+    matches: parameter
+    regex: '^int\s+section\b'

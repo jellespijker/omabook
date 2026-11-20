@@ -1,0 +1,17 @@
+id: one-type-for-a-place-in-a-book
+valid:
+  - "struct BookPlace { int section = 0; double fraction = 0; };"
+  - "struct Progress { BookPlace place; double percent = 0; qint64 updated = 0; };"
+  - "struct Chapter { int section = 0; QString title; };"
+  - "struct Stretch { double fraction = 0; double percent = 0; };"
+  - "void goTo(const BookPlace &place);"
+  - "struct GraphPlace : BookPlace { GraphPlace(qint64 bookId, int section, double fraction); };"
+  - "void goTo(int section, const QString &anchor = {});"
+  - "double fractionOf(int section, double percent);"
+invalid:
+  - "struct Mark { qint64 id = 0; int section = 0; double fraction = 0; QString text; };"
+  - "struct Mark { double fraction = 0; QString text; int section = 0; };"
+  - "class Seen { int section; double fraction; };"
+  - "void goTo(int section, double fraction);"
+  - "void goTo(qint64 book, int section, double fraction = 1.0);"
+  - "void goTo(double fraction, int section = 0);"
