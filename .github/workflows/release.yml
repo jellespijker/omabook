@@ -45,7 +45,12 @@ jobs:
           arch=('x86_64')
           url='https://github.com/jellespijker/omabook'
           license=('MIT' 'GPL-3.0-or-later')
-          options=('!debug')
+          # Not with link-time optimisation, which makepkg turns on: GCC 16's,
+          # across the whole program, took a function for one value of an
+          # argument its callers pass several of (GraphCut::whole always cut at
+          # 2), and failed tenantreaders_tests (#112). The package is built as
+          # every build of Omabook is tested.
+          options=('!debug' '!lto')
           depends=('hicolor-icon-theme' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'xdg-desktop-portal'
                    'libarchive' 'poppler-qt6' 'libsodium')
           makedepends=('cmake' 'gcc' 'make' 'pkgconf')
