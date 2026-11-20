@@ -11,6 +11,7 @@
 #include "library.h"
 #include "settings.h"
 #include "spaces.h"
+#include "tenancyleave.h"
 
 using namespace Qt::StringLiterals;
 
@@ -70,26 +71,35 @@ void setState(const Library &library, const QString &key, qint64 value) {
     return placed;
 }
 
-// Where the tables have them now.
-[[nodiscard]] QSet<qint64> keptOf(const Library &library, qint64 bookId) {
-    QSet<qint64> kept;
-    for (QSqlQuery found = ChangeLog::query(library, u"SELECT tenant FROM tenant_books WHERE book_id = ?"_s, {bookId}); found.next();)
-        kept.insert(found.value(0).toLongLong());
+// Where the tables have these books now: read whole for many books (a
+// collection changed), book by book for a few.
+[[nodiscard]] Placed keptNow(const Library &library, const Placed &books) {
+    Placed kept;
+    const auto read = [&kept](QSqlQuery found) {
+        while (found.next())
+            kept[found.value(1).toLongLong()].insert(found.value(0).toLongLong());
+    };
+    if (books.size() > fewBooks)
+        read(ChangeLog::query(library, u"SELECT tenant, book_id FROM tenant_books"_s));
+    else
+        for (const qint64 book : books.keys())
+            read(ChangeLog::query(library, u"SELECT tenant, book_id FROM tenant_books WHERE book_id = ?"_s, {book}));
     return kept;
 }
 
-// Each book where it belongs: a tenant it left is taken back (which marks
-// the graph for a rebuild), one it joined adds what it taught there (the
+// Each book where it belongs: a tenant it left takes back what it alone gave
+// there (TenancyLeave), one it joined adds what it taught there (the
 // triggers of tenant_books). Says whether any was somewhere else.
 bool settle(const Library &library, const Placed &wanted) {
     bool moved = false;
+    const Placed was = keptNow(library, wanted);
     for (auto book = wanted.cbegin(); book != wanted.cend(); ++book) {
-        const QSet<qint64> kept = keptOf(library, book.key());
-        for (const qint64 left : kept - book.value())
-            ChangeLog::exec(library, u"DELETE FROM tenant_books WHERE tenant = ? AND book_id = ?"_s, {left, book.key()});
-        for (const qint64 joined : book.value() - kept)
+        const QSet<qint64> there = was.value(book.key());
+        for (const qint64 left : there - book.value())
+            TenancyLeave::take(library, left, book.key());
+        for (const qint64 joined : book.value() - there)
             ChangeLog::exec(library, u"INSERT OR IGNORE INTO tenant_books (tenant, book_id) VALUES (?, ?)"_s, {joined, book.key()});
-        moved = moved || kept != book.value();
+        moved = moved || there != book.value();
     }
     return moved;
 }

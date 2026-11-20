@@ -1,8 +1,10 @@
 // The tenants of the knowledge graph in storage (ADR 0003, #94): each thing,
 // relation and fact stored once, with the tenants that see it, derived from
-// the books it came from.
+// the books it came from; and a book's knowledge following it as it moves
+// between collections (#97).
 
 #include <QDir>
+#include <QElapsedTimer>
 #include <QScopeGuard>
 #include <QSqlQuery>
 #include <QTemporaryDir>
@@ -31,7 +33,7 @@ struct Split {
     qint64 sea = 0, both = 0, waves = 0, loose = 0;
     qint64 fiction = 0, study = 0;
     qint64 mara = 0, bell = 0, theme = 0, viscosity = 0, note = 0, ann = 0, bo = 0;
-    qint64 keeps = 0, echoes = 0, wrote = 0, seaFact = 0, wavesFact = 0, noteFact = 0;
+    qint64 keeps = 0, echoes = 0, wrote = 0, seaFact = 0, wavesFact = 0, noteFact = 0, bothFact = 0;
 
     Split() {
         library.open();
@@ -64,6 +66,7 @@ struct Split {
         ann = graph.named({}, "author", "Ann Author");
         bo = graph.named({}, "author", "Bo Writer");
         wrote = edgeBetween(ann, graph.bookNode(sea));
+        bothFact = graph.learn(bell, "alias", "The old bell", GraphMoment{{both, 0, 0.3}, "old bell"});
     }
     qint64 book(const QString &title, const QString &author) {
         BookMeta meta;
@@ -86,7 +89,33 @@ struct Split {
         std::ranges::sort(all, {}, &Tenant::globalId);
         return all;
     }
+    // Sea Wall out of Fiction and into Study.
+    [[nodiscard]] bool moveSeaToStudy() {
+        return library.putInCollection(fiction, sea, false) && library.putInCollection(study, sea, true);
+    }
+    // Both Shores out of Physics, and so of Study: in Fiction alone.
+    [[nodiscard]] bool takeBothOutOfStudy() { return library.putInCollection(library.collectionNamed("Study/Physics")->id, both, false); }
 };
+
+// Each row of `table` (tenant_nodes, tenant_edges, tenant_facts, tenant_books) in `tenant`.
+[[nodiscard]] qint64 rowsIn(const Library &library, const QString &table, const Tenant &tenant) {
+    QSqlQuery query =
+        ChangeLog::query(library, QString("SELECT COUNT(*) FROM %1 WHERE tenant = ?").arg(table), {Tenancy::filter(library, tenant).id()});
+    return query.next() ? query.value(0).toLongLong() : -1;
+}
+
+// The books of the facts `tenant` sees, apart from those every tenant sees.
+[[nodiscard]] QSet<qint64> booksOfFactsIn(const Library &library, const Tenant &tenant) {
+    QSet<qint64> books;
+    for (QSqlQuery query =
+             ChangeLog::query(library,
+                              "SELECT COALESCE(f.book_id, 0) FROM graph_facts AS f JOIN tenant_facts AS m ON m.fact_id = f.id "
+                              "WHERE m.tenant = ?",
+                              {Tenancy::filter(library, tenant).id()});
+         query.next();)
+        books << query.value(0).toLongLong();
+    return books;
+}
 
 // Every membership row, by the global ids of both sides, in a stable order:
 // what two libraries that hold the same rows must agree on.
@@ -105,6 +134,12 @@ struct Split {
         rows << "book " + Spaces::bookId(library, query.value(1).toLongLong()) + " " + query.value(0).toString();
     rows.sort();
     return rows;
+}
+
+// The membership after a rebuild, which recomputes it all from the books' tenants.
+[[nodiscard]] QStringList rebuilt(const Library &library) {
+    Tenancy::rebuild(library);
+    return memberships(library);
 }
 
 } // namespace
@@ -257,6 +292,150 @@ private slots:
         QCOMPARE(memberships(other), memberships(split.library));
         for (const SpaceOperation &op : ops)
             QVERIFY2(!op.entity.startsWith("tenant"), qPrintable(op.entity));
+    }
+
+    void aBookMovedToAnotherTenantTakesItsKnowledgeAlong() {
+        Split split;
+        const Library &library = split.library;
+        QVERIFY(split.moveSeaToStudy());
+        const QList<Tenant> fiction = split.in({split.fiction}), study = split.in({split.study});
+        const QList<Tenant> twoOf = split.in({split.fiction, split.study});
+        QCOMPARE(Tenancy::ofBook(library, split.sea), study);
+        // What only it taught went with it, its facts and relations too.
+        QCOMPARE(Tenancy::ofNode(library, split.mara), study);
+        QCOMPARE(Tenancy::ofFact(library, split.seaFact), study);
+        QCOMPARE(Tenancy::ofEdge(library, split.keeps), study);
+        QCOMPARE(Tenancy::ofEdge(library, split.wrote), study);
+        // A theme it shared with Study is Study's alone now; things Fiction's
+        // other book is behind keep Fiction, and gain Study where the moved book was behind them.
+        QCOMPARE(Tenancy::ofNode(library, split.theme), study);
+        QCOMPARE(Tenancy::ofNode(library, split.bell), twoOf);
+        QCOMPARE(Tenancy::ofNode(library, split.ann), twoOf);
+        QCOMPARE(Tenancy::ofFact(library, split.bothFact), twoOf);
+        // A connection across books whose ends are both in Study now is seen there.
+        QCOMPARE(Tenancy::ofEdge(library, split.echoes), study);
+        // Fiction keeps only the facts of the book still in it.
+        QCOMPARE(booksOfFactsIn(library, fiction.first()), QSet<qint64>{split.both});
+        // As a rebuild would have it.
+        const QStringList kept = memberships(library);
+        QCOMPARE(rebuilt(library), kept);
+        // And back again.
+        QVERIFY(split.library.putInCollection(split.study, split.sea, false)
+                && split.library.putInCollection(split.fiction, split.sea, true));
+        QCOMPARE(Tenancy::ofNode(library, split.mara), fiction);
+        QCOMPARE(Tenancy::ofNode(library, split.theme), twoOf);
+        QCOMPARE(Tenancy::ofEdge(library, split.echoes), QList<Tenant>{});
+        const QStringList back = memberships(library);
+        QCOMPARE(rebuilt(library), back);
+    }
+
+    void aBookInTwoCollectionsLeavingOneKeepsTheOther() {
+        Split split;
+        const Library &library = split.library;
+        QVERIFY(split.takeBothOutOfStudy());
+        const QList<Tenant> fiction = split.in({split.fiction}), study = split.in({split.study});
+        QCOMPARE(Tenancy::ofBook(library, split.both), fiction);
+        QCOMPARE(Tenancy::ofNode(library, split.bell), fiction);
+        QCOMPARE(Tenancy::ofFact(library, split.bothFact), fiction);
+        // Ann wrote nothing else in Study; the theme is still Study's by Wave Mechanics.
+        QCOMPARE(Tenancy::ofNode(library, split.ann), fiction);
+        QCOMPARE(Tenancy::ofNode(library, split.theme), split.in({split.fiction, split.study}));
+        QCOMPARE(booksOfFactsIn(library, study.first()), QSet<qint64>{split.waves});
+        const QStringList kept = memberships(library);
+        QCOMPARE(rebuilt(library), kept);
+    }
+
+    void removingATopCollectionEmptiesItsTenant() {
+        Split split;
+        const Library &library = split.library;
+        const Tenant fiction = split.tenantOf(split.fiction);
+        QVERIFY(rowsIn(library, "tenant_nodes", fiction) > 0);
+        QVERIFY(split.library.removeCollection(split.fiction));
+        QCOMPARE(Tenancy::ofBook(library, split.sea), QList<Tenant>{Tenant::unfiled()});
+        QCOMPARE(Tenancy::ofBook(library, split.both), split.in({split.study}));
+        for (const char *table : {"tenant_books", "tenant_nodes", "tenant_edges", "tenant_facts"})
+            QVERIFY2(rowsIn(library, table, fiction) == 0, table);
+        QCOMPARE(Tenancy::ofNode(library, split.mara), QList<Tenant>{Tenant::unfiled()});
+        QCOMPARE(Tenancy::ofEdge(library, split.keeps), QList<Tenant>{Tenant::unfiled()});
+        QList<Tenant> studyAndUnfiled = split.in({split.study}) + QList<Tenant>{Tenant::unfiled()};
+        std::ranges::sort(studyAndUnfiled, {}, &Tenant::globalId);
+        QCOMPARE(Tenancy::ofNode(library, split.bell), studyAndUnfiled);
+        const QStringList kept = memberships(library);
+        QCOMPARE(rebuilt(library), kept);
+    }
+
+    void aMoveThatSyncsGivesTheSameMembershipThere() {
+        Split split;
+        QTemporaryDir there;
+        Library other(there.filePath("Library"));
+        QVERIFY(other.open());
+        QVERIFY(SpaceReplay::apply(other, SpaceReplay::operations(split.library)));
+        QCOMPARE(memberships(other), memberships(split.library));
+        // The collections travel; the membership is derived from them there.
+        QVERIFY(split.moveSeaToStudy());
+        QVERIFY(split.takeBothOutOfStudy());
+        QVERIFY(SpaceReplay::apply(other, SpaceReplay::operations(split.library)));
+        const QStringList here = memberships(split.library);
+        QCOMPARE(memberships(other), here);
+        QCOMPARE(rebuilt(other), here);
+    }
+
+    void movingABookCostsWhatItTaughtNotTheLibrary() {
+        // A library of 200 books in two tenants and 6000 things, each met in
+        // two books, with a fact and a relation in the first; and a theme all share.
+        QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const qint64 fiction = *library.addCollection("Fiction"), study = *library.addCollection("Study");
+        constexpr int books = 200, things = 6000;
+        qint64 moved = 0;
+        {
+            const Library::Batch batch(library);
+            Graph graph(library);
+            for (int each = 0; each < books; ++each) {
+                BookMeta meta;
+                meta.title = QString("Book %1").arg(each);
+                meta.authors = {QString("Writer %1").arg(each % 40)};
+                const qint64 book = library.addEntry(meta, true).id;
+                moved = moved == 0 ? book : moved;
+                QVERIFY(library.putInCollection(each % 2 == 0 ? fiction : study, book, true));
+                graph.bookNode(book);
+            }
+            const QString ofBook = "JOIN books AS b ON b.id = (SELECT MIN(id) FROM books) + (n.id * %1) % %2 ";
+            QVERIFY(
+                ChangeLog::exec(library, QString("WITH RECURSIVE i(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM i WHERE x < %1) "
+                                                 "INSERT INTO graph_nodes (kind, name, updated) SELECT 'concept', 'Thing ' || x, 0 FROM i")
+                                             .arg(things)));
+            for (const int step : {1, 7})
+                QVERIFY(ChangeLog::exec(library,
+                                        "INSERT OR IGNORE INTO graph_seen (node_id, book_id, section, fraction) SELECT n.id, b.id, 0, 0 "
+                                        "FROM graph_nodes AS n "
+                                            + ofBook.arg(step).arg(books) + "WHERE n.kind = 'concept'"));
+            QVERIFY(ChangeLog::exec(library, "INSERT INTO graph_facts (node_id, kind, value, book_id) SELECT n.id, 'summary', 'Said', b.id "
+                                             "FROM graph_nodes AS n "
+                                                 + ofBook.arg(1).arg(books) + "WHERE n.kind = 'concept'"));
+            QVERIFY(ChangeLog::exec(
+                library, "INSERT INTO graph_edges (source, target, kind, book_id) SELECT n.id, n.id + 1, 'leads to', b.id "
+                         "FROM graph_nodes AS n "
+                             + ofBook.arg(1).arg(books) + "WHERE n.kind = 'concept' AND n.id + 1 IN (SELECT id FROM graph_nodes)"));
+            const qint64 theme = graph.upsert({}, "theme", "Memory");
+            QVERIFY(ChangeLog::exec(
+                library, "INSERT OR IGNORE INTO graph_seen (node_id, book_id, section, fraction) SELECT ?, id, 0, 0 FROM books", {theme}));
+        }
+        QElapsedTimer clock;
+        clock.start();
+        QVERIFY(library.putInCollection(fiction, moved, false));
+        const qint64 out = clock.restart();
+        QVERIFY(library.putInCollection(study, moved, true));
+        const qint64 in = clock.restart();
+        const QStringList kept = memberships(library);
+        clock.restart();
+        Tenancy::rebuild(library);
+        const qint64 whole = clock.elapsed();
+        qInfo() << things << "things: a book out of its collection in" << out << "ms, into another in" << in << "ms; a rebuild" << whole
+                << "ms";
+        QVERIFY2(out < 100 && in < 100, qPrintable(QString("%1 ms, %2 ms").arg(out).arg(in)));
+        QCOMPARE(memberships(library), kept);
     }
 
     void theSampleOfReleaseFiveIsSplitAsItIsUpdated() {

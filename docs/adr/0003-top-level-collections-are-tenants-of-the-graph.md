@@ -50,7 +50,7 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
 - **Kept by triggers, by whoever writes.** The graph, a sync replaying the log and a merge of books all
   write the same rows, so the rules above are triggers on them (`TenancySchema`). They only add; a row
   removed doesn't take back what it gave until the membership is rebuilt (`Tenancy::rebuild`, the same
-  rules over the whole graph at once), which is done when a book leaves a tenant or the choice of one
+  rules over the whole graph at once), which is done when a book is removed or the choice of one
   tenant changes. A test holds the rebuild equal to what the writes kept.
 - **A book's tenants follow its collections** (`Tenancy::follow`): the top-level collections it is in,
   through any inside them (by the same reading of rules as `BookSides`), Unfiled for none; all in
@@ -63,6 +63,13 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
   for it. (A computer whose own writes removed rows may keep a thing in a tenant a little longer than
   one that took the same rows from the log, until its next rebuild; never in a tenant none of its
   books are in.)
+- **A move takes back only what the book gave** (#97, `TenancyLeave`). A book that leaves a tenant
+  (taken out of a collection, moved to another, its top-level collection removed) takes the same rules
+  back for the rows it was behind and that one tenant: its facts and the relations learned in it leave;
+  a thing it taught leaves unless another of the tenant's books is still behind it, and with it its
+  facts of no book and the relations that were there because both ends were. What it costs follows the
+  book, not the library, and tests hold it equal to a rebuild, here and on a computer the move reached
+  through the log.
 - **The split of the existing graph** is the format step that adds the tables and triggers (format 25),
   after the copy every step keeps, and the first `Tenancy::follow` as the library is then set up, which
   fills the membership of the whole graph at once.

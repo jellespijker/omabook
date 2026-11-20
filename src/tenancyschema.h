@@ -20,8 +20,9 @@
 // - a thing no book is behind is in tenant 0, which every tenant sees.
 //
 // The triggers only ever add: a row removed doesn't take back what it gave,
-// until Tenancy rebuilds (when a book leaves a tenant, or the choice of one
-// tenant changes), which recomputes it all by the same rules.
+// until Tenancy rebuilds (when a book is removed, or the choice of one tenant
+// changes), which recomputes it all by the same rules. A book that leaves a
+// tenant takes back what it gave there by the same rules too (TenancyLeave).
 namespace TenancySchema {
 
 // The step's statements: the tables, their indexes, led by the tenant, and the triggers.

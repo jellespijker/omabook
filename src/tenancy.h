@@ -81,15 +81,17 @@ namespace Tenancy {
 [[nodiscard]] QList<Tenant> tenants(const Library &library);
 
 // Brings every book's tenants up to date, and with them the graph's: at
-// once when a book left a tenant or the choice of one tenant changed (the
-// first time too, which is how the format step that adds tenants fills them),
-// otherwise only for what changed. Nothing is done when nothing did.
+// once when the choice of one tenant changed (the first time too, which is
+// how the format step that adds tenants fills them) or a book was removed,
+// otherwise only for what changed: a book that joined a tenant adds what it
+// taught there, one that left takes back what it alone gave (TenancyLeave).
+// Nothing is done when nothing did.
 void follow(const Library &library);
 // The same after a write, from the rows it touched (ChangeLog::afterWrite):
 // for the books it touched, or every book when it touched a collection.
 void followWrite(const Library &library, const QHash<QString, QList<qint64>> &touched);
 // Computes which tenants see each thing, relation and fact again, from the
-// books' tenants, as the triggers would have from the start.
+// books' tenants, as the triggers and the leaves would have from the start.
 void rebuild(const Library &library);
 
 // Which tenants see a book, a thing, a relation or a fact, by global id.
