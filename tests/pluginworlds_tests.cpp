@@ -237,7 +237,7 @@ private slots:
         QVERIFY(bo.call("scopes").toArray().contains(scope));
         // Nothing of it before Bo begins the book; then what was met where Bo is, and nothing later.
         QCOMPARE(bo.call("names", {scope}).toArray(), QJsonArray());
-        bo.library.setProgress(mine, {0, 0.9, 30});
+        bo.library.setProgress(mine, {0, 0.9, 0}); // a place with no percent said is begun too
         QCOMPARE(bo.call("names", {scope}).toArray(), strings({"Ilse"}));
         bo.library.setProgress(mine, {2, 0.5, 90});
         QCOMPARE(bo.call("names", {scope}).toArray(), strings({"Hollow", "Ilse"}));

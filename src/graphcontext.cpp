@@ -196,8 +196,11 @@ GraphContext::Reach GraphContext::reachOf(const Library &library, qint64 bookId)
         return reach;
     const Progress read = library.progress(bookId);
     reach.all = book->status() == "read";
-    reach.any = reach.all || read.percent > 0;
     reach.place = furthest(library, bookId);
+    // A place past the book's start is begun too, whatever percent was said
+    // with it (`omabook progress --section` says none; a plugin's book in a
+    // format not loaded has none worked out).
+    reach.any = reach.all || read.percent > 0 || read.section > 0 || read.fraction > 0;
     return reach;
 }
 
