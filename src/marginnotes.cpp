@@ -4,23 +4,46 @@
 #include <algorithm>
 
 #include "annotationanchors.h"
+#include "annotationink.h"
 #include "booktext.h"
 #include "hyphenation.h"
+#include "inkcodec.h"
+#include "inksurface.h"
+#include "noterecognition.h"
 #include "pagelayout.h"
 #include "passagematch.h"
 #include "reader.h"
 #include "readingpassages.h"
+#include "settings.h"
 
 namespace {
 
 constexpr auto kind = "margin-note";
 
-[[nodiscard]] QVariantMap shown(const Annotation &note) {
+[[nodiscard]] QVariantMap shown(const Annotation &note, bool ink) {
     return {{"id", note.id},
             {"section", note.place.section},
             {"fraction", note.place.fraction},
             {"quote", note.quote.simplified()},
-            {"note", note.note}};
+            {"note", note.note},
+            {"ink", ink}};
+}
+
+// Strokes as a note keeps them: `scale` ink units to one of theirs, their
+// top corner a little in from the note's, and no wider than it.
+[[nodiscard]] std::vector<Ink::Stroke> fitted(std::vector<Ink::Stroke> strokes, double scale) {
+    constexpr double margin = 6;
+    QRectF box;
+    for (const Ink::Stroke &stroke : strokes)
+        box |= Ink::bounds(stroke);
+    const double room = MarginNotes::inkWidth - (2 * margin);
+    const double factor = box.width() * scale > room ? room / box.width() : scale;
+    for (Ink::Stroke &stroke : strokes) {
+        stroke.width *= factor;
+        for (Ink::Point &point : stroke.points)
+            point.at = ((point.at - box.topLeft()) * factor) + QPointF(margin, margin);
+    }
+    return strokes;
 }
 
 [[nodiscard]] QString plainOf(const QQuickTextDocument *chapter) {
@@ -30,6 +53,26 @@ constexpr auto kind = "margin-note";
 } // namespace
 
 MarginNotes::MarginNotes(QObject *parent) : QObject(parent) {}
+
+MarginNotes::~MarginNotes() = default;
+
+void MarginNotes::setSettings(QObject *settings) {
+    if (settings == m_settings)
+        return;
+    m_settings = settings;
+    m_recognition.reset();
+    if (const auto *chosen = qobject_cast<const Settings *>(settings)) {
+        // A note read after its book was closed is still the library's.
+        m_recognition = std::make_unique<NoteRecognition>(RecognitionQueue::routeFor(*chosen),
+                                                          [this] { return m_reader ? m_reader->library() : nullptr; });
+        connect(m_recognition.get(), &NoteRecognition::read, this, &MarginNotes::read);
+        connect(m_recognition.get(), &NoteRecognition::stateChanged, this, [this] {
+            ++m_readings;
+            emit readingsChanged();
+        });
+    }
+    emit changed();
+}
 
 QObject *MarginNotes::reader() const { return m_reader; }
 
@@ -56,14 +99,14 @@ Library *MarginNotes::library() const { return m_reader && m_reader->bookId() > 
 QVariantList MarginNotes::notes() const {
     QVariantList list;
     for (const Annotation &note : m_notes)
-        list << shown(note);
+        list << shown(note, inked(note.id));
     return list;
 }
 
 QVariantList MarginNotes::lost() const {
     QVariantList list;
     for (const Annotation &note : m_lost)
-        list << shown(note);
+        list << shown(note, inked(note.id));
     return list;
 }
 
@@ -77,10 +120,14 @@ void MarginNotes::setDrafting(bool drafting) {
 void MarginNotes::read() {
     m_notes.clear();
     m_lost.clear();
+    m_inked.clear();
     m_fileHash.clear();
     if (const Library *own = library()) {
-        for (const Annotation &note : own->annotations(m_reader->bookId(), kind))
+        for (const Annotation &note : own->annotations(m_reader->bookId(), kind)) {
             (note.lost ? m_lost : m_notes) << note;
+            if (AnnotationInk::has(*own, note.id))
+                m_inked.insert(note.id);
+        }
         if (const auto file = AnnotationAnchors::readableFile(*own, m_reader->bookId()))
             m_fileHash = file->hash;
     }
@@ -133,7 +180,7 @@ QVariantList MarginNotes::spans(QQuickTextDocument *chapter) {
     m_spans.clear();
     for (const auto &[id, span] : spansIn(text))
         if (const Annotation *note = find(id))
-            m_spans << QVariantMap{{"id", id}, {"start", span.first}, {"end", span.second}, {"note", note->note}};
+            m_spans << QVariantMap{{"id", id}, {"start", span.first}, {"end", span.second}, {"note", note->note}, {"ink", inked(id)}};
     m_spannedText = key;
     m_spannedRevision = m_revision;
     return m_spans;
@@ -162,16 +209,20 @@ std::optional<qint64> MarginNotes::write(const QString &shown, qsizetype start, 
     const auto passage = said.isEmpty() || !own ? std::nullopt : passageIn(shown, start, end);
     if (!passage)
         return std::nullopt;
-    Annotation note{.id = 0, .kind = kind, .place = {}, .text = passage->first.quote.simplified().left(200), .note = said, .created = 0};
-    note.setPassage(passage->first);
-    // Placed in the file it is read from; one that wasn't is sought there when the book is opened next.
-    if (passage->second > 0) {
-        note.anchored = m_fileHash;
-        note.confidence = passage->second;
-    }
-    const qint64 id = own->addAnnotation(m_reader->bookId(), note);
+    const qint64 id = own->addAnnotation(m_reader->bookId(), noteOn(*passage, said));
     read();
     return id > 0 ? std::optional(id) : std::nullopt;
+}
+
+Annotation MarginNotes::noteOn(const std::pair<Passage, double> &passage, const QString &words) const {
+    Annotation note{.id = 0, .kind = kind, .place = {}, .text = passage.first.quote.simplified().left(200), .note = words, .created = 0};
+    note.setPassage(passage.first);
+    // Placed in the file it is read from; one that wasn't is sought there when the book is opened next.
+    if (passage.second > 0) {
+        note.anchored = m_fileHash;
+        note.confidence = passage.second;
+    }
+    return note;
 }
 
 qint64 MarginNotes::write(QQuickTextDocument *chapter, int start, int end, const QString &words) {
@@ -183,7 +234,8 @@ bool MarginNotes::change(qint64 id, const QString &words) {
     Library *own = library();
     if (!note || !own)
         return false;
-    if (words.trimmed().isEmpty()) {
+    // Its ink is the note written by hand: that stays without words.
+    if (words.trimmed().isEmpty() && !inked(id)) {
         remove(id);
         return true;
     }
@@ -222,4 +274,93 @@ QVariantList MarginNotes::stack(const QVariantList &wanted, double spacing, doub
     for (const double top : PageLayout::stack(notes, spacing, bottom))
         tops << top;
     return tops;
+}
+
+std::optional<qint64> MarginNotes::writeInk(const QString &shown, qsizetype start, qsizetype end, std::vector<Ink::Stroke> strokes,
+                                            double scale) {
+    Library *own = library();
+    const auto passage = strokes.empty() || !own || scale <= 0 ? std::nullopt : passageIn(shown, start, end);
+    if (!passage)
+        return std::nullopt;
+    const qint64 id = [&] {
+        const Library::Batch batch(*own);
+        const qint64 made = own->addAnnotation(m_reader->bookId(), noteOn(*passage, {}));
+        if (made > 0 && !AnnotationInk::write(*own, made, {.added = fitted(std::move(strokes), scale), .removed = {}})) {
+            own->removeAnnotation(made);
+            return qint64{0};
+        }
+        return made;
+    }();
+    read();
+    if (id <= 0)
+        return std::nullopt;
+    if (m_recognition)
+        m_recognition->soon(m_reader->bookId(), id);
+    return id;
+}
+
+qint64 MarginNotes::writeInk(QQuickTextDocument *chapter, int start, int end, const QString &snapshot, const QVariantList &which,
+                             double scale) {
+    const auto all = Ink::decodeAll(QByteArray::fromBase64(snapshot.toLatin1()));
+    if (!all)
+        return 0;
+    std::vector<Ink::Stroke> chosen;
+    for (const QVariant &index : which)
+        if (const auto at = index.toLongLong(); at >= 0 && std::cmp_less(at, all->size()))
+            chosen.push_back(all->at(static_cast<std::size_t>(at)));
+    return writeInk(plainOf(chapter), start, end, std::move(chosen), scale).value_or(0);
+}
+
+QVariantMap MarginNotes::strokes(qint64 id) const {
+    const Library *own = library();
+    return own && find(id) ? Ink::items(AnnotationInk::strokes(*own, id)).toVariantMap() : QVariantMap();
+}
+
+bool MarginNotes::ink(qint64 id, const Ink::Change &change) {
+    Library *own = library();
+    if (!own || !find(id) || !AnnotationInk::write(*own, id, change))
+        return false;
+    // The ink is the note: with none left, there is none.
+    if (!AnnotationInk::has(*own, id)) {
+        own->removeAnnotation(id);
+    } else if (m_recognition) {
+        m_recognition->soon(m_reader->bookId(), id);
+    }
+    read();
+    return true;
+}
+
+bool MarginNotes::ink(qint64 id, const QVariantMap &batch) {
+    const auto change = Ink::fromBatch(QJsonObject::fromVariantMap(batch));
+    return change && ink(id, *change);
+}
+
+void MarginNotes::recognize(qint64 id) {
+    if (m_recognition && library() && inked(id))
+        m_recognition->now(m_reader->bookId(), id);
+}
+
+QString MarginNotes::readingOf(qint64 id) const { return m_recognition ? m_recognition->state(id) : QString(); }
+
+double MarginNotes::inkBottom(QQuickItem *surface) const {
+    const auto *ink = qobject_cast<InkSurface *>(surface);
+    double bottom = 0;
+    if (ink)
+        for (const Ink::Stroke &stroke : ink->sheet().strokes())
+            bottom = std::max(bottom, Ink::bounds(stroke).bottom());
+    return bottom;
+}
+
+QVariantList MarginNotes::found(const QString &words) const {
+    QVariantList found;
+    const QString needle = words.simplified();
+    if (needle.size() < 2)
+        return found;
+    for (const Annotation &note : m_notes)
+        if (const QString said = note.note.simplified(); said.contains(needle, Qt::CaseInsensitive))
+            found << QVariantMap{{"section", note.place.section},
+                                 {"fraction", note.place.fraction},
+                                 {"snippet", said.size() > 160 ? said.left(160) + u'…' : said},
+                                 {"note", note.id}};
+    return found;
 }

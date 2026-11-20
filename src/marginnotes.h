@@ -4,13 +4,19 @@
 #include <QObject>
 #include <QPointer>
 #include <QQuickTextDocument>
+#include <QSet>
 #include <QString>
 #include <QVariantList>
+#include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 
+#include "inkstroke.h"
 #include "library.h"
 
+class NoteRecognition;
+class QQuickItem;
 class Reader;
 
 // The open book's margin notes (#82), for the reading view: words the reader
@@ -27,12 +33,22 @@ class Reader;
 // in the margin column is PageLayout::stack's. Whether there is a margin
 // column at all is the layout's (PageLayout::columns): this says only
 // whether the book has notes that want one.
+//
+// A note written by hand (#90) is its ink: strokes kept on the annotation in
+// the change log (AnnotationInk), in ink units `inkUnits` across its card,
+// whatever the card's width; its words are what was read of the ink
+// (NoteRecognition), searched and shown when the reader asks.
 class MarginNotes : public QObject {
     Q_OBJECT
     // The reader whose open book's notes these are (the window's `reader`).
     Q_PROPERTY(QObject *reader READ reader WRITE setReader NOTIFY changed)
+    // The settings handwriting is read by (the window's `settings`); none, and it isn't read.
+    Q_PROPERTY(QObject *settings READ settings WRITE setSettings NOTIFY changed)
+    Q_PROPERTY(double inkUnits READ inkUnits CONSTANT)
+    // Changes whenever how the reading of a note's handwriting goes changes (readingOf).
+    Q_PROPERTY(int readings READ readings NOTIFY readingsChanged)
     // Its notes on a passage that is there, in the order of the book: [{id,
-    // section, fraction, quote, note}]; and those that are lost, the same.
+    // section, fraction, quote, note, ink}]; and those that are lost, the same.
     Q_PROPERTY(QVariantList notes READ notes NOTIFY changed)
     Q_PROPERTY(QVariantList lost READ lost NOTIFY changed)
     Q_PROPERTY(int count READ count NOTIFY changed)
@@ -43,10 +59,19 @@ class MarginNotes : public QObject {
     Q_PROPERTY(int revision READ revision NOTIFY changed)
 
 public:
+    // How wide a handwritten note's ink is, in ink units.
+    static constexpr double inkWidth = 240;
+
     explicit MarginNotes(QObject *parent = nullptr);
+    ~MarginNotes() override;
+    Q_DISABLE_COPY_MOVE(MarginNotes)
 
     QObject *reader() const;
     void setReader(QObject *reader);
+    QObject *settings() const { return m_settings; }
+    void setSettings(QObject *settings);
+    double inkUnits() const { return inkWidth; }
+    int readings() const noexcept { return m_readings; }
     QVariantList notes() const;
     QVariantList lost() const;
     int count() const { return static_cast<int>(m_notes.size()); }
@@ -55,7 +80,7 @@ public:
     int revision() const noexcept { return m_revision; }
 
     // Where the notes of the chapter shown are in a text showing it (a
-    // TextEdit's document): [{id, start, end, note}], in the order of their
+    // TextEdit's document): [{id, start, end, note, ink}], in the order of their
     // passages; a note whose words it doesn't hold is left out.
     Q_INVOKABLE QVariantList spans(QQuickTextDocument *chapter);
     // A note with these words on the passage of the chapter shown from
@@ -74,14 +99,42 @@ public:
     // file changed and they were found again.
     Q_INVOKABLE void refresh();
 
+    // A note written by hand on the passage from `start` to `end`: its first
+    // strokes those of `snapshot` (InkSurface::snapshot) that `which` counts,
+    // `scale` ink units to a pixel of theirs, moved to the note's top corner.
+    // Its number, or 0 when there are no words there or no strokes.
+    Q_INVOKABLE qint64 writeInk(QQuickTextDocument *chapter, int start, int end, const QString &snapshot, const QVariantList &which,
+                                double scale);
+    // A note's strokes, {id: base64}, for an ink surface to load; and an ink
+    // batch of its surface's (`inked`), kept, the note read again once the
+    // pen rests. A note whose last stroke is erased is removed.
+    Q_INVOKABLE QVariantMap strokes(qint64 id) const;
+    Q_INVOKABLE bool ink(qint64 id, const QVariantMap &batch);
+    // Reads a note's handwriting now, as the reader asked; and how that goes:
+    // being read, or why it isn't, empty when neither.
+    Q_INVOKABLE void recognize(qint64 id);
+    Q_INVOKABLE QString readingOf(qint64 id) const;
+    // The lowest of an ink surface's strokes, in ink units; 0 with none.
+    Q_INVOKABLE double inkBottom(QQuickItem *surface) const;
+    // The notes on a passage that is there whose words have these in them, for
+    // the find in the book: [{section, fraction, snippet, note}], `note` its number.
+    Q_INVOKABLE QVariantList found(const QString &words) const;
+
     // The same, for a text given as it is shown (the document's plain text,
     // soft hyphens and all): for the tests, and what the above call.
     [[nodiscard]] QList<std::pair<qint64, std::pair<qsizetype, qsizetype>>> spansIn(const QString &shown) const;
     [[nodiscard]] std::optional<qint64> write(const QString &shown, qsizetype start, qsizetype end, const QString &words);
     [[nodiscard]] bool placeAgain(qint64 id, const QString &shown, qsizetype start, qsizetype end);
+    // The strokes in ink units of the note's, from pixels `scale` units each.
+    [[nodiscard]] std::optional<qint64> writeInk(const QString &shown, qsizetype start, qsizetype end, std::vector<Ink::Stroke> strokes,
+                                                 double scale);
+    bool ink(qint64 id, const Ink::Change &change);
+    [[nodiscard]] bool inked(qint64 id) const { return m_inked.contains(id); }
+    [[nodiscard]] NoteRecognition *recognition() const { return m_recognition.get(); }
 
 signals:
     void changed();
+    void readingsChanged();
 
 private:
     [[nodiscard]] Library *library() const;
@@ -89,11 +142,17 @@ private:
     // The passage of the chapter shown from `start` to `end` of a text showing
     // it, placed in the book's own text; none when it holds no words.
     [[nodiscard]] std::optional<std::pair<Passage, double>> passageIn(const QString &shown, qsizetype start, qsizetype end) const;
+    // A note on that passage, placed in the file the book is read from.
+    [[nodiscard]] Annotation noteOn(const std::pair<Passage, double> &passage, const QString &words) const;
     void read();
     void announce();
 
     QPointer<Reader> m_reader;
+    QPointer<QObject> m_settings;
+    std::unique_ptr<NoteRecognition> m_recognition;
+    int m_readings = 0;
     QList<Annotation> m_notes, m_lost;
+    QSet<qint64> m_inked; // the notes written by hand
     QString m_fileHash; // of the file the open book is read from, which a new note is placed in
     bool m_drafting = false;
     int m_revision = 0;

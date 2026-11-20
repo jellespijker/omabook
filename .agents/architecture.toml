@@ -41,6 +41,7 @@ modules = [
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights", "bookink",
+  "annotationink",
 ]
 
 [layers.services]
@@ -61,6 +62,7 @@ uses = ["services", "library", "formats", "foundation"]
 modules = [
   "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
+  "noterecognition",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

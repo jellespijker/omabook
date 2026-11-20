@@ -11,6 +11,7 @@
 #include <memory>
 
 #include "annotationanchors.h"
+#include "annotationink.h"
 #include "booktext.h"
 #include "changelog.h"
 #include "document.h"
@@ -226,6 +227,64 @@ private slots:
         two.there.removeAnnotation(there.id);
         QCOMPARE(syncLibrary(two.here, remote).annotationsTaken, 1);
         QVERIFY(two.here.annotations(two.mine).isEmpty());
+        QCOMPARE(changed(syncLibrary(two.here, remote)), 0);
+    }
+
+    // A margin note by hand (#90) travels with its ink: what each computer
+    // wrote on it is all kept, an erasing on either goes to both, and the
+    // words read of it on one are the other's too.
+    void aHandwrittenNoteTravelsWithItsInk() {
+        TwoComputers two;
+        const Remote remote = two.remote();
+        QVERIFY(syncLibrary(two.here, remote).problems.isEmpty());
+        Annotation note{.id = 0, .kind = "margin-note", .place = {}, .text = "the storm", .note = {}, .created = 0};
+        note.setPassage({.from = {.section = 1, .fraction = 0.25},
+                         .to = {.section = 1, .fraction = 0.3},
+                         .quote = "the storm",
+                         .before = {},
+                         .after = {}});
+        const qint64 made = two.here.addAnnotation(two.mine, note);
+        const auto stroke = [](double x) {
+            Ink::Stroke drawn{.id = Ink::newId(),
+                              .color = Qt::blue,
+                              .width = 2,
+                              .pressured = true,
+                              .tilted = false,
+                              .began = 1'700'000'000'000 + static_cast<qint64>(x),
+                              .points = {}};
+            for (int i = 0; i < 8; ++i)
+                drawn.points.push_back(
+                    {.at = {x + i, 10.0 + i * 3}, .pressure = 0.5F, .xTilt = 0, .yTilt = 0, .ms = static_cast<quint32>(i * 8)});
+            return drawn;
+        };
+        const Ink::Stroke first = stroke(10), second = stroke(40), third = stroke(70);
+        const auto ids = [](const Library &library, qint64 id) {
+            QStringList kept;
+            for (const Ink::Stroke &one : AnnotationInk::strokes(library, id))
+                kept << one.id;
+            return kept;
+        };
+        QVERIFY(AnnotationInk::write(two.here, made, {.added = {first, second}, .removed = {}}));
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        const QList<Annotation> came = two.there.annotations(two.theirs, "margin-note");
+        QCOMPARE(came.size(), 1);
+        const qint64 there = came.first().id;
+        QCOMPARE(ids(two.there, there), (QStringList{first.id, second.id}));
+
+        // Written on there, the first erased here: both.
+        QVERIFY(AnnotationInk::write(two.there, there, {.added = {third}, .removed = {}}));
+        QVERIFY(AnnotationInk::write(two.here, made, {.added = {}, .removed = {first.id}}));
+        QVERIFY(syncLibrary(two.here, remote).problems.isEmpty());
+        QCOMPARE(ids(two.here, made), (QStringList{second.id, third.id}));
+        QCOMPARE(ids(two.there, there), (QStringList{second.id, third.id}));
+
+        // Its words, read here, go there.
+        Annotation read = two.here.annotations(two.mine, "margin-note").first();
+        read.note = "Ferry lights";
+        QVERIFY(two.here.storeAnnotation(two.mine, read));
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        QCOMPARE(two.there.annotations(two.theirs, "margin-note").first().note, QString("Ferry lights"));
+        QVERIFY(AnnotationInk::has(two.there, there));
         QCOMPARE(changed(syncLibrary(two.here, remote)), 0);
     }
 
