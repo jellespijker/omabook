@@ -8,13 +8,16 @@
 #include <QtTest>
 #include <array>
 #include <atomic>
+#include <chrono>
 #include <latch>
 #include <thread>
 #include <vector>
 
 #include "fixtures.h"
+#include "graph.h"
 #include "library.h"
 #include "librarymigrations.h"
+#include "readinglog.h"
 
 // Opening one library folder from several places at once (#11): the window,
 // a command and a worker of the window can all open it at the same moment,
@@ -210,10 +213,10 @@ private slots:
 
     // A library of 0.1.8.1, at format 32 (#112's step), takes the steps that
     // came after it on main (#76's, format 33, #110's, 34, #80's, 35, #81's, 36,
-    // #118's, 37, and #115's, 38) and not its own again: the steps are positional,
-    // so #112's is 32 on main too.
+    // #118's, 37, #115's, 38, and #68's, 39) and not its own again: the steps are
+    // positional, so #112's is 32 on main too.
     void aLibraryOf0181TakesTheStepsAfterItsOwn() {
-        QCOMPARE(LibraryMigrations::currentFormat(), 38);
+        QCOMPARE(LibraryMigrations::currentFormat(), 39);
         const QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString root = dir.filePath(QStringLiteral("Library"));
@@ -237,10 +240,10 @@ private slots:
             const auto restore = qScopeGuard([] { qInstallMessageHandler(s_previous); });
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 38);
+            QCOMPARE(library.formatVersion(), 39);
             QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-32-*.db")}).size(), 1);
         }
-        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 38")), qPrintable(s_brought));
+        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 39")), qPrintable(s_brought));
         QVERIFY(textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'")).contains(plugins));
         QCOMPARE(run(root, QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = 'graph_facts_names'")), 1);
     }
@@ -272,7 +275,7 @@ private slots:
             QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 35")), 0);
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 38);
+            QCOMPARE(library.formatVersion(), 39);
             QCOMPARE(textOf(root, QStringLiteral("SELECT quote FROM annotations WHERE id = %1").arg(id)),
                      QStringLiteral("the ferry came back"));
             QCOMPARE(textOf(root, QStringLiteral("SELECT color FROM annotations WHERE id = %1").arg(id)), QString());
@@ -312,7 +315,7 @@ private slots:
             QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 37")), 0);
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 38);
+            QCOMPARE(library.formatVersion(), 39);
             QCOMPARE(textOf(root, QStringLiteral("SELECT note FROM annotations WHERE id = %1").arg(id)),
                      QStringLiteral("Lighthouse keepers"));
             QCOMPARE(textOf(root, QStringLiteral("SELECT area FROM annotations WHERE id = %1").arg(id)), QString());
@@ -325,6 +328,43 @@ private slots:
         QCOMPARE(found(QStringLiteral("harbour")), 1);
         library.removeAnnotation(id);
         QCOMPARE(found(QStringLiteral("ferry")), 0);
+    }
+
+    // A library of format 38 takes #68's step: its reading log keeps every
+    // day, how far each went, and took no time yet; what is read after it
+    // goes into the change log as before; and the step can be taken again,
+    // by a library put back to 38 (which, as the other steps, keeps none of
+    // what came with it).
+    void aReadingLogOfFormat38KeepsItsDaysAndTakesTime() {
+        const QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString root = dir.filePath(QStringLiteral("Library"));
+        QVERIFY(Fixtures::epub(dir.filePath(QStringLiteral("Book.epub"))));
+        qint64 book = 0;
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            book = library.add(dir.filePath(QStringLiteral("Book.epub"))).id;
+            QVERIFY(book > 0);
+            Graph(library).logReading(book, 10, 40, QStringLiteral("2026-03-02"));
+        }
+        for (const bool putBack : {false, true}) {
+            if (!putBack)
+                QCOMPARE(run(root, QStringLiteral("ALTER TABLE reading_log DROP COLUMN seconds")), 0);
+            QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 38")), 0);
+            Library library(root);
+            QVERIFY(library.open());
+            QCOMPARE(library.formatVersion(), 39);
+            const QList<ReadingDay> days = Graph(library).readingLog(book);
+            QCOMPARE(days.size(), 1);
+            QCOMPARE(days.first().to, putBack ? 55.0 : 40.0);
+            QCOMPARE(days.first().seconds, 0);
+            ReadingLog::add(library, book, 40, 55, std::chrono::minutes{10}, QStringLiteral("2026-03-02"));
+            QCOMPARE(Graph(library).readingLog(book).first().seconds, 600);
+            QCOMPARE(Graph(library).readingLog(book).first().to, 55.0);
+            QVERIFY(textOf(root, QStringLiteral("SELECT value FROM ops WHERE entity = 'reading_log' ORDER BY seq DESC LIMIT 1"))
+                        .contains(QStringLiteral("\"seconds\"")));
+        }
     }
 
     // A command that brings a library up to date says so on standard error

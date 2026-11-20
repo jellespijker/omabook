@@ -267,7 +267,7 @@ void Reader::loaded() {
     }
     m_section = qBound(0, progress.place.section, m_document->count() - 1);
     m_fraction = qBound(0.0, progress.place.fraction, 1.0);
-    m_loggedPercent = percent();
+    m_session.begin(percent());
     m_loading = false;
     refreshHtml();
     emit bookChanged();
@@ -480,14 +480,8 @@ void Reader::saveProgress() {
     if (!m_document || !m_backend->library())
         return;
     m_backend->library()->setProgress(m_bookId, {m_section, m_fraction, percent()});
-    // The reading log: that the book went from there to here today. Paging
-    // back is no reading, and opening a book without moving is none either.
-    const double now = percent();
-    if (!qFuzzyCompare(now + 1, m_loggedPercent + 1)) {
-        if (now > m_loggedPercent)
-            Graph(*m_backend->library()).logReading(m_bookId, m_loggedPercent, now);
-        m_loggedPercent = now;
-    }
+    // The reading log: that the book went from there to here today, and the time it took.
+    m_session.save(*m_backend->library(), m_bookId, percent());
 }
 
 QVariantList Reader::bookmarks() const {

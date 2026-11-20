@@ -136,6 +136,7 @@ void foldDay(ReducedDay &day, const SpaceOperation &op) {
         day.day = obj.value("day").toString();
         day.from = std::min(day.from, obj.value("from").toDouble());
         day.to = std::max(day.to, obj.value("to").toDouble());
+        day.seconds = std::max(day.seconds, obj.value("seconds").toInteger());
     } else {
         return;
     }

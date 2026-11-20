@@ -120,7 +120,7 @@ QJsonObject GraphSync::bundle(const Library &library) {
     }
     QJsonArray log;
     for (const ReadingDay &day : graph.readingLog()) {
-        log << QJsonObject{{"book", day.bookId}, {"day", day.day}, {"from", day.from}, {"to", day.to}};
+        log << QJsonObject{{"book", day.bookId}, {"day", day.day}, {"from", day.from}, {"to", day.to}, {"seconds", day.seconds}};
         books << day.bookId;
     }
     const QJsonArray relations = edgesJson(edges, books);
@@ -376,11 +376,12 @@ void takeLog(Taking &taking, const QJsonArray &log) {
         const QString date = day.value("day").toString();
         const double from = day.value("from").toDouble();
         const double to = day.value("to").toDouble();
+        const qint64 seconds = day.value("seconds").toInteger();
         const QList<ReadingDay> mine = taking.graph.readingLog(*book);
         const auto known = std::ranges::find(mine, date, &ReadingDay::day);
-        if (known != mine.end() && known->from <= from && known->to >= to)
+        if (known != mine.end() && known->from <= from && known->to >= to && known->seconds >= seconds)
             continue;
-        taking.graph.logReading(*book, from, to, date);
+        taking.graph.logReading(*book, from, to, date, seconds);
         ++taking.changed;
     }
 }

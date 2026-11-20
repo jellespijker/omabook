@@ -321,8 +321,9 @@ void materializeDays(const Library &library, const QMap<QString, ReducedDay> &da
         if (!day.valid)
             continue;
         if (const qint64 bookId = Spaces::localId(library, u"book"_s, day.bookGid); bookId > 0)
-            ChangeLog::exec(library, "INSERT OR REPLACE INTO reading_log (book_id, day, from_percent, to_percent) VALUES (?, ?, ?, ?)",
-                            {bookId, day.day, day.from, day.to});
+            ChangeLog::exec(library,
+                            "INSERT OR REPLACE INTO reading_log (book_id, day, from_percent, to_percent, seconds) VALUES (?, ?, ?, ?, ?)",
+                            {bookId, day.day, day.from, day.to, day.seconds});
     }
 }
 

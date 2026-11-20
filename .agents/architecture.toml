@@ -43,6 +43,7 @@ modules = [
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights", "bookink",
   "annotationink", "opkinds", "keptops",
   "booksearch", "annotationwords",
+  "readinglog",
 ]
 
 [layers.services]

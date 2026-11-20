@@ -175,6 +175,7 @@ struct ReadingDay {
     qint64 bookId = 0;
     QString day;            // ISO date
     double from = 0, to = 0; // percent of the book
+    qint64 seconds = 0;      // how long it took, the time away left out (ReadingLog); 0 when not known
 };
 
 // The graph of one library. It works on the library's connection, so it
@@ -370,8 +371,9 @@ public:
     bool copyScope(const QString &from, const QString &to);
     bool removeScope(const QString &scope);
 
-    // The reading log: that a book went from one percent to another today.
-    void logReading(qint64 bookId, double from, double to, const QString &day = {});
+    // The reading log: that a book went from one percent to another today,
+    // in at least `seconds` (what another computer says of the same day).
+    void logReading(qint64 bookId, double from, double to, const QString &day = {}, qint64 seconds = 0);
     QList<ReadingDay> readingLog(qint64 bookId = 0) const;
 
 private:

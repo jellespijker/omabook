@@ -18,6 +18,8 @@ ignores:
   - "src/graph.cpp"
   # Its relations' half, moved out of graph.cpp (#109): written alongside the log as graph.cpp's are.
   - "src/graphnotes.cpp"
+  # The reading log's time (#68), beside Graph::logReading: written alongside the log as graph.cpp's are.
+  - "src/readinglog.cpp"
   - "tests/**"
 rule:
   kind: string_literal

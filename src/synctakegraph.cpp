@@ -279,10 +279,10 @@ void takeDays(Taking &taking) {
             continue;
         const QList<ReadingDay> mine = taking.graph.readingLog(book);
         const auto known = std::ranges::find(mine, day.day, &ReadingDay::day);
-        if (known != mine.end() && known->from <= day.from && known->to >= day.to)
+        if (known != mine.end() && known->from <= day.from && known->to >= day.to && known->seconds >= day.seconds)
             continue;
         ++taking.changed;
-        taking.graph.logReading(book, day.from, day.to, day.day);
+        taking.graph.logReading(book, day.from, day.to, day.day, day.seconds);
     }
 }
 

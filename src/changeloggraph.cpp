@@ -137,7 +137,7 @@ void syncNodesToLog(const Library &library, bool baseline, const std::optional<Q
 void syncReadingLogToLog(const Library &library, const std::optional<QList<qint64>> &books) {
     if (books && books->isEmpty())
         return;
-    for (QSqlQuery query = ChangeLog::query(library, u"SELECT book_id, day, from_percent, to_percent FROM reading_log WHERE 1"_s
+    for (QSqlQuery query = ChangeLog::query(library, u"SELECT book_id, day, from_percent, to_percent, seconds FROM reading_log WHERE 1"_s
                                                          + onlyThese(u"book_id"_s, books) + u" ORDER BY book_id, day"_s);
          query.next();) {
         const QString bookGid = Spaces::bookId(library, query.value(0).toLongLong());
@@ -147,10 +147,11 @@ void syncReadingLogToLog(const Library &library, const std::optional<QList<qint6
         const QString gid = bookGid + u":"_s + day;
         const QString space = Spaces::personalSpace(library);
         GraphContext ctx{&library, space, u"reading_log"_s, gid, ChangeLogFields::logged(library, u"reading_log"_s, gid), true};
-        ChangeLogFields::write(
-            ctx, u"range"_s,
-            compactJson({{"book", bookGid}, {"day", day}, {"from", query.value(2).toDouble()}, {"to", query.value(3).toDouble()}}),
-            Spaces::lastHlc(library));
+        QJsonObject range{{"book", bookGid}, {"day", day}, {"from", query.value(2).toDouble()}, {"to", query.value(3).toDouble()}};
+        // Its time only when it took some (#68): a day of before is said as it always was, and isn't written again.
+        if (const qint64 seconds = query.value(4).toLongLong(); seconds > 0)
+            range.insert("seconds", seconds);
+        ChangeLogFields::write(ctx, u"range"_s, compactJson(range), Spaces::lastHlc(library));
     }
 }
 

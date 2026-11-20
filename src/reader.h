@@ -18,6 +18,7 @@
 #include "pageformat.h"
 #include "readinghighlights.h"
 #include "readingink.h"
+#include "readinglog.h"
 #include "readingmarks.h"
 
 class Backend;
@@ -216,8 +217,9 @@ private:
     int m_pageWidth = 0;
     int m_pageHeight = 0;
     double m_fraction = 0;
-    // How far the book had been read when that was last written to the reading log.
-    double m_loggedPercent = 0;
+    // How far the book had been read when that was last written to the
+    // reading log, and when the reader last moved (#68).
+    ReadingSession m_session;
     int m_wantedSection = -1; // where the book being opened should open, when it was said
     double m_wantedFraction = 0;
     bool m_reloading = false;

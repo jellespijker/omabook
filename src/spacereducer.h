@@ -89,6 +89,9 @@ struct ReducedDay {
     QString day;
     double from = 100.0;
     double to = 0.0;
+    // How long it took (#68): the most any computer said, as the same
+    // day's reading is said again by each that has it.
+    qint64 seconds = 0;
     // Whether the day is there: said of a book and a day, and not taken
     // back by a removal ("removed" "1") later than what was said of it. Only
     // a published space takes one back, when its reading is switched off.
