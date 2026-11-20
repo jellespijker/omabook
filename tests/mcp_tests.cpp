@@ -97,7 +97,7 @@ private slots:
             {"book_add_format", "add"}, {"book_add_entry", "add"}, {"book_set_details", "set"},
             {"book_set_reading", "set"}, {"book_remove", "remove"}, {"book_export", "export"},
             {"book_convert", "convert"}, {"book_contents", "toc"}, {"book_text", "text"}, {"book_find", "find"},
-            {"progress_get", "progress"}, {"progress_set", "progress"}, {"bookmarks_list", "bookmarks"},
+            {"progress_get", "progress"}, {"progress_set", "progress"}, {"reading_stats", "stats"}, {"reading_goal_set", "stats"}, {"bookmarks_list", "bookmarks"},
             {"bookmark_add", "bookmarks"}, {"bookmark_remove", "bookmarks"}, {"notes_get", "notes"},
             {"annotations_list", "annotations"}, {"annotation_add", "annotations"}, {"annotation_change", "annotations"},
             {"annotation_remove", "annotations"}, {"annotations_export", "annotations"},

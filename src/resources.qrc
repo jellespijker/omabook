@@ -111,6 +111,10 @@
         <file alias="ModelPicker.qml">ModelPicker.qml</file>
         <file alias="SpreadReader.qml">SpreadReader.qml</file>
         <file alias="TidyDialog.qml">TidyDialog.qml</file>
+        <file alias="ReadingStatsDialog.qml">ReadingStatsDialog.qml</file>
+        <file alias="ShelfCount.qml">ShelfCount.qml</file>
+        <file alias="StatsGoal.qml">StatsGoal.qml</file>
+        <file alias="StatsMonths.qml">StatsMonths.qml</file>
         <file alias="TourNote.qml">TourNote.qml</file>
         <file alias="TourOverlay.qml">TourOverlay.qml</file>
         <file alias="skill.md">skill.md</file>

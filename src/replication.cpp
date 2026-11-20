@@ -59,7 +59,7 @@ constexpr auto kept = "EXISTS (SELECT 1 FROM kept_ops AS k WHERE k.space = o.spa
     const QString entity = reading == Reading::RangesOnly ? u"+o.entity"_s : u"o.entity"_s;
     const QString kinds = u"(("_s + entity + u" = 'book' AND (o.field IN ("_s + fields.join(u", "_s) + u") OR o.field LIKE 'tag:%')) OR "_s
                           + entity + u" = 'collection' OR ("_s + entity
-                          + u" IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation') "
+                          + u" IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation', 'goal') "
                             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%')) OR s.name LIKE 'plugin:%')"_s;
     const QString which = use == Use::Sending ? u"("_s + kinds + u" OR "_s + QLatin1StringView(kept) + u")"_s
                                               : kinds + u" AND NOT "_s + QLatin1StringView(kept);
@@ -165,7 +165,7 @@ bool Replication::travels(const SpaceOperation &op) {
     if (op.entity == "collection"_L1)
         return true;
     if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1
-        || op.entity == "subscription"_L1 || op.entity == "annotation"_L1)
+        || op.entity == "subscription"_L1 || op.entity == "annotation"_L1 || op.entity == "goal"_L1)
         return op.space.startsWith("personal:"_L1) || op.space.startsWith("world:"_L1);
     return op.entity == "book"_L1 && OpKinds::travelsOfABook(op.field);
 }

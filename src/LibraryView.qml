@@ -248,14 +248,10 @@ Item {
                 readonly property string runs: "library.libraries"
                 TapHandler { onTapped: win.showLibraries() }
             }
-            Label {
+            ShelfCount {
                 id: count
-                objectName: "bookCount"
                 visible: header.step < 1 && !header.searching
-                text: backend.books.query === "" && view.filterKinds.length === 0
-                      ? qsTr("%Ln books", "", backend.books.total)
-                      : qsTr("%1 of %2").arg(backend.books.books).arg(backend.books.total)
-                color: theme.colors.muted
+                some: backend.books.query !== "" || view.filterKinds.length > 0
             }
             Item {
                 visible: !header.searching

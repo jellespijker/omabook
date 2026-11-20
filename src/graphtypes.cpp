@@ -8,6 +8,7 @@
 #include "graphtenants.h"
 #include "inksurface.h"
 #include "marginnotes.h"
+#include "readingstatsview.h"
 
 void registerGraphTypes() {
     // Once, however many backends are made; a static's first use is the
@@ -25,6 +26,8 @@ void registerGraphTypes() {
         qmlRegisterType<MarginNotes>("Omabook", 1, 0, "MarginNotes");
         // What was written in the open book, found by its words, for the reader's Find (#115).
         qmlRegisterType<AnnotationFinder>("Omabook", 1, 0, "AnnotationFinder");
+        // The reading statistics and the year's goal (#68).
+        qmlRegisterType<ReadingStatsView>("Omabook", 1, 0, "ReadingStats");
         return true;
     }();
 }

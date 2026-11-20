@@ -43,7 +43,7 @@ modules = [
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights", "bookink",
   "annotationink", "opkinds", "keptops",
   "booksearch", "annotationwords",
-  "readinglog",
+  "readinglog", "readingstats", "readinggoal",
 ]
 
 [layers.services]
@@ -73,7 +73,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
@@ -82,7 +82,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
+  "inksurface", "inknodes", "readinghighlights", "readingink", "backendplugins", "annotationfinder", "readingstatsview",
 ]
 
 [layers.app]

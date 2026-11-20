@@ -103,6 +103,7 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 | `T` | When the selected book's events happen, on their timelines | `Shift+T` | When this book's events happen, as far as you have read |
 | `W` | Ask about your library | `V` | Select words with the keyboard, to ask about them or find them |
 | `N` | Suggest what to read next | `Shift+M` | Mark the map's things in the text: while the map is open, always, or never |
+| `Shift+R` | What you read, added up, and the year's goal | | |
 | `Ctrl+K` | Change Omabook (anywhere) | | |
 | `Y` | Sync with another computer | `Esc` | Back to the library |
 | `I` | Show or hide the details | | |
@@ -692,6 +693,7 @@ omabook openlibrary sync|shelves        Bring an Open Library reading log into t
 omabook sites [connect|check|disconnect|sync]  The reading sites, and how you are connected to each
 omabook change <wish> | --undo          Ask the AI to change how Omabook looks or works
 omabook progress <id> [--section N]     Show or set how far a book has been read
+omabook stats [--year y] [goal N books|hours]  Your reading added up: time, days in a row, books finished; the year's goal
 omabook format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment
 omabook sync <computer[:folder]>        Bring this library and another computer's in step over ssh
 omabook manifest                        Print the whole library as JSON, as sync reads it

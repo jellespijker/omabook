@@ -73,7 +73,7 @@ ApplicationWindow {
     readonly property bool touch: touchscreen || touchSeen
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened
-                                       || tidyUp.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
+                                       || tidyUp.opened || readingStats.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
                                        || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
@@ -265,6 +265,7 @@ ApplicationWindow {
     Key { command: "global.pane_narrower"; onActivated: win.resizePane(-1) }
     Key { command: "library.publish"; when: library.visible && backend.collections.length > 0; onActivated: win.showPublish(0) }
     Key { command: "library.subscribe"; when: library.visible; onActivated: win.showSubscribe() }
+    Key { command: "library.stats"; when: library.visible; onActivated: readingStats.show() }
 
     // Right-to-left languages mirror the window; the Translator sets the
     // application's layout direction.
@@ -455,6 +456,7 @@ ApplicationWindow {
     PluginAsk { id: pluginAsk }
     PluginForm { id: pluginForm }
     TidyDialog { id: tidyUp }
+    ReadingStatsDialog { id: readingStats }
     CollectionDialog { id: collectionEditor }
     PublishDialog { id: publishing }
     SubscribeDialog { id: subscribing }

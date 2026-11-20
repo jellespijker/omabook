@@ -36,6 +36,7 @@
 #include "folio.h"
 #include "libraries.h"
 #include "logcommands.h"
+#include "readingcommands.h"
 #include "formats.h"
 #include "goodreads.h"
 #include "graph.h"
@@ -449,43 +450,6 @@ int add(const QStringList &arguments) {
     if (summary.items.isEmpty() && summary.problems.isEmpty())
         return fail("No books were found there.");
     return summary.problems.isEmpty() ? 0 : 1;
-}
-
-int progress(const QStringList &arguments) {
-    Command command("progress", "Show how far a book has been read, or set it.");
-    command.parser.addPositionalArgument("id", "The book's number.");
-    command.parser.addOption({"section", "The section being read, counted from 0.", "number"});
-    command.parser.addOption({"fraction", "How far into that section, from 0 to 1.", "number"});
-    command.parser.addOption({"percent", "How far into the book, from 0 to 100.", "number"});
-    command.parser.addOption({"updated", "When it was read to here, in seconds since 1970; now when not given.", "seconds"});
-    if (!command.parse(arguments, 1, 1))
-        return 1;
-    QString error;
-    const auto library = command.library(&error);
-    if (!library)
-        return fail(error);
-    const qint64 id = command.argument(0).toLongLong();
-    if (!library->book(id))
-        return fail("There is no book " + command.argument(0) + " in the library.");
-    if (command.parser.isSet("section") || command.parser.isSet("fraction") || command.parser.isSet("percent")) {
-        Progress read = library->progress(id);
-        read.updated = command.parser.value("updated").toLongLong();
-        if (command.parser.isSet("section")) read.place.section = qMax(0, command.parser.value("section").toInt());
-        if (command.parser.isSet("fraction")) read.place.fraction = qBound(0.0, command.parser.value("fraction").toDouble(), 1.0);
-        if (command.parser.isSet("percent")) read.percent = qBound(0.0, command.parser.value("percent").toDouble(), 100.0);
-        const double before = library->progress(id).percent;
-        library->setProgress(id, read);
-        // Reading set by hand counts as reading: it goes in the log too.
-        if (read.percent > before)
-            Graph(*library).logReading(id, before, read.percent);
-        Graph(*library).bookNode(id);
-    }
-    const Progress read = library->progress(id);
-    if (command.json())
-        printJson(read.place.toJson({{"percent", read.percent}, {"updated", read.updated}}));
-    else
-        print(stdout, QString("section %1, %2% of the book").arg(read.place.section).arg(qRound(read.percent)));
-    return 0;
 }
 
 // How books are set on the page: the defaults every book follows, or one
@@ -2064,7 +2028,8 @@ constexpr std::array cliCommands{
     CliCommand{"ai"_L1, runAiCli},
     CliCommand{"graph"_L1, runGraphCliWithChronology},
     CliCommand{"chronology"_L1, runChronologyCli},
-    CliCommand{"progress"_L1, progress},
+    CliCommand{"progress"_L1, runProgressCli},
+    CliCommand{"stats"_L1, runStatsCli},
     CliCommand{"format"_L1, format},
     CliCommand{"sync"_L1, runSyncCli},
     CliCommand{"manifest"_L1, runManifestCli},

@@ -8,9 +8,9 @@
 
 // The kinds of operation this Omabook knows (#118): what each is of (its
 // entity) and, of a book, which of its fields. A newer Omabook may write a
-// kind this one doesn't know (a reading goal, say): this one keeps it in its
-// log and sends it on, but never takes it in (KeptOps), until an Omabook
-// that knows it opens the library. A plugin's data is all of one kind,
+// kind this one doesn't know (as one from before #68 knows no reading
+// goal): this one keeps it in its log and sends it on, but never takes it
+// in (KeptOps), until an Omabook that knows it opens the library. A plugin's data is all of one kind,
 // whatever its plugin calls it (ADR 0002).
 namespace OpKinds {
 

@@ -56,6 +56,13 @@ public:
         NoBooksInside,     // {archive name}
         NoSuchBook,        // {book's number}
         InkNotKept,        // {page number, from 1}
+        // One's reading added up, and the year's goal (library, #68).
+        NoSuchCollection, // {name}
+        NoSuchYear,       // {year}
+        GoalUnknownKind,  // {the word given}
+        GoalOutOfRange,   // {}
+        LibraryBusy,      // {}
+        GoalNotKept,      // {}
         // Recording and playing sound (foundation, services).
         NoMicrophone,         // {}
         MicrophoneStopped,    // {}

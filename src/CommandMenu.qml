@@ -37,7 +37,7 @@ AppPopup {
     // one place that has all of it, with its key.
     readonly property var kinds: ({
         "library": ["library.add", "library.add_folder", "library.new", "library.filter", "library.suggest", "library.ask",
-                    "library.collections", "library.publish", "library.subscribe", "library.libraries", "library.sync", "library.sites", "library.tidy",
+                    "library.collections", "library.publish", "library.subscribe", "library.libraries", "library.sync", "library.sites", "library.stats", "library.tidy",
                     "library.graph", "library.graph_build", "library.group", "library.details", "library.plugins",
                     "global.settings", "global.change", "global.help", "global.quit"],
         "book": ["library.read", "library.details", "library.edit", "library.lookup", "library.collection_book",

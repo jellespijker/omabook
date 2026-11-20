@@ -220,6 +220,8 @@ signals:
     void revisionChanged();
     // A book's own reading format was changed, here or elsewhere.
     void bookFormatsChanged();
+    // The year's reading goal was set in the window (#68), for every view of it.
+    void readingGoalChanged();
     void busyChanged();
     void messageChanged();
     void candidatesChanged();

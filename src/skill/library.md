@@ -128,6 +128,10 @@ Connecting is the user's to do (`omabook sites connect <site>`, token on standar
 ```bash
 omabook progress 12 --json                       # section, fraction, percent, when
 omabook progress 12 --section 4 --fraction 0.2   # set it
+omabook stats --json                             # this year's reading: time (seconds), days read on and in a row, books finished, by month; per book begun/finished
+omabook stats --year 2025 --collection Studie    # another year, one collection's books
+omabook stats --book 12 --json                   # one book: begun, last read, finished, days it took, time read
+omabook stats goal 24 books                      # the year's goal (or `100 hours`, or `none`); the user's own, it goes to their other computers
 omabook format --json                            # how every book is set: font, size, line width, spacing, indent, margins, alignment, with their bounds
 omabook format 12 --align justify --line-height 170  # one book's own, over the defaults; without the id, the defaults
 omabook format 12 --reset                        # the book follows the defaults again

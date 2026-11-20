@@ -147,29 +147,29 @@ private slots:
         QVERIFY(KeptOps::kept(upgraded).isEmpty());
     }
 
-    // What an Omabook knows no kind of at all, a newer one's (a reading
-    // goal), is taken from what a peer sends, to be kept, never left out;
+    // What an Omabook knows no kind of at all, a newer one's (a badge for
+    // a year's reading, say), is taken from what a peer sends, to be kept, never left out;
     // what is only another computer's own, or a shared space's, still is.
     void anOperationOfAnUnknownEntityIsTakenFromWhatIsSent() {
-        const SpaceOperation goal{.space = "personal:p",
-                                  .device = "d",
-                                  .seq = 3,
-                                  .hlc = 1,
-                                  .author = "d",
-                                  .entity = "goal",
-                                  .id = "g:2026",
-                                  .field = "books",
-                                  .value = "12"};
-        SpaceOperation path = goal;
+        const SpaceOperation badge{.space = "personal:p",
+                                   .device = "d",
+                                   .seq = 3,
+                                   .hlc = 1,
+                                   .author = "d",
+                                   .entity = "badge",
+                                   .id = "b:2026",
+                                   .field = "books",
+                                   .value = "12"};
+        SpaceOperation path = badge;
         path.entity = "book";
         path.field = "path";
-        SpaceOperation shared = goal;
+        SpaceOperation shared = badge;
         shared.space = "shared:s";
-        const QList<SpaceOperation> sent{goal, path, shared};
+        const QList<SpaceOperation> sent{badge, path, shared};
         const QList<SpaceOperation> taken = Replication::operationsFrom(Replication::toJson(sent));
         QCOMPARE(taken.size(), 1);
-        QCOMPARE(taken.first().entity, QStringLiteral("goal"));
-        QVERIFY(!OpKinds::known(goal));
+        QCOMPARE(taken.first().entity, QStringLiteral("badge"));
+        QVERIFY(!OpKinds::known(badge));
         QVERIFY(OpKinds::known(path));
     }
 };
