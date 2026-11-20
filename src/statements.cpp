@@ -44,11 +44,13 @@ public:
                     m_statements.m_kept.clear();
                 m_kept = m_statements.m_kept.emplace(sql, std::make_unique<Kept>(std::move(made))).first->second.get();
             } else {
-                m_own.emplace(std::move(made));
+                m_query = &m_own.emplace(std::move(made));
             }
         }
-        if (m_kept)
+        if (m_kept) {
             m_kept->busy = true;
+            m_query = &m_kept->query;
+        }
         for (qsizetype at = 0; at < values.size(); ++at)
             query().bindValue(static_cast<int>(at), writes ? bindable(values.at(at)) : values.at(at));
     }
@@ -63,7 +65,7 @@ public:
     Use(Use &&) = delete;
     Use &operator=(Use &&) = delete;
 
-    [[nodiscard]] QSqlQuery &query() { return m_kept ? m_kept->query : *m_own; }
+    [[nodiscard]] QSqlQuery &query() { return *m_query; }
     // Whether it ran, and found what it asks for or did what it says.
     [[nodiscard]] bool exec() { return m_prepared && query().exec(); }
 
@@ -71,6 +73,7 @@ private:
     Statements &m_statements;
     Kept *m_kept = nullptr;
     std::optional<QSqlQuery> m_own;
+    QSqlQuery *m_query = nullptr; // the kept one's, or m_own's
     bool m_prepared = true;
 };
 
