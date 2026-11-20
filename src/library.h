@@ -111,6 +111,11 @@ struct SeriesNotes {
     bool blurb = false;
 };
 
+// A bookmark (a place) or a highlight (a passage), as the annotations table
+// keeps it. A passage's start is `place`; where it ends, its words and those
+// around them are the rest of its Passage (#80), found again by them when the
+// book's file changes (AnnotationAnchors). A highlight from before passages
+// is a place and its words (`text`), until its book is opened.
 struct Annotation {
     qint64 id = 0;
     QString kind;           // "bookmark" or "highlight"
@@ -118,6 +123,20 @@ struct Annotation {
     QString text;
     QString note;
     qint64 created = 0;
+    BookPlace to; // where its passage ends; a bookmark's is its place
+    QString quote, before, after;
+    QString anchored;      // the hash of the file its places were found in; empty before they were
+    double confidence = 1; // how sure that place is (FoundPassage::confidence)
+    bool lost = false;     // not found in that file: kept for the reader to place again or remove
+
+    [[nodiscard]] Passage passage() const;
+    void setPassage(const Passage &passage);
+    // Whether it is on a passage found by its words: not a bookmark's place.
+    [[nodiscard]] bool hasPassage() const;
+    // What the plugins and the trash keep of it: its place, kind, words and
+    // note, and its passage when it has one; read back the same.
+    [[nodiscard]] QJsonObject toJson(QJsonObject alongside = {}) const;
+    [[nodiscard]] static Annotation fromJson(const QJsonObject &object);
 };
 
 // A named part of the library, named as its owner likes: a saved

@@ -11,6 +11,7 @@
 #include <print>
 #include <tuple>
 
+#include "annotationanchors.h"
 #include "library.h"
 #include "settings.h"
 
@@ -77,7 +78,7 @@ int failLine(const QString &why) {
 
 int runBookmarksCli(const QStringList &arguments) {
     QCommandLineParser parser;
-    parser.setApplicationDescription("List a book's bookmarks, add one, rename one, or remove one.");
+    parser.setApplicationDescription("List a book's bookmarks and highlights, add a bookmark, rename one, or remove one.");
     parser.addHelpOption();
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
@@ -91,6 +92,7 @@ int runBookmarksCli(const QStringList &arguments) {
     parser.addOption({"rename", "Give the bookmark with this number the words given with --as.", "bookmark"});
     parser.addOption({"as", "The words a renamed bookmark is known by.", "text"});
     parser.addOption({"remove", "Remove the bookmark with this number.", "bookmark"});
+    parser.addOption({"lost", "List only the highlights whose words can no longer be found in the book's file."});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = "omabook bookmarks";
@@ -108,15 +110,19 @@ int runBookmarksCli(const QStringList &arguments) {
         return failLine("There is no book " + number + " in the library.");
     if (const auto changed = change(**library, id, parser); !changed)
         return failLine(changed.error());
+    // Highlights placed in another file of the book are found again in this one first (#80); a book without one stays as it is.
+    std::ignore = AnnotationAnchors::anchor(**library, id);
     QJsonArray array;
     for (const Annotation &note : (*library)->annotations(id)) {
-        array << note.place.toJson({{"id", note.id}, {"kind", note.kind}, {"text", note.text}});
+        if (parser.isSet("lost") && !note.lost)
+            continue;
+        array << note.toJson({{"id", note.id}});
         if (!parser.isSet("json"))
-            printLine(stdout, QString("%1\tsection %2, %3%\t%4")
+            printLine(stdout, QString("%1\tsection %2, %3%\t%4%5")
                                   .arg(note.id)
                                   .arg(note.place.section)
                                   .arg(qRound(note.place.fraction * 100))
-                                  .arg(note.text));
+                                  .arg(note.text, note.lost ? QString("\t(lost)") : QString()));
     }
     if (parser.isSet("json"))
         printLine(stdout, QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Indented)).trimmed());

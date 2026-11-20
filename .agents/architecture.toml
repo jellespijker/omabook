@@ -23,7 +23,7 @@ modules = [
 summary = "Opening and reading book files: archives, EPUB, PDF, comics, FictionBook, text, conversion."
 uses = ["foundation"]
 modules = [
-  "bookarchive", "bookplace", "booksource", "comic", "converter", "describeddocument", "document", "epub", "fb2",
+  "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
   "formatprovider", "formatreaders", "formats", "markdownbook", "mobi", "pdfdoc", "textdoc",
 ]
 
@@ -31,7 +31,7 @@ modules = [
 summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
 uses = ["formats", "foundation"]
 modules = [
-  "annotationschema", "booksides", "catalog", "changelog", "changelogannotations", "chronology", "eventtime", "changelogbaseline",
+  "annotationanchors", "annotationschema", "booksides", "catalog", "changelog", "changelogannotations", "chronology", "eventtime", "changelogbaseline",
   "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers",
   "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries", "library",
   "libraryannotations", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
@@ -72,7 +72,7 @@ uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
-  "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "spacedesk",
+  "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "spacedesk",
   "inksurface", "inknodes",
 ]
 

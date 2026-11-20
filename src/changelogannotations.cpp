@@ -24,7 +24,28 @@ constexpr auto entity = "annotation"_L1;
     return removed != existing.cend() && removed->value == "1"_L1;
 }
 
-// One row of `SELECT id, book_id, kind, section, fraction, text, note, created`.
+[[nodiscard]] QString number(double value) { return QString::number(value, 'g', QLocale::FloatingPointShortest); }
+
+// A passage's fields (#80), of a row that has one: where it ends, its words
+// and those around them, the file it was found in, how surely, and whether
+// it is lost. A bookmark has none, and writes none, unless the log already
+// holds them (a highlight it was, once).
+void writePassage(ChangeLogFields::Context &ctx, const QSqlQuery &row, qint64 hlc) {
+    const QList<std::pair<QString, QString>> fields{{u"to_section"_s, QString::number(row.value(8).toInt())},
+                                                    {u"to_fraction"_s, number(row.value(9).toDouble())},
+                                                    {u"quote"_s, row.value(10).toString()},
+                                                    {u"before"_s, row.value(11).toString()},
+                                                    {u"after"_s, row.value(12).toString()},
+                                                    {u"anchored"_s, row.value(13).toString()},
+                                                    {u"confidence"_s, number(row.value(14).toDouble())},
+                                                    {u"lost"_s, row.value(15).toBool() ? u"1"_s : u"0"_s}};
+    const bool hasPassage = !row.value(10).toString().isEmpty() || row.value(15).toBool() || !row.value(13).toString().isEmpty();
+    for (const auto &[field, value] : fields)
+        if (hasPassage || ctx.existing.contains(field))
+            ChangeLogFields::write(ctx, field, value, hlc);
+}
+
+// One row of `SELECT id, book_id, kind, section, fraction, text, note, created`, and the passage's fields after them.
 void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
     const QString gid = Spaces::annotationId(library, row.value(0).toLongLong());
     const QString bookGid = Spaces::bookId(library, row.value(1).toLongLong());
@@ -38,12 +59,13 @@ void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
         {u"book"_s, bookGid},
         {u"kind"_s, row.value(2).toString()},
         {u"section"_s, QString::number(row.value(3).toInt())},
-        {u"fraction"_s, QString::number(row.value(4).toDouble(), 'g', QLocale::FloatingPointShortest)},
+        {u"fraction"_s, number(row.value(4).toDouble())},
         {u"text"_s, row.value(5).toString()},
         {u"note"_s, row.value(6).toString()},
         {u"created"_s, QString::number(row.value(7).toLongLong())}};
     for (const auto &[field, value] : fields)
         ChangeLogFields::write(ctx, field, value, hlc);
+    writePassage(ctx, row, hlc);
     if (isRemoved(ctx.existing))
         ChangeLog::append(library, {ctx.space, QString(entity), gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
 }
@@ -60,8 +82,10 @@ void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
 }
 
 void syncRows(const Library &library, bool baseline, const std::optional<QList<qint64>> &ids) {
-    for (QSqlQuery row = ChangeLog::query(library, u"SELECT id, book_id, kind, section, fraction, text, note, created FROM annotations"_s
-                                                       + onlyThese(ids) + u" ORDER BY id"_s);
+    for (QSqlQuery row =
+             ChangeLog::query(library, u"SELECT id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, "
+                                       "quote_before, quote_after, anchored, confidence, lost FROM annotations"_s
+                                           + onlyThese(ids) + u" ORDER BY id"_s);
          row.next();)
         syncRowToLog(library, row, baseline);
 }

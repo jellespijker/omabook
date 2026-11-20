@@ -27,19 +27,33 @@ struct Row {
 [[nodiscard]] QString fieldOf(const ReducedAnnotation &reduced, const QString &field) { return reduced.fields.value(field).value; }
 
 // As the log says it is, its number the row's here (0 when there is none).
+// One from an Omabook before passages (#80) has none of a passage's fields:
+// a bookmark's place, or a highlight's start and words.
 [[nodiscard]] Annotation annotationFrom(const ReducedAnnotation &reduced, qint64 id) {
+    const auto field = [&reduced](const QString &name) { return fieldOf(reduced, name); };
+    const BookPlace place{.section = field(u"section"_s).toInt(), .fraction = field(u"fraction"_s).toDouble()};
+    const bool hasEnd = reduced.fields.contains(u"to_section"_s);
     return {.id = id,
-            .kind = fieldOf(reduced, u"kind"_s),
-            .place = {.section = fieldOf(reduced, u"section"_s).toInt(), .fraction = fieldOf(reduced, u"fraction"_s).toDouble()},
-            .text = fieldOf(reduced, u"text"_s),
-            .note = fieldOf(reduced, u"note"_s),
-            .created = fieldOf(reduced, u"created"_s).toLongLong()};
+            .kind = field(u"kind"_s),
+            .place = place,
+            .text = field(u"text"_s),
+            .note = field(u"note"_s),
+            .created = field(u"created"_s).toLongLong(),
+            .to = hasEnd ? BookPlace{.section = field(u"to_section"_s).toInt(), .fraction = field(u"to_fraction"_s).toDouble()} : place,
+            .quote = field(u"quote"_s),
+            .before = field(u"before"_s),
+            .after = field(u"after"_s),
+            .anchored = field(u"anchored"_s),
+            .confidence = reduced.fields.contains(u"confidence"_s) ? field(u"confidence"_s).toDouble() : 1,
+            .lost = field(u"lost"_s) == "1"_L1};
 }
 
 [[nodiscard]] bool unchanged(const Row &row, qint64 book, const Annotation &log) {
     const Annotation &here = row.annotation;
-    return std::tie(row.book, here.kind, here.place.section, here.place.fraction, here.text, here.note, here.created)
-           == std::tie(book, log.kind, log.place.section, log.place.fraction, log.text, log.note, log.created);
+    return std::tie(row.book, here.kind, here.place, here.text, here.note, here.created)
+               == std::tie(book, log.kind, log.place, log.text, log.note, log.created)
+           && std::tie(here.to, here.quote, here.before, here.after, here.anchored, here.confidence, here.lost)
+                  == std::tie(log.to, log.quote, log.before, log.after, log.anchored, log.confidence, log.lost);
 }
 
 } // namespace

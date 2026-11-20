@@ -8,9 +8,14 @@
 #include <QUuid>
 #include <QtTest>
 #include <algorithm>
+#include <memory>
 
+#include "annotationanchors.h"
+#include "booktext.h"
 #include "changelog.h"
+#include "document.h"
 #include "fixtures.h"
+#include "formats.h"
 #include "importer.h"
 #include "library.h"
 #include "remote.h"
@@ -117,6 +122,72 @@ private slots:
         QVERIFY(two.here.annotations(two.mine).isEmpty() && two.there.annotations(two.theirs).isEmpty());
     }
 
+    // A highlight travels with its passage (#80): its words, those around
+    // them, where it ends, the file it was found in and how surely. Found
+    // again in a new edition there, it comes back as it is there; one lost
+    // there comes back lost.
+    void aHighlightTravelsWithItsPassageAndAsItWasFoundAgain() {
+        TwoComputers two;
+        const Remote remote = two.remote();
+        QVERIFY(syncLibrary(two.here, remote).problems.isEmpty());
+        const std::optional<FormatFile> file = AnnotationAnchors::readableFile(two.here, two.mine);
+        QVERIFY(file);
+        const std::unique_ptr<Document> opened = Formats::open(file->path);
+        QVERIFY(opened);
+        const BookText text(*opened);
+        int section = 0;
+        while (section < text.sections() && text.text(section).simplified().size() < 40)
+            ++section;
+        QVERIFY(section < text.sections());
+        const QString words = text.text(section).simplified().split(' ').mid(2, 6).join(' ');
+        const qsizetype at = text.text(section).indexOf(words);
+        QVERIFY2(at >= 0, qPrintable(words));
+        Annotation highlight{.id = 0, .kind = "highlight", .place = {}, .text = words, .note = "Look", .created = 0};
+        highlight.setPassage(Passage::of(text.text(section), section, at, at + words.size()));
+        highlight.anchored = file->hash;
+        QVERIFY(two.here.addAnnotation(two.mine, highlight) > 0);
+        Annotation gone = highlight;
+        gone.setPassage({.from = {.section = section, .fraction = 0.5},
+                         .to = {.section = section, .fraction = 0.6},
+                         .quote = "words no edition of it has",
+                         .before = {},
+                         .after = {}});
+        QVERIFY(two.here.addAnnotation(two.mine, gone) > 0);
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 2);
+        const auto there = [&two](const QString &quote) {
+            const QList<Annotation> all = two.there.annotations(two.theirs);
+            const auto found = std::ranges::find(all, quote, &Annotation::quote);
+            return found == all.cend() ? Annotation{} : *found;
+        };
+        const Annotation came = there(words);
+        QCOMPARE(came.passage(), highlight.passage());
+        QCOMPARE(came.anchored, file->hash);
+        QCOMPARE(came.confidence, 1.0);
+        QVERIFY(!came.lost);
+
+        // Found again there, in a file whose text moved on: the passage as it is
+        // there comes back, and the one it lacks comes back lost.
+        QStringList sections;
+        for (int each = 0; each < text.sections(); ++each)
+            sections << (each == section ? "A line put in first. " + text.text(each) : text.text(each));
+        const BookText edition(static_cast<int>(sections.size()), [sections](int each) { return sections.value(each); });
+        QCOMPARE(AnnotationAnchors::anchor(two.there, two.theirs, edition, "edition"),
+                 (AnnotationAnchors::Summary{.kept = 0, .moved = 1, .lost = 1}));
+        const SyncSummary back = syncLibrary(two.here, remote);
+        QVERIFY2(back.problems.isEmpty(), qPrintable(back.problems.join('\n')));
+        QCOMPARE(back.annotationsTaken, 2);
+        const QList<Annotation> here = two.here.annotations(two.mine);
+        QCOMPARE(here.size(), 2);
+        for (const Annotation &annotation : std::as_const(here)) {
+            const Annotation theirs = there(annotation.quote);
+            QCOMPARE(annotation.passage(), theirs.passage());
+            QCOMPARE(annotation.anchored, QString("edition"));
+            QCOMPARE(annotation.lost, annotation.quote != words);
+            QCOMPARE(annotation.confidence, theirs.confidence);
+        }
+        QCOMPARE(changed(syncLibrary(two.here, remote)), 0);
+    }
+
     // Calibre's highlights are annotations as bookmarks are, so they travel
     // the same way, with their notes, once the book they are in has come.
     void aHighlightFromCalibreTravelsAsABookmarkDoes() {
@@ -160,6 +231,8 @@ private slots:
         Library there(dir.filePath("There"));
         QVERIFY(here.open() && there.open());
         QCOMPARE(here.annotations(1).size(), 1);
+        // A bookmark from before passages ends where it starts (#80).
+        QCOMPARE(here.annotations(1).first().to, here.annotations(1).first().place);
         QVERIFY(annotationOps(here) > 0);
         QCOMPARE(Spaces::annotationId(here, 1), Spaces::annotationId(there, 1));
         const SyncSummary summary = syncLibrary(here, Remote("laptop:" + dir.filePath("There"), {ssh(dir, "ssh-log", false)}));

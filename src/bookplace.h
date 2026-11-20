@@ -2,7 +2,13 @@
 
 #include <QJsonObject>
 #include <QString>
+#include <QStringView>
 #include <compare>
+#include <optional>
+#include <utility>
+
+class BookText;
+struct FoundPassage;
 
 // A place in a book, whatever its format: the section it is in (a chapter of
 // a flowing book, EPUB, FictionBook, Markdown or text; a page of a PDF or a
@@ -36,7 +42,9 @@ struct BookPlace {
 // starts and where it ends, and the words between, with a few just before and
 // after them (as the W3C web annotation's text quote selector keeps them). The
 // places find it quickly; the words find it again when they no longer do,
-// after the layout or the book's file changed.
+// after the layout or the book's file changed (#80). A passage lies within
+// one section, as a selection on a chapter or a page does; its places count
+// characters of that section's text (BookText), a fraction of it.
 struct Passage {
     BookPlace from;
     BookPlace to;
@@ -55,4 +63,28 @@ struct Passage {
     // The same two keys added to an object that says more of the place.
     [[nodiscard]] QJsonObject toJson(QJsonObject alongside) const;
     [[nodiscard]] static Passage fromJson(const QJsonObject &object);
+
+    // The passage from character `start` to `end` of a section's text, with a
+    // few words before and after it. Of the book's own text (BookText::text)
+    // its places are exact; of a text that shows the section otherwise (the
+    // reader's page) its words are right and its places near, and findAgain
+    // then places it in the book's text.
+    [[nodiscard]] static Passage of(QStringView sectionText, int section, qsizetype start, qsizetype end);
+    // The passage in a book's text, as it is now: by its words first, the
+    // words around them and its place telling one occurrence from another,
+    // nearest its own section first; then by most of its words, when some
+    // changed (a typo fixed, a word put in). Its words and places are
+    // the text's own then. None when too little of it is there: an
+    // annotation on it is lost.
+    [[nodiscard]] std::optional<FoundPassage> findAgain(const BookText &text) const;
+    // Where it is in a text showing its section (the reader's page, the
+    // plain text of a laid-out chapter): its first character and the one past its last.
+    [[nodiscard]] std::optional<std::pair<qsizetype, qsizetype>> spanIn(QStringView shown) const;
+};
+
+// A passage found again, and how sure that is, from 0 to 1: 1 when its words
+// and those around them are all there, less as fewer are.
+struct FoundPassage {
+    Passage passage;
+    double confidence = 0;
 };

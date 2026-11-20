@@ -513,8 +513,7 @@ public:
         QJsonArray list;
         if (const Library *library = this->library(false))
             for (const Annotation &annotation : library->annotations(qint64(id)))
-                list << annotation.place.toJson({{"id", annotation.id}, {"kind", annotation.kind}, {"text", annotation.text},
-                                                 {"note", annotation.note}, {"created", annotation.created}});
+                list << annotation.toJson({{"id", annotation.id}});
         return compact(list);
     }
     Q_INVOKABLE QString libraryToc(double id) {

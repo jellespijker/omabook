@@ -27,13 +27,14 @@
 #include "folio.h"
 #include "importer.h"
 #include "interface.h"
-#include "log.h"
 #include "librarian.h"
 #include "libraryupgrade.h"
+#include "log.h"
 #include "manual.h"
 #include "pluginformats.h"
 #include "portalfilepicker.h"
 #include "reader.h"
+#include "readingpassages.h"
 #include "settings.h"
 #include "theme.h"
 #include "themechoice.h"
@@ -84,6 +85,16 @@ void bringUpToDate(const QString &root, Look &theme) {
     QObject::connect(&upgrade, &LibraryUpgrade::finished, &waiting, &QEventLoop::quit);
     if (upgrade.running())
         waiting.exec();
+}
+
+// The reader follows the Calibre plugin's converter and the graph's setting,
+// and finds the open book's highlights again when its file changed (#80).
+void setUpReader(Reader &reader, Backend &backend, const CalibrePlugin &calibre, Settings &settings) {
+    reader.setConverter(calibre.converter(), calibre.switchedOff());
+    reader.marks()->setGraphMode([&settings] { return settings.graph(); });
+    new ReadingPassages(&reader, &reader); // the reader's, gone with it
+    QObject::connect(&backend, &Backend::pluginsChanged, &reader,
+                     [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
 }
 
 } // namespace
@@ -200,10 +211,7 @@ int main(int argc, char *argv[]) {
     // Converting is the Calibre plugin's, so there is no converter while it is off.
     const CalibrePlugin &calibre = backend.pluginRegistry()->calibre();
     Reader reader(&backend, calibre.converter());
-    reader.setConverter(calibre.converter(), calibre.switchedOff());
-    reader.marks()->setGraphMode([&settings] { return settings.graph(); });
-    QObject::connect(&backend, &Backend::pluginsChanged, &reader,
-                     [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
+    setUpReader(reader, backend, calibre, settings);
     Assistant assistant(&reader, [&settings](QString *why) { return makeAiProvider(settings, why); });
     QObject::connect(&settings, &Settings::changed, &assistant, &Assistant::refresh);
     // Whether the knowledge graph grows while reading is the user's choice.
