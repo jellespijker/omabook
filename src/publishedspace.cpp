@@ -21,6 +21,7 @@
 #include "publishedlog.h"
 #include "spacereducer.h"
 #include "spaces.h"
+#include "spaceworlds.h"
 
 using namespace Qt::StringLiterals;
 
@@ -57,6 +58,7 @@ struct Members {
     QSet<QString> days;
     // How far the owner has read each of its books (GraphContext::reachOf).
     QHash<QString, GraphContext::Reach> reach;
+    QHash<QString, QSet<QString>> worlds; // a plugin's scope given to the space, and the books it goes with (#65)
 
     [[nodiscard]] bool holds(const Canon &canon, const QString &bookGid) const {
         return !bookGid.isEmpty() && books.contains(canon.book(bookGid));
@@ -104,12 +106,24 @@ void collectTree(const Library &library, const Collection &root, const Canon &ca
     }
 }
 
-// Whether a thing was met in one of the space's books, where the owner has read.
+// Whether a thing was met in one of the space's books, where the owner has
+// read; a thing of a world only in a book its world goes with.
 [[nodiscard]] bool metInBooks(const ReducedNode &node, const Canon &canon, const Members &members) {
+    const QString scope = node.fields.value(u"scope"_s).value;
     for (auto seen = node.seen.cbegin(); seen != node.seen.cend(); ++seen)
-        if (members.holds(canon, seen.key()) && members.met(canon, seen.key(), *seen))
+        if (members.holds(canon, seen.key()) && members.met(canon, seen.key(), *seen)
+            && (scope.isEmpty() || members.worlds.value(scope).contains(canon.book(seen.key()))))
             return true;
     return false;
+}
+
+// Of the worlds given to the space, those of its books, each scope with the books it goes with.
+[[nodiscard]] QList<SpaceWorlds::World> collectWorlds(QList<SpaceWorlds::World> worlds, const Canon &canon, Members &members) {
+    worlds.removeIf([&](const SpaceWorlds::World &world) { return !members.holds(canon, world.book); });
+    for (const SpaceWorlds::World &world : std::as_const(worlds))
+        if (!world.scope.isEmpty())
+            members.worlds[world.scope].insert(canon.book(world.book));
+    return worlds;
 }
 
 // Whether a relation was learned where the owner has read, or in no book of the space.
@@ -120,20 +134,22 @@ void collectTree(const Library &library, const Collection &root, const Canon &ca
 // The things of the graph its books hold: met in one of them, learned of
 // there, related there, a book's own, or related to one; questions apart.
 struct GraphOfBooks {
-    QSet<QString> things; // alive, of the library's own graph (not a story world's)
+    QSet<QString> things; // alive, of the library's own graph, or of a world given to the space
     QHash<QString, QString> kinds;
     QSet<QString> bookNodes; // the books' own things
     QSet<QString> questions; // things that are a question asked
     QSet<QString> met;
 };
 
-// The things of the library's own graph, and of those which its books hold
-// themselves (a book's own thing, one met in a book).
+// The things of the library's own graph and of the worlds given to the
+// space, and of those which its books hold themselves (a book's own thing,
+// one met in a book).
 void readThings(const ReducedState &state, const Canon &canon, const Members &members, GraphOfBooks &graph) {
     for (auto node = state.nodes.cbegin(); node != state.nodes.cend(); ++node) {
         const QString kind = node->fields.value(u"kind"_s).value;
+        const QString scope = node->fields.value(u"scope"_s).value;
         // A tag is the owner's own word for a book, which the space leaves out.
-        if (!alive(*node) || !node->fields.value(u"scope"_s).value.isEmpty() || kind == "tag"_L1)
+        if (!alive(*node) || !(scope.isEmpty() || members.worlds.contains(scope)) || kind == "tag"_L1)
             continue;
         graph.things.insert(node.key());
         graph.kinds.insert(node.key(), kind);
@@ -363,13 +379,17 @@ std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const L
     const std::optional<Collection> root = collectionOf(library, collectionId);
     if (!root)
         return std::unexpected(u"There is no collection %1 to publish."_s.arg(collectionId));
-    // The owner's own log: what the space says is taken from there.
+    // The owner's own log: what the space says is taken from there, and of
+    // each world given to it the log of its own the world is kept in.
+    const QList<SpaceWorlds::World> worlds = SpaceWorlds::granted(library, space, parts.graph);
+    const QStringList scopes = SpaceWorlds::scopesOf(worlds);
     QList<SpaceOperation> personal = SpaceReplay::operations(library);
-    personal.removeIf([](const SpaceOperation &op) { return !op.space.startsWith("personal:"_L1); });
+    personal.removeIf([&scopes](const SpaceOperation &op) { return !op.space.startsWith("personal:"_L1) && !scopes.contains(op.space); });
     const Canon canon{.books = SpaceReducer::sameAs(personal), .things = SpaceReducer::sameAs(personal, "node"_L1)};
     const ReducedState state = SpaceReducer::reduce(personal);
     Members members;
     collectTree(library, *root, canon, members);
+    const QList<SpaceWorlds::World> given = collectWorlds(worlds, canon, members);
     collectGraph(state, canon, parts, members);
     if (parts.reading)
         collectDays(state, canon, members);
@@ -383,6 +403,7 @@ std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const L
             chosen << *taken;
         }
     }
+    chosen += SpaceWorlds::said(given, space, Spaces::deviceId(library));
     QList<SpaceOperation> compacted = Compaction::latest(chosen);
     disguise(compacted, space);
     std::ranges::sort(compacted, [](const SpaceOperation &one, const SpaceOperation &other) {

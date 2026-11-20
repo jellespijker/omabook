@@ -7,6 +7,7 @@
 #include <expected>
 
 #include "sharedspace.h"
+#include "spaceworlds.h"
 #include "subscriptions.h"
 
 class Library;
@@ -61,9 +62,10 @@ struct Created {
 };
 // Founds a shared space called `name` with `parts` (PublishedSpace::Parts by
 // name), linked to the collection `collection` here (the space's name when
-// empty; made when there is none).
+// empty; made when there is none), with what `worlds` gives of the plugins'
+// (SpaceWorlds, #65).
 [[nodiscard]] std::expected<Created, QString> create(Library &library, const QString &name, const QStringList &parts,
-                                                     const QString &collection = {});
+                                                     const QString &collection = {}, const SpaceWorlds::Ask &worlds = {});
 
 struct Invited {
     Summary space;

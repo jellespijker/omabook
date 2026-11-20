@@ -7,6 +7,7 @@
 #include "library.h"
 #include "publishedspace.h"
 #include "spacetransport.h"
+#include "spaceworlds.h"
 
 class QCommandLineParser;
 
@@ -42,13 +43,21 @@ struct Publishing {
     // A transport to send it by as well (send), and whether to a place anyone may find.
     SpaceTransport *link = nullptr;
     bool open = false;
+    // The plugins to ask what of theirs goes with it (SpaceWorlds, #65); what
+    // was given before stays when there are none to ask.
+    SpaceWorlds::Ask worlds;
 };
+
+// What the plugins are asked of `collection` when `person` publishes it with `parts`.
+[[nodiscard]] SpaceWorlds::Asked asked(const Library &library, const Collection &collection, const PublishedSpace::Parts &parts,
+                                       const QString &person);
 
 // Publishes the collection as the user's space, with `parts`, and writes its
 // snapshot where `how` says: {"space", "owner", "person", "operations",
 // "new", with a file "output" and "snapshot_operations", and with a link
 // "sent", as send says it}. What the command line and the window both do
-// once the summary has been shown.
+// once the summary has been shown. With plugins to ask, also {"worlds": what
+// they were given and what was left out (SpaceWorlds::Granted)}.
 [[nodiscard]] std::expected<QJsonObject, QString> publish(const Library &library, const Collection &collection,
                                                           const PublishedSpace::Parts &parts, const Publishing &how);
 

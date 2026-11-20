@@ -19,9 +19,9 @@
 #include <functional>
 #include <memory>
 #include <mutex>
-#include <thread>
 
 #include "formatprovider.h"
+#include "scriptwatchdog.h"
 
 class AiProvider;
 class QNetworkAccessManager;
@@ -57,35 +57,9 @@ struct ScriptManifest {
     QString dataFolder() const { return folder + "/data"; }
 };
 
-// Stops a script that doesn't come back. JavaScript runs on the thread that
-// called it, so a timer there would never fire; this one waits on a thread
-// of its own and interrupts the engine, which QJSEngine allows from anywhere.
-class ScriptWatchdog {
-public:
-    // `fired` is called on the watchdog's thread once the engine was interrupted.
-    ScriptWatchdog(QJSEngine *engine, std::function<void()> fired);
-    ~ScriptWatchdog();
-    ScriptWatchdog(const ScriptWatchdog &) = delete;
-    ScriptWatchdog &operator=(const ScriptWatchdog &) = delete;
-
-    void arm(std::chrono::milliseconds limit);
-    void disarm();
-
-private:
-    void watch();
-
-    QJSEngine *m_engine;
-    std::function<void()> m_fired;
-    std::mutex m_mutex;
-    std::condition_variable m_wake;
-    bool m_armed = false;
-    bool m_quit = false;
-    std::chrono::steady_clock::time_point m_deadline;
-    std::thread m_thread;
-};
-
 class ScriptHost;
 class ScriptPlugin;
+class ScriptSharing;
 
 // The way into a plugin from another thread. A format a script adds is asked
 // for books from wherever a book is opened (the reader opens them beside the
@@ -195,6 +169,8 @@ public:
     static std::optional<BookDescription> described(const QJsonObject &book, QString *problem);
     // Stops answering for the script's formats from other threads.
     void closeGate() { m_gate->close(); }
+    // What of the plugin's goes into spaces (omabook.sharing).
+    ScriptSharing &sharing() { return *m_sharing; }
     // The events the script listens to.
     QStringList events() const;
     // What the script set for its panels.
@@ -259,6 +235,7 @@ signals:
 
 private:
     friend class ScriptHost;
+    friend class ScriptSharing;
 
     QJSValue fromJson(const QJsonValue &value);
     QString describe(const QJSValue &error) const;
@@ -281,6 +258,7 @@ private:
     std::chrono::milliseconds m_limit{5000};
     QJSEngine m_engine;
     std::unique_ptr<ScriptHost> m_host;
+    std::unique_ptr<ScriptSharing> m_sharing;
     QJSValue m_settle, m_parse;
     int m_depth = 0;
     // The library write the code running now makes, as one transaction.

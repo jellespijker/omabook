@@ -16,6 +16,8 @@
 #include "collectionshare.h"
 #include "following.h"
 #include "githublink.h"
+#include "person.h"
+#include "scriptsharing.h"
 #include "spacesnapshot.h"
 #include "subscribedspace.h"
 #include "subscriptions.h"
@@ -196,14 +198,23 @@ void SpaceDesk::look(qint64 collection) {
 
 void SpaceDesk::publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file, bool link, bool open) {
     const PublishedSpace::Parts chosen = partsOf(parts);
+    // The plugins are asked here, where they run, what of theirs goes with it (#65).
+    SpaceWorlds::Ask worlds;
+    const Library *here = m_backend.library();
+    const auto shelf = here != nullptr ? here->collection(collection) : std::nullopt;
+    if (shelf && here->person() != nullptr && m_backend.scripts() != nullptr) {
+        QList<SpaceWorlds::Offer> offered =
+            worldsOf(*m_backend.scripts())(CollectionShare::asked(*here, *shelf, chosen, here->person()->id()));
+        worlds = [offered = std::move(offered)](const SpaceWorlds::Asked &) { return offered; };
+    }
     beside(
-        [collection, chosen, as, file, link, open, transports = m_transports](Library &library) {
+        [collection, chosen, as, file, link, open, worlds, transports = m_transports](Library &library) {
             const auto shared = library.collection(collection);
             if (!shared)
                 return failed(tr("That collection is gone."));
             const std::unique_ptr<SpaceTransport> transport = link ? transports() : nullptr;
-            const auto done =
-                CollectionShare::publish(library, *shared, chosen, {.as = as, .output = file, .link = transport.get(), .open = open});
+            const auto done = CollectionShare::publish(library, *shared, chosen,
+                                                       {.as = as, .output = file, .link = transport.get(), .open = open, .worlds = worlds});
             return done ? done->toVariantMap() : failed(done.error());
         },
         [this, file](const QVariantMap &done) {

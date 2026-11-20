@@ -30,11 +30,11 @@ namespace {
     return op.entity == "book"_L1 ? !op.value.isEmpty() && op.value != "0"_L1 : op.value == "1"_L1;
 }
 
-// Every kind a space holds can go, a reading day too: what is switched off
+// Every kind a space holds can go, a reading day and a plugin's world too: what is switched off
 // is taken back from those who had it, not only no longer sent.
 [[nodiscard]] bool removable(const QString &entity) {
     return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1 || entity == "fact"_L1 || entity == "edge"_L1
-           || entity == "reading_log"_L1;
+           || entity == "reading_log"_L1 || entity == "world"_L1;
 }
 
 // What a removal of "0" brings back; a fact, a relation or a reading day

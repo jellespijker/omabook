@@ -203,7 +203,7 @@ std::expected<QString, QString> SharedSpaces::resolve(const Library &library, co
 }
 
 std::expected<SharedSpaces::Created, QString> SharedSpaces::create(Library &library, const QString &name, const QStringList &parts,
-                                                                   const QString &collection) {
+                                                                   const QString &collection, const SpaceWorlds::Ask &worlds) {
     const QString path = collection.trimmed().isEmpty() ? name.simplified().replace(u'/', u'-') : collection.trimmed();
     auto key = SpaceKey::generate();
     if (!key)
@@ -219,6 +219,11 @@ std::expected<SharedSpaces::Created, QString> SharedSpaces::create(Library &libr
     if (const auto kept = key->keepIn(keyFile(library, *space)); !kept)
         return std::unexpected(kept.error());
     SubscribedSpace::link(library, *space, *linked);
+    QList<qint64> books;
+    if (const auto shelf = library.collection(*linked))
+        for (const Book &book : shelf->of(library.books()))
+            books << book.id;
+    SpaceWorlds::ask(library, {.space = *space, .kind = QString::fromLatin1(SharedSpace::kind), .books = books, .parts = parts}, worlds);
     const auto written = SharedCollection::contribute(library, *space, {});
     if (!written)
         return std::unexpected(written.error());

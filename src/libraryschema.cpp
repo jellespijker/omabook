@@ -371,6 +371,12 @@ const QList<QStringList> migrations{
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
      "AND o.space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
      "OR (name >= 'shared:' AND name < 'shared;'))"},
+    // A plugin's worlds in spaces (#65): which plugin made each scope of the
+    // graph here, and which of them a space was given, with the book each is
+    // of. This computer's own, never sent: a space says what it was given.
+    {"CREATE TABLE IF NOT EXISTS plugin_scopes (scope TEXT PRIMARY KEY, plugin TEXT NOT NULL) WITHOUT ROWID",
+     "CREATE TABLE IF NOT EXISTS space_worlds (space TEXT NOT NULL, book TEXT NOT NULL, scope TEXT NOT NULL, plugin TEXT NOT NULL, "
+     "file INTEGER NOT NULL DEFAULT 0, hlc INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (space, book, scope)) WITHOUT ROWID"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

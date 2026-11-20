@@ -9,7 +9,7 @@
 namespace ScriptApi {
 
 const QList<Entry> &entries() {
-    static const QList<Entry> entries{
+    static const QList<Entry> library{
         {"plugin", "plugin", "", "This plugin: `{id, name, version, folder, dataFolder, permissions}`. `id` is the plugin's folder name: what "
                                 "`omabook plugin` commands call it, what `generated` holds on a book it made, and the key "
                                 "of its data in `backend.scripts.data`. `name` is what plugin.json calls it, for people.", true},
@@ -141,45 +141,14 @@ const QList<Entry> &entries() {
          "with `reader.open(id, place)` instead.)"},
         {"library.remove", "library.remove(id)", "",
          "Moves a book this plugin made to the trash. Any other book throws: those are the reader's to remove."},
+    };
+    // After the library's, the graph's and what goes into spaces, then the rest.
+    static const QList<Entry> entries = library + graphEntries() + spaceEntries() + laterEntries();
+    return entries;
+}
 
-        {"graph.find", "graph.find(words, {kind, scope, everywhere, limit})", "",
-         "Searches the knowledge graph: the nodes whose name, other names or summary hold every word, as `[{id, kind, "
-         "name, summary, data, scope, book}]`. Kinds are `character`, `place`, `group`, `concept`, `item`, `event`, "
-         "`thread`, `theme`, `topic`, `question`, `book`, `author`, `series`, `tag`, or a plugin's own. `scope` is a "
-         "graph of its own (`\"world:42\"`); the general graph of what was read when not given."},
-        {"graph.node", "graph.node(id)", "", "One node, or `null`."},
-        {"graph.around", "graph.around(id, depth)", "",
-         "A node and what is within `depth` relations of it (1 when not given): `{nodes, edges: [{id, source, target, "
-         "kind, note, learned: {book, section, fraction}}]}`."},
-        {"graph.ofBook", "graph.ofBook(id, {section, fraction})", "",
-         "What a book's reader has met, as `{nodes, edges}`: never ahead of where the book was read, and with a place, "
-         "only what was met up to it."},
-        {"graph.beyond", "graph.beyond(id, {section, fraction})", "",
-         "What a book connects to elsewhere, as `{nodes, edges}`: things of other books tied to this book's by a "
-         "connection across books (an edge whose `across` is true and whose `kind` starts with `across: `, such as "
-         "`across: echoes`), and the other books that share a thing with it."},
-        {"graph.connect", "graph.connect(id)", "",
-         "Has the model compare a book's themes, ideas, threads and main characters with those of the other books "
-         "read, and adds what connects them as relations across books; a promise of how many it added. One request, "
-         "and none when the same comparison was made before."},
-        {"graph.whole", "graph.whole(scope, limit)", "", "A whole graph as `{nodes, edges}`, the most connected nodes first: the general one, or a scope."},
-        {"graph.upsert", "graph.upsert({kind, name, summary, aliases, data, scope, book, section, fraction})", "",
-         "Adds a node, or brings the one of that name (or alias) in the same scope and of the same kind up to date; "
-         "answers its number. With `book` it is marked as met there, at `section` or where the book was read to."},
-        {"graph.link", "graph.link(source, target, relation, {note, book, section, fraction})", "",
-         "Relates two nodes with a short verb phrase read from the first to the second (`\"mentor of\"`); answers the "
-         "relation's number. Saying the same again only updates the note."},
-        {"graph.unlink", "graph.unlink(edge)", "", "Removes one relation, by its number."},
-        {"graph.merge", "graph.merge(keep, other)", "", "Folds one node into another: its relations, places and names move over."},
-        {"graph.remove", "graph.remove(id)", "", "Removes a node and its relations."},
-        {"graph.scopes", "graph.scopes()", "", "The graphs there are: `\"\"` for the general one, and every scope."},
-        {"graph.copyScope", "graph.copyScope(from, to)", "",
-         "Copies a whole graph under a new scope name (from `\"\"` for the general one), so a world of the plugin's own "
-         "can start from what the books say. False when the name is taken."},
-        {"graph.removeScope", "graph.removeScope(scope)", "", "Throws a scope away with everything in it; never the general graph."},
-        {"graph.exported", "graph.exported(format, {book, upTo, scope})", "",
-         "A book's graph or a scope as text other tools read: `json`, `graphml`, `dot` or `cypher`."},
-
+QList<Entry> laterEntries() {
+    return {
         {"reader.current", "reader.current()", "",
          "Where the reader is: `{id, generated, identifiers, section, sections, fraction, percent}`, or `null` when no "
          "book is open. `section` counts from 0 and `sections` is how many there are; `fraction` is how far into the "
@@ -223,7 +192,6 @@ const QList<Entry> &entries() {
          "Starts a program in the plugin's folder; a promise of `{code, stdout, stderr}`. `timeout` is in seconds (30 "
          "when not given)."},
     };
-    return entries;
 }
 
 const QList<Event> &events() {

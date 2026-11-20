@@ -26,7 +26,9 @@
 #include "library.h"
 #include "scriptapi.h"
 #include "scriptform.h"
+#include "scriptsharing.h"
 #include "settings.h"
+#include "worldlayers.h"
 
 namespace {
 
@@ -133,52 +135,6 @@ ScriptManifest ScriptManifest::read(const QString &folder) {
     return manifest;
 }
 
-ScriptWatchdog::ScriptWatchdog(QJSEngine *engine, std::function<void()> fired)
-    : m_engine(engine), m_fired(std::move(fired)), m_thread([this] { watch(); }) {}
-
-ScriptWatchdog::~ScriptWatchdog() {
-    {
-        const std::lock_guard<std::mutex> lock(m_mutex);
-        m_quit = true;
-    }
-    m_wake.notify_all();
-    m_thread.join();
-}
-
-void ScriptWatchdog::arm(std::chrono::milliseconds limit) {
-    {
-        const std::lock_guard<std::mutex> lock(m_mutex);
-        m_armed = true;
-        m_deadline = std::chrono::steady_clock::now() + limit;
-    }
-    m_wake.notify_all();
-}
-
-void ScriptWatchdog::disarm() {
-    {
-        const std::lock_guard<std::mutex> lock(m_mutex);
-        m_armed = false;
-    }
-    m_wake.notify_all();
-}
-
-void ScriptWatchdog::watch() {
-    std::unique_lock<std::mutex> lock(m_mutex);
-    while (!m_quit) {
-        if (!m_armed) {
-            m_wake.wait(lock);
-            continue;
-        }
-        // Woken early means disarmed, armed anew, or quitting: look again.
-        if (m_wake.wait_until(lock, m_deadline) != std::cv_status::timeout || !m_armed
-            || std::chrono::steady_clock::now() < m_deadline)
-            continue;
-        m_armed = false;
-        m_engine->setInterrupted(true);
-        m_fired();
-    }
-}
-
 // The C++ side of the `omabook` object: what scriptprelude.js builds it
 // from. Objects cross as JSON text, which keeps what a script can hand over
 // to what JSON can hold. A permission is checked here as well as there.
@@ -198,6 +154,7 @@ public:
         p->busy(-1);
     }
 
+    Q_INVOKABLE QObject *sharing() { return p->m_sharing.get(); }
     Q_INVOKABLE void say(const QString &text) { emit p->said(text); }
     Q_INVOKABLE void log(const QString &level, const QString &text) {
         p->m_log << (level == "log" ? text : level + ": " + text);
@@ -664,11 +621,11 @@ public:
     }
     Q_INVOKABLE QString graphWhole(const QString &scope, double limit) {
         const Library *library = this->library(false);
-        return compact(library ? Graph(*library).whole(scope, qMax(1, int(limit))).toJson() : GraphView().toJson());
+        return compact(library ? WorldLayers::whole(*library, scope, qMax(1, static_cast<int>(limit))).toJson() : GraphView().toJson());
     }
     Q_INVOKABLE double graphUpsert(const QString &thing) {
         Library *library = this->library(true);
-        if (!library)
+        if (!library || !p->m_sharing->writing(*library, parsed(thing).toObject().value("scope").toString()))
             return 0;
         return double(graphAnswer(GraphOps::add(*library, parsed(thing).toObject())).value("node").toObject().value("id").toInteger());
     }
@@ -695,11 +652,11 @@ public:
     }
     Q_INVOKABLE QString graphScopes() {
         const Library *library = this->library(false);
-        return compact(QJsonArray::fromStringList(library ? Graph(*library).scopes() : QStringList()));
+        return compact(QJsonArray::fromStringList(library ? WorldLayers::scopes(*library) : QStringList()));
     }
     Q_INVOKABLE bool graphCopyScope(const QString &from, const QString &to) {
         Library *library = this->library(true);
-        return library && Graph(*library).copyScope(from, to);
+        return library && p->m_sharing->copyScope(*library, from, to);
     }
     Q_INVOKABLE bool graphRemoveScope(const QString &scope) {
         Library *library = this->library(true);
@@ -1067,12 +1024,12 @@ bool ScriptGate::run(const std::function<void(ScriptPlugin &)> &work, std::chron
 
 ScriptPlugin::ScriptPlugin(const ScriptManifest &manifest, const ScriptServices &services, QObject *parent)
     : QObject(parent), m_manifest(manifest), m_services(services), m_host(std::make_unique<ScriptHost>(this)),
-      m_gate(std::make_shared<ScriptGate>(this)),
-      m_watchdog(&m_engine, [this] {
+      m_sharing(std::make_unique<ScriptSharing>(this)), m_gate(std::make_shared<ScriptGate>(this)), m_watchdog(&m_engine, [this] {
           // On the watchdog's thread: the plugin hears of it on its own.
           QMetaObject::invokeMethod(this, [this] { interrupted(); }, Qt::QueuedConnection);
       }) {
     QJSEngine::setObjectOwnership(m_host.get(), QJSEngine::CppOwnership);
+    QJSEngine::setObjectOwnership(m_sharing.get(), QJSEngine::CppOwnership);
 }
 
 ScriptPlugin::~ScriptPlugin() {

@@ -7,7 +7,11 @@
 #include <QtTypes>
 #include <utility>
 
+#include <span>
+
 #include "graph.h"
+#include "spacereplay.h"
+#include "subscribedspace.h"
 
 class Library;
 
@@ -54,6 +58,18 @@ struct Layer {
 // Of every space this library subscribes to, a layer of what `known` says is
 // known (a place of no book never is); one for each, also when nothing of it is.
 [[nodiscard]] QList<Layer> read(const Library &library, const GraphKnown &known);
+
+// A world a plugin keeps, as a space holds it (SpaceWorlds, #65): its scope
+// there, and the name its layer goes by here.
+struct World {
+    QString scope;
+    QString named;
+};
+// Of a space's operations, the world `world` as a layer of what `known` says
+// is known, as read() makes one of a space's general graph: each thing only
+// as met in a book at a known place, and how things relate with them.
+[[nodiscard]] Layer readWorld(const Library &library, const SubscribedSpace::Subscription &space, std::span<const SpaceOperation> ops,
+                              const GraphKnown &known, const World &world);
 
 // How `from` says it: in the language the window is in, or in English, as
 // the AI is told it.

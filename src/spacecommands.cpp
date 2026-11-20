@@ -11,6 +11,8 @@
 #include "library.h"
 #include "librarymigrations.h"
 #include "person.h"
+#include "scriptplugins.h"
+#include "scriptsharing.h"
 #include "settings.h"
 #include "sharedspaces.h"
 
@@ -109,7 +111,11 @@ struct Command {
     if (command.words.size() != 2)
         return fail(u"Name the space: omabook spaces create <name>"_s);
     const QStringList parts = command.parser.value("parts").split(u',', Qt::SkipEmptyParts);
-    const auto created = SharedSpaces::create(library, command.words.at(1), parts, command.parser.value("collection"));
+    // The plugins are asked what of theirs goes with it (#65).
+    Settings settings;
+    CommandScripts scripts(&settings, library.root());
+    const auto created =
+        SharedSpaces::create(library, command.words.at(1), parts, command.parser.value("collection"), worldsOf(scripts.plugins()));
     if (!created)
         return fail(created.error());
     if (command.json) {

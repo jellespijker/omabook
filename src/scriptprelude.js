@@ -1,11 +1,14 @@
 // What a plugin's script sees: the `omabook` object, built here from the
-// host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp).
-// The host is only ever reachable through these functions: it is an argument
-// of this one, never a global, so a script can call what is listed in
+// host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp,
+// and ScriptSharing in scriptsharing.cpp, which it hands over, for what goes
+// into spaces). The hosts are only ever reachable through these functions:
+// the host is an argument of this one, never a global, so a script can call what is listed in
 // scriptapi.cpp and nothing else. A test holds this object and that table to
 // each other.
 (function (host, info) {
     "use strict";
+
+    var shared = host.sharing();
 
     function may(permission) { return info.permissions.indexOf(permission) >= 0; }
 
@@ -17,61 +20,65 @@
         if (!(name in object))
             Object.defineProperty(object, name, {value: value, writable: true, configurable: true, enumerable: false});
     }
-    give(Array.prototype, "flat", function (depth) {
-        depth = depth === undefined ? 1 : Math.floor(depth);
-        var out = [];
-        (function flatten(list, left) {
-            for (var i = 0; i < list.length; ++i) {
-                if (!(i in list))
-                    continue;
-                if (Array.isArray(list[i]) && left > 0)
-                    flatten(list[i], left - 1);
-                else
-                    out.push(list[i]);
+    // Given once, here, apart from the object below.
+    function giveWhatIsMissing() {
+        give(Array.prototype, "flat", function (depth) {
+            depth = depth === undefined ? 1 : Math.floor(depth);
+            var out = [];
+            (function flatten(list, left) {
+                for (var i = 0; i < list.length; ++i) {
+                    if (!(i in list))
+                        continue;
+                    if (Array.isArray(list[i]) && left > 0)
+                        flatten(list[i], left - 1);
+                    else
+                        out.push(list[i]);
+                }
+            })(this, depth);
+            return out;
+        });
+        give(Array.prototype, "flatMap", function (fn, self) { return Array.prototype.map.call(this, fn, self).flat(1); });
+        give(Array.prototype, "at", function (index) { index = Math.trunc(index) || 0; return this[index < 0 ? this.length + index : index]; });
+        give(Array.prototype, "findLast", function (fn, self) {
+            for (var i = this.length - 1; i >= 0; --i)
+                if (fn.call(self, this[i], i, this))
+                    return this[i];
+            return undefined;
+        });
+        give(String.prototype, "replaceAll", function (search, replacement) {
+            if (search instanceof RegExp) {
+                if (!search.global)
+                    throw new TypeError("replaceAll must be called with a global RegExp");
+                return this.replace(search, replacement);
             }
-        })(this, depth);
-        return out;
-    });
-    give(Array.prototype, "flatMap", function (fn, self) { return Array.prototype.map.call(this, fn, self).flat(1); });
-    give(Array.prototype, "at", function (index) { index = Math.trunc(index) || 0; return this[index < 0 ? this.length + index : index]; });
-    give(Array.prototype, "findLast", function (fn, self) {
-        for (var i = this.length - 1; i >= 0; --i)
-            if (fn.call(self, this[i], i, this))
-                return this[i];
-        return undefined;
-    });
-    give(String.prototype, "replaceAll", function (search, replacement) {
-        if (search instanceof RegExp) {
-            if (!search.global)
-                throw new TypeError("replaceAll must be called with a global RegExp");
-            return this.replace(search, replacement);
-        }
-        // Split and join, so nothing in the search is taken for a pattern;
-        // a function is called once for each place, as replace would.
-        var parts = String(this).split(String(search));
-        if (typeof replacement !== "function")
-            return parts.join(String(replacement).replace(/\$\$/g, "$"));
-        var out = parts[0], at = parts[0].length;
-        for (var i = 1; i < parts.length; ++i) {
-            out += String(replacement(String(search), at, String(this))) + parts[i];
-            at += String(search).length + parts[i].length;
-        }
-        return out;
-    });
-    give(String.prototype, "at", function (index) { index = Math.trunc(index) || 0; return this[index < 0 ? this.length + index : index]; });
-    give(String.prototype, "trimStart", function () { return this.replace(/^\s+/, ""); });
-    give(String.prototype, "trimEnd", function () { return this.replace(/\s+$/, ""); });
-    give(Object, "fromEntries", function (entries) {
-        var out = {};
-        Array.from(entries).forEach(function (entry) { out[entry[0]] = entry[1]; });
-        return out;
-    });
-    give(Promise, "allSettled", function (promises) {
-        return Promise.all(Array.from(promises).map(function (one) {
-            return Promise.resolve(one).then(function (value) { return {status: "fulfilled", value: value}; },
-                                             function (reason) { return {status: "rejected", reason: reason}; });
-        }));
-    });
+            // Split and join, so nothing in the search is taken for a pattern;
+            // a function is called once for each place, as replace would.
+            var parts = String(this).split(String(search));
+            if (typeof replacement !== "function")
+                return parts.join(String(replacement).replace(/\$\$/g, "$"));
+            var out = parts[0], at = parts[0].length;
+            for (var i = 1; i < parts.length; ++i) {
+                out += String(replacement(String(search), at, String(this))) + parts[i];
+                at += String(search).length + parts[i].length;
+            }
+            return out;
+        });
+        give(String.prototype, "at", function (index) { index = Math.trunc(index) || 0; return this[index < 0 ? this.length + index : index]; });
+        give(String.prototype, "trimStart", function () { return this.replace(/^\s+/, ""); });
+        give(String.prototype, "trimEnd", function () { return this.replace(/\s+$/, ""); });
+        give(Object, "fromEntries", function (entries) {
+            var out = {};
+            Array.from(entries).forEach(function (entry) { out[entry[0]] = entry[1]; });
+            return out;
+        });
+        give(Promise, "allSettled", function (promises) {
+            return Promise.all(Array.from(promises).map(function (one) {
+                return Promise.resolve(one).then(function (value) { return {status: "fulfilled", value: value}; },
+                                                 function (reason) { return {status: "rejected", reason: reason}; });
+            }));
+        });
+    }
+    giveWhatIsMissing();
 
     function need(value, type, what) {
         if (typeof value !== type)
@@ -159,6 +166,19 @@
                 need(catalog.format, "string", "The catalog's format");
                 need(catalog.make, "function", "The catalog's make");
                 host.registerCatalog(catalog.format, String(catalog.description || ""), function (books) { return catalog.make(books); });
+            }
+        },
+        sharing: {
+            register: function (sharing) {
+                need(sharing, "object", "What a plugin shares");
+                need(sharing.worlds, "function", "Its worlds");
+                shared.registerWorlds(function (context) { return sharing.worlds(context); });
+            }
+        },
+        spaces: {
+            add: function (space, id) {
+                need(space, "string", "The space");
+                shared.addToSpace(space, Number(id) || 0);
             }
         },
         importer: {
@@ -313,6 +333,7 @@
             merge: function (keep, other) { return host.graphMerge(Number(keep) || 0, Number(other) || 0); },
             remove: function (id) { return host.graphRemove(Number(id) || 0); },
             scopes: function () { return parse(host.graphScopes()); },
+            layers: function () { return parse(shared.layers()); },
             copyScope: function (from, to) { return host.graphCopyScope(String(from || ""), String(to || "")); },
             removeScope: function (scope) { return host.graphRemoveScope(String(scope || "")); },
             exported: function (format, what) { return host.graphExported(String(format || "json"), JSON.stringify(what || {})); }

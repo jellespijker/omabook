@@ -414,6 +414,10 @@ The space follows the collection. Rename it, put books in or take them out, chan
 
 Of your graph, only what you have read goes: nothing past your place in a book, nothing of a book you haven't begun, and what you read later follows. On the other side, the receiver's own reading place decides again. They see a shared graph only as far as they have read each book themselves: nothing of a book they haven't begun or only wish for, more as they read on, and never more for a place asked for further on. A shared graph can't spoil a book for either of you.
 
+### A plugin's worlds
+
+A plugin that writes books, such as Storyteller, keeps what it makes up in a world of its own, apart from the graph of what you read. A collection you publish or share takes such a world only as the plugin offers it and only when the graph goes: a world the plugin made, of a book it made, never a book by a person or anything of one, and never what the plugin keeps beside it unnamed (a story's plan, with what is still to come). What goes of it is cut at your place in its book, and on the other side it is a layer of its own, read-only, cut at their place in their copy of the book; nothing of it shows before they have the book and begin it. In a shared space where they write, their plugin can put a book of its own in, with its world (`omabook.spaces.add`). Plugins see the worlds shared with you with `omabook.graph.layers()`; see `omabook plugin api`.
+
 ### Subscribing
 
 `Shift+O`, or the ⋯ menu, picks an `.omabook-space` file to subscribe to. One dropped on the window is offered too, and a link can be pasted. Before anything is written it says which of its books you have, which become wishlist entries, the collection they go in (its name is yours to change), and that its graph stays a layer of its own.
@@ -542,7 +546,7 @@ omabook graph show 12 --beyond            # the book's graph with what it connec
 omabook graph log                         # the reading log: what was read on which day
 ```
 
-Over MCP the same are `graph_find`, `graph_node`, `graph_book`, `graph_scope`, `graph_scopes`, `graph_add`, `graph_link`, `graph_unlink`, `graph_merge`, `graph_remove`, `graph_build`, `graph_connect`, `graph_export`, `graph_copy_scope`, `graph_remove_scope` and `graph_reading_log` (`graph_node` takes `timeline`, and `book` with `up_to_section` for a thing as known at a place; each step past the reader's furthest place is marked `"ahead"`), and a book's graph is the resource `omabook://graph/book/{id}`. Script plugins have it as `omabook.graph` (`find`, `node`, `around`, `ofBook`, `beyond`, `connect`, `whole`, `upsert`, `link`, `unlink`, `merge`, `remove`, `scopes`, `copyScope`, `removeScope`, `exported`); see `omabook plugin api`.
+Over MCP the same are `graph_find`, `graph_node`, `graph_book`, `graph_scope`, `graph_scopes`, `graph_add`, `graph_link`, `graph_unlink`, `graph_merge`, `graph_remove`, `graph_build`, `graph_connect`, `graph_export`, `graph_copy_scope`, `graph_remove_scope` and `graph_reading_log` (`graph_node` takes `timeline`, and `book` with `up_to_section` for a thing as known at a place; each step past the reader's furthest place is marked `"ahead"`), and a book's graph is the resource `omabook://graph/book/{id}`. Script plugins have it as `omabook.graph` (`find`, `node`, `around`, `ofBook`, `beyond`, `connect`, `whole`, `upsert`, `link`, `unlink`, `merge`, `remove`, `scopes`, `copyScope`, `removeScope`, `exported`, and `layers`, the worlds shared with you); see `omabook plugin api`.
 
 ### Browsing it
 

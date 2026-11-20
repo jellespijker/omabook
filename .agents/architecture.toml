@@ -15,7 +15,7 @@ summary = "Settings, logging, theme and interface files, text cleaning, the scri
 uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
-  "person", "readingformat", "scriptapi", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
+  "person", "readingformat", "scriptapi", "scriptapigraph", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator",
 ]
 
@@ -34,7 +34,7 @@ modules = [
   "booksides", "catalog", "changelog", "changelogbaseline", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
   "booksides", "catalog", "changelog", "chronology", "eventtime", "changelogbaseline", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
   "library", "librarymigrations", "libraryschema", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
-  "spacesnapshot", "subscribedspace", "textmarks",
+  "spacesnapshot", "spaceworlds", "subscribedspace", "textmarks", "worldlayers",
 ]
 
 [layers.services]
@@ -45,6 +45,8 @@ modules = [
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
   "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "thinkingfilter", "tour", "whatsnew",
+  "metadatasource", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
+  "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "scriptsharing", "scriptwatchdog", "sitedesk", "spacetransport", "tour", "whatsnew",
 ]
 
 [layers.operations]

@@ -15,6 +15,9 @@
 #include "changelog.h"
 #include "githublink.h"
 #include "person.h"
+#include "scriptplugins.h"
+#include "scriptsharing.h"
+#include "settings.h"
 #include "spacelinks.h"
 #include "spacereducer.h"
 #include "spaces.h"
@@ -169,6 +172,8 @@ void printPublished(const QJsonObject &done) {
     say(stdout, u"Published as the space %1, by %2: %3 operations in its log, %4 of them new."_s.arg(
                     done.value("space").toString(), done.value("owner").toString(), QString::number(done.value("operations").toInteger()),
                     QString::number(done.value("new").toInteger())));
+    if (const qsizetype worlds = done.value("worlds").toObject().value("worlds").toArray().size(); worlds > 0)
+        say(stdout, u"With %1 of the worlds plugins keep for its books, as far as you have read them."_s.arg(worlds));
     if (done.contains("output"))
         say(stdout, u"Wrote %1 (%2 operations): give it to whoever you share the collection with."_s.arg(
                         done.value("output").toString(), QString::number(done.value("snapshot_operations").toInteger())));
@@ -244,6 +249,16 @@ QString CollectionShare::nameGoneBy(const Library &library, const Collection &co
     return named.next() ? named.value(0).toString() : QString();
 }
 
+SpaceWorlds::Asked CollectionShare::asked(const Library &library, const Collection &collection, const Parts &parts, const QString &person) {
+    QList<qint64> books;
+    for (const Book &book : collection.of(library.books()))
+        books << book.id;
+    return {.space = PublishedSpace::spaceFor(library, person, Spaces::collectionId(library, collection.id)),
+            .kind = QString::fromLatin1(PublishedSpace::kind),
+            .books = books,
+            .parts = parts.names()};
+}
+
 std::expected<QJsonObject, QString> CollectionShare::publish(const Library &library, const Collection &collection, const Parts &parts,
                                                              const Publishing &how) {
     // The user's person, who signs what this library writes (Library::person).
@@ -255,6 +270,7 @@ std::expected<QJsonObject, QString> CollectionShare::publish(const Library &libr
                                      .person = person->id()};
     if (owner.name.isEmpty())
         return std::unexpected(u"Say what name you go by in the space with --as <name>: it is what those you share it with see of you."_s);
+    const SpaceWorlds::Granted worlds = SpaceWorlds::ask(library, asked(library, collection, parts, owner.person), how.worlds);
     const auto published = PublishedSpace::publish(library, collection.id, parts, owner);
     if (!published)
         return std::unexpected(published.error());
@@ -263,6 +279,8 @@ std::expected<QJsonObject, QString> CollectionShare::publish(const Library &libr
                      {"person", owner.person},
                      {"operations", published->operations},
                      {"new", published->appended}};
+    if (how.worlds)
+        done.insert("worlds", worlds.toJson());
     if (!how.output.isEmpty()) {
         const auto snapshot = PublishedSpace::snapshot(library, collection.id, parts, owner);
         if (!snapshot)
@@ -301,11 +319,15 @@ int CollectionShare::run(const Library &library, const QCommandLineParser &parse
         printPreview(*shown);
     if (!dryRun) {
         GitHubLink github;
+        // The plugins are asked what of theirs goes with it.
+        Settings settings;
+        CommandScripts scripts(&settings, library.root());
         const auto done = publish(library, *collection, *parts,
                                   {.as = parser.value(u"as"_s),
                                    .output = parser.value(u"output"_s),
                                    .link = parser.isSet(u"gist"_s) ? &github : nullptr,
-                                   .open = parser.isSet(u"public"_s)});
+                                   .open = parser.isSet(u"public"_s),
+                                   .worlds = worldsOf(scripts.plugins())});
         if (!done)
             return fail(done.error());
         shown->insert("published", *done);

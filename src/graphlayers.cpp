@@ -47,11 +47,13 @@ template <typename Thing> [[nodiscard]] bool alive(const Thing &thing) { return 
 }
 
 // Reads one space's state as a layer: its books as they are here, and of
-// what it says only what `known` says is known.
+// what it says only what `known` says is known. Of the general graph, or of
+// one world a plugin keeps, named here as `world` says (#65).
 class Reading {
 public:
-    Reading(const Library &library, SubscribedSpace::Subscription space, std::span<const SpaceOperation> ops, const GraphKnown &known)
-        : m_library(&library), m_known(&known), m_space(std::move(space)), m_books(SpaceReducer::sameAs(ops)),
+    Reading(const Library &library, SubscribedSpace::Subscription space, std::span<const SpaceOperation> ops, const GraphKnown &known,
+            GraphLayers::World world = {})
+        : m_library(&library), m_known(&known), m_space(std::move(space)), m_world(std::move(world)), m_books(SpaceReducer::sameAs(ops)),
           m_things(SpaceReducer::sameAs(ops, "node"_L1)) {}
 
     [[nodiscard]] Layer layer(const ReducedState &state) {
@@ -93,8 +95,8 @@ private:
     void take(Layer &layer, const QString &gid, const ReducedNode &reduced) {
         const QString kind = text(reduced.fields, u"kind"_s);
         const QString name = text(reduced.fields, u"name"_s);
-        // A world a plugin keeps is no book's graph.
-        if (!alive(reduced) || kind.isEmpty() || name.isEmpty() || ofTheLibrary(kind) || !text(reduced.fields, u"scope"_s).isEmpty())
+        // A world a plugin keeps is no book's graph, and a book's graph no world.
+        if (!alive(reduced) || kind.isEmpty() || name.isEmpty() || ofTheLibrary(kind) || text(reduced.fields, u"scope"_s) != m_world.scope)
             return;
         QList<GraphMoment> met;
         for (auto seen = reduced.seen.cbegin(); seen != reduced.seen.cend(); ++seen)
@@ -105,8 +107,8 @@ private:
         QJsonObject data = QJsonDocument::fromJson(text(reduced.fields, u"data"_s).toUtf8()).object();
         data.remove("aliases");
         data.insert("layer", QJsonObject{{"space", m_space.space}, {"name", m_space.name}, {"owner", m_space.ownerName}});
-        const GraphNode node{.id = idOf(m_space.space, gid),
-                             .scope = m_space.space,
+        const GraphNode node{.id = idOf(m_space.space + m_world.scope, gid),
+                             .scope = m_world.scope.isEmpty() ? m_space.space : m_world.named,
                              .kind = kind,
                              .name = name,
                              .summary = {},
@@ -133,8 +135,12 @@ private:
         const qint64 target = thing(edge.targetGid);
         if (!alive(edge) || source == 0 || target == 0 || source == target || edge.kind.isEmpty())
             return;
-        if (const auto at = here(edge.bookGid, edge.learned))
-            layer.edges << GraphEdge{.id = idOf(m_space.space, gid),
+        // In a world, a relation of no book goes with its things, which are cut where they were met.
+        std::optional<GraphMoment> at = here(edge.bookGid, edge.learned);
+        if (!at && !m_world.scope.isEmpty() && edge.bookGid.isEmpty())
+            at = GraphMoment{};
+        if (at)
+            layer.edges << GraphEdge{.id = idOf(m_space.space + m_world.scope, gid),
                                      .source = source,
                                      .target = target,
                                      .kind = edge.kind,
@@ -147,6 +153,7 @@ private:
     const Library *m_library;
     const GraphKnown *m_known;
     SubscribedSpace::Subscription m_space;
+    GraphLayers::World m_world;
     QHash<QString, QString> m_books;  // a book of the space, by the id its same-as links stand for
     QHash<QString, QString> m_things; // and a thing
     QHash<QString, qint64> m_here;    // a book of the space, here (0 when it isn't)
@@ -194,6 +201,12 @@ QList<Layer> GraphLayers::read(const Library &library, const GraphKnown &known) 
         layers << Reading(library, space, ops, ofABook).layer(SpaceReducer::reduce(ops));
     }
     return layers;
+}
+
+Layer GraphLayers::readWorld(const Library &library, const SubscribedSpace::Subscription &space, std::span<const SpaceOperation> ops,
+                             const GraphKnown &known, const World &world) {
+    const GraphKnown ofABook = [&known](const GraphPlace &at) { return at.bookId > 0 && known(at); };
+    return Reading(library, space, ops, ofABook, world).layer(SpaceReducer::reduce(ops));
 }
 
 QString GraphLayers::from(const GraphNode &node, Said said) {
