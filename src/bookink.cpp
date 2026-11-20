@@ -3,18 +3,16 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlQuery>
-#include <QVariant>
 
 #include <algorithm>
 #include <iterator>
 #include <map>
 
+#include "annotationink.h"
 #include "changelog.h"
 #include "failure.h"
 #include "inkcodec.h"
 #include "library.h"
-#include "plugindata.h"
 #include "spaces.h"
 
 using namespace Qt::StringLiterals;
@@ -22,7 +20,6 @@ using namespace Qt::StringLiterals;
 namespace {
 
 constexpr auto entity = "annotation"_L1;
-constexpr auto setName = "strokes"_L1;
 constexpr auto setField = "set:strokes"_L1;
 
 [[nodiscard]] QList<Annotation> inkOn(const Library &library, qint64 bookId, int page) {
@@ -35,33 +32,7 @@ constexpr auto setField = "set:strokes"_L1;
 
 // The strokes of one annotation, as every computer's changes of its set make them.
 [[nodiscard]] std::vector<Ink::Stroke> strokesOf(const Library &library, qint64 annotationId) {
-    const QString gid = Spaces::globalId(library, QString(entity), annotationId);
-    if (gid.isEmpty())
-        return {};
-    QList<SpaceOperation> ops;
-    for (QSqlQuery query = ChangeLog::query(library,
-                                            u"SELECT d.name, o.seq, o.hlc, o.value FROM live_ops AS o JOIN log_ids AS d ON d.id = o.device "
-                                            "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) AND o.field = ?"_s,
-                                            {QString(entity), gid, QString(setField)});
-         query.next();)
-        ops << SpaceOperation{.space = {},
-                              .device = query.value(0).toString(),
-                              .seq = query.value(1).toLongLong(),
-                              .hlc = query.value(2).toLongLong(),
-                              .author = {},
-                              .entity = QString(entity),
-                              .id = gid,
-                              .field = QString(setField),
-                              .value = query.value(3).toString()};
-    if (ops.isEmpty())
-        return {};
-    // A set as a plugin's is (ADR 0002): of each stroke the latest word holds.
-    const QJsonArray things = PluginData::reduce(ops);
-    const QJsonObject items = things.isEmpty() ? QJsonObject() : things.first()["sets"][setName].toObject();
-    Ink::Read read = Ink::fromItems(items);
-    for (const QString &problem : std::as_const(read.problems))
-        qWarning("Book ink: a stroke left out: %s", qPrintable(problem));
-    return std::move(read.strokes);
+    return AnnotationInk::strokes(library, annotationId);
 }
 
 // The page's annotation for ink, made for its first stroke: its global id
