@@ -483,7 +483,8 @@ private slots:
         for (const qint64 event : {siege, flood, fall})
             QVERIFY(Chronology::placeOn(graph, event, age, at(0)));
 
-        reading.readTo(0);
+        // A book not begun: its reader at its start, before the siege at 0.2.
+        reading.library.setProgress(book, {});
         QVERIFY(reading.chronicle().lanes.isEmpty());
         reading.readTo(2);
         const auto early = reading.chronicle();
