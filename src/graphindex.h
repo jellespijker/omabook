@@ -13,8 +13,8 @@ class Library;
 // as the rows are written, by whoever writes them:
 //
 // - graph_words, a full-text index (SQLite FTS5) of each thing's name, what
-//   is said of it, its data (its other names) and every summary it was given
-//   as a fact. Its words are folded as the tokenizer unicode61 folds them,
+//   is said of it, its data (its other names), every summary it was given
+//   as a fact and every name a tenant gave it by hand (#110). Its words are folded as the tokenizer unicode61 folds them,
 //   case and accents aside ("mara" finds "Mára"), in any script that writes
 //   words apart. It holds only the words: the rows stay where they are.
 // - graph_touched, the things whose part of the graph changed (the thing, a
@@ -28,6 +28,9 @@ namespace GraphIndex {
 
 // The format step's statements: the tables, filled from the graph there is, and the triggers.
 [[nodiscard]] const QStringList &step();
+// Format 33's (#110): the names a tenant gave a thing by hand ("name" facts)
+// indexed as said of it, and looked up by the name (Graph::named).
+[[nodiscard]] const QStringList &names();
 
 // A word of a search as the index is asked for it (FTS5's query syntax): a
 // word that starts one of the thing's words; a word that is several to the

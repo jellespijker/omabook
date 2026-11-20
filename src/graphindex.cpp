@@ -16,12 +16,35 @@ namespace {
     return u"CREATE TRIGGER IF NOT EXISTS %1 %2 BEGIN %3; END"_s.arg(name, when, body.join(u"; "_s));
 }
 
+// The facts whose words the index holds as said of a thing: the summaries
+// it was given (format 31), and since format 33 the names a tenant gave it
+// by hand too (#110).
+constexpr auto summaries = "'summary'"_L1;
+constexpr auto summariesAndNames = "'summary', 'name'"_L1;
+
 // A thing's words as the index holds them, put in again whole: FTS5 keeps no
 // copy of what it was given, so a row is replaced, never changed in part.
-[[nodiscard]] QString wordsOf(const QString &node) {
+// The things that meet `where` (of graph_nodes AS n), or one by its id.
+[[nodiscard]] QString wordsWhere(const QString &where, QLatin1StringView said) {
     return u"INSERT OR REPLACE INTO graph_words (rowid, name, summary, data, said) SELECT n.id, n.name, n.summary, n.data, "
-           "COALESCE((SELECT group_concat(f.value, ' ') FROM graph_facts AS f WHERE f.node_id = n.id AND f.kind = 'summary'), '') "
-           "FROM graph_nodes AS n WHERE n.id = %1"_s.arg(node);
+           "COALESCE((SELECT group_concat(f.value, ' ') FROM graph_facts AS f WHERE f.node_id = n.id AND f.kind IN (%2)), '') "
+           "FROM graph_nodes AS n WHERE %1"_s.arg(where, said);
+}
+[[nodiscard]] QString wordsOf(const QString &node, QLatin1StringView said = summaries) { return wordsWhere(u"n.id = "_s + node, said); }
+
+// The triggers that keep a thing's words as it and its facts are written,
+// with what of its facts is said of it.
+[[nodiscard]] QStringList wordTriggers(QLatin1StringView said) {
+    const auto words = [said](const QString &node) { return wordsOf(node, said); };
+    return {
+        trigger(u"graph_nodes_words_insert"_s, u"AFTER INSERT ON graph_nodes"_s, {words(u"NEW.id"_s)}),
+        trigger(u"graph_nodes_words_update"_s, u"AFTER UPDATE OF name, summary, data ON graph_nodes"_s, {words(u"NEW.id"_s)}),
+        trigger(u"graph_nodes_words_delete"_s, u"AFTER DELETE ON graph_nodes"_s, {u"DELETE FROM graph_words WHERE rowid = OLD.id"_s}),
+        trigger(u"graph_facts_words_insert"_s, u"AFTER INSERT ON graph_facts WHEN NEW.kind IN (%1)"_s.arg(said), {words(u"NEW.node_id"_s)}),
+        trigger(u"graph_facts_words_update"_s, u"AFTER UPDATE OF node_id, kind, value ON graph_facts"_s,
+                {words(u"OLD.node_id"_s), words(u"NEW.node_id"_s)}),
+        trigger(u"graph_facts_words_delete"_s, u"AFTER DELETE ON graph_facts WHEN OLD.kind IN (%1)"_s.arg(said), {words(u"OLD.node_id"_s)}),
+    };
 }
 
 // A thing touched now, at the graph counter as it is.
@@ -54,13 +77,6 @@ void touching(QStringList &all, const QString &table, const auto &ends, const QS
         u"INSERT INTO graph_words (rowid, name, summary, data, said) SELECT n.id, n.name, n.summary, n.data, COALESCE(s.said, '') "
         "FROM graph_nodes AS n LEFT JOIN (SELECT node_id, group_concat(value, ' ') AS said FROM graph_facts WHERE kind = 'summary' "
         "GROUP BY node_id) AS s ON s.node_id = n.id"_s,
-        trigger(u"graph_nodes_words_insert"_s, u"AFTER INSERT ON graph_nodes"_s, {wordsOf(u"NEW.id"_s)}),
-        trigger(u"graph_nodes_words_update"_s, u"AFTER UPDATE OF name, summary, data ON graph_nodes"_s, {wordsOf(u"NEW.id"_s)}),
-        trigger(u"graph_nodes_words_delete"_s, u"AFTER DELETE ON graph_nodes"_s, {u"DELETE FROM graph_words WHERE rowid = OLD.id"_s}),
-        trigger(u"graph_facts_words_insert"_s, u"AFTER INSERT ON graph_facts WHEN NEW.kind = 'summary'"_s, {wordsOf(u"NEW.node_id"_s)}),
-        trigger(u"graph_facts_words_update"_s, u"AFTER UPDATE OF node_id, kind, value ON graph_facts"_s,
-                {wordsOf(u"OLD.node_id"_s), wordsOf(u"NEW.node_id"_s)}),
-        trigger(u"graph_facts_words_delete"_s, u"AFTER DELETE ON graph_facts WHEN OLD.kind = 'summary'"_s, {wordsOf(u"OLD.node_id"_s)}),
         u"CREATE TABLE IF NOT EXISTS graph_touched (node_id INTEGER PRIMARY KEY, at INTEGER NOT NULL)"_s,
         u"CREATE INDEX IF NOT EXISTS graph_touched_at ON graph_touched(at)"_s,
         u"INSERT OR IGNORE INTO library_state (key, value) VALUES ('tenancy_refills', 0)"_s,
@@ -68,6 +84,7 @@ void touching(QStringList &all, const QString &table, const auto &ends, const QS
                 u"AFTER UPDATE OF value ON library_state WHEN NEW.key = 'tenancy_bulk' AND NEW.value = 0 AND OLD.value <> 0"_s,
                 {u"UPDATE library_state SET value = value + 1 WHERE key = 'tenancy_refills'"_s}),
     };
+    all << wordTriggers(summaries);
     touching(all, u"graph_nodes"_s, [](const QString &row) { return QStringList{row + u".id"_s}; });
     touching(all, u"graph_seen"_s, [](const QString &row) { return QStringList{row + u".node_id"_s}; });
     touching(all, u"graph_facts"_s, [](const QString &row) { return QStringList{row + u".node_id"_s}; });
@@ -115,6 +132,22 @@ void touching(QStringList &all, const QString &table, const auto &ends, const QS
 
 const QStringList &GraphIndex::step() {
     static const QStringList made = statements();
+    return made;
+}
+
+const QStringList &GraphIndex::names() {
+    static const QStringList made = [] {
+        QStringList all;
+        for (const auto name : {"graph_nodes_words_insert"_L1, "graph_nodes_words_update"_L1, "graph_nodes_words_delete"_L1,
+                                "graph_facts_words_insert"_L1, "graph_facts_words_update"_L1, "graph_facts_words_delete"_L1})
+            all << u"DROP TRIGGER IF EXISTS "_s + name;
+        all << wordTriggers(summariesAndNames);
+        // A name given in a tenant that came by the log before this step.
+        all << wordsWhere(u"n.id IN (SELECT node_id FROM graph_facts WHERE kind = 'name')"_s, summariesAndNames);
+        // The things a tenant calls by a name looked up by it (Graph::named).
+        all << u"CREATE INDEX IF NOT EXISTS graph_facts_names ON graph_facts(value COLLATE NOCASE) WHERE kind = 'name'"_s;
+        return all;
+    }();
     return made;
 }
 

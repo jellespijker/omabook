@@ -441,6 +441,10 @@ const QList<QStringList> migrations{
      "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
      "AND o.space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
      "OR (name >= 'shared:' AND name < 'shared;') OR (name >= 'plugin:' AND name < 'plugin;'))"},
+    // A thing renamed by hand in a tenant is called so there alone (ADR 0003,
+    // #110, format 33): the name a tenant gave it found by the word index
+    // and by the name (GraphIndex).
+    GraphIndex::names(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
