@@ -16,7 +16,7 @@ uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "markupfilter", "pagelayout",
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
-  "translator", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting",
+  "translator", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "highlightcolors", "textgeometry",
 ]
 
 [layers.formats]
@@ -24,7 +24,7 @@ summary = "Opening and reading book files: archives, EPUB, PDF, comics, FictionB
 uses = ["foundation"]
 modules = [
   "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
-  "formatprovider", "formatreaders", "formats", "markdownbook", "mobi", "pdfdoc", "textdoc",
+  "formatprovider", "formatreaders", "formats", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
 ]
 
 [layers.library]
@@ -38,7 +38,7 @@ modules = [
   "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
-  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata",
+  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "highlights",
 ]
 
 [layers.services]
@@ -73,7 +73,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes",
+  "inksurface", "inknodes", "readinghighlights",
 ]
 
 [layers.app]

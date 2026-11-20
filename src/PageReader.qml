@@ -29,7 +29,13 @@ ListView {
     readonly property real columnRoom: Math.max(120, (width - 32 - (across - 1) * gap) / across)
     readonly property real rowRoom: Math.max(120, height - 24)
     readonly property real pageWidth: Math.max(120, Math.min(columnRoom, 920) * zoomFactor)
-    readonly property string selectedText: ""
+    // Words selected on a page of a PDF (PageWords), and the page's layer
+    // that holds them; a comic's pages have none.
+    readonly property string selectedText: chosen && chosen.hasSelection && chosen.selection() ? chosen.selection().text : ""
+    property Item chosen: null
+    // While a mouse drag selects words, the pages hold still under it.
+    property bool mouseSelecting: false
+    signal selected()
     // Between pages, across and down.
     readonly property real gap: 12
 
@@ -55,7 +61,7 @@ ListView {
     boundsBehavior: Flickable.StopAtBounds
     // As pages they turn, by the keys, the wheel, a swipe and the page's
     // edges; only a page zoomed larger than the window is moved by hand.
-    interactive: !turnsPages || zoomFactor > 1.01
+    interactive: (!turnsPages || zoomFactor > 1.01) && !mouseSelecting
     cacheBuffer: Math.max(0, height)
     contentWidth: Math.max(width, widthOf(1.414) * across + (across - 1) * gap + 32)
     flickableDirection: Flickable.AutoFlickIfNeeded
@@ -129,6 +135,96 @@ ListView {
     function pinch(delta) { zoomFactor = Math.max(0.4, Math.min(4, zoomFactor * delta)) }
     function placeText() { return qsTr("Page %1").arg(reader.section + 1) }
 
+    // The reading view's ways into the words (see FlowReader), points and
+    // rectangles in this item's coordinates. Each page's layer of words,
+    // by its page, while it is made.
+    property var layers: ({})
+    function layerOf(page) { return layers[page] || null }
+    function layerAt(x, y) {
+        for (const page in layers) {
+            const layer = layers[page]
+            const at = layer.mapFromItem(view, x, y)
+            if (at.x >= 0 && at.y >= 0 && at.x <= layer.width && at.y <= layer.height) return layer
+        }
+        return null
+    }
+    function fromLayer(layer, rect) {
+        const at = layer.mapToItem(view, rect.x, rect.y)
+        return Qt.rect(at.x, at.y, rect.width, rect.height)
+    }
+    function choose(layer) {
+        if (chosen && chosen !== layer) chosen.clear()
+        chosen = layer
+    }
+    function selection() {
+        const chose = chosen && chosen.hasSelection ? chosen.selection() : null
+        if (chose) chose.rect = fromLayer(chosen, chose.rect)
+        return chose
+    }
+    function selectAt(x, y) {
+        const layer = layerAt(x, y)
+        if (!layer) return false
+        choose(layer)
+        const at = layer.mapFromItem(view, x, y)
+        return layer.selectWordAt(at.x, at.y)
+    }
+    function highlightAtPoint(x, y) {
+        const layer = layerAt(x, y)
+        if (!layer) return null
+        const at = layer.mapFromItem(view, x, y)
+        const found = layer.highlightAt(at.x, at.y)
+        if (found) found.rect = fromLayer(layer, found.rect)
+        return found
+    }
+    function pressedHighlight() {
+        if (!chosen || chosen.pressedAt.x < 0) return null
+        const found = chosen.highlightAt(chosen.pressedAt.x, chosen.pressedAt.y)
+        if (found) found.rect = fromLayer(chosen, found.rect)
+        return found
+    }
+    // The keyboard's selection starts at the first word of the page being read.
+    function beginSelecting() {
+        const layer = layerOf(reader.section)
+        if (!layer || !layer.begin()) return false
+        choose(layer)
+        return true
+    }
+    function stepSelecting(words, lines, extend) {
+        if (!chosen) return
+        chosen.step(words, lines, extend)
+        const r = fromLayer(chosen, chosen.activeRect())
+        if (r.y < 0) scrollBy(r.y - 24)
+        else if (r.y + r.height > height) scrollBy(r.y + r.height - height + 24)
+    }
+    function endSelecting() {}
+    function clearSelection() { if (chosen) chosen.clear() }
+    function copySelection() { if (selectedText !== "") plainCopy.copyText(selectedText) }
+    function pageSelection() { const chose = chosen ? chosen.selection() : null; return chose ? { page: chosen.page, start: chose.start, end: chose.end } : null }
+    function highlightSelection(color) {
+        const span = pageSelection()
+        const made = span ? reader.highlights.highlightPage(span.page, span.start, span.end, color) : 0
+        clearSelection()
+        return made
+    }
+    function selectionHighlight() {
+        const span = pageSelection()
+        return span ? reader.highlights.pageAt(span.page, span.start, span.end) : ({})
+    }
+    function placeSelection(id) {
+        const span = pageSelection()
+        const placed = span ? reader.highlights.placeAgainOnPage(id, span.page, span.start, span.end) : false
+        clearSelection()
+        return placed
+    }
+    // A stroke of the pen, its points in this item's coordinates, on the page it starts on.
+    function penStroke(points) {
+        const layer = points.length > 0 ? layerAt(points[0].x, points[0].y) : null
+        if (!layer) return { kind: "" }
+        const mapped = points.map(p => layer.mapFromItem(view, p.x, p.y))
+        return reader.highlights.pagePenned(layer.page, Qt.size(layer.width, layer.height), mapped)
+    }
+    PlainCopy { id: plainCopy }
+
     // The page under the upper part of the window is the one being read.
     onContentYChanged: {
         if (!settled) return
@@ -200,6 +296,19 @@ ListView {
                         // The width in the address is in device pixels, so pages are sharp on a HiDPI screen.
                         source: reader.imagePrefix + "page/" + sheet.page + "/" + Math.round(sheet.width * Screen.devicePixelRatio)
                         fillMode: Image.PreserveAspectFit
+                    }
+                    PageWords {
+                        id: words
+                        anchors.fill: parent
+                        page: sheet.page
+                        Component.onCompleted: { const all = view.layers; all[page] = words; view.layers = all }
+                        Component.onDestruction: {
+                            if (view.chosen === words) view.chosen = null
+                            if (view.layers[page] !== words) return
+                            const all = view.layers; delete all[page]; view.layers = all
+                        }
+                        onDraggingChanged: { if (dragging) view.choose(words); view.mouseSelecting = dragging }
+                        onSelected: view.selected()
                     }
                 }
             }

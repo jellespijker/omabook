@@ -3,6 +3,7 @@
 #include <QVariant>
 #include <algorithm>
 
+#include "highlightcolors.h"
 #include "library.h"
 
 // A book's bookmarks and highlights, kept beside its other rows. They travel
@@ -12,7 +13,7 @@
 namespace {
 
 constexpr auto columns = "id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, quote_before, quote_after, "
-                         "anchored, confidence, lost";
+                         "anchored, confidence, lost, color";
 
 } // namespace
 
@@ -39,6 +40,9 @@ QJsonObject Annotation::toJson(QJsonObject alongside) const {
     for (const auto &[key, value] : {std::pair{"kind", QJsonValue(kind)}, std::pair{"text", QJsonValue(text)},
                                      std::pair{"note", QJsonValue(note)}, std::pair{"created", QJsonValue(created)}})
         alongside.insert(key, value);
+    // A highlight says its colour by its name, the first's too.
+    if (kind == "highlight")
+        alongside.insert("color", HighlightColors::of(color).key);
     if (hasPassage()) {
         alongside.insert("passage", passage().toJson());
         alongside.insert("confidence", confidence);
@@ -55,6 +59,7 @@ Annotation Annotation::fromJson(const QJsonObject &object) {
                           .note = object.value("note").toString(),
                           .created = object.value("created").toInteger()};
     annotation.to = annotation.place;
+    annotation.color = HighlightColors::stored(object.value("color").toString());
     if (const QJsonObject passage = object.value("passage").toObject(); !passage.isEmpty()) {
         annotation.setPassage(Passage::fromJson(passage));
         annotation.confidence = object.value("confidence").toDouble(1);
@@ -87,18 +92,20 @@ std::optional<qint64> Library::storeAnnotation(qint64 bookId, const Annotation &
                         annotation.after,
                         annotation.anchored,
                         annotation.confidence,
-                        annotation.lost ? 1 : 0};
+                        annotation.lost ? 1 : 0,
+                        annotation.color};
     if (annotation.id <= 0) {
         const auto made = insert("INSERT INTO annotations (book_id, kind, section, fraction, text, note, created, to_section, to_fraction, "
-                                 "quote, quote_before, quote_after, anchored, confidence, lost) "
-                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                 "quote, quote_before, quote_after, anchored, confidence, lost, color) "
+                                 "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                                  values);
         return made ? std::optional<qint64>(*made) : std::nullopt;
     }
     values << annotation.id;
-    if (!exec("UPDATE annotations SET book_id = ?, kind = ?, section = ?, fraction = ?, text = ?, note = ?, created = ?, to_section = ?, "
-              "to_fraction = ?, quote = ?, quote_before = ?, quote_after = ?, anchored = ?, confidence = ?, lost = ? WHERE id = ?",
-              values))
+    if (!exec(
+            "UPDATE annotations SET book_id = ?, kind = ?, section = ?, fraction = ?, text = ?, note = ?, created = ?, to_section = ?, "
+            "to_fraction = ?, quote = ?, quote_before = ?, quote_after = ?, anchored = ?, confidence = ?, lost = ?, color = ? WHERE id = ?",
+            values))
         return std::nullopt;
     return annotation.id;
 }
@@ -134,6 +141,7 @@ QList<Annotation> Library::annotations(qint64 bookId, const QString &kind) const
                             .after = found.value(11).toString(),
                             .anchored = found.value(12).toString(),
                             .confidence = found.value(13).toDouble(),
-                            .lost = found.value(14).toBool()});
+                            .lost = found.value(14).toBool(),
+                            .color = found.value(15).toString()});
     return annotations;
 }

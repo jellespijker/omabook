@@ -16,6 +16,7 @@
 #include "document.h"
 #include "fixtures.h"
 #include "formats.h"
+#include "highlights.h"
 #include "importer.h"
 #include "library.h"
 #include "remote.h"
@@ -230,6 +231,51 @@ private slots:
 
     // Calibre's highlights are annotations as bookmarks are, so they travel
     // the same way, with their notes, once the book they are in has come.
+    // A highlight's colour travels (#81), is changed on either computer, and
+    // back to the first colour too; a bookmark has none and writes none.
+    void aHighlightsColourTravelsAndIsChangedOnEither() {
+        TwoComputers two;
+        const Remote remote = two.remote();
+        QVERIFY(syncLibrary(two.here, remote).problems.isEmpty());
+        Annotation bookmark;
+        bookmark.kind = "bookmark";
+        bookmark.text = "Here";
+        QVERIFY(two.here.addAnnotation(two.mine, bookmark) > 0);
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        const QString colorOps = "SELECT COUNT(*) FROM live_ops WHERE entity = 'annotation' AND field = 'color'";
+        QCOMPARE(answer(two.here, colorOps), qint64(0));
+
+        Annotation highlight;
+        highlight.kind = "highlight";
+        highlight.place = {.section = 1, .fraction = 0.25};
+        highlight.to = {.section = 1, .fraction = 0.3};
+        highlight.quote = "the words marked";
+        highlight.color = "green";
+        const qint64 made = two.here.addAnnotation(two.mine, highlight);
+        QVERIFY(made > 0);
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        const auto theirs = [&two] { return Highlights::of(two.there, two.theirs); };
+        QCOMPARE(theirs().size(), 1);
+        QCOMPARE(theirs().first().color, QString("green"));
+        QCOMPARE(theirs().first().quote, QString("the words marked"));
+
+        // Coloured anew there: here too, still the one.
+        QVERIFY(Highlights::recolor(two.there, theirs().first().id, u"purple"));
+        QCOMPARE(syncLibrary(two.here, remote).annotationsTaken, 1);
+        QCOMPARE(Highlights::of(two.here, two.mine).size(), 1);
+        QCOMPARE(Highlights::of(two.here, two.mine).first().color, QString("purple"));
+        QCOMPARE(Highlights::of(two.here, two.mine).first().id, made);
+        // Back to the first colour here: there too; then nothing more to do.
+        QVERIFY(Highlights::recolor(two.here, made, u"yellow"));
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        QCOMPARE(theirs().first().color, QString());
+        QCOMPARE(changed(syncLibrary(two.here, remote)), 0);
+        // Removed there: gone here.
+        two.there.removeAnnotation(theirs().first().id);
+        QCOMPARE(syncLibrary(two.here, remote).annotationsTaken, 1);
+        QVERIFY(Highlights::of(two.here, two.mine).isEmpty());
+    }
+
     void aHighlightFromCalibreTravelsAsABookmarkDoes() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::calibreShelf(dir.filePath("Shelf")));

@@ -45,15 +45,16 @@ struct Row {
             .after = field(u"after"_s),
             .anchored = field(u"anchored"_s),
             .confidence = reduced.fields.contains(u"confidence"_s) ? field(u"confidence"_s).toDouble() : 1,
-            .lost = field(u"lost"_s) == "1"_L1};
+            .lost = field(u"lost"_s) == "1"_L1,
+            .color = field(u"color"_s)};
 }
 
 [[nodiscard]] bool unchanged(const Row &row, qint64 book, const Annotation &log) {
     const Annotation &here = row.annotation;
     return std::tie(row.book, here.kind, here.place, here.text, here.note, here.created)
                == std::tie(book, log.kind, log.place, log.text, log.note, log.created)
-           && std::tie(here.to, here.quote, here.before, here.after, here.anchored, here.confidence, here.lost)
-                  == std::tie(log.to, log.quote, log.before, log.after, log.anchored, log.confidence, log.lost);
+           && std::tie(here.to, here.quote, here.before, here.after, here.anchored, here.confidence, here.lost, here.color)
+                  == std::tie(log.to, log.quote, log.before, log.after, log.anchored, log.confidence, log.lost, log.color);
 }
 
 } // namespace

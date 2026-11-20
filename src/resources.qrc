@@ -85,6 +85,15 @@
         <file alias="NoteMarks.qml">NoteMarks.qml</file>
         <file alias="ReadingNotes.qml">ReadingNotes.qml</file>
         <file alias="SelectKeys.qml">SelectKeys.qml</file>
+        <file alias="PageHighlights.qml">PageHighlights.qml</file>
+        <file alias="HighlightLine.qml">HighlightLine.qml</file>
+        <file alias="PageWords.qml">PageWords.qml</file>
+        <file alias="HighlightWords.qml">HighlightWords.qml</file>
+        <file alias="HighlightSwatches.qml">HighlightSwatches.qml</file>
+        <file alias="ReaderBar.qml">ReaderBar.qml</file>
+        <file alias="ReaderHighlighting.qml">ReaderHighlighting.qml</file>
+        <file alias="PenGestures.qml">PenGestures.qml</file>
+        <file alias="AnnotationsList.qml">AnnotationsList.qml</file>
         <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>

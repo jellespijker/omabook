@@ -12,6 +12,8 @@
 #include <tuple>
 
 #include "annotationanchors.h"
+#include "highlightcolors.h"
+#include "highlights.h"
 #include "library.h"
 #include "settings.h"
 
@@ -74,11 +76,35 @@ int failLine(const QString &why) {
     return {};
 }
 
+// The colour asked for by its name ("blue") or what the reader calls it
+// ("Questions", Settings::highlightNames); why not, when there is none.
+[[nodiscard]] std::expected<QString, QString> colorAsked(const QString &asked) {
+    if (QString key = asked.trimmed().toLower(); !key.isEmpty() && HighlightColors::known(key))
+        return key;
+    const QVariantMap names = Settings().highlightNames();
+    for (auto it = names.cbegin(); it != names.cend(); ++it)
+        if (it.value().toString().compare(asked.trimmed(), Qt::CaseInsensitive) == 0 && HighlightColors::known(it.key()))
+            return it.key();
+    return std::unexpected("There is no highlight colour called " + asked + ".");
+}
+
+// A line of the list: its number, where it is, its words, and a highlight's colour.
+[[nodiscard]] QString lineOf(const Annotation &note) {
+    const QString words = note.kind == Highlights::kind && note.text.isEmpty() ? note.quote.simplified() : note.text;
+    const QString color = note.kind == Highlights::kind ? "\t" + HighlightColors::of(note.color).key : QString();
+    return QString("%1\tsection %2, %3%\t%4%5%6")
+        .arg(note.id)
+        .arg(note.place.section)
+        .arg(qRound(note.place.fraction * 100))
+        .arg(words, color, note.lost ? QString("\t(lost)") : QString());
+}
+
 } // namespace
 
 int runBookmarksCli(const QStringList &arguments) {
     QCommandLineParser parser;
-    parser.setApplicationDescription("List a book's bookmarks and highlights, add a bookmark, rename one, or remove one.");
+    parser.setApplicationDescription(
+        "List a book's bookmarks and highlights, of a colour or all of them, add a bookmark, rename one, or remove one.");
     parser.addHelpOption();
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
@@ -93,6 +119,10 @@ int runBookmarksCli(const QStringList &arguments) {
     parser.addOption({"as", "The words a renamed bookmark is known by.", "text"});
     parser.addOption({"remove", "Remove the bookmark with this number.", "bookmark"});
     parser.addOption({"lost", "List only the highlights whose words can no longer be found in the book's file."});
+    parser.addOption({"color",
+                      "List only the highlights of this colour, by its name (yellow, blue, green, orange, purple) or what "
+                      "you call it in the reader.",
+                      "colour"});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = "omabook bookmarks";
@@ -110,19 +140,19 @@ int runBookmarksCli(const QStringList &arguments) {
         return failLine("There is no book " + number + " in the library.");
     if (const auto changed = change(**library, id, parser); !changed)
         return failLine(changed.error());
+    const auto color = parser.isSet("color") ? colorAsked(parser.value("color")) : std::expected<QString, QString>(QString());
+    if (!color)
+        return failLine(color.error());
     // Highlights placed in another file of the book are found again in this one first (#80); a book without one stays as it is.
     std::ignore = AnnotationAnchors::anchor(**library, id);
     QJsonArray array;
     for (const Annotation &note : (*library)->annotations(id)) {
-        if (parser.isSet("lost") && !note.lost)
+        if ((parser.isSet("lost") && !note.lost)
+            || (!color->isEmpty() && (note.kind != Highlights::kind || HighlightColors::of(note.color).key != *color)))
             continue;
         array << note.toJson({{"id", note.id}});
         if (!parser.isSet("json"))
-            printLine(stdout, QString("%1\tsection %2, %3%\t%4%5")
-                                  .arg(note.id)
-                                  .arg(note.place.section)
-                                  .arg(qRound(note.place.fraction * 100))
-                                  .arg(note.text, note.lost ? QString("\t(lost)") : QString()));
+            printLine(stdout, lineOf(note));
     }
     if (parser.isSet("json"))
         printLine(stdout, QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Indented)).trimmed());

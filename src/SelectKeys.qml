@@ -4,7 +4,8 @@ import QtQuick.Controls
 // Words selected with the keyboard in the reading view (V, or Shift+N for a
 // margin note): the keys that move and widen the selection, and a line
 // saying how, while it lasts. Enter is done: the menu of what to do with the
-// words, or the note on them; Escape (or V) stops.
+// words, or the note on them; 1 to 5 highlight them in that colour (#81);
+// Escape (or V) stops.
 Item {
     id: keys
     // The reading view: its page (`content`), and what ends the selecting.
@@ -29,6 +30,8 @@ Item {
             else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) view.stopSelecting(true)
             else if (event.key === Qt.Key_Escape || event.key === Qt.Key_V) view.stopSelecting(false)
             else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) view.content.copySelection()
+            else if (event.key >= Qt.Key_1 && event.key <= Qt.Key_5 && keys.purpose === "menu")
+                view.highlighting.highlight(reader.highlights.colors[event.key - Qt.Key_1].key)
             else return
             event.accepted = true
         }
@@ -53,7 +56,7 @@ Item {
             width: Math.min(implicitWidth, parent.width - 24)
             text: keys.purpose === "note"
                   ? qsTr("H L or the arrows move a word, J K a line; Shift widens. Enter writes a margin note on it, Esc stops.")
-                  : qsTr("H L or the arrows move a word, J K a line; Shift widens. Enter shows what to do with it, Esc stops.")
+                  : qsTr("H L or the arrows move a word, J K a line; Shift widens. 1 to 5 highlight it, Enter shows what else to do with it, Esc stops.")
             color: theme.colors.muted
             font.pixelSize: 12
             wrapMode: Text.Wrap

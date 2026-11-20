@@ -12,6 +12,14 @@ _Avoid_: Note (alone), markup, comment
 A passage of a book marked in a colour.
 _Avoid_: Underline, mark, selection
 
+**Highlight colour**:
+One of the five colours a highlight is in, known by its own name (yellow, blue, green, orange, purple) and called what the reader chooses ("Important"); each has a line of its own under the words, so it is told apart without its colour (`HighlightColors`).
+_Avoid_: Category, tag, label
+
+**Pen gesture**:
+A stroke of the pen over a book's text that means something rather than staying as ink: a line under words, a loop round them or a bar beside lines highlights them; a scribble takes highlights away (`Ink::gestureOf`).
+_Avoid_: Ink (for this), drawing, shortcut
+
 **Margin note**:
 Words about a passage or place in a book, typed or written by hand, shown beside it.
 _Avoid_: Note (alone), comment, annotation (for this kind only)

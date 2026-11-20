@@ -128,6 +128,7 @@ struct Annotation {
     QString anchored;      // the hash of the file its places were found in; empty before they were
     double confidence = 1; // how sure that place is (FoundPassage::confidence)
     bool lost = false;     // not found in that file: kept for the reader to place again or remove
+    QString color;         // a highlight's colour, by its name (HighlightColors); '' for the first
 
     [[nodiscard]] Passage passage() const;
     void setPassage(const Passage &passage);

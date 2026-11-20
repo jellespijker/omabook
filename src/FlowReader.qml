@@ -198,6 +198,31 @@ Flickable {
             return y >= contentY && y < contentY + height
         }).map(span => ({ id: span.id, text: page, start: span.start, end: span.end }))
     }
+    // Highlights (#81): the one at a point, the one the last click was on,
+    // the selection made one, and a stroke of the pen.
+    function highlightAtPoint(x, y) {
+        const at = page.mapFromItem(flick, x, y)
+        const found = marks.highlightAt(at.x, at.y)
+        if (found) found.rect = fromPage(found.rect)
+        return found
+    }
+    function pressedHighlight() {
+        const found = marks.pressedAt.x < 0 ? null : marks.highlightAt(marks.pressedAt.x, marks.pressedAt.y)
+        if (found) found.rect = fromPage(found.rect)
+        return found
+    }
+    function highlightSelection(color) {
+        const made = marks.highlightSelection(color)
+        clearSelection()
+        return made
+    }
+    function selectionHighlight() { return marks.selectionHighlight() }
+    function placeSelection(id) {
+        const placed = marks.placeSelection(id)
+        clearSelection()
+        return placed
+    }
+    function penStroke(points) { return marks.penned(points.map(p => page.mapFromItem(flick, p.x, p.y))) }
     function placeText() {
         const start = page.positionAt(page.width / 2, Math.max(0, contentY - page.y + 8))
         return page.getText(start, start + 120).replace(/\u00ad/g, "")
@@ -302,6 +327,7 @@ Flickable {
         }
         onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
 
+        PageHighlights { anchors.fill: parent; z: -1; text: page }
         PageMarks {
             id: marks
             anchors.fill: parent

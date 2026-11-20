@@ -68,6 +68,31 @@ public:
         return pdfPage ? pdfPage->text(QRectF()).trimmed() : QString();
     }
 
+    // Poppler's words, each found in the page's text in turn, so that its
+    // place there is the one text() counts in.
+    QList<PageWord> words(int page) const override {
+        const QMutexLocker locker(&m_lock);
+        const auto pdfPage = m_document->page(page);
+        if (!pdfPage || pdfPage->pageSizeF().isEmpty())
+            return {};
+        const QSizeF size = pdfPage->pageSizeF();
+        const QString text = pdfPage->text(QRectF()).trimmed();
+        QList<PageWord> words;
+        qsizetype at = 0;
+        for (const auto &box : pdfPage->textList()) {
+            const qsizetype found = text.indexOf(box->text(), at);
+            if (box->text().isEmpty() || found < 0)
+                continue;
+            const QRectF bounds = box->boundingBox();
+            words.append({.box = QRectF(bounds.x() / size.width(), bounds.y() / size.height(), bounds.width() / size.width(),
+                                        bounds.height() / size.height()),
+                          .start = found,
+                          .end = found + box->text().size()});
+            at = found + box->text().size();
+        }
+        return words;
+    }
+
 private:
     mutable QMutex m_lock;
     std::unique_ptr<Poppler::Document> m_document;

@@ -6,6 +6,7 @@ QString Document::html(int, int) const { return {}; }
 QByteArray Document::resource(const QString &) const { return {}; }
 QImage Document::image(int, int) const { return {}; }
 QSizeF Document::pageSize(int) const { return {}; }
+QList<PageWord> Document::words([[maybe_unused]] int page) const { return {}; }
 
 // A flowing book's words are its chapter without the markup; paged formats
 // that have words (PDF) answer for themselves.

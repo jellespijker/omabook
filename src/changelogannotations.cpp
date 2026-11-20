@@ -45,7 +45,7 @@ void writePassage(ChangeLogFields::Context &ctx, const QSqlQuery &row, qint64 hl
             ChangeLogFields::write(ctx, field, value, hlc);
 }
 
-// One row of `SELECT id, book_id, kind, section, fraction, text, note, created`, and the passage's fields after them.
+// One row of `SELECT id, book_id, kind, section, fraction, text, note, created`, the passage's fields and the colour after them.
 void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
     const QString gid = Spaces::annotationId(library, row.value(0).toLongLong());
     const QString bookGid = Spaces::bookId(library, row.value(1).toLongLong());
@@ -66,6 +66,10 @@ void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
     for (const auto &[field, value] : fields)
         ChangeLogFields::write(ctx, field, value, hlc);
     writePassage(ctx, row, hlc);
+    // A highlight's colour (#81): written once it isn't the first, so a log
+    // from before colours is not written anew.
+    if (const QString color = row.value(16).toString(); !color.isEmpty() || ctx.existing.contains(u"color"_s))
+        ChangeLogFields::write(ctx, u"color"_s, color, hlc);
     if (isRemoved(ctx.existing))
         ChangeLog::append(library, {ctx.space, QString(entity), gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
 }
@@ -84,7 +88,7 @@ void syncRowToLog(const Library &library, const QSqlQuery &row, bool baseline) {
 void syncRows(const Library &library, bool baseline, const std::optional<QList<qint64>> &ids) {
     for (QSqlQuery row =
              ChangeLog::query(library, u"SELECT id, book_id, kind, section, fraction, text, note, created, to_section, to_fraction, quote, "
-                                       "quote_before, quote_after, anchored, confidence, lost FROM annotations"_s
+                                       "quote_before, quote_after, anchored, confidence, lost, color FROM annotations"_s
                                            + onlyThese(ids) + u" ORDER BY id"_s);
          row.next();)
         syncRowToLog(library, row, baseline);

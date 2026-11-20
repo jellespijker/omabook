@@ -110,6 +110,16 @@ QList<Manual::Step> collectionsRelease() {
     };
 }
 
+// The 0.1.9 release's entries: annotations in books (#67).
+QList<Manual::Step> annotationsRelease() {
+    return {
+        {"highlights", "0.1.9", Manual::tr("Highlights in five colours"),
+         Manual::tr("Select words and pick a colour in the menu beside them, or draw a line under them with a pen. "
+                    "{reader.annotations} lists them by colour, under the names you give the colours."),
+         "", "reader.annotations", "reader", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -188,5 +198,5 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    } + collectionsRelease();
+    } + collectionsRelease() + annotationsRelease();
 }

@@ -12,6 +12,7 @@
 #include <thread>
 #include <vector>
 
+#include "fixtures.h"
 #include "library.h"
 #include "librarymigrations.h"
 
@@ -241,6 +242,40 @@ private slots:
         QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 36")), qPrintable(s_brought));
         QVERIFY(textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'")).contains(plugins));
         QCOMPARE(run(root, QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = 'graph_facts_names'")), 1);
+    }
+
+    // A library of format 35, its highlights without a colour, takes #81's
+    // step: they keep their numbers and passages and are the first colour;
+    // and the step can be taken again, by a library put back to 35.
+    void aHighlightOfFormat35IsTheFirstColour() {
+        const QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString root = dir.filePath(QStringLiteral("Library"));
+        QVERIFY(Fixtures::epub(dir.filePath(QStringLiteral("Book.epub"))));
+        qint64 id = 0;
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            const qint64 book = library.add(dir.filePath(QStringLiteral("Book.epub"))).id;
+            QVERIFY(book > 0);
+            Annotation highlight;
+            highlight.kind = QStringLiteral("highlight");
+            highlight.quote = QStringLiteral("the ferry came back");
+            highlight.color = QStringLiteral("blue");
+            id = library.addAnnotation(book, highlight);
+            QVERIFY(id > 0);
+        }
+        for (const bool putBack : {false, true}) {
+            if (!putBack)
+                QCOMPARE(run(root, QStringLiteral("ALTER TABLE annotations DROP COLUMN color")), 0);
+            QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 35")), 0);
+            Library library(root);
+            QVERIFY(library.open());
+            QCOMPARE(library.formatVersion(), 36);
+            QCOMPARE(textOf(root, QStringLiteral("SELECT quote FROM annotations WHERE id = %1").arg(id)),
+                     QStringLiteral("the ferry came back"));
+            QCOMPARE(textOf(root, QStringLiteral("SELECT color FROM annotations WHERE id = %1").arg(id)), QString());
+        }
     }
 
     // A command that brings a library up to date says so on standard error

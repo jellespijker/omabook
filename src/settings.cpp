@@ -141,6 +141,16 @@ void Settings::setPaneWidth(const QString &pane, int width) {
         set("pane_widths", widths);
 }
 
+void Settings::setHighlightName(const QString &color, const QString &name) {
+    QJsonObject names = m_values.value("highlight_names").toObject();
+    if (const QString simple = name.simplified().left(40); simple.isEmpty())
+        names.remove(color);
+    else
+        names.insert(color, simple);
+    if (names != m_values.value("highlight_names").toObject())
+        set("highlight_names", names);
+}
+
 QJsonObject Settings::shelf(const QString &library) const {
     return m_values.value("shelves").toObject().value(library).toObject();
 }

@@ -4,12 +4,17 @@ import QtQuick.Layouts
 
 // The book's index beside the page: its chapters as a tree, the one being
 // read marked, and the reader's bookmarks under them. A click goes there
-// and the index stays where it is.
+// and the index stays where it is. Its other side is the book's highlights
+// (#81, AnnotationsList).
 Item {
     id: pane
     signal done()
+    // "contents" or "annotations": which of the two it shows.
+    property string tab: "contents"
+    // The reading view, for the words selected on its page.
+    property Item host
     // While the index has the keyboard, the arrow keys walk it, not the book.
-    readonly property bool focused: list.activeFocus
+    readonly property bool focused: list.activeFocus || annotations.focused
 
     // Chapters whose parts are folded away, by their place in the contents.
     property var folded: ({})
@@ -43,6 +48,7 @@ Item {
     }
 
     function takeFocus() {
+        if (tab === "annotations") return annotations.takeFocus()
         for (let i = 0; i < rows.length; ++i)
             if (rows[i].at === current) list.currentIndex = i
         list.positionViewAtIndex(Math.max(0, list.currentIndex), ListView.Center)
@@ -73,13 +79,50 @@ Item {
 
         RowLayout {
             Layout.fillWidth: true
-            Label {
-                Layout.fillWidth: true
-                text: qsTr("Contents")
-                font.pixelSize: 16
-                font.bold: true
-                elide: Text.ElideRight
+            spacing: 4
+            Repeater {
+                model: [{ tab: "contents", text: qsTr("Contents"), runs: "reader.contents" },
+                        { tab: "annotations", text: qsTr("Highlights"), runs: "reader.annotations" }]
+                delegate: Item {
+                    id: tabItem
+                    required property var modelData
+                    objectName: "paneTab_" + modelData.tab
+                    readonly property string runs: modelData.runs
+                    readonly property bool chosen: pane.tab === modelData.tab
+                    Layout.preferredWidth: tabLabel.implicitWidth + 12
+                    Layout.maximumWidth: (pane.width - 32) / 2
+                    Layout.preferredHeight: win.touch ? 44 : 30
+                    Accessible.role: Accessible.PageTab
+                    Accessible.name: modelData.text
+                    Label {
+                        id: tabLabel
+                        anchors.left: parent.left
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        leftPadding: 6
+                        rightPadding: 6
+                        text: tabItem.modelData.text
+                        font.pixelSize: 16
+                        font.bold: tabItem.chosen
+                        color: tabItem.chosen ? theme.foreground : theme.colors.muted
+                        elide: Text.ElideRight
+                    }
+                    Rectangle {
+                        visible: tabItem.chosen
+                        anchors.bottom: parent.bottom
+                        width: parent.width
+                        height: 2
+                        color: theme.accent
+                    }
+                    TapHandler {
+                        onTapped: {
+                            pane.tab = tabItem.modelData.tab
+                            pane.takeFocus()
+                        }
+                    }
+                }
             }
+            Item { Layout.fillWidth: true }
             AppButton {
                 visible: win.touch
                 focusPolicy: Qt.NoFocus
@@ -87,8 +130,17 @@ Item {
                 onClicked: pane.done()
             }
         }
+        AnnotationsList {
+            id: annotations
+            objectName: "annotationsList"
+            visible: pane.tab === "annotations"
+            host: pane.host
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            onDone: pane.done()
+        }
         Label {
-            visible: list.count === 0
+            visible: list.count === 0 && pane.tab === "contents"
             Layout.fillWidth: true
             text: qsTr("This book has no table of contents.")
             color: theme.colors.muted
@@ -97,6 +149,7 @@ Item {
         ListView {
             id: list
             objectName: "contentsList"
+            visible: pane.tab === "contents"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true

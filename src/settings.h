@@ -31,6 +31,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool folio READ folio WRITE setFolio NOTIFY changed)
     Q_PROPERTY(int pages READ pages WRITE setPages NOTIFY changed)
     Q_PROPERTY(QVariantMap paneWidths READ paneWidths NOTIFY changed)
+    Q_PROPERTY(QVariantMap highlightNames READ highlightNames NOTIFY changed)
     Q_PROPERTY(QString syncTarget READ syncTarget WRITE setSyncTarget NOTIFY changed)
     Q_PROPERTY(QString aiProvider READ aiProvider WRITE setAiProvider NOTIFY changed)
     Q_PROPERTY(QString aiCommand READ aiCommand WRITE setAiCommand NOTIFY changed)
@@ -107,6 +108,11 @@ public:
     Q_INVOKABLE int paneWidth(const QString &pane) const { return m_values.value("pane_widths").toObject().value(pane).toInt(); }
     // A width of 0 forgets the choice.
     Q_INVOKABLE void setPaneWidth(const QString &pane, int width);
+    // What the reader calls each highlight colour (#81), by its name
+    // ("yellow": "Important"); one not named is called by its colour.
+    QVariantMap highlightNames() const { return m_values.value("highlight_names").toObject().toVariantMap(); }
+    // An empty name forgets it.
+    Q_INVOKABLE void setHighlightName(const QString &color, const QString &name);
 
     // "recent", "title", "author", "series", "added", "progress", "rating",
     // "published" or "finished", and whether that order is turned round.

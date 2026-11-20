@@ -92,7 +92,9 @@ void bringUpToDate(const QString &root, Look &theme) {
 void setUpReader(Reader &reader, const Backend &backend, const CalibrePlugin &calibre, Settings &settings) {
     reader.setConverter(calibre.converter(), calibre.switchedOff());
     reader.marks()->setGraphMode([&settings] { return settings.graph(); });
-    new ReadingPassages(&reader, &reader); // the reader's, gone with it
+    // The reader's, gone with it; the page shows its highlights where they were found.
+    const auto *passages = new ReadingPassages(&reader, &reader);
+    QObject::connect(passages, &ReadingPassages::anchored, reader.highlights(), &ReadingHighlights::refresh);
     QObject::connect(&backend, &Backend::pluginsChanged, &reader,
                      [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
 }

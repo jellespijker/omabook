@@ -16,6 +16,7 @@
 #include "library.h"
 #include "metadatasource.h"
 #include "pageformat.h"
+#include "readinghighlights.h"
 #include "readingmarks.h"
 
 class Backend;
@@ -67,6 +68,8 @@ class Reader : public QObject {
     Q_PROPERTY(QVariantList bookmarks READ bookmarks NOTIFY bookmarksChanged)
     // The things of the book's knowledge graph, as they are marked on the page.
     Q_PROPERTY(ReadingMarks *marks READ marks CONSTANT)
+    // The book's highlights, as the page shows them and the pen makes them (#81).
+    Q_PROPERTY(ReadingHighlights *highlights READ highlights CONSTANT)
     // How the text is set: the options in force, and the chapter set with them.
     Q_PROPERTY(PageFormat *format READ format CONSTANT)
 
@@ -106,6 +109,10 @@ public:
     double percent() const;
     QVariantList bookmarks() const;
     ReadingMarks *marks() const noexcept { return m_marks; }
+    ReadingHighlights *highlights() const noexcept { return m_highlights; }
+    // The opened book itself, none while none is open, and the backend it is read for.
+    std::shared_ptr<const Document> document() const { return m_document; }
+    Backend *backend() const noexcept { return m_backend; }
     PageFormat *format() const noexcept { return m_format; }
 
     Q_INVOKABLE void openBook(qint64 id);
@@ -217,4 +224,6 @@ private:
     bool m_growing = false;
     ReadingMarks *m_marks;
     PageFormat *m_format = nullptr;
+    // Made last, when the backend it follows is known; a child, gone with the reader.
+    ReadingHighlights *m_highlights = new ReadingHighlights(this);
 };

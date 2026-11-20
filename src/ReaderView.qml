@@ -101,6 +101,17 @@ Item {
         if (showIndex) index.takeFocus()
         else if (content) content.forceActiveFocus()
     }
+    // The contents or the highlights (#81) beside the page: the other one
+    // shown in its place, the same one put away.
+    function showList(tab) {
+        if (showIndex && index.tab === tab) return toggleIndex()
+        index.tab = tab
+        if (showIndex) index.takeFocus()
+        else toggleIndex()
+    }
+    function openFinder() { finder.open() }
+    // Words highlighted, and a highlight tapped (#81).
+    readonly property QtObject highlighting: ReaderHighlighting { view: view; menu: menu; touchArea: touchArea }
     // The graph beside the page, on what a plugin asked for.
     function showGraphOf(scope, bookId) {
         if (!showGraph) toggleGraph()
@@ -195,15 +206,21 @@ Item {
         if (chosen && chosen.text.trim() !== "") {
             showSoon.stop()
             chosen.rect = fromContent(chosen.rect)
+            chosen.highlight = typeof content.selectionHighlight === "function" ? content.selectionHighlight() : ({})
             menu.openMenu(chosen)
         } else if (pointedThing) {
             showSoon.stop()
             menu.openCard(pointedThing, fromContent(pointedThing.rect), false, false)
+        } else if (content && typeof content.pressedHighlight === "function") {
+            const clicked = content.pressedHighlight()
+            if (clicked) menu.openHighlight(clicked, fromContent(clicked.rect))
         }
     }
+
     // A finger: a tap on a marked thing shows its card; a long press selects
     // the word under it and shows the menu.
     function tappedAt(x, y) {
+        if (highlighting.tapped(x, y)) return true
         if (!content || typeof content.thingAt !== "function") return false
         const at = touchArea.mapToItem(content, x, y)
         const found = content.thingAt(at.x, at.y)
@@ -219,26 +236,24 @@ Item {
     // V: the first word on the screen is selected, and the keys move it on
     // or widen it (see SelectKeys); Enter shows the menu, or for a margin note writes it.
     function startSelecting(purpose) {
-        if (!content || typeof content.beginSelecting !== "function") {
+        menu.close()
+        if (!content || typeof content.beginSelecting !== "function" || content.beginSelecting() === false) {
             backend.say(qsTr("These pages are pictures, so there are no words to select."))
             return
         }
-        menu.close()
         selecting = true
         selectKeys.purpose = purpose === "note" ? "note" : "menu"
-        content.beginSelecting()
         selectKeys.take()
     }
-    function stopSelecting(keep) {
+    // Stops; the selection kept for its menu or note, or (`kept`) for whoever goes on with it.
+    function stopSelecting(keep, kept) {
         selecting = false
         if (!content) return
         content.endSelecting()
         if (keep && selectKeys.purpose === "note") notesLayer.write()
         else if (keep) released()
-        else {
-            content.clearSelection()
-            content.forceActiveFocus()
-        }
+        else if (!kept) content.clearSelection()
+        if (!keep) content.forceActiveFocus()
     }
     function showThing(id) {
         if (!showGraph) toggleGraph()
@@ -296,7 +311,8 @@ Item {
     Key { command: "reader.larger"; when: win.inReader && !!view.content && !view.mapping && !view.formatting; onActivated: view.content.zoom(1) }
     Key { command: "reader.smaller"; when: win.inReader && !!view.content && !view.mapping && !view.formatting; onActivated: view.content.zoom(-1) }
     Key { command: "reader.format"; when: reader.open && !view.mapping; onActivated: view.toggleFormat() }
-    Key { command: "reader.contents"; when: reader.open; onActivated: view.toggleIndex() }
+    Key { command: "reader.contents"; when: reader.open; onActivated: view.showList("contents") }
+    Key { command: "reader.annotations"; when: reader.open; onActivated: view.showList("annotations") }
     Key { command: "reader.catch_up"; when: reader.open; onActivated: view.catchUp() }
     Key { command: "reader.cast"; when: reader.open; onActivated: { view.showAssistant = true; assistant.whoIsWho(); companion.takeFocus() } }
     Key { command: "reader.find"; when: reader.open && !view.mapping; onActivated: finder.open() }
@@ -315,6 +331,8 @@ Item {
     Binding { target: reader.marks; property: "colors"; value: theme.colors }
     Binding { target: reader.marks; property: "foreground"; value: theme.foreground }
     Binding { target: reader.marks; property: "background"; value: theme.background }
+    Binding { target: reader.highlights; property: "foreground"; value: theme.foreground }
+    Binding { target: reader.highlights; property: "background"; value: theme.background }
     // Links in the text take the accent.
     Binding { target: reader.format; property: "linkColor"; value: theme.accent }
     // The room the text has, for how many pages stand side by side.
@@ -533,6 +551,15 @@ Item {
                 }
             }
 
+            // The pen over the page: a line under words, a loop round them or a
+            // bar beside them highlights them; a scribble takes highlights away.
+            PenGestures {
+                host: view
+                anchors.fill: contentLoader
+                z: 1
+                enabled: reader.open && !!view.content
+            }
+
             Loader {
                 id: contentLoader
                 objectName: "contentLoader"
@@ -630,54 +657,14 @@ Item {
                 onClicked: view.showBar = !view.showBar
             }
 
-            Rectangle {
-                objectName: "readerBar"
+            ReaderBar {
+                host: view
+                room: contentLoader.width
                 visible: view.showBar && reader.open
                 z: 2
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.bottom: progress.top
                 anchors.bottomMargin: 80
-                width: bar.childrenRect.width + 24
-                height: bar.childrenRect.height + 24
-                radius: theme.radius
-                color: theme.background
-                border.color: theme.colors.selection
-
-                Flow {
-                    id: bar
-                    // One row where the window has room for it, more where it doesn't.
-                    x: 12
-                    y: 12
-                    width: Math.min(660, contentLoader.width - 48)
-                    spacing: 8
-                    AppButton { objectName: "barBack"; runs: "reader.back"; text: qsTr("Library"); focusPolicy: Qt.NoFocus; onClicked: reader.close() }
-                    AppButton { objectName: "barContents"; runs: "reader.contents"; text: qsTr("Contents"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.toggleIndex() } }
-                    AppButton { objectName: "barFind"; runs: "reader.find"; text: qsTr("Find"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; finder.open() } }
-                    AppButton { objectName: "barBookmark"; runs: "reader.bookmark"; text: qsTr("Bookmark"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.bookmark() } }
-                    AppButton { objectName: "barGraph"; runs: "reader.graph"; text: qsTr("Graph"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.toggleGraph() } }
-                    AppButton { objectName: "barAsk"; runs: "reader.ask"; text: qsTr("Ask AI"); focusPolicy: Qt.NoFocus; onClicked: { view.showBar = false; view.askAssistant() } }
-                    AppButton { objectName: "barSmaller"; runs: "reader.smaller"; text: qsTr("Smaller"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(-1) }
-                    AppButton { objectName: "barLarger"; runs: "reader.larger"; text: qsTr("Larger"); focusPolicy: Qt.NoFocus; onClicked: if (view.content) view.content.zoom(1) }
-                    AppButton {
-                        objectName: "barFormat"
-                        runs: "reader.format"
-                        text: "Aa"
-                        Accessible.name: qsTr("Text")
-                        focusPolicy: Qt.NoFocus
-                        onClicked: { view.showBar = false; view.toggleFormat() }
-                    }
-                    // The rest: the AI's catch-up and cast, the marks, the
-                    // pages side by side, chapters, the whole screen, help.
-                    AppButton {
-                        objectName: "barMore"
-                        text: qsTr("More")
-                        focusPolicy: Qt.NoFocus
-                        onClicked: {
-                            view.showBar = false
-                            win.showMenu("reader")
-                        }
-                    }
-                }
             }
 
             Rectangle {
@@ -731,6 +718,7 @@ Item {
             ContentsPane {
                 id: index
                 objectName: "contents"
+                host: view
                 anchors.fill: parent
                 onDone: {
                     view.showIndex = false
@@ -890,6 +878,8 @@ Item {
                 assistant.identify(words, paragraph)
             }
             onFind: (words) => finder.findWords(words)
+            onHighlight: (color) => view.highlighting.highlight(color)
+            onShowHighlights: view.showList("annotations")
             onCopy: if (view.content) view.content.copySelection()
             onWriteNote: notesLayer.write()
             onGoTo: (met) => reader.goToPlace(met.section, met.fraction)

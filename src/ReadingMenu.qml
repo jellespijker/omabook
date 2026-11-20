@@ -8,15 +8,20 @@ import Omabook
 // a thing of the graph that is pointed at or tapped (its name, kind and what
 // is known of it), and a menu for words that were selected (ask about them,
 // who or what they are, the graph, find, copy, a margin note on them, and
-// questions worth asking).
+// questions worth asking). Selected words are highlighted in a colour there
+// too (1 to 5), and a highlight that is clicked or tapped has its own menu:
+// another colour, or none (#81).
 // It stands under the words, or over them where there is no room below,
 // and never leaves the page. Up and Down (or J and K) and Enter work it from
 // the keyboard; Escape puts it away.
 FocusScope {
     id: menu
     objectName: "readingMenu"
-    // "card" for a thing, "menu" for selected words.
+    // "card" for a thing, "menu" for selected words, "highlight" for a highlight.
     property string mode: "card"
+    // The highlight the words are on, or that was clicked; 0 for none.
+    property var highlightId: 0
+    property string highlightColor: ""
     // The thing, as ReadingMarks.thing gives it; null for words the graph doesn't know.
     property var thing: null
     property string words: ""
@@ -49,6 +54,9 @@ FocusScope {
     signal goTo(var met)
     // Put away; `hadFocus` says the keyboard was with it, to go back to the page.
     signal dismissed(bool hadFocus)
+    // The selected words highlighted in a colour, and the list of them all asked for.
+    signal highlight(string color)
+    signal showHighlights()
 
     function refreshSuggestions() {
         suggestions = mode === "menu" ? reader.marks.suggestions(known ? thing.id : 0, words).slice(0, 6) : []
@@ -77,12 +85,39 @@ FocusScope {
         fromAnswer = false
         passing = false
         answered = false
+        highlightId = chosen.highlight && chosen.highlight.id ? chosen.highlight.id : 0
+        highlightColor = highlightId ? chosen.highlight.color : ""
         around = chosen.rect
         noted = reader.marks.notedUpTo()
         refreshSuggestions()
         current = 0
         shown = true
         forceActiveFocus()
+    }
+    // A highlight clicked or tapped: {id, color, rect}.
+    function openHighlight(found, rect) {
+        mode = "highlight"
+        highlightId = found.id
+        highlightColor = found.color
+        const listed = reader.highlights.list.find(one => one.id === found.id)
+        words = listed ? listed.quote : ""
+        thing = null
+        paragraph = ""
+        fromAnswer = false
+        passing = false
+        answered = false
+        around = rect
+        noted = ""
+        suggestions = []
+        current = 0
+        shown = true
+        forceActiveFocus()
+    }
+    // A colour chosen: the highlight there is it now, or the words are highlighted in it.
+    function choose(color) {
+        if (highlightId) reader.highlights.recolor(highlightId, color)
+        else highlight(color)
+        close()
     }
     function close() {
         if (!shown) return
@@ -106,6 +141,12 @@ FocusScope {
             }
             return rows
         }
+        if (mode === "highlight") {
+            rows.push({ id: "unhighlight", text: qsTr("Remove highlight") })
+            rows.push({ id: "highlights", text: qsTr("All highlights") })
+            return rows
+        }
+        if (highlightId) rows.push({ id: "unhighlight", text: qsTr("Remove highlight") })
         rows.push({ id: "ask", text: qsTr("Ask about this") })
         rows.push({ id: "who", text: qsTr("Who or what is this?") })
         rows.push(known ? { id: "graph", text: qsTr("Show in graph") } : { id: "add", text: qsTr("Add to the graph") })
@@ -139,6 +180,8 @@ FocusScope {
             reader.marks.goToMoment(moment.section, moment.fraction, moment.anchor || "")
         }
         else if (row.id === "question") { ask(row.text, words); close() }
+        else if (row.id === "unhighlight") { reader.highlights.remove(highlightId); close() }
+        else if (row.id === "highlights") { showHighlights(); close() }
         else if (row.id === "more") assistant.suggestMore(key, known ? thing.id : 0, words, paragraph)
     }
 
@@ -171,6 +214,7 @@ FocusScope {
         if (event.key === Qt.Key_Down || event.key === Qt.Key_J) current = Math.min(actions.length - 1, current + 1)
         else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) current = Math.max(0, current - 1)
         else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) activate(current)
+        else if (event.key >= Qt.Key_1 && event.key <= Qt.Key_5 && mode !== "card") choose(reader.highlights.colors[event.key - Qt.Key_1].key)
         else return
         event.accepted = true
     }
@@ -315,6 +359,14 @@ FocusScope {
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
+                }
+                // The colours: the words highlighted in one, or the highlight made another.
+                HighlightSwatches {
+                    Layout.leftMargin: 4
+                    Layout.topMargin: 4
+                    visible: menu.mode !== "card"
+                    chosen: menu.highlightColor !== "" ? menu.highlightColor : reader.highlights.current
+                    onPicked: (color) => menu.choose(color)
                 }
                 Item { Layout.preferredHeight: 4; visible: menu.known || menu.words !== "" }
 

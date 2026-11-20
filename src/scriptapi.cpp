@@ -122,7 +122,7 @@ const QList<Entry> &entries() {
          "its own under a kind of its own."},
         {"library.setNotes", "library.setNotes(id, kind, text)", "", "Keeps notes with a book, at the place it has been read to."},
         {"library.progress", "library.progress(id)", "", "How far a book has been read: `{section, fraction, percent, updated}`."},
-        {"library.annotations", "library.annotations(id)", "", "Bookmarks, highlights: `[{id, kind, section, fraction, text, note, created, passage}]`."},
+        {"library.annotations", "library.annotations(id)", "", "Bookmarks, highlights: `[{id, kind, section, fraction, text, note, created, passage, color}]`."},
         {"library.toc", "library.toc(id)", "", "A book's contents: `{sections, contents: [{section, title, level}]}`."},
         {"library.text", "library.text(id, section)", "",
          "A book's text: one section (a chapter, or a page of a PDF), or all of it when no section is given. Text of a "

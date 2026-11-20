@@ -2,6 +2,7 @@
 
 #include <QImage>
 #include <QList>
+#include <QRectF>
 #include <QSizeF>
 #include <QString>
 #include <memory>
@@ -13,6 +14,15 @@ struct TocEntry {
     int section = 0;
     QString anchor;
     int level = 0;
+};
+
+// A word of a page and where it stands on it (#81): its box as a share of the
+// page's width and height (0 to 1), and where it is in the page's text
+// (Document::text), its first character and the one past its last.
+struct PageWord {
+    QRectF box;
+    qsizetype start = 0;
+    qsizetype end = 0;
 };
 
 // An opened book, whatever its format. A book either flows (chapters of text
@@ -48,4 +58,7 @@ public:
 
     // The words of a chapter or page, for search, agents and the AI.
     virtual QString text(int section) const;
+    // Pages: the words of a page where they stand on it, in the order of its
+    // text, for highlighting them; none for pages of pictures (a comic).
+    virtual QList<PageWord> words(int page) const;
 };

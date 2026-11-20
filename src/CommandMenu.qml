@@ -42,7 +42,7 @@ AppPopup {
                     "global.settings", "global.change", "global.help", "global.quit"],
         "book": ["library.read", "library.details", "library.edit", "library.lookup", "library.collection_book",
                  "library.graph_book", "library.chronology_book", "library.found_graph", "library.found_moment", "library.export", "library.remove"],
-        "reader": ["reader.back", "reader.contents", "reader.find", "reader.bookmark", "reader.ask", "reader.catch_up",
+        "reader": ["reader.back", "reader.contents", "reader.annotations", "reader.find", "reader.bookmark", "reader.ask", "reader.catch_up",
                    "reader.cast", "reader.graph", "reader.chronology", "reader.marks", "reader.select", "reader.note", "reader.notes", "reader.format", "reader.pages", "reader.layout",
                    "reader.larger", "reader.smaller", "reader.expand", "reader.previous", "reader.next", "reader.start",
                    "reader.end", "global.settings", "global.change", "global.help", "global.quit"],

@@ -227,6 +227,47 @@ Item {
         }
         return seen.sort((a, b) => a.order - b.order)
     }
+    // Highlights (#81), as FlowReader's: a page asked about is the one under the point.
+    function highlightAtPoint(x, y) {
+        const sheet = pageAt(x, y)
+        if (!sheet) return null
+        const at = sheet.text.mapFromItem(spread, x, y)
+        const found = sheet.marks.highlightAt(at.x, at.y)
+        if (found) found.rect = fromText(sheet, found.rect)
+        return found
+    }
+    function pressedHighlight() {
+        for (const sheet of sheets) {
+            const at = sheet.marks.pressedAt
+            if (!sheet.there || at.y < spread.breaks[sheet.index] || at.y > spread.breaks[sheet.index + 1]) continue
+            const found = sheet.marks.highlightAt(at.x, at.y)
+            if (found) found.rect = fromText(sheet, found.rect)
+            if (found) return found
+        }
+        return null
+    }
+    // The selection is the same on every page that shows part of it; the first that has it says.
+    function selectedSheet() {
+        for (const sheet of sheets) if (sheet.marks.selectionSpan()) return sheet
+        return null
+    }
+    function highlightSelection(color) {
+        const sheet = selectedSheet()
+        const made = sheet ? sheet.marks.highlightSelection(color) : 0
+        clearSelection()
+        return made
+    }
+    function selectionHighlight() { const sheet = selectedSheet(); return sheet ? sheet.marks.selectionHighlight() : ({}) }
+    function placeSelection(id) {
+        const sheet = selectedSheet()
+        const placed = sheet ? sheet.marks.placeSelection(id) : false
+        clearSelection()
+        return placed
+    }
+    function penStroke(points) {
+        const sheet = points.length > 0 ? pageAt(points[0].x, points[0].y) : null
+        return sheet ? sheet.marks.penned(points.map(p => sheet.text.mapFromItem(spread, p.x, p.y))) : { kind: "" }
+    }
     function placeText() {
         const start = firstText.positionAt(columnWidth / 2, breaks[page] + 8)
         return firstText.getText(start, start + 120).replace(/\u00ad/g, "")
@@ -289,6 +330,7 @@ Item {
                 // A page that isn't part of the spread lays nothing out.
                 text: sheet.shown ? reader.format.html : ""
                 onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
+                PageHighlights { anchors.fill: parent; z: -1; text: column; visible: sheet.there }
                 PageMarks {
                     id: pageMarks
                     anchors.fill: parent

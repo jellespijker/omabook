@@ -15,6 +15,8 @@ Item {
     property var hovered: null
     // A press of the mouse ended: on selected text, or on a marked thing.
     signal released()
+    // Where the last press of the mouse was, in the text's coordinates.
+    property point pressedAt: Qt.point(-1, -1)
 
     // Marking waits for the text to be set: a timer of its own, which goes
     // with this item.
@@ -159,6 +161,33 @@ Item {
     // Where the keyboard's selection is, to keep it in sight.
     function activeRect() { return text.positionToRectangle(activeAt >= 0 ? activeAt : text.selectionEnd) }
 
+    // Its highlights (#81). The one at a point of the text: {id, color, rect}, or null.
+    function highlightAt(x, y) {
+        if (!text) return null
+        const position = text.positionAt(x, y)
+        const r = text.positionToRectangle(position)
+        if (Math.abs(y - (r.y + r.height / 2)) > r.height) return null
+        const found = reader.highlights.at(text.textDocument, position, position)
+        if (!found.id) return null
+        found.rect = r
+        return found
+    }
+    function selectionSpan() { return text && text.selectionEnd > text.selectionStart ? { start: text.selectionStart, end: text.selectionEnd } : null }
+    function highlightSelection(color) {
+        const span = selectionSpan()
+        return span ? reader.highlights.highlight(text.textDocument, span.start, span.end, color) : 0
+    }
+    function selectionHighlight() {
+        const span = selectionSpan()
+        return span ? reader.highlights.at(text.textDocument, span.start, span.end) : ({})
+    }
+    function placeSelection(id) {
+        const span = selectionSpan()
+        return span ? reader.highlights.placeAgain(id, text.textDocument, span.start, span.end) : false
+    }
+    // A stroke of the pen, its points in the text's coordinates.
+    function penned(points) { return reader.highlights.penned(text.textDocument, points) }
+
     HoverHandler {
         id: pointer
         cursorShape: helper.text && helper.text.hoveredLink !== "" || helper.hovered ? Qt.PointingHandCursor : Qt.IBeamCursor
@@ -168,6 +197,9 @@ Item {
     PointHandler {
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         acceptedButtons: Qt.LeftButton
-        onActiveChanged: if (!active) helper.released()
+        onActiveChanged: {
+            if (active) helper.pressedAt = point.pressPosition
+            else helper.released()
+        }
     }
 }

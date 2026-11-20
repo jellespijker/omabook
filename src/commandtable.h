@@ -103,6 +103,7 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"reader.contents", {"T"}, tr("Show or hide the contents beside the page")},
     {"reader.find", {"/", "Ctrl+F"}, tr("Find words in the book")},
     {"reader.bookmark", {"B"}, tr("Bookmark this place")},
+    {"reader.annotations", {"Shift+B"}, tr("Show or hide the book's highlights beside the page, by colour, the ones no longer found too")},
     {"reader.ask", {"A"}, tr("Ask the AI about what is being read")},
     {"reader.catch_up", {"C"}, tr("Have the AI catch you up")},
     {"reader.cast", {"W"}, tr("Have the AI say who is who so far")},
