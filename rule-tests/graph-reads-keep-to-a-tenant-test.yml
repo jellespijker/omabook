@@ -1,0 +1,13 @@
+id: graph-reads-keep-to-a-tenant
+valid:
+  - 'QList<GraphNode> Graph::find(const QString &w) const { return collect("SELECT id FROM graph_nodes WHERE 1 = 1" + andWithin(&TenantFilter::nodes, u"id")); }'
+  - 'qint64 count(const Graph &graph) { const auto &within = graph.within(); return countOf(graph.library().query("SELECT COUNT(*) FROM graph_edges WHERE " + within->edges(u"id"))); }'
+  - 'void one(const Library &l, const TenantFilter &f) { l.query("SELECT n.id FROM graph_nodes AS n WHERE " + f.nodes(u"n.id")); }'
+  - 'void joined(const Library &l) { l.query("SELECT n.id FROM graph_nodes AS n JOIN tenant_nodes AS m ON m.node_id = n.id WHERE m.tenant = ?"); }'
+  - 'void copy(Library &l) { l.exec("INSERT INTO graph_facts (node_id) SELECT ? FROM graph_facts WHERE node_id = ?"); }'
+  - 'void drop(Library &l) { l.exec(u"DELETE FROM graph_edges WHERE id IN (SELECT id FROM graph_edges)"_s); }'
+  - 'void books(const Library &l) { l.query("SELECT id, title FROM books"); }'
+invalid:
+  - 'QList<qint64> all(const Library &l) { QList<qint64> ids; for (QSqlQuery q = l.query("SELECT id FROM graph_nodes"); q.next();) ids << q.value(0).toLongLong(); return ids; }'
+  - 'void met(const Library &l, qint64 book) { l.query(u"SELECT node_id FROM graph_seen WHERE book_id = ?"_s, {book}); }'
+  - 'void around(const Library &l) { l.query("SELECT s.id FROM graph_seen AS s JOIN graph_edges AS e ON e.source = s.node_id"); }'

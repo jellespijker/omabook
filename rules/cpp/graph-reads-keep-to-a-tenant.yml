@@ -1,0 +1,43 @@
+id: graph-reads-keep-to-a-tenant
+language: cpp
+severity: error
+message: A query that reads the knowledge graph without keeping to a tenant; every reader keeps to one (ADR 0003, #95).
+note: |
+  Each thing, relation and fact of the graph is stored once, with the tenants
+  that see it, and to whatever reads within a tenant the others are not there.
+  That holds only if every query that reads graph_nodes, graph_edges,
+  graph_facts or graph_seen keeps to one: read through a Graph made for a
+  tenant (Graph::forTenant, ofReader, ofCollection, ofLibrary), or put the
+  tenant's condition into the query (Graph::within(), TenantFilter, or a join
+  with the tenant_* tables). A statement that writes the graph is not a read.
+  Only the storage and the change log, which keep and carry the whole graph,
+  read it whole; they are the files this rule leaves out.
+ignores:
+  # The storage, the change log and what replays or carries it: the whole graph, on purpose.
+  - "src/changelog*.cpp"
+  - "src/compaction.cpp"
+  - "src/library.cpp"
+  - "src/libraryschema.cpp"
+  - "src/librarymigrations.cpp"
+  - "src/spacereplay.cpp"
+  - "src/spaces.cpp"
+  - "src/spaceworlds.cpp"
+  - "src/graphsync.cpp"
+  - "src/synctakegraph.cpp"
+  - "src/tenancy.cpp"
+  - "src/tenancyschema.cpp"
+  # The graph's writing half, and the lookups by name its writes are made of;
+  # what reads the graph is in graphviews.cpp, which the rule does look at.
+  - "src/graph.cpp"
+  - "tests/**"
+rule:
+  kind: string_literal
+  regex: '(?i)\b(FROM|JOIN)\s+graph_(nodes|edges|facts|seen)\b'
+  not:
+    any:
+      # A write (an INSERT … SELECT copies, it doesn't read for anyone).
+      - regex: '^(u8|u|U|L)?"\s*(?i:INSERT|UPDATE|DELETE|REPLACE)\b'
+      - inside:
+          kind: function_definition
+          stopBy: end
+          regex: 'TenantFilter|\bwithin\(|andWithin|\btenant_'
