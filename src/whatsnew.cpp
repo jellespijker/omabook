@@ -5,9 +5,8 @@
 // short tour of the entries that arrived since; "What's new" in the help
 // (?) and `omabook help new` show the newest release's at any time.
 //
-// TO ANNOUNCE A FEATURE, add one entry at the end of laterReleases(), and
-// nothing else (the first release's entries are in firstRelease(), those of
-// 0.1.1 to 0.1.5 in features(), to keep each short):
+// TO ANNOUNCE A FEATURE, add one entry at the end of features(), and nothing
+// else (the first release's entries are in firstRelease(), to keep it short):
 //
 //   {"id", "version", tr("Title"), tr("One or two sentences."), "spot", "command", "place", ""},
 //
@@ -80,8 +79,6 @@ QList<Manual::Step> firstRelease() {
 
 // The 0.1.6 release's entries: sharing a collection, by publishing it, subscribing to it, or keeping it together.
 QList<Manual::Step> sharingRelease() {
-// What 0.1.6 and the releases after it brought: sharing, and what came of it.
-QList<Manual::Step> laterReleases() {
     return {
         {"publish", "0.1.6", Manual::tr("Share a collection"),
          Manual::tr("{library.publish} publishes the collection shown, as a file or a link, and says first what goes in. The "
@@ -95,14 +92,6 @@ QList<Manual::Step> laterReleases() {
          Manual::tr("For a household or a book club, `omabook spaces` makes a collection several people write, kept in step "
                     "through a folder you already sync."),
          "", "", "", ""},
-        {"ai-servers", "0.1.7", Manual::tr("Your own AI server"),
-         Manual::tr("Under {global.settings}, the AI can be a server: Omarchy's local models, Ollama on this computer or another "
-                    "one, OpenAI, or any other by its address. Its models are listed to pick from."),
-         "", "global.settings", "", ""},
-        {"chronology", "0.1.7", Manual::tr("When it happens"),
-         Manual::tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
-                    "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
-         "", "library.chronology_book", "library", ""},
     };
 }
 
@@ -180,6 +169,9 @@ QList<Manual::Step> Manual::features() {
             "space carries them once a writer says so. A file comes only when its book is opened, and never in place of "
             "your own copy."),
          "", "library.publish", "library", ""},
+        {"chronology", "0.1.7", tr("When it happens"),
+         tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
+            "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
+         "", "library.chronology_book", "library", ""},
     };
-    } + laterReleases();
 }
