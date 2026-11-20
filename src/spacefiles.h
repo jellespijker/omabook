@@ -72,6 +72,15 @@ struct Carried {
 // hash, and gives it to the book. The file it took.
 [[nodiscard]] std::expected<Carried, QString> fetch(Library &library, qint64 book);
 
+// A book a plugin made, whose file the plugin gave the space with its world
+// (SpaceWorlds, `file`), travels as above whatever the space's switch, and
+// only it (#107): the plugin's user chose to give it, and a member's plugin
+// needs the book to read or write in its world. It comes as the space does,
+// at a sync or as the space's file is imported, not only when it is opened.
+// Of the space's books those, the files fetched here. How many it fetched;
+// one not there yet comes at a later sync, or when the book is opened.
+qsizetype bringWorldFiles(Library &library, const QString &space);
+
 // Of the space's books, the files this library has and the folder of the
 // shared space doesn't yet, written there sealed, when the space lets them
 // travel; the folder is remembered as where its files are fetched from. How

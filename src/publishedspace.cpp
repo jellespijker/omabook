@@ -60,6 +60,7 @@ struct Members {
     // How far the owner has read each of its books (GraphContext::reachOf).
     QHash<QString, GraphContext::Reach> reach;
     QHash<QString, QSet<QString>> worlds; // a plugin's scope given to the space, and the books it goes with (#65)
+    QSet<QString> files;                  // the books whose plugin gave the space their file with their world (#107)
 
     [[nodiscard]] bool holds(const Canon &canon, const QString &bookGid) const {
         return !bookGid.isEmpty() && books.contains(canon.book(bookGid));
@@ -121,9 +122,12 @@ void collectTree(const Library &library, const Collection &root, const Canon &ca
 // Of the worlds given to the space, those of its books, each scope with the books it goes with.
 [[nodiscard]] QList<SpaceWorlds::World> collectWorlds(QList<SpaceWorlds::World> worlds, const Canon &canon, Members &members) {
     worlds.removeIf([&](const SpaceWorlds::World &world) { return !members.holds(canon, world.book); });
-    for (const SpaceWorlds::World &world : std::as_const(worlds))
+    for (const SpaceWorlds::World &world : std::as_const(worlds)) {
         if (!world.scope.isEmpty())
             members.worlds[world.scope].insert(canon.book(world.book));
+        if (world.file)
+            members.files.insert(canon.book(world.book));
+    }
     return worlds;
 }
 
@@ -243,9 +247,12 @@ struct Place {
     return members.met(canon, place.book, place.section, place.fraction);
 }
 
-[[nodiscard]] bool bookFieldIn(const SpaceOperation &op, const PublishedSpace::Parts &parts) {
+// A book's files are said when the space carries its books' files, and of a
+// book its plugin made when the plugin gave the space its file with its
+// world, whatever the space's switch (#107).
+[[nodiscard]] bool bookFieldIn(const SpaceOperation &op, const PublishedSpace::Parts &parts, bool fileGiven) {
     return among(identityFields, op.field) || op.field == "same_as"_L1 || (parts.ratings && op.field == "rating"_L1)
-           || (parts.reading && among(readingFields, op.field)) || (parts.files && op.field == "formats"_L1);
+           || (parts.reading && among(readingFields, op.field)) || ((parts.files || fileGiven) && op.field == "formats"_L1);
 }
 
 [[nodiscard]] bool nodeFieldIn(const SpaceOperation &op, const Members &members, const Canon &canon) {
@@ -274,7 +281,7 @@ struct Place {
 // learned past where they are in its book stays out until they get there.
 [[nodiscard]] bool belongs(const SpaceOperation &op, const Members &members, const Canon &canon, const PublishedSpace::Parts &parts) {
     if (op.entity == "book"_L1)
-        return members.books.contains(canon.book(op.id)) && bookFieldIn(op, parts);
+        return members.books.contains(canon.book(op.id)) && bookFieldIn(op, parts, members.files.contains(canon.book(op.id)));
     if (op.entity == "collection"_L1)
         return members.collections.contains(op.id) && (among(collectionFields, op.field) || op.field.startsWith("book:"_L1));
     if (op.entity == "reading_log"_L1)

@@ -333,6 +333,8 @@ std::expected<SharedSpaces::Synced, QString> SharedSpaces::sync(Library &library
     if (!files)
         return std::unexpected(files.error());
     synced.files = *files;
+    // Once the folder is known as where the space's files are (send remembers it).
+    synced.fetched = SpaceFiles::bringWorldFiles(library, *space);
     synced.space = sharedSummary(library, *space, which);
     return synced;
 }

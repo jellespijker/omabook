@@ -128,8 +128,10 @@ using namespace Qt::StringLiterals;
     if (!snapshot)
         return std::unexpected(snapshot.error());
     auto report = Subscriptions::subscribe(library, *snapshot, options);
-    if (report)
+    if (report) {
         SpaceFiles::takenFrom(library, report->space.space, file); // its books' files, if it lets them travel, are beside it
+        SpaceFiles::bringWorldFiles(library, report->space.space); // and the files a plugin gave with their worlds
+    }
     return report;
 }
 

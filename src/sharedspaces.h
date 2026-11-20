@@ -99,6 +99,7 @@ struct Synced {
     qsizetype written = 0; // of this writer's own edits, written into the space
     qsizetype sent = 0;    // operations written to the folder
     qsizetype files = 0;   // books' files written to the folder, when the space lets them travel (#63)
+    qsizetype fetched = 0; // books' files a plugin gave with their worlds, fetched from it (#107)
     QStringList refused;   // each refused batch or operation, and why
     Subscriptions::Report filed;
 };

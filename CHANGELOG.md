@@ -17,8 +17,16 @@ moves those lines under its version.
 - A book whose details are the same on two computers is no longer reported as taken at every sync from one of them: the details taken keep their time to the clock's count within a second, as the other computer's log says it, so a cover set in a second the clock ticked in more than once is newer there no more. And both computers compare a book's details as their logs say them, so a book is undecided from both sides or from neither (#106).
 - The graph centred on a thing in a large library counts what is around it at once: four steps out took over a second on a library of 1,500 books, and now takes a few hundredths of one (#100).
 - An answer from a model that wraps it in HTML-like tags (`<panel>…</panel>`, `<div>`s, a stray `<span>`) is shown without them: in the reading companion, the library's answers, `omabook ask` and the MCP tools that answer questions, whichever AI answers. Markdown stays as it is, and so does a tag written in a code span or a code block. The companion and the librarian are also told to answer in plain text or Markdown (#105).
+
 ### Changed
+
 - Syncing a large library is quicker: each sync reads of the change log only what the other computer lacks, and what it says it holds, not all of it each time; and the log another computer brings in when it is paired is compacted in that same sync, of what both have seen, so it no longer sits beside the snapshot that says the same (#103).
+
+## [0.1.7.1] - 2026-11-20
+
+### Fixed
+
+- A book a plugin made and marked to travel with its world (`file: true` from `omabook.sharing.register`'s `worlds`) now carries its file, also when the space's files switch is off: only that book's file, and only of a book the plugin made, never a person's. It goes as the space's book files do, sealed in a shared space's folder or beside a published space's file, checked against its hash, and comes to a member with the space, at their `omabook spaces sync` or as they import the space's file, when their copy of the book has no file of its own (#107).
 
 ## [0.1.7] - 2026-11-20
 
@@ -210,7 +218,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.7.1...HEAD
+[0.1.7.1]: https://github.com/jellespijker/omabook/compare/v0.1.7...v0.1.7.1
 [0.1.7]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...v0.1.7
 [0.1.6.1]: https://github.com/jellespijker/omabook/compare/v0.1.6...v0.1.6.1
 [0.1.6]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...v0.1.6
