@@ -61,7 +61,7 @@ QJsonObject remove(Library &library, qint64 id);
 
 // Brings the graph of a book up to a place with the model, in as many
 // requests as it takes: {"requests", "nodes", "edges", "sent", "complete",
-// "up_to", "problems"}. Without a place it goes as far as the book was
+// "up_to", "chronology" (GraphBuild::Timed), "problems"}. Without a place it goes as far as the book was
 // read; `whole` takes the book to its end, read or not; `again` starts
 // over from the first page.
 QJsonObject build(Library &library, qint64 bookId, const std::optional<GraphPlace> &upTo, bool whole, bool again,

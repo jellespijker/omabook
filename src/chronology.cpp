@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <ranges>
 #include <tuple>
+#include <utility>
 
 using namespace Qt::StringLiterals;
 
@@ -93,6 +94,44 @@ constexpr auto eventKind = "event"_L1;
     if (edge == 0)
         return std::unexpected(u"The relation could not be kept."_s);
     return edge;
+}
+
+// The timeline a book's events go on, and its name: a series' for a book in
+// no series is the book's own, as is a world's of no name.
+[[nodiscard]] std::pair<Chronology::Whose, QString> lineOf(const Book &book, Chronology::Whose whose, const QString &called) {
+    using Chronology::Whose;
+    const QString series = book.meta.series.simplified();
+    if (whose == Whose::Series && !series.isEmpty())
+        return {whose, series};
+    if (whose == Whose::World && !called.simplified().isEmpty())
+        return {whose, called.simplified()};
+    return {Whose::Book, book.meta.title.simplified()};
+}
+
+// Whether another book shares a book's timeline of `whose`: a book's own is
+// its alone, a series' is the series', a world's any book's; and only on
+// the same side of the library.
+[[nodiscard]] bool sharedWith(const Graph &graph, const Library &library, const Book &book, Chronology::Whose whose, qint64 other) {
+    using Chronology::Whose;
+    if (other == book.id)
+        return true;
+    if (whose == Whose::Book || !graph.sides().together(book.id, other))
+        return false;
+    if (whose != Whose::Series)
+        return true;
+    const auto that = library.book(other);
+    return that && that->meta.series.simplified().compare(book.meta.series.simplified(), Qt::CaseInsensitive) == 0;
+}
+
+// Whether a timeline is the book's of `whose`: of that whose, and met in a
+// book that shares it (or in none, as one made by hand is).
+[[nodiscard]] bool ours(const Graph &graph, const Library &library, const Book &book, Chronology::Whose whose, const GraphNode &timeline) {
+    if (timeline.data.value("timeline"_L1).toString() != Chronology::name(whose))
+        return false;
+    const QList<GraphPlace> met = graph.seen(timeline.id);
+    return met.isEmpty() || std::ranges::any_of(met, [&](const GraphPlace &at) {
+               return at.bookId == 0 || sharedWith(graph, library, book, whose, at.bookId);
+           });
 }
 
 } // namespace
@@ -187,7 +226,7 @@ std::expected<qint64, QString> Chronology::setWhen(Graph &graph, qint64 event, c
 }
 
 std::expected<qint64, QString> Chronology::order(Graph &graph, qint64 event, const QString &relation, qint64 other,
-                                                 const std::optional<GraphMoment> &learned) {
+                                                 const std::optional<GraphMoment> &learned, const QString &note) {
     const QString said = relation.simplified().toLower();
     if (!orderRelations().contains(said))
         return std::unexpected(u"\"%1\" is no relation of order (%2)."_s.arg(relation, orderRelations().join(", "_L1)));
@@ -197,7 +236,7 @@ std::expected<qint64, QString> Chronology::order(Graph &graph, qint64 event, con
     if (event == other)
         return std::unexpected(u"An event is in no order with itself."_s);
     const std::optional<GraphPlace> place = learned ? std::optional(learned->place) : std::nullopt;
-    return linked(graph.link(event, other, said, {}, place, learned ? learned->anchor : QString()));
+    return linked(graph.link(event, other, said, note.simplified(), place, learned ? learned->anchor : QString()));
 }
 
 std::expected<qint64, QString> Chronology::placeOn(Graph &graph, qint64 event, qint64 timeline, const std::optional<GraphMoment> &learned) {
@@ -223,4 +262,28 @@ qint64 Chronology::timeline(Graph &graph, Whose whose, const QString &called, co
     const std::optional<GraphPlace> place = seen ? std::optional(seen->place) : std::nullopt;
     return graph.upsert({}, timelineKind(), name, {}, {{"timeline", Chronology::name(whose)}}, place, seen ? seen->anchor : QString(),
                         seen);
+}
+
+qint64 Chronology::timelineFor(Graph &graph, const Library &library, qint64 bookId, Whose whose, const QString &called,
+                               const std::optional<GraphMoment> &seen) {
+    const auto book = library.book(bookId);
+    if (!book)
+        return 0;
+    if (whose == Whose::History)
+        return timeline(graph, whose, called, seen);
+    const auto [taken, name] = lineOf(*book, whose, called);
+    if (name.isEmpty())
+        return 0;
+    for (const GraphNode &known : graph.find(name, timelineKind(), QString(), 50))
+        if ((known.name.compare(name, Qt::CaseInsensitive) == 0 || known.name.startsWith(name + " ("_L1, Qt::CaseInsensitive))
+            && ours(graph, library, *book, taken, known))
+            return timeline(graph, taken, known.name, seen);
+    if (graph.named({}, timelineKind(), name) == 0)
+        return timeline(graph, taken, name, seen);
+    // The name is taken by a timeline of books this one doesn't share it with.
+    // A world's by the series or book, a book's or a series' by its authors.
+    QString by = book->meta.authorText().simplified();
+    if (taken == Whose::World)
+        by = book->meta.series.simplified().isEmpty() ? book->meta.title.simplified() : book->meta.series.simplified();
+    return timeline(graph, taken, u"%1 (%2)"_s.arg(name, by.isEmpty() ? QString::number(bookId) : by), seen);
 }

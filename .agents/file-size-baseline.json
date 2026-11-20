@@ -23,7 +23,7 @@
     "src/folio.cpp": 1449,
     "src/goodreads.cpp": 745,
     "src/graph.cpp": 1001,
-    "src/graphbuilder.cpp": 697,
+    "src/graphbuilder.cpp": 603,
     "src/graphcanvas.cpp": 620,
     "src/graphmodel.cpp": 961,
     "src/graphtools.cpp": 885,

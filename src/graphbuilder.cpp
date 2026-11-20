@@ -4,11 +4,11 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
 #include <QSet>
 #include <algorithm>
 #include <ranges>
 
+#include "chronology.h"
 #include "graphcontext.h"
 #include "graphlinks.h"
 #include "prompts.h"
@@ -26,8 +26,6 @@ constexpr qsizetype summaryRoom = 220;
 // How much of the other books' part of the general graph goes with it.
 constexpr int mostShared = 30, mostNamedElsewhere = 10, mostWeighed = 400;
 constexpr qsizetype elsewhereRoom = 120;
-// The most a single answer may add, whatever the model sends.
-constexpr int mostNodes = 40, mostEdges = 60;
 
 // What a book's graph is drawn from: the things known of it and of the
 // earlier books of its series, findable by any of their names.
@@ -172,80 +170,6 @@ std::optional<GraphNode> sharedNode(const Graph &graph, const Scene &scene, qint
     return std::nullopt;
 }
 
-// A section number as a model writes it: a number, or a number in a string.
-int sectionOf(const QJsonValue &value) {
-    if (value.isDouble())
-        return value.toInt(-1);
-    bool number = false;
-    const int section = value.toString().toInt(&number);
-    return number ? section : -1;
-}
-
-// Words as the text may hold them: any case, and any run of white space
-// (a line break inside a quote) between them.
-QRegularExpression phraseIn(const QString &words) {
-    QStringList parts;
-    for (const QString &word : words.simplified().split(' ', Qt::SkipEmptyParts))
-        parts << QRegularExpression::escape(word);
-    return QRegularExpression(parts.join("\\s+"), QRegularExpression::CaseInsensitiveOption | QRegularExpression::UseUnicodePropertiesOption);
-}
-
-// The passages a model's section number points into: that section's, or
-// all of them when it named one that isn't there.
-QList<const Passage *> partsOf(const QList<Passage> &passages, int section) {
-    QList<const Passage *> within;
-    for (const Passage &passage : passages)
-        if (passage.section == section)
-            within << &passage;
-    if (within.isEmpty())
-        for (const Passage &passage : passages)
-            within << &passage;
-    return within;
-}
-
-// Where in the passages some words first occur, of the section the model
-// named: the place, and the words as the text has them, to find it by.
-std::optional<GraphMoment> momentOf(qint64 bookId, const QList<Passage> &passages, int section, const QStringList &phrases) {
-    for (const Passage *passage : partsOf(passages, section)) {
-        qsizetype first = -1, length = 0;
-        for (const QString &phrase : phrases) {
-            if (phrase.simplified().size() < 2)
-                continue;
-            const QRegularExpressionMatch found = phraseIn(phrase).match(passage->text);
-            if (found.hasMatch() && (first < 0 || found.capturedStart() < first)) {
-                first = found.capturedStart();
-                length = found.capturedLength();
-            }
-        }
-        if (first >= 0)
-            return GraphMoment{{bookId, passage->section, passage->from + (passage->to - passage->from) * double(first) / passage->text.size()},
-                               passage->text.mid(first, length).simplified()};
-    }
-    return std::nullopt;
-}
-
-// Where in the passages a thing first shows: where one of its names first
-// occurs in the section the model named, and where none does, the end of
-// that section's part. Never after the passages' end, so a fact is never
-// placed ahead of the reader.
-GraphMoment placeOf(qint64 bookId, const QList<Passage> &passages, int section, const QStringList &names) {
-    if (const auto found = momentOf(bookId, passages, section, names))
-        return *found;
-    const QList<const Passage *> within = partsOf(passages, section);
-    const Passage *last = within.isEmpty() ? nullptr : within.last();
-    return {last ? GraphPlace{bookId, last->section, last->to} : GraphPlace{bookId, 0, 0}, {}};
-}
-
-// Where a fact was revealed: at the words the model quoted from the text,
-// when the text has them; else where the names it gave first occur.
-GraphMoment revealedAt(qint64 bookId, const QList<Passage> &passages, int section, const QJsonValue &quote, const GraphMoment &fallback) {
-    const QString said = quote.toString().simplified().left(200);
-    if (said.size() >= 3)
-        if (const auto found = momentOf(bookId, passages, section, {said}))
-            return *found;
-    return fallback;
-}
-
 QStringList stringsOf(const QJsonValue &value, int most) {
     QStringList strings;
     for (const QJsonValue &entry : value.toArray()) {
@@ -256,37 +180,33 @@ QStringList stringsOf(const QJsonValue &value, int most) {
     return strings;
 }
 
-} // namespace
-
-QList<Passage> GraphBuild::passages(const Document &document, const std::optional<GraphPlace> &after, const GraphPlace &upTo) {
-    QList<Passage> found;
-    const bool flows = document.kind() == Document::Flow;
-    const int first = !after ? 0 : flows ? after->section : after->section + 1;
-    const int last = qMin(upTo.section, document.count() - 1);
-    for (int section = qMax(0, first); section <= last; ++section) {
-        const QString whole = document.text(section);
-        if (!flows) {
-            if (!whole.trimmed().isEmpty())
-                found.append({section, 0, 0, whole});
+// The edges of an answer, but for those of order (graphtimes.h): each known
+// where the words the model quoted are, and failing those once both ends
+// have shown, the later of the two.
+int linkEdges(Graph &graph, qint64 bookId, const QList<Passage> &passages, const QJsonArray &edges, const GraphBuild::NodeOf &idOf,
+              const QHash<QString, QStringList> &calledAlso) {
+    int linked = 0;
+    for (qsizetype index = 0; index < edges.size() && index < GraphBuild::mostEdges; ++index) {
+        const QJsonObject edge = edges.at(index).toObject();
+        const QString from = edge.value("from").toString().simplified();
+        const QString to = edge.value("to").toString().simplified();
+        const QString relation = edge.value("relation").toString().simplified().left(60);
+        const qint64 source = idOf(from);
+        const qint64 target = idOf(to);
+        if (source == 0 || target == 0 || relation.isEmpty() || GraphBuild::ofOrder(relation))
             continue;
-        }
-        const double from = after && section == after->section ? qBound(0.0, after->fraction, 1.0) : 0.0;
-        const double to = section == upTo.section ? qBound(0.0, upTo.fraction, 1.0) : 1.0;
-        const qsizetype start = qRound64(whole.size() * from);
-        // The line the reader is on has been read, as it is for a catch-up.
-        const qsizetype end = section == upTo.section ? qMin(whole.size(), qRound64(whole.size() * to) + 1) : whole.size();
-        if (end > start && !whole.mid(start, end - start).trimmed().isEmpty())
-            found.append({section, from, to, whole.mid(start, end - start)});
+        const int section = GraphBuild::sectionOf(edge.value("section"));
+        const GraphMoment first = GraphBuild::placeOf(bookId, passages, section, QStringList{from} + calledAlso.value(from.toLower()));
+        const GraphMoment second = GraphBuild::placeOf(bookId, passages, section, QStringList{to} + calledAlso.value(to.toLower()));
+        const GraphMoment learned =
+            GraphBuild::revealedAt(bookId, passages, section, edge.value("quote"), first.place.notAfter(second.place) ? second : first);
+        if (graph.link(source, target, relation, edge.value("note").toString().simplified().left(300), learned.place, learned.anchor) > 0)
+            ++linked;
     }
-    return found;
+    return linked;
 }
 
-qsizetype GraphBuild::size(const QList<Passage> &passages) {
-    qsizetype total = 0;
-    for (const Passage &passage : passages)
-        total += passage.text.size();
-    return total;
-}
+} // namespace
 
 QList<QList<Passage>> GraphBuild::chunks(const QList<Passage> &passages, qsizetype most) {
     most = qMax<qsizetype>(most, 200);
@@ -463,9 +383,10 @@ GraphBuild::Applied GraphBuild::apply(Library &library, qint64 bookId, const QLi
     for (qsizetype index = 0; index < nodes.size() && index < mostNodes; ++index) {
         const QJsonObject node = nodes.at(index).toObject();
         const QString name = node.value("name").toString().simplified();
-        if (name.isEmpty() || name.size() > 120)
-            continue;
         QString kind = kindOf(node.value("kind").toString());
+        // A timeline is made from what the answer says of its events (graphtimes.h).
+        if (name.isEmpty() || name.size() > 120 || kind == Chronology::timelineKind())
+            continue;
         QStringList aliases = stringsOf(node.value("aliases"), 8);
         const QString summary = node.value("summary").toString().simplified().left(600);
         const int section = sectionOf(node.value("section"));
@@ -535,30 +456,14 @@ GraphBuild::Applied GraphBuild::apply(Library &library, qint64 bookId, const QLi
         graph.link(id, bookNode, kind == "topic" ? "referred to in" : "appears in", shared ? summary : QString(), place, met.anchor);
     }
 
-    const QJsonArray edges = object->value("edges").toArray();
-    for (qsizetype index = 0; index < edges.size() && index < mostEdges; ++index) {
-        const QJsonObject edge = edges.at(index).toObject();
-        const QString from = edge.value("from").toString().simplified(), to = edge.value("to").toString().simplified();
-        const QString relation = edge.value("relation").toString().simplified().left(60);
-        auto idOf = [&](const QString &name) {
-            if (const qint64 id = named.value(name.toLower()))
-                return id;
-            const GraphNode *known = scene.find(name);
-            return known ? known->id : qint64(0);
-        };
-        const qint64 source = idOf(from), target = idOf(to);
-        if (source == 0 || target == 0 || relation.isEmpty())
-            continue;
-        // Known where the words the model quoted are, and failing those once
-        // both ends have shown: the later of the two.
-        const int section = sectionOf(edge.value("section"));
-        const GraphMoment first = placeOf(bookId, passages, section, QStringList{from} + calledAlso.value(from.toLower()));
-        const GraphMoment second = placeOf(bookId, passages, section, QStringList{to} + calledAlso.value(to.toLower()));
-        const GraphMoment learned = revealedAt(bookId, passages, section, edge.value("quote"),
-                                               first.place.notAfter(second.place) ? second : first);
-        if (graph.link(source, target, relation, edge.value("note").toString().simplified().left(300), learned.place, learned.anchor) > 0)
-            ++applied.edges;
-    }
+    const GraphBuild::NodeOf idOf = [&](const QString &name) {
+        if (const qint64 id = named.value(name.toLower()))
+            return id;
+        const GraphNode *known = scene.find(name);
+        return known ? known->id : qint64{0};
+    };
+    applied.edges = linkEdges(graph, bookId, passages, object->value("edges").toArray(), idOf, calledAlso);
+    applied.times = applyTimes(graph, library, bookId, passages, *object, idOf);
     return applied;
 }
 
@@ -588,6 +493,7 @@ GraphBuild::Built GraphBuild::build(Library &library, const Document &document, 
                                   .arg(chunk.first().section);
         built.nodes += applied.nodes;
         built.edges += applied.edges;
+        built.times += applied.times;
         built.upTo = {bookId, chunk.last().section, chunk.last().to};
         setBuiltTo(library, bookId, built.upTo);
         if (said)

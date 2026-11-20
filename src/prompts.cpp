@@ -129,7 +129,7 @@ QString Prompts::cast(const QString &notes, const QString &since, const QList<Se
 }
 
 QStringList Prompts::graphKinds() {
-    return {"character", "place", "group", "concept", "item", "event", "thread", "theme", "topic"};
+    return {"character", "place", "group", "concept", "item", "event", "thread", "theme", "topic", "timeline"};
 }
 
 AiRequest Prompts::graphExtraction(const BookMeta &book, const QString &known, const QString &text, const QString &elsewhere) {
@@ -172,6 +172,14 @@ AiRequest Prompts::graphExtraction(const BookMeta &book, const QString &known, c
         "- An edge goes \"from\" one name \"to\" another, with a short verb phrase as its \"relation\", read from the "
         "first to the second: \"mentor of\", \"member of\", \"rules\", \"located in\", \"seeks\", \"caused\", "
         "\"embodies\", \"alludes to\". Both ends are nodes you give or known things.\n"
+        "- An event's \"when\", only as far as the text says or makes it clear, never guessed: {\"calendar\": "
+        "\"gregorian\" for real dates, else the story's own; \"at\": \"1815-06-18\" as far as given (\"1815\", "
+        "\"1815-06\"), or \"from\" and \"to\" for a span; \"approximate\": true where the text hedges; \"said\": the "
+        "text's few words for it}. With no date given, \"said\" alone; with nothing, no \"when\". Its \"timeline\": "
+        "left out for this book's own, \"series\" when the series shares one time, \"history\" for real history, or "
+        "the name of a world several books share.\n"
+        "- Events in order: an edge \"before\", \"after\", \"during\" or \"same time as\" between two events, as "
+        "the text tells it (\"three years later\", a flashback); add \"inferred\": true when you conclude it.\n"
         "- \"section\" is the number of the section where what you give becomes known: where a new thing first shows, "
         "where this part changes what is known of a known thing, or where a relation becomes known. \"quote\" is a few "
         "words (twelve at most) copied exactly from that place of the text, so the reader can be shown the very spot.\n\n"

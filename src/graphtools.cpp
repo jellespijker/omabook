@@ -234,7 +234,7 @@ QJsonObject GraphOps::build(Library &library, qint64 bookId, const std::optional
         return problem(built.problems.value(0, "The graph could not be built."));
     return {{"book", bookId}, {"requests", built.requests}, {"nodes", built.nodes}, {"edges", built.edges},
             {"sent", built.sent}, {"complete", built.complete}, {"up_to", placeJson(built.upTo)},
-            {"problems", QJsonArray::fromStringList(built.problems)}};
+            {"chronology", built.times.toJson()}, {"problems", QJsonArray::fromStringList(built.problems)}};
 }
 
 QJsonObject GraphOps::connect(Library &library, qint64 bookId, const GraphBuild::Asker &ask, bool again, bool estimate) {

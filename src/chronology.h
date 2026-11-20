@@ -37,6 +37,8 @@ namespace Chronology {
 // The relations of order, as they are written from the first event to the
 // second ("the siege" before "the flood").
 [[nodiscard]] const QStringList &orderRelations();
+// The note on an order that was concluded rather than read in so many words.
+[[nodiscard]] inline QString inferred() { return QStringLiteral("inferred"); }
 
 // Whose a timeline is, kept in its data as {"timeline": "history"}.
 enum class Whose { Book, Series, World, History, Reader };
@@ -93,9 +95,10 @@ struct Known {
 // Writing it, each checked: the time of an event, revealed at a moment.
 [[nodiscard]] std::expected<qint64, QString> setWhen(Graph &graph, qint64 event, const EventTime &time,
                                                      const std::optional<GraphMoment> &revealed = std::nullopt);
-// That `event` is `relation` (one of orderRelations()) `other`, learned at a place.
+// That `event` is `relation` (one of orderRelations()) `other`, learned at a
+// place, with a note (inferred(), when it was concluded).
 [[nodiscard]] std::expected<qint64, QString> order(Graph &graph, qint64 event, const QString &relation, qint64 other,
-                                                   const std::optional<GraphMoment> &learned = std::nullopt);
+                                                   const std::optional<GraphMoment> &learned = std::nullopt, const QString &note = {});
 // That an event is on a timeline, learned at a place.
 [[nodiscard]] std::expected<qint64, QString> placeOn(Graph &graph, qint64 event, qint64 timeline,
                                                      const std::optional<GraphMoment> &learned = std::nullopt);
@@ -103,5 +106,13 @@ struct Known {
 // library, whatever it is called. `seen` is where a book first places
 // something on it.
 [[nodiscard]] qint64 timeline(Graph &graph, Whose whose, const QString &called, const std::optional<GraphMoment> &seen = std::nullopt);
+// The timeline a book's events go on: the book's own (by its title), its
+// series' (by the series), a world's (by the name it is `called`) or real
+// history. A book's, a series' or a world's is shared only by the books it
+// belongs to that are on the same side of the library (booksides.h): one of
+// that name met only on another side is another timeline, told apart by the
+// book's authors, series or title. 0 when there is no such book.
+[[nodiscard]] qint64 timelineFor(Graph &graph, const Library &library, qint64 bookId, Whose whose, const QString &called,
+                                 const std::optional<GraphMoment> &seen = std::nullopt);
 
 } // namespace Chronology

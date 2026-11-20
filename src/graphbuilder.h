@@ -11,6 +11,8 @@
 #include "ai.h"
 #include "document.h"
 #include "graph.h"
+#include "graphpassages.h"
+#include "graphtimes.h"
 #include "library.h"
 
 // Growing the knowledge graph from what is read. The model is shown only the
@@ -21,27 +23,15 @@
 // page is ever sent twice and nothing past the reader's place is sent at all.
 namespace GraphBuild {
 
-// A stretch of one section's text: from where to where in it (0 to 1).
-struct Passage {
-    int section = 0;
-    double from = 0, to = 1;
-    QString text;
-};
-
 // The most text sent with one request, in characters (some six thousand
 // tokens): a chapter or two. Longer stretches are cut into several requests.
 constexpr qsizetype chunkSize = 24000;
 // Less than this since the last time is not worth a request yet.
 constexpr qsizetype worthAsking = 1500;
 
-// The text of a book after one place (the very start when there is none)
-// and up to another, a passage per section. In a paged book a page has been
-// read once the reader is on it, and its facts are placed at its start.
-QList<Passage> passages(const Document &document, const std::optional<GraphPlace> &after, const GraphPlace &upTo);
-// Those passages as requests: each at most `most` characters, cut between
+// Passages (graphpassages.h) as requests: each at most `most` characters, cut between
 // paragraphs where a section is longer than that.
 QList<QList<Passage>> chunks(const QList<Passage> &passages, qsizetype most = chunkSize);
-qsizetype size(const QList<Passage> &passages);
 
 // How far the graph of a book has been built; nothing when it never was.
 std::optional<GraphPlace> builtTo(const Library &library, qint64 bookId);
@@ -69,6 +59,7 @@ AiRequest request(const Library &library, qint64 bookId, const QList<Passage> &p
 struct Applied {
     bool understood = false; // the answer held the JSON asked for
     int nodes = 0, edges = 0;
+    Timed times; // what it said of when its events happen
 };
 // Lays a model's answer into the graph. Every node and edge is placed in
 // the passages it came from, never after their end; an answer that is not
@@ -81,6 +72,7 @@ using Asker = std::function<bool(const AiRequest &request, QString *answer, QStr
 struct Built {
     int requests = 0, nodes = 0, edges = 0;
     qsizetype sent = 0;       // characters of the book's text sent
+    Timed times;              // the times of events noted, and those dropped
     QStringList problems;     // answers that could not be read, and the call that failed
     bool complete = false;    // it got as far as was asked
     GraphPlace upTo;          // how far the graph of the book now goes
