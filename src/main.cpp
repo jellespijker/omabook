@@ -89,7 +89,7 @@ void bringUpToDate(const QString &root, Look &theme) {
 
 // The reader follows the Calibre plugin's converter and the graph's setting,
 // and finds the open book's highlights again when its file changed (#80).
-void setUpReader(Reader &reader, Backend &backend, const CalibrePlugin &calibre, Settings &settings) {
+void setUpReader(Reader &reader, const Backend &backend, const CalibrePlugin &calibre, Settings &settings) {
     reader.setConverter(calibre.converter(), calibre.switchedOff());
     reader.marks()->setGraphMode([&settings] { return settings.graph(); });
     new ReadingPassages(&reader, &reader); // the reader's, gone with it

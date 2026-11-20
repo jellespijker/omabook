@@ -61,8 +61,9 @@ struct Span {
     const int m = to - from;
     if (m <= 0)
         return std::nullopt;
-    std::vector<int> table(static_cast<size_t>(n + 1) * static_cast<size_t>(m + 1), 0);
-    const auto at = [&table, m](int i, int j) -> int & { return table[static_cast<size_t>((i * (m + 1)) + j)]; };
+    std::vector<int> table((static_cast<size_t>(n) + 1) * (static_cast<size_t>(m) + 1), 0);
+    const size_t width = static_cast<size_t>(m) + 1;
+    const auto at = [&table, width](int i, int j) -> int & { return table[(static_cast<size_t>(i) * width) + static_cast<size_t>(j)]; };
     for (int i = 1; i <= n; ++i)
         for (int j = 1; j <= m; ++j)
             at(i, j) = quote[i - 1] == text[from + j - 1].key ? at(i - 1, j - 1) + 1 : std::max(at(i - 1, j), at(i, j - 1));
