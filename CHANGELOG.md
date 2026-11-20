@@ -12,11 +12,7 @@ moves those lines under its version.
 
 ## [Unreleased]
 
-### Fixed
-
-- A book without a cover that the search found by what you know of it no longer has its title run under its author line on the shelf: the title keeps above the author and the band that says what found it (#113).
-- The graph's *Between books* view says when it shows part of what there is: "300 of 1,240 connections between books" in its header, with a note over the picture. The connections between the most connected things of the collection's graph come first, rather than the latest, and *Show More Connections* (also under Filter) shows 300 more at a time, up to 900 (#91).
-- A thing renamed by hand in the graph of one top-level collection, an author or a theme two collections share, is called so in that collection's graph alone: the others keep the name their books gave it, or one of their own, and the name it had stays one of its names. Search and `knows:` find it there by its new name. With *Knowledge graph: one for the whole library*, a rename is its name everywhere (#110).
+## [0.1.9] - 2026-11-20
 
 ### Added
 
@@ -25,7 +21,17 @@ moves those lines under its version.
 - Justified text is hyphenated by the book's language: a long word is broken at the end of a line where its language's rules allow, as LibreOffice breaks it, so justified lines are no longer filled with wide gaps. It uses the hyphenation dictionaries LibreOffice uses (`hyphen-en`, `hyphen-de`, `hyphen-nl` and the other `hyphen-*` packages); a language without one is set as before. *Hyphenate* in the *Aa* panel (the `hyphenation` reading-format option, for every book, a collection or one book) turns it off. The hyphens are only on the page: selected and copied text, search, the graph's marks and the places in a chapter are as they are without them (#69).
 - Highlights in five colours (#81): select words (drag, a long press, or V and the arrows) and pick a colour in the menu beside them, or press 1 to 5 while selecting; with a pen, a line under words, a loop round them or a bar beside lines in the margin highlights them in the colour in use, and a scribble over a highlight takes it away. A click or a tap on one colours it anew or removes it. Each colour is readable on light and dark themes and has a line of its own under the words (solid, dashed, dotted…) for readers who tell colours apart less well. *Highlights* beside the page (Shift+B, beside *Contents*) lists the book's highlights in its order, one colour alone if you like, under the names you give the colours ("yellow = important"), with those no longer found in this edition to place again on selected words, and copies them as Markdown. They show in EPUB, FictionBook, Markdown and text books and on a PDF's pages (drag over a PDF's words to select them), travel to your other computers with their colour, and `omabook bookmarks <book> --color <colour or its name>` lists one colour's. Bookmarks no longer list highlights under the contents. The library's format goes up by one for the colour (a copy is kept first).
 - A highlight keeps the words it is on, with a few before and after, and is found again by them when the book's file changes: a new edition, a typo fixed, a paragraph put in. One whose words are gone from the book is kept as a lost annotation, for the reader to place again or remove; `omabook bookmarks <book> --lost` lists them. Highlights from Calibre and earlier libraries are found by their words the first time their book is opened, and passages travel between one's own computers with the rest of the annotation (#80).
-- Margin notes: select words and write a note on them (Shift+N, or *Write a margin note* in the menu beside the selection). Where the window has room, notes stand in a margin column beside the text, each at the height of its words, stacked where words are close, and stay beside them as the window or the type changes; the column is part of the page's layout, so it never moves the text while you write. In a narrower window, or under fingers, a mark where the words end opens the note on a card. E goes through the notes on the page from the keyboard: Enter edits one where it stands, Delete removes it, and a note left without words is removed. Notes go to your other computers at a sync and are found again by their words in a new edition; those whose words are gone are listed at the foot of the page, to be placed on other words or removed. The contents' list of bookmarks no longer shows highlights (#82).
+- Margin notes: select words and write a note on them (Shift+N, or *Write a margin note* in the menu beside the selection). Where the window has room, notes stand in a margin column beside the text, each at the height of its words, stacked where words are close, and stay beside them as the window or the type changes; the column is part of the page's layout, so it never moves the text while you write. In a narrower window, or under fingers, a mark where the words end opens the note on a card. E goes through the notes on the page from the keyboard: Enter edits one where it stands, Delete removes it, and a note left without words is removed. Notes go to your other computers at a sync and are found again by their words in a new edition; those whose words are gone are listed at the foot of the page, to be placed on other words or removed (#82).
+
+### Changed
+
+- The first opening after updating to 0.1.9 brings a library from format 32 up to 36, one step at a time (formats 33 to 36), keeping a copy of it first in `.backups` in the library's folder, as for every format change. An Omabook from before 0.1.9 no longer opens the library, but it does open that copy (#76, #110, #80, #81).
+
+### Fixed
+
+- A book without a cover that the search found by what you know of it no longer has its title run under its author line on the shelf: the title keeps above the author and the band that says what found it (#113).
+- The graph's *Between books* view says when it shows part of what there is: "300 of 1,240 connections between books" in its header, with a note over the picture. The connections between the most connected things of the collection's graph come first, rather than the latest, and *Show More Connections* (also under Filter) shows 300 more at a time, up to 900 (#91).
+- A thing renamed by hand in the graph of one top-level collection, an author or a theme two collections share, is called so in that collection's graph alone: the others keep the name their books gave it, or one of their own, and the name it had stays one of its names. Search and `knows:` find it there by its new name. With *Knowledge graph: one for the whole library*, a rename is its name everywhere (#110).
 
 ## [0.1.8.1] - 2026-11-20
 
@@ -250,7 +256,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.8.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/jellespijker/omabook/compare/v0.1.8.1...v0.1.9
 [0.1.8.1]: https://github.com/jellespijker/omabook/compare/v0.1.8...v0.1.8.1
 [0.1.8]: https://github.com/jellespijker/omabook/compare/v0.1.7.1...v0.1.8
 [0.1.7.1]: https://github.com/jellespijker/omabook/compare/v0.1.7...v0.1.7.1

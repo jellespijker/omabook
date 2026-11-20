@@ -64,7 +64,7 @@ expect "the keys of a panel" 0 "Remove the selected bookmark" "$omabook" help ke
 expect "a plugin switched off" 0 "off" "$omabook" plugins disable folder:shelver
 "$omabook" help keys | grep -q "Shelver" && fail "a plugin switched off still has its keys listed"
 rm -rf "$XDG_CONFIG_HOME/omabook/plugins/shelver"
-expect "what is new" 0 "A large library, quick" "$omabook" help new
+expect "what is new" 0 "Justified, without wide gaps" "$omabook" help new
 expect "a help page on sharing" 0 "What is never shared" "$omabook" help sharing
 expect "it says removing a member changes the key" 0 "changes its key" "$omabook" help sharing
 expect "a help page on the chronology" 0 "Never ahead of you" "$omabook" help chronology
