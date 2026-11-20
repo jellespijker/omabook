@@ -8,8 +8,11 @@
 #include <QVariant>
 #include <algorithm>
 #include <array>
+#include <cstdint>
 #include <optional>
+#include <set>
 #include <tuple>
+#include <utility>
 
 #include "changelog.h"
 #include "hlc.h"
@@ -33,19 +36,65 @@ constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,   
                                 "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
                                 "finished"_L1,    "paper"_L1,     "reading_at"_L1, "removed"_L1,    "removed_at"_L1};
 
-// The operations that travel, in SQL; Replication::travels says the same of one.
-[[nodiscard]] QString travelling() {
+// How a query reads the log: all of it, or by ranges of a space and device
+// alone, where what an operation is of must not make it read by thing instead.
+enum class Reading : std::uint8_t { All, RangesOnly };
+
+// The spaces whose operations travel by the log, in SQL, of `s`. A space this
+// computer subscribes to, and a shared one, travel to one's other computers
+// sealed beside the log (SpaceCarry, #51), never in it.
+[[nodiscard]] QString travellingSpace() {
+    return u"s.name NOT LIKE 'shared:%' AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
+           "AND person = (SELECT global_id FROM global_ids WHERE entity = 'device' AND local_id = 0))"_s;
+}
+
+// The operations that travel, in SQL, of `o` in a space `s`; Replication::travels says the same of one.
+[[nodiscard]] QString travelling(Reading reading = Reading::All) {
     QStringList fields;
     for (const QLatin1StringView field : bookFields)
         fields << u"'"_s + field + u"'"_s;
-    return u"((o.entity = 'book' AND (o.field IN ("_s + fields.join(u", "_s)
-           + u") OR o.field LIKE 'tag:%')) OR o.entity = 'collection' "
-             "OR (o.entity IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation') "
-             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%'))) "
-             // A space this computer subscribes to, and a shared one, travel to one's
-             // other computers sealed beside the log (SpaceCarry, #51), never in it.
-             "AND s.name NOT LIKE 'shared:%' AND s.name NOT IN (SELECT space FROM space_members WHERE role = 'reader' "
-             "AND person = (SELECT global_id FROM global_ids WHERE entity = 'device' AND local_id = 0))"_s;
+    // A unary plus keeps SQLite from looking the thing up by its index.
+    const QString entity = reading == Reading::RangesOnly ? u"+o.entity"_s : u"o.entity"_s;
+    return u"(("_s + entity + u" = 'book' AND (o.field IN ("_s + fields.join(u", "_s) + u") OR o.field LIKE 'tag:%')) OR "_s + entity
+           + u" = 'collection' OR ("_s + entity
+           + u" IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation') "
+             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%'))) AND "_s
+           + travellingSpace();
+}
+
+// The names of an operation's space, device, author, thing and signer, for
+// a query of the log whose operations are `o`.
+constexpr auto namesJoined =
+    "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device JOIN log_ids AS a ON a.id = o.author "
+    "JOIN log_ids AS i ON i.id = o.id LEFT JOIN log_ids AS g ON g.id = o.signer";
+
+// Every space and device whose operations travel, with its mark (0 for
+// none): each operation written or taken in is recorded in `seen`, and of
+// each the snapshot holds there is a mark (Compaction), so the log itself is
+// not read to find them.
+[[nodiscard]] QString travellingPairs() {
+    return u"SELECT k.space, k.device, COALESCE(m.seq, 0) AS mark FROM (SELECT space, device FROM seen "
+           "UNION SELECT space, device FROM snapshot_marks) AS k JOIN log_ids AS s ON s.id = k.space "
+           "LEFT JOIN snapshot_marks AS m ON m.space = k.space AND m.device = k.device WHERE "_s
+           + travellingSpace();
+}
+
+// The operations `sql` answers, each by its eleven parts in the order of SpaceOperation.
+[[nodiscard]] QList<SpaceOperation> operationsOf(const Library &library, const QString &sql, const QVariantList &values = {}) {
+    QList<SpaceOperation> list;
+    for (QSqlQuery query = ChangeLog::query(library, sql, values); query.next();)
+        list.append({.space = query.value(0).toString(),
+                     .device = query.value(1).toString(),
+                     .seq = query.value(2).toLongLong(),
+                     .hlc = query.value(3).toLongLong(),
+                     .author = query.value(4).toString(),
+                     .entity = query.value(5).toString(),
+                     .id = query.value(6).toString(),
+                     .field = query.value(7).toString(),
+                     .value = query.value(8).toString(),
+                     .signer = query.value(9).toString(),
+                     .signature = query.value(10).toByteArray()});
+    return list;
 }
 
 [[nodiscard]] QString standsFor(const QHash<QString, QString> &canonical, const QString &gid) { return canonical.value(gid, gid); }
@@ -143,39 +192,25 @@ QJsonObject Replication::bookView(const ReducedBook &book) {
 }
 
 QList<SpaceOperation> Replication::operations(const Library &library) {
-    QList<SpaceOperation> list;
-    for (QSqlQuery query =
-             ChangeLog::query(library, QString("SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value, "
-                                               "g.name, o.signature FROM space_ops AS o JOIN log_ids AS s ON s.id = o.space "
-                                               "JOIN log_ids AS d ON d.id = o.device JOIN log_ids AS a ON a.id = o.author "
-                                               "JOIN log_ids AS i ON i.id = o.id LEFT JOIN log_ids AS g ON g.id = o.signer "
-                                               "WHERE %1 ORDER BY s.name, d.name, o.seq")
-                                           .arg(travelling()));
-         query.next();)
-        list.append({.space = query.value(0).toString(),
-                     .device = query.value(1).toString(),
-                     .seq = query.value(2).toLongLong(),
-                     .hlc = query.value(3).toLongLong(),
-                     .author = query.value(4).toString(),
-                     .entity = query.value(5).toString(),
-                     .id = query.value(6).toString(),
-                     .field = query.value(7).toString(),
-                     .value = query.value(8).toString(),
-                     .signer = query.value(9).toString(),
-                     .signature = query.value(10).toByteArray()});
-    return list;
+    return operationsOf(library, QString("SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value, "
+                                         "g.name, o.signature FROM space_ops AS o %1 WHERE %2 ORDER BY s.name, d.name, o.seq")
+                                     .arg(QString::fromLatin1(namesJoined), travelling()));
 }
 
 Replication::Vector Replication::vector(const Library &library) {
     Vector known;
-    // Up to its mark at least, of a device the snapshot covers: what it
-    // leaves out of that is held in the snapshot's place.
-    for (QSqlQuery query =
-             ChangeLog::query(library, QString("SELECT s.name, d.name, MAX(MAX(o.seq), COALESCE(m.seq, 0)) FROM space_ops AS o "
-                                               "JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
-                                               "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device "
-                                               "WHERE %1 GROUP BY o.space, o.device")
-                                           .arg(travelling()));
+    // Of each space and device, the last that travels after its mark, else,
+    // of one the snapshot holds any that travels of, at least its mark: what
+    // the snapshot leaves out of that is held in its place. Each is the
+    // newest of a range of the log, read from its end (#103).
+    for (QSqlQuery query = ChangeLog::query(
+             library, QString("SELECT name, device, last FROM (SELECT s.name, d.name AS device, COALESCE("
+                              "(SELECT o.seq FROM ops AS o WHERE o.space = p.space AND o.device = p.device AND o.seq > p.mark AND %1 "
+                              "ORDER BY o.seq DESC LIMIT 1), "
+                              "(SELECT MAX(o.seq, p.mark) FROM snapshot_ops AS o WHERE o.space = p.space AND o.device = p.device AND %1 "
+                              "ORDER BY o.seq DESC LIMIT 1)) AS last FROM (%2) AS p "
+                              "JOIN log_ids AS s ON s.id = p.space JOIN log_ids AS d ON d.id = p.device) WHERE last IS NOT NULL")
+                          .arg(travelling(Reading::RangesOnly), travellingPairs()));
          query.next();)
         known[query.value(0).toString()][query.value(1).toString()] = query.value(2).toLongLong();
     return known;
@@ -192,19 +227,43 @@ Replication::Vector Replication::annotationVector(const Library &library) {
     return known;
 }
 
-QList<SpaceOperation> Replication::since(const Library &library, const Vector &known) {
-    QList<SpaceOperation> lacking = operations(library);
-    lacking.removeIf([&known](const SpaceOperation &op) { return op.seq <= known.value(op.space).value(op.device); });
-    return lacking;
-}
+QList<SpaceOperation> Replication::since(const Library &library, const Vector &known) { return since(library, known, known); }
 
 QList<SpaceOperation> Replication::since(const Library &library, const Vector &known, const Vector &annotations) {
-    QList<SpaceOperation> lacking = operations(library);
-    lacking.removeIf([&known, &annotations](const SpaceOperation &op) {
-        const Vector &held = op.entity == "annotation"_L1 ? annotations : known;
-        return op.seq <= held.value(op.space).value(op.device);
-    });
-    return lacking;
+    // Of each space and device here, what the other side holds, and of the
+    // bookmarks and highlights apart: only the operations after the less of
+    // the two are read, after the mark from `ops`, and before it from the
+    // snapshot only for a side behind the mark (#103).
+    QStringList rows;
+    QVariantList values;
+    std::set<std::pair<QString, QString>> pairs;
+    for (const Vector *vector : {&known, &annotations})
+        for (auto space = vector->cbegin(); space != vector->cend(); ++space)
+            for (auto device = space->cbegin(); device != space->cend(); ++device)
+                pairs.insert({space.key(), device.key()});
+    for (const auto &[space, device] : pairs) {
+        rows << u"(?, ?, ?, ?)"_s;
+        values << space << device << known.value(space).value(device) << annotations.value(space).value(device);
+    }
+    const QString held = rows.isEmpty() ? u"SELECT NULL, NULL, 0, 0 WHERE 0"_s : u"VALUES "_s + rows.join(u", "_s);
+    const QString columns = u"x.space, x.device, x.seq, x.hlc, x.author, x.entity, x.id, x.field, x.value, x.signer, x.signature, "
+                            "p.seq AS peer_seq, p.notes AS peer_notes"_s;
+    return operationsOf(
+        library,
+        QString("WITH held(space, device, seq, notes) AS (%1), "
+                "peer AS (SELECT sn.id AS space, dn.id AS device, h.seq, h.notes FROM held AS h "
+                "JOIN log_ids AS sn ON sn.name = h.space JOIN log_ids AS dn ON dn.name = h.device), "
+                "pairs AS (SELECT q.space, q.device, q.mark, COALESCE(v.seq, 0) AS seq, COALESCE(v.notes, 0) AS notes, "
+                "MIN(COALESCE(v.seq, 0), COALESCE(v.notes, 0)) AS low FROM (%2) AS q "
+                "LEFT JOIN peer AS v ON v.space = q.space AND v.device = q.device) "
+                "SELECT s.name, d.name, o.seq, o.hlc, a.name, o.entity, i.name, o.field, o.value, g.name, o.signature FROM ("
+                "SELECT %3 FROM pairs AS p CROSS JOIN ops AS x ON x.space = p.space AND x.device = p.device AND x.seq > MAX(p.mark, p.low) "
+                "UNION ALL SELECT %3 FROM pairs AS p CROSS JOIN snapshot_ops AS x ON x.space = p.space AND x.device = p.device "
+                "AND x.seq > p.low WHERE p.low < p.mark) AS o %4 "
+                "WHERE %5 AND o.seq > (CASE WHEN o.entity = 'annotation' THEN o.peer_notes ELSE o.peer_seq END) "
+                "ORDER BY s.name, d.name, o.seq")
+            .arg(held, travellingPairs(), columns, QString::fromLatin1(namesJoined), travelling(Reading::RangesOnly)),
+        values);
 }
 
 QJsonObject Replication::toJson(const Vector &vector) {

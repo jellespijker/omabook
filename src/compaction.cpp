@@ -19,6 +19,9 @@ namespace {
 // links that line up ids (SpaceReducer's growing sets).
 constexpr auto growing = "(field LIKE 'seen:%' OR field IN ('revealed', 'link', 'range', 'same_as'))";
 
+// How many operations after the marks make compacting worth it.
+constexpr qint64 worthIt = 1000;
+
 [[nodiscard]] qint64 count(const Library &library, const char *sql) {
     QSqlQuery query = ChangeLog::query(library, QString::fromLatin1(sql));
     return query.next() ? query.value(0).toLongLong() : 0;
@@ -81,7 +84,15 @@ Compaction::Result Compaction::compact(const Library &library) {
 void Compaction::compactWhenWorthIt(const Library &library) {
     const qint64 after = count(library, "SELECT COUNT(*) FROM ops AS o LEFT JOIN snapshot_marks AS m ON m.space = o.space "
                                         "AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0)");
-    if (after > 1000 && after > count(library, "SELECT COUNT(*) FROM snapshot_ops"))
+    if (after <= worthIt)
+        return;
+    // Of a device with no mark, its whole log came in at once: another
+    // computer's, at a pairing, which mostly says again what the snapshot
+    // here says. That is compacted now, of what both have seen, however
+    // large the snapshot is (#103).
+    const qint64 unmarked = count(library, "SELECT COUNT(*) FROM ops AS o WHERE NOT EXISTS (SELECT 1 FROM snapshot_marks AS m "
+                                           "WHERE m.space = o.space AND m.device = o.device)");
+    if (unmarked > worthIt || after > count(library, "SELECT COUNT(*) FROM snapshot_ops"))
         compact(library);
 }
 

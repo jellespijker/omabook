@@ -108,6 +108,15 @@ their space has seen, as each said when it last synced (`member_vectors`). Compa
 that deletes from the log (rule `ops-deleted-only-by-compaction`); nothing ever updates an operation
 (`ops-append-only`). The freed pages go back to the file at the next VACUUM.
 
+As built (#103): a sync reads of the log only what the other side lacks, in SQL, by ranges of each
+space and device after its number in the other's vector (`ops` after the mark, and the snapshot
+before it only for a side behind the mark, by an index on `snapshot_ops(space, device, seq)`), and
+its own vector from the end of each range. Compaction runs after a sync when over a thousand
+operations are of a device with no mark here, as another computer's whole log is at a pairing,
+however large the snapshot: what both have seen goes from `ops` as above. The snapshot still keeps
+each device's own latest of a field, the same value said by two computers included, since a sync
+reads what each side's device holds (`SyncTake`).
+
 Since #2 the snapshot takes the place of the operations it covers: those every member has seen are
 dropped from `ops` whether the snapshot keeps them or not, so only what came after the marks (and what
 a member hasn't seen yet) stays there, and the library is smaller after compacting than before. What

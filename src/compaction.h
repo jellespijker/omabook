@@ -41,8 +41,10 @@ struct Result {
 Result compact(const Library &library);
 
 // Compacts when the operations after the marks outnumber the snapshot and a
-// thousand: what a sync runs after it, so reading the log stays about the
-// size of what it says.
+// thousand, or when over a thousand are of a device with no mark here, as
+// another computer's whole log is when a pairing brings it in (#103): what a
+// sync runs after it, so reading the log stays about the size of what it
+// says.
 void compactWhenWorthIt(const Library &library);
 
 // What a snapshot of one owner's operations keeps of `ops` (a published

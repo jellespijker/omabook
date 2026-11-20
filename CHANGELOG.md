@@ -17,6 +17,8 @@ moves those lines under its version.
 - A book whose details are the same on two computers is no longer reported as taken at every sync from one of them: the details taken keep their time to the clock's count within a second, as the other computer's log says it, so a cover set in a second the clock ticked in more than once is newer there no more. And both computers compare a book's details as their logs say them, so a book is undecided from both sides or from neither (#106).
 - The graph centred on a thing in a large library counts what is around it at once: four steps out took over a second on a library of 1,500 books, and now takes a few hundredths of one (#100).
 - An answer from a model that wraps it in HTML-like tags (`<panel>…</panel>`, `<div>`s, a stray `<span>`) is shown without them: in the reading companion, the library's answers, `omabook ask` and the MCP tools that answer questions, whichever AI answers. Markdown stays as it is, and so does a tag written in a code span or a code block. The companion and the librarian are also told to answer in plain text or Markdown (#105).
+### Changed
+- Syncing a large library is quicker: each sync reads of the change log only what the other computer lacks, and what it says it holds, not all of it each time; and the log another computer brings in when it is paired is compacted in that same sync, of what both have seen, so it no longer sits beside the snapshot that says the same (#103).
 
 ## [0.1.7] - 2026-11-20
 
