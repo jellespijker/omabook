@@ -43,12 +43,18 @@ Item {
             size: Math.round(Math.max(18, Math.min(56, tile.width / 3.2)))
             color: theme.accent
         }
+        // The title takes what the author line, and the band of what found
+        // it, leave above them: down to a quarter of the width from the foot
+        // without the band, as far above it with one.
         Label {
             visible: picture.status !== Image.Ready
-            anchors.topMargin: tile.launcher ? Math.round(tile.height * 0.14 + Math.max(18, Math.min(56, tile.width / 3.2)) + 8) : Math.round(tile.width / 12)
-            anchors.fill: parent
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            anchors.bottom: byline.top
             anchors.margins: Math.round(tile.width / 12)
-            anchors.bottomMargin: Math.round(tile.width / 4)
+            anchors.topMargin: tile.launcher ? Math.round(tile.height * 0.14 + Math.max(18, Math.min(56, tile.width / 3.2)) + 8) : Math.round(tile.width / 12)
+            anchors.bottomMargin: Math.max(Math.round(tile.width / 24), Math.round(tile.width / 6 - byline.height))
             text: tile.title
             font.pixelSize: Math.round(Math.max(12, Math.min(24, tile.width / 10)))
             font.bold: true
@@ -59,6 +65,7 @@ Item {
             verticalAlignment: Text.AlignVCenter
         }
         Label {
+            id: byline
             visible: picture.status !== Image.Ready
             anchors.left: parent.left
             anchors.right: parent.right

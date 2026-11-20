@@ -71,7 +71,7 @@ class LayoutTests : public QObject {
     int looked = 0;
 
     void look(Desk &desk, const QString &state) {
-        desk.settle(1);
+        QVERIFY2(desk.pictured(), qPrintable(state + ": a picture was still loading after 5 s"));
         Survey survey{desk.window, desk.touch, {}};
         survey.walk();
         ++looked;
@@ -1092,8 +1092,8 @@ private slots:
             const QList<qint64> ids = stock(desk);
             QVERIFY(!ids.isEmpty());
             Library *library = desk.backend->library();
-            library->setReading(ids.first(), "read", 4, {});
-            Graph(*library).upsert({}, "character", "Wilhelmina von Hohenstaufen-Overbeck", {}, {}, GraphPlace{ids.first(), 0, 0.1});
+            for (const qint64 id : {ids.first(), ids.value(5)}) // the second without a cover: its title is on the tile
+                knownIn(*library, id, "Wilhelmina von Hohenstaufen-Overbeck");
             QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
             desk.backend->reload();
             const QString question = "die Bücher, in denen eine Mentorin stirbt";
@@ -1104,7 +1104,7 @@ private slots:
             for (const QSize &size : sizes()) {
                 QVERIFY(desk.resize(size));
                 books->setQuery("hohenstaufen");
-                QTRY_COMPARE(books->count(), 1);
+                QTRY_COMPARE(books->count(), 2);
                 look(desk, "search-known");
                 books->setQuery("?" + question);
                 QTRY_COMPARE(books->count(), books->total());

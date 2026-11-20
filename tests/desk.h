@@ -26,6 +26,7 @@
 #include "backend.h"
 #include "customization.h"
 #include "fixtures.h"
+#include "graph.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
@@ -82,6 +83,12 @@ public:
         });
     }
 };
+
+// A picture decoded off the GUI thread (an asynchronous Image) that has
+// not come in yet.
+inline bool stillLoading(const QQuickItem *item) {
+    return item->inherits("QQuickImageBase") && item->property("status").toInt() == 2; // Image.Loading
+}
 
 // The whole app on a temp folder, as in ui_tests.cpp: its own language,
 // theme, settings and library, never the user's.
@@ -229,6 +236,30 @@ struct Desk {
             window->update();
             drawn.wait(150);
         }
+    }
+
+    // Every picture on screen that is decoded off the GUI thread (an
+    // asynchronous Image) has come in or failed: until then a cover's tile
+    // shows its title instead, and how the window looks depends on how
+    // busy the machine is. False when one is still loading after `timeout`.
+    bool pictured(int timeout = 5000) {
+        settle(1);
+        const auto loading = [this] {
+            QList<QQuickItem *> items{window->contentItem()};
+            while (!items.isEmpty()) {
+                QQuickItem *item = items.takeFirst();
+                if (!item->isVisible())
+                    continue;
+                if (stillLoading(item))
+                    return true;
+                items << item->childItems();
+            }
+            return false;
+        };
+        if (!QTest::qWaitFor([&] { return !loading(); }, timeout))
+            return false;
+        settle(1);
+        return true;
     }
 
     // The layer popups are shown in, and the popups that are up.
@@ -382,6 +413,13 @@ inline QList<qint64> stock(Desk &desk) {
     }
     desk.backend->reload();
     return ids;
+}
+
+// A thing of the graph met in a book that has been read: a search finds
+// the book by it (BookListModel::knownFor).
+inline void knownIn(Library &library, qint64 book, const QString &name) {
+    library.setReading(book, "read", 4, {});
+    Graph(library).upsert({}, "character", name, {}, {}, GraphPlace{book, 0, 0.1});
 }
 
 // What is wrong with what is on screen. One walk of the visible item tree,

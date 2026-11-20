@@ -14,6 +14,7 @@ moves those lines under its version.
 
 ### Fixed
 
+- A book without a cover that the search found by what you know of it no longer has its title run under its author line on the shelf: the title keeps above the author and the band that says what found it (#113).
 - The graph's *Between books* view says when it shows part of what there is: "300 of 1,240 connections between books" in its header, with a note over the picture. The connections between the most connected things of the collection's graph come first, rather than the latest, and *Show More Connections* (also under Filter) shows 300 more at a time, up to 900 (#91).
 - A thing renamed by hand in the graph of one top-level collection, an author or a theme two collections share, is called so in that collection's graph alone: the others keep the name their books gave it, or one of their own, and the name it had stays one of its names. Search and `knows:` find it there by its new name. With *Knowledge graph: one for the whole library*, a rename is its name everywhere (#110).
 
