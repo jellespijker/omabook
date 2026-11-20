@@ -94,7 +94,8 @@ void Assistant::ask(const QString &question, const QString &scope, const QString
     // reader has got: a few lines that keep the answers consistent.
     const Library *library = m_reader->library();
     const QString known = library && graphMode() != "off"
-                              ? GraphContext::forQuestion(*library, m_reader->bookId(), m_reader->place(), question + "\n" + selection)
+                              ? GraphContext::forQuestion(Graph::ofReader(*library, m_reader->bookId()), m_reader->bookId(),
+                                                          m_reader->place(), question + "\n" + selection)
                               : QString();
     request.messages.append({"user", Prompts::question(excerpt.text, selection, question, known)});
     m_asked = question.trimmed();
@@ -161,7 +162,7 @@ void Assistant::askFromNotes(const QString &kind, const QString &asked) {
     const auto built = library && notes.text.isEmpty() && graphMode() != "off"
                            ? GraphBuild::builtTo(*library, m_reader->bookId()) : std::nullopt;
     if (built && built->notAfter(m_reader->place())) {
-        const QString digest = GraphContext::digest(*library, m_reader->bookId(), *built,
+        const QString digest = GraphContext::digest(Graph::ofReader(*library, m_reader->bookId()), m_reader->bookId(), *built,
                                                     kind == "cast" ? QStringList{"character", "place", "group"} : Prompts::graphKinds());
         if (!digest.isEmpty()) {
             from = Prompts::graphNotes(digest);
@@ -236,7 +237,8 @@ void Assistant::finishAnswer() {
     // What was asked, with the gist of its answer, joins the graph.
     Library *library = m_reader->library();
     if (!m_asked.isEmpty() && whole && library && graphMode() != "off" && m_reader->bookId() == m_askedAt.bookId)
-        GraphContext::noteQuestion(*library, m_askedAt.bookId, m_askedAt, m_asked, m_streaming.trimmed());
+        GraphContext::noteQuestion(Graph::ofReader(*library, m_askedAt.bookId), m_askedAt.bookId, m_askedAt, m_asked,
+                                   m_streaming.trimmed());
     m_asked.clear();
     m_failed = false;
     if (!m_streaming.trimmed().isEmpty())

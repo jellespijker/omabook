@@ -16,6 +16,12 @@
 //
 // Every answer is an object. When something went wrong it has an "error"
 // (English) and the call failed; otherwise it didn't.
+//
+// What reads the graph, and what is put in by hand, is of one tenant (ADR
+// 0003), that of the graph given (Graph::forTenant): nothing of another is
+// read, found, changed or written out, and what is made by hand stays in it.
+// A reader's answer says which: "tenant": {"id", "name"}. The readers are in
+// graphreading.cpp; those that change it take a graph of their own.
 namespace GraphOps {
 
 bool failed(const QJsonObject &answer);
@@ -30,16 +36,17 @@ std::optional<GraphPlace> place(qint64 bookId, const QString &section, const QSt
 // as "beyond": {"nodes", "edges"}: things of other books tied to it by a
 // connection across books, each with the books it is "in", and the other
 // books that share a thing with it.
-QJsonObject show(Library &library, qint64 bookId, const QString &scope = {}, const std::optional<GraphPlace> &upTo = std::nullopt,
+QJsonObject show(const Graph &graph, qint64 bookId, const QString &scope = {}, const std::optional<GraphPlace> &upTo = std::nullopt,
                  int limit = 500, bool beyond = false);
 // Connects a book to the other books read, with one request to the model:
 // {"book", "asked", "links", "topics", "skipped", "connections": [...]}.
 // With `estimate` nothing is sent: {"book", "requests", "own", "others"}.
+// It is all of the book's tenant (Tenancy::ofReader).
 QJsonObject connect(Library &library, qint64 bookId, const GraphBuild::Asker &ask, bool again = false, bool estimate = false);
 // {"nodes"}: the things whose name, other names or summary hold every word.
 // With no scope the general graph is searched; `everywhere` searches all.
-QJsonObject find(const Library &library, const QString &words, const QString &kind = {}, const QString &scope = {},
-                 bool everywhere = false, int limit = 50);
+QJsonObject find(const Graph &graph, const QString &words, const QString &kind = {}, const QString &scope = {}, bool everywhere = false,
+                 int limit = 50);
 // {"node", "seen", "nodes", "edges"}: one thing, the places it was met at,
 // and what is within `depth` relations of it. With a book and a place, as a
 // reader there knows it: its summary and names then, and only what was met
@@ -47,17 +54,17 @@ QJsonObject find(const Library &library, const QString &words, const QString &ki
 // of it was revealed ({what, text, revealed: {book, section, fraction,
 // anchor}}), up to that place when one is given, each past its reader's
 // furthest place in its book marked "ahead".
-QJsonObject node(const Library &library, qint64 id, int depth = 1, bool timeline = false, qint64 bookId = 0,
+QJsonObject node(const Graph &graph, qint64 id, int depth = 1, bool timeline = false, qint64 bookId = 0,
                  const std::optional<GraphPlace> &upTo = std::nullopt);
 // Adds a thing, or brings the one of that name up to date: {"kind", "name",
 // "summary", "aliases", "data", "scope", "book", "section", "fraction"}.
 // With a book and no section it is placed where the book was read to.
-QJsonObject add(Library &library, const QJsonObject &thing);
-QJsonObject link(Library &library, qint64 source, qint64 target, const QString &relation, const QString &note = {},
+QJsonObject add(Graph graph, const QJsonObject &thing);
+QJsonObject link(Graph graph, qint64 source, qint64 target, const QString &relation, const QString &note = {},
                  const std::optional<GraphPlace> &learned = std::nullopt);
-QJsonObject unlink(Library &library, qint64 edge);
-QJsonObject merge(Library &library, qint64 keep, qint64 other);
-QJsonObject remove(Library &library, qint64 id);
+QJsonObject unlink(Graph graph, qint64 edge);
+QJsonObject merge(Graph graph, qint64 keep, qint64 other);
+QJsonObject remove(Graph graph, qint64 id);
 
 // Brings the graph of a book up to a place with the model, in as many
 // requests as it takes: {"requests", "nodes", "edges", "sent", "complete",
@@ -69,14 +76,15 @@ QJsonObject build(Library &library, qint64 bookId, const std::optional<GraphPlac
 
 // {"format", "content"}: a book's graph or a scope as a file other tools
 // read; written to `output` instead when that is given.
-QJsonObject exported(Library &library, qint64 bookId, const QString &scope, const std::optional<GraphPlace> &upTo,
-                     const QString &format, const QString &output = {});
+QJsonObject exported(const Graph &graph, qint64 bookId, const QString &scope, const std::optional<GraphPlace> &upTo, const QString &format,
+                     const QString &output = {});
 
-QJsonObject scopes(const Library &library);
-QJsonObject copyScope(Library &library, const QString &from, const QString &to);
+QJsonObject scopes(const Graph &graph);
+// A world forked from what the tenant sees.
+QJsonObject copyScope(Graph graph, const QString &from, const QString &to);
 QJsonObject removeScope(Library &library, const QString &scope);
 // {"days": [{"book", "title", "day", "from", "to"}]}: what was read when.
-QJsonObject log(const Library &library, qint64 bookId = 0);
+QJsonObject log(const Graph &graph, qint64 bookId = 0);
 // Brings the books' own nodes (status, stars, authors, series, tags) in
 // step with the library.
 QJsonObject sync(Library &library);

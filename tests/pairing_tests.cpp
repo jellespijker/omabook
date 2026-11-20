@@ -182,7 +182,7 @@ struct OwnComputers {
 
 [[nodiscard]] QStringList layerNames(const Library &library, qint64 book) {
     QStringList names;
-    for (const GraphLayers::Layer &layer : GraphContext::layers(library))
+    for (const GraphLayers::Layer &layer : GraphContext::layers(Graph::ofLibrary(library)))
         for (const GraphNode &node : layer.ofBook(book).nodes)
             names << node.name;
     names.sort();

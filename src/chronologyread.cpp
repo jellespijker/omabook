@@ -1,12 +1,13 @@
 #include "chronologyread.h"
 
 #include <QCoreApplication>
+#include <algorithm>
 #include <ranges>
 
-#include "booksides.h"
 #include "chronicle.h"
 #include "graphcontext.h"
 #include "graphlayers.h"
+#include "tenancy.h"
 
 using namespace Chronology;
 using namespace Qt::StringLiterals;
@@ -37,15 +38,21 @@ const auto tr = [](const char *text) { return QCoreApplication::translate("Chron
     return books;
 }
 
-// The name of a side, when a whole graph is shown a side at a time.
-[[nodiscard]] QString nameOf(const Library &library, const BookSides::Side &side) {
-    QStringList names;
-    for (const Collection &collection : library.collections())
-        if (collection.parent == 0 && side.contains(collection.id))
-            names << collection.name;
-    if (side.contains(BookSides::none))
-        names << tr("Books in no collection");
-    return names.join(u", "_s);
+// The name of a tenant, when a whole graph is shown a tenant at a time.
+[[nodiscard]] QString nameOf(const Library &library, const ::Tenant &tenant) {
+    return tenant == ::Tenant::unfiled() ? tr("Books in no collection") : Tenancy::nameOf(library, tenant);
+}
+
+// The tenant a book, a series or a collection is read in: the collection's,
+// or that of its first book.
+[[nodiscard]] ::Tenant tenantOf(const Library &library, const From &from, const QSet<qint64> &books) {
+    if (from.what == From::What::Collection)
+        if (const auto collection = library.collectionNamed(from.name))
+            if (const auto tenant = Tenancy::ofCollection(library, collection->id))
+                return *tenant;
+    QList<qint64> sorted = books.values();
+    std::ranges::sort(sorted);
+    return from.what == From::What::Book ? Tenancy::ofReader(library, from.bookId) : Tenancy::ofReader(library, sorted.value(0));
 }
 
 void merge(Facts &into, const Facts &more) {
@@ -100,30 +107,28 @@ const QStringList &Reading::involvedKinds() {
 
 Reading::Read Reading::read(const Library &library, const From &from) {
     const GraphKnown known = GraphContext::readerKnows(library);
-    const BookSides sides = BookSides::of(library);
     Read told;
     told.books = booksOf(library, from);
     const QString scope = from.what == From::What::Scope ? from.scope : QString();
-    // A whole graph a side at a time; a book, a series or a collection on the side of its books.
-    QList<Tenant> tenants;
-    if (from.what == From::What::Scope)
-        tenants = Chronology::tenants(library, scope);
-    else
-        tenants.append(Tenant{.scope = scope, .side = sides.sideOf(told.books)});
-    // The shared graphs are of the general graph, and are the reader's as far as they read.
-    const QList<GraphLayers::Layer> layers = scope.isEmpty() ? GraphContext::layers(library) : QList<GraphLayers::Layer>{};
-    const QList<Facts> shared = layers | std::views::transform([](const GraphLayers::Layer &layer) { return Chronology::read(layer); })
-                                | std::ranges::to<QList<Facts>>();
-    for (const Tenant &tenant : tenants) {
+    // A whole graph a tenant at a time; a book, a series or a collection in the tenant of its books.
+    const QList<Chronology::Tenant> tenants =
+        from.what == From::What::Scope
+            ? Chronology::tenants(library, scope)
+            : QList<Chronology::Tenant>{Chronology::Tenant{.scope = scope, .in = tenantOf(library, from, told.books)}};
+    for (const Chronology::Tenant &tenant : tenants) {
+        const Graph graph = Graph::forTenant(library, tenant.in);
         Facts facts = Chronology::read(library, known, tenant);
-        for (const Facts &layer : shared)
-            merge(facts, within(layer, sides, tenant.side));
+        // The shared graphs are of the general graph, and are the reader's as far as they read, in the tenant's books.
+        const QList<GraphLayers::Layer> layers = scope.isEmpty() ? GraphContext::layers(graph) : QList<GraphLayers::Layer>{};
+        const QSet<qint64> books = Tenancy::booksOf(library, tenant.in);
+        for (const GraphLayers::Layer &layer : layers)
+            merge(facts, within(Chronology::read(layer), books));
         keepEvents(told, facts);
-        told.parts.append({.name = tenants.size() > 1 ? nameOf(library, tenant.side) : QString(), .chronicle = chronicle(facts)});
+        told.parts.append({.name = tenants.size() > 1 ? nameOf(library, tenant.in) : QString(), .chronicle = chronicle(facts)});
+        const GraphView whole = graph.whole(scope.isNull() ? u""_s : scope, everyThing);
+        involve(told, whole.nodes, whole.edges, known);
+        for (const GraphLayers::Layer &layer : layers)
+            involve(told, layer.nodes, layer.edges, [](const GraphPlace &) { return true; });
     }
-    const GraphView whole = Graph(library).whole(scope.isNull() ? u""_s : scope, everyThing);
-    involve(told, whole.nodes, whole.edges, known);
-    for (const GraphLayers::Layer &layer : layers)
-        involve(told, layer.nodes, layer.edges, [](const GraphPlace &) { return true; });
     return told;
 }

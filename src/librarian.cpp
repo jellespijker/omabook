@@ -363,7 +363,7 @@ void Librarian::ask(const QString &question) {
     const bool graph = m_settings->graph() != "off";
     m_question = graph ? question.trimmed() : QString();
     startAnswer(std::move(provider),
-                Curation::libraryQuestion(books, question, graph ? GraphContext::picture(*library, question) : QString()));
+                Curation::libraryQuestion(books, question, graph ? GraphContext::picture(Graph::ofCollection(*library, m_backend->collection()), question) : QString()));
 }
 
 void Librarian::startAnswer(std::unique_ptr<AiProvider> provider, const AiRequest &request) {
@@ -378,7 +378,7 @@ void Librarian::startAnswer(std::unique_ptr<AiProvider> provider, const AiReques
     });
     connect(m_askCall.get(), &AiCall::done, this, [this](const QString &answer) {
         if (Library *library = m_backend->library(); library && !m_question.isEmpty())
-            GraphContext::noteQuestion(*library, 0, std::nullopt, m_question, answer);
+            GraphContext::noteQuestion(Graph::ofCollection(*library, m_backend->collection()), 0, std::nullopt, m_question, answer);
         m_question.clear();
         m_answering = false;
         emit answerChanged();
@@ -425,7 +425,7 @@ void Librarian::suggest() {
         m_answering = false;
         emit answerChanged();
     });
-    m_askCall->ask(Curation::suggestionRequest(books, m_settings->graph() != "off" ? GraphContext::picture(*library) : QString()));
+    m_askCall->ask(Curation::suggestionRequest(books, m_settings->graph() != "off" ? GraphContext::picture(Graph::ofCollection(*library, m_backend->collection())) : QString()));
 }
 
 void Librarian::checkSuggestions(const Curation::Suggestions &suggested) {

@@ -1,6 +1,5 @@
 #include "readingmarks.h"
 
-#include "booksides.h"
 
 #include <QRegularExpression>
 #include <QTextBlock>
@@ -107,14 +106,14 @@ void ReadingMarks::load() {
     const Library *library = m_reader->isOpen() ? m_reader->library() : nullptr;
     m_book = library ? m_reader->bookId() : 0;
     m_graphCount = library ? library->changes().graph : -1;
-    m_met = library && enabled() ? Graph(*library).metIn(m_book) : QList<std::pair<GraphNode, GraphPlace>>();
+    m_met = library && enabled() ? Graph::ofReader(*library, m_book).metIn(m_book) : QList<std::pair<GraphNode, GraphPlace>>();
     m_facts = library && enabled()
-                  ? Graph(*library).factsOf(m_met | std::views::transform([](const auto &met) { return met.first.id; })
+                  ? Graph::ofReader(*library, m_book).factsOf(m_met | std::views::transform([](const auto &met) { return met.first.id; })
                                             | std::ranges::to<QList<qint64>>())
                   : QHash<qint64, QList<GraphFact>>();
     // And the graphs someone shared, as far as the reader has read the book:
     // read again once they read on past that (follow).
-    const QList<GraphLayers::Layer> layers = library && enabled() ? GraphContext::layers(*library) : QList<GraphLayers::Layer>();
+    const QList<GraphLayers::Layer> layers = library && enabled() ? GraphContext::layers(Graph::ofReader(*library, m_book)) : QList<GraphLayers::Layer>();
     GraphLayers::addTo(m_met, m_facts, layers, m_book);
     m_layersTo = layers.isEmpty() ? std::nullopt : std::optional(laterOf(GraphContext::furthest(*library, m_book), m_reader->place()));
     m_factPlaces.clear();
@@ -164,12 +163,8 @@ void ReadingMarks::rebuild(bool force) {
     // Each thing as it was known here: a name revealed further on is not
     // marked, and its card says only what was known by now.
     QList<std::pair<GraphNode, GraphPlace>> met = m_met;
-    // What a book on the other side of the library's top collections taught
-    // is not this book's to say (booksides.h).
-    const BookSides sides = m_reader->isOpen() && m_reader->library() ? BookSides::of(*m_reader->library()) : BookSides();
-    const GraphKnown known = [book = m_book, place, &sides](const GraphPlace &at) {
-        return at.bookId != book ? sides.together(at.bookId, book) : at.notAfter(place);
-    };
+    // What another tenant's book taught was never read (load, in the book's tenant).
+    const GraphKnown known = [book = m_book, place](const GraphPlace &at) { return at.bookId != book || at.notAfter(place); };
     for (auto &[node, at] : met)
         node = Graph::asKnown(std::move(node), m_facts.value(node.id), m_book, known);
     const QList<TextMarks::Thing> things = TextMarks::known(met, place);
@@ -405,7 +400,7 @@ QVariantMap ReadingMarks::thing(qint64 id) const {
         return {};
     const Library *library = m_reader->isOpen() ? m_reader->library() : nullptr;
     const GraphPlace here = m_reader->place();
-    const QString metAnchor = library ? Graph(*library).firstMet(id, m_book).value_or(GraphMoment()).anchor : QString();
+    const QString metAnchor = library ? Graph::ofReader(*library, m_book).firstMet(id, m_book).value_or(GraphMoment()).anchor : QString();
     QVariantMap map{{"id", found->id},
                     {"kind", found->kind},
                     {"name", found->name},
@@ -432,7 +427,7 @@ QVariantMap ReadingMarks::thing(qint64 id) const {
     // Its relations as the reader may know them, a few, the latest first.
     QVariantList relations;
     if (library) {
-        const GraphView view = Graph(*library).ofBook(m_book, here);
+        const GraphView view = Graph::ofReader(*library, m_book).ofBook(m_book, here);
         QHash<qint64, QString> names;
         for (const GraphNode &node : view.nodes)
             names.insert(node.id, node.name);
@@ -472,7 +467,7 @@ QVariantList ReadingMarks::suggestions(qint64 id, const QString &words) {
         list = *cached;
     } else if (const auto found = m_things.constFind(id); found != m_things.cend() && m_reader->library()) {
         // Made from the graph, with no AI: its threads, places and relations.
-        const GraphView view = Graph(*m_reader->library()).ofBook(m_book, m_reader->place());
+        const GraphView view = Graph::ofReader(*m_reader->library(), m_book).ofBook(m_book, m_reader->place());
         const auto node = std::ranges::find(view.nodes, id, &GraphNode::id);
         if (node != view.nodes.end())
             for (const TextMarks::Suggestion &one : TextMarks::suggestions(*node, found->met, view, m_reader->place())) {

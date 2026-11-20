@@ -82,7 +82,7 @@ const auto tr = [](const char *text, const char *disambiguation = nullptr) {
     if (event.met.isEmpty())
         return {};
     const GraphPlace first = *std::ranges::min_element(event.met, {}, [](const GraphPlace &place) { return revealed(place); });
-    const auto moment = event.node.id > 0 ? Graph(library).firstMet(event.node.id, first.bookId) : std::nullopt;
+    const auto moment = event.node.id > 0 ? Graph::ofReader(library, first.bookId).firstMet(event.node.id, first.bookId) : std::nullopt;
     return ChronologyCard::where(library, moment.value_or(GraphMoment{.place = first, .anchor = {}}));
 }
 

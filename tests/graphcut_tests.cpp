@@ -160,7 +160,7 @@ private slots:
         // A world of its own is another scope, and not counted with it.
         chained(graph, 15, "world:1");
 
-        const GraphCut cut = GraphCut::whole(library, {}, 20);
+        const GraphCut cut = GraphCut::whole(Graph::ofLibrary(library), {}, 20);
         QCOMPARE(cut.view.nodes.size(), qsizetype{20});
         QVERIFY(cut.cut());
         QCOMPARE(cut.things, qint64{60});
@@ -175,14 +175,14 @@ private slots:
         QCOMPARE(json.value("cut").toString(), QString("most connected"));
 
         // Not cut, it is its own total and says no cut.
-        const GraphCut whole = GraphCut::whole(library, "world:1", 20);
+        const GraphCut whole = GraphCut::whole(Graph::ofLibrary(library), "world:1", 20);
         QVERIFY(!whole.cut());
         QCOMPARE(whole.things, qint64{15});
         QCOMPARE(whole.relations, static_cast<qint64>(whole.view.edges.size()));
         QVERIFY(!whole.toJson().contains("cut"));
         QCOMPARE(whole.toJson().value("total").toObject().value("nodes").toInteger(), qint64{15});
         // Exactly at its limit nothing was left out either.
-        QVERIFY(!GraphCut::whole(library, "world:1", 15).cut());
+        QVERIFY(!GraphCut::whole(Graph::ofLibrary(library), "world:1", 15).cut());
     }
 
     void whatIsAroundAThingCutAtItsLimitCountsWhatIsWithinReach() {
@@ -193,9 +193,9 @@ private slots:
         const Made made = chained(graph, 60);
         // Two steps from the first hub: its nine, the next hub, and their
         // neighbours along the chain.
-        const GraphCut whole = GraphCut::around(library, made.ids.at(0), 2, 400);
+        const GraphCut whole = GraphCut::around(Graph::ofLibrary(library), made.ids.at(0), 2, 400);
         QVERIFY(!whole.cut());
-        const GraphCut cut = GraphCut::around(library, made.ids.at(0), 2, 5);
+        const GraphCut cut = GraphCut::around(Graph::ofLibrary(library), made.ids.at(0), 2, 5);
         QCOMPARE(cut.view.nodes.size(), qsizetype{5});
         QVERIFY(cut.cut());
         QCOMPARE(cut.by, GraphCut::By::Nearest);
@@ -211,20 +211,21 @@ private slots:
         Library library(dir.filePath("library"));
         QVERIFY(library.open());
         Graph graph(library);
-        QVERIFY(!graph.sides().apart());
+        QCOMPARE(Tenancy::tenants(library).size(), 1);
         const QList<qint64> ids = likeALibrary(library, graph, 4000);
         const qint64 alone = graph.upsert(QString(), "character", "On its own");
         for (const qint64 centre : {ids.at(1000), ids.at(2345), alone})
             for (int depth = 0; depth <= 6; ++depth) {
                 // A limit of one is always reached, so it is always counted.
-                const GraphCut cut = GraphCut::around(library, centre, depth, 1);
+                const GraphCut cut = GraphCut::around(Graph::ofLibrary(library), centre, depth, 1);
                 const auto [things, relations] = countedInOneQuery(library, centre, depth);
                 QVERIFY2(things > 0, "the recursive query answered");
                 QCOMPARE(cut.things, things);
                 QCOMPARE(cut.relations, relations);
             }
         // Farther is more, up to all of it.
-        QVERIFY(GraphCut::around(library, ids.at(2345), 2, 1).things < GraphCut::around(library, ids.at(2345), 4, 1).things);
+        QVERIFY(GraphCut::around(Graph::ofLibrary(library), ids.at(2345), 2, 1).things
+                < GraphCut::around(Graph::ofLibrary(library), ids.at(2345), 4, 1).things);
     }
 
     void theCountAroundAThingAtDepthFourTakesLittleTime() {
@@ -238,7 +239,7 @@ private slots:
         const QList<qint64> ids = likeALibrary(library, graph, 6000);
         QElapsedTimer clock;
         clock.start();
-        const GraphCut cut = GraphCut::around(library, ids.at(3000), 4, 1);
+        const GraphCut cut = GraphCut::around(Graph::ofLibrary(library), ids.at(3000), 4, 1);
         const qint64 took = clock.elapsed();
         QVERIFY(cut.things > 100);
         QVERIFY2(took < 250, qPrintable(QString("%1 things counted in %2 ms").arg(cut.things).arg(took)));
@@ -305,19 +306,19 @@ private slots:
         Graph graph(library);
         const Made made = chained(graph, 40, "world:7");
         // `omabook graph show --scope world:7 --limit 10`, and graph_scope.
-        const QJsonObject shown = GraphOps::show(library, 0, "world:7", std::nullopt, 10);
+        const QJsonObject shown = GraphOps::show(Graph::ofLibrary(library), 0, "world:7", std::nullopt, 10);
         QCOMPARE(shown.value("nodes").toArray().size(), qsizetype{10});
         QCOMPARE(shown.value("total").toObject().value("nodes").toInteger(), qint64{40});
         QCOMPARE(shown.value("total").toObject().value("edges").toInteger(), qint64{made.relations});
         QCOMPARE(shown.value("cut").toString(), QString("most connected"));
-        QVERIFY(!GraphOps::show(library, 0, "world:7", std::nullopt, 40).contains("cut"));
+        QVERIFY(!GraphOps::show(Graph::ofLibrary(library), 0, "world:7", std::nullopt, 40).contains("cut"));
         // `omabook graph node`, and graph_node: what is around a thing, all of
         // it within the limit, and its total that.
-        const QJsonObject around = GraphOps::node(library, made.ids.at(0), 2);
+        const QJsonObject around = GraphOps::node(Graph::ofLibrary(library), made.ids.at(0), 2);
         QCOMPARE(around.value("total").toObject().value("nodes").toInteger(), static_cast<qint64>(around.value("nodes").toArray().size()));
         QVERIFY(!around.contains("cut"));
         // The scopes are counted, not loaded.
-        const QJsonArray scopes = GraphOps::scopes(library).value("scopes").toArray();
+        const QJsonArray scopes = GraphOps::scopes(Graph::ofLibrary(library)).value("scopes").toArray();
         QVERIFY(std::ranges::any_of(scopes, [](const QJsonValue &scope) {
             return scope.toObject().value("scope").toString() == "world:7" && scope.toObject().value("nodes").toInteger() == 40;
         }));

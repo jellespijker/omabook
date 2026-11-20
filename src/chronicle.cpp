@@ -159,16 +159,14 @@ void keepEdges(Facts &facts, QList<GraphEdge> edges, const GraphKnown &known) {
 } // namespace
 
 QList<Chronology::Tenant> Chronology::tenants(const Library &library, const QString &scope) {
-    const BookSides sides = BookSides::of(library);
-    if (!sides.apart())
-        return {Tenant{.scope = scope, .side = {}}};
-    QSet<qint64> tops;
-    for (const Book &book : library.books())
-        tops += sides.side(book.id);
-    QList<qint64> sorted = tops.values();
-    std::ranges::sort(sorted);
-    return sorted | std::views::transform([&scope](qint64 top) { return Tenant{.scope = scope, .side = {top}}; })
-           | std::ranges::to<QList<Tenant>>();
+    QList<Tenant> parts;
+    const QList<::Tenant> all = Tenancy::tenants(library);
+    for (const ::Tenant &tenant : all)
+        if (all.size() == 1 || !Tenancy::booksOf(library, tenant).isEmpty())
+            parts.append(Tenant{.scope = scope, .in = tenant});
+    if (parts.isEmpty())
+        parts.append(Tenant{.scope = scope, .in = all.value(0, ::Tenant::unfiled())});
+    return parts;
 }
 
 QJsonObject Chronology::Axis::toJson() const {
@@ -224,7 +222,7 @@ Chronology::Chronicle Chronology::chronicle(const Facts &facts) {
 }
 
 Facts Chronology::read(const Library &library, const GraphKnown &known, const Tenant &tenant) {
-    const Graph graph(library);
+    const Graph graph = Graph::forTenant(library, tenant.in);
     // The whole scope at once: its things and the relations among them, read in a few statements.
     const GraphView whole = graph.whole(kept(tenant.scope), everyThing);
     const QList<GraphNode> things =
@@ -236,7 +234,7 @@ Facts Chronology::read(const Library &library, const GraphKnown &known, const Te
     for (const GraphNode &node : things)
         take(facts, node, told.value(node.id), graph.seen(node.id), known);
     keepEdges(facts, whole.edges, known);
-    return within(std::move(facts), graph.sides(), tenant.side);
+    return facts;
 }
 
 Facts Chronology::read(const GraphLayers::Layer &layer) {
@@ -251,11 +249,11 @@ Facts Chronology::read(const GraphLayers::Layer &layer) {
     return facts;
 }
 
-Facts Chronology::within(Facts facts, const BookSides &sides, const BookSides::Side &side) {
-    if (!sides.apart() || side.isEmpty())
-        return facts;
+Facts Chronology::within(Facts facts, const QSet<qint64> &books) {
     facts.events.removeIf([&](const GraphNode &event) {
-        return !BookSides::meet(side, sides.sideOf(facts.met.value(event.id) | std::views::transform(&GraphPlace::bookId)));
+        const QList<GraphPlace> met = facts.met.value(event.id);
+        return !met.isEmpty()
+               && std::ranges::none_of(met, [&books](const GraphPlace &at) { return at.bookId == 0 || books.contains(at.bookId); });
     });
     QSet<qint64> kept;
     for (const GraphNode &node : std::as_const(facts.events) + facts.timelines)

@@ -86,8 +86,8 @@ struct Known {
 // GraphContext::readerKnows for the reader, as far as they read each book.
 // Only what was revealed at a known place (or of no book) is told, and only
 // of events and timelines met at one. Nothing when the event itself isn't
-// known, or isn't an event.
-[[nodiscard]] std::optional<Known> of(const Library &library, qint64 event, const GraphKnown &known);
+// known, isn't an event, or isn't the graph's tenant's.
+[[nodiscard]] std::optional<Known> of(const Graph &graph, qint64 event, const GraphKnown &known);
 // The same of an event of a subscribed space's layer, which is cut at the
 // reader's place already (GraphContext::layers).
 [[nodiscard]] std::optional<Known> of(const GraphLayers::Layer &layer, qint64 event);

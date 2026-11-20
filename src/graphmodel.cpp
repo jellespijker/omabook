@@ -165,7 +165,7 @@ void GraphBrowser::showAhead(qint64 node, bool shown) {
 QList<GraphNode> GraphBrowser::unspoiled(QList<GraphNode> nodes) const {
     if (!library() || nodes.isEmpty())
         return nodes;
-    const Graph graph(*library());
+    const Graph graph = this->graph();
     const auto facts = graph.factsOf(nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QList<qint64>>());
     const GraphKnown known = GraphContext::unspoiled(*library());
     for (GraphNode &node : nodes)
@@ -177,7 +177,7 @@ GraphCut GraphBrowser::allowed() const {
     const Library *books = library();
     if (!books)
         return {};
-    const Graph graph(*books);
+    const Graph graph = this->graph();
     if (m_what == What::Scope && m_onlyAcross && m_scope.isEmpty() && !(m_centre > 0 && m_depth > 0)) {
         // The connections between books, each thing with the books it is in.
         GraphView view = graph.acrossBooks(300);
@@ -207,14 +207,14 @@ GraphCut GraphBrowser::allowed() const {
         return GraphCut(std::move(view));
     }
     if (m_what == What::Scope)
-        return m_centre > 0 && m_depth > 0 ? GraphCut::around(*books, m_centre, m_depth, 400) : GraphCut::whole(*books, m_scope, 2000);
+        return m_centre > 0 && m_depth > 0 ? GraphCut::around(graph, m_centre, m_depth, 400) : GraphCut::whole(graph, m_scope, 2000);
     // A book's graph, with the graphs someone shared as far as its reader has
     // read it, however much of it is shown (GraphContext::layers).
     if (m_what == What::Book)
-        return GraphCut(GraphLayers::with(graph.ofBook(m_bookId, m_upTo), GraphContext::layers(*books, m_upTo), m_bookId));
+        return GraphCut(GraphLayers::with(graph.ofBook(m_bookId, m_upTo), GraphContext::layers(graph, m_upTo), m_bookId));
     // A series, or a collection, is its books' graphs laid over each other.
     QList<GraphView> each;
-    const QList<GraphLayers::Layer> layers = GraphContext::layers(*books);
+    const QList<GraphLayers::Layer> layers = GraphContext::layers(graph);
     const auto collection = m_what == What::Collection ? books->collectionNamed(m_series) : std::nullopt;
     for (const Book &book : books->books()) {
         if (m_what == What::Collection ? !collection || !collection->contains(book)
@@ -325,14 +325,14 @@ void GraphBrowser::load(bool keepPlaces) {
     if (!bounded())
         m_base.nodes = unspoiled(m_base.nodes);
     // What the book connects to in other books, as far as it was read.
-    m_outer = m_what == What::Book && library() ? Graph(*library()).beyond(m_bookId, m_upTo) : GraphView();
+    m_outer = m_what == What::Book && library() ? graph().beyond(m_bookId, m_upTo) : GraphView();
     m_outer.nodes = unspoiled(m_outer.nodes);
     m_beyondCount = int(m_outer.nodes.size());
     m_knownCount = int(m_base.nodes.size());
     // What is known of the book past the place shown, so the view can say
     // so rather than look as if nothing were known.
     m_hiddenCount =
-        bounded() && library() ? qMax(0, static_cast<int>(Graph(*library()).ofBook(m_bookId).nodes.size() - ownCount(m_base))) : 0;
+        bounded() && library() ? qMax(0, static_cast<int>(graph().ofBook(m_bookId).nodes.size() - ownCount(m_base))) : 0;
     m_storied = std::ranges::any_of(m_base.nodes, std::not_fn(ofTheLibrary), &GraphNode::kind);
 
     GraphView view = m_base;
@@ -496,7 +496,7 @@ void GraphBrowser::settleNow() {
 QVariantList GraphBrowser::scopes() const {
     QVariantList list{QVariantMap{{"scope", QString("")}}};
     if (library())
-        for (const QString &scope : Graph(*library()).scopes())
+        for (const QString &scope : graph().scopes())
             if (!scope.isEmpty())
                 list << QVariantMap{{"scope", scope}};
     return list;
@@ -506,7 +506,7 @@ QVariantList GraphBrowser::books() const {
     QVariantList list;
     if (!library())
         return list;
-    const Graph graph(*library());
+    const Graph graph = this->graph();
     for (const Book &book : library()->books()) {
         const int things = int(graph.ofBook(book.id, placeIn(book)).nodes.size());
         if (things > 0)
@@ -541,11 +541,11 @@ void GraphBrowser::setOnlyAcross(bool only) {
 QPair<qint64, QString> GraphBrowser::bookOf(const GraphNode &node) const {
     if (!library() || node.kind == "book")
         return {};
-    const Graph graph(*library());
-    // Of a book, the other book on its side.
+    const Graph graph = this->graph();
+    // Of a book, another book of the tenant.
     const qint64 here = m_what == What::Book ? m_bookId : 0;
     for (const GraphPlace &place : graph.seen(node.id))
-        if (place.bookId != here && (here == 0 || graph.sides().together(here, place.bookId)))
+        if (place.bookId != here)
             if (const auto book = library()->book(place.bookId))
                 return {book->id, book->meta.title};
     return {};
@@ -611,7 +611,7 @@ void GraphBrowser::jumpTo(qint64 node) {
     if (node == 0 || !library())
         return;
     if (!m_index.contains(node)) {
-        const auto found = Graph(*library()).node(node);
+        const auto found = graph().node(node);
         if (!found)
             return;
         // A book's graph never shows what its reader hasn't met.
@@ -743,7 +743,7 @@ QVariantList GraphBrowser::find(const QString &typed) const {
     if (m_what == What::Scope && !words.isEmpty()) {
         // Found only by what may be shown: a name revealed past a reader's
         // place finds nothing, so neither the list nor its count gives it away.
-        nodes = unspoiled(Graph(*library()).find(words.join(' '), {}, m_scope, 200));
+        nodes = unspoiled(graph().find(words.join(' '), {}, m_scope, 200));
         nodes.removeIf([&](const GraphNode &node) { return !goesBy(node, words); });
     } else {
         for (const GraphNode &node : m_base.nodes)
@@ -764,7 +764,7 @@ QVariantList GraphBrowser::find(const QString &typed) const {
 }
 
 bool GraphBrowser::edit(qint64 node, const QString &name, const QString &summary) {
-    if (!library() || !Graph(*library()).edit(node, name, summary))
+    if (!library() || !graph().edit(node, name, summary))
         return false;
     load(true);
     GraphFeed::announce();
@@ -772,7 +772,7 @@ bool GraphBrowser::edit(qint64 node, const QString &name, const QString &summary
 }
 
 bool GraphBrowser::merge(qint64 keep, qint64 other) {
-    if (!library() || !Graph(*library()).merge(keep, other))
+    if (!library() || !graph().merge(keep, other))
         return false;
     load(true);
     select(keep);
@@ -781,7 +781,7 @@ bool GraphBrowser::merge(qint64 keep, qint64 other) {
 }
 
 bool GraphBrowser::remove(qint64 node) {
-    if (!library() || !Graph(*library()).remove(node))
+    if (!library() || !graph().remove(node))
         return false;
     load(true);
     GraphFeed::announce();
@@ -789,7 +789,7 @@ bool GraphBrowser::remove(qint64 node) {
 }
 
 bool GraphBrowser::unlink(qint64 edge) {
-    if (!library() || !Graph(*library()).unlink(edge))
+    if (!library() || !graph().unlink(edge))
         return false;
     load(true);
     GraphFeed::announce();
@@ -799,7 +799,7 @@ bool GraphBrowser::unlink(qint64 edge) {
 qint64 GraphBrowser::add(const QString &kind, const QString &name, const QString &summary, const QString &relation) {
     if (!library())
         return 0;
-    Graph graph(*library());
+    Graph graph = this->graph();
     // A thing added to a book's graph was met in that book, where its
     // reader is now, so it is part of that graph and of no place ahead.
     std::optional<GraphPlace> place;
@@ -825,7 +825,7 @@ void GraphBrowser::describe() {
     if (row < 0 || !library())
         return;
     const Library *books = library();
-    const Graph graph(*books);
+    const Graph graph = this->graph();
     const GraphNode &node = m_shown.at(row).node;
     m_details = {{"id", node.id}, {"kind", node.kind}, {"name", node.name}, {"summary", node.summary},
                  {"aliases", node.aliases()}, {"scope", node.scope}, {"bookId", node.bookId},

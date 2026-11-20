@@ -1,6 +1,7 @@
 # 3. Top-level collections are tenants of the knowledge graph
 
-- Status: accepted, to be built in parts (#92); amended 2026-11-20, after the performance analysis (#94)
+- Status: accepted, to be built in parts (#92); amended 2026-11-20, after the performance analysis (#94),
+  and for what is made by hand (#95)
 - Date: 2026-11-20
 
 ## Context
@@ -29,7 +30,10 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
   its facts' and its relations' books, and, tied by hand to a book's node (its authors, series, tags,
   a question), of that book. So an author who wrote in two tenants, or a theme two tenants' books
   share, is one node seen from both, and each of its facts only from the tenant whose book said it.
-  A thing no book is behind (put in by hand and tied to nothing) is seen from every tenant.
+  A thing put in by hand belongs to the tenant it was made in, and a relation of no book to a book's
+  node gives it no other (so a question asked of the library stays with the tenant it was asked in,
+  whatever books it names); only what no book is behind and no tenant made (made while the library
+  was one tenant, or before tenants) is seen from every tenant (decided 2026-11-20, #95).
 - **Every reader takes a tenant**, and filters by it; there is no merged view. A harness check flags
   graph queries without one (#95). A setting, "one tenant for the whole library", keeps the old
   behaviour for those who don't want tenants.
@@ -81,6 +85,26 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
   remembers it per library (`graph_tenants` in `config.json`). The graph and the chronology take it as
   their `tenant` property, which their readers keep to (#95); a book's graph or chronology opens in a
   tenant of the book's own. With one tenant for the whole library there is that one and no switch.
+
+### As built (#95)
+
+- **Every reader reads through a tenant's graph.** `Graph::forTenant` (and `ofReader` for a book's
+  reader, `ofCollection` for a collection's view, `ofLibrary` for what names none) keeps every read of
+  `Graph` to its tenant: things, relations, facts, sightings, search, the views and the scopes. A thing
+  both tenants see is told as the tenant knows it, from its facts there, so the summary another
+  tenant's book gave it never shows. A `Graph` of no tenant reads the whole graph: what writes it, keeps
+  it and carries it to other computers. The read-time filtering by book sides is gone from the readers;
+  what builds a book's graph still draws only on the books it shares a tenant with (`Graph::together`).
+- **Where a reader doesn't say its tenant** it is that of the book, collection or view it was opened
+  from; the command line and the MCP tools take `--collection` (`collection`), and otherwise use the
+  book's or the thing's tenant, or the library's only one, and else say which tenants there are and ask
+  rather than mix (`Tenancy::chosen`). The window chooses among them (#96).
+- **Made by hand in a tenant**: a thing's data keeps the tenants it was made in (`"tenants"`), which
+  travels with it, and the membership follows from it as from the rest (format 27, which places the
+  whole graph again by the amended rules). It is in the whole library's tenant too, so the one-tenant
+  setting shows it.
+- **A harness rule** (`rules/cpp/graph-reads-keep-to-a-tenant.yml`) flags a query that reads the graph's
+  tables without the tenant's condition, outside the storage and the log.
 
 ## Considered options
 

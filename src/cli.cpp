@@ -1655,7 +1655,7 @@ int suggest(const QStringList &arguments) {
                                "from a reading site alike. Each suggestion is then looked up on Goodreads and Open "
                                "Library: that it exists, what readers rate it, and whether it is already yours.");
     command.parser.addOption({"no-check", "Don't look the suggestions up."});
-    command.parser.addOption({"collection", "Go only by the books of this collection, by its path or name.", "name"});
+    command.parser.addOption({"collection", "Go only by the books of this collection, by its path or name, with the graph of its top-level collection.", "name"});
     if (!command.parse(arguments, 0, 0))
         return 1;
     QString error;
@@ -1673,8 +1673,8 @@ int suggest(const QStringList &arguments) {
     QList<Curation::BookNotes> books;
     for (const Book &book : goneBy)
         books.append({book, library->notes(book.id, "recap").text});
-    // What the knowledge graph holds across the books goes along, unless it is off.
-    const auto answer = askAi(Curation::suggestionRequest(books, Settings().graph() != "off" ? GraphContext::picture(*library) : QString()));
+    const auto picture = GraphContext::pictureIn(*library, command.parser.value("collection"), {}, Settings().graph() != "off");
+    const auto answer = picture ? askAi(Curation::suggestionRequest(books, *picture)) : std::expected<QString, QString>(std::unexpected(picture.error()));
     if (!answer)
         return fail(answer.error());
     const Curation::Suggestions suggested = Curation::suggestionsFrom(*answer);
@@ -1838,7 +1838,7 @@ int ask(const QStringList &arguments) {
     command.parser.addPositionalArgument("book", "A book's number in the library, a book file, or \"all\" to ask about the library as a whole.");
     command.parser.addPositionalArgument("question", "What to ask.", "<question...>");
     command.parser.addOption({"upto", "Send the text only up to and including this section, so later ones stay unread.", "number"});
-    command.parser.addOption({"collection", "With all: ask only about the books of this collection.", "name"});
+    command.parser.addOption({"collection", "With all: ask only about the books of this collection, with the graph of its top-level collection.", "name"});
     if (!command.parse(arguments, 2))
         return 1;
     QString error;
@@ -1861,12 +1861,12 @@ int ask(const QStringList &arguments) {
         // question joins the graph once it is answered; neither with it off.
         const QString question = command.parser.positionalArguments().mid(1).join(' ');
         const bool graph = Settings().graph() != "off";
-        const auto answer = askAi(Curation::libraryQuestion(books, question, graph ? GraphContext::picture(*library, question) : QString()),
-                                  !command.json());
+        const auto picture = GraphContext::pictureIn(*library, command.parser.value("collection"), question, graph);
+        const auto answer = picture ? askAi(Curation::libraryQuestion(books, question, *picture), !command.json()) : std::expected<QString, QString>(std::unexpected(picture.error()));
         if (!answer)
             return fail(answer.error());
         if (graph)
-            GraphContext::noteQuestion(*library, 0, std::nullopt, question, *answer);
+            GraphContext::noteQuestion(Graph::forTenant(*library, *Tenancy::chosen(*library, command.parser.value("collection"))), 0, std::nullopt, question, *answer);
         if (command.json())
             printJson(QJsonObject{{"answer", answer->trimmed()}});
         else
@@ -1889,14 +1889,14 @@ int ask(const QStringList &arguments) {
     const GraphPlace asked{id, upTo < 0 ? document->count() - 1 : upTo, 1.0};
     bool trimmed = false;
     const AiRequest request = BookOps::bookQuestion(*document, question, upTo, &trimmed,
-                                                    graph ? GraphContext::forQuestion(*library, id, asked, question) : QString());
+                                                    graph ? GraphContext::forQuestion(Graph::ofReader(*library, id), id, asked, question) : QString());
     if (trimmed)
         print(stderr, "The text is longer than fits in one question, so only its last part was sent.");
     const auto answer = askAi(request, !command.json());
     if (!answer)
         return fail(answer.error());
     if (graph)
-        GraphContext::noteQuestion(*library, id, asked, question, *answer);
+        GraphContext::noteQuestion(Graph::ofReader(*library, id), id, asked, question, *answer);
     if (command.json())
         printJson(QJsonObject{{"answer", answer->trimmed()}});
     else

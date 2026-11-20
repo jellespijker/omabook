@@ -9,6 +9,8 @@
 #include "chroniclefilter.h"
 #include "chronology.h"
 #include "graphcontext.h"
+#include "spaces.h"
+#include "tenancy.h"
 
 using namespace Qt::StringLiterals;
 
@@ -24,14 +26,15 @@ constexpr auto eventKind = "event"_L1;
 // A thing named on the command line: by its number (whose kind the writers
 // check), or by its name or one of its other names, in the scope and then,
 // for a timeline, the general graph that every book's timelines are in.
+// Only what the graph's tenant sees is found.
 [[nodiscard]] std::expected<qint64, QString> named(const Graph &graph, const QString &scope, const QString &kind, const QString &word) {
     bool number = false;
-    if (const qint64 id = word.toLongLong(&number); number && id > 0)
+    if (const qint64 id = word.toLongLong(&number); number && id > 0 && graph.node(id))
         return id;
-    if (const qint64 found = graph.named(kept(scope), kind, word.simplified()); found > 0)
+    if (const qint64 found = graph.named(kept(scope), kind, word.simplified()); found > 0 && graph.node(found))
         return found;
     if (kind == Chronology::timelineKind() && !scope.isEmpty())
-        if (const qint64 found = graph.named(u""_s, kind, word.simplified()); found > 0)
+        if (const qint64 found = graph.named(u""_s, kind, word.simplified()); found > 0 && graph.node(found))
             return found;
     return std::unexpected(u"There is no %1 called \"%2\" in the graph."_s.arg(kind, word));
 }
@@ -164,10 +167,16 @@ void nameBooks(QJsonObject &books, const Library &library, const Chronology::Fac
             books.insert(QString::number(id), book->meta.title);
 }
 
-[[nodiscard]] QJsonArray sideJson(const BookSides::Side &side) {
-    QList<qint64> sorted = side.values();
-    std::ranges::sort(sorted);
-    return QJsonArray::fromVariantList(sorted | std::ranges::to<QVariantList>());
+// A tenant as the parts of a chronology say it: its top-level collection's
+// number ("side", 0 for Unfiled; none for the whole library), and its global id.
+[[nodiscard]] QJsonObject tenantJson(const Library &library, const Tenant &tenant) {
+    QJsonArray side;
+    if (tenant == Tenant::unfiled())
+        side << 0;
+    for (const Collection &collection : library.collections())
+        if (collection.depth == 0 && Spaces::collectionId(library, collection.id) == tenant.globalId())
+            side << collection.id;
+    return {{"side", side}, {"tenant", tenant.globalId()}};
 }
 
 } // namespace
@@ -186,7 +195,11 @@ std::expected<QJsonObject, QString> ChronologyOps::read(const Library &library, 
     if (!span)
         return std::unexpected(span.error());
     const Chronology::Narrowing narrowing{.timeline = *timeline, .span = *span};
-    const QList<Chronology::Tenant> tenants = Chronology::tenants(library, kept(ask.scope));
+    // Each tenant apart; a collection asked for in its own.
+    QList<Chronology::Tenant> tenants = Chronology::tenants(library, kept(ask.scope));
+    if (const auto collection = ask.collection.isEmpty() ? std::nullopt : library.collectionNamed(ask.collection))
+        if (const auto tenant = Tenancy::ofCollection(library, collection->id))
+            tenants = {Chronology::Tenant{.scope = kept(ask.scope), .in = *tenant}};
     QJsonArray parts;
     QJsonObject titles;
     qsizetype total = 0;
@@ -203,7 +216,9 @@ std::expected<QJsonObject, QString> ChronologyOps::read(const Library &library, 
         total += Chronology::eventsIn(whole).size();
         shown += Chronology::eventsIn(told).size();
         QJsonObject part = markedByHand(told.toJson()).toObject();
-        part.insert("side", sideJson(tenant.side));
+        const QJsonObject in = tenantJson(library, tenant.in);
+        for (auto member = in.begin(); member != in.end(); ++member)
+            part.insert(member.key(), member.value());
         parts << part;
         nameBooks(titles, library, facts);
     }

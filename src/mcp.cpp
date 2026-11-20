@@ -966,7 +966,7 @@ QList<Tool> coreTools() {
                   "Has the model Omabook is set up with answer a question about the library as a whole: what it "
                   "holds, what each book is about, how far each was read and the notes kept on them.",
                   schema({{"question", string("What to ask.")}, {"model", string(modelIs)},
-                          {"collection", string("Ask only about the books of this collection.")}},
+                          {"collection", string("Ask only about the books of this collection, with the graph of its top-level collection; needed when the library has several.")}},
                          {"question"}),
                   ReadOnly,
                   [](const QJsonObject &arguments) {
@@ -977,14 +977,13 @@ QList<Tool> coreTools() {
                       QString answer, error;
                       const QString question = arguments.value("question").toString();
                       QList<Curation::BookNotes> books = BookOps::booksWithNotes(*at.library);
-                      if (arguments.contains("collection")) {
-                          const auto collection = at.library->collectionNamed(arguments.value("collection").toString());
-                          if (!collection)
-                              return Result::fail("There is no collection called " + arguments.value("collection").toString() + ".");
+                      // Of the graph of the collection's tenant, or the library's only one; a collection not there is none.
+                      const auto tenant = Tenancy::chosen(*at.library, arguments.value("collection").toString());
+                      if (!tenant)
+                          return Result::fail(tenant.error());
+                      if (const auto collection = at.library->collectionNamed(arguments.value("collection").toString()))
                           books.removeIf([&](const Curation::BookNotes &entry) { return !collection->contains(entry.book); });
-                      }
-                      if (!BookOps::ask(Curation::libraryQuestion(books, question,
-                                                                  GraphContext::picture(*at.library, question)),
+                      if (!BookOps::ask(Curation::libraryQuestion(books, question, GraphContext::picture(Graph::forTenant(*at.library, *tenant), question)),
                                         &answer, &error))
                           return Result::fail(error);
                       return Result::ok({{"answer", answer.trimmed()}});
@@ -1291,7 +1290,7 @@ QJsonObject resourceTemplates() {
         const qint64 id = of.captured(1).toLongLong();
         if (!library->book(id))
             return notFound;
-        return json(GraphLayers::with(Graph(*library).ofBook(id), GraphContext::layers(*library), id).toJson());
+        return json(GraphLayers::with(Graph::ofReader(*library, id).ofBook(id), GraphContext::layers(Graph::ofReader(*library, id)), id).toJson());
     }
     static const QRegularExpression address("^omabook://book/(\\d+)(?:/section/(\\d+))?$");
     const auto match = address.match(uri);

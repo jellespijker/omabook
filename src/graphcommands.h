@@ -6,6 +6,7 @@
 #include <functional>
 #include <optional>
 
+#include "graph.h"
 #include "library.h"
 
 // The `omabook graph` commands that look after the graph rather than read or
@@ -18,7 +19,9 @@ struct Kept {
     std::function<void(const QJsonObject &)> show; // how the answer reads without --json
 };
 
-// Runs `omabook graph <words>` when its first word is one of these; nothing when it isn't.
-std::optional<Kept> housekeeping(Library &library, const QString &sub, const QStringList &words);
+// Runs `omabook graph <words>` when its first word is one of these; nothing
+// when it isn't. The scopes, a copy of one and the reading log are of the
+// graph's tenant.
+std::optional<Kept> housekeeping(Library &library, const Graph &graph, const QString &sub, const QStringList &words);
 
 } // namespace GraphCommands

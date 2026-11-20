@@ -12,9 +12,9 @@ namespace {
 
 using GraphPrint::print;
 
-GraphCommands::Kept scopes(const Library &library) {
+GraphCommands::Kept scopes(const Graph &graph) {
     return {
-        GraphOps::scopes(library), [](const QJsonObject &answer) {
+        GraphOps::scopes(graph), [](const QJsonObject &answer) {
             for (const auto &value : answer.value("scopes").toArray()) {
                 const QString scope = value.toObject().value("scope").toString();
                 print(stdout,
@@ -23,8 +23,8 @@ GraphCommands::Kept scopes(const Library &library) {
         }};
 }
 
-GraphCommands::Kept log(const Library &library, qint64 bookId) {
-    return {GraphOps::log(library, bookId), [](const QJsonObject &answer) {
+GraphCommands::Kept log(const Graph &graph, qint64 bookId) {
+    return {GraphOps::log(graph, bookId), [](const QJsonObject &answer) {
                 for (const auto &value : answer.value("days").toArray()) {
                     const QJsonObject day = value.toObject();
                     print(stdout, QString("%1\t%2% → %3%\t%4")
@@ -47,17 +47,18 @@ GraphCommands::Kept take(Library &library, const QString &path) {
 
 } // namespace
 
-std::optional<GraphCommands::Kept> GraphCommands::housekeeping(Library &library, const QString &sub, const QStringList &words) {
+std::optional<GraphCommands::Kept> GraphCommands::housekeeping(Library &library, const Graph &graph, const QString &sub,
+                                                               const QStringList &words) {
     if (sub == "scopes")
-        return scopes(library);
+        return scopes(graph);
     if (sub == "copy-scope" && words.size() == 3)
-        return Kept{GraphOps::copyScope(library, words.at(1), words.at(2)),
+        return Kept{GraphOps::copyScope(graph, words.at(1), words.at(2)),
                     [to = words.at(2)](const QJsonObject &) { print(stdout, "Copied to " + to + "."); }};
     if (sub == "remove-scope" && words.size() == 2)
         return Kept{GraphOps::removeScope(library, words.at(1)),
                     [scope = words.at(1)](const QJsonObject &) { print(stdout, "Removed " + scope + "."); }};
     if (sub == "log")
-        return log(library, words.value(1).toLongLong());
+        return log(graph, words.value(1).toLongLong());
     if (sub == "take" && words.size() == 2)
         return take(library, words.at(1));
     if (sub == "sync")

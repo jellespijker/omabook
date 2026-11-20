@@ -73,7 +73,8 @@ struct Shelf {
         QVERIFY(graph.link(paul, jessica, "son of", {}, GraphPlace{dune, 1, 0.3}) > 0);
         graph.logReading(dune, 10, 40, "2026-11-01");
         graph.logReading(outside, 0, 100, "2026-10-01");
-        question = GraphContext::noteQuestion(library, dune, GraphPlace{dune, 2, 0.1}, "Who is Paul?", "The duke's son.");
+        question =
+            GraphContext::noteQuestion(Graph::ofReader(library, dune), dune, GraphPlace{dune, 2, 0.1}, "Who is Paul?", "The duke's son.");
         QVERIFY(question > 0);
     }
 

@@ -2,9 +2,12 @@
 
 #include <QHash>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringView>
 #include <QtTypes>
+#include <expected>
+#include <optional>
 #include <utility>
 
 class Library;
@@ -44,6 +47,11 @@ private:
 //
 //   "SELECT … FROM graph_nodes AS n WHERE n.scope = '' AND " + within.nodes(u"n.id")
 //   "SELECT … FROM graph_seen AS s WHERE " + within.books(u"s.book_id")
+//
+// Those read the tenant's whole range once per statement, which is what a
+// scan wants. A query of a few rows (one thing, the relations of one) asks
+// instead whether each row it reads is the tenant's, through the index of
+// the row: the has… conditions, whose cost follows the rows read.
 class TenantFilter {
 public:
     explicit TenantFilter(qint64 id) : m_id(id) {}
@@ -52,6 +60,10 @@ public:
     [[nodiscard]] QString facts(QStringView column) const;
     // A book in the tenant: what a sighting (graph_seen) is in.
     [[nodiscard]] QString books(QStringView column) const;
+    [[nodiscard]] QString hasNode(QStringView column) const;
+    [[nodiscard]] QString hasEdge(QStringView column) const;
+    [[nodiscard]] QString hasFact(QStringView column) const;
+    [[nodiscard]] QString hasBook(QStringView column) const;
     // The tenant's number in this library's tables; -1 for one with no books here yet.
     [[nodiscard]] qint64 id() const noexcept { return m_id; }
 
@@ -105,5 +117,37 @@ void rebuild(const Library &library);
 
 // The condition that keeps a query to `tenant` (and to what no book is behind).
 [[nodiscard]] TenantFilter filter(const Library &library, const Tenant &tenant);
+
+// The books a tenant has, by their numbers here.
+[[nodiscard]] QSet<qint64> booksOf(const Library &library, const Tenant &tenant);
+// What a tenant is called: its top-level collection's name, "Unfiled", or
+// "The whole library" (in English; the window says it in its language).
+[[nodiscard]] QString nameOf(const Library &library, const Tenant &tenant);
+// The tenant a collection is part of: that of the top-level collection it
+// is in, or the whole library's when the user keeps one; none for a
+// collection the library doesn't have.
+[[nodiscard]] std::optional<Tenant> ofCollection(const Library &library, qint64 collectionId);
+
+// The tenant a scope of its own (a world) is in: that of the books its
+// things were met in; none for one of no book, or the general graph.
+[[nodiscard]] std::optional<Tenant> ofScope(const Library &library, const QString &scope);
+// The tenant read when nothing says which: the library's only one, or else
+// the one with the most books.
+[[nodiscard]] Tenant preferred(const Library &library);
+// The tenant a reader of a book reads in: the book's, the first of them by
+// global id for a book in two (the window lets the reader choose, #96), and
+// preferred() for a book in none.
+[[nodiscard]] Tenant ofReader(const Library &library, qint64 bookId);
+// The tenant the command line and the MCP server read in: the one named (a
+// collection's name or path, which stands for its top-level collection's,
+// "unfiled", or a tenant's global id), or else the tenant of the book given
+// when it has one, or else the library's only one; otherwise why not,
+// naming the tenants there are, so that the caller asks rather than mixes.
+[[nodiscard]] std::expected<Tenant, QString> chosen(const Library &library, const QString &named, qint64 bookId = 0);
+// The membership that keeps a thing made by hand (Graph::upsert, of no
+// book) in the tenant it was made in, as the thing's data says it
+// ({"tenants": [global id, ...]}); none for the whole library's, whose
+// things are seen from every tenant.
+[[nodiscard]] inline QString madeInKey() { return QStringLiteral("tenants"); }
 
 } // namespace Tenancy

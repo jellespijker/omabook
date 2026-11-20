@@ -47,10 +47,10 @@ struct Layer {
 // The layer named `scope`, or none.
 [[nodiscard]] std::optional<Layer> named(const Library &library, const QString &scope);
 
-// The scopes there are (Graph::scopes) and the layers'.
-[[nodiscard]] QStringList scopes(const Library &library);
-// A scope whole (Graph::whole), a layer's as known.
-[[nodiscard]] GraphView whole(const Library &library, const QString &scope, int limit);
+// The scopes there are in the graph's tenant (Graph::scopes) and the layers'.
+[[nodiscard]] QStringList scopes(const Graph &graph);
+// A scope whole as the graph's tenant sees it (Graph::whole), a layer's as known.
+[[nodiscard]] GraphView whole(const Graph &graph, const QString &scope, int limit);
 // Copies a scope whole under a new name (Graph::copyScope), a layer's as
 // known, its things and how they relate. False when `to` is taken, or is a
 // layer's name.

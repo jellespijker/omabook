@@ -2,13 +2,14 @@
 
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 
-#include "booksides.h"
 #include "chronologyorder.h"
 #include "graph.h"
 #include "graphlayers.h"
 #include "library.h"
+#include "tenancy.h"
 
 // The chronology as a reader knows it (#43): of every timeline, its events
 // in the order they happen (chronologyorder.h says how), and how the
@@ -25,21 +26,19 @@
 //   to it), an event, or a relation between their events: the axis is then
 //   one order of all their events, by which the lanes are drawn side by side.
 //
-// It is read within one part of the library, a tenant: a scope of the graph
-// and a side of the library (BookSides), so that a timeline shared by books
-// in two top collections is two orders, one in each, never one across them.
+// It is read within one tenant of the library (ADR 0003): a scope of the
+// graph as one tenant sees it, so that a timeline shared by books of two
+// top-level collections is two orders, one in each, never one across them.
 namespace Chronology {
 
-// Where a chronology is read: the graph's scope, and the side of the
-// library (the top collections) whose books it is of. An empty side is the
-// whole library, which is right only where it isn't split (tenants()).
+// Where a chronology is read: the graph's scope, in a tenant.
 struct Tenant {
     QString scope;
-    BookSides::Side side;
+    ::Tenant in = ::Tenant::unfiled();
 };
 
-// The parts a chronology of the library is read in: the whole of it, or one
-// for each of its sides when they are kept apart.
+// The parts a chronology of the library is read in: one for each tenant
+// that has books (the whole library when the user keeps one tenant).
 [[nodiscard]] QList<Tenant> tenants(const Library &library, const QString &scope = {});
 
 // Lanes that line up: their order together, by which each lane's events are
@@ -66,11 +65,11 @@ struct Chronicle {
 // What a chronicle is made from, of the reader's own graph: the events and
 // timelines known to whoever `known` says knows a place (as Chronology::of
 // takes it), each event with its times, the places it was met and its
-// relations, all cut there, and only the events of the tenant's side.
+// relations, all cut there, and only what the tenant sees.
 [[nodiscard]] Facts read(const Library &library, const GraphKnown &known, const Tenant &tenant);
 // The same of a subscribed space's layer, which is cut at the reader's place already.
 [[nodiscard]] Facts read(const GraphLayers::Layer &layer);
-// Only the events met in a book on a side that meets `side`, and those of no book.
-[[nodiscard]] Facts within(Facts facts, const BookSides &sides, const BookSides::Side &side);
+// Only the events met in one of these books (a tenant's), and those of no book.
+[[nodiscard]] Facts within(Facts facts, const QSet<qint64> &books);
 
 } // namespace Chronology

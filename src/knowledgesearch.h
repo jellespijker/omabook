@@ -54,8 +54,12 @@ public:
     // The kinds of things looked in, in the order they say most of a book.
     static QStringList kinds();
 
-    // Everything a reader of each book knows, read from the library now.
+    // Everything a reader of each book knows, read from the library now:
+    // in each of these tenants apart (ADR 0003), so that what is known of a
+    // book is only what its own tenant knows; in every tenant of the library
+    // when none are named.
     static KnowledgeIndex build(const Library &library);
+    static KnowledgeIndex build(const Library &library, const QList<Tenant> &tenants);
 
     [[nodiscard]] bool empty() const noexcept { return m_entries.empty(); }
     // How many (thing, book) pairs are known.
@@ -82,6 +86,10 @@ private:
         GraphMoment met;
         QString from; // a graph someone shared it is of
     };
+    // Takes in what a tenant's graph knows of its books; a thing and book
+    // already taken (a book in two tenants) is not taken again.
+    void take(const Graph &graph, const GraphKnown &known, QHash<std::pair<qint64, qint64>, qsizetype> &taken);
+
     std::vector<Entry> m_entries;
     QHash<qint64, QList<qsizetype>> m_byBook;
 };

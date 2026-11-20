@@ -6,6 +6,8 @@
 #include <tuple>
 #include <utility>
 
+#include "booksides.h"
+
 using namespace Qt::StringLiterals;
 
 namespace {
@@ -115,7 +117,7 @@ constexpr auto eventKind = "event"_L1;
     using Chronology::Whose;
     if (other == book.id)
         return true;
-    if (whose == Whose::Book || !graph.sides().together(book.id, other))
+    if (whose == Whose::Book || !BookSides::of(library).together(book.id, other))
         return false;
     if (whose != Whose::Series)
         return true;
@@ -189,8 +191,7 @@ QJsonObject Known::toJson() const {
     return {{"event", event.toJson()}, {"when", when}, {"order", ordered}, {"timelines", on}};
 }
 
-std::optional<Known> Chronology::of(const Library &library, qint64 event, const GraphKnown &known) {
-    const Graph graph(library);
+std::optional<Known> Chronology::of(const Graph &graph, qint64 event, const GraphKnown &known) {
     const auto node = graph.node(event);
     if (!node || node->kind != eventKind || !met(graph, event, known))
         return std::nullopt;

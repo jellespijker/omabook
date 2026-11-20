@@ -435,7 +435,7 @@ private slots:
         QCOMPARE(chronicle.unplaced.at(1).rank, -1);
     }
 
-    void aSharedTimelineKeepsToItsSideOfTheLibrary() {
+    void aSharedTimelineKeepsToItsTenant() {
         Told told;
         const qint64 history = told.timeline("History");
         const qint64 study = told.event("Study", {10, 0, 0}), leisure = told.event("Leisure", {20, 0, 0});
@@ -445,22 +445,14 @@ private slots:
             told.on(event, history);
         }
         told.relate(study, "before", leisure);
-        Collection school, home;
-        school.id = 1;
-        school.included = {10};
-        home.id = 2;
-        home.included = {20};
-        Book ten, twenty;
-        ten.id = 10;
-        twenty.id = 20;
-        const BookSides sides({school, home}, {ten, twenty});
-        const auto ofSchool = Chronology::chronicle(Chronology::within(told.facts, sides, sides.side(10)));
+        // Of a tenant's books: book 10 in one, book 20 in the other.
+        const auto ofSchool = Chronology::chronicle(Chronology::within(told.facts, {10}));
         QCOMPARE(order(laneOf(ofSchool, "History")), QString("Study < By hand"));
         QVERIFY(ofSchool.toJson().value("lanes").toArray().size() == 1);
-        const auto ofHome = Chronology::chronicle(Chronology::within(told.facts, sides, sides.side(20)));
+        const auto ofHome = Chronology::chronicle(Chronology::within(told.facts, {20}));
         QCOMPARE(order(laneOf(ofHome, "History")), QString("Leisure < By hand"));
-        // Where the library isn't split, all of it.
-        QCOMPARE(order(laneOf(Chronology::chronicle(Chronology::within(told.facts, {}, {})), "History")),
+        // A tenant with both, all of it.
+        QCOMPARE(order(laneOf(Chronology::chronicle(Chronology::within(told.facts, {10, 20})), "History")),
                  QString("Study < Leisure < By hand"));
     }
 

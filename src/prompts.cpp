@@ -4,6 +4,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include "graph.h"
+
 Prompts::Excerpt Prompts::fit(const QString &text) {
     if (text.size() <= maximumExcerpt)
         return {text, false};
@@ -139,9 +141,7 @@ QString Prompts::cast(const QString &notes, const QString &since, const QList<Se
                      "who still matters and bring them up to date.";
 }
 
-QStringList Prompts::graphKinds() {
-    return {"character", "place", "group", "concept", "item", "event", "thread", "theme", "topic", "timeline"};
-}
+QStringList Prompts::graphKinds() { return GraphNode::storyKinds(); }
 
 AiRequest Prompts::graphExtraction(const BookMeta &book, const QString &known, const QString &text, const QString &elsewhere) {
     AiRequest request;

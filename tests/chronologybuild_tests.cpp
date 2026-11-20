@@ -66,7 +66,10 @@ struct Shelf {
     void readTo(qint64 book, int section) { library.setProgress(book, {section, 1.0, (section + 1) * 10.0}); }
     [[nodiscard]] qint64 event(const QString &name) const { return Graph(library).named({}, "event", name); }
     [[nodiscard]] std::optional<Chronology::Known> known(const QString &name) const {
-        return Chronology::of(library, event(name), GraphContext::readerKnows(library));
+        // Read in the tenant the event is in (each book's here is in one).
+        const qint64 id = event(name);
+        return Chronology::of(Graph::forTenant(library, Tenancy::ofNode(library, id).value(0, Tenant::unfiled())), id,
+                              GraphContext::readerKnows(library));
     }
 
     QTemporaryDir dir;

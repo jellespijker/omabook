@@ -163,7 +163,7 @@ std::optional<GraphNode> sharedNode(const Graph &graph, const Scene &scene, qint
             continue;
         const QList<GraphPlace> met = graph.seen(id);
         if (std::ranges::any_of(met, [&](const GraphPlace &at) {
-                return !scene.books.contains(at.bookId) && graph.sides().together(bookId, at.bookId);
+                return !scene.books.contains(at.bookId) && graph.together(bookId, at.bookId);
             }))
             return graph.node(id);
     }
@@ -332,7 +332,7 @@ QString GraphBuild::elsewhere(const Library &library, qint64 bookId, const QList
                 break;
             for (const GraphPlace &at : graph.seen(candidate.node.id)) {
                 // Nor of a book on another side of the library.
-                if (scene.books.contains(at.bookId) || !graph.sides().together(bookId, at.bookId))
+                if (scene.books.contains(at.bookId) || !graph.together(bookId, at.bookId))
                     continue;
                 if (!reaches.contains(at.bookId))
                     reaches.insert(at.bookId, GraphContext::reachOf(library, at.bookId));

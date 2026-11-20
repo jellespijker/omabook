@@ -262,7 +262,7 @@ private slots:
         QCOMPARE(bo.call("names", {scope}).toArray(), strings({"Hollow", "Ilse"}));
         QCOMPARE(bo.call("relations", {scope}).toArray(), strings({"was born in"}));
         // The command line and the window show it the same (graph show --scope).
-        QCOMPARE(GraphCut::whole(bo.library, scope, 50).view.nodes.size(), 2);
+        QCOMPARE(GraphCut::whole(Graph::ofLibrary(bo.library), scope, 50).view.nodes.size(), 2);
         QCOMPARE(bo.call("names", {"world:s1"}).toArray(), strings({"Bo's Own"}));
 
         // Copied into a world of Bo's plugin's own; the layer itself is never written to.

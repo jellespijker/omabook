@@ -37,20 +37,20 @@ struct GraphCut {
 
     // Graph::whole, with the scope's things and the relations among them; of
     // a layer, a world shared here (WorldLayers), what the reader knows of it.
-    [[nodiscard]] static GraphCut whole(const Library &library, const QString &scope, int limit);
-    // Graph::around, with what is within `depth` relations of the node.
-    // Where the library's sides are apart (BookSides), the count goes along
-    // no connection across books, so it never says more was left out than was.
-    [[nodiscard]] static GraphCut around(const Library &library, qint64 node, int depth, int limit);
+    // Read as the graph's tenant sees it, and counted so too.
+    [[nodiscard]] static GraphCut whole(const Graph &graph, const QString &scope, int limit);
+    // Graph::around, with what is within `depth` relations of the node, of
+    // the graph's tenant.
+    [[nodiscard]] static GraphCut around(const Graph &graph, qint64 node, int depth, int limit);
 
 private:
     // The relations among a scope's things, as Graph answers them.
-    [[nodiscard]] static qint64 relationsIn(const Library &library, const Graph &graph, const QString &scope);
+    [[nodiscard]] static qint64 relationsIn(const Graph &graph, const QString &scope);
     // A relation's two ends: its source and its target.
     using Ends = std::pair<qint64, qint64>;
     // How many things are within `steps` relations of `start`, and how many
-    // relations there are among them, going along only relations `along` allows.
-    [[nodiscard]] static std::pair<qint64, qint64> within(const Library &library, qint64 start, int steps, const QString &along);
-    // The relations touching any of `ids`, by their id.
-    [[nodiscard]] static QHash<qint64, Ends> touching(const Library &library, const QList<qint64> &ids, const QString &along);
+    // relations there are among them.
+    [[nodiscard]] static std::pair<qint64, qint64> within(const Graph &graph, qint64 start, int steps);
+    // The relations touching any of `ids`, by their id, of the graph's tenant (#100).
+    [[nodiscard]] static QHash<qint64, Ends> touching(const Graph &graph, const QList<qint64> &ids);
 };

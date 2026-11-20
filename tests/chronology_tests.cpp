@@ -102,7 +102,7 @@ struct Reading {
     }
     void readTo(int section) { library.setProgress(book, {section, 0.9, section * 10.0}); }
     [[nodiscard]] std::optional<Chronology::Known> known(qint64 event) const {
-        return Chronology::of(library, event, GraphContext::readerKnows(library));
+        return Chronology::of(Graph::ofLibrary(library), event, GraphContext::readerKnows(library));
     }
 
     QTemporaryDir dir;
@@ -184,11 +184,12 @@ private slots:
         QVERIFY(!Chronology::order(graph, siege, "before", mara));
         QVERIFY(!Chronology::order(graph, siege, "long before", graph.upsert({}, "event", "The flood")));
         QVERIFY(!Chronology::placeOn(graph, siege, mara));
-        QVERIFY(!Chronology::of(reading.library, mara, GraphContext::readerKnows(reading.library)));
+        QVERIFY(!Chronology::of(Graph::ofLibrary(reading.library), mara, GraphContext::readerKnows(reading.library)));
         // Folded into another, the event takes its time along.
         const qint64 fall = graph.upsert({}, "event", "The fall of the city");
         QVERIFY(graph.merge(fall, siege));
-        QCOMPARE(times(*Chronology::of(reading.library, fall, GraphContext::readerKnows(reading.library))), QStringList{year.written()});
+        QCOMPARE(times(*Chronology::of(Graph::ofLibrary(reading.library), fall, GraphContext::readerKnows(reading.library))),
+                 QStringList{year.written()});
     }
 
     void aTimeShowsOnlyOnceItIsRevealed() {
@@ -206,7 +207,7 @@ private slots:
         QCOMPARE(late->latest()->revealed.anchor, QString("on the ides"));
         // A reader at a place asked for, as asOf takes it.
         const GraphKnown atThird = [book = reading.book](const GraphPlace &at) { return at.bookId != book || at.notAfter({book, 3, 0}); };
-        QCOMPARE(Chronology::of(reading.library, story.siege, atThird)->times.size(), 1);
+        QCOMPARE(Chronology::of(Graph::ofLibrary(reading.library), story.siege, atThird)->times.size(), 1);
     }
 
     void anOrderShowsOnlyOnceItIsRevealedAndOnlyOfEventsMet() {
@@ -264,7 +265,7 @@ private slots:
         const auto subscribed = Subscriptions::subscribe(receiver, *snapshot, {});
         QVERIFY2(subscribed.has_value(), qPrintable(Fixtures::whyNot(subscribed)));
         receiver.setProgress(mine, {2, 0.9, 25});
-        const GraphLayers::Layer early = GraphContext::layers(receiver).first();
+        const GraphLayers::Layer early = GraphContext::layers(Graph::ofLibrary(receiver)).first();
         QVERIFY(named(early, "The siege") && !named(early, "The fall"));
         const auto siege = Chronology::of(early, named(early, "The siege")->id);
         QVERIFY(siege.has_value());
@@ -273,7 +274,7 @@ private slots:
         QCOMPARE(timelines(*siege), QStringList{"The Third Age"});
 
         receiver.setProgress(mine, {9, 1.0, 100});
-        const GraphLayers::Layer late = GraphContext::layers(receiver).first();
+        const GraphLayers::Layer late = GraphContext::layers(Graph::ofLibrary(receiver)).first();
         const auto all = Chronology::of(late, named(late, "The siege")->id);
         QCOMPARE(all->times.size(), 2);
         QCOMPARE(relations(*all), QStringList({"before The fall", "before The flood"}));
@@ -291,7 +292,7 @@ private slots:
         here.setProgress(mine, {9, 1.0, 100});
         there.setProgress(theirs, {9, 1.0, 100});
         const Story story(here, mine);
-        const auto before = Chronology::of(here, story.siege, GraphContext::readerKnows(here));
+        const auto before = Chronology::of(Graph::ofLibrary(here), story.siege, GraphContext::readerKnows(here));
 
         const Remote remote("laptop:" + dir.filePath("There"), {Fixtures::standInSsh(dir.path(), OMABOOK_BINARY)});
         const SyncSummary summary = syncLibrary(here, remote);
@@ -299,7 +300,7 @@ private slots:
         const Graph graph(there);
         const qint64 siege = graph.named({}, "event", "The siege");
         QVERIFY(siege > 0);
-        const auto after = Chronology::of(there, siege, GraphContext::readerKnows(there));
+        const auto after = Chronology::of(Graph::ofLibrary(there), siege, GraphContext::readerKnows(there));
         QVERIFY(after.has_value());
         QCOMPARE(times(*after), times(*before));
         QCOMPARE(after->latest()->revealed.place.section, 7);

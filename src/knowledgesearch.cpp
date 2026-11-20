@@ -58,22 +58,11 @@ QStringList KnowledgeIndex::kinds() {
     return {"theme", "topic", "concept", "character", "place", "thread", "event", "group", "item", "question"};
 }
 
-KnowledgeIndex KnowledgeIndex::build(const Library &library) {
+KnowledgeIndex KnowledgeIndex::build(const Library &library) { return build(library, Tenancy::tenants(library)); }
+
+KnowledgeIndex KnowledgeIndex::build(const Library &library, const QList<Tenant> &tenants) {
     KnowledgeIndex index;
     index.changes = library.changes();
-    const QStringList kinds = KnowledgeIndex::kinds();
-    const Graph graph(library);
-    QList<Graph::Sighting> sightings = graph.sightings(kinds);
-    QHash<qint64, QList<GraphFact>> facts = sightings.isEmpty() ? QHash<qint64, QList<GraphFact>>() : graph.factsOfKinds(kinds);
-    // And the graphs someone shared, as far as the reader has read each book.
-    for (const GraphLayers::Layer &layer : GraphContext::layers(library)) {
-        sightings += layer.sightings();
-        facts.insert(layer.facts);
-    }
-    sightings.removeIf([&kinds](const Graph::Sighting &sighting) { return !kinds.contains(sighting.node.kind); });
-    if (sightings.isEmpty())
-        return index;
-
     // How far each book was read, asked once per book.
     QHash<qint64, GraphContext::Reach> reaches;
     const auto reach = [&](qint64 bookId) -> const GraphContext::Reach & {
@@ -83,15 +72,29 @@ KnowledgeIndex KnowledgeIndex::build(const Library &library) {
         return *found;
     };
     const GraphKnown known = [&reach](const GraphPlace &at) { return at.bookId == 0 || reach(at.bookId).covers(at); };
-
     // One entry per thing and book, at the earliest place it is known from.
     QHash<std::pair<qint64, qint64>, qsizetype> taken;
-    for (const Graph::Sighting &sighting : sightings) {
+    for (const Tenant &tenant : tenants)
+        index.take(Graph::forTenant(library, tenant), known, taken);
+    return index;
+}
+
+void KnowledgeIndex::take(const Graph &graph, const GraphKnown &known, QHash<std::pair<qint64, qint64>, qsizetype> &taken) {
+    const QStringList kinds = KnowledgeIndex::kinds();
+    QList<Graph::Sighting> sightings = graph.sightings(kinds);
+    QHash<qint64, QList<GraphFact>> facts = sightings.isEmpty() ? QHash<qint64, QList<GraphFact>>() : graph.factsOfKinds(kinds);
+    // And the graphs someone shared, as far as the reader has read each book.
+    for (const GraphLayers::Layer &layer : GraphContext::layers(graph)) {
+        sightings += layer.sightings();
+        facts.insert(layer.facts);
+    }
+    sightings.removeIf([&kinds](const Graph::Sighting &sighting) { return !kinds.contains(sighting.node.kind); });
+    for (const Graph::Sighting &sighting : std::as_const(sightings)) {
         if (sighting.bookId <= 0 || !known(sighting.at.place))
             continue;
         const auto key = std::pair{sighting.node.id, sighting.bookId};
         if (const auto before = taken.constFind(key); before != taken.cend()) {
-            Entry &entry = index.m_entries[std::size_t(*before)];
+            Entry &entry = m_entries[static_cast<std::size_t>(*before)];
             const GraphPlace &was = entry.met.place, &now = sighting.at.place;
             // A place in the book itself is worth more than none, and an earlier one more than a later.
             if (now.bookId == sighting.bookId && (was.bookId != sighting.bookId || !was.notAfter(now)))
@@ -102,17 +105,16 @@ KnowledgeIndex KnowledgeIndex::build(const Library &library) {
         Entry entry;
         entry.book = sighting.bookId;
         entry.node = node.id;
-        entry.kind = int(kinds.indexOf(node.kind));
+        entry.kind = static_cast<int>(kinds.indexOf(node.kind));
         entry.name = node.name;
         entry.names = (QStringList{node.name} + node.aliases()).join('\n').toCaseFolded();
         entry.said = node.summary.left(saidRoom).toCaseFolded();
         entry.met = sighting.at.place.bookId == sighting.bookId ? sighting.at : GraphMoment{};
         entry.from = GraphLayers::from(node);
-        taken.insert(key, qsizetype(index.m_entries.size()));
-        index.m_byBook[entry.book].append(qsizetype(index.m_entries.size()));
-        index.m_entries.push_back(std::move(entry));
+        taken.insert(key, static_cast<qsizetype>(m_entries.size()));
+        m_byBook[entry.book].append(static_cast<qsizetype>(m_entries.size()));
+        m_entries.push_back(std::move(entry));
     }
-    return index;
 }
 
 QHash<qint64, KnownMatch> KnowledgeIndex::find(const QString &word, bool deep) const {

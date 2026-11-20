@@ -545,8 +545,8 @@ public:
     }
 
     // The knowledge graph. Any plugin may read it and write to it, the
-    // general graph and scopes alike, as any plugin may change the library.
-    // What went wrong is thrown into the script, as GraphOps words it.
+    // general graph and scopes alike, in one tenant (that of the book named,
+    // or else Tenancy::preferred's). What went wrong is thrown, as GraphOps words it.
     QJsonObject graphAnswer(const QJsonObject &answer) {
         if (GraphOps::failed(answer))
             p->m_engine.throwError(answer.value("error").toString());
@@ -559,26 +559,26 @@ public:
     }
     Q_INVOKABLE QString graphFind(const QString &words, const QString &kind, const QString &scope, bool everywhere, double limit) {
         const Library *library = this->library(false);
-        return compact(library ? GraphOps::find(*library, words, kind, scope, everywhere, int(limit)).value("nodes").toArray()
+        return compact(library ? GraphOps::find(Graph::ofScope(*library, scope), words, kind, scope, everywhere, static_cast<int>(limit)).value("nodes").toArray()
                                : QJsonArray());
     }
     Q_INVOKABLE QString graphNode(double id) {
         const Library *library = this->library(false);
-        const auto node = library ? Graph(*library).node(qint64(id)) : std::nullopt;
+        const auto node = library ? Graph::ofThing(*library, static_cast<qint64>(id)).node(static_cast<qint64>(id)) : std::nullopt;
         return node ? compact(node->toJson()) : QString("null");
     }
     Q_INVOKABLE QString graphAround(double id, double depth) {
         const Library *library = this->library(false);
-        return compact(library ? Graph(*library).around(qint64(id), int(depth)).toJson() : GraphView().toJson());
+        return compact(library ? Graph::ofThing(*library, static_cast<qint64>(id)).around(static_cast<qint64>(id), static_cast<int>(depth)).toJson() : GraphView().toJson());
     }
     Q_INVOKABLE QString graphOfBook(double id, const QString &upTo) {
         const Library *library = this->library(false);
-        return compact(library ? Graph(*library).ofBook(qint64(id), graphPlace(qint64(id), parsed(upTo).toObject())).toJson()
+        return compact(library ? Graph::ofReader(*library, static_cast<qint64>(id)).ofBook(static_cast<qint64>(id), graphPlace(static_cast<qint64>(id), parsed(upTo).toObject())).toJson()
                                : GraphView().toJson());
     }
     Q_INVOKABLE QString graphBeyond(double id, const QString &upTo) {
         const Library *library = this->library(false);
-        return compact(library ? Graph(*library).beyond(qint64(id), graphPlace(qint64(id), parsed(upTo).toObject())).toJson()
+        return compact(library ? Graph::ofReader(*library, static_cast<qint64>(id)).beyond(static_cast<qint64>(id), graphPlace(static_cast<qint64>(id), parsed(upTo).toObject())).toJson()
                                : GraphView().toJson());
     }
     // One request to the model the user chose: what a book connects to in
@@ -621,38 +621,38 @@ public:
     }
     Q_INVOKABLE QString graphWhole(const QString &scope, double limit) {
         const Library *library = this->library(false);
-        return compact(library ? WorldLayers::whole(*library, scope, qMax(1, static_cast<int>(limit))).toJson() : GraphView().toJson());
+        return compact(library ? WorldLayers::whole(Graph::ofScope(*library, scope), scope, qMax(1, static_cast<int>(limit))).toJson() : GraphView().toJson());
     }
     Q_INVOKABLE double graphUpsert(const QString &thing) {
         Library *library = this->library(true);
         if (!library || !p->m_sharing->writing(*library, parsed(thing).toObject().value("scope").toString()))
             return 0;
-        return double(graphAnswer(GraphOps::add(*library, parsed(thing).toObject())).value("node").toObject().value("id").toInteger());
+        return static_cast<double>(graphAnswer(GraphOps::add(Graph::ofReader(*library, parsed(thing).toObject().value("book").toInteger()), parsed(thing).toObject())).value("node").toObject().value("id").toInteger());
     }
     Q_INVOKABLE double graphLink(double source, double target, const QString &relation, const QString &details) {
         Library *library = this->library(true);
         if (!library)
             return 0;
         const QJsonObject given = parsed(details).toObject();
-        return double(graphAnswer(GraphOps::link(*library, qint64(source), qint64(target), relation, given.value("note").toString(),
+        return static_cast<double>(graphAnswer(GraphOps::link(given.contains("book") ? Graph::ofReader(*library, given.value("book").toInteger()) : Graph::ofThing(*library, static_cast<qint64>(source)), static_cast<qint64>(source), static_cast<qint64>(target), relation, given.value("note").toString(),
                                                  graphPlace(given.value("book").toInteger(), given)))
                           .value("edge").toInteger());
     }
     Q_INVOKABLE bool graphUnlink(double edge) {
         Library *library = this->library(true);
-        return library && Graph(*library).unlink(qint64(edge));
+        return library && Graph::forTenant(*library, Tenancy::ofEdge(*library, static_cast<qint64>(edge)).value(0, Tenancy::preferred(*library))).unlink(static_cast<qint64>(edge));
     }
     Q_INVOKABLE bool graphMerge(double keep, double other) {
         Library *library = this->library(true);
-        return library && Graph(*library).merge(qint64(keep), qint64(other));
+        return library && Graph::ofThing(*library, static_cast<qint64>(keep)).merge(static_cast<qint64>(keep), static_cast<qint64>(other));
     }
     Q_INVOKABLE bool graphRemove(double id) {
         Library *library = this->library(true);
-        return library && Graph(*library).remove(qint64(id));
+        return library && Graph::ofThing(*library, static_cast<qint64>(id)).remove(static_cast<qint64>(id));
     }
     Q_INVOKABLE QString graphScopes() {
         const Library *library = this->library(false);
-        return compact(QJsonArray::fromStringList(library ? WorldLayers::scopes(*library) : QStringList()));
+        return compact(QJsonArray::fromStringList(library ? WorldLayers::scopes(Graph::ofLibrary(*library)) : QStringList()));
     }
     Q_INVOKABLE bool graphCopyScope(const QString &from, const QString &to) {
         Library *library = this->library(true);
@@ -668,7 +668,7 @@ public:
             return {};
         const QJsonObject of = parsed(what).toObject();
         const qint64 bookId = of.value("book").toInteger();
-        return graphAnswer(GraphOps::exported(*library, bookId, of.value("scope").toString(),
+        return graphAnswer(GraphOps::exported(bookId > 0 ? Graph::ofReader(*library, bookId) : Graph::ofScope(*library, of.value("scope").toString()), bookId, of.value("scope").toString(),
                                               graphPlace(bookId, of.value("upTo").toObject()), format))
             .value("content").toString();
     }

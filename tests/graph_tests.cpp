@@ -491,7 +491,7 @@ private slots:
         const auto document = shelf.document(shelf.book);
         GraphBuild::apply(shelf.library, shelf.book, GraphBuild::passages(*document, std::nullopt, {shelf.book, 0, 1.0}), firstAnswer);
         const GraphPlace place{shelf.book, 0, 0.8};
-        const qint64 id = GraphContext::noteQuestion(shelf.library, shelf.book, place, "Who taught Mara Venn?",
+        const qint64 id = GraphContext::noteQuestion(Graph::ofReader(shelf.library, shelf.book), shelf.book, place, "Who taught Mara Venn?",
                                                      "Old Tobin did. He kept the lighthouse before her.");
         const Graph graph(shelf.library);
         const GraphNode question = *graph.node(id);
@@ -511,7 +511,7 @@ private slots:
         QVERIFY(!has(graph.ofBook(shelf.book, GraphPlace{shelf.book, 0, 0.5}), "Who taught Mara Venn?"));
 
         // A question of the whole library names the books its answer does.
-        const qint64 asked = GraphContext::noteQuestion(shelf.library, 0, std::nullopt, "Which book is about inheritance?",
+        const qint64 asked = GraphContext::noteQuestion(Graph::ofLibrary(shelf.library), 0, std::nullopt, "Which book is about inheritance?",
                                                         "The Keeper of Saltmere is: a craft is handed from keeper to keeper.");
         QCOMPARE(graph.node(asked)->data.value("of").toString(), QString("library"));
         QVERIFY(has(graph.around(asked, 1), "The Keeper of Saltmere"));
@@ -625,11 +625,11 @@ private slots:
                                            {}, GraphPlace{shelf.book, 0, 0.1});
             graph.link(id, mara, "neighbour of", {}, GraphPlace{shelf.book, 0, 0.1});
         }
-        const QString slice = GraphContext::forQuestion(shelf.library, shelf.book, {shelf.book, 2, 1.0}, "Who is Mara Venn?");
+        const QString slice = GraphContext::forQuestion(Graph::ofReader(shelf.library, shelf.book), shelf.book, {shelf.book, 2, 1.0}, "Who is Mara Venn?");
         QVERIFY(slice.contains("Mara Venn (character)"));
         QVERIFY2(slice.size() < 9000, qPrintable(QString::number(slice.size())));
-        QVERIFY(GraphContext::forQuestion(shelf.library, shelf.book, {shelf.book, 2, 1.0}, "What is the weather like?").isEmpty());
-        QVERIFY(GraphContext::digest(shelf.library, shelf.book, {shelf.book, 2, 1.0}, {"character"}).size() < 16000);
+        QVERIFY(GraphContext::forQuestion(Graph::ofReader(shelf.library, shelf.book), shelf.book, {shelf.book, 2, 1.0}, "What is the weather like?").isEmpty());
+        QVERIFY(GraphContext::digest(Graph::ofReader(shelf.library, shelf.book), shelf.book, {shelf.book, 2, 1.0}, {"character"}).size() < 16000);
 
         // What goes with an extraction: what the text names in full, the
         // rest by name, and never the whole graph.
@@ -650,10 +650,10 @@ private slots:
                 graph.logReading(id, day * 4, day * 4 + 4, QString("2025-%1-%2").arg(1 + index % 12, 2, 10, QChar('0')).arg(day, 2, 10, QChar('0')));
             for (int theme = 0; theme < 4; ++theme)
                 graph.upsert({}, "theme", QString("Theme %1").arg((index + theme) % 60), "What a book is about.", {}, GraphPlace{id, 0, 0.0});
-            GraphContext::noteQuestion(shelf.library, 0, std::nullopt, QString("What is book number %1 about, at length?").arg(index),
+            GraphContext::noteQuestion(Graph::ofLibrary(shelf.library), 0, std::nullopt, QString("What is book number %1 about, at length?").arg(index),
                                        QString("It is about a great many things. ").repeated(20));
         }
-        const QString picture = GraphContext::picture(shelf.library, "Which books are about the lighthouse and its keeper?", 6000);
+        const QString picture = GraphContext::picture(Graph::ofLibrary(shelf.library), "Which books are about the lighthouse and its keeper?", 6000);
         QVERIFY2(picture.size() <= 6000, qPrintable(QString::number(picture.size())));
         QVERIFY(picture.contains("Reading history"));
         QVERIFY(picture.contains("Themes"));
@@ -1024,13 +1024,13 @@ private slots:
 
         // The companion is told of them with a question that names the
         // thing, the librarian in its picture, and who-is-who is not.
-        const QString slice = GraphContext::forQuestion(shelf.library, other, here, "What is storm-singing?");
+        const QString slice = GraphContext::forQuestion(Graph::ofReader(shelf.library, other), other, here, "What is storm-singing?");
         QVERIFY2(slice.contains("Storm-singing — same idea as → Tide-binding [concept in The Keeper of Saltmere"), qPrintable(slice));
         QVERIFY(slice.size() < 6000);
-        QVERIFY(!GraphContext::forQuestion(shelf.library, other, {other, 0, 0.0}, "What is storm-singing?").contains("Tide-binding"));
-        QVERIFY(GraphContext::picture(shelf.library).contains(
+        QVERIFY(!GraphContext::forQuestion(Graph::ofReader(shelf.library, other), other, {other, 0, 0.0}, "What is storm-singing?").contains("Tide-binding"));
+        QVERIFY(GraphContext::picture(Graph::ofLibrary(shelf.library)).contains(
             "Storm-singing [The Storm Choir] — same idea as → Tide-binding [The Keeper of Saltmere]"));
-        QVERIFY(!GraphContext::digest(shelf.library, other, here, {"character", "place", "group"}).contains("Tide-binding"));
+        QVERIFY(!GraphContext::digest(Graph::ofReader(shelf.library, other), other, here, {"character", "place", "group"}).contains("Tide-binding"));
 
         // What it will take is part of what a build says it will cost.
         const QJsonObject estimate = GraphOps::connect(shelf.library, other, model.asker(), true, true);
@@ -1065,7 +1065,7 @@ private slots:
         const qint64 thing = graph.upsert({}, "concept", "Lantern-work", {}, {}, GraphPlace{novel, 0, 0.0});
         QCOMPARE(graph.upsert({}, "concept", "Lantern-work", "Light bent along a wire.", {}, GraphPlace{paper, 0, 0.0}), thing);
         const auto summaryIn = [&](qint64 book) {
-            for (const GraphNode &node : graph.ofBook(book, GraphPlace{book, 2, 1.0}).nodes)
+            for (const GraphNode &node : Graph::ofReader(shelf.library, book).ofBook(book, GraphPlace{book, 2, 1.0}).nodes)
                 if (node.id == thing)
                     return node.summary;
             return QString("(not shown)");
@@ -1148,7 +1148,7 @@ private slots:
             });
         };
         const auto check = [&](bool split) {
-            const Graph now(shelf.library);
+            const Graph now = Graph::ofReader(shelf.library, paper);
             const GraphView beyond = now.beyond(paper);
             QCOMPARE(has(beyond, "Viscosity"), true);
             QCOMPARE(has(beyond, "Mara Venn"), !split);
@@ -1158,14 +1158,14 @@ private slots:
             QVERIFY(edgeTo(now.acrossBooks(), waves, flow));
             const GraphView whole = now.whole({}, 100000);
             QCOMPARE(edgeTo(whole, waves, mara), !split);
-            QVERIFY(edgeTo(whole, waves, flow) && has(whole, "Tide-binding") && has(whole, "Mara Venn"));
+            QVERIFY(edgeTo(whole, waves, flow) && has(whole, "Tide-binding") && has(whole, "Mara Venn") == !split);
             QCOMPARE(std::ranges::count(whole.nodes, tide, &GraphNode::id), 1);
             QCOMPARE(has(now.around(waves, 1), "Mara Venn"), !split);
             // The AI is told only of its own side.
-            const QString slice = GraphContext::forQuestion(shelf.library, paper, {paper, 2, 1.0}, "What are standing waves?");
+            const QString slice = GraphContext::forQuestion(Graph::ofReader(shelf.library, paper), paper, {paper, 2, 1.0}, "What are standing waves?");
             QVERIFY2(slice.contains("Viscosity"), qPrintable(slice));
             QCOMPARE(slice.contains("Mara Venn"), !split);
-            QCOMPARE(GraphContext::forQuestion(shelf.library, novel, {novel, 2, 1.0}, "Who is Mara Venn?").contains("Standing waves"), !split);
+            QCOMPARE(GraphContext::forQuestion(Graph::ofReader(shelf.library, novel), novel, {novel, 2, 1.0}, "Who is Mara Venn?").contains("Standing waves"), !split);
         };
         check(true);
 
@@ -1185,15 +1185,15 @@ private slots:
         QVERIFY(shelf.library.putInCollection(play, paper, true));
         QCOMPARE(BookSides::of(shelf.library).side(paper), (BookSides::Side{play}));
         {
-            const Graph now(shelf.library);
+            const Graph now = Graph::ofReader(shelf.library, paper);
             QVERIFY(has(now.beyond(paper), "Mara Venn") && !has(now.beyond(paper), "Viscosity"));
             QVERIFY(edgeTo(now.acrossBooks(), waves, mara) && !edgeTo(now.acrossBooks(), waves, flow));
             QCOMPARE(shelf.library.earlierInSeries(paper).size(), 1);
         }
-        // In both, it is on both sides and links with either.
+        // In both, it is in both tenants and links with either, in each.
         QVERIFY(shelf.library.putInCollection(work, paper, true));
         QCOMPARE(BookSides::of(shelf.library).side(paper), (BookSides::Side{work, play}));
-        QVERIFY(has(Graph(shelf.library).beyond(paper), "Mara Venn") && has(Graph(shelf.library).beyond(paper), "Viscosity"));
+        QVERIFY(has(Graph::ofCollection(shelf.library, play).beyond(paper), "Mara Venn") && has(Graph::ofCollection(shelf.library, work).beyond(paper), "Viscosity"));
         // And back where it was, as before.
         QVERIFY(shelf.library.putInCollection(play, paper, false));
         QVERIFY(shelf.library.putInCollection(work, paper, false));
@@ -1618,7 +1618,7 @@ private slots:
         QVERIFY(Graph(shelf.library).edit(named(shelf.library, "character", "Mara Venn").id, "Mara Venn", "The keeper, in my own words."));
         QVERIFY(found("words", true).contains(book));
         // And so does a question asked of a book, opened or not.
-        GraphContext::noteQuestion(shelf.library, unopened, std::nullopt, "Why does the lamp turn at night?", "It warns the ships.");
+        GraphContext::noteQuestion(Graph::ofReader(shelf.library, unopened), unopened, std::nullopt, "Why does the lamp turn at night?", "It warns the ships.");
         QCOMPARE(found("lamp").value(unopened).kind, QString("question"));
         // A book marked as read is known to its end.
         QVERIFY(shelf.library.setReading(unopened, "read", 0, {}));
@@ -1650,18 +1650,18 @@ private slots:
         shelf.library.setProgress(book, {.section = 1, .fraction = 0.9, .percent = 60, .updated = 0});
         const GraphPlace here{book, 1, 0.9};
 
-        const QString question = GraphContext::forQuestion(shelf.library, book, here, "Who is Corin Ash, and what of the bell?");
+        const QString question = GraphContext::forQuestion(Graph::ofReader(shelf.library, book), book, here, "Who is Corin Ash, and what of the bell?");
         QVERIFY(question.contains("Corin Ash"));
         QVERIFY(question.contains("after the drowned bell"));
         QVERIFY(!question.contains("Tobin's son"));
         QVERIFY(!question.contains("son of"));
         QVERIFY(!question.contains("Told Mara"));
-        const QString cast = GraphContext::digest(shelf.library, book, here, {"character", "item"});
+        const QString cast = GraphContext::digest(Graph::ofReader(shelf.library, book), book, here, {"character", "item"});
         QVERIFY(cast.contains("Corin Ash"));
         QVERIFY(!cast.contains("Tobin's son"));
         QVERIFY(!cast.contains("Told Mara"));
         // A question of the whole library goes by how far each book was read.
-        const QString picture = GraphContext::picture(shelf.library, "What is Corin doing?");
+        const QString picture = GraphContext::picture(Graph::ofLibrary(shelf.library), "What is Corin doing?");
         QVERIFY(picture.contains("Corin Ash"));
         QVERIFY(!picture.contains("Tobin's son"));
         // And what the model is told when it notes the second chapter again.

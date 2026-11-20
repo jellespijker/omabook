@@ -19,6 +19,7 @@
 #include "graphtools.h"
 #include "library.h"
 #include "settings.h"
+#include "tenancy.h"
 
 namespace {
 
@@ -121,7 +122,11 @@ void addOptions(QCommandLineParser &parser) {
 
 // One of the writers, as the words ask; none when they ask for none of them.
 [[nodiscard]] std::optional<Answer> written(const Library &library, const QStringList &words, const QCommandLineParser &parser) {
-    Graph graph(library);
+    // Made by hand in a tenant: the collection's, or the library's only one.
+    const auto tenant = Tenancy::chosen(library, parser.value("collection"));
+    if (!tenant)
+        return std::unexpected(tenant.error());
+    Graph graph = Graph::forTenant(library, *tenant);
     const QString sub = words.value(0);
     const QString scope = parser.value("scope");
     if (sub == "set-when"_L1 && (words.size() == 3 || (words.size() == 2 && parser.isSet("said"))))

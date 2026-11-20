@@ -112,18 +112,18 @@ std::optional<Layer> WorldLayers::named(const Library &library, const QString &s
     return std::nullopt;
 }
 
-QStringList WorldLayers::scopes(const Library &library) {
-    QStringList scopes = Graph(library).scopes();
-    for (const Layer &layer : list(library, false))
+QStringList WorldLayers::scopes(const Graph &graph) {
+    QStringList scopes = graph.scopes();
+    for (const Layer &layer : list(graph.library(), false))
         if (!scopes.contains(layer.scope))
             scopes << layer.scope;
     return scopes;
 }
 
-GraphView WorldLayers::whole(const Library &library, const QString &scope, int limit) {
-    const std::optional<Layer> layer = named(library, scope);
+GraphView WorldLayers::whole(const Graph &graph, const QString &scope, int limit) {
+    const std::optional<Layer> layer = named(graph.library(), scope);
     if (!layer)
-        return Graph(library).whole(scope, limit);
+        return graph.whole(scope, limit);
     GraphView view = layer->view;
     if (view.nodes.size() > limit)
         view.nodes.resize(limit);

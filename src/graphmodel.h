@@ -46,7 +46,8 @@ class GraphBrowser : public QObject {
     Q_PROPERTY(QObject *source READ backend WRITE setBackend NOTIFY backendChanged)
     // The tenant of the graph (ADR 0003) whose part is read, by its global id
     // (Tenant::globalId), as GraphTenants chose it; empty for none, which
-    // reads all of it. Every reader the browser asks keeps to it (#95).
+    // reads the tenant of the book or the collection shown, or else
+    // Tenancy::preferred's (graph()). Every reader the browser asks keeps to it (#95).
     Q_PROPERTY(QString tenant READ tenant WRITE setTenant NOTIFY changed)
     // What is shown: "scope", "book" or "series", and which one.
     Q_PROPERTY(QString showing READ showing NOTIFY changed)
@@ -277,6 +278,15 @@ private:
     Shown shownOf(const GraphNode &node, bool outer) const;
 
     const Library *library() const;
+    // The graph as the tenant read sees it (tenant()); every read goes through it.
+    [[nodiscard]] Graph graph() const {
+        if (!m_tenant.isEmpty())
+            return Graph::forTenant(*library(), Tenant::fromGlobalId(m_tenant));
+        if (m_what == What::Book)
+            return Graph::ofReader(*library(), m_bookId);
+        const auto collection = m_what == What::Collection ? library()->collectionNamed(m_series) : std::nullopt;
+        return collection ? Graph::ofCollection(*library(), collection->id) : Graph::ofLibrary(*library());
+    }
     // Where a book's reader is, or nothing when the book is finished.
     std::optional<GraphPlace> placeIn(const Book &book) const;
     // What may be shown at all, before the centre and the filters, and how

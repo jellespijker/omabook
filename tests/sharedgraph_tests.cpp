@@ -125,7 +125,7 @@ struct Receiver {
 
 [[nodiscard]] QStringList sharedNames(const Library &library, qint64 book) {
     QList<GraphNode> nodes;
-    for (const GraphLayers::Layer &layer : GraphContext::layers(library))
+    for (const GraphLayers::Layer &layer : GraphContext::layers(Graph::ofLibrary(library)))
         nodes += layer.ofBook(book).nodes;
     return names(nodes);
 }
@@ -191,7 +191,7 @@ private slots:
         QTemporaryDir dir;
         Receiver receiver(owner, dir.filePath("Receiver"));
         receiver.readTo(2, 0.5, 30);
-        const QList<GraphLayers::Layer> layers = GraphContext::layers(receiver.library);
+        const QList<GraphLayers::Layer> layers = GraphContext::layers(Graph::ofLibrary(receiver.library));
         QCOMPARE(layers.size(), 1);
         QCOMPARE(layers.first().owner, QString("Ada Fixture"));
         const GraphView view = layers.first().ofBook(receiver.book);
@@ -205,9 +205,15 @@ private slots:
         QCOMPARE(view.edges.size(), 1);
         QCOMPARE(view.edges.first().kind, QString("lives in"));
         // A place asked for further on gives no more than the receiver read.
-        QCOMPARE(names(GraphContext::layers(receiver.library, GraphPlace{receiver.book, 9, 1.0}).first().ofBook(receiver.book).nodes),
+        QCOMPARE(names(GraphContext::layers(Graph::ofLibrary(receiver.library), GraphPlace{receiver.book, 9, 1.0})
+                           .first()
+                           .ofBook(receiver.book)
+                           .nodes),
                  QStringList({"Glass Harbour", "Mara"}));
-        QCOMPARE(names(GraphContext::layers(receiver.library, GraphPlace{receiver.book, 0, 0.5}).first().ofBook(receiver.book).nodes),
+        QCOMPARE(names(GraphContext::layers(Graph::ofLibrary(receiver.library), GraphPlace{receiver.book, 0, 0.5})
+                           .first()
+                           .ofBook(receiver.book)
+                           .nodes),
                  QStringList({"Mara"}));
         // Never merged into the receiver's own graph, which is as it was.
         const Graph graph(receiver.library);
@@ -239,7 +245,7 @@ private slots:
         receiver.readTo(2, 0.5, 30);
         QCOMPARE(sharedNames(receiver.library, receiver.book), QStringList({"Glass Harbour", "Mara"}));
         receiver.readTo(8, 0.6, 85);
-        const GraphView view = GraphContext::layers(receiver.library).first().ofBook(receiver.book);
+        const GraphView view = GraphContext::layers(Graph::ofLibrary(receiver.library)).first().ofBook(receiver.book);
         QCOMPARE(names(view.nodes), QStringList({"Glass Harbour", "Mara", "Wick"}));
         const auto mara = std::ranges::find(view.nodes, QString("Mara"), &GraphNode::name);
         QCOMPARE(mara->summary, QString("Secretly the queen in exile."));
@@ -268,20 +274,23 @@ private slots:
         Receiver receiver(owner, dir.filePath("Receiver"));
         receiver.readTo(2, 0.5, 30);
         const GraphPlace here{receiver.book, 2, 0.5};
-        const QString asked = GraphContext::forQuestion(receiver.library, receiver.book, here, "Who is Mara, and what of Wick?");
+        const QString asked = GraphContext::forQuestion(Graph::ofReader(receiver.library, receiver.book), receiver.book, here,
+                                                        "Who is Mara, and what of Wick?");
         QVERIFY2(asked.contains("Ada Fixture's shared graph") && asked.contains("A ferry pilot.") && asked.contains("Glass Harbour"),
                  qPrintable(asked));
         QVERIFY2(asked.contains("My note: she rows at night."), qPrintable(asked));
         QVERIFY2(!asked.contains("Wick") && !asked.contains("queen", Qt::CaseInsensitive), qPrintable(asked));
-        const QString cast = GraphContext::digest(receiver.library, receiver.book, here, {"character", "place"});
+        const QString cast =
+            GraphContext::digest(Graph::ofReader(receiver.library, receiver.book), receiver.book, here, {"character", "place"});
         QVERIFY2(cast.contains("Glass Harbour") && !cast.contains("Wick") && !cast.contains("queen", Qt::CaseInsensitive),
                  qPrintable(cast));
-        const QString library = GraphContext::picture(receiver.library, "harbour wick queen");
+        const QString library = GraphContext::picture(Graph::ofLibrary(receiver.library), "harbour wick queen");
         QVERIFY2(library.contains("Glass Harbour") && !library.contains("Wick") && !library.contains("queen", Qt::CaseInsensitive),
                  qPrintable(library));
         // A book not begun tells the AI nothing of the shared graph.
         receiver.readTo(0, 0, 0);
-        QVERIFY(!GraphContext::forQuestion(receiver.library, receiver.book, here, "Glass Harbour").contains("shared"));
+        QVERIFY(!GraphContext::forQuestion(Graph::ofReader(receiver.library, receiver.book), receiver.book, here, "Glass Harbour")
+                     .contains("shared"));
     }
 
     void theCommandLineAndTheMcpServerShowNoMore() {
@@ -315,9 +324,9 @@ private slots:
         QVERIFY(!QJsonDocument(tool(root, "graph_book", {{"id", book}})).toJson().contains("Glass Harbour"));
         Library library(root);
         QVERIFY(library.open());
-        QVERIFY(GraphContext::layers(library).isEmpty());
+        QVERIFY(GraphContext::layers(Graph::ofLibrary(library)).isEmpty());
         QVERIFY(KnowledgeIndex::build(library).find("harbour").isEmpty());
-        QVERIFY(!GraphContext::forQuestion(library, book, {book, 9, 1.0}, "Glass Harbour").contains("shared"));
+        QVERIFY(!GraphContext::forQuestion(Graph::ofReader(library, book), book, {book, 9, 1.0}, "Glass Harbour").contains("shared"));
     }
 
     void theWindowsGraphAndCardsShowNoMore() {

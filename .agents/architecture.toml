@@ -37,7 +37,8 @@ modules = [
   "libraryannotations", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
   "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
-  "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave", "statements",
+  "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
+  "statements", "graphviews", "graphrows", "graphpicture",
 ]
 
 [layers.services]
@@ -54,7 +55,7 @@ modules = [
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
+  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
 ]
 

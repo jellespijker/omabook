@@ -10,6 +10,7 @@
 #include <optional>
 #include <utility>
 
+#include "booksides.h"
 #include "graphcontext.h"
 #include "prompts.h"
 
@@ -96,8 +97,9 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     const auto book = library.book(bookId);
     if (!book)
         return offer;
-    const Graph graph(library);
-    const GraphView mine = GraphContext::story(library, bookId, upTo);
+    // All of it in the book's tenant: the model is never shown another's.
+    const Graph graph = Graph::ofReader(library, bookId);
+    const GraphView mine = GraphContext::story(graph, bookId, upTo);
     const QHash<qint64, int> ties = tiesOf(mine);
     // What a book is about and how its world works say most; then what it
     // leaves open, and who carries it.
@@ -122,7 +124,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     };
     QList<Near> near;
     for (const Book &other : library.books()) {
-        if (other.id == bookId || !graph.sides().together(bookId, other.id) || !GraphBuild::builtTo(library, other.id)
+        if (other.id == bookId || !graph.sees(other.id) || !GraphBuild::builtTo(library, other.id)
             || !GraphContext::reachOf(library, other.id).any)
             continue;
         int score = 0;
@@ -150,7 +152,7 @@ GraphLinks::Offer GraphLinks::offer(const Library &library, qint64 bookId, const
     QList<Candidate> candidates;
     QSet<qint64> taken;
     for (const Near &other : near.mid(0, mostBooks)) {
-        const GraphView theirs = GraphContext::story(library, other.book.id, GraphContext::reachOf(library, other.book.id).upTo());
+        const GraphView theirs = GraphContext::story(graph, other.book.id, GraphContext::reachOf(library, other.book.id).upTo());
         const QHash<qint64, int> theirTies = tiesOf(theirs);
         const QList<GraphNode> telling = pick(theirs, theirTies, "theme", 10) + pick(theirs, theirTies, "concept", 8)
                                          + pick(theirs, theirTies, "thread", 5) + pick(theirs, theirTies, "topic", 5)

@@ -6,6 +6,7 @@
 
 #include "changelog.h"
 #include "library.h"
+#include "tenancyschema.h"
 
 using namespace Qt::StringLiterals;
 
@@ -46,6 +47,10 @@ namespace {
         u"SELECT 1 FROM graph_edges AS e "_s + ofTenant + u"e.book_id WHERE e.target = %1 AND "_s.arg(c) + inBook(u"e"_s),
         tied.arg(u"source"_s, u"target"_s, c),
         tied.arg(u"target"_s, u"source"_s, c),
+        // Made by hand in the tenant (#95), or in any for the whole library's: no book is behind it there.
+        u"SELECT 1 FROM graph_nodes AS n JOIN tenants AS m ON m.id = :T WHERE n.id = %1 AND "_s.arg(c) + TenancySchema::madeHere(u"n"_s)
+            + u" AND (m.gid = 'library' OR m.gid IN (SELECT value FROM json_each(CASE WHEN json_valid(n.data) THEN n.data ELSE '{}' END, "
+              "'$.tenants')))"_s,
     };
     QStringList any;
     for (const QString &way : ways)

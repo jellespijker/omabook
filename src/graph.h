@@ -3,13 +3,13 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <functional>
 #include <optional>
 #include <utility>
 
-#include "booksides.h"
 #include "eventtime.h"
 #include "library.h"
 #include "tenancy.h"
@@ -101,6 +101,11 @@ struct GraphNode {
 
     QStringList aliases() const;
     QJsonObject toJson() const;
+    // The kinds of thing a book's story is told in, which the AI reads into
+    // the graph and is told from it (Prompts::graphKinds).
+    static QStringList storyKinds() {
+        return {"character", "place", "group", "concept", "item", "event", "thread", "theme", "topic", "timeline"};
+    }
 };
 
 struct GraphEdge {
@@ -176,12 +181,47 @@ public:
         graph.m_tenant = std::move(tenant);
         return graph;
     }
-    [[nodiscard]] const std::optional<Tenant> &tenant() const noexcept { return m_tenant; }
-    // The condition that keeps a query to the tenant (TenantFilter); none
-    // for the graph of no tenant, which reads all of it.
-    [[nodiscard]] std::optional<TenantFilter> within() const {
-        return m_tenant ? std::optional(Tenancy::filter(*m_library, *m_tenant)) : std::nullopt;
+    // The graph a reader that names no tenant reads (Tenancy::preferred).
+    [[nodiscard]] static Graph ofLibrary(const Library &library) { return forTenant(library, Tenancy::preferred(library)); }
+    // The graph a thing is read in: the first of its tenants, or for one of
+    // none (what every tenant sees) Tenancy::preferred's.
+    [[nodiscard]] static Graph ofThing(const Library &library, qint64 node) {
+        const QList<Tenant> all = Tenancy::tenants(library);
+        for (const Tenant &tenant : Tenancy::ofNode(library, node))
+            if (all.contains(tenant))
+                return forTenant(library, tenant);
+        return ofLibrary(library);
     }
+    // The graph a scope is read in: a world's, its tenant (Tenancy::ofScope),
+    // the general graph's, Tenancy::preferred's.
+    [[nodiscard]] static Graph ofScope(const Library &library, const QString &scope) {
+        return forTenant(library, Tenancy::ofScope(library, scope).value_or(Tenancy::preferred(library)));
+    }
+    // The graph read from a collection's view: its tenant's, or for none (the
+    // whole shelf) Tenancy::preferred's, until the window says which (#96).
+    [[nodiscard]] static Graph ofCollection(const Library &library, qint64 collectionId) {
+        return forTenant(library, Tenancy::ofCollection(library, collectionId).value_or(Tenancy::preferred(library)));
+    }
+    // The graph a reader of a book reads, in the book's tenant (Tenancy::ofReader).
+    [[nodiscard]] static Graph ofReader(const Library &library, qint64 bookId) {
+        return forTenant(library, Tenancy::ofReader(library, bookId));
+    }
+    [[nodiscard]] const std::optional<Tenant> &tenant() const noexcept { return m_tenant; }
+    [[nodiscard]] const Library &library() const noexcept { return *m_library; }
+    // The condition that keeps a query to the tenant (TenantFilter); none
+    // for the graph of no tenant, which reads all of it: what writes the
+    // graph, keeps it and carries it to other computers, never a reader.
+    [[nodiscard]] const std::optional<TenantFilter> &within() const {
+        if (m_tenant && !m_within)
+            m_within = Tenancy::filter(*m_library, *m_tenant);
+        return m_within;
+    }
+    // Whether a book is in the tenant, and so is the graph's to read and
+    // tell of; every book is the graph of no tenant's.
+    [[nodiscard]] bool sees(qint64 bookId) const;
+    // Whether two books share a tenant (as BookSides places them): what one
+    // book's graph, as it is built, may draw on of the other's.
+    [[nodiscard]] bool together(qint64 bookId, qint64 otherBook) const;
 
     // Adds a thing, or brings the one already known by that name (or one of
     // its aliases) in the same scope and of the same kind up to date: a
@@ -189,7 +229,8 @@ public:
     // `seen` is where it was met, with `anchor` the words there that name it;
     // the earliest place per book is kept. The summary and the names new to
     // it are kept as facts (see facts()) revealed at `revealed`, or where it
-    // was met when that isn't given.
+    // was met when that isn't given. Put in by hand in the general graph of a
+    // tenant, met in no book, it is kept in that tenant (Tenancy::madeInKey).
     qint64 upsert(const QString &scope, const QString &kind, const QString &name, const QString &summary = {},
                   const QJsonObject &data = {}, const std::optional<GraphPlace> &seen = std::nullopt,
                   const QString &anchor = {}, const std::optional<GraphMoment> &revealed = std::nullopt);
@@ -272,12 +313,12 @@ public:
     // with that place. What a reader at some place has met is therefore the
     // front of this list, up to the first thing met after it.
     QList<std::pair<GraphNode, GraphPlace>> metIn(qint64 bookId, const QString &scope = {}) const;
-    // Links between books keep to the library's sides (BookSides): a
-    // connection across books whose two ends are of books on sides that
-    // don't meet is kept but never answered by what follows (ofBook,
-    // around, beyond, acrossBooks, whole), and beyond leaves out the books
-    // on another side than the book's. The sides are read once per Graph.
-    [[nodiscard]] const BookSides &sides() const;
+    // Everything that reads (node, seen, facts, the views and search) keeps
+    // to the graph's tenant, when it has one (ADR 0003): nothing another
+    // tenant sees alone is answered, and a thing both see is told as this
+    // one knows it, by its facts here (told()). So a connection across books
+    // of two tenants is never answered, and beyond leaves out the books of
+    // another tenant.
 
     // What a book connects to elsewhere: the things of other books that a
     // connection across books (see GraphEdge::across) ties to this book's
@@ -313,15 +354,22 @@ public:
 private:
     // Keeps a fact as learn() does, without touching the node itself.
     qint64 recordFact(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed);
-    [[nodiscard]] GraphView collect(const QString &nodesWhere, const QVariantList &values, int limit) const;
+    // The nodes that meet a condition, of the tenant, in an order, at most `limit`.
+    [[nodiscard]] GraphView collect(const QString &nodesWhere, const QVariantList &values, int limit, const QString &order) const;
     [[nodiscard]] QList<GraphEdge> edgesAmong(const QList<GraphNode> &nodes) const;
-    // The sides of these nodes: of the books each was met in, and for a
-    // book's own node of its book. A node of no book has no side.
-    [[nodiscard]] QHash<qint64, BookSides::Side> sidesOf(const QSet<qint64> &nodes) const;
-    // The edges without the connections across books between two sides.
-    [[nodiscard]] QList<GraphEdge> withinSides(QList<GraphEdge> edges) const;
+    // `data` of a thing put in (upsert), kept in the graph's tenant
+    // (Tenancy::madeInKey) when it was put in there by hand.
+    [[nodiscard]] QJsonObject madeIn(QJsonObject data, qint64 id, const QString &scope, const std::optional<GraphPlace> &seen) const;
+    // " AND " the tenant's condition on a column (TenantFilter), or nothing
+    // for the graph of no tenant.
+    [[nodiscard]] QString andWithin(QString (TenantFilter::*condition)(QStringView) const, QStringView column) const;
+    // Things as the tenant knows them: of what is said of each and what it is
+    // called, only what the tenant was told (its facts). A thing another
+    // tenant was told nothing of is as it is.
+    void told(QList<GraphNode> &nodes) const;
 
     const Library *m_library;
     std::optional<Tenant> m_tenant;
-    mutable std::optional<BookSides> m_sides;
+    mutable std::optional<TenantFilter> m_within;
+    mutable std::optional<QSet<qint64>> m_books;
 };

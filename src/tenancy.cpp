@@ -12,6 +12,7 @@
 #include "settings.h"
 #include "spaces.h"
 #include "tenancyleave.h"
+#include "tenancyschema.h"
 
 using namespace Qt::StringLiterals;
 
@@ -108,6 +109,10 @@ bool settle(const Library &library, const Placed &wanted) {
 [[nodiscard]] QStringList derived() {
     const QString inBook = u"substr(e.kind, 1, 8) <> 'across: '"_s;
     const QString bookNode = u"(%1.kind = 'book' AND %1.book_id IS NOT NULL)"_s;
+    // Made by hand in a tenant: in it, and given nothing by a relation to a book's node.
+    const QString made = TenancySchema::madeHere(u"n"_s);
+    const QString others = TenancySchema::madeHere(u"o"_s);
+    const QString dataOf = u"CASE WHEN json_valid(n.data) THEN n.data ELSE '{}' END"_s;
     return {
         u"DELETE FROM tenant_nodes"_s,
         u"DELETE FROM tenant_edges"_s,
@@ -125,10 +130,18 @@ bool settle(const Library &library, const Placed &wanted) {
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.tenant, e.target FROM graph_edges AS e "
         "JOIN graph_nodes AS b ON b.id = e.source JOIN graph_nodes AS o ON o.id = e.target JOIN tenant_books AS t ON t.book_id = b.book_id "
         "WHERE e.book_id = 0 AND "_s
-            + inBook + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s)
+            + inBook + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s) + u" AND NOT "_s + others
             + u" UNION SELECT t.tenant, e.source FROM graph_edges AS e JOIN graph_nodes AS b ON b.id = e.target "
               "JOIN graph_nodes AS o ON o.id = e.source JOIN tenant_books AS t ON t.book_id = b.book_id WHERE e.book_id = 0 AND "_s
-            + inBook + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s),
+            + inBook + u" AND "_s + bookNode.arg(u"b"_s) + u" AND NOT "_s + bookNode.arg(u"o"_s) + u" AND NOT "_s + others,
+        u"INSERT OR IGNORE INTO tenants (gid) SELECT DISTINCT j.value FROM graph_nodes AS n, json_each("_s + dataOf
+            + u", '$.tenants') AS j "
+              "WHERE j.type = 'text' AND "_s
+            + made,
+        u"INSERT OR IGNORE INTO tenants (gid) SELECT 'library' WHERE EXISTS (SELECT 1 FROM graph_nodes AS n WHERE "_s + made + u")"_s,
+        u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.id, n.id FROM graph_nodes AS n, json_each("_s + dataOf
+            + u", '$.tenants') AS j JOIN tenants AS t ON t.gid = j.value WHERE j.type = 'text' AND "_s + made
+            + u" UNION SELECT t.id, n.id FROM graph_nodes AS n JOIN tenants AS t ON t.gid = 'library' WHERE "_s + made,
         u"INSERT INTO tenant_nodes (tenant, node_id) SELECT 0, id FROM graph_nodes WHERE id NOT IN (SELECT node_id FROM tenant_nodes)"_s,
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT t.tenant, f.id FROM graph_facts AS f "
         "JOIN tenant_books AS t ON t.book_id = f.book_id"_s,
@@ -158,7 +171,16 @@ void inBulk(const Library &library, const auto &fill) {
     setState(library, u"tenancy_shrunk"_s, 0);
 }
 
+// The books placed as the user chose now: a reader that comes before the
+// next write after the choice of one tenant changed has them placed first,
+// so that it never reads a tenant the books are not in.
+void placedAsChosen(const Library &library) {
+    if (stateOf(library, u"tenancy_one"_s) != (Tenancy::oneTenant() ? 1 : 0))
+        Tenancy::follow(library);
+}
+
 [[nodiscard]] QList<Tenant> members(const Library &library, const QString &table, const QString &column, qint64 id) {
+    placedAsChosen(library);
     QList<Tenant> found;
     for (QSqlQuery rows = ChangeLog::query(
              library, u"SELECT t.gid FROM %1 AS m JOIN tenants AS t ON t.id = m.tenant WHERE m.%2 = ? ORDER BY t.gid"_s.arg(table, column),
@@ -184,6 +206,22 @@ QString TenantFilter::facts(QStringView column) const {
 
 QString TenantFilter::books(QStringView column) const {
     return u"%1 IN (SELECT book_id FROM tenant_books WHERE tenant = %2)"_s.arg(column.toString(), QString::number(m_id));
+}
+
+QString TenantFilter::hasNode(QStringView column) const {
+    return u"EXISTS (SELECT 1 FROM tenant_nodes WHERE tenant IN (%2, 0) AND node_id = %1)"_s.arg(column.toString(), QString::number(m_id));
+}
+
+QString TenantFilter::hasEdge(QStringView column) const {
+    return u"EXISTS (SELECT 1 FROM tenant_edges WHERE tenant IN (%2, 0) AND edge_id = %1)"_s.arg(column.toString(), QString::number(m_id));
+}
+
+QString TenantFilter::hasFact(QStringView column) const {
+    return u"EXISTS (SELECT 1 FROM tenant_facts WHERE tenant IN (%2, 0) AND fact_id = %1)"_s.arg(column.toString(), QString::number(m_id));
+}
+
+QString TenantFilter::hasBook(QStringView column) const {
+    return u"EXISTS (SELECT 1 FROM tenant_books WHERE tenant = %2 AND book_id = %1)"_s.arg(column.toString(), QString::number(m_id));
 }
 
 bool Tenancy::oneTenant() {
@@ -276,6 +314,103 @@ QHash<QString, qint64> Tenancy::bookCounts(const Library &library) {
 }
 
 TenantFilter Tenancy::filter(const Library &library, const Tenant &tenant) {
+    placedAsChosen(library);
     QSqlQuery found = ChangeLog::query(library, u"SELECT id FROM tenants WHERE gid = ?"_s, {tenant.globalId()});
     return TenantFilter(found.next() ? found.value(0).toLongLong() : -1);
+}
+
+QSet<qint64> Tenancy::booksOf(const Library &library, const Tenant &tenant) {
+    placedAsChosen(library);
+    QSet<qint64> books;
+    for (QSqlQuery found =
+             ChangeLog::query(library, u"SELECT m.book_id FROM tenant_books AS m JOIN tenants AS t ON t.id = m.tenant WHERE t.gid = ?"_s,
+                              {tenant.globalId()});
+         found.next();)
+        books.insert(found.value(0).toLongLong());
+    return books;
+}
+
+QString Tenancy::nameOf(const Library &library, const Tenant &tenant) {
+    if (tenant == Tenant::unfiled())
+        return u"Unfiled"_s;
+    if (tenant == Tenant::wholeLibrary() || tenant == Tenant::everyone())
+        return u"The whole library"_s;
+    for (const Collection &collection : library.collections())
+        if (collection.depth == 0 && Spaces::collectionId(library, collection.id) == tenant.globalId())
+            return collection.name;
+    return tenant.globalId();
+}
+
+std::optional<Tenant> Tenancy::ofCollection(const Library &library, qint64 collectionId) {
+    const QList<Collection> all = library.collections();
+    QHash<qint64, qint64> parents;
+    for (const Collection &collection : all)
+        parents.insert(collection.id, collection.parent);
+    if (!parents.contains(collectionId))
+        return std::nullopt;
+    if (oneTenant())
+        return Tenant::wholeLibrary();
+    qint64 top = collectionId;
+    for (qsizetype steps = 0; parents.value(top) != 0 && steps < all.size(); ++steps)
+        top = parents.value(top);
+    return Tenant::ofCollection(Spaces::collectionId(library, top));
+}
+
+std::optional<Tenant> Tenancy::ofScope(const Library &library, const QString &scope) {
+    if (scope.isEmpty())
+        return std::nullopt;
+    placedAsChosen(library);
+    QSqlQuery found = ChangeLog::query(library,
+                                       u"SELECT t.gid FROM graph_nodes AS n JOIN tenant_nodes AS m ON m.node_id = n.id "
+                                       "JOIN tenants AS t ON t.id = m.tenant WHERE n.scope = ? AND m.tenant <> 0 ORDER BY t.gid LIMIT 1"_s,
+                                       {scope});
+    const std::optional<Tenant> in = found.next() ? std::optional(Tenant::fromGlobalId(found.value(0).toString())) : std::nullopt;
+    return in && tenants(library).contains(*in) ? in : std::nullopt;
+}
+
+Tenant Tenancy::preferred(const Library &library) {
+    const QList<Tenant> all = tenants(library);
+    if (all.size() == 1)
+        return all.first();
+    placedAsChosen(library);
+    QSqlQuery most = ChangeLog::query(library, u"SELECT t.gid FROM tenant_books AS m JOIN tenants AS t ON t.id = m.tenant "
+                                               "GROUP BY m.tenant ORDER BY COUNT(*) DESC, t.gid LIMIT 1"_s);
+    const Tenant found = most.next() ? Tenant::fromGlobalId(most.value(0).toString()) : Tenant::unfiled();
+    return all.contains(found) ? found : all.first();
+}
+
+Tenant Tenancy::ofReader(const Library &library, qint64 bookId) {
+    const QList<Tenant> its = ofBook(library, bookId);
+    return its.isEmpty() ? preferred(library) : its.first();
+}
+
+std::expected<Tenant, QString> Tenancy::chosen(const Library &library, const QString &named, qint64 bookId) {
+    const QList<Tenant> all = tenants(library);
+    const QString wanted = named.simplified();
+    if (!wanted.isEmpty()) {
+        if (wanted.compare(u"unfiled"_s, Qt::CaseInsensitive) == 0)
+            return oneTenant() ? Tenant::wholeLibrary() : Tenant::unfiled();
+        if (Tenant asGiven = Tenant::fromGlobalId(wanted); all.contains(asGiven))
+            return asGiven;
+        if (const auto collection = library.collectionNamed(wanted))
+            if (const auto tenant = ofCollection(library, collection->id))
+                return *tenant;
+        return std::unexpected(u"There is no collection called %1. omabook collections lists them."_s.arg(wanted));
+    }
+    if (oneTenant())
+        return Tenant::wholeLibrary();
+    const QList<Tenant> its = bookId > 0 ? ofBook(library, bookId) : QList<Tenant>{};
+    if (its.size() == 1)
+        return its.first();
+    if (its.isEmpty() && all.size() == 1)
+        return all.first();
+    QStringList names;
+    for (const Tenant &tenant : its.isEmpty() ? all : its)
+        names << nameOf(library, tenant);
+    return std::unexpected(
+        (its.isEmpty()
+             ? u"The graph of this library is kept apart by its top-level collections, and is read in one of them at a time: %1. "_s
+             : u"This book is in more than one top-level collection, and its graph is read in one of them at a time: %1. "_s)
+            .arg(names.join(u", "_s))
+        + u"Say which with --collection."_s);
 }
