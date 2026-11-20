@@ -159,7 +159,7 @@ std::expected<Dictionary, QString> Dictionary::parse(const QByteArray &bytes) {
 namespace {
 
 constexpr std::uint64_t edge(std::int32_t state, char16_t letter) {
-    return (static_cast<std::uint64_t>(state) << 16) | static_cast<std::uint64_t>(letter);
+    return static_cast<std::uint64_t>(state) * 0x10000U + static_cast<std::uint64_t>(letter);
 }
 
 } // namespace
