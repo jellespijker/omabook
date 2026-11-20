@@ -4,7 +4,9 @@
 #include <QList>
 #include <QObject>
 #include <QString>
+#include <memory>
 
+#include "scriptchangelog.h"
 #include "spaceworlds.h"
 
 class Library;
@@ -43,6 +45,9 @@ public:
     Q_INVOKABLE void registerWorlds(const QJSValue &worlds);
     Q_INVOKABLE QString layers();
     Q_INVOKABLE void addToSpace(const QString &space, double book);
+    // The plugin's own data in the change log, which travels between one's
+    // computers (omabook.log.set and the rest, #76).
+    Q_INVOKABLE QObject *changeLog();
 
 private:
     [[nodiscard]] Library *library();
@@ -50,6 +55,7 @@ private:
 
     ScriptPlugin *m_plugin;
     QJSValue m_worlds;
+    std::unique_ptr<ScriptChangeLog> m_changeLog;
 };
 
 // What every running plugin of `plugins` offers, as SpaceWorlds asks it.

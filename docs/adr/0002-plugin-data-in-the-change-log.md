@@ -44,3 +44,28 @@ the library's own personal parts.
 - Compaction, the older-peer path and the sharing switches have to treat plugin entities like the
   library's own; a plugin removed from a computer leaves its operations in the log, read again when it
   comes back.
+
+## As built (#76)
+
+- **A space per plugin.** A plugin writes `plugin:<id>` (`PluginData`), its entities named `<id>:<entity>` in
+  it, so no plugin's field is taken for the library's or another plugin's where compaction keeps the latest
+  of each (it matches a field by device, entity, thing and field, not by space). A plugin reads and writes
+  its own space alone (`omabook.log.*`, `ScriptChangeLog`).
+- **Out of the rows.** What the rows are made of (`live_ops`) leaves `plugin:` spaces out (format 32), as it
+  does published and shared ones; `space_ops` holds them for replication, compaction and `PluginData`.
+- **Three kinds of operation.** A field (its JSON value, the latest winning); a change of a set
+  (`set:<name>`, `{"add": {key: value}, "remove": [key]}`), so one operation carries a batch, or an
+  erasing in part, and of each item the latest word holds, an addition winning a removal at the same
+  moment; and a removal (`removed`), which a later write undoes. Compaction keeps every change of a set
+  (`SpaceReducer::grows`), so what two computers added survives it.
+- **Between one's own computers only.** The ssh replication carries every `plugin:` space; a sync says it
+  takes plugin data (`"plugin_data": 1`), and a side that doesn't (an Omabook from before, whose log
+  would leave it out and whose vector would then never hold it) is sent none. No space carries plugin data
+  yet.
+- **Limits on what arrives.** A value of more than 64 KiB, a change of more than 1000 items, a name or id
+  out of bounds, another plugin's entity, or what is no field or change of a set is refused at a write
+  (thrown into the script) and when it comes from elsewhere (`PluginData::whyRefused`, counted with the
+  refused in a sync's summary), from one's own computers too.
+- **Still open.** A part of a space for a plugin's data (the parts registry), so a space takes it only when
+  switched on; reading it cut at a place in a book; and an event that tells a plugin its data changed at a
+  sync.

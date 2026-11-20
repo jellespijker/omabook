@@ -10,6 +10,7 @@
 #include "compaction.h"
 #include "log.h"
 #include "pairing.h"
+#include "plugindata.h"
 #include "replication.h"
 #include "spacecarry.h"
 #include "spacereplay.h"
@@ -68,7 +69,8 @@ namespace {
     if (taken.refused > 0) {
         summary.refused += taken.refused;
         summary.problems << refusal.arg(taken.refused)
-                                .arg("they are not as their author signed them, or are unsigned and not from one of your own computers");
+                                .arg("they are not as their author signed them, are unsigned and not from one of your own computers, "
+                                     "or are a plugin's data over its limits");
         qCWarning(lcSync).noquote() << taken.refused << "operations refused from" << peer;
     }
     return std::move(taken.ops);
@@ -115,11 +117,18 @@ QJsonObject carried(Library &library, const QJsonObject &theirs, bool carry) {
 // apart: an Omabook from before they travelled took none, though it holds
 // what came after them. One that says nothing of them leaves them out of
 // what it takes in (Replication::operationsFrom).
+//
+// A plugin's data (#76) goes only to a side that says it takes it: an
+// Omabook from before leaves it out of what it takes in, and would be sent
+// all of it again at every sync.
 [[nodiscard]] QList<SpaceOperation> lackingThere(const Library &library, const QJsonObject &theirs) {
     const Replication::Vector known = Replication::vectorFrom(theirs.value("vector").toObject());
-    if (!theirs.contains("annotations"))
-        return Replication::since(library, known);
-    return Replication::since(library, known, Replication::vectorFrom(theirs.value("annotations").toObject()));
+    QList<SpaceOperation> lacking =
+        theirs.contains("annotations") ? Replication::since(library, known, Replication::vectorFrom(theirs.value("annotations").toObject()))
+                                       : Replication::since(library, known);
+    if (theirs.value("plugin_data").toInt() < 1)
+        lacking.removeIf([](const SpaceOperation &op) { return PluginData::isPluginSpace(op.space); });
+    return lacking;
 }
 
 QJsonObject with(QJsonObject object, const QJsonObject &more) {
@@ -152,7 +161,8 @@ QJsonObject SyncLog::introduction(const Library &library) {
     return with({{"space", Spaces::personalSpace(library)},
                  {"device", Spaces::deviceId(library)},
                  {"vector", Replication::toJson(Replication::vector(library))},
-                 {"annotations", Replication::toJson(Replication::annotationVector(library))}},
+                 {"annotations", Replication::toJson(Replication::annotationVector(library))},
+                 {"plugin_data", 1}},
                 with(Pairing::introduction(library), SpaceCarry::introduction(library)));
 }
 
@@ -174,6 +184,7 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
                                       {"device", Spaces::deviceId(library)},
                                       {"vector", Replication::toJson(Replication::vector(library))},
                                       {"annotations", Replication::toJson(Replication::annotationVector(library))},
+                                      {"plugin_data", 1},
                                       {"ops", Replication::toJson(lacking, manifest.value("signs").toInt() >= 1)},
                                       {"books", dryRun ? QJsonArray() : Replication::toJson(Replication::unlinked(library, theirGids))},
                                       {"details", SyncTake::otherSide(options.details)},

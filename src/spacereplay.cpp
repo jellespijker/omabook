@@ -381,7 +381,7 @@ void storeOperations(const Library &library, std::span<const SpaceOperation> ops
     for (const SpaceOperation &op : ops) {
         const QString space = op.space.isEmpty() ? Spaces::personalSpace(library) : op.space;
         QString kind = u"personal"_s;
-        for (const auto prefix : {"world"_L1, "published"_L1})
+        for (const auto prefix : {"world"_L1, "published"_L1, "plugin"_L1})
             if (space.startsWith(prefix + u':'))
                 kind = prefix;
         ChangeLog::exec(library, "INSERT OR IGNORE INTO spaces (id, kind, name, owner, created) VALUES (?, ?, ?, ?, ?)",

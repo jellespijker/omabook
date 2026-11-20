@@ -442,6 +442,10 @@ Of your graph, only what you have read goes: nothing past your place in a book, 
 
 A plugin that writes books, such as Storyteller, keeps what it makes up in a world of its own, apart from the graph of what you read. A collection you publish or share takes such a world only as the plugin offers it and only when the graph goes: a world the plugin made, of a book it made, never a book by a person or anything of one, and never what the plugin keeps beside it unnamed (a story's plan, with what is still to come). What goes of it is cut at your place in its book, and on the other side it is a layer of its own, read-only, cut at their place in their copy of the book; nothing of it shows before they have the book and begin it. In a shared space where they write, their plugin can put a book of its own in, with its world (`omabook.spaces.add`). Plugins see the worlds shared with you with `omabook.graph.layers()`; see `omabook plugin api`.
 
+### A plugin's own data
+
+A plugin can keep data of its own in Omabook's change log rather than in a file (`omabook.log.set`, `add`, `remove`, `read` and `list`): a notebook's pages, say, with their title and strokes. It goes to your other computers at a sync and merges there as everything else does: of a field the one written later stays, and what both computers added to a set is all kept, so strokes drawn on the laptop and on the desktop are both on the page. It is the plugin's alone, never a book or part of the graph, and stays on your own computers.
+
 ### Subscribing
 
 `Shift+O`, or the ⋯ menu, picks an `.omabook-space` file to subscribe to. One dropped on the window is offered too, and a link can be pasted. Before anything is written it says which of its books you have, which become wishlist entries, the collection they go in (its name is yours to change), and that its graph stays a layer of its own.

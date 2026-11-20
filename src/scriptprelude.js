@@ -124,14 +124,33 @@
                          function (reason) { return Promise.resolve(after()).then(function () { throw reason; }); });
     });
 
-    function promise(start) { return new Promise(start); }
+    // The plugin's own data in the change log (#76), on the function that
+    // writes its log, as `omabook.log.set` and the rest.
+    function changeLog(changes) {
+        return {
+            set: function (entity, id, fields) {
+                need(fields, "object", "The fields");
+                changes.set(String(entity), String(id), JSON.stringify(fields));
+            },
+            add: function (entity, id, set, items, removed) {
+                need(items, "object", "The items");
+                changes.add(String(entity), String(id), String(set), JSON.stringify(items), JSON.stringify(removed || []));
+            },
+            remove: function (entity, id, set, keys) {
+                changes.remove(String(entity), String(id), set === undefined ? "" : String(set), JSON.stringify(keys || []));
+            },
+            read: function (entity, id) { return parse(changes.read(String(entity), String(id))); },
+            list: function (entity) { return parse(changes.list(String(entity))); }
+        };
+    }
+
     function parse(json) { return JSON.parse(json); }
 
     var omabook = {
         plugin: Object.freeze(info.plugin),
 
         say: function (words) { host.say(String(words)); },
-        log: function () { host.log("log", text(arguments)); },
+        log: Object.assign(function () { host.log("log", text(arguments)); }, changeLog(shared.changeLog())),
         on: function (event, handler) {
             need(event, "string", "The event");
             need(handler, "function", "The handler");
@@ -245,7 +264,7 @@
                 question = typeof question === "string" ? {title: question} : question;
                 need(question, "object", "The question");
                 need(question.title, "string", "The question's title");
-                return promise(function (resolve) {
+                return new Promise(function (resolve) {
                     host.uiAsk(question.title, String(question.placeholder || ""), String(question.text || ""), resolve);
                 });
             },
@@ -257,7 +276,7 @@
                 var problem = host.formProblem(json);
                 if (problem)
                     throw new TypeError(problem);
-                return promise(function (resolve) {
+                return new Promise(function (resolve) {
                     host.uiForm(json, function (answer) { resolve(answer === null ? null : parse(answer)); });
                 });
             },
@@ -319,7 +338,7 @@
             ofBook: function (id, upTo) { return parse(host.graphOfBook(Number(id) || 0, JSON.stringify(upTo || {}))); },
             beyond: function (id, upTo) { return parse(host.graphBeyond(Number(id) || 0, JSON.stringify(upTo || {}))); },
             connect: function (id) {
-                return promise(function (resolve, reject) { host.graphConnect(Number(id) || 0, resolve, reject); });
+                return new Promise(function (resolve, reject) { host.graphConnect(Number(id) || 0, resolve, reject); });
             },
             whole: function (scope, limit) { return parse(host.graphWhole(String(scope || ""), Number(limit) || 2000)); },
             upsert: function (thing) {
@@ -367,7 +386,7 @@
                 options = typeof options === "string" ? {system: options} : (options || {});
                 if (options.onText !== undefined && options.onText !== null)
                     need(options.onText, "function", "onText");
-                return promise(function (resolve, reject) {
+                return new Promise(function (resolve, reject) {
                     host.aiAsk(prompt, String(options.system || ""), String(options.model || ""), options.onText || null,
                                resolve, reject);
                 });
@@ -384,7 +403,7 @@
                 if (!headers["Content-Type"])
                     headers = Object.assign({"Content-Type": "application/json"}, headers);
             }
-            return promise(function (resolve, reject) {
+            return new Promise(function (resolve, reject) {
                 host.http(method, url, body === null || body === undefined ? "" : String(body), JSON.stringify(headers),
                           function (answer) {
                               var response = parse(answer);
@@ -423,7 +442,7 @@
     if (may("run")) {
         omabook.run = function (program, args, options) {
             need(program, "string", "The program");
-            return promise(function (resolve, reject) {
+            return new Promise(function (resolve, reject) {
                 host.run(program, JSON.stringify(args || []), JSON.stringify(options || {}),
                          function (answer) { resolve(parse(answer)); }, reject);
             });
@@ -432,13 +451,13 @@
 
     // The script can't take the object apart, by accident or otherwise.
     Object.keys(omabook).forEach(function (key) {
-        if (omabook[key] !== null && typeof omabook[key] === "object")
+        if (omabook[key] !== null && (typeof omabook[key] === "object" || typeof omabook[key] === "function"))
             Object.freeze(omabook[key]);
     });
     Object.freeze(omabook);
 
     var console = Object.freeze({
-        log: function () { host.log("log", text(arguments)); },
+        log: Object.assign(function () { host.log("log", text(arguments)); }, changeLog(shared.changeLog())),
         info: function () { host.log("log", text(arguments)); },
         warn: function () { host.log("warn", text(arguments)); },
         error: function () { host.log("error", text(arguments)); }

@@ -16,6 +16,7 @@
 
 #include "changelog.h"
 #include "hlc.h"
+#include "plugindata.h"
 #include "signedops.h"
 #include "spacereducer.h"
 #include "spaces.h"
@@ -30,7 +31,8 @@ namespace {
 // those are this computer's own. A book's removal travels as its tombstone.
 // Every field of a collection travels, and everything of the general graph
 // (the personal space's) and of a story's world (its own space, `world:…`),
-// which goes where its story goes (#25), and the bookmarks and highlights (#66).
+// which goes where its story goes (#25), the bookmarks and highlights (#66),
+// and a plugin's data, all of its own space (#76).
 constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,      "authors"_L1,    "series"_L1,      "series_index"_L1,
                                 "publisher"_L1,   "language"_L1,  "isbn"_L1,       "published"_L1,  "description"_L1, "tags"_L1,
                                 "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
@@ -58,7 +60,7 @@ enum class Reading : std::uint8_t { All, RangesOnly };
     return u"(("_s + entity + u" = 'book' AND (o.field IN ("_s + fields.join(u", "_s) + u") OR o.field LIKE 'tag:%')) OR "_s + entity
            + u" = 'collection' OR ("_s + entity
            + u" IN ('node', 'fact', 'edge', 'reading_log', 'subscription', 'annotation') "
-             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%'))) AND "_s
+             "AND (s.name LIKE 'personal:%' OR s.name LIKE 'world:%')) OR s.name LIKE 'plugin:%') AND "_s
            + travellingSpace();
 }
 
@@ -156,6 +158,8 @@ void join(QHash<QString, QString> &canonical, const QString &one, const QString 
 bool Replication::travels(const SpaceOperation &op) {
     if (op.space.startsWith("shared:"_L1))
         return false;
+    if (PluginData::isPluginSpace(op.space))
+        return true;
     if (op.entity == "collection"_L1)
         return true;
     if (op.entity == "node"_L1 || op.entity == "fact"_L1 || op.entity == "edge"_L1 || op.entity == "reading_log"_L1
@@ -338,6 +342,9 @@ Replication::Admitted Replication::admit(const Library &library, const QList<Spa
                 ownComputer = Spaces::isOwnComputer(library, peer);
             taken = *ownComputer;
         }
+        // A plugin's data over its limits is refused as one not signed is (#76).
+        if (taken && PluginData::isPluginSpace(op.space))
+            taken = PluginData::whyRefused(op).isEmpty();
         if (taken)
             admitted.ops << op;
         else

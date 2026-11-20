@@ -276,7 +276,8 @@ QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops
 }
 
 bool SpaceReducer::grows(const QString &field) {
-    return field.startsWith("seen:"_L1) || field == "revealed"_L1 || field == "link"_L1 || field == "range"_L1 || field == "same_as"_L1;
+    return field.startsWith("seen:"_L1) || field.startsWith("set:"_L1) || field == "revealed"_L1 || field == "link"_L1
+           || field == "range"_L1 || field == "same_as"_L1;
 }
 
 namespace {

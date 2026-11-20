@@ -1,6 +1,7 @@
 // The part of the plugin API table (scriptapi.cpp) that is the knowledge
-// graph, `omabook.graph`, and what of a plugin's goes into spaces,
-// `omabook.sharing` and `omabook.spaces` (#65).
+// graph, `omabook.graph`, what of a plugin's goes into spaces,
+// `omabook.sharing` and `omabook.spaces` (#65), and the plugin's own data in
+// the change log, which goes between one's computers, `omabook.log` (#76).
 
 #include "scriptapi.h"
 
@@ -69,7 +70,23 @@ QList<Entry> spaceEntries() {
             {"spaces.add", "spaces.add(space, id)", "",
              "Puts a book the plugin made into the collection linked to a shared space this library writes, with what "
              "`worlds` answers of it: it goes into the space, signed as the person, at the space's next sync. Throws for a "
-             "reader of the space, a space that isn't shared here, or a book the plugin didn't make."}};
+             "reader of the space, a space that isn't shared here, or a book the plugin didn't make."},
+            {"log.set", "log.set(entity, id, fields)", "",
+             "Keeps data of the plugin's own in the change log, which goes to the person's other computers at a sync and is "
+             "never a book, a collection or the graph: of the thing `id` (some text) of `entity` (lower-case letters, digits, - "
+             "and _, such as `page`), each field of `fields` (`{title: \"Monday\", paper: \"lined\"}`), any JSON value. Of a "
+             "field written on two computers the later stays. Only this plugin reads it. A value of more than 64 KiB throws."},
+            {"log.add", "log.add(entity, id, set, items, removed)", "",
+             "Adds `items` (`{key: value}`) to a set of the thing, such as the strokes of one pen pause, and removes the keys "
+             "listed in `removed` in the same write, such as a stroke erased in part: one removed, the pieces left added. What two "
+             "computers add to a set is all kept; of one item the latest word holds. At most 1000 items in one write."},
+            {"log.remove", "log.remove(entity, id, set, keys)", "",
+             "Removes the thing, or with `set` only the items of it named in `keys`. A thing removed comes back when it is "
+             "written to later, anywhere."},
+            {"log.read", "log.read(entity, id)", "",
+             "A thing as the log says it now, `{id, fields, sets: {name: {key: value}}, updated}` (`updated` in seconds), or "
+             "`null` when there is none."},
+            {"log.list", "log.list(entity)", "", "Every thing of an entity, as `log.read` answers each, ordered by id."}};
 }
 
 } // namespace ScriptApi

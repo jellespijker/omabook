@@ -1,5 +1,6 @@
 #include "scriptsharing.h"
 
+#include <QJSEngine>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -106,6 +107,15 @@ void ScriptSharing::addToSpace(const QString &space, double book) {
     const SpaceWorlds::Asked asked{.space = space, .kind = u"shared"_s, .books = {id}, .parts = state.parts};
     for (const SpaceWorlds::Left &left : SpaceWorlds::grant(*library, asked, offers(asked)).left)
         m_plugin->m_log << u"warn: not shared: "_s + left.why;
+}
+
+QObject *ScriptSharing::changeLog() {
+    if (!m_changeLog) {
+        m_changeLog = std::make_unique<ScriptChangeLog>(
+            m_plugin->m_manifest.id, [this] { return library(); }, [this](const QString &why) { fail(why); });
+        QJSEngine::setObjectOwnership(m_changeLog.get(), QJSEngine::CppOwnership);
+    }
+    return m_changeLog.get();
 }
 
 SpaceWorlds::Ask worldsOf(ScriptPlugins &plugins) {

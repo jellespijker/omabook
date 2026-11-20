@@ -16,8 +16,9 @@ namespace {
 
 // The fields of which every operation counts, not only the latest: what was
 // met where, what was learned, how things relate, the days read, and the
-// links that line up ids (SpaceReducer's growing sets).
-constexpr auto growing = "(field LIKE 'seen:%' OR field IN ('revealed', 'link', 'range', 'same_as'))";
+// links that line up ids (SpaceReducer's growing sets), and the changes of a
+// plugin's sets (#76).
+constexpr auto growing = "(field LIKE 'seen:%' OR field LIKE 'set:%' OR field IN ('revealed', 'link', 'range', 'same_as'))";
 
 // How many operations after the marks make compacting worth it.
 constexpr qint64 worthIt = 1000;

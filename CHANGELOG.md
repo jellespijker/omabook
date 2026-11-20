@@ -15,6 +15,8 @@ moves those lines under its version.
 ### Fixed
 
 - The graph's *Between books* view says when it shows part of what there is: "300 of 1,240 connections between books" in its header, with a note over the picture. The connections between the most connected things of the collection's graph come first, rather than the latest, and *Show More Connections* (also under Filter) shows 300 more at a time, up to 900 (#91).
+### Added
+- A plugin can keep data of its own in the change log (ADR 0002, #76): `omabook.log.set(entity, id, fields)`, `omabook.log.add(entity, id, set, items, removed)` and `omabook.log.remove(entity, id, set, keys)` write it, signed as you, and `omabook.log.read(entity, id)` and `omabook.log.list(entity)` read it back. It goes to your other computers at a sync and merges there: of a field the later stays, and what two computers added to a set (the strokes of a page) is all kept, with an erasing, or a page torn out, going too. It is never a book, a collection or the graph, stays on your computers (no space takes it yet), is compacted like the rest, and is never sent to an Omabook from before, which would leave it out. A write of more than 64 KiB, or of more than 1000 items, throws; what comes over such limits from elsewhere is refused and said in the sync's summary. `omabook.log(...)` writes the plugin's log as before. The library's format goes up by one for it (a copy is kept first).
 
 ## [0.1.8] - 2026-11-20
 

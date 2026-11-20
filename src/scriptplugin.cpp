@@ -1438,9 +1438,9 @@ QStringList ScriptPlugin::takeLog() {
 
 QStringList ScriptPlugin::surface() {
     const QJSValue paths = m_engine.evaluate(
-        "(function () { var out = []; (function walk(object, prefix) { Object.keys(object).forEach(function (key) {"
-        " var value = object[key]; if (value !== null && typeof value === 'object' && prefix + key !== 'plugin')"
-        " walk(value, prefix + key + '.'); else out.push(prefix + key); }); })(omabook, ''); return out.join(','); })()");
+        "(function () { var out = []; (function walk(object, at) { Object.keys(object).forEach(function (key) { var value = object[key];"
+        " if (value === null || typeof value !== 'object' || at + key === 'plugin') out.push(at + key); else walk(value, at + key + '.');"
+        " if (typeof value === 'function') walk(value, at + key + '.'); }); })(omabook, ''); return out.join(','); })()");
     return paths.toString().split(',', Qt::SkipEmptyParts);
 }
 

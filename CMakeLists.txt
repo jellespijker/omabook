@@ -56,7 +56,7 @@ enable_testing()
 set(omabook_test_home "${CMAKE_BINARY_DIR}/test-home")
 file(MAKE_DIRECTORY "${omabook_test_home}/.config" "${omabook_test_home}/.local/share" "${omabook_test_home}/.cache")
 set(omabook_test_environment "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state;HOME=${omabook_test_home};XDG_CONFIG_HOME=${omabook_test_home}/.config;XDG_DATA_HOME=${omabook_test_home}/.local/share;XDG_CACHE_HOME=${omabook_test_home}/.cache")
-foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross)
+foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross plugindata)
   add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)
@@ -115,6 +115,9 @@ target_compile_definitions(pluginsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FIL
 target_sources(largelog_tests PRIVATE tests/samples.cpp)
 add_dependencies(largelog_tests omabook)
 target_compile_definitions(largelog_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+# A plugin's data in the change log, synced over the stand-in ssh (#76).
+add_dependencies(plugindata_tests omabook)
+target_compile_definitions(plugindata_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 # A book in the format of a plugin that isn't installed, synced over the stand-in ssh.
 add_dependencies(pluginformats_tests omabook)
 target_compile_definitions(pluginformats_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
