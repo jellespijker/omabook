@@ -394,6 +394,10 @@ const QList<QStringList> migrations{
      "WHERE key = 'annotations'; END",
      "CREATE TRIGGER IF NOT EXISTS annotations_delete_counted AFTER DELETE ON annotations BEGIN UPDATE library_state SET value = value + 1 "
      "WHERE key = 'annotations'; END"},
+    // The snapshot looked up by space and device too (#103): what a peer
+    // lacks of it, the last a device wrote of it, and one space's operations
+    // are a range of it, not a read of all of it.
+    {"CREATE INDEX IF NOT EXISTS snapshot_ops_space ON snapshot_ops(space, device, seq)"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
