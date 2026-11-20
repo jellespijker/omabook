@@ -492,7 +492,7 @@ private slots:
     }
 
     // A cover set there at a time with a counter (a second in which the clock
-    // ticked more than once), of a picture that is never the same bytes once
+    // ticked more than once), of a file that is never the same bytes once
     // saved again here. Taken once, the book's details are in step: syncs
     // either way afterwards take nothing, send nothing and leave nothing
     // undecided, from either side (#106).
@@ -518,6 +518,10 @@ private slots:
             }
         const qint64 later = QDateTime::currentSecsSinceEpoch() + 60; // after every time the books were stamped with
         QVERIFY(there.setCover(theirs, cover, Hlc::pack(later, 3)));
+        // Its file another save of the picture than the one its log names, as
+        // a cover saved before the log so often is (#59): what is fetched of
+        // it is never the same bytes here.
+        QVERIFY(cover.save(there.coverPath(theirs), "JPG", 60));
         QVERIFY(there.setReading(theirs, {}, 4, {}));
 
         const SyncSummary taken = syncLibrary(here, toThere);
