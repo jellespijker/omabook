@@ -199,7 +199,7 @@ void ScriptPlugins::listenTo(ScriptPlugin *plugin) {
     connect(plugin, &ScriptPlugin::dataChanged, this, &ScriptPlugins::dataChanged);
     connect(plugin, &ScriptPlugin::touchedLibrary, this, &ScriptPlugins::touchedLibrary);
     connect(plugin, &ScriptPlugin::openBookRequested, this, &ScriptPlugins::openBookRequested);
-    connect(plugin, &ScriptPlugin::graphRequested, this, &ScriptPlugins::graphRequested);
+    listenToWindow(plugin);
     connect(plugin, &ScriptPlugin::reloadBookRequested, this, &ScriptPlugins::reloadBookRequested);
     connect(plugin, &ScriptPlugin::askRequested, this,
             [this, plugin](int token, const QString &title, const QString &placeholder, const QString &text) {
@@ -628,24 +628,6 @@ QVariantList ScriptPlugins::commands() const {
             list << QVariantMap{{"id", command.id}, {"title", command.title}, {"place", command.place}, {"key", command.key},
                                 {"plugin", entry.second->manifest().name}, {"when", command.when},
                                 {"applies", applies(entry.first, command.when, command.enabled)}};
-    return list;
-}
-
-QVariantList ScriptPlugins::panels() const {
-    QVariantList list;
-    for (const auto &entry : m_plugins) {
-        int number = 0;
-        for (const ScriptPlugin::Panel &panel : entry.second->panels()) {
-            // A panel that doesn't apply isn't there: it takes no room.
-            const QString name = number++ == 0 ? entry.first : entry.first + "-" + QString::number(number);
-            if (!applies(entry.first, panel.when, panel.visible))
-                continue;
-            // The file's time in the address makes an edited panel a new component.
-            QUrl url = QUrl::fromLocalFile(panel.source);
-            url.setQuery(QString::number(QFileInfo(panel.source).lastModified().toMSecsSinceEpoch()));
-            list << QVariantMap{{"name", name}, {"place", panel.place}, {"title", panel.title}, {"width", panel.width}, {"url", url}};
-        }
-    }
     return list;
 }
 

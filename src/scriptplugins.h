@@ -101,7 +101,8 @@ public:
 
     // Every command, each with whether it applies now ("applies": it is
     // enabled, and not one for the plugin's own books while another book
-    // is in front of the reader); and the panels that apply.
+    // is in front of the reader); and the panels that apply, a plugin's
+    // views among them as of the place "view", with their "plugin" and "view".
     QVariantList commands() const;
     QVariantList panels() const;
     qint64 selectedBook() const noexcept { return m_selectedBook; }
@@ -165,6 +166,11 @@ signals:
     void openBookRequested(qint64 id, int section, double fraction);
     // The window should show the knowledge graph of a book, else of a scope.
     void graphRequested(const QString &scope, qint64 book);
+    // The window should show a plugin's view (omabook.ui.showView, and its
+    // commands, which `toggle`), or put it away; by the plugin's folder name
+    // and the view's id, as `panels` has them.
+    void viewRequested(const QString &plugin, const QString &view, const QVariantMap &args, bool toggle);
+    void viewClosed(const QString &plugin, const QString &view);
     // What a `request` came to.
     void answered(int id, const QVariant &result, const QString &error);
     void selectedBookChanged();
@@ -186,6 +192,8 @@ private:
     // The books after claimBooks: these, or the library's anew when it marked any.
     QList<Book> claimed(const QList<Book> &books);
     void listenTo(ScriptPlugin *plugin);
+    // What a plugin asks of the window: the graph, its views (scriptpluginviews.cpp).
+    void listenToWindow(ScriptPlugin *plugin);
     void lookAtTheBook();
     bool applies(const QString &plugin, const QString &when, bool on) const;
     void settle(int id, const QJsonValue &text);

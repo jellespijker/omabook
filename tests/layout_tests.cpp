@@ -489,37 +489,25 @@ class LayoutTests : public QObject {
                                               : QJsonObject();
     }
 
-    // Of every command and every plugin's command, those without a control
-    // (`reached`: the smaller side of the largest of each), under fingers
-    // those smaller than a fingertip, and anything said to be the way to a
-    // command there isn't.
-    static QStringList unreached(Desk &desk, const QHash<QString, qreal> &reached, const QHash<QString, QString> &keyboardOnly) {
-        QStringList wanted, missing, small, problems;
-        for (const Customization::Command &command : Customization::commands())
-            wanted << command.id;
-        for (const QVariant &command : desk.custom->pluginCommands())
-            wanted << command.toMap().value("id").toString();
-        if (!wanted.contains("library.shelver:shelve") || !wanted.contains("reader.shelver:note"))
-            problems << "the plugin's commands are not there";
-        for (const QString &id : std::as_const(wanted)) {
-            if (keyboardOnly.contains(id))
-                continue;
-            if (!reached.contains(id))
-                missing << id;
-            else if (desk.touch && reached.value(id) < Survey::fingertip - 0.5)
-                small << QString("%1 (%2 px)").arg(id).arg(reached.value(id));
-        }
-        if (!missing.isEmpty())
-            problems << "no control for " + missing.join(", ");
-        if (!small.isEmpty())
-            problems << "smaller than a fingertip: " + small.join(", ");
-        QStringList unknown;
-        for (auto it = reached.cbegin(); it != reached.cend(); ++it)
-            if (!wanted.contains(it.key()))
-                unknown << it.key();
-        if (!unknown.isEmpty())
-            problems << "no such command: " + unknown.join(", ");
-        return problems;
+    // What the commands need to be there: a plugin with a command for the
+    // shelf, one for the page and a view of its own, and a thing known of
+    // `book` for its graph with an event of it, timed, for its chronology,
+    // which is answered (0 when it couldn't be).
+    static qint64 forEveryCommand(Desk &desk, qint64 book) {
+        QDir().mkpath(desk.dir.filePath("plugins/shelver"));
+        Fixtures::write(desk.dir.filePath("plugins/shelver/View.qml"), "import QtQuick\nItem {}\n");
+        Fixtures::write(desk.dir.filePath("plugins/shelver/plugin.json"), "{\"name\": \"Shelver\", \"script\": \"main.js\"}");
+        Fixtures::write(desk.dir.filePath("plugins/shelver/main.js"),
+                        "omabook.commands.register({id: \"shelve\", title: \"Shelve it\", place: \"library\", key: \"Ctrl+Shift+E\", "
+                        "run: function () {}});\n"
+                        "omabook.commands.register({id: \"note\", title: \"Note the page\", place: \"reader\", run: function () {}});\n"
+                        "omabook.ui.view({id: \"shelf\", title: \"Shelf notes\", source: \"View.qml\"});\n");
+        desk.backend->scripts()->reload();
+        Graph known(*desk.backend->library());
+        known.upsert({}, "character", "Wilhelmina Overbeck", "Keeps the long lighthouse.", {}, GraphPlace{book, 0, 0.1}, "Wilhelmina");
+        const qint64 storm = known.upsert({}, "event", "The storm", {}, {}, GraphPlace{book, 0, 0.2});
+        const auto year = EventTime::parse(QString(R"({"calendar": "gregorian", "at": "1911"})"));
+        return year && Chronology::setWhen(known, storm, *year) ? storm : 0;
     }
 
 private slots:
@@ -1190,24 +1178,8 @@ private slots:
             const QList<qint64> ids = stock(desk);
             QVERIFY(!ids.isEmpty());
             QVERIFY(desk.backend->library()->addCollection("Harbour books", "tag:Fantasy"));
-            // A plugin with a command for the shelf and one for the page.
-            QDir().mkpath(desk.dir.filePath("plugins/shelver"));
-            Fixtures::write(desk.dir.filePath("plugins/shelver/plugin.json"), "{\"name\": \"Shelver\", \"script\": \"main.js\"}");
-            Fixtures::write(desk.dir.filePath("plugins/shelver/main.js"),
-                            "omabook.commands.register({id: \"shelve\", title: \"Shelve it\", place: \"library\", key: \"Ctrl+Shift+E\", "
-                            "run: function () {}});\n"
-                            "omabook.commands.register({id: \"note\", title: \"Note the page\", place: \"reader\", run: function () {}});\n");
-            desk.backend->scripts()->reload();
-            // A thing known of the first book, for its graph.
-            Graph known(*desk.backend->library());
-            known.upsert({}, "character", "Wilhelmina Overbeck", "Keeps the long lighthouse.", {}, GraphPlace{ids.first(), 0, 0.1},
-                         "Wilhelmina");
-            // And an event of it, with its time, for its chronology.
-            const qint64 storm = known.upsert({}, "event", "The storm", {}, {}, GraphPlace{ids.first(), 0, 0.2});
-            const auto year = EventTime::parse(QString(R"({"calendar": "gregorian", "at": "1911"})"));
-            QVERIFY(year);
-            const auto timed = Chronology::setWhen(known, storm, *year);
-            QVERIFY2(timed, qPrintable(Fixtures::whyNot(timed)));
+            const qint64 storm = forEveryCommand(desk, ids.first());
+            QVERIFY(storm > 0);
             QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
             desk.backend->reload();
             QVERIFY(desk.resize(QSize(1180, 780)));
@@ -1305,6 +1277,14 @@ private slots:
             inMenu("chronologyMore", "chronology-menu");
             if (QTest::currentTestFailed()) return;
             QMetaObject::invokeMethod(desk.find("chronology"), "done");
+
+            // The plugin's view in place of the shelf, and the list behind its ⋯.
+            QVERIFY(desk.run("library.shelver:shelf"));
+            QTRY_VERIFY(desk.shows("pluginViewFull"));
+            gather("view");
+            inMenu("pluginViewMore", "view-menu");
+            QVERIFY(desk.run("view.close"));
+            QTRY_VERIFY(desk.shows("library"));
 
             // The open book: the bar a finger brings up, and the list
             // behind its "More" or the ⋯ in the corner.

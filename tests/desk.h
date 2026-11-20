@@ -612,6 +612,39 @@ struct Survey {
     }
 };
 
+// Of every command and every plugin's command, those without a control
+// (`reached`: the smaller side of the largest of each), under fingers
+// those smaller than a fingertip, and anything said to be the way to a
+// command there isn't (layout_tests: everyCommandIsThereForAMouseAndAFinger).
+inline QStringList unreached(Desk &desk, const QHash<QString, qreal> &reached, const QHash<QString, QString> &keyboardOnly) {
+    QStringList wanted, missing, small, problems;
+    for (const Customization::Command &command : Customization::commands())
+        wanted << command.id;
+    for (const QVariant &command : desk.custom->pluginCommands())
+        wanted << command.toMap().value("id").toString();
+    if (!wanted.contains("library.shelver:shelve") || !wanted.contains("reader.shelver:note"))
+        problems << "the plugin's commands are not there";
+    for (const QString &id : std::as_const(wanted)) {
+        if (keyboardOnly.contains(id))
+            continue;
+        if (!reached.contains(id))
+            missing << id;
+        else if (desk.touch && reached.value(id) < Survey::fingertip - 0.5)
+            small << QString("%1 (%2 px)").arg(id).arg(reached.value(id));
+    }
+    if (!missing.isEmpty())
+        problems << "no control for " + missing.join(", ");
+    if (!small.isEmpty())
+        problems << "smaller than a fingertip: " + small.join(", ");
+    QStringList unknown;
+    for (auto it = reached.cbegin(); it != reached.cend(); ++it)
+        if (!wanted.contains(it.key()))
+            unknown << it.key();
+    if (!unknown.isEmpty())
+        problems << "no such command: " + unknown.join(", ");
+    return problems;
+}
+
 inline const QByteArray lightTheme = "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n"
                                      "selection_background = \"#dcdcdc\"\ncolor8 = \"#6f6f6f\"\n";
 

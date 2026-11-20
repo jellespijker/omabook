@@ -44,8 +44,10 @@ Item {
     // While the keyboard selects, or works the menu beside the words, its
     // keys are theirs, not the book's.
     readonly property bool popupOpen: finder.opened || knowledge.popupOpen || selecting || (menu.shown && menu.activeFocus) || notesLayer.focused
-    // While the map has the keyboard, the keys are its own (see GraphPane).
-    readonly property bool mapping: knowledge.focused
+    // While the map, or a plugin's view beside the page, has the keyboard, the keys are its own (see GraphPane, PluginView).
+    readonly property bool mapping: knowledge.focused || pluginSide.focused
+    // The plugin whose view beside the page has the keyboard, for its commands; "" for none.
+    readonly property string pluginKeys: pluginSide.live ? pluginSide.plugin : ""
     // Whether the keys that move through the book are the book's right now.
     readonly property bool paging: win.inReader && !!content && !index.focused && !mapping && !formatting
     readonly property var content: contentLoader.item
@@ -86,6 +88,7 @@ Item {
         if (showFormat) closeFormat()
         else if (showAssistant) showAssistant = false
         else if (showGraph) toggleGraph()
+        else if (pluginSide.shown) pluginSide.close()
         else if (showIndex) showIndex = false
         else if (immersive) expand(false)
         else reader.close()
@@ -113,6 +116,9 @@ Item {
     // Words highlighted, and a highlight tapped (#81).
     readonly property QtObject highlighting: ReaderHighlighting { view: view; menu: menu; touchArea: touchArea }
     // The graph beside the page, on what a plugin asked for.
+    // A plugin's view beside the page (PluginSide), on what the plugin asked for.
+    function showPluginView(entry, args, toggle) { pluginSide.show(entry, args, toggle) }
+    function closePluginView(plugin, id) { pluginSide.closeView(plugin, id) }
     function showGraphOf(scope, bookId) {
         if (!showGraph) toggleGraph()
         if (bookId > 0) knowledge.showBook(bookId)
@@ -148,9 +154,9 @@ Item {
         formatBookOnly = Object.keys(reader.format.own).length > 0
         formatForCollection = !formatBookOnly && Object.keys(reader.format.collectionOwn).length > 0
     }
-    onShowFormatChanged: if (showFormat) { showAssistant = false; showGraph = false }
-    onShowAssistantChanged: if (showAssistant) showFormat = false
-    onShowGraphChanged: if (showGraph) showFormat = false
+    onShowFormatChanged: if (showFormat) { showAssistant = false; showGraph = false; pluginSide.close() }
+    onShowAssistantChanged: if (showAssistant) { showFormat = false; pluginSide.close() }
+    onShowGraphChanged: if (showGraph) { showFormat = false; pluginSide.close() }
     // The book and nothing else: the whole screen, no title line, no panes.
     function expand(yes) {
         immersive = yes
@@ -297,35 +303,8 @@ Item {
         backend.say(qsTr("Bookmarked"))
     }
 
-    Key { command: "reader.back"; when: win.inReader && !view.mapping; onActivated: view.back() }
-    // Left and Right follow the reading direction: forward is leftwards in
-    // a right-to-left language, as a finger's swipe is.
-    Key { command: "reader.page_down"; mirrored: win.rightToLeft; when: view.paging; onActivated: view.content.pageDown() }
-    Key { command: "reader.page_up"; mirrored: win.rightToLeft; when: view.paging; onActivated: view.content.pageUp() }
-    Key { command: "reader.line_down"; when: view.paging; onActivated: view.content.lineDown() }
-    Key { command: "reader.line_up"; when: view.paging; onActivated: view.content.lineUp() }
-    Key { command: "reader.next"; when: view.paging; onActivated: view.content.next() }
-    Key { command: "reader.previous"; when: view.paging; onActivated: view.content.previous() }
-    Key { command: "reader.start"; when: view.paging; onActivated: view.content.toStart() }
-    Key { command: "reader.end"; when: view.paging; onActivated: view.content.toEnd() }
-    Key { command: "reader.larger"; when: win.inReader && !!view.content && !view.mapping && !view.formatting; onActivated: view.content.zoom(1) }
-    Key { command: "reader.smaller"; when: win.inReader && !!view.content && !view.mapping && !view.formatting; onActivated: view.content.zoom(-1) }
-    Key { command: "reader.format"; when: reader.open && !view.mapping; onActivated: view.toggleFormat() }
-    Key { command: "reader.contents"; when: reader.open; onActivated: view.showList("contents") }
-    Key { command: "reader.annotations"; when: reader.open; onActivated: view.showList("annotations") }
-    Key { command: "reader.catch_up"; when: reader.open; onActivated: view.catchUp() }
-    Key { command: "reader.cast"; when: reader.open; onActivated: { view.showAssistant = true; assistant.whoIsWho(); companion.takeFocus() } }
-    Key { command: "reader.find"; when: reader.open && !view.mapping; onActivated: finder.open() }
-    Key { command: "reader.ask"; when: reader.open; onActivated: view.askAssistant() }
-    Key { command: "reader.bookmark"; when: reader.open; onActivated: view.bookmark() }
-    Key { command: "reader.expand"; when: win.inReader && !view.mapping; onActivated: view.expand(!view.immersive) }
-    Key { command: "reader.graph"; when: reader.open; onActivated: view.toggleGraph() }
-    Key { command: "reader.marks"; when: reader.open; onActivated: view.cycleMarks() }
-    Key { command: "reader.pages"; when: reader.open && !view.mapping; onActivated: view.cyclePages() }
-    Key { command: "reader.layout"; when: reader.open && !view.mapping; onActivated: view.cycleLayout() }
-    Key { command: "reader.select"; when: view.paging; onActivated: view.startSelecting("menu") }
-    Key { command: "reader.note"; when: view.paging; onActivated: notesLayer.write() }
-    Key { command: "reader.notes"; when: view.paging; onActivated: notesLayer.go() }
+    // The reader's keys, each in the place it belongs to right now.
+    ReaderKeys { host: view; notes: notesLayer; aiPane: companion }
 
     // The kinds' colors are the graph's, from the theme.
     Binding { target: reader.marks; property: "colors"; value: theme.colors }
@@ -370,8 +349,10 @@ Item {
     readonly property bool formatOpen: showFormat && reader.open && !win.compact
     readonly property real slotWidth: sideSlot.visible ? sideSlot.width : 0
     readonly property bool beside: width - slotWidth - (indexOpen ? indexSide.least : 0) - (showAssistant ? assistantSide.least : 0)
-                                   - (graphOpen ? graphSide.least : 0) - (formatOpen ? formatSide.least : 0) >= win.contentFloor
-    readonly property string topPane: formatOpen ? "format" : showAssistant ? "assistant" : graphOpen ? "graph" : indexOpen ? "contents" : ""
+                                   - (graphOpen ? graphSide.least : 0) - (formatOpen ? formatSide.least : 0)
+                                   - (pluginSide.shown ? pluginSide.least : 0) >= win.contentFloor
+    readonly property string topPane: formatOpen ? "format" : pluginSide.shown ? "plugin" : showAssistant ? "assistant" : graphOpen ? "graph"
+                                    : indexOpen ? "contents" : ""
     // What a pane lying over the page may take: all but a strip of the
     // page, which is what is clicked to put the pane away.
     readonly property real overRoom: width - 48
@@ -379,7 +360,7 @@ Item {
     // the one on top.
     function resizePane(steps) {
         const pane = index.focused && indexSide.visible ? indexSide : knowledge.focused && graphSide.visible ? graphSide
-                   : topPane === "format" ? formatSide
+                   : topPane === "format" ? formatSide : topPane === "plugin" ? pluginSide
                    : topPane === "assistant" ? assistantSide : topPane === "graph" ? graphSide : topPane === "contents" ? indexSide : null
         if (pane) pane.resize(steps)
     }
@@ -393,7 +374,8 @@ Item {
             anchors.leftMargin: view.beside && indexSide.visible ? indexSide.width : 0
             anchors.rightMargin: view.slotWidth + (view.beside ? (assistantSide.visible ? assistantSide.width : 0)
                                                                  + (graphSide.visible ? graphSide.width : 0)
-                                                                 + (formatSide.visible ? formatSide.width : 0) : 0)
+                                                                 + (formatSide.visible ? formatSide.width : 0)
+                                                                 + (pluginSide.visible ? pluginSide.width : 0) : 0)
 
             // Where you are: the book and chapter, and how far through.
             RowLayout {
@@ -679,7 +661,7 @@ Item {
             anchors.bottom: parent.bottom
             anchors.right: parent.right
             anchors.rightMargin: view.beside ? (assistantSide.visible ? assistantSide.width : 0) + (graphSide.visible ? graphSide.width : 0)
-                                               + (formatSide.visible ? formatSide.width : 0) : 0
+                                               + (formatSide.visible ? formatSide.width : 0) + (pluginSide.visible ? pluginSide.width : 0) : 0
         }
         // The page behind a pane that lies over it, dimmed; a click on it
         // puts the pane away, as Escape does.
@@ -703,6 +685,7 @@ Item {
             room: over ? view.overRoom
                        : view.width - view.slotWidth - win.contentFloor - (view.showAssistant ? assistantSide.least : 0)
                          - (view.graphOpen ? graphSide.least : 0) - (view.formatOpen ? formatSide.least : 0)
+                         - (pluginSide.shown ? pluginSide.least : 0)
             visible: view.indexOpen && (view.beside || view.topPane === "contents")
             anchors.top: parent.top
             anchors.bottom: parent.bottom
@@ -786,6 +769,18 @@ Item {
             }
         }
 
+        PluginSide {
+            id: pluginSide
+            objectName: "pluginSide"
+            host: view
+            over: !view.beside
+            room: over ? view.overRoom : view.width - view.slotWidth - win.contentFloor - (indexSide.visible ? indexSide.width : 0)
+            visible: shown && (view.beside || view.topPane === "plugin")
+            anchors.top: parent.top
+            anchors.bottom: parent.bottom
+            anchors.right: parent.right
+            z: 5
+        }
         Component {
             id: formatPane
             FormatPane {

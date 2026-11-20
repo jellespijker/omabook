@@ -67,7 +67,7 @@ AppPopup {
     }
     // Where a plugin's command works, said beside it.
     function whereName(where) {
-        return where === "reader" ? qsTr("While reading") : where === "library" ? qsTr("On the shelf") : qsTr("Anywhere")
+        return where === "reader" ? qsTr("While reading") : where === "library" ? qsTr("On the shelf") : where === "view" ? qsTr("In its view") : qsTr("Anywhere")
     }
     // A key of a panel's own, shown as a command is but not run from here.
     function panelRow(panel, key) {
@@ -83,7 +83,7 @@ AppPopup {
     }
     function placeName(place) {
         return place === "reader" ? qsTr("Reading") : place === "library" ? qsTr("Library") : place === "graph" ? qsTr("Graph")
-             : place === "chronology" ? qsTr("Chronology") : place === "plugins" ? qsTr("Plugins") : qsTr("Everywhere")
+             : place === "chronology" ? qsTr("Chronology") : place === "view" ? qsTr("Plugin views") : place === "plugins" ? qsTr("Plugins") : qsTr("Everywhere")
     }
 
     // The rows of what is shown: the results of a search, the keys by
@@ -128,7 +128,7 @@ AppPopup {
             return rows
         }
         if (popup.page === "keys") {
-            const places = popup.reading ? ["reader", "graph", "chronology", "global", "library"] : ["library", "graph", "chronology", "global", "reader"]
+            const places = popup.reading ? ["reader", "graph", "chronology", "view", "global", "library"] : ["library", "graph", "chronology", "view", "global", "reader"]
             for (const place of places) {
                 const here = popup.commands.filter(command => command.place === place)
                 if (here.length === 0)

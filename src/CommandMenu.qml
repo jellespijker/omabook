@@ -20,7 +20,7 @@ AppPopup {
     padding: 12
     widest: 460
 
-    // "library", "book", "reader", "graph" or "chronology".
+    // "library", "book", "reader", "graph", "chronology" or "view" (a plugin's own).
     property string kind: "library"
     // What gets the keyboard back before the command runs: a command of
     // the graph beside the page works while the graph has it.
@@ -53,12 +53,16 @@ AppPopup {
         "chronology": ["chronology.tenant", "chronology.find", "chronology.filter", "chronology.range", "chronology.filter_clear", "chronology.unplaced",
                        "chronology.details", "chronology.page", "chronology.graph", "chronology.left", "chronology.right",
                        "chronology.up", "chronology.down", "chronology.zoom_in", "chronology.zoom_out", "chronology.fit",
-                       "chronology.pan_left", "chronology.pan_right", "chronology.pan_up", "chronology.pan_down", "chronology.close"]
+                       "chronology.pan_left", "chronology.pan_right", "chronology.pan_up", "chronology.pan_down", "chronology.close"],
+        // A plugin's view: its own commands come after these.
+        "view": ["view.back", "view.close", "global.settings", "global.help"]
     })
     // Where the plugins' commands for a kind work.
     function pluginsFit(kind, where) {
         if (kind === "reader") return where === "reader" || where === "global"
         if (kind === "library") return where === "library" || where === "global"
+        // Only the commands of the plugin whose view it is can run, and only those are listed.
+        if (kind === "view") return where === "view"
         // A command for the shelf runs on the selected book.
         return kind === "book" && where === "library"
     }

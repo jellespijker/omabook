@@ -1823,5 +1823,10 @@
   "Allow": "Toestaan",
   "It records what the microphone hears into its own folder until it stops. While it records, a red mark at the top of the window says so, with a button to stop it.": "Het neemt op wat de microfoon hoort, in zijn eigen map, tot het stopt. Zolang het opneemt, zegt een rood teken boven in het venster dat, met een knop om het te stoppen.",
   "Let %1 use the microphone?": "Mag %1 de microfoon gebruiken?",
-  "the microphone": "de microfoon"
+  "the microphone": "de microfoon",
+  "%1 could not show this view: its QML file has a mistake in it.": "%1 kon deze weergave niet tonen: er zit een fout in het QML-bestand.",
+  "Close a plugin's view": "De weergave van een plugin sluiten",
+  "Go back in a plugin's view, or close it when it has nowhere to go back to": "Teruggaan in de weergave van een plugin, of die sluiten als er niets meer terug is",
+  "In its view": "In zijn weergave",
+  "Plugin views": "Pluginweergaven"
 }

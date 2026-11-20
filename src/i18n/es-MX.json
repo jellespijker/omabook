@@ -1907,5 +1907,10 @@
   "Allow": "Permitir",
   "It records what the microphone hears into its own folder until it stops. While it records, a red mark at the top of the window says so, with a button to stop it.": "Graba lo que oye el micrófono en su propia carpeta hasta que se detiene. Mientras graba, una marca roja en la parte de arriba de la ventana lo indica, con un botón para detenerlo.",
   "Let %1 use the microphone?": "¿Dejar que %1 use el micrófono?",
-  "the microphone": "el micrófono"
+  "the microphone": "el micrófono",
+  "%1 could not show this view: its QML file has a mistake in it.": "%1 no pudo mostrar esta vista: su archivo QML tiene un error.",
+  "Close a plugin's view": "Cerrar la vista de un plugin",
+  "Go back in a plugin's view, or close it when it has nowhere to go back to": "Volver atrás en la vista de un plugin, o cerrarla cuando no hay adónde volver",
+  "In its view": "En su vista",
+  "Plugin views": "Vistas de plugins"
 }

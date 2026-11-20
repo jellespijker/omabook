@@ -65,6 +65,7 @@ class ScriptAi;
 class ScriptHost;
 class ScriptPlugin;
 class ScriptSharing;
+class ScriptWindow;
 
 // The way into a plugin from another thread. A format a script adds is asked
 // for books from wherever a book is opened (the reader opens them beside the
@@ -126,6 +127,7 @@ public:
         int width = 280;
         QString when;        // as a command's
         bool visible = true; // what the script last said with ui.setVisible
+        QString view;        // a view's id (omabook.ui.view), whose place is "view"; empty for a panel
     };
     struct Format {
         QString name;
@@ -226,6 +228,9 @@ signals:
     void openBookRequested(qint64 id, int section, double fraction);
     // The window should show the knowledge graph: of a book, else of a scope.
     void graphRequested(const QString &scope, qint64 book);
+    // The window should show one of the plugin's views (ScriptWindow), or put it away.
+    void viewRequested(const QString &view, const QJsonObject &args, bool toggle);
+    void viewClosed(const QString &view);
     // The reader should open this book's file anew and stay where it is:
     // the book grew. 0 is whichever book is open.
     void reloadBookRequested(qint64 id);
@@ -243,6 +248,7 @@ private:
     friend class ScriptHost;
     friend class ScriptSharing;
     friend class ScriptAudio;
+    friend class ScriptWindow;
 
     QJSValue fromJson(const QJsonValue &value);
     QString describe(const QJSValue &error) const;
@@ -267,6 +273,7 @@ private:
     std::unique_ptr<ScriptHost> m_host;
     std::unique_ptr<ScriptSharing> m_sharing;
     std::unique_ptr<ScriptAi> m_ai;
+    std::unique_ptr<ScriptWindow> m_window;
     QJSValue m_settle, m_parse;
     int m_depth = 0;
     // The library write the code running now makes, as one transaction.

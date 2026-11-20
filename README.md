@@ -193,7 +193,7 @@ stdout:  {"candidates": [{"title": "Dune", "authors": ["Frank Herbert"], "series
 
 ### Script plugins
 
-A plugin can also be a script that runs inside Omabook, and then it can do far more than answer look-ups: add sources of book details, catalog formats, importers that have a say in every new book, commands with a key of their own, panels in the window, and hooks on everything that happens to a book (added, changed, removed, opened, closed, a page turned, a look-up finished, another library opened).
+A plugin can also be a script that runs inside Omabook, and then it can do far more than answer look-ups: add sources of book details, catalog formats, importers that have a say in every new book, commands with a key of their own, panels in the window, views of their own in place of the shelf or beside the page (a notebook, say), and hooks on everything that happens to a book (added, changed, removed, opened, closed, a page turned, a look-up finished, another library opened).
 
 ```text
 ~/.config/omabook/plugins/finished/plugin.json   {"name": "Finished", "script": "main.js", "permissions": []}

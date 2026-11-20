@@ -28,6 +28,7 @@
 #include "scriptapi.h"
 #include "scriptform.h"
 #include "scriptsharing.h"
+#include "scriptwindow.h"
 #include "settings.h"
 #include "worldlayers.h"
 
@@ -156,6 +157,7 @@ public:
     }
 
     Q_INVOKABLE QObject *sharing() { return p->m_sharing.get(); }
+    Q_INVOKABLE QJSValue window() { return p->m_window->build(p->m_engine); }
     Q_INVOKABLE void say(const QString &text) { emit p->said(text); }
     Q_INVOKABLE void log(const QString &level, const QString &text) {
         p->m_log << (level == "log" ? text : level + ": " + text);
@@ -243,34 +245,8 @@ public:
         }
         p->m_engine.throwError("There is no command \"" + id + "\" of this plugin's to switch.");
     }
-    Q_INVOKABLE void setPanelVisible(const QString &source, bool visible) {
-        bool found = false;
-        for (ScriptPlugin::Panel &panel : p->m_panels) {
-            if (QFileInfo(panel.source).fileName() == QFileInfo(source).fileName()) {
-                panel.visible = visible;
-                found = true;
-            }
-        }
-        if (found)
-            emit p->registered();
-        else
-            p->m_engine.throwError("There is no panel \"" + source + "\" of this plugin's to show or hide.");
-    }
     Q_INVOKABLE void showGraph(const QString &scope, double book) { emit p->graphRequested(scope, qint64(book)); }
     Q_INVOKABLE void hold(int change) { p->m_holds = qMax(0, p->m_holds + change); }
-    Q_INVOKABLE void registerPanel(const QString &place, const QString &title, int width, const QString &source, const QString &when) {
-        const QString path = p->inside(source, false);
-        if (path.isEmpty() || !QFileInfo(path).isFile()) {
-            p->m_engine.throwError("There is no \"" + source + "\" in the plugin's folder for the panel.");
-            return;
-        }
-        // The same file again is the same panel, said anew.
-        for (qsizetype i = p->m_panels.size() - 1; i >= 0; --i)
-            if (p->m_panels.at(i).source == path)
-                p->m_panels.removeAt(i);
-        p->m_panels.append({place, title, path, std::clamp(width, 120, 900), when, true});
-        emit p->registered();
-    }
     Q_INVOKABLE void registerFormat(const QString &name, const QJSValue &extensions, const QJSValue &claims, const QJSValue &open) {
         QStringList list;
         for (int i = 0; i < extensions.property("length").toInt(); ++i)
@@ -280,34 +256,6 @@ public:
                 p->m_formats.removeAt(i);
         p->m_formats.append({name, list, claims, open});
         emit p->registered();
-    }
-    Q_INVOKABLE void registerLauncher(const QString &id, const QString &title, const QString &author, const QString &description,
-                                      const QString &cover, const QJSValue &open, const QJSValue &removed) {
-        QString picture;
-        if (!cover.isEmpty()) {
-            picture = p->inside(cover, false);
-            if (picture.isEmpty() || !QFileInfo(picture).isFile()) {
-                p->m_engine.throwError("There is no \"" + cover + "\" in the plugin's folder for the launcher's cover.");
-                return;
-            }
-        }
-        // The same id again is the same launcher, said anew; a plugin has
-        // few, since each is a place on everybody's shelf.
-        for (qsizetype i = p->m_launchers.size() - 1; i >= 0; --i)
-            if (p->m_launchers.at(i).id == id)
-                p->m_launchers.removeAt(i);
-        if (p->m_launchers.size() >= 3) {
-            p->m_engine.throwError(QString("A plugin puts at most three launchers on the shelf."));
-            return;
-        }
-        p->m_launchers.append({id, title.simplified(), author.simplified(), description.trimmed(), picture, open, removed});
-        emit p->registered();
-    }
-    Q_INVOKABLE void removeLauncher(const QString &id) {
-        const qsizetype before = p->m_launchers.size();
-        p->m_launchers.removeIf([&id](const ScriptPlugin::Launcher &launcher) { return launcher.id == id; });
-        if (p->m_launchers.size() != before)
-            emit p->registered();
     }
     Q_INVOKABLE QString markdownToHtml(const QString &text) { return htmlFromMarkdown(text); }
     Q_INVOKABLE QString bookEntries(int token) {
@@ -988,8 +936,8 @@ bool ScriptGate::run(const std::function<void(ScriptPlugin &)> &work, std::chron
 
 ScriptPlugin::ScriptPlugin(const ScriptManifest &manifest, const ScriptServices &services, QObject *parent)
     : QObject(parent), m_manifest(manifest), m_services(services), m_host(std::make_unique<ScriptHost>(this)),
-      m_sharing(std::make_unique<ScriptSharing>(this)), m_ai(std::make_unique<ScriptAi>(this)), m_gate(std::make_shared<ScriptGate>(this)),
-      m_watchdog(&m_engine, [this] {
+      m_sharing(std::make_unique<ScriptSharing>(this)), m_ai(std::make_unique<ScriptAi>(this)),
+      m_window(std::make_unique<ScriptWindow>(this)), m_gate(std::make_shared<ScriptGate>(this)), m_watchdog(&m_engine, [this] {
           // On the watchdog's thread: the plugin hears of it on its own.
           QMetaObject::invokeMethod(this, [this] { interrupted(); }, Qt::QueuedConnection);
       }) {

@@ -9,6 +9,10 @@
         <file alias="DialogBody.qml">DialogBody.qml</file>
         <file alias="HeaderChoice.qml">HeaderChoice.qml</file>
         <file alias="SidePane.qml">SidePane.qml</file>
+        <file alias="PluginView.qml">PluginView.qml</file>
+        <file alias="PluginViewLayer.qml">PluginViewLayer.qml</file>
+        <file alias="PluginSide.qml">PluginSide.qml</file>
+        <file alias="ReaderKeys.qml">ReaderKeys.qml</file>
         <file alias="FormatControls.qml">FormatControls.qml</file>
         <file alias="FormatPane.qml">FormatPane.qml</file>
         <file alias="AiSearchDialog.qml">AiSearchDialog.qml</file>
@@ -113,6 +117,7 @@
         <file alias="scriptprelude.js">scriptprelude.js</file>
         <file alias="scriptassist.js">scriptassist.js</file>
         <file alias="scriptaudio.js">scriptaudio.js</file>
+        <file alias="scriptui.js">scriptui.js</file>
         <file>plugin-templates/metadata/plugin.json</file>
         <file>plugin-templates/metadata/main.js</file>
         <file>plugin-templates/command/plugin.json</file>

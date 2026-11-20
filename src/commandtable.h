@@ -13,7 +13,7 @@
 namespace CommandTable {
 
 // Where keys work: what a command's id begins with, and what keys.json is divided into.
-inline constexpr std::array<std::string_view, 5> places{"global", "library", "reader", "graph", "chronology"};
+inline constexpr std::array<std::string_view, 6> places{"global", "library", "reader", "graph", "chronology", "view"};
 
 [[nodiscard]] constexpr std::string_view placeOf(std::string_view command) noexcept { return command.substr(0, command.find('.')); }
 
@@ -189,6 +189,10 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"chronology.tenant", {"C"}, tr("Choose whose chronology is shown: one top-level collection's, or that of the books in none")},
     {"chronology.tenant_next", {"PgDown"}, tr("Show the chronology of the next top-level collection")},
     {"chronology.tenant_previous", {"PgUp"}, tr("Show the chronology of the previous top-level collection")},
+    // A plugin's own view (#77), in place of the shelf or beside the page:
+    // its keys are these and the plugin's commands for its view.
+    {"view.back", {"Backspace"}, tr("Go back in a plugin's view, or close it when it has nowhere to go back to")},
+    {"view.close", {"Escape"}, tr("Close a plugin's view")},
 });
 
 // A command is found by its id, which begins with the place it works in.
@@ -206,7 +210,8 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
 // A key does one thing where it is pressed: no two commands of one place
 // have the same key by default, and none has a key that works everywhere.
 // (The graph's keys are its own: it lies over the shelf or beside the page;
-// so are the chronology's, in place of the shelf, the graph or the page.)
+// so are the chronology's, in place of the shelf, the graph or the page, and
+// a plugin's view's.)
 // Each command's place is found once, as its number in `places` (global is
 // the first), not once for every pair: clang's constant evaluation stops at
 // a number of steps a table this long reaches otherwise.

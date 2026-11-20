@@ -288,7 +288,7 @@ QJsonObject Manual::overviewJson() const {
 QString Manual::keysText() const {
     QString text, heading;
     const QHash<QString, QString> headings{{"global", "Everywhere"}, {"library", "On the shelf"}, {"reader", "While reading"}, {"graph", "In the graph"},
-                                               {"chronology", "In the chronology"}};
+                                               {"chronology", "In the chronology"}, {"view", "In a plugin's view"}};
     for (const QVariant &value : commands()) {
         const QVariantMap command = value.toMap();
         const bool plugin = command.value("place").toString() == "plugins";

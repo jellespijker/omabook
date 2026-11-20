@@ -1,7 +1,8 @@
 // What a plugin's script sees: the `omabook` object, built here from the
 // host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp,
 // and ScriptSharing in scriptsharing.cpp, which it hands over, for what goes
-// into spaces, and what scriptassist.js builds from ScriptAi). The hosts are
+// into spaces, what scriptassist.js builds from ScriptAi, and `omabook.ui`
+// from scriptui.js). The hosts are
 // only ever reachable through these functions: the host is an argument of
 // this one, never a global, so a script can call what is listed in
 // scriptapi.cpp and nothing else. A test holds this object and that table to
@@ -11,6 +12,7 @@
 
     var shared = host.sharing();
     var assisted = host.assistant();
+    var windowed = host.window();
 
     function may(permission) { return info.permissions.indexOf(permission) >= 0; }
 
@@ -248,57 +250,8 @@
         markdown: {
             toHtml: function (words) { return host.markdownToHtml(String(words)); }
         },
-        ui: {
-            panel: function (panel) {
-                need(panel, "object", "A panel");
-                need(panel.source, "string", "The panel's source");
-                oneOf(panel.place || "library.side", info.panelPlaces, "The panel's place");
-                oneOf(panel.when || "always", ["always", "generated"], "The panel's when");
-                host.registerPanel(panel.place || "library.side", String(panel.title || info.plugin.name),
-                                   Number(panel.width) || 280, panel.source, panel.when || "always");
-            },
-            setVisible: function (source, visible) { host.setPanelVisible(String(source), !!visible); },
-            showGraph: function (what) {
-                what = what || {};
-                host.showGraph(String(what.scope || ""), Number(what.book) || 0);
-            },
-            set: function (key, value) { host.uiSet(String(key), JSON.stringify(value === undefined ? null : value)); },
-            ask: function (question) {
-                question = typeof question === "string" ? {title: question} : question;
-                need(question, "object", "The question");
-                need(question.title, "string", "The question's title");
-                return new Promise(function (resolve) {
-                    host.uiAsk(question.title, String(question.placeholder || ""), String(question.text || ""), resolve);
-                });
-            },
-            form: function (form) {
-                need(form, "object", "The form");
-                // Functions and the like don't cross; what does is checked
-                // now, so a form that can't be drawn is a mistake said at once.
-                var json = JSON.stringify(form);
-                var problem = host.formProblem(json);
-                if (problem)
-                    throw new TypeError(problem);
-                return new Promise(function (resolve) {
-                    host.uiForm(json, function (answer) { resolve(answer === null ? null : parse(answer)); });
-                });
-            },
-            launcher: function (launcher) {
-                need(launcher, "object", "A launcher");
-                need(launcher.id, "string", "The launcher's id");
-                need(launcher.title, "string", "The launcher's title");
-                need(launcher.open, "function", "The launcher's open");
-                if (!/^[a-z0-9_-]+$/.test(launcher.id))
-                    throw new RangeError("A launcher's id is lower-case letters, digits, - and _; this one is \"" + launcher.id + "\".");
-                if (launcher.removed !== undefined && launcher.removed !== null)
-                    need(launcher.removed, "function", "The launcher's removed");
-                host.registerLauncher(launcher.id, launcher.title, String(launcher.author || info.plugin.name),
-                                      String(launcher.description || ""), String(launcher.cover || ""),
-                                      function (context) { return launcher.open(context); },
-                                      launcher.removed ? function (context) { return launcher.removed(context); } : null);
-            },
-            removeLauncher: function (id) { host.removeLauncher(String(id)); }
-        },
+        // What a plugin puts in the window, from scriptui.js.
+        ui: windowed(host, info, need, oneOf, parse),
 
         library: {
             list: function () { return parse(host.libraryBooks("")); },

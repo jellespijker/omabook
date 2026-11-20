@@ -46,7 +46,7 @@ const QList<Entry> &entries() {
          "`source.resolve(fromFile, relativePath)`. A book whose every file is in this format, and in no other plugin's, is this plugin's own (`generated`), one synced from another computer included; a format Omabook reads itself (EPUB, PDF, ...) stays Omabook's."},
         {"markdown.toHtml", "markdown.toHtml(text)", "", "Markdown as HTML, for a format whose chapters are partly Markdown."},
         {"commands.register", "commands.register({id, title, place, key, when, run(context)})", "",
-         "Adds a command. `place` is `library`, `reader` or `global`; `key` is its default key, written like `Ctrl+R` "
+         "Adds a command. `place` is `library`, `reader`, `global` or `view` (while the plugin's own view has the keyboard: `ui.view`); `key` is its default key, written like `Ctrl+R` "
          "(left out when something has that key already). It shows among the shortcuts and is bound in keys.json as "
          "`<place>.<plugin>:<id>`. `run` is given `{book, place}`: the selected or open book's number, or 0. With "
          "`when: \"generated\"` the command is only there while a book this plugin made is open or selected: "
@@ -54,50 +54,6 @@ const QList<Entry> &entries() {
         {"commands.setEnabled", "commands.setEnabled(id, enabled)", "",
          "Takes one of the plugin's commands away, or brings it back, while it runs: a command that is not enabled is "
          "not among the shortcuts and its key does nothing. `id` is as given to `register`."},
-        {"ui.panel", "ui.panel({place, title, width, source, when})", "",
-         "Puts a QML file of the plugin's folder in the window: `place` is `library.side` or `reader.side`. With `when: "
-         "\"generated\"` it is only there, and only takes room, while a book this plugin made is open or selected. "
-         "The panel sees what a view sees (`backend`, `reader`, `theme`, ...) and what the script set as "
-         "`backend.scripts.data[\"<plugin>\"]`. It calls the script three ways: "
-         "`backend.scripts.call(\"<plugin>\", \"fn\", [args])` answers at once what `fn` returned; "
-         "`backend.scripts.request(\"<plugin>\", \"fn\", [args])` answers a number, and the signal "
-         "`answered(number, result, error)` comes when `fn`, or the promise it returned, is done; "
-         "`backend.scripts.run(\"<plugin>:<command id>\", bookId)` runs a command."},
-        {"ui.setVisible", "ui.setVisible(source, visible)", "",
-         "Hides one of the plugin's panels, by the file it was given as, or shows it again. A hidden panel takes no room."},
-        {"ui.showGraph", "ui.showGraph({scope, book})", "",
-         "Opens the knowledge graph in the window: of `book` (a number) when given, else of `scope` (a scope of "
-         "`omabook.graph`, a world of the plugin's own say; `\"\"` is the library's). Beside the page while a book is "
-         "open, in place of the shelf otherwise. Nothing happens where there is no window."},
-        {"ui.set", "ui.set(key, value)", "", "Sets a value the plugin's panels are bound to, and that others can read."},
-        {"ui.ask", "ui.ask({title, placeholder, text})", "",
-         "Asks the reader for words in a small dialog: `title` is the question, `text` what is filled in to start with. "
-         "A promise of what they typed, or of `null` when they left it (Escape) or there is no window to ask in (a "
-         "command). Questions are put one at a time."},
-        {"ui.form", "ui.form({title, intro, accept, fields})", "",
-         "Asks the reader to fill in a form, drawn by Omabook in its own style and language, for the keyboard and for "
-         "fingers. `intro` is a few words under the title, `accept` the caption of the button that sends it (Done when "
-         "not given). Each field is `{id, label, type, help, value, ...}`, where `type` is `text` (one line; "
-         "`placeholder`), `textarea` (several), `choice` (one of `choices`), `multi` (any number of `choices`, its value a "
-         "list), `number` (with `min`, `max`, `step`) or `toggle` (true or false). A choice is a string, or `{value, "
-         "label, help}`. `required: true` keeps the form from being sent while that field is empty, and `when: {other: "
-         "value or [values]}` shows a field only while a field above it has one of those values. A promise of `{id: "
-         "value}` for every field, each of its type and within its bounds (a hidden field at its starting value), or of "
-         "`null` when the reader left it (Escape) or there is no window (a command). With no fields it asks to confirm: "
-         "`{}` for yes. A form that can't be drawn (no title, two fields with one id, a choice with nothing to choose) "
-         "throws at once. Forms and questions are put "
-         "one at a time."},
-        {"ui.launcher", "ui.launcher({id, title, author, description, cover, open(context), removed(context)})", "",
-         "Puts an entry on the shelf that is not a book: it is shown in every view of the library and found by a search "
-         "like a book, and opening it (Space, Enter, a double click or a tap, as for any book) calls `open({launcher})` "
-         "instead of the reader. `cover` is a picture in the plugin's folder; without one Omabook draws a cover from the "
-         "theme, marked as something to start rather than to read. It is in the window only: not in the library, so "
-         "never in the counts, the reading statistics, suggestions, the knowledge graph, tidying, sync, catalogs, the "
-         "exports or the file manager, and it goes when the plugin is switched off or removed. When the reader takes it "
-         "off the shelf (Remove), `removed({launcher})` is called and it stays off until the script puts it back; keep "
-         "that choice in `settings` and offer the way back. The same `id` again replaces it; at most three a plugin."},
-        {"ui.removeLauncher", "ui.removeLauncher(id)", "", "Takes one of the plugin's launchers off the shelf."},
-
         {"library.list", "library.list()", "", "Every book: `{id, title, authors, series, series_index, publisher, language, "
                                                "isbn, published, description, tags, formats, added, percent_read, held, status, "
                                                "rating, finished, identifiers, generated}`. `generated` is the name of "
@@ -142,8 +98,8 @@ const QList<Entry> &entries() {
         {"library.remove", "library.remove(id)", "",
          "Moves a book this plugin made to the trash. Any other book throws: those are the reader's to remove."},
     };
-    // After the library's, the graph's and what goes into spaces, then the rest.
-    static const QList<Entry> entries = library + graphEntries() + spaceEntries() + laterEntries() + assistEntries();
+    // After the library's, what a plugin puts in the window, the graph's and what goes into spaces, then the rest.
+    static const QList<Entry> entries = library + uiEntries() + graphEntries() + spaceEntries() + laterEntries() + assistEntries();
     return entries;
 }
 
@@ -168,7 +124,7 @@ QStringList eventNames() { return events() | std::views::transform(&Event::name)
 
 QStringList permissionNames() { return permissions() | std::views::transform(&Permission::name) | std::ranges::to<QStringList>(); }
 
-QStringList commandPlaces() { return {"library", "reader", "global"}; }
+QStringList commandPlaces() { return {"library", "reader", "global", "view"}; }
 QStringList panelPlaces() { return {"library.side", "reader.side"}; }
 
 QString markdown() {

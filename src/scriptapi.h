@@ -34,8 +34,10 @@ struct Permission {
 };
 
 const QList<Entry> &entries();
-// The parts of entries() after the library's: the knowledge graph's and what
-// goes into spaces (scriptapigraph.cpp), and the rest.
+// The parts of entries() after the library's: what a plugin puts in the window
+// (scriptapiui.cpp), the knowledge graph's and what goes into spaces
+// (scriptapigraph.cpp), and the rest.
+QList<Entry> uiEntries();
 QList<Entry> graphEntries();
 QList<Entry> spaceEntries();
 QList<Entry> laterEntries();

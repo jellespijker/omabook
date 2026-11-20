@@ -156,6 +156,7 @@ ApplicationWindow {
         if (win.chronologyShown) chronologyLayer.takeFocus()
         else if (win.inReader && readerLoader.item && readerLoader.item.content) readerLoader.item.content.forceActiveFocus()
         else if (win.graphShown && graphLoader.item) graphLoader.item.takeFocus()
+        else if (pluginViews.visible) pluginViews.takeFocus()
         else library.takeFocus()
     }
     // The item with that objectName, if it is on screen: what the tour points at.
@@ -287,7 +288,8 @@ ApplicationWindow {
             delegate: Key {
                 required property var modelData
                 command: modelData.id
-                when: modelData.place === "global" || (modelData.place === "reader") === win.inReader
+                when: modelData.place === "view" ? pluginViews.keysOf !== "" && modelData.id.startsWith("view." + pluginViews.keysOf + ":")
+                                                 : modelData.place === "global" || (modelData.place === "reader") === win.inReader
                 onActivated: backend.scripts.run(modelData.id, win.inReader ? reader.bookId : library.selectedId)
             }
         }
@@ -296,7 +298,7 @@ ApplicationWindow {
             id: library
             objectName: "library"
             anchors.fill: parent
-            visible: !win.inReader && !win.graphShown && !win.chronologyShown
+            visible: !win.inReader && !win.graphShown && !win.chronologyShown && !pluginViews.visible
             active: visible && win.keys
         }
 
@@ -324,6 +326,8 @@ ApplicationWindow {
             }
         }
 
+        // A plugin's view in place of the shelf, and where a plugin's asking for one goes.
+        PluginViewLayer { id: pluginViews; objectName: "pluginViews"; anchors.fill: parent }
         // The reader is built when the first book opens, so the shelf is up at once.
         Loader {
             id: readerLoader
