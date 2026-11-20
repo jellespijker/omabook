@@ -38,7 +38,13 @@ omabook chronology timeline add "The Third Age" --kind world
 omabook chronology place "The siege" on "The Third Age"
 ```
 
-What is put in by hand is marked `"by_hand"` and wins over what the books say; ask the user before correcting what a book said.
+What is put in by hand is marked `"by_hand"` and wins over what the books say; ask the user before correcting what a book said. An event or a timeline is its number or its name. The AI notes the times as it builds a book's graph; for a book built before, rebuild it (it costs AI calls, so say so first):
+
+```bash
+omabook graph build 12 --again                   # reads the times, orders and timelines into an older book's graph
+```
+
+Over MCP the same are `chronology`, `chronology_set_when`, `chronology_order`, `chronology_place` and `chronology_timeline_add`. In the window, `T` on the shelf, `Shift+T` while reading and `T` in the graph show it (`omabook help chronology`).
 
 ## Collections
 

@@ -5,7 +5,7 @@ description: Work with the user's ebook library through the omabook command line
 
 # Omabook
 
-Omabook is the ebook library and reader on this desktop. Everything the window does with the library is also a command that needs no display. Every command takes `--json`, writes errors to standard error, and exits 0 on success and 1 on failure. `omabook <command> --help` lists its options, and `omabook help <topic>` (`start`, `reading`, `ai`, `library`, `plugins`, `calibre`, `computers`, `sharing`, `agents`, `keys`, `new`) prints the help the window shows.
+Omabook is the ebook library and reader on this desktop. Everything the window does with the library is also a command that needs no display. Every command takes `--json`, writes errors to standard error, and exits 0 on success and 1 on failure. `omabook <command> --help` lists its options, and `omabook help <topic>` (`start`, `reading`, `ai`, `library`, `chronology`, `plugins`, `calibre`, `computers`, `sharing`, `agents`, `keys`, `new`) prints the help the window shows.
 
 A `<book>` is a number from `omabook list`, or the path of any book file, so the reading commands also work on files that are not in the library.
 

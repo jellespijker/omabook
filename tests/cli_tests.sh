@@ -67,6 +67,8 @@ rm -rf "$XDG_CONFIG_HOME/omabook/plugins/shelver"
 expect "what is new" 0 "Share a collection" "$omabook" help new
 expect "a help page on sharing" 0 "What is never shared" "$omabook" help sharing
 expect "it says removing a member changes the key" 0 "changes its key" "$omabook" help sharing
+expect "a help page on the chronology" 0 "Never ahead of you" "$omabook" help chronology
+expect "the chronology page names its keys" 0 "Shift+T the open book's" "$omabook" help chronology
 expect "what is new as JSON" 0 '"features"' "$omabook" help new --json
 expect "an unknown help topic fails" 1 "no help on" "$omabook" help nonsense
 expect "an empty library lists nothing" 0 "" "$omabook" list --library "$library"

@@ -100,6 +100,7 @@ These are the keys as shipped; every one can be changed in `keys.json` (see *Mak
 | `Shift+O` | Subscribe to a collection someone shared | | |
 | `P` | Plugins | `C` | Have the AI catch you up |
 | `Shift+T` | Tidy the library | `W` | Who is who so far |
+| `T` | When the selected book's events happen, on their timelines | `Shift+T` | When this book's events happen, as far as you have read |
 | `W` | Ask about your library | `V` | Select words with the keyboard, to ask about them or find them |
 | `N` | Suggest what to read next | `Shift+M` | Mark the map's things in the text: while the map is open, always, or never |
 | `Ctrl+K` | Change Omabook (anywhere) | | |
@@ -120,7 +121,7 @@ Books can also be dropped on the window.
 
 `?` (or `F1`) opens the help wherever you are. It lists every key **as it is bound now**: change one in `keys.json`, or add a plugin with a command of its own, and the help shows it without anyone having written it down: a plugin's keys under its name, each saying whether it works on the shelf, while reading or anywhere, for as long as the plugin is on. After them come the keys a panel or dialog has of its own (the menu beside selected words, the contents, the Aa panel, the plugin manager, the tour...), under the panel they work in. Type what you want to do ("add a folder", "how do I bookmark") and the list narrows to the commands and pages that match; Up and Down pick one and Enter runs it, so the help is also a way to do things. Typing only ever searches. Opened over a book, the reading keys come first.
 
-Beside the keys are a few short pages: getting started, reading, the AI companion, your library, plugins, Calibre and Goodreads, other computers, sharing, and one for agents. Tab turns to the next. Each lists the commands it mentions, and the same pages print in a terminal:
+Beside the keys are a few short pages: getting started, reading, the AI companion, your library, the chronology, plugins, Calibre and Goodreads, other computers, sharing, and one for agents. Tab turns to the next. Each lists the commands it mentions, and the same pages print in a terminal:
 
 ```bash
 omabook help             # the commands, and the topics
@@ -603,6 +604,42 @@ The picture is laid out by a small simulation in which nodes push each other apa
 
 What is sent to grow it: the book's title and authors, the pages read since the last time, the names and short summaries the graph already holds for that book and the earlier books of its series, and up to forty names with one line each from the graphs of the other books you read. The connecting request sends no book text at all, only such names and lines from both sides.
 
+## Chronology
+
+The chronology puts the events of the books you read in the order they **happen** in their world, not the order you read them in. A flashback lands where it belongs, and two novels set in the same war line up on one axis. It is not the same as *When it was revealed* in the graph's details: that is the order in which you learned things about one thing; this is story time.
+
+- **Never ahead of you.** Every time and every order is a fact with the place in the book where it was told, like the rest of the graph. So the chronology holds only what you have read: an event you haven't reached isn't on it, not even on a timeline it shares with a book you finished.
+- **Timelines.** An event is on one or more: the book's own, its series', a world several books share, or real history. A real date or a real event (a war, a coronation) puts it on real history, which is how books with nothing else in common meet. A series' or a world's timeline is shared only by books on the same side of a library split into top collections.
+- **The AI notes the times.** As it builds a book's graph, the model also notes when each event happens, as far as the book says: a date, a year or a span, on the real calendar or the story's own, "around" where the book hedges, or only the book's words ("three years before the war"). It notes what comes before or after what, and marks an order it concluded as inferred. It never guesses a date: what the book doesn't say stays unknown. `omabook graph build <book> --again` reads the times into a book built before.
+- **Or by hand.** Say when an event happens, put two in order, place one on a timeline, or make a timeline of your own (see below). What you put in is marked as yours and wins over what the books say.
+- **What can't be ordered is said.** Events with no time and no order are listed apart. A contradiction (A before B and B before A, two books giving times that can't both be, a date that disagrees with an order) is shown with where each statement was said and which one is followed, never quietly resolved.
+
+### In the window
+
+`T` on the shelf shows the selected book's chronology, `Shift+T` the open book's while reading, and `T` in the graph that of what the graph shows: a book, a series, a collection or everything read.
+
+- **Lanes on a ruler.** One lane per timeline, under the ruler of its calendar, from centuries down to minutes. Lanes that line up share one axis: by date where the books give one, in order where they don't. A moment is a mark, a span a bar, and an event during another sits under it. *You are here* marks the event you came to last.
+- **What is unplaced and what disagrees.** `U` shows the events no time or order is known of. An event in a contradiction is ringed, and its card says what was said where and which was followed.
+- **The card.** A click or a tap on an event shows what is known of it, with **Back to the page** it was revealed on (`O` or `Enter`) and **Show in the graph** (`G`).
+- **Filters.** `F` filters by timeline, book, series, collection, character, place, group or theme, or only what was met in a book; `R` shows only a stretch of time, from one year or date to another. Filters show as chips that a click takes off, and `Shift+F` clears them all.
+- **Moving around.** `H` `J` `K` `L` or the arrows go from event to event, `/` finds one by name, `+` `-` zoom and `0` fits it all; `Shift` with a direction moves the view. The wheel, a drag and a pinch do the same. In a right-to-left language time runs from right to left.
+- **Shared graphs.** The graphs of collections you subscribe to are laid in, hollow, and only as far as you have read each book yourself.
+
+### On the command line and over MCP
+
+```bash
+omabook chronology 12                    # a book's events in the order they happen, cut where you are
+omabook chronology --collection Novels --timeline "Real history" --from 1940 --to 1942   # every novel set then
+omabook chronology 12 --upto 5 --json    # as known at section 5; --whole takes everything, read or not
+omabook chronology --format csv --output story.csv   # or json, graphml, dot: with times, the order as edges
+omabook chronology set-when "The siege" 1944-06-06   # or a span 1939..1945; --calendar, --approximate, --said
+omabook chronology order "The flood" before "The siege"   # before, after, during or same
+omabook chronology timeline add "The Third Age" --kind world
+omabook chronology place "The siege" on "The Third Age"
+```
+
+With no book it takes every book you read; `--collection` takes one collection's. `omabook graph chronology` is the same command. An event or a timeline is its number or its name, and what doesn't check out is refused with why. Over MCP the same are `chronology`, `chronology_set_when`, `chronology_order`, `chronology_place` and `chronology_timeline_add`.
+
 ## Commands
 
 Everything the window does with the library, with no display needed. Every command takes `--json`, prints errors to standard error, and exits 0 or 1.
@@ -639,6 +676,7 @@ omabook export <id> <folder>            Copy a book's file out of the library
 omabook ask <book|all> <question>       Ask the AI about a book, or about the whole library
 omabook ai use|models|key               A server as the AI (Omarchy's local models, Ollama, OpenAI, ...); its models; its key
 omabook graph show|find|node|build|...  The knowledge graph of what is read; see omabook graph --help
+omabook chronology [book] [--timeline t]  The events read, in the order they happen in their world; see Chronology
 omabook tidy [--ai] [--apply]           List duplicates, author spellings and series to tidy; make the changes
 omabook suggest [--no-check]            Have the AI suggest what to read next, checked against the reading sites
 omabook goodreads import|sync|export|shelves  Keep your Goodreads shelves and the library in step
@@ -694,6 +732,7 @@ omabook mcp --library ~/Other  # serve one library, whatever the window has open
 | `plugin_install`, `plugin_remove` | Install a plugin from a folder or a `.zip`, checked first and left off; move one of your own to the trash |
 | `plugin_add`, `plugin_sources`, `plugin_update`, `plugin_forget_source` | Install a plugin from a GitHub repository; where each came from; check or update them; stop updating one |
 | `graph_find`, `graph_node`, `graph_book`, `graph_add`, `graph_link`, `graph_build`, `graph_export`, ... | The knowledge graph: search it, a node and its neighbours, a book's graph up to a place, add and relate things, grow it with the AI, write it as GraphML, DOT or Cypher, the reading log |
+| `chronology`, `chronology_set_when`, `chronology_order`, `chronology_place`, `chronology_timeline_add` | The events read, in the order they happen in their world, cut where the user is; say when one happens, put two in order, place one on a timeline, make a timeline |
 | `customize_get`, `customize_set`, `customize_undo` | `keys.json`, `style.json` and the look settings, changed with the same checks as a file edited by hand, and undone |
 
 Other parts of Omabook add their own (script plugins, Calibre, reading sites); `omabook mcp --tools` lists what this build has. Every tool says in its annotations whether it only reads, changes something, or takes something away (`book_remove`, `tidy_apply`, `lookup_apply`, `bookmark_remove`, `book_add_format`), so a client can ask you at the right moments. Arguments are checked against each tool's schema, and what goes wrong comes back as the tool's result, in words the agent can act on. There are also four resources (`omabook://library/books`, `omabook://book/{id}`, `omabook://book/{id}/section/{n}`, `omabook://graph/book/{id}`) and two prompts (`tidy_library`, `fix_details`).

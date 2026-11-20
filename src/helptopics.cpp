@@ -99,6 +99,66 @@ Manual::Topic sharingTopic() {
             }};
 }
 
+Manual::Topic themesTopic() {
+    return {"themes", Manual::tr("Colors and themes"), Manual::tr("Look like Omarchy anywhere, follow Aether, or pick a theme."),
+            {
+                {Manual::tr("Automatic"),
+                 Manual::tr("Omabook takes its colors from Omarchy's current theme and follows it as it changes. Without "
+                            "Omarchy it follows the theme Aether writes, and without either it looks like Omarchy's "
+                            "default, Tokyo Night.")},
+                {Manual::tr("Choosing a theme"),
+                 Manual::tr("In the settings ({global.settings}), Choose Theme lists Omarchy's own themes, built into "
+                            "Omabook, with Omarchy and Aether when they are here. The arrow keys show each one on the "
+                            "window as you go; Enter keeps it and Escape puts back what there was. It changes Omabook "
+                            "only, not the desktop.")},
+                {Manual::tr("From a terminal"),
+                 Manual::tr("`omabook theme list` shows the themes, `omabook theme use nord` picks one, and `omabook theme "
+                            "use ~/colors.toml` takes any colors.toml. `omabook theme import <name>` makes a theme of your "
+                            "own from an Aether blueprint.")},
+                {Manual::tr("Your own colors"),
+                 Manual::tr("Colors in `~/.config/omabook/style.json` stay over whichever theme is chosen, so a theme can "
+                            "be the start and one color your own.")},
+            }};
+}
+
+Manual::Topic chronologyTopic() {
+    return {"chronology", Manual::tr("The chronology"), Manual::tr("When the events of your books happen in their stories."),
+            {
+                {Manual::tr("Story time"),
+                 Manual::tr("The chronology puts the events you read in the order they happen in their world, not the "
+                            "order you read them in: a flashback lands where it belongs. {library.chronology_book} shows "
+                            "the selected book's, {reader.chronology} the open book's, and {graph.chronology} that of what "
+                            "the graph shows. It is not When it was revealed in the graph, which is the order you learned "
+                            "things in.")},
+                {Manual::tr("Never ahead of you"),
+                 Manual::tr("Every time and every order is kept with the place in the book where it was told, so the "
+                            "chronology holds only what you have read, also on a timeline your book shares with another.")},
+                {Manual::tr("Timelines"),
+                 Manual::tr("Each lane is a timeline: a book's own, a series', a world's or real history, under the ruler "
+                            "of its calendar. Lanes that line up share one axis. A real date puts an event on real history, "
+                            "which is how books with nothing else in common meet.")},
+                {Manual::tr("Where the times come from"),
+                 Manual::tr("As the AI builds a book's graph, it notes when events happen, as far as the book says, and "
+                            "what comes before what; it never guesses a date. `omabook graph build <book> --again` does "
+                            "it for a book built before. By hand, `omabook chronology set-when`, `order`, `place` and "
+                            "`timeline add`, which win over what the books say.")},
+                {Manual::tr("Unplaced, and contradictions"),
+                 Manual::tr("{chronology.unplaced} shows the events no time or order is known of. An event in a "
+                            "contradiction is ringed, and its card says what was said where and which was followed.")},
+                {Manual::tr("The card"),
+                 Manual::tr("A click or a tap on an event shows what is known of it. {chronology.page} goes back to the "
+                            "page it was revealed on, and {chronology.graph} shows it in the graph.")},
+                {Manual::tr("Filters and moving around"),
+                 Manual::tr("{chronology.filter} filters by timeline, book, series, collection, character, place, group or "
+                            "theme; {chronology.range} keeps a stretch of time, and {chronology.filter_clear} takes them "
+                            "off. {chronology.zoom_in} and {chronology.zoom_out} zoom, {chronology.fit} fits it all; the "
+                            "wheel, a drag and a pinch do the same.")},
+                {Manual::tr("From a terminal"),
+                 Manual::tr("`omabook chronology <book>` prints it, `--format csv`, `graphml` or `dot` writes it for other "
+                            "tools, and the MCP tool `chronology` gives it to an agent.")},
+            }};
+}
+
 } // namespace
 
 QList<Manual::Topic> Manual::topicList() {
@@ -298,25 +358,10 @@ QList<Manual::Topic> Manual::topicList() {
                  "the last one stays as you left it. Disconnecting forgets who you are on the site and its token, and "
                  "leaves every book.")},
          }},
+        chronologyTopic(),
         computersTopic(),
         sharingTopic(),
-        {"themes", tr("Colors and themes"), tr("Look like Omarchy anywhere, follow Aether, or pick a theme."),
-         {
-             {tr("Automatic"),
-              tr("Omabook takes its colors from Omarchy's current theme and follows it as it changes. Without Omarchy it "
-                 "follows the theme Aether writes, and without either it looks like Omarchy's default, Tokyo Night.")},
-             {tr("Choosing a theme"),
-              tr("In the settings ({global.settings}), Choose Theme lists Omarchy's own themes, built into Omabook, with "
-                 "Omarchy and Aether when they are here. The arrow keys show each one on the window as you go; Enter keeps "
-                 "it and Escape puts back what there was. It changes Omabook only, not the desktop.")},
-             {tr("From a terminal"),
-              tr("`omabook theme list` shows the themes, `omabook theme use nord` picks one, and `omabook theme use "
-                 "~/colors.toml` takes any colors.toml. `omabook theme import <name>` makes a theme of your own from an "
-                 "Aether blueprint.")},
-             {tr("Your own colors"),
-              tr("Colors in `~/.config/omabook/style.json` stay over whichever theme is chosen, so a theme can be the "
-                 "start and one color your own.")},
-         }},
+        themesTopic(),
         {"agents", tr("For agents"), tr("The command line, the MCP server, and the interface as files."),
          {
              {tr("The command line"),

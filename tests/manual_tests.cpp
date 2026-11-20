@@ -117,7 +117,7 @@ private slots:
             }
         }
         QVERIFY2(problems.isEmpty(), qPrintable(problems.join('\n')));
-        QVERIFY(topics.contains("sharing"));
+        QVERIFY(topics.contains("sharing") && topics.contains("chronology"));
     }
 
     void theHelpIsTheSameTextInTheWindowAndATerminal() {
