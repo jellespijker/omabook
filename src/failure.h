@@ -56,6 +56,24 @@ public:
         NoBooksInside,     // {archive name}
         NoSuchBook,        // {book's number}
         InkNotKept,        // {page number, from 1}
+        // Recording and playing sound (foundation, services).
+        NoMicrophone,         // {}
+        MicrophoneStopped,    // {}
+        MicrophoneUnopened,   // {}
+        NoSpeakers,           // {}
+        SoundUnplayed,        // {}
+        SpeakersUnopened,     // {}
+        PacketTooLarge,       // {bytes}
+        RecordingUnwritten,   // {the system's reason}
+        SoundFileUnreadable,  // {path, the system's reason}
+        OpusDecoderUnstarted, // {Opus's reason}
+        NotOpus,              // {path}
+        OpusWithoutSound,     // {path}
+        OpusEncoderUnstarted, // {Opus's reason}
+        FolderUnmade,         // {path}
+        SoundFileUnwritten,   // {path, the system's reason}
+        RecordingEnded,       // {}
+        SoundUnencoded,       // {Opus's reason}
         // Recognising handwriting and speech (services); "where" is a recognizer's own words.
         NoInk,                 // {}
         RecordingUnreadable,   // {recording}

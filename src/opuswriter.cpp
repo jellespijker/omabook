@@ -9,6 +9,8 @@
 #include <opus.h>
 #include <tuple>
 
+#include "failure.h"
+
 using namespace Qt::StringLiterals;
 
 namespace Opus {
@@ -66,15 +68,15 @@ std::expected<void, QString> Writer::begin(const Options &options) {
     int error = OPUS_OK;
     m_encoder.reset(opus_encoder_create(sampleRate, 1, OPUS_APPLICATION_VOIP, &error));
     if (error != OPUS_OK || !m_encoder)
-        return std::unexpected(u"The Opus encoder did not start: %1"_s.arg(QString::fromUtf8(opus_strerror(error))));
+        return std::unexpected(Failure(Failure::Code::OpusEncoderUnstarted, {QString::fromUtf8(opus_strerror(error))}).text());
     opus_encoder_ctl(m_encoder.get(), OPUS_SET_BITRATE(options.bitrate));
     opus_encoder_ctl(m_encoder.get(), OPUS_SET_SIGNAL(OPUS_SIGNAL_VOICE));
     opus_encoder_ctl(m_encoder.get(), OPUS_GET_LOOKAHEAD(&m_preskip));
     if (!QDir().mkpath(QFileInfo(options.path).absolutePath()))
-        return std::unexpected(u"The folder for %1 could not be made."_s.arg(options.path));
+        return std::unexpected(Failure(Failure::Code::FolderUnmade, {options.path}).text());
     m_file.setFileName(options.path);
     if (!m_file.open(QIODevice::WriteOnly | QIODevice::Truncate))
-        return std::unexpected(u"%1 could not be written: %2"_s.arg(options.path, m_file.errorString()));
+        return std::unexpected(Failure(Failure::Code::SoundFileUnwritten, {options.path, m_file.errorString()}).text());
     // The two headers each on a page of their own, as the format asks.
     if (auto written = m_ogg.add(head(m_preskip), 0); !written)
         return written;
@@ -97,7 +99,7 @@ Writer::~Writer() {
 
 std::expected<void, QString> Writer::write(std::span<const qint16> samples) {
     if (m_finished)
-        return std::unexpected(u"The recording has ended."_s);
+        return std::unexpected(Failure(Failure::Code::RecordingEnded).text());
     m_taken += static_cast<std::int64_t>(samples.size());
     std::ranges::copy(samples, std::back_inserter(m_left));
     qsizetype at = 0;
@@ -116,7 +118,7 @@ std::expected<void, QString> Writer::encode(std::span<const qint16> frame) {
     std::array<unsigned char, maxPacket> packet{};
     const opus_int32 size = opus_encode(m_encoder.get(), frame.data(), frameSamples, packet.data(), maxPacket);
     if (size < 0)
-        return std::unexpected(u"The sound could not be encoded: %1"_s.arg(QString::fromUtf8(opus_strerror(size))));
+        return std::unexpected(Failure(Failure::Code::SoundUnencoded, {QString::fromUtf8(opus_strerror(size))}).text());
     m_encoded += frameSamples;
     // The last page says where the sound really ends: the encoder's delay
     // and the silence that filled the last frame are left out.

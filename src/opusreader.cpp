@@ -9,6 +9,8 @@
 #include <utility>
 #include <vector>
 
+#include "failure.h"
+
 using namespace Qt::StringLiterals;
 
 namespace Opus {
@@ -65,7 +67,7 @@ std::expected<std::unique_ptr<Reader>, QString> Reader::open(const QString &path
 std::expected<void, QString> Reader::begin(const QString &path) {
     m_file.setFileName(path);
     if (!m_file.open(QIODevice::ReadOnly))
-        return std::unexpected(u"%1 could not be read: %2"_s.arg(path, m_file.errorString()));
+        return std::unexpected(Failure(Failure::Code::SoundFileUnreadable, {path, m_file.errorString()}).text());
     if (auto read = readHeaders(path); !read)
         return read;
     m_map = m_pages.map(m_pages.position());
@@ -77,7 +79,7 @@ std::expected<void, QString> Reader::begin(const QString &path) {
     int error = OPUS_OK;
     m_decoder.reset(opus_decoder_create(sampleRate, 1, &error));
     if (error != OPUS_OK || !m_decoder)
-        return std::unexpected(u"The Opus decoder did not start: %1"_s.arg(QString::fromUtf8(opus_strerror(error))));
+        return std::unexpected(Failure(Failure::Code::OpusDecoderUnstarted, {QString::fromUtf8(opus_strerror(error))}).text());
     seek(0);
     return {};
 }
@@ -86,14 +88,14 @@ std::expected<void, QString> Reader::readHeaders(const QString &path) {
     const std::optional<Ogg::Page> first = m_pages.next();
     const QByteArray head = first && !first->packets.isEmpty() ? first->packets.first() : QByteArray();
     if (!head.startsWith("OpusHead") || head.size() < 19 || head.at(9) < 1 || head.at(9) > 2)
-        return std::unexpected(u"%1 is no Opus recording."_s.arg(path));
+        return std::unexpected(Failure(Failure::Code::NotOpus, {path}).text());
     m_preskip = qFromLittleEndian<std::uint16_t>(head.mid(10, 2).constData());
     // The tags may take more than a page; the sound begins after them.
     QByteArray tags;
     while (true) {
         const std::optional<Ogg::Page> page = m_pages.next();
         if (!page)
-            return std::unexpected(u"%1 ends before its sound begins."_s.arg(path));
+            return std::unexpected(Failure(Failure::Code::OpusWithoutSound, {path}).text());
         for (const QByteArray &packet : page->packets)
             tags += packet;
         if (!page->open)

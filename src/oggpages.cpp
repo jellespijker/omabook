@@ -4,6 +4,8 @@
 #include <array>
 #include <tuple>
 
+#include "failure.h"
+
 using namespace Qt::StringLiterals;
 
 namespace Ogg {
@@ -49,7 +51,7 @@ std::uint32_t checksum(QByteArrayView page) {
 std::expected<void, QString> Writer::add(QByteArrayView packet, std::int64_t granule) {
     const qsizetype segments = packet.size() / 255 + 1;
     if (segments > maxSegments)
-        return std::unexpected(u"A packet of %1 bytes is more than a page holds."_s.arg(packet.size()));
+        return std::unexpected(Failure(Failure::Code::PacketTooLarge, {QString::number(packet.size())}).text());
     if (m_lacing.size() + segments > maxSegments)
         if (auto written = flush(); !written)
             return written;
@@ -78,7 +80,7 @@ std::expected<void, QString> Writer::flush(bool last) {
     m_body.clear();
     m_packets = 0;
     if (m_device->write(page) != page.size())
-        return std::unexpected(u"The recording could not be written: %1"_s.arg(m_device->errorString()));
+        return std::unexpected(Failure(Failure::Code::RecordingUnwritten, {m_device->errorString()}).text());
     return {};
 }
 

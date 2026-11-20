@@ -5,6 +5,7 @@
 #include <QAudioSource>
 #include <QMediaDevices>
 
+#include "failure.h"
 #include "opuswriter.h"
 
 using namespace Qt::StringLiterals;
@@ -16,15 +17,15 @@ public:
     std::expected<QIODevice *, QString> start() override {
         const QAudioDevice device = QMediaDevices::defaultAudioInput();
         if (device.isNull())
-            return std::unexpected(u"There is no microphone."_s);
+            return std::unexpected(Failure(Failure::Code::NoMicrophone).text());
         m_source = std::make_unique<QAudioSource>(device, AudioPorts::format());
         connect(m_source.get(), &QAudioSource::stateChanged, this, [this](QAudio::State state) {
             if (state == QAudio::StoppedState && m_source->error() != QAudio::NoError)
-                emit failed(u"The microphone stopped giving sound."_s);
+                emit failed(Failure(Failure::Code::MicrophoneStopped).text());
         });
         QIODevice *heard = m_source->start();
         if (heard == nullptr || m_source->error() != QAudio::NoError)
-            return std::unexpected(u"The microphone could not be opened."_s);
+            return std::unexpected(Failure(Failure::Code::MicrophoneUnopened).text());
         return heard;
     }
     void suspend() override {
@@ -49,7 +50,7 @@ public:
     std::expected<void, QString> start(QIODevice &source) override {
         const QAudioDevice device = QMediaDevices::defaultAudioOutput();
         if (device.isNull())
-            return std::unexpected(u"There is nothing to play sound on."_s);
+            return std::unexpected(Failure(Failure::Code::NoSpeakers).text());
         m_sink = std::make_unique<QAudioSink>(device, AudioPorts::format());
         connect(m_sink.get(), &QAudioSink::stateChanged, this, [this, &source](QAudio::State state) {
             // Idle with nothing more to give is the end; idle while the
@@ -57,11 +58,11 @@ public:
             if (state == QAudio::IdleState && source.atEnd())
                 emit drained();
             else if (state == QAudio::StoppedState && m_sink->error() != QAudio::NoError && m_sink->error() != QAudio::UnderrunError)
-                emit failed(u"The sound could not be played."_s);
+                emit failed(Failure(Failure::Code::SoundUnplayed).text());
         });
         m_sink->start(&source);
         if (m_sink->error() == QAudio::OpenError)
-            return std::unexpected(u"The speakers could not be opened."_s);
+            return std::unexpected(Failure(Failure::Code::SpeakersUnopened).text());
         return {};
     }
     void suspend() override {
