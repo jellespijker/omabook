@@ -4,11 +4,12 @@
 #include <algorithm>
 #include <utility>
 
+#include "failure.h"
 #include "log.h"
 #include "recognitionstore.h"
 
 using namespace std::chrono_literals;
-using Recognition::Failure;
+using Why = Recognition::Failure::Why;
 
 struct RecognitionQueue::Job {
     int id = 0;
@@ -74,13 +75,13 @@ bool RecognitionQueue::cancel(int job) {
         m_retry.stop();
         for (const auto &way : (*found)->ways)
             way->cancel();
-        finish(std::unexpected(tr("The recognition was cancelled.")));
+        finish(std::unexpected(Failure(Failure::Code::RecognitionCancelled).text()));
         return true;
     }
     const std::unique_ptr<Job> cancelled = std::move(*found);
     m_jobs.erase(found);
     if (cancelled->done)
-        cancelled->done(std::unexpected(tr("The recognition was cancelled.")));
+        cancelled->done(std::unexpected(Failure(Failure::Code::RecognitionCancelled).text()));
     return true;
 }
 
@@ -97,7 +98,8 @@ void RecognitionQueue::next() {
     job.ways = std::move(*ways);
     for (const auto &way : job.ways) {
         connect(way.get(), &Recognition::Recognizer::resolved, this, [this, &job] { resolved(job); });
-        connect(way.get(), &Recognition::Recognizer::failed, this, [this, &job](const Failure &failure) { failed(job, failure); });
+        connect(way.get(), &Recognition::Recognizer::failed, this,
+                [this, &job](const Recognition::Failure &failure) { failed(job, failure); });
         connect(way.get(), &Recognition::Recognizer::recognized, this, [this, &job](Recognition::Result result) {
             if (result.at == 0)
                 result.at = QDateTime::currentMSecsSinceEpoch();
@@ -147,15 +149,15 @@ void RecognitionQueue::resolved(Job &job) {
     way.recognize(job.request.input);
 }
 
-void RecognitionQueue::failed(Job &job, const Failure &failure) {
+void RecognitionQueue::failed(Job &job, const Recognition::Failure &failure) {
     switch (failure.why) {
-    case Failure::Why::Refused:
+    case Why::Refused:
         finish(std::unexpected(failure.message));
         return;
-    case Failure::Why::Away:
+    case Why::Away:
         job.away = failure.message;
         break;
-    case Failure::Why::Unsupported:
+    case Why::Unsupported:
         job.without << failure.message;
         break;
     }

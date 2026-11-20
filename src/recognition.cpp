@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <ranges>
 
+#include "failure.h"
 #include "inkcodec.h"
 
 using namespace Qt::StringLiterals;
@@ -87,7 +88,7 @@ std::expected<QString, QString> Recognition::key(const Input &input, const QStri
     hash.addData(QString(keyVersion + u'\n' + kindName(input.kind) + u'\n' + model + u'\n' + input.language + u'\n').toUtf8());
     if (input.kind == Kind::Ink) {
         if (std::ranges::all_of(input.strokes, [](const Ink::Stroke &stroke) { return stroke.points.empty(); }))
-            return std::unexpected(QObject::tr("There is no ink to recognise."));
+            return std::unexpected(::Failure(::Failure::Code::NoInk).text());
         // In the order they were written, whatever order they were kept in;
         // their ids are where they are kept, not what was written.
         std::vector<const Ink::Stroke *> written;
@@ -103,11 +104,11 @@ std::expected<QString, QString> Recognition::key(const Input &input, const QStri
     }
     QFile file(input.file);
     if (!file.open(QIODevice::ReadOnly))
-        return std::unexpected(QObject::tr("The recording %1 can't be read.").arg(input.file));
+        return std::unexpected(::Failure(::Failure::Code::RecordingUnreadable, {input.file}).text());
     if (file.size() == 0)
-        return std::unexpected(QObject::tr("The recording %1 is empty.").arg(input.file));
+        return std::unexpected(::Failure(::Failure::Code::RecordingEmpty, {input.file}).text());
     if (!hash.addData(&file))
-        return std::unexpected(QObject::tr("The recording %1 can't be read.").arg(input.file));
+        return std::unexpected(::Failure(::Failure::Code::RecordingUnreadable, {input.file}).text());
     return QString::fromLatin1(hash.result().toHex());
 }
 

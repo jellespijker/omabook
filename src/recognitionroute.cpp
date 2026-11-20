@@ -5,6 +5,7 @@
 #include <QUrl>
 
 #include "ai.h"
+#include "failure.h"
 #include "recognizers.h"
 #include "secretstore.h"
 #include "settings.h"
@@ -70,7 +71,7 @@ std::expected<RecognitionRoute::Ways, QString> RecognitionRoute::ways(const Sett
             model = Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
         const auto server = AiEndpoints::server(settings, model);
         if (!server)
-            return std::unexpected(QObject::tr("Handwriting is read by a vision model on your AI server: %1").arg(server.error()));
+            return std::unexpected(::Failure(::Failure::Code::NoVisionServer, {server.error()}).text());
         if (model.isEmpty())
             model = server->model;
         if (const QString why = whyNot(settings, server->baseUrl, model, hostedAsked); !why.isEmpty())

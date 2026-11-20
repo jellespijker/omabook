@@ -14,6 +14,7 @@
 #include <optional>
 #include <utility>
 
+#include "failure.h"
 #include "inkpicture.h"
 #include "openaiprovider.h"
 #include "thinkingfilter.h"
@@ -54,9 +55,11 @@ constexpr auto inkPrompt = "The picture is handwriting. Write out exactly what i
 // A failure that only means waiting: the server isn't there, or not ready.
 [[nodiscard]] std::optional<Failure> awayFailure(int status, const QNetworkReply &reply, const QString &where) {
     if (status == 0)
-        return Failure{.why = Why::Away, .message = sentence(QObject::tr("%1 can't be reached now (%2).").arg(where, reply.errorString()))};
+        return Failure{.why = Why::Away,
+                       .message = sentence(::Failure(::Failure::Code::RecognizerUnreachable, {where, reply.errorString()}).text())};
     if (status == 429 || status == 502 || status == 503 || status == 504)
-        return Failure{.why = Why::Away, .message = sentence(QObject::tr("%1 is busy or starting (%2).").arg(where).arg(status))};
+        return Failure{.why = Why::Away,
+                       .message = sentence(::Failure(::Failure::Code::RecognizerBusy, {where, QString::number(status)}).text())};
     return std::nullopt;
 }
 
@@ -68,19 +71,18 @@ constexpr auto inkPrompt = "The picture is handwriting. Write out exactly what i
         return *away;
     const QString said = serverMessage(body);
     if (status == 401 || status == 403)
-        return {.why = Why::Refused, .message = sentence(QObject::tr("%1 didn't accept the key; put one in the settings.").arg(where))};
+        return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerRefusedKey, {where}).text())};
     // A server without the service answers that the address isn't there.
     const bool aboutTheModel = said.contains("model"_L1, Qt::CaseInsensitive);
     if (transcribing && !aboutTheModel && (status == 404 || status == 405 || status == 501))
-        return {.why = Why::Unsupported, .message = sentence(QObject::tr("%1 doesn't transcribe speech.").arg(where))};
+        return {.why = Why::Unsupported, .message = sentence(::Failure(::Failure::Code::RecognizerNoSpeech, {where}).text())};
     if (status == 404 || said.contains("not found"_L1, Qt::CaseInsensitive))
-        return {.why = Why::Refused, .message = sentence(QObject::tr("%1 has no model \"%2\".").arg(where, model))};
+        return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerNoModel, {where, model}).text())};
     if (!transcribing && (said.contains("image"_L1, Qt::CaseInsensitive) || said.contains("vision"_L1, Qt::CaseInsensitive)))
-        return {.why = Why::Refused,
-                .message = QObject::tr("The model %1 on %2 can't read pictures; choose one that can for handwriting.").arg(model, where)};
+        return {.why = Why::Refused, .message = ::Failure(::Failure::Code::RecognizerNoVision, {model, where}).text()};
     if (!said.isEmpty())
-        return {.why = Why::Refused, .message = sentence(QObject::tr("%1 answered: %2").arg(where, said))};
-    return {.why = Why::Refused, .message = sentence(QObject::tr("%1 answered with an error (%2).").arg(where).arg(status))};
+        return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerAnswered, {where, said}).text())};
+    return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerError, {where, QString::number(status)}).text())};
 }
 
 // The type a recording is sent as, by its file's name.
@@ -155,7 +157,7 @@ void Vision::recognize(const Recognition::Input &input) {
     cancel();
     const QByteArray png = Ink::png(input.strokes);
     if (png.isEmpty()) {
-        emit failed({.why = Why::Refused, .message = tr("There is no ink to recognise.")});
+        emit failed({.why = Why::Refused, .message = ::Failure(::Failure::Code::NoInk).text()});
         return;
     }
     m_language = input.language;
@@ -224,7 +226,7 @@ void Transcription::recognize(const Recognition::Input &input) {
     cancel();
     auto file = std::make_unique<QFile>(input.file);
     if (!file->open(QIODevice::ReadOnly)) {
-        emit failed({.why = Why::Refused, .message = tr("The recording %1 can't be read.").arg(input.file)});
+        emit failed({.why = Why::Refused, .message = ::Failure(::Failure::Code::RecordingUnreadable, {input.file}).text()});
         return;
     }
     auto form = std::make_unique<QHttpMultiPart>(QHttpMultiPart::FormDataType);

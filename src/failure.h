@@ -54,6 +54,27 @@ public:
         BookNeedsTitle,    // {}
         NotOneBook,        // {folder or archive name}
         NoBooksInside,     // {archive name}
+        // Recognising handwriting and speech (services); "where" is a recognizer's own words.
+        NoInk,                 // {}
+        RecordingUnreadable,   // {recording}
+        RecordingEmpty,        // {recording}
+        RecognitionCancelled,  // {}
+        NoVisionServer,        // {the AI server's reason}
+        StrokeUnreadable,      // {its number, the reason}
+        RecognizerUnreachable, // {where, the network's reason}
+        RecognizerBusy,        // {where, HTTP status}
+        RecognizerRefusedKey,  // {where}
+        RecognizerNoSpeech,    // {where}
+        RecognizerNoModel,     // {where, model}
+        RecognizerNoVision,    // {model, where}
+        RecognizerAnswered,    // {where, what it said}
+        RecognizerError,       // {where, HTTP status}
+        WhisperMissing,        // {program}
+        WhisperNoModel,        // {}
+        WhisperNeedsWav,       // {file name}
+        FfmpegFailed,          // {what it said}
+        WhisperFailed,         // {what it said}
+        WhisperNoTranscript,   // {}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

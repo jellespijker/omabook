@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "aicall.h"
+#include "failure.h"
 #include "inkcodec.h"
 #include "recognitionqueue.h"
 #include "recognitionroute.h"
@@ -64,7 +65,7 @@ constexpr auto assistName = "omabook-api/assist";
         }
         const auto decoded = Ink::decode(QByteArray::fromBase64(stroke.toString().toLatin1()), QString::number(index));
         if (!decoded)
-            return std::unexpected(QObject::tr("Stroke %1 can't be read: %2").arg(index + 1).arg(decoded.error()));
+            return std::unexpected(::Failure(::Failure::Code::StrokeUnreadable, {QString::number(index + 1), decoded.error()}).text());
         strokes.push_back(*decoded);
     }
     return strokes;

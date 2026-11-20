@@ -9,6 +9,8 @@
 #include <QStandardPaths>
 #include <utility>
 
+#include "failure.h"
+
 using namespace Qt::StringLiterals;
 
 namespace {
@@ -54,9 +56,9 @@ QString WhisperLocal::findModel() {
 
 QString WhisperLocal::missing(const QString &program, const QString &modelFile) {
     if (found(program).isEmpty())
-        return tr("whisper.cpp isn't installed on this computer (there is no %1 command).").arg(program);
+        return ::Failure(::Failure::Code::WhisperMissing, {program}).text();
     if (modelFile.isEmpty() || !QFileInfo(modelFile).isFile())
-        return tr("whisper.cpp has no model to transcribe with; put a ggml model in ~/.local/share/whisper.cpp/models.");
+        return ::Failure(::Failure::Code::WhisperNoModel).text();
     return {};
 }
 
@@ -78,9 +80,8 @@ void WhisperLocal::recognize(const Recognition::Input &input) {
     }
     // whisper.cpp reads 16 kHz WAV; anything else is made one first.
     if (found(converter).isEmpty()) {
-        emit failed({.why = Why::Unsupported,
-                     .message = tr("whisper.cpp reads only WAV recordings, and ffmpeg isn't installed to make one of %1.")
-                                    .arg(QFileInfo(input.file).fileName())});
+        emit failed(
+            {.why = Why::Unsupported, .message = ::Failure(::Failure::Code::WhisperNeedsWav, {QFileInfo(input.file).fileName()}).text()});
         return;
     }
     m_converting = true;
@@ -101,8 +102,8 @@ void WhisperLocal::read() {
     const QString said = QString::fromUtf8(m_process.readAllStandardError()).trimmed().section(u'\n', -1);
     if (!worked) {
         emit failed({.why = Why::Refused,
-                     .message = m_converting ? tr("ffmpeg couldn't read the recording: %1").arg(said)
-                                             : tr("whisper.cpp couldn't transcribe the recording: %1").arg(said)});
+                     .message = m_converting ? ::Failure(::Failure::Code::FfmpegFailed, {said}).text()
+                                             : ::Failure(::Failure::Code::WhisperFailed, {said}).text()});
         return;
     }
     if (m_converting) {
@@ -111,7 +112,7 @@ void WhisperLocal::read() {
     }
     QFile output(m_folder->filePath(u"transcript.json"_s));
     if (!output.open(QIODevice::ReadOnly)) {
-        emit failed({.why = Why::Refused, .message = tr("whisper.cpp wrote no transcript.")});
+        emit failed({.why = Why::Refused, .message = ::Failure(::Failure::Code::WhisperNoTranscript).text()});
         return;
     }
     Recognition::Result result = Whisper::transcript(QJsonDocument::fromJson(output.readAll()).object());
