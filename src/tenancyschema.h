@@ -21,6 +21,11 @@
 //   is in that tenant, and in the whole library's; a relation of no book to a
 //   book's node gives it nothing more, so that a question asked of the
 //   library stays with the tenant it was asked in, whatever books it names;
+// - a fact or a relation written by hand in a tenant (a fact's `tenant`, the
+//   "tenants" of a relation's notes) is in that tenant and in the whole
+//   library's, and gives its thing or its ends nothing (#109);
+// - a relation said in another book than its own (the "books" of its notes)
+//   is in that book's tenants too, where both its ends are (#109);
 // - a thing no book is behind and no tenant made (made while the library
 //   was one tenant, or before tenants) is in tenant 0, which every tenant sees.
 //
@@ -45,8 +50,25 @@ namespace TenancySchema {
 // Counts every degree whole, as Tenancy does after filling the tables whole
 // (with tenancy_bulk 2, while the triggers that count one row at a time stand aside).
 [[nodiscard]] QString countDegrees();
+// The steps after that (#109): the columns in which a fact of no book keeps
+// the tenant it was written in by hand, and a relation what it was noted in
+// each book that said it and in each tenant that wrote it by hand (format
+// 29); and the triggers again by those rules, with the membership placed
+// again whole (format 30, which can be taken again).
+[[nodiscard]] const QStringList &writtenColumns();
+[[nodiscard]] const QStringList &writtenInTheirTenant();
 
 // Whether the thing of `row` (a table's alias, or NEW) was made by hand in a tenant.
 [[nodiscard]] QString madeHere(const QString &row);
+// The notes of relation `row` (graph_edges.notes), as JSON functions take them.
+[[nodiscard]] QString notesOf(const QString &row);
+// Whether relation `row` was written by hand in a tenant.
+[[nodiscard]] QString writtenHere(const QString &row);
+// Whether relation `row` was said in book `book` (a column or NEW's) other than its own.
+[[nodiscard]] QString saidIn(const QString &row, const QString &book);
+// Whether relation `row` is in `tenant` (a column) where both its ends are
+// in it: across books and in a tenant of its book, of no book and written by
+// no tenant, or said in another book of the tenant.
+[[nodiscard]] QString whereEndsAre(const QString &row, const QString &tenant);
 
 } // namespace TenancySchema

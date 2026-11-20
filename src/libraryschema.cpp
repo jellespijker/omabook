@@ -419,6 +419,12 @@ const QList<QStringList> migrations{
     // things first, read as a range of an index rather than counted for
     // every thing each time.
     TenancySchema::degrees(),
+    // A fact or a relation written by hand in a tenant stays in it, and a
+    // relation's note is the one its tenant was told (ADR 0003, #109): the
+    // columns that keep them (format 29), and the tenancy triggers again by
+    // those rules, with the membership placed again whole (format 30).
+    TenancySchema::writtenColumns(),
+    TenancySchema::writtenInTheirTenant(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

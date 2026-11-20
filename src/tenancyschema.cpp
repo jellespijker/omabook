@@ -20,10 +20,22 @@ namespace {
 // the triggers that follow one row at a time stand aside.
 [[nodiscard]] QString notBulk() { return u"WHEN (SELECT value FROM library_state WHERE key = 'tenancy_bulk') = 0"_s; }
 
-// Where a relation (NEW) is, and what it gives its ends.
-[[nodiscard]] QStringList placingEdge() {
+// The tenants `gids` (a SELECT of one column, g) names that are not there yet.
+// Not INSERT OR IGNORE: a trigger takes the conflict clause of the statement
+// that set it off, and a replay's INSERT OR REPLACE would replace a tenant,
+// and with it every membership of it (#109).
+[[nodiscard]] QString newTenants(const QString &gids) {
+    return u"INSERT INTO tenants (gid) SELECT g FROM ("_s + gids + u") WHERE g NOT IN (SELECT gid FROM tenants)"_s;
+}
+
+// Where a relation (NEW) is, and what it gives its ends; `written`, by the
+// rules of format 30 (#109), which keep what is written by hand in a tenant
+// in it, and a relation said in other books in theirs too.
+[[nodiscard]] QStringList placingEdge(bool written) {
     const QString inBook = u"NOT "_s + across(u"NEW"_s);
-    return {
+    // Written by hand in a tenant, it gives its ends nothing either.
+    const QString notMade = written ? u" AND NOT "_s + TenancySchema::writtenHere(u"NEW"_s) : QString();
+    QStringList all{
         // Learned in a book: both ends are that book's, and so is the relation.
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT tenant, NEW.source FROM tenant_books WHERE book_id = NEW.book_id "
         "AND "_s
@@ -35,38 +47,59 @@ namespace {
         // series, a tag, a question) is that book's.
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.tenant, NEW.target FROM graph_nodes AS b "
         "JOIN tenant_books AS t ON t.book_id = b.book_id WHERE b.id = NEW.source AND "_s
-            + bookNode(u"b"_s) + u" AND NEW.book_id = 0 AND "_s + inBook
+            + bookNode(u"b"_s) + u" AND NEW.book_id = 0 AND "_s + inBook + notMade
             + u" AND NOT EXISTS (SELECT 1 FROM graph_nodes AS o WHERE o.id = NEW.target AND ("_s + bookNode(u"o"_s) + u" OR "_s
             + TenancySchema::madeHere(u"o"_s) + u"))"_s,
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT t.tenant, NEW.source FROM graph_nodes AS b "
         "JOIN tenant_books AS t ON t.book_id = b.book_id WHERE b.id = NEW.target AND "_s
-            + bookNode(u"b"_s) + u" AND NEW.book_id = 0 AND "_s + inBook
+            + bookNode(u"b"_s) + u" AND NEW.book_id = 0 AND "_s + inBook + notMade
             + u" AND NOT EXISTS (SELECT 1 FROM graph_nodes AS o WHERE o.id = NEW.source AND ("_s + bookNode(u"o"_s) + u" OR "_s
             + TenancySchema::madeHere(u"o"_s) + u"))"_s,
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT tenant, NEW.id FROM tenant_books WHERE book_id = NEW.book_id AND "_s
             + inBook,
         // Across books, or of no book: where both ends are.
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, NEW.id FROM tenant_nodes AS s "
-        "JOIN tenant_nodes AS t ON t.tenant = s.tenant AND t.node_id = NEW.target WHERE s.node_id = NEW.source "
-        "AND (NEW.book_id = 0 OR ("_s
-            + across(u"NEW"_s) + u" AND s.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = NEW.book_id)))"_s,
+        "JOIN tenant_nodes AS t ON t.tenant = s.tenant AND t.node_id = NEW.target WHERE s.node_id = NEW.source AND "_s
+            + (written ? TenancySchema::whereEndsAre(u"NEW"_s, u"s.tenant"_s)
+                       : u"(NEW.book_id = 0 OR ("_s + across(u"NEW"_s)
+                             + u" AND s.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = NEW.book_id)))"_s),
     };
+    if (written) {
+        // Written by hand in tenants: in each, and in the whole library's.
+        const QString named = u"SELECT key AS g FROM json_each("_s + TenancySchema::notesOf(u"NEW"_s) + u", '$.tenants')"_s;
+        const QString made = TenancySchema::writtenHere(u"NEW"_s);
+        all << newTenants(named + u" UNION SELECT 'library' WHERE "_s + made)
+            << u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT id, NEW.id FROM tenants WHERE "_s + made + u" AND (gid IN ("_s
+                   + named + u") OR gid = 'library')"_s;
+    }
+    return all;
 }
 
-// Where a fact (NEW) is, and what it gives its thing.
-[[nodiscard]] QStringList placingFact() {
-    return {
+// Where a fact (NEW) is, and what it gives its thing; `written`, as for a relation.
+[[nodiscard]] QStringList placingFact(bool written) {
+    const QString ofNoBook = u"COALESCE(NEW.book_id, 0) = 0"_s;
+    QStringList all{
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT tenant, NEW.node_id FROM tenant_books WHERE book_id = NEW.book_id"_s,
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT tenant, NEW.id FROM tenant_books WHERE book_id = NEW.book_id"_s,
-        u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT tenant, NEW.id FROM tenant_nodes WHERE node_id = NEW.node_id "
-        "AND COALESCE(NEW.book_id, 0) = 0"_s,
+        u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT tenant, NEW.id FROM tenant_nodes WHERE node_id = NEW.node_id AND "_s
+            + ofNoBook + (written ? u" AND NEW.tenant = ''"_s : QString()),
     };
+    if (written) {
+        // Written by hand in a tenant: in it, and in the whole library's.
+        const QString made = ofNoBook + u" AND NEW.tenant <> ''"_s;
+        all << newTenants(u"SELECT NEW.tenant AS g WHERE "_s + made + u" UNION SELECT 'library' WHERE "_s + made)
+            << u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT id, NEW.id FROM tenants WHERE "_s + made
+                   + u" AND gid IN (NEW.tenant, 'library')"_s;
+    }
+    return all;
 }
 
-// A thing in a tenant (NEW): no longer of no book, and what hangs on it alone goes with it.
-[[nodiscard]] QStringList followingNode() {
-    const QString shared =
-        u"(e.book_id = 0 OR ("_s + across(u"e"_s) + u" AND NEW.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = e.book_id)))"_s;
+// A thing in a tenant (NEW): no longer of no book, and what hangs on it alone
+// goes with it; `written`, not what was written by hand in another tenant.
+[[nodiscard]] QStringList followingNode(bool written) {
+    const QString shared = written ? TenancySchema::whereEndsAre(u"e"_s, u"NEW.tenant"_s)
+                                   : u"(e.book_id = 0 OR ("_s + across(u"e"_s)
+                                         + u" AND NEW.tenant IN (SELECT tenant FROM tenant_books WHERE book_id = e.book_id)))"_s;
     return {
         u"DELETE FROM tenant_nodes WHERE NEW.tenant <> 0 AND tenant = 0 AND node_id = NEW.node_id"_s,
         u"DELETE FROM tenant_facts WHERE NEW.tenant <> 0 AND tenant = 0 AND fact_id IN (SELECT id FROM graph_facts WHERE node_id = "
@@ -74,7 +107,8 @@ namespace {
         u"DELETE FROM tenant_edges WHERE NEW.tenant <> 0 AND tenant = 0 AND edge_id IN (SELECT id FROM graph_edges WHERE source = "
         "NEW.node_id UNION ALL SELECT id FROM graph_edges WHERE target = NEW.node_id)"_s,
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT NEW.tenant, id FROM graph_facts WHERE node_id = NEW.node_id "
-        "AND COALESCE(book_id, 0) = 0"_s,
+        "AND COALESCE(book_id, 0) = 0"_s
+            + (written ? u" AND tenant = ''"_s : QString()),
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_edges AS e "
         "JOIN tenant_nodes AS o ON o.tenant = NEW.tenant AND o.node_id = e.target WHERE e.source = NEW.node_id AND "_s
             + shared,
@@ -84,10 +118,12 @@ namespace {
     };
 }
 
-// A book in a tenant (NEW): what was learned from it is in it too.
-[[nodiscard]] QStringList followingBook() {
+// A book in a tenant (NEW): what was learned from it is in it too; `written`,
+// a relation it said that another book is behind, where both ends are.
+[[nodiscard]] QStringList followingBook(bool written) {
     const QString inBook = u"NOT "_s + across(u"e"_s);
-    return {
+    const QString tied = inBook + (written ? u" AND NOT "_s + TenancySchema::writtenHere(u"e"_s) : QString());
+    QStringList all{
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT NEW.tenant, id FROM graph_nodes WHERE book_id = NEW.book_id"_s,
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT NEW.tenant, node_id FROM graph_seen WHERE book_id = NEW.book_id"_s,
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT NEW.tenant, node_id FROM graph_facts WHERE book_id = NEW.book_id"_s,
@@ -96,11 +132,11 @@ namespace {
             + inBook + u" UNION SELECT NEW.tenant, e.target FROM graph_edges AS e WHERE e.book_id = NEW.book_id AND "_s + inBook,
         u"INSERT OR IGNORE INTO tenant_nodes (tenant, node_id) SELECT NEW.tenant, e.target FROM graph_nodes AS b "
         "JOIN graph_edges AS e ON e.source = b.id JOIN graph_nodes AS o ON o.id = e.target WHERE b.book_id = NEW.book_id AND "_s
-            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook + u" AND NOT "_s + bookNode(u"o"_s) + u" AND NOT "_s
+            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + tied + u" AND NOT "_s + bookNode(u"o"_s) + u" AND NOT "_s
             + TenancySchema::madeHere(u"o"_s)
             + u" UNION SELECT NEW.tenant, e.source FROM graph_nodes AS b JOIN graph_edges AS e ON e.target = b.id "
               "JOIN graph_nodes AS o ON o.id = e.source WHERE b.book_id = NEW.book_id AND "_s
-            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + inBook + u" AND NOT "_s + bookNode(u"o"_s) + u" AND NOT "_s
+            + bookNode(u"b"_s) + u" AND e.book_id = 0 AND "_s + tied + u" AND NOT "_s + bookNode(u"o"_s) + u" AND NOT "_s
             + TenancySchema::madeHere(u"o"_s),
         u"INSERT OR IGNORE INTO tenant_facts (tenant, fact_id) SELECT NEW.tenant, id FROM graph_facts WHERE book_id = NEW.book_id"_s,
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_edges AS e WHERE e.book_id = "
@@ -111,6 +147,15 @@ namespace {
         "JOIN tenant_nodes AS t ON t.tenant = NEW.tenant AND t.node_id = e.target WHERE e.book_id = NEW.book_id AND "_s
             + across(u"e"_s),
     };
+    if (written)
+        // Said in it, at the things met in it.
+        for (const auto &[end, other] : {std::pair{u"source"_s, u"target"_s}, std::pair{u"target"_s, u"source"_s}})
+            all << u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT NEW.tenant, e.id FROM graph_seen AS m "
+                   "JOIN graph_edges AS e ON e.%1 = m.node_id JOIN tenant_nodes AS s ON s.tenant = NEW.tenant AND s.node_id = e.%2 "
+                   "JOIN tenant_nodes AS t ON t.tenant = NEW.tenant AND t.node_id = e.%1 WHERE m.book_id = NEW.book_id AND "_s.arg(end,
+                                                                                                                                   other)
+                       + TenancySchema::saidIn(u"e"_s, u"NEW.book_id"_s);
+    return all;
 }
 
 // The rows of one kind in a tenant: led by the tenant, so a reader of one
@@ -169,14 +214,14 @@ namespace {
                          "WHERE book_id = NEW.book_id"_s;
     all << trigger(u"graph_seen_tenant"_s, u"AFTER INSERT ON graph_seen"_s, {seen})
         << trigger(u"graph_seen_moved_tenant"_s, u"AFTER UPDATE OF node_id, book_id ON graph_seen"_s, {seen});
-    all << trigger(u"graph_facts_tenant"_s, u"AFTER INSERT ON graph_facts"_s, placingFact())
+    all << trigger(u"graph_facts_tenant"_s, u"AFTER INSERT ON graph_facts"_s, placingFact(false))
         << trigger(u"graph_facts_moved_tenant"_s, u"AFTER UPDATE OF node_id, book_id ON graph_facts"_s,
-                   QStringList{u"DELETE FROM tenant_facts WHERE fact_id = NEW.id"_s} + placingFact());
-    all << trigger(u"graph_edges_tenant"_s, u"AFTER INSERT ON graph_edges"_s, placingEdge())
+                   QStringList{u"DELETE FROM tenant_facts WHERE fact_id = NEW.id"_s} + placingFact(false));
+    all << trigger(u"graph_edges_tenant"_s, u"AFTER INSERT ON graph_edges"_s, placingEdge(false))
         << trigger(u"graph_edges_moved_tenant"_s, u"AFTER UPDATE OF source, target, kind, book_id ON graph_edges"_s,
-                   QStringList{u"DELETE FROM tenant_edges WHERE edge_id = NEW.id"_s} + placingEdge());
-    all << trigger(u"tenant_nodes_follow"_s, u"AFTER INSERT ON tenant_nodes "_s + notBulk(), followingNode())
-        << trigger(u"tenant_books_follow"_s, u"AFTER INSERT ON tenant_books "_s + notBulk(), followingBook())
+                   QStringList{u"DELETE FROM tenant_edges WHERE edge_id = NEW.id"_s} + placingEdge(false));
+    all << trigger(u"tenant_nodes_follow"_s, u"AFTER INSERT ON tenant_nodes "_s + notBulk(), followingNode(false))
+        << trigger(u"tenant_books_follow"_s, u"AFTER INSERT ON tenant_books "_s + notBulk(), followingBook(false))
         << trigger(u"tenant_books_left"_s, u"AFTER DELETE ON tenant_books"_s,
                    {u"UPDATE library_state SET value = 1 WHERE key = 'tenancy_shrunk'"_s});
     return all;
@@ -219,7 +264,7 @@ namespace {
         u"ALTER TABLE tenant_nodes_degreed RENAME TO tenant_nodes"_s,
         u"PRAGMA legacy_alter_table = OFF"_s,
         u"CREATE INDEX IF NOT EXISTS tenant_nodes_of ON tenant_nodes(node_id)"_s,
-        trigger(u"tenant_nodes_follow"_s, u"AFTER INSERT ON tenant_nodes "_s + notBulk(), followingNode()),
+        trigger(u"tenant_nodes_follow"_s, u"AFTER INSERT ON tenant_nodes "_s + notBulk(), followingNode(false)),
         // The graph window's order: a tenant's most connected things first, as a range of this.
         u"CREATE INDEX IF NOT EXISTS tenant_nodes_degree ON tenant_nodes(tenant, degree DESC, node_id)"_s,
         trigger(u"tenant_edges_degree"_s, u"AFTER INSERT ON tenant_edges "_s + notWhole(),
@@ -282,10 +327,61 @@ const QStringList &TenancySchema::madeInTheirTenant() {
             all << u"DROP TRIGGER IF EXISTS "_s + name;
         all << trigger(u"graph_nodes_tenant"_s, u"AFTER INSERT ON graph_nodes"_s, placingNode())
             << trigger(u"graph_nodes_made_tenant"_s, u"AFTER UPDATE OF data ON graph_nodes WHEN "_s + madeHere(u"NEW"_s), madeIn())
-            << trigger(u"graph_edges_tenant"_s, u"AFTER INSERT ON graph_edges"_s, placingEdge())
+            << trigger(u"graph_edges_tenant"_s, u"AFTER INSERT ON graph_edges"_s, placingEdge(false))
             << trigger(u"graph_edges_moved_tenant"_s, u"AFTER UPDATE OF source, target, kind, book_id ON graph_edges"_s,
-                       QStringList{u"DELETE FROM tenant_edges WHERE edge_id = NEW.id"_s} + placingEdge())
-            << trigger(u"tenant_books_follow"_s, u"AFTER INSERT ON tenant_books "_s + notBulk(), followingBook());
+                       QStringList{u"DELETE FROM tenant_edges WHERE edge_id = NEW.id"_s} + placingEdge(false))
+            << trigger(u"tenant_books_follow"_s, u"AFTER INSERT ON tenant_books "_s + notBulk(), followingBook(false));
+        // Placed again, whole, by the new rules the next time Tenancy follows the books.
+        all << u"UPDATE library_state SET value = -1 WHERE key = 'tenancy_one'"_s;
+        return all;
+    }();
+    return made;
+}
+
+QString TenancySchema::notesOf(const QString &row) { return u"CASE WHEN json_valid(%1.notes) THEN %1.notes ELSE '{}' END"_s.arg(row); }
+
+QString TenancySchema::writtenHere(const QString &row) {
+    return u"(%1.notes LIKE '%\"tenants\"%' AND json_type(%2, '$.tenants') = 'object')"_s.arg(row, notesOf(row));
+}
+
+QString TenancySchema::saidIn(const QString &row, const QString &book) {
+    return u"(%1.notes LIKE '%\"books\"%' AND EXISTS (SELECT 1 FROM json_each(%2, '$.books') AS j JOIN global_ids AS g "
+           "ON g.entity = 'book' AND g.global_id = j.key WHERE g.local_id = %3))"_s.arg(row, notesOf(row), book);
+}
+
+QString TenancySchema::whereEndsAre(const QString &row, const QString &tenant) {
+    return u"((%1.book_id = 0 AND NOT %3) OR (substr(%1.kind, 1, 8) = 'across: ' AND %2 IN (SELECT tenant FROM tenant_books WHERE "
+           "book_id = %1.book_id)) OR (%1.notes LIKE '%\"books\"%' AND %2 IN (SELECT b.tenant FROM json_each(%4, '$.books') AS j "
+           "JOIN global_ids AS g ON g.entity = 'book' AND g.global_id = j.key JOIN tenant_books AS b ON b.book_id = g.local_id)))"_s.arg(
+               row, tenant, writtenHere(row), notesOf(row));
+}
+
+const QStringList &TenancySchema::writtenColumns() {
+    static const QStringList made{
+        // The tenant a fact of no book was written in by hand, by its global
+        // id ('' for one no tenant wrote); and what a relation was noted in
+        // each of the other books that said it, and by hand in each tenant:
+        // {"books": {book's global id: note}, "tenants": {tenant's: note}}.
+        u"ALTER TABLE graph_facts ADD COLUMN tenant TEXT NOT NULL DEFAULT ''"_s,
+        u"ALTER TABLE graph_edges ADD COLUMN notes TEXT NOT NULL DEFAULT ''"_s,
+    };
+    return made;
+}
+
+const QStringList &TenancySchema::writtenInTheirTenant() {
+    static const QStringList made = [] {
+        QStringList all;
+        for (const QString &name : {u"graph_facts_tenant"_s, u"graph_facts_moved_tenant"_s, u"graph_edges_tenant"_s,
+                                    u"graph_edges_moved_tenant"_s, u"tenant_nodes_follow"_s, u"tenant_books_follow"_s})
+            all << u"DROP TRIGGER IF EXISTS "_s + name;
+        all << trigger(u"graph_facts_tenant"_s, u"AFTER INSERT ON graph_facts"_s, placingFact(true))
+            << trigger(u"graph_facts_moved_tenant"_s, u"AFTER UPDATE OF node_id, book_id, tenant ON graph_facts"_s,
+                       QStringList{u"DELETE FROM tenant_facts WHERE fact_id = NEW.id"_s} + placingFact(true))
+            << trigger(u"graph_edges_tenant"_s, u"AFTER INSERT ON graph_edges"_s, placingEdge(true))
+            << trigger(u"graph_edges_moved_tenant"_s, u"AFTER UPDATE OF source, target, kind, book_id, notes ON graph_edges"_s,
+                       QStringList{u"DELETE FROM tenant_edges WHERE edge_id = NEW.id"_s} + placingEdge(true))
+            << trigger(u"tenant_nodes_follow"_s, u"AFTER INSERT ON tenant_nodes "_s + notBulk(), followingNode(true))
+            << trigger(u"tenant_books_follow"_s, u"AFTER INSERT ON tenant_books "_s + notBulk(), followingBook(true));
         // Placed again, whole, by the new rules the next time Tenancy follows the books.
         all << u"UPDATE library_state SET value = -1 WHERE key = 'tenancy_one'"_s;
         return all;
