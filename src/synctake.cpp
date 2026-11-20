@@ -110,8 +110,12 @@ bool takeDetails(Taking &taking, const Book &here, const QJsonObject &theirs, co
     const QJsonObject mine = Replication::bookView(taking.mine.books.value(gid));
     const bool covers = !listed.isEmpty() && coverHash(taking.library, here.id) != theirs.value("cover_hash").toString();
     const SyncManifest::MergedBookDetails merged = SyncManifest::decideDetails(here, mine, theirs, true, taking.peer.details, covers);
-    // The details keep the time they had: the later of the two books' own details times.
-    const qint64 settled = std::max(Hlc::normalize(here.detailsAt), Hlc::normalize(theirs.value("details_at").toInteger()));
+    // The details keep the time they had: the later of the two books' own
+    // details times, to the clock's counter as each side's log says it. In
+    // seconds alone, a field taken from a second the clock ticked in more than
+    // once would be older here than there, and taken again at every sync (#106).
+    const qint64 settled = std::max(
+        {Hlc::normalize(here.detailsAt), SyncManifest::theirDetailsHlc(mine), SyncManifest::theirDetailsHlc(theirs)});
     const QString &title = here.meta.title;
     if (merged.undecided && !merged.takeFields && !merged.sendFields)
         note(taking.summary.detailsUndecided, taking.summary.titles.detailsUndecided, title);

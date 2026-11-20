@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- A book whose details are the same on two computers is no longer reported as taken at every sync from one of them: the details taken keep their time to the clock's count within a second, as the other computer's log says it, so a cover set in a second the clock ticked in more than once is newer there no more. And both computers compare a book's details as their logs say them, so a book is undecided from both sides or from neither (#106).
+
 ## [0.1.7] - 2026-11-20
 
 ### Added

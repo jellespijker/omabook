@@ -491,6 +491,55 @@ private slots:
         QCOMPARE(settled.detailsTaken + settled.detailsSent + settled.readingTaken + settled.readingSent, 0);
     }
 
+    // A cover set there at a time with a counter (a second in which the clock
+    // ticked more than once), of a picture that is never the same bytes once
+    // saved again here. Taken once, the book's details are in step: syncs
+    // either way afterwards take nothing, send nothing and leave nothing
+    // undecided, from either side (#106).
+    void detailsTakenOnceSettleWhateverTheCountersSecond() {
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "Settled Once"));
+        const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
+        Library here(dir.filePath("Here"));
+        Library there(dir.filePath("There"));
+        QVERIFY(here.open() && there.open());
+        const qint64 mine = here.add(dir.filePath("shared.epub")).id;
+        const qint64 theirs = there.add(dir.filePath("shared.epub")).id;
+        const Remote toThere("laptop:" + dir.filePath("There"), {ssh});
+        const Remote toHere("laptop:" + dir.filePath("Here"), {ssh});
+        QVERIFY(syncLibrary(here, toThere).problems.isEmpty());
+
+        QImage cover(120, 160, QImage::Format_RGB32);
+        quint32 seed = 106;
+        for (int y = 0; y < cover.height(); ++y)
+            for (int x = 0; x < cover.width(); ++x) {
+                seed = seed * 1664525U + 1013904223U;
+                cover.setPixel(x, y, seed >> 8U);
+            }
+        const qint64 later = QDateTime::currentSecsSinceEpoch() + 60; // after every time the books were stamped with
+        QVERIFY(there.setCover(theirs, cover, Hlc::pack(later, 3)));
+        QVERIFY(there.setReading(theirs, {}, 4, {}));
+
+        const SyncSummary taken = syncLibrary(here, toThere);
+        QVERIFY2(taken.problems.isEmpty(), qPrintable(taken.problems.join('\n')));
+        QCOMPARE(taken.detailsTaken, 1);
+        QVERIFY(!here.coverPath(mine).isEmpty());
+        QCOMPARE(here.book(mine)->detailsAt, there.book(theirs)->detailsAt);
+
+        for (int round = 0; round < 3; ++round)
+            for (const bool fromHere : {true, false}) {
+                const SyncSummary settled = fromHere ? syncLibrary(here, toThere) : syncLibrary(there, toHere);
+                const QString step = QString("round %1, from %2").arg(round).arg(fromHere ? "here" : "there");
+                QVERIFY2(settled.problems.isEmpty(), qPrintable(step + ": " + settled.problems.join('\n')));
+                QVERIFY2(settled.detailsTaken + settled.detailsSent + settled.detailsUndecided == 0,
+                         qPrintable(step + ": " + settled.titles.detailsTaken.join(", ") + " taken, "
+                                    + settled.titles.detailsSent.join(", ") + " sent, " + settled.titles.detailsUndecided.join(", ")
+                                    + " undecided"));
+                QCOMPARE(settled.readingTaken + settled.readingSent, 0);
+            }
+        QCOMPARE(here.book(mine)->detailsAt, there.book(theirs)->detailsAt);
+    }
+
     void undecidedDetailsThroughTheLogWaitForMineOrTheirs() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("shared.epub"), "No Time Kept"));

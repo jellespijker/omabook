@@ -321,7 +321,11 @@ MergedBookDetails mergeBookDetails(const Library &library, const Book &here, con
 MergedBookDetails decideDetails(const Book &here, const QJsonObject &mine, const QJsonObject &theirs, bool current,
                                 SyncOptions::Details choice, bool covers) {
     MergedBookDetails out;
-    out.meta = BookMeta::fromJson(here.meta.toJson());
+    // The details as this side's log says them, where it says them, as
+    // theirs are as their log says them: both sides then compare alike, and
+    // a book is undecided from both or from neither (#106). The book's own
+    // details where the log has none of them (an older peer's manifest).
+    out.meta = BookMeta::fromJson(mine.value("title").toString().isEmpty() ? here.meta.toJson() : mine);
     const BookMeta theirMeta = BookMeta::fromJson(theirs);
     const QJsonObject myFieldObj = mine.value("field_hlc").toObject();
     const QJsonObject theirFieldObj = theirs.value("field_hlc").toObject();
