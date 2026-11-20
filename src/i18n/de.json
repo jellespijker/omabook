@@ -364,7 +364,7 @@
   "Keys for this": "Tasten dafür",
   "Keys, colors and views of your own": "Eigene Tasten, Farben und Ansichten",
   "Knowledge graph: grows as you read (uses AI calls)": "Wissensgraph: wächst beim Lesen (verbraucht KI-Anfragen)",
-  "Knowledge graph: links books across top-level collections": "Wissensgraph: verknüpft Bücher über die obersten Sammlungen hinweg",
+  "Knowledge graph: one for the whole library, not one per top-level collection": "Wissensgraph: einer für die ganze Bibliothek, nicht einer je oberster Sammlung",
   "Knowledge graph: off": "Wissensgraph: aus",
   "Knowledge graph: only when you ask for it": "Wissensgraph: nur auf Anfrage",
   "Language": "Sprache",
@@ -1372,7 +1372,7 @@
   "Sort with AI": "Mit KI sortieren",
   "Sorting books into collections: %1 of %2…": "Bücher in Sammlungen sortieren: %1 von %2…",
   "Take it out of %1": "Aus %1 herausnehmen",
-  "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” in the settings ({global.settings}).": "Der Wissensgraph verknüpft ein Buch nur mit Büchern derselben obersten Sammlung der Bibliothek oder einer Sammlung darin: Ein Fachbuch und ein Roman in getrennten obersten Sammlungen werden nie verknüpft, und die KI erfährt, nach dem einen gefragt, nichts vom anderen. Bücher in keiner Sammlung sind untereinander verknüpft, ein Buch in zwei obersten Sammlungen mit beiden. Nichts wird entfernt, und ein Buch, das in eine andere Sammlung wandert, nimmt seine Verknüpfungen mit. Um die ganze Bibliothek wieder zu verknüpfen, setze in den Einstellungen ({global.settings}) den Haken bei „Wissensgraph: verknüpft Bücher über die obersten Sammlungen hinweg“.",
+  "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: one for the whole library, not one per top-level collection” in the settings ({global.settings}).": "Der Wissensgraph verknüpft ein Buch nur mit Büchern derselben obersten Sammlung der Bibliothek oder einer Sammlung darin: Ein Fachbuch und ein Roman in getrennten obersten Sammlungen werden nie verknüpft, und die KI erfährt, nach dem einen gefragt, nichts vom anderen. Bücher in keiner Sammlung sind untereinander verknüpft, ein Buch in zwei obersten Sammlungen mit beiden. Nichts wird entfernt, und ein Buch, das in eine andere Sammlung wandert, nimmt seine Verknüpfungen mit. Um die ganze Bibliothek wieder zu verknüpfen, setze in den Einstellungen ({global.settings}) den Haken bei „Wissensgraph: einer für die ganze Bibliothek, nicht einer je oberster Sammlung“.",
   "The rule finds %Ln books.": {
     "one": "Die Regel findet %Ln Buch.",
     "other": "Die Regel findet %Ln Bücher."

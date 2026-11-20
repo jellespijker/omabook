@@ -36,7 +36,7 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiCommand READ aiCommand WRITE setAiCommand NOTIFY changed)
     Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY changed)
     Q_PROPERTY(QString graph READ graph WRITE setGraph NOTIFY changed)
-    Q_PROPERTY(bool graphAcrossCollections READ graphAcrossCollections WRITE setGraphAcrossCollections NOTIFY changed)
+    Q_PROPERTY(bool graphOneTenant READ graphOneTenant WRITE setGraphOneTenant NOTIFY changed)
     Q_PROPERTY(QString marks READ marks WRITE setMarks NOTIFY changed)
     Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
     Q_PROPERTY(QString goodreadsUser READ goodreadsUser WRITE setGoodreadsUser NOTIFY changed)
@@ -194,11 +194,14 @@ public:
     // "off" (no graph is kept or used while reading).
     QString graph() const;
     void setGraph(const QString &mode);
-    // Whether the graph links books across the collections at the top of
-    // the library (see BookSides). Off by default: a library split into,
-    // say, study and leisure keeps the two apart.
-    bool graphAcrossCollections() const { return m_values.value("graph_across_collections").toBool(false); }
-    void setGraphAcrossCollections(bool on) { set("graph_across_collections", on); }
+    // Whether the knowledge graph is one tenant for the whole library, not
+    // one per collection at its top (ADR 0003, Tenancy). Off by default: a
+    // library split into, say, study and leisure keeps the two apart. Until
+    // 0.1.8 it was "graph_across_collections", which still says it.
+    bool graphOneTenant() const {
+        return m_values.value("graph_one_tenant").toBool(m_values.value("graph_across_collections").toBool(false));
+    }
+    void setGraphOneTenant(bool on) { set("graph_one_tenant", on); }
     // When the things of the graph are marked in the text: "always" (the
     // default), "map" (only while the map of the book is beside the page)
     // or "never". Kept in config.json, so a choice lasts.

@@ -44,7 +44,7 @@ BookSides BookSides::of(const Library &library) {
     thread_local Choice choice;
     const QFileInfo config(Settings::defaultFile());
     if (config.absoluteFilePath() != choice.file || config.lastModified() != choice.modified || config.size() != choice.size)
-        choice = {config.absoluteFilePath(), config.lastModified(), config.size(), Settings().graphAcrossCollections()};
+        choice = {config.absoluteFilePath(), config.lastModified(), config.size(), Settings().graphOneTenant()};
     if (choice.across)
         return {};
 

@@ -1202,13 +1202,13 @@ private slots:
 
         // Turned off, the graph links across the whole library again.
         Settings settings;
-        settings.setGraphAcrossCollections(true);
-        const auto restore = qScopeGuard([&settings] { settings.setGraphAcrossCollections(false); });
+        settings.setGraphOneTenant(true);
+        const auto restore = qScopeGuard([&settings] { settings.setGraphOneTenant(false); });
         QVERIFY(!BookSides::of(shelf.library).apart());
         check(false);
         QCOMPARE(shelf.library.earlierInSeries(paper).size(), 1);
         QVERIFY(GraphLinks::offer(shelf.library, paper, {paper, 2, 1.0}).titles.values().contains("The Keeper of Saltmere"));
-        settings.setGraphAcrossCollections(false);
+        settings.setGraphOneTenant(false);
         check(true);
     }
 

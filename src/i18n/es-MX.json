@@ -387,7 +387,7 @@
   "Keys for this": "Teclas para esto",
   "Keys, colors and views of your own": "Teclas, colores y vistas propias",
   "Knowledge graph: grows as you read (uses AI calls)": "Grafo de conocimiento: crece mientras lees (usa llamadas a la IA)",
-  "Knowledge graph: links books across top-level collections": "Grafo de conocimiento: enlaza libros entre colecciones principales",
+  "Knowledge graph: one for the whole library, not one per top-level collection": "Grafo de conocimiento: uno para toda la biblioteca, no uno por colección principal",
   "Knowledge graph: off": "Grafo de conocimiento: desactivado",
   "Knowledge graph: only when you ask for it": "Grafo de conocimiento: solo cuando lo pidas",
   "Language": "Idioma",
@@ -1430,7 +1430,7 @@
   "Sort with AI": "Ordenar con IA",
   "Sorting books into collections: %1 of %2…": "Ordenando libros en colecciones: %1 de %2…",
   "Take it out of %1": "Quitarlo de %1",
-  "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” in the settings ({global.settings}).": "El grafo de conocimiento enlaza un libro solo con libros de la misma colección principal de la biblioteca, o de una que esté dentro de ella: un libro de estudio y una novela guardados en colecciones principales distintas nunca se enlazan, y a la IA, al preguntarle por uno, no se le dice nada del otro. Los libros que no están en ninguna colección se enlazan entre sí, y un libro en dos colecciones principales, con ambas. No se quita nada, y un libro que pasa a otra colección se lleva sus enlaces. Para enlazar de nuevo toda la biblioteca, marque “Grafo de conocimiento: enlaza libros entre colecciones principales” en la configuración ({global.settings}).",
+  "The knowledge graph links a book only with books in the same collection at the top of the library, or in one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, asked about one, is told nothing of the other. Books in no collection link with each other, and a book in two top collections with both. Nothing is removed, and a book moved to another collection takes its links along. To link the whole library again, tick “Knowledge graph: one for the whole library, not one per top-level collection” in the settings ({global.settings}).": "El grafo de conocimiento enlaza un libro solo con libros de la misma colección principal de la biblioteca, o de una que esté dentro de ella: un libro de estudio y una novela guardados en colecciones principales distintas nunca se enlazan, y a la IA, al preguntarle por uno, no se le dice nada del otro. Los libros que no están en ninguna colección se enlazan entre sí, y un libro en dos colecciones principales, con ambas. No se quita nada, y un libro que pasa a otra colección se lleva sus enlaces. Para enlazar de nuevo toda la biblioteca, marque “Grafo de conocimiento: uno para toda la biblioteca, no uno por colección principal” en la configuración ({global.settings}).",
   "The rule finds %Ln books.": {
     "one": "La regla encuentra %Ln libro.",
     "other": "La regla encuentra %Ln libros.",

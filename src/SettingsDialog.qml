@@ -254,14 +254,14 @@ AppPopup {
             Material.roundedScale: theme.radius
             onActivated: (index) => settings.graph = modes[index].key
         }
-        // Off, the collections at the top of the library keep their books'
-        // knowledge apart: no links between a book of one and of another.
+        // Off, each collection at the top of the library is a tenant of the
+        // graph, its books' knowledge apart from the others' (ADR 0003).
         CheckBox {
-            objectName: "graphAcrossCollections"
+            objectName: "graphOneTenant"
             Layout.fillWidth: true
-            text: qsTr("Knowledge graph: links books across top-level collections")
-            checked: settings.graphAcrossCollections
-            onToggled: settings.graphAcrossCollections = checked
+            text: qsTr("Knowledge graph: one for the whole library, not one per top-level collection")
+            checked: settings.graphOneTenant
+            onToggled: settings.graphOneTenant = checked
         }
         // What is done about plugins that came from a GitHub repository.
         ComboBox {

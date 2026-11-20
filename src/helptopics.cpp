@@ -280,7 +280,7 @@ QList<Manual::Topic> Manual::topicList() {
                  "one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, "
                  "asked about one, is told nothing of the other. Books in no collection link with each other, and a book in "
                  "two top collections with both. Nothing is removed, and a book moved to another collection takes its links "
-                 "along. To link the whole library again, tick “Knowledge graph: links books across top-level collections” "
+                 "along. To link the whole library again, tick “Knowledge graph: one for the whole library, not one per top-level collection” "
                  "in the settings ({global.settings}).")},
              {tr("Search"),
               tr("{library.search} looks everywhere. Start a word with `author:`, `title:`, `series:`, `tag:`, `genre:`, "
