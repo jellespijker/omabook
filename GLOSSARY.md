@@ -16,6 +16,10 @@ _Avoid_: Underline, mark, selection
 Words about a passage or place in a book, typed or written by hand, shown beside it.
 _Avoid_: Note (alone), comment, annotation (for this kind only)
 
+**Margin column**:
+The strip beside the text where margin notes stand, each at the height of its passage; part of the page's layout, there only when the window has room for it beside a comfortable page (`PageLayout::columns`).
+_Avoid_: Sidebar, notes pane, gutter (the space between pages)
+
 **Book ink**:
 Handwriting or drawing directly on a page of a book whose pages don't reflow, such as a PDF or a comic.
 _Avoid_: Drawing, scribble, ink (alone, which is the notebook plugin's)

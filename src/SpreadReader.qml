@@ -19,6 +19,15 @@ Item {
     }
     // Whether the graph's things are marked in the text.
     property bool marking: false
+    // The book's margin notes (ReadingNotes), and the room their column
+    // takes beyond the spread's last page (PageLayout::columns).
+    property var notes: null
+    readonly property real noteRoom: notes && reader.format.noteWidth > 0 ? reader.format.noteWidth + gutter : 0
+    property alias marginColumn: margin
+    // Counts the pages being cut anew or turned, which moves the notes.
+    property int cut: 0
+    onBreaksChanged: cut++
+    onPageChanged: cut++
     // The thing under the pointer changed (null for none), and a selection
     // was made with the mouse.
     signal pointed(var thing)
@@ -190,6 +199,34 @@ Item {
         for (const sheet of sheets) sheet.text.deselect()
     }
     function copySelection() { if (selectedText !== "") plainCopy.copyText(selectedText) }
+    // The selection, for a margin note: {text, start, end}; null for none.
+    function selectionSpan() {
+        for (const sheet of sheets) {
+            if (sheet.text.selectedText === "") continue
+            const start = sheet.text.selectionStart
+            // The page it starts on, which a card about it stands by.
+            const shown = sheetShowing(firstText.positionToRectangle(start).y) || sheet
+            return { text: shown.text, start: start, end: sheet.text.selectionEnd }
+        }
+        return null
+    }
+    // Where a character of the chapter is on the spread: how far down the
+    // page that shows it, and which page that is; null where none does.
+    function onSpread(position) {
+        const y = firstText.positionToRectangle(position).y
+        const sheet = sheetShowing(y)
+        return sheet ? { y: y - breaks[sheet.index], sheet: sheet } : null
+    }
+    // The notes whose passages start on the spread, page by page, top to bottom.
+    function notesInSight() {
+        if (!notes) return []
+        const seen = []
+        for (const span of notes.notes.spans(firstText.textDocument)) {
+            const at = onSpread(span.start)
+            if (at) seen.push({ id: span.id, text: at.sheet.text, start: span.start, end: span.end, order: at.sheet.offset * 1e6 + at.y })
+        }
+        return seen.sort((a, b) => a.order - b.order)
+    }
     function placeText() {
         const start = firstText.positionAt(columnWidth / 2, breaks[page] + 8)
         return firstText.getText(start, start + 120).replace(/\u00ad/g, "")
@@ -260,6 +297,14 @@ Item {
                     onHoveredChanged: spread.pointed(hovered ? Object.assign({}, hovered, { rect: spread.fromText(sheet, hovered.rect) }) : null)
                     onReleased: spread.selected()
                 }
+                NoteMarks {
+                    anchors.fill: parent
+                    visible: sheet.there
+                    text: column
+                    reading: spread.notes
+                    from: sheet.there ? spread.breaks[sheet.index] : 0
+                    to: sheet.there ? spread.breaks[sheet.index + 1] : 0
+                }
             }
         }
         // The fold before the next page, halfway across the gutter.
@@ -274,7 +319,11 @@ Item {
     }
 
     Row {
+        id: sheetsRow
         anchors.horizontalCenter: parent.horizontalCenter
+        // With the margin column, the two are centred together; the
+        // window's mirroring turns the offset round in a right-to-left language.
+        anchors.horizontalCenterOffset: -spread.noteRoom / 2
         y: spread.above
         spacing: spread.gutter
         // The spread reads in the direction of the language: the window's
@@ -284,6 +333,25 @@ Item {
         Page { id: page0; objectName: "page0"; offset: 0 }
         Page { id: page1; objectName: "page1"; offset: 1 }
         Page { id: page2; objectName: "page2"; offset: 2 }
+    }
+
+    // The margin notes of the spread's pages, beyond its last, each at the
+    // height of its passage on the page that shows it.
+    MarginColumn {
+        id: margin
+        visible: spread.noteRoom > 0
+        x: win.rightToLeft ? sheetsRow.x - spread.noteRoom : sheetsRow.x + sheetsRow.width + spread.gutter
+        y: spread.above
+        width: reader.format.noteWidth
+        height: spread.pageHeight
+        foot: spread.pageHeight
+        reading: spread.notes
+        text: spread.firstText
+        laid: spread.cut
+        place: function(position) {
+            const at = spread.onSpread(position)
+            return at ? at.y : NaN
+        }
     }
 
     Binding { target: page0.text; property: "objectName"; value: "flowText" }

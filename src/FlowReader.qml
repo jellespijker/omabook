@@ -23,6 +23,11 @@ Flickable {
     property bool runsOn: false
     // A finger is on the page: it scrolls, rather than selecting words.
     property bool fingerDown: false
+    // The book's margin notes (ReadingNotes), and the room their column
+    // takes beside the text, a gutter beyond it (PageLayout::columns).
+    property var notes: null
+    readonly property real noteRoom: notes && reader.format.noteWidth > 0 ? reader.format.noteWidth + reader.format.gutter : 0
+    property alias marginColumn: margin
     // The thing under the pointer changed (null for none), and a selection
     // was made with the mouse.
     signal pointed(var thing)
@@ -183,6 +188,16 @@ Flickable {
         page.deselect()
     }
     function copySelection() { plainCopy.copyText(selectedText) }
+    // The selection, for a margin note: {text, start, end}; null for none.
+    function selectionSpan() { return page.selectedText !== "" ? { text: page, start: page.selectionStart, end: page.selectionEnd } : null }
+    // The notes whose passages start on the screen, top to bottom.
+    function notesInSight() {
+        if (!notes) return []
+        return notes.notes.spans(page.textDocument).filter(span => {
+            const y = page.y + page.positionToRectangle(span.start).y
+            return y >= contentY && y < contentY + height
+        }).map(span => ({ id: span.id, text: page, start: span.start, end: span.end }))
+    }
     function placeText() {
         const start = page.positionAt(page.width / 2, Math.max(0, contentY - page.y + 8))
         return page.getText(start, start + 120).replace(/\u00ad/g, "")
@@ -256,8 +271,10 @@ Flickable {
         id: page
         objectName: "flowText"
         y: flick.side + 8
-        x: Math.round((flick.width - width) / 2)
-        width: Math.max(200, Math.min(reader.format.lineWidth, flick.width - 2 * flick.side))
+        // With the margin column, the two are centred together, the column
+        // at the end the lines end at.
+        x: Math.round((flick.width - width - flick.noteRoom) / 2) + (win.rightToLeft ? flick.noteRoom : 0)
+        width: Math.max(200, Math.min(reader.format.lineWidth, flick.width - 2 * flick.side - flick.noteRoom))
         readOnly: true
         selectByMouse: !flick.fingerDown
         persistentSelection: true
@@ -293,6 +310,22 @@ Flickable {
             onHoveredChanged: flick.pointed(hovered ? Object.assign({}, hovered, { rect: flick.fromPage(hovered.rect) }) : null)
             onReleased: flick.selected()
         }
+        NoteMarks {
+            anchors.fill: parent
+            text: page
+            reading: flick.notes
+        }
+    }
+    MarginColumn {
+        id: margin
+        visible: flick.noteRoom > 0
+        x: win.rightToLeft ? page.x - flick.noteRoom : page.x + page.width + reader.format.gutter
+        width: reader.format.noteWidth
+        height: flick.contentHeight
+        reading: flick.notes
+        text: page
+        laid: page.width + page.y
+        place: function(position) { return page.y + page.positionToRectangle(position).y }
     }
 
     // The chapter's end, when reading runs on: a quiet line saying so, and

@@ -9,6 +9,8 @@
 #include <algorithm>
 #include <array>
 #include <cmath>
+#include <numeric>
+#include <ranges>
 #include <vector>
 
 namespace PageLayout {
@@ -54,7 +56,10 @@ int measureFromPixels(int pixels, int fontSize) noexcept {
     return std::clamp(static_cast<int>(std::lround(pixels / (std::max(1, fontSize) / 2.0))), 40, 90);
 }
 
-Columns columns(const Space &space, int wanted, int previous) {
+namespace {
+
+// The pages side by side in the room, with no margin column.
+Columns pagesIn(const Space &space, int wanted, int previous) {
     const double character = std::max(1.0, space.characterWidth);
     const int measure = std::max(1, space.measure);
     // The width each of `count` pages gets, in characters.
@@ -87,6 +92,58 @@ Columns columns(const Space &space, int wanted, int previous) {
     }
     result.width = std::max(0.0, std::min(measure * character, perPage(result.count) * character));
     return result;
+}
+
+// The margin column's width in this room, or 0 when a comfortable page
+// doesn't fit beside it.
+double noteColumn(const Space &space) {
+    if (!space.notes)
+        return 0;
+    const double character = std::max(1.0, space.characterWidth);
+    const double width = std::max(leastNoteWidth, noteMeasure * noteScale * character);
+    const double lowest = std::min(minimumMeasure, std::max(1, space.measure));
+    const double comfortable = std::max(lowest, std::round(space.measure * automaticShare)) * character;
+    return space.available - 2 * space.margin - width - space.gutter >= comfortable ? width : 0;
+}
+
+} // namespace
+
+Columns columns(const Space &space, int wanted, int previous) {
+    const double notes = noteColumn(space);
+    Space text = space;
+    if (notes > 0)
+        text.available -= notes + space.gutter;
+    Columns result = pagesIn(text, wanted, previous);
+    result.notes = notes;
+    return result;
+}
+
+QList<double> stack(const QList<Note> &notes, double spacing, double bottom) {
+    QList<qsizetype> order(notes.size());
+    std::ranges::iota(order, qsizetype{0});
+    std::ranges::stable_sort(order, {}, [&notes](qsizetype index) { return notes.at(index).top; });
+    QList<double> tops(notes.size());
+    // Down from the first: each where it wants, or below the one before.
+    double free = 0;
+    for (const qsizetype index : std::as_const(order)) {
+        tops[index] = std::max(notes.at(index).top, free);
+        free = tops.at(index) + notes.at(index).height + spacing;
+    }
+    if (bottom < 0)
+        return tops;
+    // Up from the last, within the foot: each above the one after, none above the top.
+    double limit = bottom;
+    for (const qsizetype index : std::views::reverse(order)) {
+        tops[index] = std::max(0.0, std::min(tops.at(index), limit - notes.at(index).height));
+        limit = tops.at(index) - spacing;
+    }
+    // Pushed against the top, they keep apart, and what doesn't fit runs past the foot.
+    free = 0;
+    for (const qsizetype index : std::as_const(order)) {
+        tops[index] = std::max(tops.at(index), free);
+        free = tops.at(index) + notes.at(index).height + spacing;
+    }
+    return tops;
 }
 
 namespace {

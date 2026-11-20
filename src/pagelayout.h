@@ -61,6 +61,14 @@ inline constexpr double hysteresis = 3;
 // character's width, within 40 to 90.
 [[nodiscard]] int measureFromPixels(int pixels, int fontSize) noexcept;
 
+// The margin column (#82): where a book's margin notes stand beside its
+// text, each at the height of its passage, set in type `noteScale` the size
+// of the body's. Its lines are short, as a margin's are: `noteMeasure`
+// characters of that type, and never narrower than `leastNoteWidth`.
+inline constexpr int noteMeasure = 30;
+inline constexpr double noteScale = 0.8;
+inline constexpr double leastNoteWidth = 160;
+
 // The room the text has and how it is to be set.
 struct Space {
     double available = 0;      // the reading area's width, panes beside it already taken off
@@ -68,6 +76,8 @@ struct Space {
     int measure = 66;          // the longest line, in characters
     double margin = 56;        // at each outer edge of the spread
     double gutter = 56;        // between two pages
+    bool notes = false;        // the book has margin notes, which want a margin column
+    bool operator==(const Space &) const = default;
 };
 
 // What fits in it.
@@ -77,6 +87,8 @@ struct Columns {
     int most = 1;           // the most that keep the minimum measure
     double width = 0;       // each page's text, in pixels: never past the measure
     bool honoured = true;   // a choice of 1, 2 or 3 is what shows
+    double notes = 0;       // the margin column's width, a gutter beyond the text; 0 for none
+    bool operator==(const Columns &) const = default;
 };
 
 // The pages side by side. `wanted` is the reader's choice: 0 for
@@ -85,7 +97,27 @@ struct Columns {
 // as each keep `automaticShare` of the measure (and never less than the
 // minimum). `previous` is the count shown until now (0 for none), which
 // keeps its pages until they would lose `hysteresis` characters more.
+//
+// A book with margin notes has a margin column at the end of its lines (the
+// spread's last page), a gutter beyond them, when a page that keeps
+// `automaticShare` of the measure still fits beside it; the pages share
+// what is left. Where it doesn't fit there is none, and each note is a mark
+// in the text instead. It is decided here, from the room alone, like the
+// pages: so the same window always cuts a chapter into the same pages, and
+// notes never move the text as they are written.
 [[nodiscard]] Columns columns(const Space &space, int wanted, int previous = 0);
+
+// Where margin notes stand in the margin column, given where each would
+// like to (the top of its passage's first line) and how tall it is, in the
+// order of their passages: each as near its passage as the notes before it
+// leave room for, `spacing` apart, none over another. Within a `bottom` (a
+// page's foot) they are pushed up, as far as the top, to keep in; what
+// still doesn't fit runs past it. The tops, in the order given.
+struct Note {
+    double top = 0;
+    double height = 0;
+};
+[[nodiscard]] QList<double> stack(const QList<Note> &notes, double spacing, double bottom = -1);
 
 // Where a chapter laid out as one column is cut into pages `height` tall:
 // the top of each page in the column, and last where the column ends. Pages

@@ -43,7 +43,7 @@ Item {
     property bool selecting: false
     // While the keyboard selects, or works the menu beside the words, its
     // keys are theirs, not the book's.
-    readonly property bool popupOpen: finder.opened || knowledge.popupOpen || selecting || (menu.shown && menu.activeFocus)
+    readonly property bool popupOpen: finder.opened || knowledge.popupOpen || selecting || (menu.shown && menu.activeFocus) || notesLayer.focused
     // While the map has the keyboard, the keys are its own (see GraphPane).
     readonly property bool mapping: knowledge.focused
     // Whether the keys that move through the book are the book's right now.
@@ -217,22 +217,24 @@ Item {
         if (content.selectAt(at.x, at.y)) released()
     }
     // V: the first word on the screen is selected, and the keys move it on
-    // or widen it (see selectKeys); Enter shows the menu.
-    function startSelecting() {
+    // or widen it (see SelectKeys); Enter shows the menu, or for a margin note writes it.
+    function startSelecting(purpose) {
         if (!content || typeof content.beginSelecting !== "function") {
             backend.say(qsTr("These pages are pictures, so there are no words to select."))
             return
         }
         menu.close()
         selecting = true
+        selectKeys.purpose = purpose === "note" ? "note" : "menu"
         content.beginSelecting()
-        selectKeys.forceActiveFocus()
+        selectKeys.take()
     }
     function stopSelecting(keep) {
         selecting = false
         if (!content) return
         content.endSelecting()
-        if (keep) released()
+        if (keep && selectKeys.purpose === "note") notesLayer.write()
+        else if (keep) released()
         else {
             content.clearSelection()
             content.forceActiveFocus()
@@ -305,7 +307,9 @@ Item {
     Key { command: "reader.marks"; when: reader.open; onActivated: view.cycleMarks() }
     Key { command: "reader.pages"; when: reader.open && !view.mapping; onActivated: view.cyclePages() }
     Key { command: "reader.layout"; when: reader.open && !view.mapping; onActivated: view.cycleLayout() }
-    Key { command: "reader.select"; when: view.paging; onActivated: view.startSelecting() }
+    Key { command: "reader.select"; when: view.paging; onActivated: view.startSelecting("menu") }
+    Key { command: "reader.note"; when: view.paging; onActivated: notesLayer.write() }
+    Key { command: "reader.notes"; when: view.paging; onActivated: notesLayer.go() }
 
     // The kinds' colors are the graph's, from the theme.
     Binding { target: reader.marks; property: "colors"; value: theme.colors }
@@ -548,11 +552,12 @@ Item {
                 readonly property string layout: reader.format.effective.layout || "auto"
                 readonly property bool paged: layout === "pages" || (layout === "auto" && reader.format.columns > 1)
                 sourceComponent: reader.kind === "flow" ? (paged ? spreadPages : flow) : reader.kind === "pages" ? pages : null
-                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: finger.active } }
-                Component { id: spreadPages; SpreadReader { marking: view.marksOn } }
+                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: finger.active; notes: notesLayer } }
+                Component { id: spreadPages; SpreadReader { marking: view.marksOn; notes: notesLayer } }
                 Component { id: pages; PageReader { layout: contentLoader.layout } }
             }
 
+            ReadingNotes { id: notesLayer; anchors.fill: contentLoader; z: 2; host: view }
             // Opening, or the reason it can't be opened.
             ColumnLayout {
                 objectName: "readerState"
@@ -862,50 +867,10 @@ Item {
             }
         }
 
-        // The keys while words are selected with the keyboard.
-        Item {
+        SelectKeys {
             id: selectKeys
-            objectName: "selectKeys"
-            focus: false
-            Keys.onPressed: (event) => {
-                const wide = (event.modifiers & Qt.ShiftModifier) !== 0
-                const back = win.rightToLeft ? Qt.Key_Right : Qt.Key_Left
-                const on = win.rightToLeft ? Qt.Key_Left : Qt.Key_Right
-                if (event.key === back || event.key === Qt.Key_H) view.content.stepSelecting(-1, 0, wide)
-                else if (event.key === on || event.key === Qt.Key_L) view.content.stepSelecting(1, 0, wide)
-                else if (event.key === Qt.Key_Down || event.key === Qt.Key_J) view.content.stepSelecting(0, 1, wide)
-                else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) view.content.stepSelecting(0, -1, wide)
-                else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_Space) view.stopSelecting(true)
-                else if (event.key === Qt.Key_Escape || event.key === Qt.Key_V) view.stopSelecting(false)
-                else if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) view.content.copySelection()
-                else return
-                event.accepted = true
-            }
-            onActiveFocusChanged: if (!activeFocus && view.selecting) view.stopSelecting(false)
-        }
-        // Says how, while it lasts.
-        Rectangle {
-            objectName: "selectHint"
-            visible: view.selecting
-            z: 6
-            anchors.horizontalCenter: parent.horizontalCenter
-            anchors.bottom: parent.bottom
-            anchors.bottomMargin: 20
-            width: Math.min(hint.implicitWidth + 24, parent.width - 32)
-            height: hint.implicitHeight + 14
-            radius: theme.radius
-            color: theme.background
-            border.color: theme.colors.selection
-            Label {
-                id: hint
-                anchors.centerIn: parent
-                width: Math.min(implicitWidth, parent.width - 24)
-                text: qsTr("H L or the arrows move a word, J K a line; Shift widens. Enter shows what to do with it, Esc stops.")
-                color: theme.colors.muted
-                font.pixelSize: 12
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-            }
+            anchors.fill: parent
+            view: view
         }
         ReadingMenu {
             id: menu
@@ -926,6 +891,7 @@ Item {
             }
             onFind: (words) => finder.findWords(words)
             onCopy: if (view.content) view.content.copySelection()
+            onWriteNote: notesLayer.write()
             onGoTo: (met) => reader.goToPlace(met.section, met.fraction)
             onDismissed: (hadFocus) => { if (hadFocus && view.content) view.content.forceActiveFocus() }
         }

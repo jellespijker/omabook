@@ -3,6 +3,7 @@
 #include <QFontDatabase>
 #include <QLocale>
 #include <algorithm>
+#include <cmath>
 
 using namespace Qt::StringLiterals;
 
@@ -102,6 +103,18 @@ void PageFormat::setAvailable(double width) {
     relayout();
 }
 
+int PageFormat::noteFontSize() const {
+    const int size = m_effective.value("font_size"_L1).toInt(ReadingFormat::range("font_size"_L1)->fallback);
+    return std::max(11, static_cast<int>(std::lround(size * PageLayout::noteScale)));
+}
+
+void PageFormat::setNotes(bool notes) {
+    if (notes == m_notes)
+        return;
+    m_notes = notes;
+    relayout();
+}
+
 void PageFormat::relayout() {
     const auto number = [this](QLatin1StringView key) { return m_effective.value(key).toInt(ReadingFormat::range(key)->fallback); };
     const int size = number("font_size"_L1);
@@ -113,12 +126,9 @@ void PageFormat::relayout() {
     space.gutter = PageLayout::gutter(size);
     // A book that scrolls is one column at any width.
     const bool scrolls = m_effective.value("layout").toString() == "scroll"_L1;
+    space.notes = m_notes;
     const PageLayout::Columns columns = PageLayout::columns(space, scrolls ? 1 : m_settings->pages(), m_columns.count);
-    if (qFuzzyCompare(space.characterWidth, m_space.characterWidth) && space.measure == m_space.measure
-        && qFuzzyCompare(space.margin + 1, m_space.margin + 1) && qFuzzyCompare(space.gutter, m_space.gutter)
-        && qFuzzyCompare(space.available + 1, m_space.available + 1) && columns.count == m_columns.count
-        && columns.automatic == m_columns.automatic && columns.most == m_columns.most
-        && qFuzzyCompare(columns.width + 1, m_columns.width + 1) && columns.honoured == m_columns.honoured)
+    if (space == m_space && columns == m_columns)
         return;
     m_space = space;
     m_columns = columns;

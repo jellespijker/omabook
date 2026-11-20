@@ -159,6 +159,79 @@ Manual::Topic chronologyTopic() {
             }};
 }
 
+// Reading a book: turning pages, finding one's place, margin notes, the
+// graph in the text, and making the page comfortable.
+Manual::Topic readingTopic() {
+    return {"reading",
+            Manual::tr("Reading"),
+            Manual::tr("Turn pages, find your place, and make the page comfortable."),
+            {
+                {Manual::tr("Turning pages"),
+                 Manual::tr("{reader.page_down} turns the page, or scrolls a screen on, and carries on into the next chapter; "
+                            "{reader.page_up} goes back. Nothing is shown twice: the next screen starts at the first line that wasn't "
+                            "wholly in sight. {reader.next} goes to the next chapter; {reader.previous} to the start of this one, and "
+                            "from there to the one before. {reader.line_down} and {reader.line_up} scroll a few lines. Where the "
+                            "window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one "
+                            "page scrolls.")},
+                {Manual::tr("Pages or scroll"),
+                 Manual::tr("{reader.layout} chooses how a book is read through, also under Layout in the Aa panel. Pages: even one "
+                            "column is cut into pages, each chapter starts on a page of its own, and turning on from its last page "
+                            "opens the next chapter; a PDF or comic page is shown whole, and two side by side open as a book does, "
+                            "page 1 alone (First page alone). Scroll: one column that runs on, with a line at each chapter's end "
+                            "saying what is next; scroll on past it, or tap it, to go on. Automatic: pages where two fit side by "
+                            "side, else a column that scrolls. Your place stays where it is when you change.")},
+                {Manual::tr("How many pages"),
+                 Manual::tr("A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you "
+                            "read in. As many pages stand side by side as each keep most of that, up to three, and none with lines "
+                            "shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} "
+                            "goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows "
+                            "the most that do. A pane beside the page leaves less room, as a narrower window does.")},
+                {Manual::tr("Finding your place"),
+                 Manual::tr("{reader.contents} shows the chapters beside the page, and {reader.find} finds words in the book. "
+                            "{reader.bookmark} keeps a bookmark. Your place is remembered when you leave with {reader.back}.")},
+                {Manual::tr("Margin notes"),
+                 Manual::tr("Select words and write a margin note on them: {reader.note}, or Write a margin note in the menu beside "
+                            "the selection. Where the window has room, notes stand in a margin column beside the text, each at the "
+                            "height of its words, and are edited where they stand; in a narrower window a mark where the words end "
+                            "opens the note. {reader.notes} goes through the notes on the page: Enter edits one, Delete removes it, "
+                            "and a note left without words is removed. Notes go with the book to your other computers, and stay "
+                            "with their words in a new edition; those whose words are gone are listed at the foot of the page.")},
+                {Manual::tr("The graph in the text"),
+                 Manual::tr("The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors "
+                            "they have there, always, unless you switch it off: {reader.marks} marks them only while the map is "
+                            "beside the page, or never, and the choice is kept. Point at "
+                            "one, or tap it, for what is known of it. Select words (drag, double-click, press and hold, or "
+                            "{reader.select} and the arrow keys) for a menu: ask about them, who or what they are, show them in the "
+                            "map, find them in the book, or a question worth asking.")},
+                {Manual::tr("Moments, and no spoilers"),
+                 Manual::tr("The map's details say when each thing known of someone was revealed, and each is a way back to that "
+                            "moment in the text ({graph.moments} from the keyboard), where its words are lit. The card on the page goes to "
+                            "where a thing was first met, "
+                            "and to where what is said of it now was told. What happens past the furthest you have read stays "
+                            "closed under Later in the book: it opens for that one thing only, once you confirm, until Omabook "
+                            "closes. A book marked as read has nothing to hide.")},
+                {Manual::tr("Making it comfortable"),
+                 Manual::tr("{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and "
+                            "nothing else, on the whole screen.")},
+                {Manual::tr("Setting the text your way"),
+                 Manual::tr(
+                     "{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, "
+                     "the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line "
+                     "indent, the margins, "
+                     "and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at "
+                     "once and the page stays where you were. With Only this book on, the change is for this book alone; "
+                     "Reset puts back what there was when the panel opened. The defaults for every book are in the "
+                     "settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set. Their layout can.")},
+                {Manual::tr("With fingers"),
+                 Manual::tr("Swipe sideways or tap the left or right edge to turn the page, pinch to resize, and tap the middle of "
+                            "the page for buttons to everything else.")},
+                {Manual::tr("What it reads"),
+                 Manual::tr("EPUB, FictionBook, Markdown, HTML and plain text flow in your own type. PDF and comics are shown page by "
+                            "page. Kindle, Word and the other formats Calibre knows are converted the first time you open them, "
+                            "which needs Calibre installed.")},
+            }};
+}
+
 } // namespace
 
 QList<Manual::Topic> Manual::topicList() {
@@ -179,62 +252,7 @@ QList<Manual::Topic> Manual::topicList() {
               tr("{global.help} opens this help anywhere. Type what you want to do, and Enter runs it. The tour is a short "
                  "walk through the window, and it is always here.")},
          }},
-        {"reading", tr("Reading"), tr("Turn pages, find your place, and make the page comfortable."),
-         {
-             {tr("Turning pages"),
-              tr("{reader.page_down} turns the page, or scrolls a screen on, and carries on into the next chapter; "
-                 "{reader.page_up} goes back. Nothing is shown twice: the next screen starts at the first line that wasn't "
-                 "wholly in sight. {reader.next} goes to the next chapter; {reader.previous} to the start of this one, and "
-                 "from there to the one before. {reader.line_down} and {reader.line_up} scroll a few lines. Where the "
-                 "window has room, two or three pages stand side by side and a turn moves on by all of them; otherwise one "
-                 "page scrolls.")},
-             {tr("Pages or scroll"),
-              tr("{reader.layout} chooses how a book is read through, also under Layout in the Aa panel. Pages: even one "
-                 "column is cut into pages, each chapter starts on a page of its own, and turning on from its last page "
-                 "opens the next chapter; a PDF or comic page is shown whole, and two side by side open as a book does, "
-                 "page 1 alone (First page alone). Scroll: one column that runs on, with a line at each chapter's end "
-                 "saying what is next; scroll on past it, or tap it, to go on. Automatic: pages where two fit side by "
-                 "side, else a column that scrolls. Your place stays where it is when you change.")},
-             {tr("How many pages"),
-              tr("A line is as long as reads well: 66 characters unless you set it otherwise, in the font and size you "
-                 "read in. As many pages stand side by side as each keep most of that, up to three, and none with lines "
-                 "shorter than 45 characters; a single page doesn't grow past it, the rest is margin. {reader.pages} "
-                 "goes from as many as fit to one, two or three pages and round again; a choice that doesn't fit shows "
-                 "the most that do. A pane beside the page leaves less room, as a narrower window does.")},
-             {tr("Finding your place"),
-              tr("{reader.contents} shows the chapters beside the page, and {reader.find} finds words in the book. "
-                 "{reader.bookmark} keeps a bookmark. Your place is remembered when you leave with {reader.back}.")},
-             {tr("The graph in the text"),
-              tr("The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors "
-                 "they have there, always, unless you switch it off: {reader.marks} marks them only while the map is "
-                 "beside the page, or never, and the choice is kept. Point at "
-                 "one, or tap it, for what is known of it. Select words (drag, double-click, press and hold, or "
-                 "{reader.select} and the arrow keys) for a menu: ask about them, who or what they are, show them in the "
-                 "map, find them in the book, or a question worth asking.")},
-             {tr("Moments, and no spoilers"),
-              tr("The map's details say when each thing known of someone was revealed, and each is a way back to that "
-                 "moment in the text ({graph.moments} from the keyboard), where its words are lit. The card on the page goes to where a thing was first met, "
-                 "and to where what is said of it now was told. What happens past the furthest you have read stays "
-                 "closed under Later in the book: it opens for that one thing only, once you confirm, until Omabook "
-                 "closes. A book marked as read has nothing to hide.")},
-             {tr("Making it comfortable"),
-              tr("{reader.larger} and {reader.smaller} change the size of the type. {reader.expand} shows the book and "
-                 "nothing else, on the whole screen.")},
-             {tr("Setting the text your way"),
-              tr("{reader.format} opens the Aa panel beside the page (Aa in the bar, with fingers): the font, its size, "
-                 "the longest line in characters, the pages side by side, the space between lines and between paragraphs, a first-line indent, the margins, "
-                 "and the alignment: start, justified (filled out to both sides), centred or end. Each change shows at "
-                 "once and the page stays where you were. With Only this book on, the change is for this book alone; "
-                 "Reset puts back what there was when the panel opened. The defaults for every book are in the "
-                 "settings ({global.settings}) too. Pages that are pictures, as in a PDF or a comic, can't be set. Their layout can.")},
-             {tr("With fingers"),
-              tr("Swipe sideways or tap the left or right edge to turn the page, pinch to resize, and tap the middle of "
-                 "the page for buttons to everything else.")},
-             {tr("What it reads"),
-              tr("EPUB, FictionBook, Markdown, HTML and plain text flow in your own type. PDF and comics are shown page by "
-                 "page. Kindle, Word and the other formats Calibre knows are converted the first time you open them, "
-                 "which needs Calibre installed.")},
-         }},
+        readingTopic(),
         {"ai", tr("The AI companion"), tr("It reads along with you, and looks after the library when asked."),
          {
              {tr("While you read"),

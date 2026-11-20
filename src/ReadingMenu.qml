@@ -7,7 +7,8 @@ import Omabook
 // What can be done with something on the page, beside it: a small card for
 // a thing of the graph that is pointed at or tapped (its name, kind and what
 // is known of it), and a menu for words that were selected (ask about them,
-// who or what they are, the graph, find, copy, and questions worth asking).
+// who or what they are, the graph, find, copy, a margin note on them, and
+// questions worth asking).
 // It stands under the words, or over them where there is no room below,
 // and never leaves the page. Up and Down (or J and K) and Enter work it from
 // the keyboard; Escape puts it away.
@@ -44,6 +45,7 @@ FocusScope {
     signal identify(string words, string paragraph)
     signal find(string words)
     signal copy()
+    signal writeNote()
     signal goTo(var met)
     // Put away; `hadFocus` says the keyboard was with it, to go back to the page.
     signal dismissed(bool hadFocus)
@@ -109,6 +111,7 @@ FocusScope {
         rows.push(known ? { id: "graph", text: qsTr("Show in graph") } : { id: "add", text: qsTr("Add to the graph") })
         rows.push({ id: "find", text: qsTr("Find in book") })
         rows.push({ id: "copy", text: qsTr("Copy") })
+        if (reader.kind === "flow") rows.push({ id: "note", text: qsTr("Write a margin note") })
         for (const one of suggestions) rows.push({ id: "question", text: one.text, question: true })
         if (assistant.available && !reader.marks.suggested(key) && !assistant.suggesting)
             rows.push({ id: "more", text: suggestions.length > 0 ? qsTr("More suggestions") : qsTr("Suggest questions"), question: true })
@@ -128,6 +131,7 @@ FocusScope {
         }
         else if (row.id === "find") { find(words); close() }
         else if (row.id === "copy") { copy(); close() }
+        else if (row.id === "note") { close(); writeNote() }
         else if (row.id === "met" || row.id === "latest") {
             // To the very words, lit for a moment on the page.
             const moment = row.id === "met" ? thing.met : thing.latest
@@ -156,6 +160,13 @@ FocusScope {
     }
 
     Keys.onEscapePressed: close()
+    // The row the keyboard is on is kept in sight.
+    onCurrentChanged: {
+        const row = rows.itemAt(current)
+        if (!row) return
+        if (row.y < scroller.contentY) scroller.contentY = row.y
+        else if (row.y + row.height > scroller.contentY + scroller.height) scroller.contentY = row.y + row.height - scroller.height
+    }
     Keys.onPressed: (event) => {
         if (event.key === Qt.Key_Down || event.key === Qt.Key_J) current = Math.min(actions.length - 1, current + 1)
         else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) current = Math.max(0, current - 1)
@@ -172,178 +183,189 @@ FocusScope {
     Rectangle {
         id: frame
         width: parent.width
-        height: body.implicitHeight + 16
+        // In a window too low for all of it, what it holds scrolls.
+        height: Math.min(body.implicitHeight + 16, menu.parent ? menu.parent.height - 16 : body.implicitHeight + 16)
         radius: theme.radius
         color: theme.background
         border.color: theme.colors.selection
 
-        ColumnLayout {
-            id: body
-            x: 8
-            y: 8
-            width: parent.width - 16
-            spacing: 2
-            LayoutMirroring.enabled: win.rightToLeft
-            LayoutMirroring.childrenInherit: true
+        Flickable {
+            id: scroller
+            objectName: "readingMenuScroller"
+            anchors.fill: parent
+            anchors.margins: 8
+            contentWidth: width
+            contentHeight: body.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height + 1
+            ColumnLayout {
+                id: body
+                width: scroller.width
+                spacing: 2
+                LayoutMirroring.enabled: win.rightToLeft
+                LayoutMirroring.childrenInherit: true
 
-            // The thing: its kind's mark, its name and kind.
-            RowLayout {
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                Layout.topMargin: 4
-                spacing: 8
-                visible: menu.known
-                GraphKind {
-                    size: 16
-                    kind: menu.known ? menu.thing.kind : ""
-                    Layout.alignment: Qt.AlignVCenter
-                }
-                Label {
-                    objectName: "readingMenuName"
-                    Layout.fillWidth: true
-                    text: menu.known ? menu.thing.name : ""
-                    font.pixelSize: 15
-                    font.bold: true
-                    elide: Text.ElideRight
-                    textFormat: Text.PlainText
-                }
-                Label {
-                    objectName: "readingMenuKind"
-                    text: menu.known ? kindWords.kind(menu.thing.kind) : ""
-                    color: theme.colors.muted
-                    font.pixelSize: 12
-                    textFormat: Text.PlainText
-                }
-            }
-            // Words the graph doesn't know: the words themselves.
-            Label {
-                objectName: "readingMenuWords"
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                Layout.topMargin: 4
-                visible: !menu.known && menu.words !== ""
-                text: qsTr("“%1”").arg(menu.words.replace(/\s+/g, " "))
-                font.italic: true
-                wrapMode: Text.Wrap
-                maximumLineCount: 2
-                elide: Text.ElideRight
-                textFormat: Text.PlainText
-            }
-            Label {
-                objectName: "readingMenuSummary"
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                visible: menu.known && text !== ""
-                text: menu.known ? menu.thing.summary : ""
-                wrapMode: Text.Wrap
-                maximumLineCount: menu.answered ? 8 : 4
-                elide: Text.ElideRight
-                lineHeight: 1.2
-                textFormat: Text.PlainText
-            }
-            // Of a graph someone shared, never the reader's own: whose it is.
-            Label {
-                objectName: "readingMenuFrom"
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                visible: text !== ""
-                text: menu.known && menu.thing.from ? qsTr("From %1").arg(menu.thing.from) : ""
-                color: theme.accent
-                wrapMode: Text.Wrap
-                textFormat: Text.PlainText
-            }
-            // Answered from the graph: how it relates, and where it was first met.
-            Repeater {
-                model: menu.answered && menu.known ? menu.thing.relations : []
-                delegate: Label {
-                    required property var modelData
+                // The thing: its kind's mark, its name and kind.
+                RowLayout {
                     Layout.fillWidth: true
                     Layout.leftMargin: 6
                     Layout.rightMargin: 6
-                    text: (modelData.outgoing ? "%1 → %2" : "%2 → %1").arg(modelData.relation).arg(modelData.other)
+                    Layout.topMargin: 4
+                    spacing: 8
+                    visible: menu.known
+                    GraphKind {
+                        size: 16
+                        kind: menu.known ? menu.thing.kind : ""
+                        Layout.alignment: Qt.AlignVCenter
+                    }
+                    Label {
+                        objectName: "readingMenuName"
+                        Layout.fillWidth: true
+                        text: menu.known ? menu.thing.name : ""
+                        font.pixelSize: 15
+                        font.bold: true
+                        elide: Text.ElideRight
+                        textFormat: Text.PlainText
+                    }
+                    Label {
+                        objectName: "readingMenuKind"
+                        text: menu.known ? kindWords.kind(menu.thing.kind) : ""
+                        color: theme.colors.muted
+                        font.pixelSize: 12
+                        textFormat: Text.PlainText
+                    }
+                }
+                // Words the graph doesn't know: the words themselves.
+                Label {
+                    objectName: "readingMenuWords"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                    Layout.topMargin: 4
+                    visible: !menu.known && menu.words !== ""
+                    text: qsTr("“%1”").arg(menu.words.replace(/\s+/g, " "))
+                    font.italic: true
+                    wrapMode: Text.Wrap
+                    maximumLineCount: 2
+                    elide: Text.ElideRight
+                    textFormat: Text.PlainText
+                }
+                Label {
+                    objectName: "readingMenuSummary"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                    visible: menu.known && text !== ""
+                    text: menu.known ? menu.thing.summary : ""
+                    wrapMode: Text.Wrap
+                    maximumLineCount: menu.answered ? 8 : 4
+                    elide: Text.ElideRight
+                    lineHeight: 1.2
+                    textFormat: Text.PlainText
+                }
+                // Of a graph someone shared, never the reader's own: whose it is.
+                Label {
+                    objectName: "readingMenuFrom"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                    visible: text !== ""
+                    text: menu.known && menu.thing.from ? qsTr("From %1").arg(menu.thing.from) : ""
+                    color: theme.accent
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
+                }
+                // Answered from the graph: how it relates, and where it was first met.
+                Repeater {
+                    model: menu.answered && menu.known ? menu.thing.relations : []
+                    delegate: Label {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 6
+                        Layout.rightMargin: 6
+                        text: (modelData.outgoing ? "%1 → %2" : "%2 → %1").arg(modelData.relation).arg(modelData.other)
+                        color: theme.colors.muted
+                        font.pixelSize: 12
+                        elide: Text.ElideRight
+                        textFormat: Text.PlainText
+                    }
+                }
+                Label {
+                    objectName: "readingMenuMet"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                    visible: menu.answered && menu.known
+                    text: menu.known ? qsTr("First met in %1").arg(menu.thing.met.title) : ""
                     color: theme.colors.muted
                     font.pixelSize: 12
                     elide: Text.ElideRight
                     textFormat: Text.PlainText
                 }
-            }
-            Label {
-                objectName: "readingMenuMet"
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                visible: menu.answered && menu.known
-                text: menu.known ? qsTr("First met in %1").arg(menu.thing.met.title) : ""
-                color: theme.colors.muted
-                font.pixelSize: 12
-                elide: Text.ElideRight
-                textFormat: Text.PlainText
-            }
-            // Honest about how far the graph got, when it is behind the reader.
-            Label {
-                objectName: "readingMenuNoted"
-                Layout.fillWidth: true
-                Layout.leftMargin: 6
-                Layout.rightMargin: 6
-                visible: menu.noted !== ""
-                text: menu.noted
-                color: theme.colors.muted
-                font.pixelSize: 12
-                wrapMode: Text.Wrap
-                textFormat: Text.PlainText
-            }
-            Item { Layout.preferredHeight: 4; visible: menu.known || menu.words !== "" }
-
-            Repeater {
-                model: menu.actions
-                delegate: Rectangle {
-                    id: row
-                    required property var modelData
-                    required property int index
-                    objectName: "readingAction_" + modelData.id
+                // Honest about how far the graph got, when it is behind the reader.
+                Label {
+                    objectName: "readingMenuNoted"
                     Layout.fillWidth: true
-                    // A question may take two lines rather than be cut short.
-                    Layout.preferredHeight: Math.max(menu.rowHeight, caption.implicitHeight + 12)
-                    radius: Math.min(4, theme.radius)
-                    color: menu.current === index && menu.activeFocus || tap.pressed || rowHover.hovered ? theme.colors.selection : "transparent"
-                    // The questions stand apart from what is done with the words.
-                    Rectangle {
-                        visible: !!row.modelData.question && (row.index === 0 || !menu.actions[row.index - 1].question)
-                        width: parent.width
-                        height: 1
-                        y: -1
-                        color: theme.colors.selection
-                    }
-                    Label {
-                        id: caption
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.verticalCenter: parent.verticalCenter
-                        anchors.leftMargin: 8
-                        anchors.rightMargin: 8
-                        text: row.modelData.text
-                        color: row.modelData.id === "more" ? theme.colors.muted : theme.foreground
-                        font.pixelSize: 14
-                        wrapMode: Text.Wrap
-                        maximumLineCount: 2
-                        elide: Text.ElideRight
-                        textFormat: Text.PlainText
-                    }
-                    HoverHandler { id: rowHover; onHoveredChanged: if (hovered) menu.current = row.index }
-                    TapHandler { id: tap; onTapped: menu.activate(row.index) }
+                    Layout.leftMargin: 6
+                    Layout.rightMargin: 6
+                    visible: menu.noted !== ""
+                    text: menu.noted
+                    color: theme.colors.muted
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                    textFormat: Text.PlainText
                 }
-            }
-            Thinking {
-                objectName: "readingMenuThinking"
-                Layout.leftMargin: 8
-                Layout.preferredHeight: menu.rowHeight
-                active: assistant.suggesting && menu.mode === "menu"
-                text: qsTr("Thinking of questions…")
-                room: body.width - 16
+                Item { Layout.preferredHeight: 4; visible: menu.known || menu.words !== "" }
+
+                Repeater {
+                    id: rows
+                    model: menu.actions
+                    delegate: Rectangle {
+                        id: row
+                        required property var modelData
+                        required property int index
+                        objectName: "readingAction_" + modelData.id
+                        Layout.fillWidth: true
+                        // A question may take two lines rather than be cut short.
+                        Layout.preferredHeight: Math.max(menu.rowHeight, caption.implicitHeight + 12)
+                        radius: Math.min(4, theme.radius)
+                        color: menu.current === index && menu.activeFocus || tap.pressed || rowHover.hovered ? theme.colors.selection : "transparent"
+                        // The questions stand apart from what is done with the words.
+                        Rectangle {
+                            visible: !!row.modelData.question && (row.index === 0 || !menu.actions[row.index - 1].question)
+                            width: parent.width
+                            height: 1
+                            y: -1
+                            color: theme.colors.selection
+                        }
+                        Label {
+                            id: caption
+                            anchors.left: parent.left
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            anchors.leftMargin: 8
+                            anchors.rightMargin: 8
+                            text: row.modelData.text
+                            color: row.modelData.id === "more" ? theme.colors.muted : theme.foreground
+                            font.pixelSize: 14
+                            wrapMode: Text.Wrap
+                            maximumLineCount: 2
+                            elide: Text.ElideRight
+                            textFormat: Text.PlainText
+                        }
+                        HoverHandler { id: rowHover; onHoveredChanged: if (hovered) menu.current = row.index }
+                        TapHandler { id: tap; onTapped: menu.activate(row.index) }
+                    }
+                }
+                Thinking {
+                    objectName: "readingMenuThinking"
+                    Layout.leftMargin: 8
+                    Layout.preferredHeight: menu.rowHeight
+                    active: assistant.suggesting && menu.mode === "menu"
+                    text: qsTr("Thinking of questions…")
+                    room: body.width - 16
+                }
             }
         }
     }

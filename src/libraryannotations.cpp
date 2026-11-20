@@ -113,10 +113,12 @@ bool Library::renameAnnotation(qint64 annotationId, const QString &text) {
 
 void Library::removeAnnotation(qint64 annotationId) { exec("DELETE FROM annotations WHERE id = ?", {annotationId}); }
 
-QList<Annotation> Library::annotations(qint64 bookId) const {
+QList<Annotation> Library::annotations(qint64 bookId, const QString &kind) const {
     QList<Annotation> annotations;
-    for (QSqlQuery found =
-             query(QString("SELECT %1 FROM annotations WHERE book_id = ? ORDER BY section, fraction, id").arg(columns), {bookId});
+    for (QSqlQuery found = query(
+             QString("SELECT %1 FROM annotations WHERE book_id = ? AND (IFNULL(?, '') = '' OR kind = ?) ORDER BY section, fraction, id")
+                 .arg(columns),
+             {bookId, kind, kind});
          found.next();)
         annotations.append({.id = found.value(0).toLongLong(),
                             .kind = found.value(1).toString(),

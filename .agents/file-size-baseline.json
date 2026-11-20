@@ -11,7 +11,7 @@
     "src/LibraryView.qml": 826,
     "src/PluginDetail.qml": 597,
     "src/PluginsDialog.qml": 704,
-    "src/ReaderView.qml": 935,
+    "src/ReaderView.qml": 901,
     "src/ReadingSitesDialog.qml": 506,
     "src/ai.cpp": 547,
     "src/backend.cpp": 587,

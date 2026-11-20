@@ -70,6 +70,14 @@ class PageFormat : public QObject {
     Q_PROPERTY(bool pagesHonoured READ pagesHonoured NOTIFY layoutChanged)
     // The fewest characters a page of a spread is set to.
     Q_PROPERTY(int minimumMeasure READ minimumMeasure CONSTANT)
+    // Whether the open book has margin notes (or one is being written),
+    // which want a margin column (MarginNotes says); and that column's width
+    // beyond the text, a gutter away, or 0 where there is no room for it and
+    // the notes are marks in the text (PageLayout::columns).
+    Q_PROPERTY(bool notes READ notes WRITE setNotes NOTIFY layoutChanged)
+    Q_PROPERTY(double noteWidth READ noteWidth NOTIFY layoutChanged)
+    // The size of their type, `noteScale` the body's.
+    Q_PROPERTY(int noteFontSize READ noteFontSize NOTIFY changed)
 
 public:
     PageFormat(Reader *reader, Settings *settings, QObject *parent = nullptr);
@@ -103,6 +111,10 @@ public:
     double columnWidth() const noexcept { return m_columns.width; }
     bool pagesHonoured() const noexcept { return m_columns.honoured; }
     static constexpr int minimumMeasure() noexcept { return PageLayout::minimumMeasure; }
+    bool notes() const noexcept { return m_notes; }
+    void setNotes(bool notes);
+    double noteWidth() const noexcept { return m_columns.notes; }
+    int noteFontSize() const;
 
     // Changes one option, for the open book alone or for the defaults; what
     // is wrong with the value when it can't be, else empty.
@@ -153,6 +165,7 @@ private:
     const Hyphenation::Dictionary *m_dictionary = nullptr;
     QColor m_links{"#7aa2f7"};
     double m_available = 0;
+    bool m_notes = false;
     PageLayout::Space m_space;
     PageLayout::Columns m_columns;
 };

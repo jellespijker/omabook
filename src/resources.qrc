@@ -80,6 +80,11 @@
         <file alias="ReaderView.qml">ReaderView.qml</file>
         <file alias="ReadingMenu.qml">ReadingMenu.qml</file>
         <file alias="PageMarks.qml">PageMarks.qml</file>
+        <file alias="MarginColumn.qml">MarginColumn.qml</file>
+        <file alias="NoteCard.qml">NoteCard.qml</file>
+        <file alias="NoteMarks.qml">NoteMarks.qml</file>
+        <file alias="ReadingNotes.qml">ReadingNotes.qml</file>
+        <file alias="SelectKeys.qml">SelectKeys.qml</file>
         <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>

@@ -493,7 +493,7 @@ QVariantList Reader::bookmarks() const {
     QVariantList list;
     if (!m_document || !m_backend->library())
         return list;
-    for (const Annotation &annotation : m_backend->library()->annotations(m_bookId))
+    for (const Annotation &annotation : m_backend->library()->annotations(m_bookId, "bookmark"))
         list << QVariantMap{{"id", annotation.id}, {"section", annotation.place.section}, {"fraction", annotation.place.fraction},
                             {"text", annotation.text}};
     return list;

@@ -111,14 +111,14 @@ struct SeriesNotes {
     bool blurb = false;
 };
 
-// A bookmark (a place) or a highlight (a passage), as the annotations table
-// keeps it. A passage's start is `place`; where it ends, its words and those
+// A bookmark (a place), a highlight (a passage) or a margin note (words
+// about a passage, its `note`, #82), as the annotations table keeps it. A passage's start is `place`; where it ends, its words and those
 // around them are the rest of its Passage (#80), found again by them when the
 // book's file changes (AnnotationAnchors). A highlight from before passages
 // is a place and its words (`text`), until its book is opened.
 struct Annotation {
     qint64 id = 0;
-    QString kind;           // "bookmark" or "highlight"
+    QString kind; // "bookmark", "highlight" or "margin-note"
     BookPlace place;
     QString text;
     QString note;
@@ -373,7 +373,8 @@ public:
     // Other words to know one by; whether there is one of that number.
     bool renameAnnotation(qint64 annotationId, const QString &text);
     void removeAnnotation(qint64 annotationId);
-    QList<Annotation> annotations(qint64 bookId) const;
+    // Those of one kind ("bookmark", "highlight", "margin-note"), or all of them.
+    QList<Annotation> annotations(qint64 bookId, const QString &kind = {}) const;
 
     // How often what the shelf shows (books, their files, their reading
     // places), the knowledge graph and the books' own reading formats have

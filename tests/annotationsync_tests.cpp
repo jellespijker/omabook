@@ -188,6 +188,46 @@ private slots:
         QCOMPARE(changed(syncLibrary(two.here, remote)), 0);
     }
 
+    // A margin note (#82) travels as a highlight does, with its passage and
+    // its words; changed on either computer it changes on the other, and
+    // removed on one it goes from the other.
+    void aMarginNoteTravelsIsChangedOnEitherAndRemoved() {
+        TwoComputers two;
+        const Remote remote = two.remote();
+        QVERIFY(syncLibrary(two.here, remote).problems.isEmpty());
+        Annotation note{.id = 0, .kind = "margin-note", .place = {}, .text = "the storm", .note = "Read this twice", .created = 0};
+        note.setPassage({.from = {.section = 1, .fraction = 0.25},
+                         .to = {.section = 1, .fraction = 0.3},
+                         .quote = "the storm",
+                         .before = "Before ",
+                         .after = " came"});
+        const qint64 made = two.here.addAnnotation(two.mine, note);
+        QVERIFY(made > 0);
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        const QList<Annotation> came = two.there.annotations(two.theirs, "margin-note");
+        QCOMPARE(came.size(), 1);
+        QCOMPARE(came.first().note, QString("Read this twice"));
+        QCOMPARE(came.first().passage(), note.passage());
+
+        Annotation there = came.first();
+        there.note = "Read this three times";
+        QVERIFY(two.there.storeAnnotation(two.theirs, there));
+        QCOMPARE(syncLibrary(two.here, remote).annotationsTaken, 1);
+        QCOMPARE(two.here.annotations(two.mine, "margin-note").first().note, QString("Read this three times"));
+        QCOMPARE(two.here.annotations(two.mine, "margin-note").first().id, made);
+
+        Annotation here = two.here.annotations(two.mine).first();
+        here.note = "Enough";
+        QVERIFY(two.here.storeAnnotation(two.mine, here));
+        QCOMPARE(syncLibrary(two.here, remote).annotationsSent, 1);
+        QCOMPARE(two.there.annotations(two.theirs, "margin-note").first().note, QString("Enough"));
+
+        two.there.removeAnnotation(there.id);
+        QCOMPARE(syncLibrary(two.here, remote).annotationsTaken, 1);
+        QVERIFY(two.here.annotations(two.mine).isEmpty());
+        QCOMPARE(changed(syncLibrary(two.here, remote)), 0);
+    }
+
     // Calibre's highlights are annotations as bookmarks are, so they travel
     // the same way, with their notes, once the book they are in has come.
     void aHighlightFromCalibreTravelsAsABookmarkDoes() {

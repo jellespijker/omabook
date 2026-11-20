@@ -6,6 +6,7 @@
 #include "graphmodel.h"
 #include "graphtenants.h"
 #include "inksurface.h"
+#include "marginnotes.h"
 
 void registerGraphTypes() {
     // Once, however many backends are made; a static's first use is the
@@ -19,6 +20,8 @@ void registerGraphTypes() {
         qmlRegisterType<ChronologyCanvas>("Omabook", 1, 0, "ChronologyCanvas");
         // The ink surface, for the window and for plugins' panels (#78).
         registerInkTypes();
+        // The open book's margin notes, for the reading view (#82).
+        qmlRegisterType<MarginNotes>("Omabook", 1, 0, "MarginNotes");
         return true;
     }();
 }
