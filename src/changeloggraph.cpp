@@ -15,6 +15,7 @@
 #include "hlc.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "statements.h"
 
 using namespace Qt::StringLiterals;
 
@@ -40,17 +41,16 @@ void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool basel
     ChangeLogFields::write(ctx, u"book"_s, bookId > 0 ? Spaces::bookId(library, bookId) : QString(), hlc);
     if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
         ChangeLog::append(library, {ctx.space, u"node"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
-    for (QSqlQuery seen = ChangeLog::query(
-             library, "SELECT book_id, section, fraction, anchor FROM graph_seen WHERE node_id = ? ORDER BY book_id", {id});
-         seen.next();) {
-        const QString bookGid = Spaces::bookId(library, seen.value(0).toLongLong());
-        if (!bookGid.isEmpty())
-            ChangeLogFields::write(
-                ctx, u"seen:"_s + bookGid,
-                compactJson(
-                    {{"section", seen.value(1).toInt()}, {"fraction", seen.value(2).toDouble()}, {"anchor", seen.value(3).toString()}}),
-                hlc);
-    }
+    ChangeLog::statements(library).each("SELECT book_id, section, fraction, anchor FROM graph_seen WHERE node_id = ? ORDER BY book_id",
+                                        {id}, [&](const QSqlQuery &seen) {
+                                            const QString bookGid = Spaces::bookId(library, seen.value(0).toLongLong());
+                                            if (!bookGid.isEmpty())
+                                                ChangeLogFields::write(ctx, u"seen:"_s + bookGid,
+                                                                       compactJson({{"section", seen.value(1).toInt()},
+                                                                                    {"fraction", seen.value(2).toDouble()},
+                                                                                    {"anchor", seen.value(3).toString()}}),
+                                                                       hlc);
+                                        });
     if (explicitHlc && SpaceReplay::entityHlc(library, u"node"_s, gid) < hlc)
         ChangeLog::append(library, {ctx.space, u"node"_s, gid, u"name"_s, query.value(3).toString(), hlc});
 }
@@ -160,8 +160,7 @@ void tombstone(const Library &library, const QString &entity, const QString &gid
 }
 
 [[nodiscard]] bool exists(const Library &library, const QString &table, qint64 id) {
-    QSqlQuery query = ChangeLog::query(library, u"SELECT 1 FROM "_s + table + u" WHERE id = ?"_s, {id});
-    return query.next();
+    return ChangeLog::statements(library).first(u"SELECT 1 FROM "_s + table + u" WHERE id = ?"_s, {id}).has_value();
 }
 
 } // namespace

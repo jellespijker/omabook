@@ -22,6 +22,7 @@
 #include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "statements.h"
 #include "tenancy.h"
 
 using namespace Qt::StringLiterals;
@@ -39,14 +40,13 @@ int &activeScopes() noexcept {
 
 [[nodiscard]] QString formatsJson(const Library &library, qint64 bookId) {
     QJsonArray array;
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT format, file, size, hash FROM formats WHERE book_id = ? ORDER BY format", {bookId});
-         query.next();) {
-        array << QJsonObject{{"format", query.value(0).toString()},
-                             {"file", query.value(1).toString()},
-                             {"size", query.value(2).toLongLong()},
-                             {"hash", query.value(3).toString()}};
-    }
+    ChangeLog::statements(library).each("SELECT format, file, size, hash FROM formats WHERE book_id = ? ORDER BY format", {bookId},
+                                        [&array](const QSqlQuery &query) {
+                                            array << QJsonObject{{"format", query.value(0).toString()},
+                                                                 {"file", query.value(1).toString()},
+                                                                 {"size", query.value(2).toLongLong()},
+                                                                 {"hash", query.value(3).toString()}};
+                                        });
     return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
 }
 
@@ -358,10 +358,8 @@ void ChangeLog::afterWrite(const Library &library) {
 }
 
 qint64 ChangeLog::internId(const Library &library, const QString &name) {
-    QSqlQuery found = ChangeLog::query(library, "SELECT id FROM log_ids WHERE name = ?", {name});
-    if (found.next())
-        return found.value(0).toLongLong();
-    found.finish();
+    if (const auto found = statements(library).first("SELECT id FROM log_ids WHERE name = ?", {name}))
+        return found->toLongLong();
     return ChangeLog::insert(library, "INSERT INTO log_ids (name) VALUES (?)", {name}).value_or(0);
 }
 
@@ -387,12 +385,12 @@ void ChangeLog::appendAs(const Library &library, const Entry &entry, const Perso
         Spaces::observeHlc(library, stamp);
     // After the last this device wrote here, also of what compaction took out
     // of `ops` into the snapshot (its mark): a number is never given twice.
-    QSqlQuery nextSeq = ChangeLog::query(library,
-                                         "SELECT MAX(COALESCE((SELECT MAX(seq) FROM ops WHERE space = ? AND device = ?), 0), "
-                                         "COALESCE((SELECT seq FROM snapshot_marks WHERE space = ? AND device = ?), 0)) + 1",
-                                         {spaceNum, deviceNum, spaceNum, deviceNum});
-    const qint64 seq = nextSeq.next() ? nextSeq.value(0).toLongLong() : 1;
-    nextSeq.finish();
+    const qint64 seq = statements(library)
+                           .first("SELECT MAX(COALESCE((SELECT MAX(seq) FROM ops WHERE space = ? AND device = ?), 0), "
+                                  "COALESCE((SELECT seq FROM snapshot_marks WHERE space = ? AND device = ?), 0)) + 1",
+                                  {spaceNum, deviceNum, spaceNum, deviceNum})
+                           .value_or(1)
+                           .toLongLong();
     // Signed by the person, as it is kept: the very bytes stored are the ones
     // signed. Without a person it goes unsigned, its author this computer, as
     // every operation did before there were people.
@@ -491,6 +489,8 @@ void ChangeLog::recordRemoval(const Library &library, const QString &key, qint64
 QSqlQuery ChangeLog::query(const Library &library, const QString &sql, const QVariantList &values) { return library.query(sql, values); }
 
 bool ChangeLog::exec(const Library &library, const QString &sql, const QVariantList &values) { return library.exec(sql, values); }
+
+Statements &ChangeLog::statements(const Library &library) { return *library.m_statements; }
 
 std::expected<qint64, QString> ChangeLog::insert(const Library &library, const QString &sql, const QVariantList &values) {
     return library.insert(sql, values);

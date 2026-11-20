@@ -10,6 +10,7 @@ struct Progress;
 class Library;
 class Person;
 class QSqlQuery;
+class Statements;
 
 // The transactional outbox (ADR 0001): every write to a table that travels
 // goes through ChangeLog inside a transaction, which updates the row, appends
@@ -73,6 +74,8 @@ public:
     [[nodiscard]] static QSqlQuery query(const Library &library, const QString &sql, const QVariantList &values = {});
     static bool exec(const Library &library, const QString &sql, const QVariantList &values = {});
     [[nodiscard]] static std::expected<qint64, QString> insert(const Library &library, const QString &sql, const QVariantList &values = {});
+    // The same, for what runs for every row of a library: each statement prepared once (#104).
+    [[nodiscard]] static Statements &statements(const Library &library);
 
 private:
     // Signed by `person`; unsigned, its author this computer, without one.

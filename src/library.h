@@ -8,6 +8,7 @@
 #include <cstdint>
 #include <expected>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -15,6 +16,7 @@
 #include "person.h"
 
 class QSqlQuery;
+class Statements;
 
 struct Book {
     qint64 id = 0;
@@ -409,5 +411,9 @@ private:
     bool m_keepFormat = false;
     std::function<void(const QString &)> m_bringingUpToDate;
     QString m_connection;
+    // Its statements, each prepared once (#104).
+    std::unique_ptr<Statements> m_statements;
+    // This computer's id here, once asked for (Spaces::deviceId).
+    mutable QString m_deviceId;
     mutable PersonFile m_person;
 };

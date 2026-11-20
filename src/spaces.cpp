@@ -7,9 +7,11 @@
 #include <QVariant>
 #include <algorithm>
 #include <initializer_list>
+#include <optional>
 
 #include "hlc.h"
 #include "library.h"
+#include "statements.h"
 
 using namespace Qt::StringLiterals;
 
@@ -31,18 +33,19 @@ namespace {
 } // namespace
 
 QString Spaces::deviceId(const Library &library) {
+    // Asked for with every operation written; it changes only by setGlobalId.
+    if (!library.m_deviceId.isEmpty())
+        return library.m_deviceId;
     if (QString existing = globalId(library, u"device"_s, 0); !existing.isEmpty())
-        return existing;
+        return library.m_deviceId = existing;
     QString created = QUuid::createUuid().toString(QUuid::Id128);
     setGlobalId(library, u"device"_s, 0, created);
     return created;
 }
 
 void Spaces::ensurePersonalSpace(const Library &library) {
-    QSqlQuery query = library.query("SELECT 1 FROM spaces WHERE kind = 'personal' LIMIT 1");
-    if (query.next())
+    if (library.m_statements->first("SELECT 1 FROM spaces WHERE kind = 'personal' LIMIT 1"))
         return;
-    query.finish();
     const QString device = deviceId(library);
     const QString space = u"personal:"_s + device;
     const qint64 created = tickHlc(library);
@@ -52,9 +55,13 @@ void Spaces::ensurePersonalSpace(const Library &library) {
 }
 
 QString Spaces::personalSpace(const Library &library) {
+    // Made only when there is none: what is asked for every row the log takes in.
+    constexpr auto kept = "SELECT id FROM spaces WHERE kind = 'personal' ORDER BY id LIMIT 1";
+    if (const auto found = library.m_statements->first(kept))
+        return found->toString();
     ensurePersonalSpace(library);
-    QSqlQuery query = library.query("SELECT id FROM spaces WHERE kind = 'personal' ORDER BY id LIMIT 1");
-    return query.next() ? query.value(0).toString() : (u"personal:"_s + deviceId(library));
+    const auto found = library.m_statements->first(kept);
+    return found ? found->toString() : (u"personal:"_s + deviceId(library));
 }
 
 void Spaces::pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName) {
@@ -101,10 +108,8 @@ void Spaces::ensureSpaceForScope(const Library &library, const QString &scope) {
         ensurePersonalSpace(library);
         return;
     }
-    QSqlQuery query = library.query("SELECT 1 FROM spaces WHERE id = ?", {trimmed});
-    if (query.next())
+    if (library.m_statements->first("SELECT 1 FROM spaces WHERE id = ?", {trimmed}))
         return;
-    query.finish();
     const QString device = deviceId(library);
     const qint64 created = lastHlc(library);
     library.exec("INSERT OR IGNORE INTO spaces (id, kind, name, owner, created) VALUES (?, 'world', ?, ?, ?)",
@@ -143,8 +148,8 @@ void Spaces::ensurePublishedSpace(const Library &library, const QString &space, 
 }
 
 qint64 Spaces::lastHlc(const Library &library) {
-    QSqlQuery query = library.query("SELECT value FROM library_state WHERE key = 'hlc'");
-    return query.next() ? Hlc::normalize(query.value(0).toLongLong()) : 0;
+    const auto found = library.m_statements->first("SELECT value FROM library_state WHERE key = 'hlc'");
+    return found ? Hlc::normalize(found->toLongLong()) : 0;
 }
 
 qint64 Spaces::tickHlc(const Library &library, std::optional<qint64> wallSeconds) {
@@ -167,8 +172,8 @@ void Spaces::setClockOffset(const Library &library, qint64 offsetSeconds) {
 }
 
 qint64 Spaces::clockOffset(const Library &library) {
-    QSqlQuery query = library.query("SELECT value FROM library_state WHERE key = 'clock_offset'");
-    return query.next() ? query.value(0).toLongLong() : 0;
+    const auto found = library.m_statements->first("SELECT value FROM library_state WHERE key = 'clock_offset'");
+    return found ? found->toLongLong() : 0;
 }
 
 qint64 Spaces::wallSeconds(const Library &library) {
@@ -218,18 +223,21 @@ QString Spaces::removalGlobalId(const QString &removalKey) {
 }
 
 QString Spaces::globalId(const Library &library, const QString &entity, qint64 localId) {
-    QSqlQuery query = library.query("SELECT global_id FROM global_ids WHERE entity = ? AND local_id = ?", {entity, localId});
-    return query.next() ? query.value(0).toString() : QString();
+    const auto found = library.m_statements->first("SELECT global_id FROM global_ids WHERE entity = ? AND local_id = ?", {entity, localId});
+    return found ? found->toString() : QString();
 }
 
 qint64 Spaces::localId(const Library &library, const QString &entity, const QString &globalId) {
-    QSqlQuery query = library.query("SELECT local_id FROM global_ids WHERE entity = ? AND global_id = ?", {entity, globalId});
-    return query.next() ? query.value(0).toLongLong() : 0;
+    const auto found =
+        library.m_statements->first("SELECT local_id FROM global_ids WHERE entity = ? AND global_id = ?", {entity, globalId});
+    return found ? found->toLongLong() : 0;
 }
 
 void Spaces::setGlobalId(const Library &library, const QString &entity, qint64 localId, const QString &globalId) {
     if (globalId.isEmpty())
         return;
+    if (entity == "device"_L1)
+        library.m_deviceId.clear();
     library.exec("DELETE FROM global_ids WHERE entity = ? AND global_id = ? AND local_id <> ?", {entity, globalId, localId});
     library.exec("INSERT OR REPLACE INTO global_ids (entity, local_id, global_id) VALUES (?, ?, ?)", {entity, localId, globalId});
 }
@@ -251,6 +259,8 @@ void Spaces::ensureBookId(const Library &library, qint64 localId) {
 }
 
 QString Spaces::bookId(const Library &library, qint64 localId) {
+    if (QString known = globalId(library, u"book"_s, localId); !known.isEmpty())
+        return known;
     ensureBookId(library, localId);
     return globalId(library, u"book"_s, localId);
 }
@@ -267,6 +277,8 @@ void Spaces::ensureCollectionId(const Library &library, qint64 localId) {
 }
 
 QString Spaces::collectionId(const Library &library, qint64 localId) {
+    if (QString known = globalId(library, u"collection"_s, localId); !known.isEmpty())
+        return known;
     ensureCollectionId(library, localId);
     return globalId(library, u"collection"_s, localId);
 }
@@ -274,15 +286,17 @@ QString Spaces::collectionId(const Library &library, qint64 localId) {
 void Spaces::ensureNodeId(const Library &library, qint64 localId) {
     if (localId <= 0 || !globalId(library, u"node"_s, localId).isEmpty())
         return;
-    QSqlQuery query = library.query("SELECT scope, kind, name FROM graph_nodes WHERE id = ?", {localId});
-    if (!query.next())
-        return;
-    const QString derived = nodeGlobalId(query.value(0).toString(), query.value(1).toString(), query.value(2).toString());
-    query.finish();
-    setGlobalId(library, u"node"_s, localId, derived);
+    std::optional<QString> derived;
+    library.m_statements->each("SELECT scope, kind, name FROM graph_nodes WHERE id = ?", {localId}, [&derived](const QSqlQuery &query) {
+        derived = nodeGlobalId(query.value(0).toString(), query.value(1).toString(), query.value(2).toString());
+    });
+    if (derived)
+        setGlobalId(library, u"node"_s, localId, *derived);
 }
 
 QString Spaces::nodeId(const Library &library, qint64 localId) {
+    if (QString known = globalId(library, u"node"_s, localId); !known.isEmpty())
+        return known;
     ensureNodeId(library, localId);
     return globalId(library, u"node"_s, localId);
 }
@@ -290,13 +304,18 @@ QString Spaces::nodeId(const Library &library, qint64 localId) {
 void Spaces::ensureEdgeId(const Library &library, qint64 localId) {
     if (localId <= 0 || !globalId(library, u"edge"_s, localId).isEmpty())
         return;
-    QSqlQuery query = library.query("SELECT source, target, kind FROM graph_edges WHERE id = ?", {localId});
-    if (!query.next())
+    bool found = false;
+    qint64 source = 0;
+    qint64 target = 0;
+    QString kind;
+    library.m_statements->each("SELECT source, target, kind FROM graph_edges WHERE id = ?", {localId}, [&](const QSqlQuery &query) {
+        found = true;
+        source = query.value(0).toLongLong();
+        target = query.value(1).toLongLong();
+        kind = query.value(2).toString();
+    });
+    if (!found)
         return;
-    const qint64 source = query.value(0).toLongLong();
-    const qint64 target = query.value(1).toLongLong();
-    const QString kind = query.value(2).toString();
-    query.finish();
     const QString sourceGid = nodeId(library, source);
     const QString targetGid = nodeId(library, target);
     if (!sourceGid.isEmpty() && !targetGid.isEmpty())
@@ -304,6 +323,8 @@ void Spaces::ensureEdgeId(const Library &library, qint64 localId) {
 }
 
 QString Spaces::edgeId(const Library &library, qint64 localId) {
+    if (QString known = globalId(library, u"edge"_s, localId); !known.isEmpty())
+        return known;
     ensureEdgeId(library, localId);
     return globalId(library, u"edge"_s, localId);
 }
@@ -311,20 +332,29 @@ QString Spaces::edgeId(const Library &library, qint64 localId) {
 void Spaces::ensureFactId(const Library &library, qint64 localId) {
     if (localId <= 0 || !globalId(library, u"fact"_s, localId).isEmpty())
         return;
-    QSqlQuery query = library.query("SELECT node_id, kind, value, COALESCE(book_id, 0) FROM graph_facts WHERE id = ?", {localId});
-    if (!query.next())
+    bool found = false;
+    qint64 node = 0;
+    QString kind;
+    QString value;
+    qint64 book = 0;
+    library.m_statements->each("SELECT node_id, kind, value, COALESCE(book_id, 0) FROM graph_facts WHERE id = ?", {localId},
+                               [&](const QSqlQuery &query) {
+                                   found = true;
+                                   node = query.value(0).toLongLong();
+                                   kind = query.value(1).toString();
+                                   value = query.value(2).toString();
+                                   book = query.value(3).toLongLong();
+                               });
+    if (!found)
         return;
-    const qint64 node = query.value(0).toLongLong();
-    const QString kind = query.value(1).toString();
-    const QString value = query.value(2).toString();
-    const qint64 book = query.value(3).toLongLong();
-    query.finish();
     const QString nodeGid = nodeId(library, node);
     if (!nodeGid.isEmpty())
         setGlobalId(library, u"fact"_s, localId, factGlobalId(nodeGid, kind, value, book > 0 ? bookId(library, book) : QString()));
 }
 
 QString Spaces::factId(const Library &library, qint64 localId) {
+    if (QString known = globalId(library, u"fact"_s, localId); !known.isEmpty())
+        return known;
     ensureFactId(library, localId);
     return globalId(library, u"fact"_s, localId);
 }
@@ -354,6 +384,8 @@ void Spaces::ensureAnnotationId(const Library &library, qint64 localId) {
 }
 
 QString Spaces::annotationId(const Library &library, qint64 localId) {
+    if (QString known = globalId(library, u"annotation"_s, localId); !known.isEmpty())
+        return known;
     ensureAnnotationId(library, localId);
     return globalId(library, u"annotation"_s, localId);
 }

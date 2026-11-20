@@ -31,6 +31,7 @@
 #include "log.h"
 #include "readingformat.h"
 #include "spaces.h"
+#include "statements.h"
 
 using namespace Qt::StringLiterals;
 
@@ -94,21 +95,6 @@ namespace {
 
 [[nodiscard]] QString compact(const QJsonObject &object) {
     return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
-}
-
-// A null QString binds as SQL NULL, which the NOT NULL columns refuse; a book
-// with no series has the empty string for one.
-[[nodiscard]] QVariant bindable(const QVariant &value) {
-    return value.typeId() == QMetaType::QString && value.toString().isNull() ? QVariant(QString("")) : value;
-}
-
-// A statement with its values in place, ready to run.
-[[nodiscard]] QSqlQuery statement(const QString &connection, const QString &sql, const QVariantList &values) {
-    QSqlQuery statement(QSqlDatabase::database(connection));
-    statement.prepare(sql);
-    for (const QVariant &value : values)
-        statement.addBindValue(bindable(value));
-    return statement;
 }
 
 constexpr auto selectBooks = "SELECT books.*, progress.percent, progress.updated FROM books "
@@ -327,10 +313,12 @@ QString Library::hashFile(const QString &path) {
 }
 
 Library::Library(const QString &root)
-    : m_root(QDir(root).absolutePath()), m_connection("omabook-" + QUuid::createUuid().toString(QUuid::Id128)) {}
+    : m_root(QDir(root).absolutePath()), m_connection("omabook-" + QUuid::createUuid().toString(QUuid::Id128)),
+      m_statements(std::make_unique<Statements>(m_connection)) {}
 
 Library::~Library() {
     if (QSqlDatabase::contains(m_connection)) {
+        LibraryMigrations::closing(*this);
         QSqlDatabase::database(m_connection, false).close();
         QSqlDatabase::removeDatabase(m_connection);
     }
@@ -359,7 +347,7 @@ int Library::formatVersion() const {
 }
 
 bool Library::exec(const QString &sql, const QVariantList &values) const {
-    if (!statement(m_connection, sql, values).exec())
+    if (!m_statements->run(sql, values))
         return false;
     if (m_batches == 0)
         ChangeLog::afterWrite(*this);
@@ -377,11 +365,8 @@ QSqlQuery Library::query(const QString &sql, const QVariantList &values) const {
 }
 
 std::expected<qint64, QString> Library::insert(const QString &sql, const QVariantList &values) const {
-    QSqlQuery insert = statement(m_connection, sql, values);
-    if (!insert.exec())
-        return std::unexpected(insert.lastError().text());
-    const qint64 id = insert.lastInsertId().toLongLong();
-    if (m_batches == 0)
+    const auto id = m_statements->run(sql, values);
+    if (id && m_batches == 0)
         ChangeLog::afterWrite(*this);
     return id;
 }

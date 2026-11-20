@@ -8,26 +8,24 @@
 #include "changelog.h"
 #include "hlc.h"
 #include "spaces.h"
+#include "statements.h"
 
 ChangeLogFields::Map ChangeLogFields::logged(const Library &library, const QString &entity, const QString &globalId) {
     Map map;
     const QString me = Spaces::deviceId(library);
-    for (QSqlQuery query =
-             ChangeLog::query(library,
-                              "SELECT o.field, o.value, o.hlc, d.name FROM live_ops AS o JOIN log_ids AS d ON d.id = o.device "
-                              "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.seq",
-                              {entity, globalId});
-         query.next();) {
-        const QString field = query.value(0).toString();
-        const QString value = query.value(1).toString();
-        const qint64 hlc = query.value(2).toLongLong();
-        const QString device = query.value(3).toString();
-        Logged &latest = map[field];
-        if (std::tie(hlc, device, value) >= std::tie(latest.hlc, latest.device, latest.value))
-            std::tie(latest.hlc, latest.device, latest.value) = std::tie(hlc, device, value);
-        if (device == me) // in the order this device wrote them
-            latest.own = value;
-    }
+    ChangeLog::statements(library).each("SELECT o.field, o.value, o.hlc, d.name FROM live_ops AS o JOIN log_ids AS d ON d.id = o.device "
+                                        "WHERE o.entity = ? AND o.id = (SELECT id FROM log_ids WHERE name = ?) ORDER BY o.seq",
+                                        {entity, globalId}, [&map, &me](const QSqlQuery &query) {
+                                            const QString field = query.value(0).toString();
+                                            const QString value = query.value(1).toString();
+                                            const qint64 hlc = query.value(2).toLongLong();
+                                            const QString device = query.value(3).toString();
+                                            Logged &latest = map[field];
+                                            if (std::tie(hlc, device, value) >= std::tie(latest.hlc, latest.device, latest.value))
+                                                std::tie(latest.hlc, latest.device, latest.value) = std::tie(hlc, device, value);
+                                            if (device == me) // in the order this device wrote them
+                                                latest.own = value;
+                                        });
     return map;
 }
 
