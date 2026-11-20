@@ -61,8 +61,9 @@ struct Taken {
 // the operations just come from the other side (already stored, but on a dry
 // run): removes the ones the other side removed, all of each, and that
 // didn't change here since (as the manifest sync decided it), then takes
-// their newer details and reading, the collections and what the general
-// knowledge graph lacks (synctakegraph.h). Counts what changed here in
+// their newer details and reading, the collections, the bookmarks and
+// highlights (synctakeannotations.h) and what the general knowledge graph
+// lacks (synctakegraph.h). Counts what changed here in
 // `summary`.
 [[nodiscard]] Taken take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary);
 

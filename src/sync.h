@@ -66,6 +66,8 @@ struct SyncSummary {
     int collectionsSent = 0;    // collections that changed here last, brought there
     int graphTaken = 0;         // things, facts and relations of the knowledge graph new here
     int graphSent = 0;          // the same, new there
+    int annotationsTaken = 0;   // bookmarks and highlights made, changed or removed here, as they were there
+    int annotationsSent = 0;    // the same there, as they were here
     int refused = 0;            // operations from there refused here (Replication::admit)
     bool dryRun = false;        // nothing was changed; the counts are what would be
     // The titles each count is of, for showing on a terminal (never logged).

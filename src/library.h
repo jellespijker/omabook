@@ -343,7 +343,15 @@ public:
     // collection of the book's has a format.
     [[nodiscard]] std::optional<Collection> formatCollection(qint64 bookId, qint64 preferred = 0) const;
 
+    // A book's bookmarks and highlights (libraryannotations.cpp). A new one
+    // is made now; its number, or 0 when it can't be written.
     qint64 addAnnotation(qint64 bookId, const Annotation &annotation);
+    // Writes one as it is given, its time too: what a sync brings from
+    // another computer. Given its `id`, that one; else a new one. Its number,
+    // or none when it can't be written.
+    std::optional<qint64> storeAnnotation(qint64 bookId, const Annotation &annotation);
+    // Other words to know one by; whether there is one of that number.
+    bool renameAnnotation(qint64 annotationId, const QString &text);
     void removeAnnotation(qint64 annotationId);
     QList<Annotation> annotations(qint64 bookId) const;
 

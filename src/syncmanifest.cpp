@@ -204,6 +204,8 @@ QJsonObject SyncSummary::toJson() const {
                        {"collections_sent", collectionsSent},
                        {"graph_taken", graphTaken},
                        {"graph_sent", graphSent},
+                       {"annotations_taken", annotationsTaken},
+                       {"annotations_sent", annotationsSent},
                        {"refused", refused},
                        {"dry_run", dryRun},
                        {"problems", list(problems)}};

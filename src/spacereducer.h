@@ -94,6 +94,14 @@ struct ReducedDay {
     SpaceStamp removed;
 };
 
+// A bookmark or highlight (#66): of each field (its book's id, kind, place,
+// words and note) the latest written, and a removal as a tombstone.
+struct ReducedAnnotation {
+    QHash<QString, SpaceStamp> fields;
+    SpaceStamp alive;
+    SpaceStamp removed;
+};
+
 struct ReducedState {
     QMap<QString, ReducedBook> books;
     QMap<QString, ReducedCollection> collections;
@@ -101,6 +109,7 @@ struct ReducedState {
     QMap<QString, ReducedFact> facts;
     QMap<QString, ReducedEdge> edges;
     QMap<QString, ReducedDay> days;
+    QMap<QString, ReducedAnnotation> annotations;
 };
 
 namespace SpaceReducer {

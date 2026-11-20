@@ -31,8 +31,8 @@ modules = [
 summary = "The library and the knowledge graph: storage, books, their sides and marks, catalogs, searching what is known."
 uses = ["formats", "foundation"]
 modules = [
-  "booksides", "catalog", "changelog", "chronology", "eventtime", "changelogbaseline", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
-  "library", "librarymigrations", "libraryschema", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
+  "booksides", "catalog", "changelog", "changelogannotations", "chronology", "eventtime", "changelogbaseline", "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers", "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries",
+  "library", "libraryannotations", "librarymigrations", "libraryschema", "publishedlog", "publishedspace", "replication", "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces",
   "spacesnapshot", "spaceworlds", "subscribedspace", "textmarks", "worldlayers",
 ]
 
@@ -51,7 +51,7 @@ summary = "What the command line, the MCP server and the window all do, each wri
 uses = ["services", "library", "formats", "foundation"]
 modules = [
   "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
-  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakegraph",
+  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
 ]
 
 # The two front ends are peers: neither includes the other. What both need
@@ -59,7 +59,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
+modules = ["aicommands", "bookmarkcommands", "cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

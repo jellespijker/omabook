@@ -84,6 +84,7 @@ make the id of the same thing independently make the same one:
 | A collection | `c:` + its path |
 | A graph thing | `n:` + a hash of its scope, kind and normalised name |
 | A relation, a fact | a hash of its ends and kind; of its thing, kind, value and book |
+| A bookmark, a highlight | `a:` + a hash of its book's id, kind, section, fraction, words and note (then kept, though renamed) |
 
 Where content can't decide, as when one computer knows a thing by a name the other knows as another
 name, a **same-as** operation folds one id into the other, and both sides follow it.
@@ -450,6 +451,13 @@ one that hasn't.
    two that speak it, the log carries what has moved over to it (reading places first, then the rest,
    one kind at a time) and the manifest the rest, with those kinds left out of it. Each kind that
    moves deletes its manifest merge.
+
+   As built (#66): the bookmarks and highlights are the first kind to move over after a release
+   that speaks the log, as one entity, `annotation`, of every kind (a highlight, and later a margin
+   note, needs no kind of its own). An Omabook of the release before takes none of them, though its
+   vector then holds what came after them, so each side also says the last of each device it holds
+   of them alone (`"annotations"`, `Replication::annotationVector`), and is sent those after it,
+   whatever its vector says. One that doesn't say it is from before, and takes none.
 
 5. **Writes that bypass the log.** Something other than this Omabook that writes the database (a
    backup put back, a tool, a bug that writes a row without its operation) leaves rows the log doesn't

@@ -34,6 +34,8 @@ QStringList syncStatusLines(const SyncSummary &summary) {
         lines << Backend::tr("%Ln graph changes taken", "", summary.graphTaken);
     if (summary.graphSent > 0)
         lines << Backend::tr("%Ln graph changes sent", "", summary.graphSent);
+    if (summary.annotationsTaken + summary.annotationsSent > 0)
+        lines << Backend::tr("%Ln bookmarks and highlights updated", "", summary.annotationsTaken + summary.annotationsSent);
     if (summary.detailsUndecided > 0)
         lines << Backend::tr("%Ln books have other details on the other computer, and neither side knows which "
                              "are newer. omabook sync --details mine or --details theirs settles them.",

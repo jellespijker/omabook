@@ -11,6 +11,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "changelogannotations.h"
 #include "changelogbaseline.h"
 #include "changelogfields.h"
 #include "changeloggraph.h"
@@ -259,6 +260,7 @@ void logRows(const Library &library, const QHash<QString, QList<qint64>> &dirty)
                                             .facts = dirty.value(u"fact"_s),
                                             .edges = dirty.value(u"edge"_s),
                                             .readingBooks = dirty.value(u"reading_log"_s)});
+    ChangeLogAnnotations::syncRowsToLog(library, dirty.value(u"annotation"_s));
 }
 
 [[nodiscard]] bool countersMatch(const Library &library) {
@@ -269,7 +271,7 @@ void logRows(const Library &library, const QHash<QString, QList<qint64>> &dirty)
          query.next();)
         logged.insert(query.value(0).toString(), query.value(1).toLongLong());
     return logged.value(u"logged_books"_s, -1) == now.books && logged.value(u"logged_graph"_s, -1) == now.graph
-           && logged.value(u"logged_format"_s, -1) == now.format;
+           && logged.value(u"logged_format"_s, -1) == now.format && ChangeLogAnnotations::counted(library);
 }
 
 } // namespace
@@ -305,6 +307,7 @@ void ChangeLog::writeBaseline(const Library &library) {
     for (const Collection &collection : library.collections(true))
         syncCollectionToLog(library, collection, true);
     ChangeLogGraph::syncToLog(library, true);
+    ChangeLogAnnotations::syncToLog(library, true);
     baseline.finish();
     ChangeLog::exec(library, "DELETE FROM log_dirty"); // all of it is in the log now
     markLogged(library);
@@ -325,6 +328,8 @@ void ChangeLog::reconcile(const Library &library) {
     ChangeLogGraph::detectDeletedEntity(library, u"node"_s, u"graph_nodes"_s);
     ChangeLogGraph::detectDeletedEntity(library, u"edge"_s, u"graph_edges"_s);
     ChangeLogGraph::detectDeletedEntity(library, u"fact"_s, u"graph_facts"_s);
+    ChangeLogAnnotations::syncToLog(library, false);
+    ChangeLogAnnotations::detectDeleted(library);
     ChangeLog::exec(library, "DELETE FROM log_dirty"); // all of it is in the log now
     markLogged(library);
 }
@@ -413,6 +418,7 @@ void ChangeLog::markLogged(const Library &library) {
     ChangeLog::exec(library, "INSERT OR REPLACE INTO library_state (key, value) VALUES ('logged_books', ?)", {now.books});
     ChangeLog::exec(library, "INSERT OR REPLACE INTO library_state (key, value) VALUES ('logged_graph', ?)", {now.graph});
     ChangeLog::exec(library, "INSERT OR REPLACE INTO library_state (key, value) VALUES ('logged_format', ?)", {now.format});
+    ChangeLogAnnotations::markLogged(library);
 }
 
 void ChangeLog::syncCollectionAt(const Library &library, qint64 collectionId, qint64 hlc) {

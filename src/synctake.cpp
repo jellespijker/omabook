@@ -17,6 +17,7 @@
 #include "spacereducer.h"
 #include "spaces.h"
 #include "syncmanifest.h"
+#include "synctakeannotations.h"
 #include "synctakegraph.h"
 
 using namespace Qt::StringLiterals;
@@ -335,6 +336,8 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
     for (const Book &here : books)
         takeBook(taking, here);
     takeCollections(taking);
+    summary.annotationsTaken +=
+        SyncTakeAnnotations::take(library, taking.merged.annotations, booksHere(taking), taking.canonical, peer.dryRun);
     // A dry run leaves the graph be, as it always did.
     if (!peer.dryRun)
         summary.graphTaken += SyncTakeGraph::take(

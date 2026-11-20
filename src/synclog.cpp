@@ -94,6 +94,8 @@ void takeCarried(Library &library, const QJsonObject &theirs, SyncSummary &summa
 // operations, so what this side holds, they do.
 QJsonObject holding(const Library &library, QJsonObject manifest) {
     manifest.insert("vector", Replication::toJson(Replication::vector(library)));
+    if (manifest.contains("annotations"))
+        manifest.insert("annotations", Replication::toJson(Replication::annotationVector(library)));
     return manifest;
 }
 
@@ -106,6 +108,18 @@ QJsonObject carried(Library &library, const QJsonObject &theirs, bool carry) {
     QJsonObject offer = SpaceCarry::offer(library, theirs);
     offer.insert("carrying", true);
     return offer;
+}
+
+// What the other side, whose manifest or request is `theirs`, lacks of the
+// log. Of the bookmarks and highlights (#66), what it says it holds of them,
+// apart: an Omabook from before they travelled took none, though it holds
+// what came after them. One that says nothing of them leaves them out of
+// what it takes in (Replication::operationsFrom).
+[[nodiscard]] QList<SpaceOperation> lackingThere(const Library &library, const QJsonObject &theirs) {
+    const Replication::Vector known = Replication::vectorFrom(theirs.value("vector").toObject());
+    if (!theirs.contains("annotations"))
+        return Replication::since(library, known);
+    return Replication::since(library, known, Replication::vectorFrom(theirs.value("annotations").toObject()));
 }
 
 QJsonObject with(QJsonObject object, const QJsonObject &more) {
@@ -127,6 +141,7 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     add(summary.removedThere, summary.titles.removedThere, "removed_here");
     summary.collectionsSent += there.value("collections_taken").toInt();
     summary.graphSent += there.value("graph_taken").toInt();
+    summary.annotationsSent += there.value("annotations_taken").toInt();
     for (const auto &problem : there.value("problems").toArray())
         summary.problems << problem.toString();
 }
@@ -136,7 +151,8 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
 QJsonObject SyncLog::introduction(const Library &library) {
     return with({{"space", Spaces::personalSpace(library)},
                  {"device", Spaces::deviceId(library)},
-                 {"vector", Replication::toJson(Replication::vector(library))}},
+                 {"vector", Replication::toJson(Replication::vector(library))},
+                 {"annotations", Replication::toJson(Replication::annotationVector(library))}},
                 with(Pairing::introduction(library), SpaceCarry::introduction(library)));
 }
 
@@ -150,13 +166,14 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     QSet<QString> theirGids;
     for (const auto &book : books)
         theirGids.insert(book.toObject().value("gid").toString());
-    const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(manifest.value("vector").toObject()));
+    const QList<SpaceOperation> lacking = lackingThere(library, manifest);
     // A dry run links nothing: what is unlinked stays so until a sync. Nor
     // does it pair: the person's key goes with it only in a sync, when theirs
     // is to become this one's (pairing.h).
     const QJsonObject request = with({{"space", Spaces::personalSpace(library)},
                                       {"device", Spaces::deviceId(library)},
                                       {"vector", Replication::toJson(Replication::vector(library))},
+                                      {"annotations", Replication::toJson(Replication::annotationVector(library))},
                                       {"ops", Replication::toJson(lacking, manifest.value("signs").toInt() >= 1)},
                                       {"books", dryRun ? QJsonArray() : Replication::toJson(Replication::unlinked(library, theirGids))},
                                       {"details", SyncTake::otherSide(options.details)},
@@ -255,7 +272,7 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
         takeCarried(library, request, taken);
     }
     // After taking theirs, so what was just written here goes back with the rest.
-    const QList<SpaceOperation> lacking = Replication::since(library, Replication::vectorFrom(request.value("vector").toObject()));
+    const QList<SpaceOperation> lacking = lackingThere(library, request);
     return with(
         {{"ops", Replication::toJson(lacking, request.value("signs").toInt() >= 1)},
          {"changed", static_cast<int>(changed.size())},

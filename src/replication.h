@@ -19,8 +19,8 @@
 // What travels by the log so far is the books' reading places, details and
 // what is said of their reading, with the same-as operations that line up the
 // books where two computers' content ids don't (#36, #37), the collections
-// and the general knowledge graph and story worlds' (#25), and whether one follows a subscribed space
-// (#51); everything else
+// and the general knowledge graph and story worlds' (#25), whether one follows a subscribed space
+// (#51), and the bookmarks and highlights (#66); everything else
 // still travels by the manifest, one kind moving over at a time. Two computers exchange what they have of it, per
 // space and device the last sequence number (`{laptop: 812, desktop: 77}`),
 // and send each other the operations after that. Taking an operation twice
@@ -59,6 +59,14 @@ public:
     [[nodiscard]] static Vector vector(const Library &library);
     // The operations that travel which a computer with `known` lacks.
     [[nodiscard]] static QList<SpaceOperation> since(const Library &library, const Vector &known);
+    // Of the bookmarks and highlights alone (#66), the last of each space and
+    // device held. An Omabook from before they travelled took none of them,
+    // though it holds the operations after them: it says no such vector, and
+    // once it does, it is sent each it lacks by this one, whatever its other
+    // vector says.
+    [[nodiscard]] static Vector annotationVector(const Library &library);
+    // The same as since() but the bookmarks and highlights, which are those after `annotations`.
+    [[nodiscard]] static QList<SpaceOperation> since(const Library &library, const Vector &known, const Vector &annotations);
 
     [[nodiscard]] static QJsonObject toJson(const Vector &vector);
     [[nodiscard]] static Vector vectorFrom(const QJsonObject &object);

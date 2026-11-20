@@ -203,6 +203,13 @@ QString Spaces::factGlobalId(const QString &nodeGlobalId, const QString &kind, c
     return u"f:"_s + hashParts({nodeGlobalId.trimmed(), kind.simplified().toLower(), value.trimmed(), bookGlobalId.trimmed()});
 }
 
+QString Spaces::annotationGlobalId(const QString &bookGlobalId, const QString &kind, int section, double fraction, const QString &text,
+                                   const QString &note) {
+    return u"a:"_s
+           + hashParts({bookGlobalId.trimmed(), kind.trimmed(), QString::number(section), QString::number(fraction, 'g', 12),
+                        text.simplified(), note.trimmed()});
+}
+
 QString Spaces::removalGlobalId(const QString &removalKey) {
     QString trimmed = removalKey.trimmed();
     if (trimmed.startsWith("b:"_L1) || trimmed.startsWith("e:"_L1) || trimmed.startsWith("u:"_L1))
@@ -322,6 +329,35 @@ QString Spaces::factId(const Library &library, qint64 localId) {
     return globalId(library, u"fact"_s, localId);
 }
 
+void Spaces::ensureAnnotationId(const Library &library, qint64 localId) {
+    if (localId <= 0 || !globalId(library, u"annotation"_s, localId).isEmpty())
+        return;
+    QSqlQuery query = library.query("SELECT book_id, kind, section, fraction, text, note FROM annotations WHERE id = ?", {localId});
+    if (!query.next())
+        return;
+    const qint64 book = query.value(0).toLongLong();
+    const QString kind = query.value(1).toString();
+    const int section = query.value(2).toInt();
+    const double fraction = query.value(3).toDouble();
+    const QString text = query.value(4).toString();
+    const QString note = query.value(5).toString();
+    query.finish();
+    const QString bookGid = bookId(library, book);
+    if (bookGid.isEmpty())
+        return;
+    // The same twice in one book (a bookmark made again) is two, each with an id of its own.
+    const QString derived = annotationGlobalId(bookGid, kind, section, fraction, text, note);
+    QString gid = derived;
+    for (int copy = 2; Spaces::localId(library, u"annotation"_s, gid) > 0; ++copy)
+        gid = derived + u"."_s + QString::number(copy);
+    setGlobalId(library, u"annotation"_s, localId, gid);
+}
+
+QString Spaces::annotationId(const Library &library, qint64 localId) {
+    ensureAnnotationId(library, localId);
+    return globalId(library, u"annotation"_s, localId);
+}
+
 void Spaces::assignAll(const Library &library) {
     const Library::Batch batch(library);
     ensurePersonalSpace(library);
@@ -339,4 +375,6 @@ void Spaces::assignAll(const Library &library) {
         ensureEdgeId(library, query.value(0).toLongLong());
     for (QSqlQuery query = library.query("SELECT id FROM graph_facts ORDER BY id"); query.next();)
         ensureFactId(library, query.value(0).toLongLong());
+    for (QSqlQuery query = library.query("SELECT id FROM annotations ORDER BY id"); query.next();)
+        ensureAnnotationId(library, query.value(0).toLongLong());
 }

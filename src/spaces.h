@@ -75,6 +75,11 @@ public:
     [[nodiscard]] static QString factGlobalId(const QString &nodeGlobalId, const QString &kind, const QString &value,
                                               const QString &bookGlobalId = {});
     [[nodiscard]] static QString removalGlobalId(const QString &removalKey);
+    // A bookmark or highlight (#66), by its book and what it is where, so the
+    // same one taken in on two computers (from Calibre, or a copy of the
+    // library) is one; renamed after, it keeps the id it was given.
+    [[nodiscard]] static QString annotationGlobalId(const QString &bookGlobalId, const QString &kind, int section, double fraction,
+                                                    const QString &text, const QString &note);
 
     // Looks up or records global ids in `global_ids`.
     [[nodiscard]] static QString globalId(const Library &library, const QString &entity, qint64 localId);
@@ -87,11 +92,13 @@ public:
     static void ensureNodeId(const Library &library, qint64 localId);
     static void ensureEdgeId(const Library &library, qint64 localId);
     static void ensureFactId(const Library &library, qint64 localId);
+    static void ensureAnnotationId(const Library &library, qint64 localId);
     [[nodiscard]] static QString bookId(const Library &library, qint64 localId);
     [[nodiscard]] static QString collectionId(const Library &library, qint64 localId);
     [[nodiscard]] static QString nodeId(const Library &library, qint64 localId);
     [[nodiscard]] static QString edgeId(const Library &library, qint64 localId);
     [[nodiscard]] static QString factId(const Library &library, qint64 localId);
+    [[nodiscard]] static QString annotationId(const Library &library, qint64 localId);
 
     // Gives every existing row in the library its global id.
     static void assignAll(const Library &library);

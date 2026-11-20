@@ -385,7 +385,9 @@ A sync carries the collections too: the books each holds by hand, its rule, its 
 
 A sync carries the knowledge graph as well, merged rather than copied: what the AI noted on either computer while you read (the people, places, ideas and threads, what was revealed where, the relations, the questions you asked, the reading log) is on both afterwards, each fact with the moment it was revealed, so the map (`M`) of a book is never ahead of where you are on either. A thing is the same thing on both when it has the same kind and name, or one of its other names. The story worlds of Storyteller stay with their stories. Both computers need an Omabook that carries the graph (0.1.5.2 or newer); with an older one on the other side, the books still sync and the graph waits.
 
-What a sync doesn't carry yet: bookmarks, and Storyteller's story worlds. Between your own paired computers it carries the collections you subscribed to and the shared spaces you are in (see [Sharing](#sharing)). The first sync between two computers also pairs them into one person, so both sign what they write as you; see [Your own computers](#your-own-computers).
+A sync between your own computers carries the bookmarks too, and the highlights and bookmarks taken in from Calibre: one made on either is on both afterwards, at the same place in the book's own terms (its section and how far into it), so it lands at the same words on a window of another size. One renamed (`omabook bookmarks 3 --rename 7 --as "The storm"`) is renamed on the other, and one removed is removed there too, unless it went with its book. Both computers need Omabook 0.1.7 or newer; with an older one on the other side, the books still sync and the bookmarks wait.
+
+What a sync doesn't carry yet: Storyteller's story worlds. Between your own paired computers it carries the collections you subscribed to and the shared spaces you are in (see [Sharing](#sharing)). The first sync between two computers also pairs them into one person, so both sign what they write as you; see [Your own computers](#your-own-computers).
 
 ## Sharing
 
@@ -786,7 +788,7 @@ For whoever changes the format: add a step to the list in `Library::open` (never
 - Books with DRM can't be opened; Omabook says so rather than failing blankly.
 - Highlights and notes in the text are not there yet (bookmarks are).
 - Sending books to an e-reader and writing details back into a book's own file are not there yet.
-- A sync carries books and reading places, not bookmarks, the AI's notes or a book's own reading format.
+- A sync carries books, reading places, collections, the graph and bookmarks, not the AI's notes or a book's own reading format.
 - A line's length in characters is counted from the widths of the font's lowercase letters, weighted as often as each is met in English; in a script whose letters run wider or narrower (Chinese, Japanese, Korean) a line holds fewer or more characters than the measure says.
 - Pages are cut by Omabook, from the lines Qt's text layout gives, so a paragraph's first or last line is never left alone on a page and a heading goes over with what follows it; a page can come out a line or two short for that. A picture taller than a page is cut across pages.
 - There is no automatic hyphenation: Qt's text layout has none, so justified text is filled with wider spaces. A line does break at a soft hyphen that a book already has in its text.

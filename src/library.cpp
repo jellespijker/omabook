@@ -926,31 +926,6 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
     return true;
 }
 
-qint64 Library::addAnnotation(qint64 bookId, const Annotation &annotation) {
-    return insert("INSERT INTO annotations (book_id, kind, section, fraction, text, note, created) VALUES (?, ?, ?, ?, ?, ?, ?)",
-                  {bookId, annotation.kind, annotation.section, annotation.fraction, annotation.text, annotation.note,
-                   QDateTime::currentSecsSinceEpoch()})
-        .value_or(0);
-}
-
-void Library::removeAnnotation(qint64 annotationId) { exec("DELETE FROM annotations WHERE id = ?", {annotationId}); }
-
-QList<Annotation> Library::annotations(qint64 bookId) const {
-    QList<Annotation> annotations;
-    for (QSqlQuery found = query("SELECT id, kind, section, fraction, text, note, created FROM annotations WHERE book_id = ? "
-                                 "ORDER BY section, fraction",
-                                 {bookId});
-         found.next();)
-        annotations.append({.id = found.value(0).toLongLong(),
-                            .kind = found.value(1).toString(),
-                            .section = found.value(2).toInt(),
-                            .fraction = found.value(3).toDouble(),
-                            .text = found.value(4).toString(),
-                            .note = found.value(5).toString(),
-                            .created = found.value(6).toLongLong()});
-    return annotations;
-}
-
 namespace {
 
 // A collection's name: what it is called on the shelf, in Folio's sidebar and

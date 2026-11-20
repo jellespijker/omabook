@@ -107,7 +107,7 @@ void printDryRun(const SyncSummary &summary, const QString &host) {
 
 void printPlainSummary(const SyncSummary &summary, const QString &host) {
     printLine(stdout, QString("%1 received, %2 sent, %3 reading places updated, %4 details updated, %5 removed here, %6 removed on %7, "
-                              "%8 graph changes taken, %9 graph changes sent")
+                              "%8 graph changes taken, %9 graph changes sent, %10 bookmarks and highlights updated")
                           .arg(summary.received)
                           .arg(summary.sent)
                           .arg(summary.placesTaken + summary.placesSent)
@@ -116,7 +116,8 @@ void printPlainSummary(const SyncSummary &summary, const QString &host) {
                           .arg(summary.removedThere)
                           .arg(host)
                           .arg(summary.graphTaken)
-                          .arg(summary.graphSent));
+                          .arg(summary.graphSent)
+                          .arg(summary.annotationsTaken + summary.annotationsSent));
 }
 
 int printSyncStatus(const QCommandLineParser &parser, const Library &library, const QString &computer) {

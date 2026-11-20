@@ -23,6 +23,7 @@
 #include "ai.h"
 #include "aicommands.h"
 #include "aisearch.h"
+#include "bookmarkcommands.h"
 #include "bookops.h"
 #include "calibreplugin.h"
 #include "catalog.h"
@@ -1149,51 +1150,6 @@ int calibre(const QStringList &arguments) {
     return answer;
 }
 
-int bookmarks(const QStringList &arguments) {
-    Command command("bookmarks", "List a book's bookmarks, add one, or remove one.");
-    command.parser.addPositionalArgument("id", "The book's number.");
-    command.parser.addOption({"add", "Bookmark a place, with these words to know it by.", "text"});
-    command.parser.addOption({"section", "The section of the new bookmark, counted from 0; where the book was read to when not given.", "number"});
-    command.parser.addOption({"fraction", "How far into that section, from 0 to 1.", "number"});
-    command.parser.addOption({"remove", "Remove the bookmark with this number.", "bookmark"});
-    if (!command.parse(arguments, 1, 1))
-        return 1;
-    QString error;
-    const auto library = command.library(&error);
-    if (!library)
-        return fail(error);
-    const qint64 id = command.argument(0).toLongLong();
-    if (!library->book(id))
-        return fail("There is no book " + command.argument(0) + " in the library.");
-    if (command.parser.isSet("remove")) {
-        const qint64 bookmark = command.parser.value("remove").toLongLong();
-        const QList<Annotation> before = library->annotations(id);
-        if (std::ranges::none_of(before, [&](const Annotation &note) { return note.id == bookmark; }))
-            return fail("That book has no bookmark " + command.parser.value("remove") + ".");
-        library->removeAnnotation(bookmark);
-    }
-    if (command.parser.isSet("add")) {
-        const Progress place = library->progress(id);
-        Annotation bookmark;
-        bookmark.kind = "bookmark";
-        bookmark.section = command.parser.isSet("section") ? qMax(0, command.parser.value("section").toInt()) : place.section;
-        bookmark.fraction = command.parser.isSet("fraction") ? qBound(0.0, command.parser.value("fraction").toDouble(), 1.0)
-                                                             : command.parser.isSet("section") ? 0.0 : place.fraction;
-        bookmark.text = command.parser.value("add").simplified();
-        library->addAnnotation(id, bookmark);
-    }
-    QJsonArray array;
-    for (const Annotation &note : library->annotations(id)) {
-        array << QJsonObject{{"id", note.id}, {"kind", note.kind}, {"section", note.section}, {"fraction", note.fraction},
-                             {"text", note.text}};
-        if (!command.json())
-            print(stdout, QString("%1\tsection %2, %3%\t%4").arg(note.id).arg(note.section).arg(qRound(note.fraction * 100)).arg(note.text));
-    }
-    if (command.json())
-        printJson(array);
-    return 0;
-}
-
 int notes(const QStringList &arguments) {
     Command command("notes", "Show the notes the AI companion keeps on a book: its catch-up (recap) and who is who (cast), "
                              "each as far as the book was read when it was written.");
@@ -2145,7 +2101,7 @@ constexpr std::array cliCommands{
     CliCommand{"show"_L1, show},
     CliCommand{"add"_L1, add},
     CliCommand{"folio"_L1, Folio::run},
-    CliCommand{"bookmarks"_L1, bookmarks},
+    CliCommand{"bookmarks"_L1, runBookmarksCli},
     CliCommand{"logs"_L1, logs},
     CliCommand{"notes"_L1, notes},
     CliCommand{"libraries"_L1, libraries},

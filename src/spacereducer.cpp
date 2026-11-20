@@ -42,6 +42,18 @@ void foldCollection(ReducedCollection &col, const SpaceOperation &op) {
     takeMax(col.fields[op.field], {op.hlc, op.device, 1, op.value});
 }
 
+void foldAnnotation(ReducedAnnotation &annotation, const SpaceOperation &op) {
+    if (op.field == "removed"_L1) {
+        if (op.value == "1"_L1)
+            takeMax(annotation.removed, {op.hlc, op.device, 0, op.value});
+        else
+            takeMax(annotation.alive, {op.hlc, op.device, 1, op.value});
+        return;
+    }
+    takeMax(annotation.alive, {op.hlc, op.device, 1, op.value});
+    takeMax(annotation.fields[op.field], {op.hlc, op.device, 1, op.value});
+}
+
 void foldNode(ReducedNode &node, const SpaceOperation &op) {
     if (op.field == "removed"_L1) {
         if (op.value == "1"_L1)
@@ -287,6 +299,8 @@ ReducedState reduceOf(std::span<const SpaceOperation> ops, std::span<const Space
             foldEdge(state.edges[op.id], op);
         else if (op.entity == "reading_log"_L1)
             foldDay(state.days[op.id], op);
+        else if (op.entity == "annotation"_L1)
+            foldAnnotation(state.annotations[op.id], op);
     }
     return state;
 }

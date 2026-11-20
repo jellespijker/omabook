@@ -80,6 +80,10 @@
     "one": "%Ln becomes a wishlist entry: a book without a file, never downloaded",
     "other": "%Ln become wishlist entries: books without a file, never downloaded"
   },
+  "%Ln bookmarks and highlights updated": {
+    "one": "%Ln bookmark or highlight updated",
+    "other": "%Ln bookmarks and highlights updated"
+  },
   "%Ln books": {
     "one": "%Ln book",
     "other": "%Ln books"
