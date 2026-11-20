@@ -46,9 +46,10 @@ int failLine(const QString &why) {
     Annotation bookmark;
     bookmark.kind = "bookmark";
     bookmark.section = parser.isSet("section") ? qMax(0, parser.value("section").toInt()) : place.section;
-    bookmark.fraction = parser.isSet("fraction")  ? qBound(0.0, parser.value("fraction").toDouble(), 1.0)
-                        : parser.isSet("section") ? 0.0
-                                                  : place.fraction;
+    // The start of a section given without a fraction; where it was read to when neither is given.
+    bookmark.fraction = parser.isSet("section") ? 0.0 : place.fraction;
+    if (parser.isSet("fraction"))
+        bookmark.fraction = qBound(0.0, parser.value("fraction").toDouble(), 1.0);
     bookmark.text = parser.value("add").simplified();
     return bookmark;
 }
