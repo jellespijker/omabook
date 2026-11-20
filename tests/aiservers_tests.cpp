@@ -18,6 +18,7 @@
 #include "openaiprovider.h"
 #include "secretstore.h"
 #include "settings.h"
+#include "thinkingfilter.h"
 
 namespace {
 
@@ -202,6 +203,60 @@ private slots:
         fake.answer({"ok"});
         QCOMPARE(ask(provider, asking("q", AiRequest::Quick)).answer, QString("ok"));
         QCOMPARE(fake.received.last().body.value("model").toString(), QString("small"));
+    }
+
+    void thinkingIsNeverShown_data() {
+        QTest::addColumn<QString>("answer");
+        QTest::addColumn<QString>("shown");
+        QTest::newRow("at the start") << "<think>secret plans</think>\n\nThe answer." << "The answer.";
+        QTest::newRow("the longer tag") << "<thinking>secret</thinking>Done." << "Done.";
+        QTest::newRow("no tag") << "No tag at all: a < b, and <b>bold</b>." << "No tag at all: a < b, and <b>bold</b>.";
+        QTest::newRow("only thinking") << "<think>secret plans</think>" << "";
+        QTest::newRow("never closed") << "<think>secret plans, cut off" << "";
+        QTest::newRow("text before and after") << "Before <think>secret</think> after" << "Before  after";
+        QTest::newRow("a tag's start that is text") << "1 <thi" << "1 <thi";
+        QTest::newRow("a close inside") << "<think>secret </thin secret</think>ok" << "ok";
+    }
+
+    void thinkingIsNeverShown() {
+        QFETCH(QString, answer);
+        QFETCH(QString, shown);
+        // However the answer is cut into pieces: whole, in two at every
+        // place, in three at every pair of places, and a character at a time.
+        // What is passed on only ever grows, so a piece of thinking shown
+        // even for a moment would be in what is shown at the end.
+        auto through = [](const QStringList &pieces) {
+            ThinkingFilter filter;
+            QString out;
+            for (const QString &piece : pieces)
+                out += filter.take(piece);
+            return out + filter.finish();
+        };
+        QCOMPARE(through({answer}), shown);
+        for (qsizetype i = 0; i <= answer.size(); ++i) {
+            QCOMPARE(through({answer.left(i), answer.mid(i)}), shown);
+            for (qsizetype j = i; j <= answer.size(); ++j)
+                QCOMPARE(through({answer.left(i), answer.mid(i, j - i), answer.mid(j)}), shown);
+        }
+        QStringList characters;
+        for (const QChar character : std::as_const(answer))
+            characters << QString(character);
+        QCOMPARE(through(characters), shown);
+    }
+
+    void aServerThatThinksInItsAnswerShowsOnlyTheAnswer() {
+        FakeServer fake;
+        // As qwen and deepseek do through llama.cpp: the tag split between chunks.
+        fake.answer({"<thi", "nk>Who could it be", "? Ishmael.</th", "ink>\\n\\nIshmael", " narrates."});
+        OpenAiProvider provider(serverAt(fake));
+        provider.setModels({"qwen", "qwen"});
+        QStringList pieces;
+        connect(&provider, &AiProvider::delta, this, [&pieces](const QString &text) { pieces << text; });
+        const Outcome outcome = ask(provider, asking("q"));
+        QCOMPARE(outcome.failure, QString());
+        QCOMPARE(outcome.answer, QString("Ishmael narrates."));
+        for (const QString &piece : std::as_const(pieces))
+            QVERIFY2(!piece.contains("Who") && !piece.contains("<"), qPrintable(piece));
     }
 
     void withoutAKeyNoneIsSent() {

@@ -10,6 +10,7 @@
 
 #include "ai.h"
 #include "aiendpoint.h"
+#include "thinkingfilter.h"
 
 class QNetworkReply;
 
@@ -55,4 +56,5 @@ private:
     QPointer<QNetworkReply> m_reply;
     QByteArray m_buffer, m_body;
     QString m_streamError;
+    ThinkingFilter m_thinking; // for servers that send it inside the answer
 };

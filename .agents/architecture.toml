@@ -44,7 +44,7 @@ modules = [
   "ai", "aichoice", "aiendpoint", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
   "graphbuilder", "graphlinks", "hardcover", "helptopics", "importer", "interfacechange", "manual",
   "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
-  "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "tour", "whatsnew",
+  "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "sitedesk", "spacetransport", "thinkingfilter", "tour", "whatsnew",
 ]
 
 [layers.operations]

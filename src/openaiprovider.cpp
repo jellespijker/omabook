@@ -146,6 +146,7 @@ void OpenAiProvider::post(const QString &model) {
     m_buffer.clear();
     m_body.clear();
     m_streamError.clear();
+    m_thinking = {};
     // A server loading a large model may say nothing for a while, but not for minutes.
     m_reply = m_network.post(httpRequest(m_server, u"/chat/completions"_s, 3min), QJsonDocument(body).toJson(QJsonDocument::Compact));
     connect(m_reply, &QNetworkReply::readyRead, this, &OpenAiProvider::read);
@@ -183,9 +184,10 @@ void OpenAiProvider::read() {
             continue;
         }
         // Only the answer: `reasoning_content` and `reasoning`, a thinking
-        // model's working, are left unread.
+        // model's working, are left unread, and so is a <think> inside it.
         const QJsonObject choice = event.value("choices"_L1).toArray().at(0).toObject();
-        if (const QString text = choice.value("delta"_L1).toObject().value("content"_L1).toString(); !text.isEmpty()) {
+        const QString text = m_thinking.take(choice.value("delta"_L1).toObject().value("content"_L1).toString());
+        if (!text.isEmpty()) {
             m_answered = true;
             emit delta(text);
         }
@@ -202,6 +204,8 @@ void OpenAiProvider::done() {
     const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     const bool failedHere = status != 200 || reply->error() != QNetworkReply::NoError;
     if (!failedHere && m_streamError.isEmpty()) {
+        if (const QString rest = m_thinking.finish(); !rest.isEmpty())
+            emit delta(rest);
         emit finished();
         return;
     }
