@@ -12,4 +12,8 @@ fileignoreconfig:
   # generated for the test. No secret.
   - filename: tests/data/space-1.0.omabook-space
     checksum: bebba8851674834e20ae79495ba515b64f7b17e7d901b56234877fd6a3d1953c
+  # The first-open test (#104): its hex strings are SHA-256 digests of the
+  # change log the tests write, to compare with. No secret.
+  - filename: tests/firstopen_tests.cpp
+    checksum: 3e3b853abc073e84d52710b47dc5f2706ac6994febbb5227035a0d3d0a41a0a2
 version: "1.0"
