@@ -252,6 +252,10 @@ FocusScope {
                             status: spine.book.status
                             held: spine.book.held
                             current: true
+                            found: {
+                                backend.books.knownRevision
+                                return backend.books.knownFor(spine.book.bookId)
+                            }
                             transformOrigin: Item.Bottom
                             // It comes off the shelf: up from its spine, quickly, then settles.
                             ParallelAnimation {

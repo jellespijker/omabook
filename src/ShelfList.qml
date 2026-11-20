@@ -157,6 +157,11 @@ FocusScope {
             required property string held
             required property var added
             readonly property bool current: ListView.isCurrentItem
+            // What found it, when the search found it by what is known (FoundBy.qml).
+            readonly property var found: {
+                backend.books.knownRevision
+                return backend.books.knownFor(line.bookId)
+            }
             width: table.width
             height: win.touch ? 44 : 32
 
@@ -200,7 +205,7 @@ FocusScope {
                             anchors.left: parent.left
                             anchors.right: parent.right
                             anchors.leftMargin: 8
-                            anchors.rightMargin: 8
+                            anchors.rightMargin: 8 + (whyFound.visible ? whyFound.width + 8 : 0)
                             anchors.verticalCenter: parent.verticalCenter
                             text: {
                                 translator.language
@@ -215,6 +220,16 @@ FocusScope {
                             // Figures line up down a column.
                             font.features: { "tnum": 1 }
                             color: cell.modelData.key === "title" ? theme.foreground : shelf.quiet
+                        }
+                        // After the title, what found the book, in at most half its column.
+                        FoundBy {
+                            id: whyFound
+                            visible: cell.modelData.key === "title" && shown
+                            anchors.right: parent.right
+                            anchors.rightMargin: 8
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: Math.min(implicitWidth, cell.width / 2 - 12)
+                            known: line.found
                         }
                         Stars {
                             visible: cell.modelData.key === "rating" && line.rating > 0

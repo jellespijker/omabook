@@ -221,10 +221,10 @@ QList<Manual::Topic> Manual::topicList() {
                  "for the books that have no file. \"Quotes\" keep words together, -word leaves out, and OR joins "
                  "alternatives.")},
              {tr("Search by what you know"),
-              tr("A word also finds a book by the characters, places, ideas, threads and topics you met in it, and the "
-                 "questions you asked of it, as far as you have read: never a name from further on, and nothing of a book "
-                 "you haven't begun. `knows:` looks only there. The details say what found the book; {library.found_graph} "
-                 "shows it in the graph and {library.found_moment} goes to where you learned it.")},
+              tr("A word also finds a book by the characters, places, ideas, threads and topics you met in it, and the questions you "
+                 "asked of it, as far as you have read: never a name from further on, and nothing of a book you haven't begun. `knows:` "
+                 "looks only there. Its tile says briefly what found the book, marked when of a graph someone shared, and the details "
+                 "say it in full; {library.found_graph} shows it in the graph and {library.found_moment} goes to where you learned it.")},
              {tr("Ask the AI to find books"),
               tr("For what a search can't put, such as “the books where a mentor dies”, start the search with ?, press "
                  "{library.search_ai} or the AI button in the search field. The AI reads your books' details and what you "

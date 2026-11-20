@@ -70,6 +70,10 @@ FocusScope {
                 status: cell.status
                 held: cell.held
                 current: grid.currentIndex === cell.index
+                found: {
+                    backend.books.knownRevision
+                    return backend.books.knownFor(cell.bookId)
+                }
             }
             Label {
                 anchors.top: tile.bottom

@@ -15,6 +15,9 @@ moves those lines under its version.
 ### Changed
 
 - A long press on a book with a finger lists what can be done with it, as a right click does, beside where it was pressed, in every view of the shelf; its details are one of what is listed. Before, holding a book only opened its details, and the list was reached only from the details' *More* (#9).
+### Added
+
+- A book the search found by what is known of it says which thing found it on the shelf too, not only in the details: along the foot of its cover in the covers and the carousel, on the book pulled out of the spines, and after its title in the list (*Mara Venn (Character)*), by the name you know it by at your place in the book. A thing of a graph someone shared carries the mark of a shared graph, and says whose to a screen reader (#10).
 
 ## [0.1.6.1] - 2026-11-19
 

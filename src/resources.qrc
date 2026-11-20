@@ -14,6 +14,7 @@
         <file alias="AskDialog.qml">AskDialog.qml</file>
         <file alias="AssistantPane.qml">AssistantPane.qml</file>
         <file alias="BookCover.qml">BookCover.qml</file>
+        <file alias="FoundBy.qml">FoundBy.qml</file>
         <file alias="CalibreOffer.qml">CalibreOffer.qml</file>
         <file alias="ContentsPane.qml">ContentsPane.qml</file>
         <file alias="DetailsPane.qml">DetailsPane.qml</file>

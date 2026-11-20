@@ -6,7 +6,8 @@ import QtQuick.Controls
 // not a file says so in a corner, and one that is finished or waiting to be
 // read carries a small mark. A plugin's launcher (something to start, such
 // as a new story) is no book: without a picture of its own its cover is
-// drawn from the theme, open rather than bound, with a mark to begin.
+// drawn from the theme, open rather than bound, with a mark to begin. A
+// book the search found by what is known of it says what along its foot.
 Item {
     id: tile
     property url cover
@@ -20,6 +21,8 @@ Item {
     property string held
     readonly property bool wish: held === "none"
     readonly property bool launcher: held === "launcher"
+    // What found it (BookListModel::knownFor), when the search found it by what is known.
+    property var found: ({})
 
     Rectangle {
         id: frame
@@ -61,6 +64,7 @@ Item {
             anchors.right: parent.right
             anchors.bottom: parent.bottom
             anchors.margins: Math.round(tile.width / 12)
+            anchors.bottomMargin: Math.round(tile.width / 12) + (foundBand.visible ? foundBand.height : 0)
             text: tile.authors
             // Muted would be too faint on the tile, which is the selection color.
             opacity: 0.7
@@ -78,6 +82,27 @@ Item {
             sourceSize.width: tile.width > 220 ? 720 : 360
             asynchronous: true
             fillMode: Image.PreserveAspectCrop
+        }
+
+        // Over the cover's foot, on a band of the background so it reads
+        // over any picture.
+        Rectangle {
+            id: foundBand
+            objectName: "foundBand"
+            visible: why.shown
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.bottom: parent.bottom
+            height: why.implicitHeight + 8
+            color: Qt.alpha(theme.background, 0.88)
+            FoundBy {
+                id: why
+                anchors.fill: parent
+                anchors.leftMargin: 6
+                anchors.rightMargin: 6
+                known: tile.found
+                fontSize: Math.round(Math.max(11, Math.min(14, tile.width / 14)))
+            }
         }
 
         Rectangle {

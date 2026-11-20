@@ -105,6 +105,10 @@ FocusScope {
                 status: slot.status
                 held: slot.held
                 current: slot.ListView.isCurrentItem
+                found: {
+                    backend.books.knownRevision
+                    return backend.books.knownFor(slot.bookId)
+                }
                 transform: Rotation {
                     origin.x: flow.coverWidth / 2
                     origin.y: flow.coverHeight / 2
