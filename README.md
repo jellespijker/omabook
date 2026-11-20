@@ -429,7 +429,9 @@ A space names each file by its format, its hash and its size, never by where it 
 - **A published space's file.** The files go beside it, in a folder of their own (`Fiction.omabook-files` beside `Fiction.omabook-space`), never inside it, so the space's file stays small enough to mail. Give the folder with it; whoever subscribes from the file fetches from beside it.
 - **A gist** carries no files: it is no place for books. Publishing by link with the files on says so; whoever follows the link is told to ask for the space's file.
 
-Switching it off stops it: nothing more goes, and the space no longer names the files. What a member fetched before stays theirs.
+Switching it off stops it: nothing more goes, and the space no longer names the files. What a member fetched before stays theirs; nothing takes it back.
+
+Not yet: a shared space's switch is on the command line and the MCP server only, as the window has no place for shared spaces yet. Where a space's files come from (the folder you sync it through, the file you subscribed from) is each computer's own: on your other computers, sync the space there, or import its file there again, before its files come.
 
 ### No spoilers
 
