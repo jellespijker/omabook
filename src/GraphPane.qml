@@ -6,9 +6,10 @@ import Omabook
 
 // The knowledge graph, browsable: what is known as nodes with the relations
 // between them drawn as a picture, or the same nodes as a list by kind, and
-// everything known of the selected one beside it. It shows the whole
-// library, one book or series, or a world of its own; beside the page
-// (`reading`) it shows the open book only as far as its reader has got.
+// everything known of the selected one beside it. It shows one tenant of
+// the library's graph (a top-level collection, or Unfiled: TenantChoice),
+// or one book, series or world in it; beside the page (`reading`) it shows
+// the open book only as far as its reader has got.
 //
 // The kinds above the picture are its legend and its filter at once. The
 // arrow keys walk along the relations, Enter looks around the selected
@@ -39,7 +40,7 @@ FocusScope {
     // The details beside the picture, wider or narrower by the keys.
     function resizePane(steps) { if (detailsSide.visible) detailsSide.resize(steps) }
     readonly property bool focused: activeFocus
-    readonly property bool popupOpen: chooser.opened || sheet.opened
+    readonly property bool popupOpen: chooser.opened || sheet.opened || tenantChoice.opened
     readonly property alias browser: graph
     readonly property bool keysOn: active && visible && (!reading || focused)
     readonly property var node: graph.details
@@ -65,8 +66,16 @@ FocusScope {
 
     function takeFocus() { (listing ? rows : canvas).forceActiveFocus() }
     function keyOf(command) { return (custom.keyText[command] || "").split("  ")[0] }
-    function showLibrary() { graph.showScope("") }
-    function showBook(id) { graph.showBook(id) }
+    function showLibrary() {
+        graph.tenant = graphTenants.current
+        graph.showScope("")
+    }
+    // A book is shown in a tenant of its own, which is then the one shown.
+    function showBook(id) {
+        graph.tenant = graphTenants.tenantOf(id)
+        graphTenants.current = graph.tenant
+        graph.showBook(id)
+    }
     // A scope that was asked for by name (a plugin's world, say) stays up
     // beside the page until the pane is put away, rather than giving way
     // to the open book at the next page turned.
@@ -81,6 +90,7 @@ FocusScope {
         const ahead = furthest.bookId !== reader.bookId || reader.section > furthest.section
                       || (reader.section === furthest.section && reader.fraction > furthest.fraction)
         if (ahead) furthest = { bookId: reader.bookId, section: reader.section, fraction: reader.fraction }
+        graph.tenant = graphTenants.tenantOf(furthest.bookId)
         graph.showBookUpTo(furthest.bookId, furthest.section, furthest.fraction)
     }
     // A thing named on the page: the open book's graph, with it selected and in sight.
@@ -137,6 +147,8 @@ FocusScope {
 
     GraphBrowser {
         id: graph
+        // Read in the tenant shown from the first; see showLibrary and showBook.
+        tenant: graphTenants.current
         source: backend
         // The picture is laid out as wide or as tall as the room it has.
         // Where the details stand under it, that is about half the height.
@@ -168,6 +180,19 @@ FocusScope {
         }
         // A book that didn't open leaves nothing to go to.
         function onLoadingChanged() { if (reader.error !== "") pane.pending = null }
+    }
+    // Another tenant chosen (here, in the chronology, or as its collection
+    // went) is another graph, shown whole.
+    Connections {
+        target: graphTenants
+        enabled: !pane.reading
+        function onChanged() { if (graph.tenant !== graphTenants.current) pane.showLibrary() }
+    }
+    TenantChoice {
+        id: tenantChoice
+        place: "graph"
+        keysOn: pane.keysOn && !pane.reading
+        onClosed: if (!chooser.opened && !sheet.opened) pane.takeFocus()
     }
     // What the AI noted while reading shows as soon as it is in.
     Connections {
@@ -298,37 +323,26 @@ FocusScope {
             spacing: 12
 
             // Back to the shelf, for a pointer or a finger.
-            Rectangle {
+            BackButton {
                 objectName: "graphClose"
-                readonly property string runs: "graph.close"
+                runs: "graph.close"
                 visible: !pane.reading
-                // The library's name with the arrow where the pane is wide,
-                // the arrow alone where it isn't.
-                Layout.preferredWidth: Math.max(closeRow.implicitWidth + 16, height)
-                Layout.preferredHeight: win.touch ? 40 : 30
-                radius: theme.radius
-                color: closeHover.hovered ? theme.colors.selection : "transparent"
-                Row {
-                    id: closeRow
-                    anchors.centerIn: parent
-                    spacing: 4
-                    Glyph {
-                        anchors.verticalCenter: parent.verticalCenter
-                        name: win.rightToLeft ? "forward" : "back"
-                        size: 14
-                        color: theme.colors.muted
-                    }
-                    Label {
-                        visible: !pane.compact
-                        text: backend.libraryName
-                        color: theme.colors.muted
-                    }
-                }
-                HoverHandler { id: closeHover }
-                TapHandler { onTapped: pane.done() }
+                text: backend.libraryName
+                compact: pane.compact
+                onTapped: pane.done()
+            }
+            TenantSwitch {
+                id: tenantSwitch
+                objectName: "graphTenant"
+                visible: !pane.reading && graphTenants.switchable
+                Layout.maximumWidth: pane.width * (pane.compact ? 0.4 : 0.25)
+                keys: pane.keyOf("graph.tenant")
+                onTapped: tenantChoice.open()
             }
             Label {
                 objectName: "graphTitle"
+                // The tenant's whole graph is named by the switch beside it.
+                visible: !(tenantSwitch.visible && graph.showing === "scope" && graph.scope === "")
                 Layout.fillWidth: true
                 Layout.minimumWidth: Math.min(implicitWidth, 40)
                 Layout.maximumWidth: Math.min(Math.ceil(implicitWidth), pane.width * (pane.compact ? 0.4 : 0.3))
@@ -384,37 +398,12 @@ FocusScope {
                 Accessible.name: qsTr("How far around the selected thing is shown")
             }
             // The picture or the list.
-            Row {
-                spacing: 2
-                Repeater {
-                    model: ["graph", "list"]
-                    delegate: Rectangle {
-                        id: face
-                        required property string modelData
-                        readonly property bool current: (modelData === "list") === pane.listing
-                        objectName: "graphAs-" + modelData
-                        readonly property string runs: "graph.list"
-                        width: win.touch ? 40 : 30
-                        height: win.touch ? 40 : 30
-                        radius: theme.radius
-                        color: current ? theme.colors.selection : "transparent"
-                        Glyph {
-                            anchors.centerIn: parent
-                            name: face.modelData
-                            size: 18
-                            color: face.current || faceHover.hovered ? theme.foreground : theme.colors.muted
-                        }
-                        HoverHandler { id: faceHover }
-                        TapHandler {
-                            onTapped: {
-                                pane.listing = face.modelData === "list"
-                                pane.takeFocus()
-                            }
-                        }
-                        ToolTip.visible: faceHover.hovered
-                        ToolTip.delay: 600
-                        ToolTip.text: (face.modelData === "list" ? qsTr("List") : qsTr("Picture")) + "  " + pane.keyOf("graph.list")
-                    }
+            GraphFaces {
+                listing: pane.listing
+                keys: pane.keyOf("graph.list")
+                onChosen: (list) => {
+                    pane.listing = list
+                    pane.takeFocus()
                 }
             }
             // Everything else the graph does, each with its key, for a

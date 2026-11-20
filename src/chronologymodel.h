@@ -25,6 +25,9 @@ class ChronologyBrowser : public QObject {
     // The Backend whose library is read. Not called `backend`, so a view can
     // bind it to the window's `backend` without meaning this property.
     Q_PROPERTY(QObject *source READ backend WRITE setBackend NOTIFY backendChanged)
+    // The tenant of the graph (ADR 0003) it is read from, by its global id,
+    // as GraphTenants chose it; empty for none. What it reads keeps to it (#95).
+    Q_PROPERTY(QString tenant READ tenant WRITE setTenant NOTIFY changed)
     // What it was opened from: "scope", "book", "series" or "collection",
     // and its name (a book's title).
     Q_PROPERTY(QString showing READ showing NOTIFY changed)
@@ -52,6 +55,13 @@ public:
     // Tests work on a library of their own, without a backend.
     void setLibrary(const Library *library);
 
+    QString tenant() const noexcept { return m_tenant; }
+    void setTenant(const QString &tenant) {
+        if (tenant == m_tenant)
+            return;
+        m_tenant = tenant;
+        refresh();
+    }
     QString showing() const;
     QString title() const { return m_title; }
     int eventCount() const { return static_cast<int>(m_chart.marksOf.size()); }
@@ -141,7 +151,7 @@ private:
     Backend *m_backend = nullptr;
     const Library *m_library = nullptr;
     Chronology::Reading::From m_from;
-    QString m_title;
+    QString m_tenant, m_title;
     Chronology::Reading::Read m_read;
     Chronology::Chart::Chart m_chart;
     QList<bool> m_passes;

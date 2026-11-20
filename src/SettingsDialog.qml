@@ -263,6 +263,16 @@ AppPopup {
             checked: settings.graphOneTenant
             onToggled: settings.graphOneTenant = checked
         }
+        Label {
+            objectName: "graphOneTenantNote"
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: theme.colors.muted
+            text: settings.graphOneTenant
+                  ? qsTr("Every book is in one graph, and the AI may link any book with any other.")
+                  : qsTr("Each top-level collection has a graph of its own, and so do the books in none (Unfiled): nothing of one is shown or told to the AI in another. The graph window switches between them, with %1.")
+                    .arg((custom.keyText["graph.tenant"] || "C").split("  ")[0])
+        }
         // What is done about plugins that came from a GitHub repository.
         ComboBox {
             id: pluginUpdates

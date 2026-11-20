@@ -12,35 +12,27 @@ RowLayout {
     signal close()
     signal filter()
     signal more()
+    // The list of the tenants to show instead (TenantChoice), and its key.
+    signal tenant()
+    property string tenantKey
     spacing: 12
 
     function number(n) { return n.toLocaleString(Qt.locale(), 'f', 0) }
 
-    Rectangle {
+    BackButton {
         objectName: "chronologyClose"
-        readonly property string runs: "chronology.close"
-        Layout.preferredWidth: Math.max(closeRow.implicitWidth + 16, height)
-        Layout.preferredHeight: win.touch ? 40 : 30
-        radius: theme.radius
-        color: closeHover.hovered ? theme.colors.selection : "transparent"
-        Row {
-            id: closeRow
-            anchors.centerIn: parent
-            spacing: 4
-            Glyph {
-                anchors.verticalCenter: parent.verticalCenter
-                name: win.rightToLeft ? "forward" : "back"
-                size: 14
-                color: theme.colors.muted
-            }
-            Label {
-                visible: !header.compact
-                text: qsTr("Back")
-                color: theme.colors.muted
-            }
-        }
-        HoverHandler { id: closeHover }
-        TapHandler { onTapped: header.close() }
+        runs: "chronology.close"
+        text: qsTr("Back")
+        compact: header.compact
+        onTapped: header.close()
+    }
+    TenantSwitch {
+        objectName: "chronologyTenant"
+        place: "chronology"
+        // Of the room the header is given: its own width is what it lays out.
+        Layout.maximumWidth: (header.parent ? header.parent.width : 0) * (header.compact ? 0.4 : 0.25)
+        keys: header.tenantKey
+        onTapped: header.tenant()
     }
     Label {
         objectName: "chronologyTitle"

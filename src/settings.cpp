@@ -151,6 +151,14 @@ void Settings::setShelf(const QString &library, const QJsonObject &shelf) {
     set("shelves", shelves);
 }
 
+QString Settings::graphTenant(const QString &library) const { return m_values.value("graph_tenants").toObject().value(library).toString(); }
+
+void Settings::setGraphTenant(const QString &library, const QString &tenant) {
+    QJsonObject tenants = m_values.value("graph_tenants").toObject();
+    tenants.insert(library, tenant);
+    set("graph_tenants", tenants);
+}
+
 int Settings::number(QAnyStringView key) const {
     const ReadingFormat::Range *range = ReadingFormat::range(key);
     return std::clamp(m_values.value(key.toString()).toInt(range->fallback), range->low, range->high);

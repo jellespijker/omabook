@@ -14,13 +14,14 @@ import Omabook
 // A tap on an event shows its card, which goes back to the page it was
 // revealed on, or shows it in the graph. The filters narrow it by
 // timeline, book, series or collection, by who or what an event involves,
-// to what was met in a book, and to a stretch of time.
+// to what was met in a book, and to a stretch of time. It is of one tenant
+// of the graph, the graph window's (TenantChoice), switched here too.
 FocusScope {
     id: pane
     // Whether single keys are this view's shortcuts right now.
     property bool active: true
     readonly property alias browser: chronology
-    readonly property bool popupOpen: chooser.opened || range.opened
+    readonly property bool popupOpen: chooser.opened || range.opened || tenantChoice.opened
     readonly property bool keysOn: active && visible
     readonly property var event: chronology.details
     readonly property bool hasEvent: chronology.selected !== 0
@@ -70,7 +71,24 @@ FocusScope {
 
     ChronologyBrowser {
         id: chronology
+        tenant: graphTenants.current
         source: backend
+    }
+    // Another tenant chosen is another chronology: the whole of it.
+    Connections {
+        target: graphTenants
+        function onChanged() {
+            if (chronology.tenant === graphTenants.current) return
+            chronology.tenant = graphTenants.current
+            chronology.showScope("")
+            pane.fitSoon()
+        }
+    }
+    TenantChoice {
+        id: tenantChoice
+        place: "chronology"
+        keysOn: pane.keysOn
+        onClosed: pane.takeFocus()
     }
     GraphWords { id: words }
     Connections {
@@ -134,6 +152,8 @@ FocusScope {
             compact: pane.compact
             onClose: pane.done()
             onFilter: chooser.show("filter")
+            tenantKey: pane.keyOf("chronology.tenant")
+            onTenant: tenantChoice.open()
             onMore: {
                 pane.takeFocus()
                 win.showMenu("chronology", undefined, canvas)

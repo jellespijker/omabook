@@ -202,6 +202,10 @@ public:
         return m_values.value("graph_one_tenant").toBool(m_values.value("graph_across_collections").toBool(false));
     }
     void setGraphOneTenant(bool on) { set("graph_one_tenant", on); }
+    // The tenant the graph window showed last, by its global id
+    // (Tenant::globalId), kept per library folder in "graph_tenants".
+    QString graphTenant(const QString &library) const;
+    void setGraphTenant(const QString &library, const QString &tenant);
     // When the things of the graph are marked in the text: "always" (the
     // default), "map" (only while the map of the book is beside the page)
     // or "never". Kept in config.json, so a choice lasts.

@@ -12,11 +12,14 @@ Item {
     readonly property alias pane: loader.item
     function takeFocus() { if (shown) loader.item.takeFocus() }
     // "book" with a book's number, "series" or "collection" with a name,
-    // "scope" with a graph's ("" for everything read).
+    // "scope" with a graph's ("" for everything read); in the tenant shown
+    // (GraphTenants), or for a book one of its own, which is then the one shown.
     function show(what, value) {
         loader.active = true
         const chronology = loader.item
         chronology.visible = true
+        chronology.browser.tenant = what === "book" ? graphTenants.tenantOf(value) : graphTenants.current
+        graphTenants.current = chronology.browser.tenant
         if (what === "book") chronology.browser.showBook(value)
         else if (what === "series") chronology.browser.showSeries(value)
         else if (what === "collection") chronology.browser.showCollection(value)

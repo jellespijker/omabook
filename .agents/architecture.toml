@@ -70,7 +70,7 @@ summary = "The window: QML-facing models, the reader, the assistant and the dial
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
-  "chronologycanvas", "chronologycard", "chronologymodel", "graphtypes",
+  "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "spacedesk",
 ]
 

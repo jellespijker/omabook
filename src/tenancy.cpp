@@ -263,6 +263,15 @@ QList<Tenant> Tenancy::ofNode(const Library &library, qint64 nodeId) { return me
 QList<Tenant> Tenancy::ofEdge(const Library &library, qint64 edgeId) { return members(library, u"tenant_edges"_s, u"edge_id"_s, edgeId); }
 QList<Tenant> Tenancy::ofFact(const Library &library, qint64 factId) { return members(library, u"tenant_facts"_s, u"fact_id"_s, factId); }
 
+QHash<QString, qint64> Tenancy::bookCounts(const Library &library) {
+    QHash<QString, qint64> counts;
+    QSqlQuery found =
+        ChangeLog::query(library, u"SELECT t.gid, COUNT(*) FROM tenant_books AS b JOIN tenants AS t ON t.id = b.tenant GROUP BY t.gid"_s);
+    while (found.next())
+        counts.insert(found.value(0).toString(), found.value(1).toLongLong());
+    return counts;
+}
+
 TenantFilter Tenancy::filter(const Library &library, const Tenant &tenant) {
     QSqlQuery found = ChangeLog::query(library, u"SELECT id FROM tenants WHERE gid = ?"_s, {tenant.globalId()});
     return TenantFilter(found.next() ? found.value(0).toLongLong() : -1);

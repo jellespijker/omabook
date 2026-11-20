@@ -100,6 +100,9 @@ void rebuild(const Library &library);
 [[nodiscard]] QList<Tenant> ofEdge(const Library &library, qint64 edgeId);
 [[nodiscard]] QList<Tenant> ofFact(const Library &library, qint64 factId);
 
+// How many books each tenant holds, by its global id; one with none is not there.
+[[nodiscard]] QHash<QString, qint64> bookCounts(const Library &library);
+
 // The condition that keeps a query to `tenant` (and to what no book is behind).
 [[nodiscard]] TenantFilter filter(const Library &library, const Tenant &tenant);
 

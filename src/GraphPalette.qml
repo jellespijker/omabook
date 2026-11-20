@@ -89,8 +89,13 @@ AppPopup {
         for (const name of Object.keys(series).sort())
             list.push({ kindName: qsTr("Series"), label: name, act: "series", value: name, on: browser.series === name,
                         common: true, count: 0 })
-        // Only the books of a collection; the graph itself is the whole library's.
-        for (const collection of backend.collections)
+        // Only the books of a collection in the tenant shown: the top-level
+        // collection itself and those inside it; none in Unfiled; any in
+        // the one graph of the whole library, which has no path.
+        const tenant = graphTenants.shown
+        const top = tenant.path || ""
+        const within = collection => !tenant.unfiled && (top === "" || collection.path === top || collection.path.startsWith(top + "/"))
+        for (const collection of backend.collections.filter(within))
             list.push({ kindName: qsTr("Collection"), label: collection.name, act: "collection", value: collection.name,
                         on: browser.collection === collection.name, common: true, count: 0 })
         return list

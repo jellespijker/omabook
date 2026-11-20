@@ -6,7 +6,7 @@
   },
   "files": {
     "src/GraphDetails.qml": 717,
-    "src/GraphPane.qml": 1064,
+    "src/GraphPane.qml": 1053,
     "src/HelpOverlay.qml": 590,
     "src/LibraryView.qml": 826,
     "src/PluginDetail.qml": 597,

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import Omabook
 
 ApplicationWindow {
     id: win
@@ -331,6 +332,8 @@ ApplicationWindow {
             visible: win.inReader && !win.chronologyShown
             sourceComponent: ReaderView { active: win.inReader && win.keys && !win.chronologyShown }
         }
+        // Which tenant of the graph the graph and the chronology show (TenantChoice).
+        GraphTenants { id: graphTenants; objectName: "graphTenants"; source: backend }
         ChronologyLayer {
             id: chronologyLayer
             objectName: "chronologyLayer"

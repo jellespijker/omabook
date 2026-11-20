@@ -4,6 +4,7 @@
         <file alias="Upgrading.qml">Upgrading.qml</file>
         <file alias="AppButton.qml">AppButton.qml</file>
         <file alias="AppPopup.qml">AppPopup.qml</file>
+        <file alias="BackButton.qml">BackButton.qml</file>
         <file alias="DialogActions.qml">DialogActions.qml</file>
         <file alias="DialogBody.qml">DialogBody.qml</file>
         <file alias="HeaderChoice.qml">HeaderChoice.qml</file>
@@ -46,11 +47,14 @@
         <file alias="GraphCount.qml">GraphCount.qml</file>
         <file alias="GraphDetails.qml">GraphDetails.qml</file>
         <file alias="GraphEdit.qml">GraphEdit.qml</file>
+        <file alias="GraphFaces.qml">GraphFaces.qml</file>
         <file alias="GraphKind.qml">GraphKind.qml</file>
         <file alias="GraphNote.qml">GraphNote.qml</file>
         <file alias="GraphPalette.qml">GraphPalette.qml</file>
         <file alias="GraphPane.qml">GraphPane.qml</file>
         <file alias="GraphWords.qml">GraphWords.qml</file>
+        <file alias="TenantChoice.qml">TenantChoice.qml</file>
+        <file alias="TenantSwitch.qml">TenantSwitch.qml</file>
         <file alias="ShelfCarousel.qml">ShelfCarousel.qml</file>
         <file alias="ShelfCovers.qml">ShelfCovers.qml</file>
         <file alias="ShelfList.qml">ShelfList.qml</file>

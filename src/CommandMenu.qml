@@ -46,11 +46,11 @@ AppPopup {
                    "reader.cast", "reader.graph", "reader.chronology", "reader.marks", "reader.select", "reader.format", "reader.pages", "reader.layout",
                    "reader.larger", "reader.smaller", "reader.expand", "reader.previous", "reader.next", "reader.start",
                    "reader.end", "global.settings", "global.change", "global.help", "global.quit"],
-        "graph": ["graph.find", "graph.filter", "graph.list", "graph.details", "graph.open", "graph.moments", "graph.expand",
+        "graph": ["graph.tenant", "graph.find", "graph.filter", "graph.list", "graph.details", "graph.open", "graph.moments", "graph.expand",
                   "graph.back", "graph.next", "graph.previous", "graph.further", "graph.nearer", "graph.zoom_in",
                   "graph.zoom_out", "graph.fit", "graph.beyond", "graph.chronology", "graph.add", "graph.edit", "graph.merge",
                   "graph.remove", "graph.close"],
-        "chronology": ["chronology.find", "chronology.filter", "chronology.range", "chronology.filter_clear", "chronology.unplaced",
+        "chronology": ["chronology.tenant", "chronology.find", "chronology.filter", "chronology.range", "chronology.filter_clear", "chronology.unplaced",
                        "chronology.details", "chronology.page", "chronology.graph", "chronology.left", "chronology.right",
                        "chronology.up", "chronology.down", "chronology.zoom_in", "chronology.zoom_out", "chronology.fit",
                        "chronology.pan_left", "chronology.pan_right", "chronology.pan_up", "chronology.pan_down", "chronology.close"]

@@ -276,12 +276,12 @@ QList<Manual::Topic> Manual::topicList() {
                  "{library.collection_book}, which win over the rule. Each keeps its own view, order and reading format, "
                  "and the AI can propose where books belong, as changes to tick in the tidy ({library.tidy}).")},
              {tr("Collections and the knowledge graph"),
-              tr("The knowledge graph links a book only with books in the same collection at the top of the library, or in "
-                 "one inside it: a book for study and a novel kept in separate top collections are never linked, and the AI, "
-                 "asked about one, is told nothing of the other. Books in no collection link with each other, and a book in "
-                 "two top collections with both. Nothing is removed, and a book moved to another collection takes its links "
-                 "along. To link the whole library again, tick “Knowledge graph: one for the whole library, not one per top-level collection” "
-                 "in the settings ({global.settings}).")},
+              tr("Each collection at the top of the library has a knowledge graph of its own, with those inside it, and "
+                 "the books in no collection have one more, Unfiled: nothing of one is shown, linked or told to the AI in "
+                 "another. A book in two top collections is in both, and a book moved takes what it told along. The graph "
+                 "shows one at a time: its name at the top lists the others, as {graph.tenant} does, and {graph.tenant_next} "
+                 "and {graph.tenant_previous} go to the next and the previous; the chronology follows. For one graph of the "
+                 "whole library, tick “Knowledge graph: one for the whole library, not one per top-level collection” in the settings ({global.settings}).")},
              {tr("Search"),
               tr("{library.search} looks everywhere. Start a word with `author:`, `title:`, `series:`, `tag:`, `genre:`, "
                  "`format:`, `lang:`, `publisher:` or `about:` to look in one field, and type `is:paper` or `is:wishlist` "

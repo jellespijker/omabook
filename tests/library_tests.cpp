@@ -2090,7 +2090,7 @@ private slots:
         // future front end can use them alone. Only these files may see QML.
         const QStringList presentation{"backend.h", "backend.cpp", "backendcollections.cpp", "backendlookup.cpp", "backendpicker.cpp", "backendsync.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
-                                       "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp", "graphtypes.cpp",
+                                       "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp", "graphtenants.h", "graphtenants.cpp", "graphtypes.cpp",
                                        "readingmarks.h", "readingmarks.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",
                                        "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianfind.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h",

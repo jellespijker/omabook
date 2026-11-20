@@ -154,6 +154,9 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"graph.merge", {"Shift+M"}, tr("Fold another thing into the selected one: they are the same")},
     {"graph.remove", {"D", "Delete"}, tr("Remove the selected thing from the graph (asks first)")},
     {"graph.chronology", {"T"}, tr("Show when the events of what the graph shows happen, on their timelines")},
+    {"graph.tenant", {"C"}, tr("Choose whose graph is shown: one top-level collection's, or that of the books in none")},
+    {"graph.tenant_next", {"PgDown"}, tr("Show the graph of the next top-level collection")},
+    {"graph.tenant_previous", {"PgUp"}, tr("Show the graph of the previous top-level collection")},
     // The chronology: when the events happen in their stories, in place of
     // the shelf, the graph or the page.
     {"chronology.close", {"Escape"}, tr("Close the chronology")},
@@ -178,6 +181,9 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"chronology.details", {"I"}, tr("Show or hide what is known of the selected event")},
     {"chronology.page", {"O", "Return", "Enter"}, tr("Go back to the page where the selected event was revealed")},
     {"chronology.graph", {"G"}, tr("Show the selected event in the graph")},
+    {"chronology.tenant", {"C"}, tr("Choose whose chronology is shown: one top-level collection's, or that of the books in none")},
+    {"chronology.tenant_next", {"PgDown"}, tr("Show the chronology of the next top-level collection")},
+    {"chronology.tenant_previous", {"PgUp"}, tr("Show the chronology of the previous top-level collection")},
 });
 
 // A command is found by its id, which begins with the place it works in.

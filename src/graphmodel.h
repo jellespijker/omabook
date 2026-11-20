@@ -44,6 +44,10 @@ class GraphBrowser : public QObject {
     // The Backend whose library is browsed. Not called `backend`, so a view
     // can bind it to the window's `backend` without meaning this property.
     Q_PROPERTY(QObject *source READ backend WRITE setBackend NOTIFY backendChanged)
+    // The tenant of the graph (ADR 0003) whose part is read, by its global id
+    // (Tenant::globalId), as GraphTenants chose it; empty for none, which
+    // reads all of it. Every reader the browser asks keeps to it (#95).
+    Q_PROPERTY(QString tenant READ tenant WRITE setTenant NOTIFY changed)
     // What is shown: "scope", "book" or "series", and which one.
     Q_PROPERTY(QString showing READ showing NOTIFY changed)
     Q_PROPERTY(QString scope READ scope NOTIFY changed)
@@ -137,6 +141,15 @@ public:
 
     QString showing() const {
         return m_what == What::Book ? "book" : m_what == What::Series ? "series" : m_what == What::Collection ? "collection" : "scope";
+    }
+    QString tenant() const noexcept { return m_tenant; }
+    // Another tenant is another graph: read again, and brought into view whole.
+    void setTenant(const QString &tenant) {
+        if (tenant == m_tenant)
+            return;
+        m_tenant = tenant;
+        load(false);
+        emit reframed();
     }
     QString scope() const noexcept { return m_scope; }
     qint64 bookId() const { return m_what == What::Book ? m_bookId : 0; }
@@ -281,7 +294,7 @@ private:
     Backend *m_backend = nullptr;
     const Library *m_library = nullptr;
     What m_what = What::Scope;
-    QString m_scope, m_series, m_bookTitle;
+    QString m_tenant, m_scope, m_series, m_bookTitle;
     qint64 m_bookId = 0;
     std::optional<GraphPlace> m_upTo;
     QSet<QString> m_hidden;
@@ -318,7 +331,7 @@ private:
 };
 
 // Makes the views of the graph known to QML, as `import Omabook`:
-// GraphBrowser, GraphCanvas and GraphMark, and the chronology's
+// GraphBrowser, GraphCanvas, GraphMark and GraphTenants, and the chronology's
 // ChronologyBrowser and ChronologyCanvas (graphtypes.cpp). Safe to call
 // more than once.
 void registerGraphTypes();
