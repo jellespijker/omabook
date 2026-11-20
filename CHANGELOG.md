@@ -12,6 +12,8 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.7] - 2026-11-20
+
 ### Added
 
 - As the AI builds a book's knowledge graph, it notes when the events happen, as far as the book says: a date, a year or a span on the real calendar or the story's own, "around" where the book hedges, or only the book's words for it ("three years before the war"); which events come before or after others, as a flashback tells it, with an order it concluded marked as inferred; and the timeline each event is on: the book's own, its series', a world several books share, and real history for real dates, where books with nothing else in common meet. A series' or a world's timeline is shared only by books on the same side of a library split into top collections. Each is revealed where the book says it, so nothing shows before the reader gets there, and what the model gives that is no time or no order is dropped, never kept. `omabook graph build` (and the MCP tool) counts them under `"chronology"`: the times, orders and placings kept, and how many were dropped; `--again` reads them into the graph of a book built before (#42).
@@ -200,7 +202,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.7...HEAD
+[0.1.7]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...v0.1.7
 [0.1.6.1]: https://github.com/jellespijker/omabook/compare/v0.1.6...v0.1.6.1
 [0.1.6]: https://github.com/jellespijker/omabook/compare/v0.1.5.2...v0.1.6
 [0.1.5.2]: https://github.com/jellespijker/omabook/compare/v0.1.5.1...v0.1.5.2
