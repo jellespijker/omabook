@@ -430,6 +430,10 @@ const QList<QStringList> migrations{
     // format 31): a full-text index of its things, and the things touched
     // since a count of the graph, both kept by triggers (GraphIndex).
     GraphIndex::step(),
+    // A relation of no book to a thing every tenant sees is in the tenant of
+    // its other end (#112, format 32): the tenancy triggers again by that
+    // rule, and the membership placed again whole.
+    TenancySchema::endsSeenFromEveryTenant(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
