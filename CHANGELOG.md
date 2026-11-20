@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- A relation of no book between a thing of a top-level collection's graph and one that every collection sees (put in by hand before collections had graphs of their own, or a plugin's world) is seen again in that collection's graph, and counts there in the order of the graph's window. Such relations were in no collection's graph once one of their ends was met in a book: Storyteller's plan lost a person's ties to the rest of the cast as soon as a chapter mentioned that person (#112).
+
 ## [0.1.8] - 2026-11-20
 
 ### Fixed

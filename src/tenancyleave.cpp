@@ -65,6 +65,7 @@ namespace {
 // The statements of a leave, with `:T` for the tenant and `:B` for the book.
 [[nodiscard]] QStringList statements() {
     const QString writtenIn = u"SELECT key FROM json_each("_s + TenancySchema::notesOf(u"e"_s) + u", '$.tenants')"_s;
+    const QString both = TenancySchema::tenantOfBoth(u"s"_s, u"t"_s);
     return {
         u"CREATE TEMP TABLE IF NOT EXISTS tenancy_leaving (id INTEGER PRIMARY KEY)"_s,
         u"CREATE TEMP TABLE IF NOT EXISTS tenancy_leaving_edges (id INTEGER PRIMARY KEY)"_s,
@@ -100,10 +101,12 @@ namespace {
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT b.tenant, e.id FROM tenancy_leaving_edges AS x "
         "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_books AS b ON b.book_id = e.book_id AND b.tenant = :T WHERE "_s
             + inBook(u"e"_s),
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT s.tenant, e.id FROM tenancy_leaving_edges AS x "
-        "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_nodes AS s ON s.node_id = e.source AND s.tenant IN (:T, 0) "
-        "JOIN tenant_nodes AS t ON t.tenant = s.tenant AND t.node_id = e.target WHERE "_s
-            + TenancySchema::whereEndsAre(u"e"_s, u"s.tenant"_s),
+        // Where both ends are, an end in tenant 0 in each: in :T or 0, or, for
+        // an end back in 0, in the other end's tenant.
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM tenancy_leaving_edges AS x "
+            "JOIN graph_edges AS e ON e.id = x.id JOIN tenant_nodes AS s ON s.node_id = e.source "
+            "JOIN tenant_nodes AS t ON t.node_id = e.target AND "_s
+            + TenancySchema::seenTogether(u"s"_s, u"t"_s) + u" WHERE "_s + TenancySchema::whereEndsAre(u"e"_s, both),
         u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT m.id, e.id FROM tenancy_leaving_edges AS x "
         "JOIN graph_edges AS e ON e.id = x.id JOIN tenants AS m ON m.id = :T WHERE "_s
             + TenancySchema::writtenHere(u"e"_s) + u" AND (m.gid = 'library' OR m.gid IN ("_s + writtenIn + u"))"_s,

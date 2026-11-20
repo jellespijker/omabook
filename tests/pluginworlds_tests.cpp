@@ -32,6 +32,8 @@
 #include "spaces.h"
 #include "spaceworlds.h"
 #include "subscriptions.h"
+#include "tenancy.h"
+#include "tenants.h"
 
 namespace {
 
@@ -58,6 +60,20 @@ function relations(scope) { return omabook.graph.whole(scope).edges.map(function
 function copy(from, to) { return omabook.graph.copyScope(from, to); }
 function write(scope) { return omabook.graph.upsert({scope: scope, kind: "place", name: "Nowhere"}); }
 function add(space, book) { omabook.spaces.add(space, book); return true; }
+// A plan as a storyteller lays it: things of no book and the relations
+// between them, then one learned in the story's first chapter, then another.
+function plan(scope, book) {
+    const ilse = omabook.graph.upsert({scope: scope, kind: "character", name: "Ilse"});
+    const teodor = omabook.graph.upsert({scope: scope, kind: "character", name: "Teodor"});
+    const court = omabook.graph.upsert({scope: scope, kind: "group", name: "Tide Court"});
+    const market = omabook.graph.upsert({scope: scope, kind: "place", name: "Market"});
+    omabook.graph.link(teodor, ilse, "godfather of");
+    omabook.graph.link(ilse, court, "keeps tallies for");
+    omabook.graph.link(teodor, court, "sits in");
+    omabook.graph.link(ilse, market, "works in", {book: book, section: 0, fraction: 0.5});
+    omabook.graph.link(ilse, teodor, "owes");
+    return true;
+}
 )";
 
 void writePlugin(const QString &folder) {
@@ -141,6 +157,13 @@ struct Someone {
 [[nodiscard]] QString hashOf(const Library &library, qint64 book) {
     const QList<FormatFile> files = library.formatFiles(book);
     return files.size() == 1 ? files.first().hash : QString();
+}
+
+// The relations a plugin reads of a scope, sorted.
+[[nodiscard]] QStringList relationsOf(Someone &someone, const QString &scope) {
+    QStringList kinds = someone.call("relations", {scope}).toVariant().toStringList();
+    kinds.sort();
+    return kinds;
 }
 
 } // namespace
@@ -447,6 +470,54 @@ private slots:
         const std::optional<Book> notTheirs = titled(bo.library, "By A Person");
         QVERIFY(notTheirs.has_value() && notTheirs->formats.isEmpty());
         QVERIFY(SpaceFiles::of(bo.library, notTheirs->id).isEmpty());
+    }
+
+    // A plugin's plan keeps every relation it wrote, read back by the plugin,
+    // when one of its things is learned in a book and so leaves what every
+    // tenant sees for the book's tenant, while the others stay there: in a
+    // library of no collections, and in one whose biggest collection is not
+    // the story's; and the same once the membership is placed again whole.
+    void aPluginsPlanKeepsTheRelationsItWrote_data() {
+        QTest::addColumn<bool>("collections");
+        QTest::newRow("no collections") << false;
+        QTest::newRow("collections") << true;
+    }
+    void aPluginsPlanKeepsTheRelationsItWrote() {
+        QFETCH(bool, collections);
+        QTemporaryDir dir;
+        Someone ann(dir, "Ann");
+        QVERIFY(threeChapters(dir.filePath("story.epub"), "The Glass Tithe"));
+        QVERIFY(Fixtures::epub(dir.filePath("one.epub"), "A Person's Book"));
+        QVERIFY(Fixtures::epub(dir.filePath("two.epub"), "Another Person's Book"));
+        const qint64 story = ann.story(dir.filePath("story.epub"), "story.epub");
+        const qint64 one = ann.library.add(dir.filePath("one.epub")).id;
+        const qint64 two = ann.library.add(dir.filePath("two.epub")).id;
+        QVERIFY(story > 0 && one > 0 && two > 0);
+        if (collections) {
+            const auto stories = ann.library.addCollection("Stories");
+            const auto study = ann.library.addCollection("Study");
+            QVERIFY(stories && study);
+            QVERIFY(ann.library.putInCollection(*stories, story, true));
+            QVERIFY(ann.library.putInCollection(*study, one, true) && ann.library.putInCollection(*study, two, true));
+        }
+        const QStringList all{"godfather of", "keeps tallies for", "owes", "sits in", "works in"};
+        QCOMPARE(ann.call("plan", {"world:s1:plan", story}).toBool(), true);
+        QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+        const QStringList kept = memberships(ann.library);
+        QCOMPARE(rebuilt(ann.library), kept);
+        QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+        // The story moved to another collection, and back out of every one.
+        if (collections) {
+            const auto stories = ann.library.collectionNamed("Stories");
+            const auto study = ann.library.collectionNamed("Study");
+            QVERIFY(stories && study);
+            QVERIFY(ann.library.putInCollection(stories->id, story, false) && ann.library.putInCollection(study->id, story, true));
+            QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+            QVERIFY(ann.library.putInCollection(study->id, story, false));
+            QCOMPARE(relationsOf(ann, "world:s1:plan"), all);
+            const QStringList moved = memberships(ann.library);
+            QCOMPARE(rebuilt(ann.library), moved);
+        }
     }
 };
 

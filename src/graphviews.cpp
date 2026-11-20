@@ -388,16 +388,17 @@ GraphView Graph::whole(const QString &scope, int limit) const {
     }
     // The most connected first, by the relations the tenant sees: its own
     // and those of what every tenant sees (tenant 0), each by the degree kept
-    // there (#101). A thing is in one or the other, never both
+    // there (#101), with the relations the tenant holds of the latter (to
+    // things of its own). A thing is in one or the other, never both
     // (TenancySchema), so the two are merged, not added.
     const bool general = text(scope).isEmpty();
     QString sql = mostConnected(0, general, limit);
     QVariantList values{text(scope)};
     if (filter->id() > 0) {
         sql = QString("SELECT * FROM (%1) UNION ALL SELECT * FROM (%2) ORDER BY 9 DESC, 1 LIMIT %3")
-                  .arg(mostConnected(filter->id(), general, limit), sql)
+                  .arg(mostConnected(filter->id(), general, limit), sharedMostConnected(filter->id(), general, limit))
                   .arg(std::max(1, limit));
-        values << text(scope);
+        values << text(scope) << text(scope);
     }
     GraphView view;
     for (QSqlQuery query = m_library->query(sql, values); query.next();)
