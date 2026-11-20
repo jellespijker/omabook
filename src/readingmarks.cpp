@@ -201,7 +201,7 @@ QList<TextMarks::Mark> ReadingMarks::marksIn(int section, const QString &text) {
         return *found;
     }
     ++m_counts.misses;
-    const Marks marks = m_matcher ? m_matcher->match(text) : Marks();
+    const Marks marks = m_matcher ? m_matcher->matchShown(text) : Marks();
     keep(key, marks);
     return marks;
 }
@@ -263,7 +263,7 @@ void ReadingMarks::mark(QQuickTextDocument *chapter) {
         if (laid)
             emit marked();
     });
-    watcher->setFuture(QtConcurrent::run([matcher = m_matcher, text] { return matcher->match(text); }));
+    watcher->setFuture(QtConcurrent::run([matcher = m_matcher, text] { return matcher->matchShown(text); }));
     m_working.emplace(key, std::move(watcher));
 }
 

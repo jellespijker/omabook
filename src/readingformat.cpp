@@ -6,7 +6,31 @@
 #include <cmath>
 #include <ranges>
 
+#include "hyphenation.h"
+
 namespace ReadingFormat {
+
+namespace {
+
+// The paragraphs that are justified, which cleaned HTML writes as a bare
+// <p>, with soft hyphens where their words may be broken.
+QString hyphenated(const QString &html, const Hyphenation::Dictionary &dictionary) {
+    QString broken;
+    broken.reserve(html.size() + html.size() / 8);
+    qsizetype from = 0;
+    for (qsizetype at = html.indexOf("<p>"_L1); at >= 0; at = html.indexOf("<p>"_L1, from)) {
+        const qsizetype start = at + 3;
+        const qsizetype end = html.indexOf("</p>"_L1, start);
+        const qsizetype stop = end < 0 ? html.size() : end;
+        broken += QStringView(html).mid(from, start - from);
+        broken += Hyphenation::hyphenateHtml(QStringView(html).mid(start, stop - start), dictionary);
+        from = stop;
+    }
+    broken += QStringView(html).mid(from);
+    return broken;
+}
+
+} // namespace
 
 QStringList keys() {
     QStringList keys = ranges | std::views::transform([](const Range &range) { return QString(range.key); })
@@ -82,9 +106,11 @@ QJsonObject bounds() {
     return bounds;
 }
 
-QString setChapter(const QString &html, const QJsonObject &options, const QColor &links) {
+QString setChapter(const QString &source, const QJsonObject &options, const QColor &links, const Hyphenation::Dictionary *dictionary) {
     const auto number = [&options](QLatin1StringView key) { return options.value(key).toInt(range(key)->fallback); };
     const QString align = options.value("align").toString("start");
+    const bool hyphenate = dictionary && align == "justify"_L1 && options.value("hyphenation").toString() != "off"_L1;
+    const QString html = hyphenate ? hyphenated(source, *dictionary) : source;
     // Qt reads "left" and "right" against the paragraph's own direction,
     // which is what start and end mean; justify it only takes from the
     // paragraph (below).

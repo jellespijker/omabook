@@ -15,7 +15,8 @@ import QtQuick.Controls
 Flickable {
     id: flick
     objectName: "flowReader"
-    readonly property string selectedText: page.selectedText
+    // Without the soft hyphens hyphenation puts in (hyphenation.h), which are only for the eye.
+    readonly property string selectedText: page.selectedText.replace(/\u00ad/g, "")
     // Whether the graph's things are marked in the text.
     property bool marking: false
     // Whether reading runs on from one chapter into the next.
@@ -181,11 +182,12 @@ Flickable {
         marks.finish()
         page.deselect()
     }
-    function copySelection() { page.copy() }
+    function copySelection() { plainCopy.copyText(selectedText) }
     function placeText() {
         const start = page.positionAt(page.width / 2, Math.max(0, contentY - page.y + 8))
-        return page.getText(start, start + 120)
+        return page.getText(start, start + 120).replace(/\u00ad/g, "")
     }
+    PlainCopy { id: plainCopy }
 
     onContentYChanged: {
         if (!ready || settling || contentHeight !== laidHeight || height !== laidView)

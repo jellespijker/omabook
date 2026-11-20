@@ -92,6 +92,9 @@ public:
 
     // Every place in `text` that names one of the things, in order, none overlapping.
     QList<Mark> match(QStringView text) const;
+    // The same in a chapter as it is shown, read past its soft hyphens
+    // (hyphenation.h): a name broken by one is found, and marked with it.
+    QList<Mark> matchShown(QStringView text) const;
     // The thing these words are exactly a name of (as selected on the page,
     // in any case), or 0 when they name none.
     qint64 named(QStringView words) const;
@@ -145,7 +148,7 @@ QList<Suggestion> suggestions(const GraphNode &thing, const GraphPlace &met, con
 
 // Where words are in a document, the nearest to a place in it (0 to 1): the
 // first character and the one past the last; none when it doesn't hold them.
-// Across lines and in any case, as a moment's words are kept.
+// Across lines (not paragraphs), in any case and past soft hyphens, as a moment's words are kept.
 [[nodiscard]] std::optional<std::pair<int, int>> nearest(const QTextDocument &document, const QString &words, double fraction);
 
 } // namespace TextMarks

@@ -18,9 +18,13 @@
 // line spacing, the space after a paragraph, a first-line indent and the
 // alignment of a paragraph are block formats it lays out itself. Justified
 // text is filled with wider spaces, never letter spacing. It has no
-// hyphenation of its own (no dictionaries, no option for it), so there is
-// no setting for that; it does break a line at a soft hyphen a book already
-// has in its text.
+// hyphenation of its own, but it breaks a line at a soft hyphen; so
+// justified text is given soft hyphens by the book's language (see
+// hyphenation.h), unless "hyphenation" is "off".
+namespace Hyphenation {
+class Dictionary;
+}
+
 namespace ReadingFormat {
 
 using namespace Qt::StringLiterals;
@@ -66,6 +70,10 @@ inline constexpr std::array layouts{"auto"_L1, "pages"_L1, "scroll"_L1};
 // across two pages as one wide picture already, and many begin without a
 // cover of their own, so pairing from the first shows the most.
 inline constexpr std::array firstPages{"auto"_L1, "alone"_L1, "paired"_L1};
+// Whether justified text is hyphenated, where a dictionary for the book's
+// language is installed. Text set any other way never is: a ragged line has
+// room to end short.
+inline constexpr std::array hyphenations{"on"_L1, "off"_L1};
 
 // A setting that is one of a few words.
 struct Choice {
@@ -77,11 +85,12 @@ inline constexpr std::array choices{
     Choice{"align"_L1, alignments, "start"_L1},
     Choice{"layout"_L1, layouts, "auto"_L1},
     Choice{"first_page"_L1, firstPages, "auto"_L1},
+    Choice{"hyphenation"_L1, hyphenations, "on"_L1},
 };
 [[nodiscard]] const Choice *choice(QAnyStringView key);
 
 // Every option by its key: the numbers above, then "font_family" (a font's
-// name, empty for the desktop's), "align", "layout" and "first_page".
+// name, empty for the desktop's), "align", "layout", "first_page" and "hyphenation".
 [[nodiscard]] QStringList keys();
 [[nodiscard]] const Range *range(QAnyStringView key);
 // Why a value can't be given to an option, in English, with what it may be;
@@ -101,7 +110,10 @@ inline constexpr std::array choices{
 // can't give them in Qt (justification and the indent, which Qt only takes
 // from the paragraph itself). Paragraphs the book aligned itself, such as
 // a centred line, keep their own alignment and get no indent; nor does the
-// first paragraph after a heading, as in a printed book.
-[[nodiscard]] QString setChapter(const QString &html, const QJsonObject &options, const QColor &links);
+// first paragraph after a heading, as in a printed book. Justified
+// paragraphs are hyphenated by `dictionary`, the book's language's, when
+// there is one and hyphenation isn't off.
+[[nodiscard]] QString setChapter(const QString &source, const QJsonObject &options, const QColor &links,
+                                 const Hyphenation::Dictionary *dictionary = nullptr);
 
 } // namespace ReadingFormat

@@ -67,6 +67,7 @@
         <file alias="Words.qml">Words.qml</file>
         <file alias="LookupDialog.qml">LookupDialog.qml</file>
         <file alias="PageReader.qml">PageReader.qml</file>
+        <file alias="PlainCopy.qml">PlainCopy.qml</file>
         <file alias="PluginAsk.qml">PluginAsk.qml</file>
         <file alias="PluginForm.qml">PluginForm.qml</file>
         <!-- The plugins to try, as this Omabook was built; see PluginFinder. -->

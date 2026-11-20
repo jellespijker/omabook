@@ -1,10 +1,12 @@
 #include "pageformat.h"
 
 #include <QFontDatabase>
+#include <QLocale>
 #include <algorithm>
 
 using namespace Qt::StringLiterals;
 
+#include "hyphenation.h"
 #include "library.h"
 #include "reader.h"
 #include "readingformat.h"
@@ -39,6 +41,13 @@ void PageFormat::setLinkColor(const QColor &color) {
     m_links = color;
     m_html.clear();
     restyle();
+}
+
+QString PageFormat::hyphenationLanguage() const {
+    if (!m_dictionary)
+        return {};
+    const QString name = QLocale(QString(m_language).replace(u'-', u'_')).nativeLanguageName();
+    return name.isEmpty() ? m_language : name;
 }
 
 void PageFormat::setPreferredCollection(qint64 id) {
@@ -116,12 +125,27 @@ void PageFormat::relayout() {
     emit layoutChanged();
 }
 
+bool PageFormat::followLanguage() {
+    std::optional<Book> book;
+    if (hasBook())
+        book = m_reader->library()->book(m_reader->bookId());
+    const QString language = book ? book->meta.language : QString();
+    if (language == m_language)
+        return false;
+    m_language = language;
+    m_dictionary = Hyphenation::forLanguage(language);
+    emit changed();
+    return true;
+}
+
 void PageFormat::restyle() {
     const QString chapter = m_reader->html();
-    if (!m_html.isEmpty() && chapter == m_chapter)
+    // Another book, maybe in another language, or its language set anew.
+    const bool relanguaged = followLanguage();
+    if (!m_html.isEmpty() && chapter == m_chapter && !relanguaged)
         return;
     m_chapter = chapter;
-    m_html = ReadingFormat::setChapter(chapter, m_effective, m_links);
+    m_html = ReadingFormat::setChapter(chapter, m_effective, m_links, m_dictionary);
     emit htmlChanged();
 }
 

@@ -10,6 +10,9 @@
 
 class Reader;
 class Settings;
+namespace Hyphenation {
+class Dictionary;
+}
 
 // The reading format for the window: what is in force for the open book,
 // the defaults and the book's own, and the chapter set with them. It
@@ -39,6 +42,10 @@ class PageFormat : public QObject {
     Q_PROPERTY(QString html READ html NOTIFY htmlChanged)
     // The color links are shown in, which is the theme's.
     Q_PROPERTY(QColor linkColor READ linkColor WRITE setLinkColor NOTIFY htmlChanged)
+    // The language justified text is hyphenated by, named in itself
+    // ("English", "Deutsch"); empty when no dictionary for the open book's
+    // language is installed, or no book is open.
+    Q_PROPERTY(QString hyphenationLanguage READ hyphenationLanguage NOTIFY changed)
 
     // How the text is laid out across the room it has (pagelayout.h). The
     // reading view says how wide its reading area is (`available`, the
@@ -82,6 +89,7 @@ public:
     QString html() const noexcept { return m_html; }
     QColor linkColor() const noexcept { return m_links; }
     void setLinkColor(const QColor &color);
+    QString hyphenationLanguage() const;
 
     double available() const noexcept { return m_available; }
     void setAvailable(double width);
@@ -127,6 +135,8 @@ signals:
 
 private:
     void restyle();
+    // Takes the open book's language and its dictionary, when they changed.
+    bool followLanguage();
     // Where the option in force comes from: "book", "collection" or "defaults".
     QString from(const QString &key) const;
     // Works the layout out again from the room, the format and the setting.
@@ -138,6 +148,9 @@ private:
     qint64 m_collectionId = 0, m_preferred = 0;
     QString m_collectionName;
     QString m_html, m_chapter;
+    // The open book's language, and the dictionary for it (hyphenation.h).
+    QString m_language;
+    const Hyphenation::Dictionary *m_dictionary = nullptr;
     QColor m_links{"#7aa2f7"};
     double m_available = 0;
     PageLayout::Space m_space;

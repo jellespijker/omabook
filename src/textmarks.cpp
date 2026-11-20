@@ -1,6 +1,7 @@
 #include "textmarks.h"
 
 #include "graphlayers.h"
+#include "hyphenation.h"
 
 #include <QRegularExpression>
 #include <QTextCursor>
@@ -224,6 +225,21 @@ Matcher::Matcher(const QList<Thing> &things) {
     m_fingerprint = print;
 }
 
+QList<Mark> Matcher::matchShown(QStringView text) const {
+    if (!text.contains(Hyphenation::softHyphen))
+        return match(text);
+    // A name with a soft hyphen in it is still the name: it is looked for
+    // without them, and marked where it is shown.
+    const Hyphenation::Plain plain(text);
+    QList<Mark> marks = match(plain.text());
+    for (Mark &mark : marks) {
+        const qsizetype end = plain.toShownEnd(mark.start + mark.length);
+        mark.start = plain.toShown(mark.start);
+        mark.length = end - mark.start;
+    }
+    return marks;
+}
+
 QList<Mark> Matcher::match(QStringView text) const {
     QList<Mark> marks;
     if (m_first.isEmpty())
@@ -360,19 +376,24 @@ QList<Suggestion> suggestions(const GraphNode &thing, const GraphPlace &met, con
 
 std::optional<std::pair<int, int>> nearest(const QTextDocument &document, const QString &words, double fraction) {
     QStringList parts;
-    for (const QString &word : words.simplified().split(' ', Qt::SkipEmptyParts))
+    for (const QString &word : QString(words).remove(Hyphenation::softHyphen).simplified().split(' ', Qt::SkipEmptyParts))
         parts << QRegularExpression::escape(word);
     if (parts.isEmpty())
         return std::nullopt;
-    const QRegularExpression phrase(parts.join("\\s+"), QRegularExpression::CaseInsensitiveOption);
+    // Within a paragraph, and blind to soft hyphens: the words are looked
+    // for in the text without them, and given where they are shown.
+    const QRegularExpression phrase(parts.join("[^\\S\\n]+"), QRegularExpression::CaseInsensitiveOption);
+    const Hyphenation::Plain plain(document.toPlainText());
     const double wanted = qBound(0.0, fraction, 1.0) * document.characterCount();
     std::optional<std::pair<int, int>> best;
     double closest = -1;
-    for (QTextCursor found = document.find(phrase); !found.isNull(); found = document.find(phrase, found)) {
-        const double off = std::abs(found.selectionStart() - wanted);
+    for (auto found = phrase.globalMatch(plain.text()); found.hasNext();) {
+        const QRegularExpressionMatch match = found.next();
+        const auto start = int(plain.toShown(match.capturedStart()));
+        const double off = std::abs(start - wanted);
         if (closest < 0 || off < closest) {
             closest = off;
-            best = std::pair{found.selectionStart(), found.selectionEnd()};
+            best = std::pair{start, int(plain.toShownEnd(match.capturedEnd()))};
         }
     }
     return best;

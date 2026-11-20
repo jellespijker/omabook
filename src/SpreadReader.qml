@@ -11,9 +11,10 @@ import QtQuick.Controls
 Item {
     id: spread
     objectName: "spreadReader"
+    // Without the soft hyphens hyphenation puts in (hyphenation.h), which are only for the eye.
     readonly property string selectedText: {
         for (const sheet of sheets)
-            if (sheet.text.selectedText !== "") return sheet.text.selectedText
+            if (sheet.text.selectedText !== "") return sheet.text.selectedText.replace(/\u00ad/g, "")
         return ""
     }
     // Whether the graph's things are marked in the text.
@@ -188,14 +189,12 @@ Item {
         page0.marks.finish()
         for (const sheet of sheets) sheet.text.deselect()
     }
-    function copySelection() {
-        for (const sheet of sheets)
-            if (sheet.text.selectedText !== "") { sheet.text.copy(); return }
-    }
+    function copySelection() { if (selectedText !== "") plainCopy.copyText(selectedText) }
     function placeText() {
         const start = firstText.positionAt(columnWidth / 2, breaks[page] + 8)
-        return firstText.getText(start, start + 120)
+        return firstText.getText(start, start + 120).replace(/\u00ad/g, "")
     }
+    PlainCopy { id: plainCopy }
 
     onPageHeightChanged: later.restart()
     // Another page more or fewer: the same pages, as a spread of another size.

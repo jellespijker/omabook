@@ -421,5 +421,30 @@ ColumnLayout {
               : controls.values.align === "end" ? qsTr("End: lines against the side the text ends at")
               : qsTr("Start: lines against the side the text starts at")
     }
+    // Justified lines break words by the book's language (hyphenation.h),
+    // where a dictionary for it is installed.
+    Switch {
+        id: hyphenate
+        objectName: controls.prefix + "Hyphenation"
+        Layout.fillWidth: true
+        Layout.minimumHeight: 40
+        visible: controls.values.align === "justify"
+        text: qsTr("Hyphenate")
+        checked: controls.values.hyphenation !== "off"
+        Accessible.name: text
+        onToggled: controls.change("hyphenation", checked ? "on" : "off")
+    }
+    Label {
+        objectName: controls.prefix + "HyphenationName"
+        visible: hyphenate.visible
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: theme.colors.muted
+        font.pixelSize: 12
+        text: !hyphenate.checked ? qsTr("Words are never broken at the end of a line")
+              : !controls.scoped || !reader.open ? qsTr("Words are broken at the end of a line by the book's language, where a dictionary for it is installed")
+              : reader.format.hyphenationLanguage !== "" ? qsTr("Words are broken at the end of a line by the rules of %1").arg(reader.format.hyphenationLanguage)
+              : qsTr("No hyphenation dictionary for this book's language is installed")
+    }
     }
 }
