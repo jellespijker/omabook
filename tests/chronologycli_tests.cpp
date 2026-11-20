@@ -3,11 +3,13 @@
 // section 5 with dates, a span, an order, events not placed, a
 // contradiction, and an event past the reader that is never told.
 
+#include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QtTest>
 #include <algorithm>
+#include <ranges>
 
 #include "chronology.h"
 #include "eventtime.h"
@@ -206,6 +208,58 @@ private slots:
         QVERIFY(story.run({"place", "The meeting", "on", "Nowhere"}).errors.contains("timeline add"));
         QVERIFY(!itemNamed(laneNamed(story.json(), "The Shire"), "The meeting").isEmpty());
         QVERIFY(story.run({"place", "The meeting"}).code == 1);
+    }
+
+    void itIsWrittenAsAFileOtherToolsRead() {
+        const Story story;
+        // CSV: a row per placed event on each lane, the time as said and where.
+        auto ran = story.run({"--format", "csv"});
+        QCOMPARE(ran.code, 0);
+        const QStringList rows = ran.output.trimmed().split('\n');
+        QVERIFY2(rows.first().startsWith("timeline,timeline_id,calendar,rank,event,event_id,time,extent_from,extent_to,book,section"),
+                 qPrintable(rows.first()));
+        // The War's three, and the rise and the fall in the book's own order.
+        QCOMPARE(rows.size(), 1 + 5);
+        QVERIFY2(std::ranges::any_of(rows,
+                                     [](const QString &row) {
+                                         return row.startsWith("The War,") && row.contains(",The siege,") && row.contains(",1942,")
+                                                && row.contains(",The Long Siege,0,");
+                                     }),
+                 qPrintable(ran.output));
+        QVERIFY2(ran.output.contains("1939-09-01 – 1945-09-02"), qPrintable(ran.output));
+        QVERIFY(!ran.output.contains("The end"));
+        // dot and graphml, with the order as edges.
+        ran = story.run({"--format", "dot", "--timeline", "The War"});
+        QVERIFY2(ran.output.startsWith("digraph omabook") && ran.output.contains("[label=\"before\"]")
+                     && ran.output.contains("[label=\"on\"]"),
+                 qPrintable(ran.output));
+        const QString file = story.machine.dir.filePath("chronology.graphml");
+        ran = story.run({"--output", file});
+        QVERIFY2(ran.code == 0 && ran.output.contains("as graphml"), qPrintable(ran.output + ran.errors));
+        QFile written(file);
+        QVERIFY(written.open(QIODevice::ReadOnly));
+        const QByteArray graphml = written.readAll();
+        QVERIFY(graphml.contains("<graphml") && graphml.contains("The siege") && graphml.contains(">before<"));
+        QCOMPARE(QJsonDocument::fromJson(story.run({"--format", "json"}).output.toUtf8()).object().value("events"),
+                 story.json().value("events"));
+        QVERIFY(story.run({"--format", "pdf"}).errors.contains("no format of the chronology"));
+    }
+
+    // `omabook graph chronology` is the same command, as the issue named it.
+    void theGraphCommandTakesItToo() {
+        const Story story;
+        const auto ran = story.machine.omabook({"graph", "chronology", "--json", "--library", story.machine.library});
+        QCOMPARE(ran.code, 0);
+        QCOMPARE(QJsonDocument::fromJson(ran.output.toUtf8()).object(), story.json());
+        const auto before = story.machine.omabook({"graph", "--library", story.machine.library, "chronology", "--timeline", "The War"});
+        QVERIFY2(before.output.contains("3 of 7 events."), qPrintable(before.output + before.errors));
+        const auto set =
+            story.machine.omabook({"graph", "chronology", "set-when", "The meeting", "1941", "--library", story.machine.library});
+        QVERIFY2(set.code == 0 && set.output.contains("The meeting: 1941, by hand."), qPrintable(set.output + set.errors));
+        QVERIFY(story.machine.omabook({"graph", "--help"}).output.contains("chronology"));
+        QVERIFY(story.machine.omabook({"chronology", "--help"}).output.contains("omabook graph chronology"));
+        // The rest of the graph's commands are as they were.
+        QCOMPARE(story.machine.omabook({"graph", "scopes", "--library", story.machine.library}).code, 0);
     }
 
     void theToolsAreTheCommands() {

@@ -1,8 +1,10 @@
 #include "chronologycommands.h"
 
 #include <QCommandLineParser>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
 #include <cstdio>
 #include <expected>
 #include <memory>
@@ -10,6 +12,7 @@
 #include <print>
 #include <tuple>
 
+#include "chronologyexport.h"
 #include "chronologyops.h"
 #include "chronologyprint.h"
 #include "graph.h"
@@ -30,6 +33,9 @@ constexpr auto usage = "Usage: omabook chronology [book] [options]\n\n"
                        "  chronology [book] [--series s|--collection c] [--timeline t] [--from time] [--to time] [--calendar c]\n"
                        "             [--upto section [--fraction f]|--whole]\n"
                        "                                             Read it: of a book, a series, a collection, or every book\n"
+                       "  chronology ... --format json|csv|graphml|dot [--output file]\n"
+                       "                                             As a file other tools read: csv one row per placed event,\n"
+                       "                                             graphml and dot with the order as edges\n"
                        "  chronology set-when <event> <time> [--calendar c] [--approximate] [--said words]\n"
                        "                                             When an event happens: 1944-06-06, a span 1939..1945, or JSON\n"
                        "  chronology order <event> before|after|during|same <other>\n"
@@ -39,7 +45,8 @@ constexpr auto usage = "Usage: omabook chronology [book] [options]\n\n"
                        "                                             A timeline of its own\n\n"
                        "An event or a timeline is its number or its name. What is put in by hand wins over what the books say, and is\n"
                        "marked so. Times are Y, Y-MM, Y-MM-DD, Y-MM-DDTHH or Y-MM-DDTHH:MM, on the Gregorian calendar unless --calendar\n"
-                       "names the story's own. Every command takes --json and --library <folder>.";
+                       "names the story's own. `omabook graph chronology` is the same command. Every command takes --json and\n"
+                       "--library <folder>.";
 
 void printLine(FILE *stream, const QString &text) {
     std::println(stream, "{}", qPrintable(text));
@@ -81,6 +88,9 @@ void addOptions(QCommandLineParser &parser) {
     parser.addOption({"whole", "Everything that is known, read or not: it gives away what happens."});
     parser.addOption({"approximate", "set-when: the book says around, or some time in."});
     parser.addOption({"said", "set-when: the book's own few words for the time.", "words"});
+    parser.addOption({"format", "Write it as a file other tools read: json, csv, graphml or dot.", "format"});
+    parser.addOption(
+        {"output", "With --format: write to this file instead of printing; its suffix names the format when none is.", "file"});
     parser.addOption({"kind", "timeline add: whose it is: book, series, world, history or reader (the default).", "kind"});
 }
 
@@ -130,7 +140,44 @@ void addOptions(QCommandLineParser &parser) {
     return std::nullopt;
 }
 
+// The chronology as a file, printed or written where --output says.
+int exportTo(const QJsonObject &answer, const QCommandLineParser &parser) {
+    const QString output = parser.value("output");
+    QString format = parser.value("format").toLower();
+    if (format.isEmpty())
+        format =
+            ChronologyExport::formats().contains(QFileInfo(output).suffix().toLower()) ? QFileInfo(output).suffix().toLower() : u"json"_s;
+    const auto bytes = ChronologyExport::exported(answer, format);
+    if (!bytes)
+        return failLine(bytes.error());
+    if (output.isEmpty()) {
+        printLine(stdout, QString::fromUtf8(*bytes).trimmed());
+        return 0;
+    }
+    QSaveFile file(output);
+    if (!file.open(QIODevice::WriteOnly) || file.write(*bytes) != bytes->size() || !file.commit())
+        return failLine(u"The chronology could not be written to %1."_s.arg(output));
+    if (parser.isSet("json"))
+        printLine(stdout,
+                  QString::fromUtf8(QJsonDocument(QJsonObject{{"format", format}, {"output", output}, {"events", answer.value("events")}})
+                                        .toJson(QJsonDocument::Indented))
+                      .trimmed());
+    else
+        printLine(stdout, u"Wrote the chronology to %1, as %2."_s.arg(output, format));
+    return 0;
+}
+
 } // namespace
+
+int runGraphCliWithChronology(const QStringList &arguments) {
+    // Past the options given before the graph's command: those commandFirst moved there, and a scope.
+    qsizetype at = 2;
+    while (at < arguments.size() && arguments.at(at).startsWith(u'-'))
+        at += arguments.at(at) == "--library"_L1 || arguments.at(at) == "--scope"_L1 ? 2 : 1;
+    if (arguments.value(at) != "chronology"_L1)
+        return runGraphCli(arguments);
+    return runChronologyCli(arguments.first(1) + QStringList{u"chronology"_s} + arguments.mid(2, at - 2) + arguments.mid(at + 1));
+}
 
 int runChronologyCli(const QStringList &arguments) {
     QCommandLineParser parser;
@@ -160,6 +207,8 @@ int runChronologyCli(const QStringList &arguments) {
     }
     if (!answer)
         return failLine(answer.error());
+    if (!writing && (parser.isSet("format") || parser.isSet("output")))
+        return exportTo(*answer, parser);
     if (parser.isSet("json")) {
         printLine(stdout, QString::fromUtf8(QJsonDocument(*answer).toJson(QJsonDocument::Indented)).trimmed());
         return 0;

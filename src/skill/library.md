@@ -31,6 +31,7 @@ The events of the books read, in the order they happen in their world rather tha
 omabook chronology --json                          # every book's; "events": {"shown", "total"}, "parts": [{"lanes", "axes", "unplaced", "contradictions"}]
 omabook chronology 12 --timeline "The War" --from 1940 --to 1942   # one book, one timeline, a stretch of time
 omabook chronology 12 --upto 3 --json             # as known at section 3 of book 12; --series or --collection for several
+omabook chronology --format csv --output story.csv # or graphml, dot; `omabook graph chronology` is the same command
 omabook chronology set-when "The siege" 1944-06-06 # or a span 1939..1945, --calendar "Third Age", --approximate, --said "long ago"
 omabook chronology order "The flood" before "The siege"   # before, after, during, same
 omabook chronology timeline add "The Third Age" --kind world

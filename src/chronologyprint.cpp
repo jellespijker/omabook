@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QStringList>
 
+#include "chronologyexport.h"
+
 using namespace Qt::StringLiterals;
 
 namespace {
@@ -29,20 +31,7 @@ struct Names {
     return calendar == gregorian ? u"the Gregorian calendar"_s : u"the %1 calendar"_s.arg(calendar);
 }
 
-// A time as the book says it: "1944-06-06", "about 3019 – …", with its own
-// calendar where that isn't the lane's, and the book's words in quotes.
-[[nodiscard]] QString timeText(const QJsonObject &time, const QString &calendar) {
-    QString when = time.value("at").toString();
-    if (when.isEmpty() && (time.contains("from") || time.contains("to")))
-        when = time.value("from").toString(u"…"_s) + u" – "_s + time.value("to").toString(u"…"_s);
-    if (!when.isEmpty() && time.value("approximate").toBool())
-        when = u"about "_s + when;
-    if (const QString on = time.value("calendar").toString(); !when.isEmpty() && on != calendar)
-        when += u" ("_s + on + u")"_s;
-    if (const QString said = time.value("said").toString(); !said.isEmpty())
-        when += (when.isEmpty() ? QString() : u" "_s) + u"“"_s + said + u"”"_s;
-    return when;
-}
+[[nodiscard]] QString timeText(const QJsonObject &time, const QString &calendar) { return ChronologyExport::said(time, calendar); }
 
 [[nodiscard]] QString laneName(const QJsonObject &lane, const Names &names) {
     const QJsonObject line = lane.value("timeline").toObject();

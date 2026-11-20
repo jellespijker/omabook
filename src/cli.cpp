@@ -2062,7 +2062,7 @@ constexpr std::array cliCommands{
     CliCommand{"export"_L1, exportBook},
     CliCommand{"ask"_L1, ask},
     CliCommand{"ai"_L1, runAiCli},
-    CliCommand{"graph"_L1, runGraphCli},
+    CliCommand{"graph"_L1, runGraphCliWithChronology},
     CliCommand{"chronology"_L1, runChronologyCli},
     CliCommand{"progress"_L1, progress},
     CliCommand{"format"_L1, format},

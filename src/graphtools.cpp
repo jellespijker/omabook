@@ -374,7 +374,7 @@ constexpr auto usage =
     "  sync                                       Bring the books' own nodes in step with the library\n"
     "  take <file>                                Merge in another computer's graph (what omabook sync sends)\n\n"
     "Kinds: character, place, group, concept, item, event, thread, theme, topic, question, book, author, series, tag.\n"
-    "Every command takes --json and --library <folder>.";
+    "chronology [book]: the events in the order they happen (omabook chronology). Every command takes --json and --library <folder>.";
 
 } // namespace
 
