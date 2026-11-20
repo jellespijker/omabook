@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.8.1] - 2026-11-20
+
+0.1.8 was tagged but its package never built; this is the first release of what 0.1.8 brought.
+
 ### Fixed
 
 - A relation of no book between a thing of a top-level collection's graph and one that every collection sees (put in by hand before collections had graphs of their own, or a plugin's world) is seen again in that collection's graph, and counts there in the order of the graph's window. Such relations were in no collection's graph once one of their ends was met in a book: Storyteller's plan lost a person's ties to the rest of the cast as soon as a chapter mentioned that person (#112).
@@ -231,7 +235,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.8...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.8.1...HEAD
+[0.1.8.1]: https://github.com/jellespijker/omabook/compare/v0.1.8...v0.1.8.1
 [0.1.8]: https://github.com/jellespijker/omabook/compare/v0.1.7.1...v0.1.8
 [0.1.7.1]: https://github.com/jellespijker/omabook/compare/v0.1.7...v0.1.7.1
 [0.1.7]: https://github.com/jellespijker/omabook/compare/v0.1.6.1...v0.1.7
