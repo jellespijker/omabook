@@ -49,11 +49,14 @@ jobs:
           depends=('hicolor-icon-theme' 'qt6-base' 'qt6-declarative' 'qt6-svg' 'qt6-wayland' 'xdg-desktop-portal'
                    'libarchive' 'poppler-qt6' 'libsodium')
           makedepends=('cmake' 'gcc' 'make' 'pkgconf')
-          checkdepends=('ttf-dejavu' 'dbus' 'zip')
+          checkdepends=('ttf-dejavu' 'dbus' 'zip' 'hyphen-en' 'hyphen-de' 'hyphen-nl')
           optdepends=('calibre: import Calibre libraries, use its metadata plugins and read Kindle and other converted formats'
                       'gnome-keyring: keep reading-site tokens in the keyring'
                       'folio: Omabook libraries and "Add to Library" in the file manager'
-                      'openssh: sync libraries between computers')
+                      'openssh: sync libraries between computers'
+                      'hyphen-en: hyphenate English books'
+                      'hyphen-de: hyphenate German books'
+                      'hyphen-nl: hyphenate Dutch books')
 
           prepare() {
             cp -r "$GITHUB_WORKSPACE" "\$srcdir/omabook"
