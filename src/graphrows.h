@@ -5,6 +5,7 @@
 #include <QString>
 #include <QStringList>
 #include <QVariant>
+#include <algorithm>
 
 #include "graph.h"
 
@@ -59,6 +60,21 @@ constexpr QLatin1StringView factColumns{"id, node_id, kind, value, COALESCE(book
 // Facts in the order a reader comes to them: by book, then place, then as
 // they were kept; those of no book after the rest.
 constexpr QLatin1StringView factOrder{"COALESCE(book_id, 0) = 0, book_id, section, fraction, id"};
+
+// The things of a scope that `tenant` (its number, TenantFilter::id) sees,
+// the most connected first by their degree there (tenant_nodes.degree), and
+// cut at `limit`; with a scope's value to bind once. In the general graph,
+// which holds most of a tenant's things, a range of the index that the
+// tenant and the degree lead, stopped at the limit; in a world, its few
+// things by the scope, then sorted. Each thing's degree after its columns.
+[[nodiscard]] inline QString mostConnected(qint64 tenant, bool general, int limit) {
+    const QString columns = QStringLiteral("n.id, n.scope, n.kind, n.name, n.summary, n.data, COALESCE(n.book_id, 0), n.updated, m.degree");
+    const QString from = general ? QStringLiteral("tenant_nodes AS m CROSS JOIN graph_nodes AS n ON n.id = m.node_id WHERE m.tenant = %1")
+                                 : QStringLiteral("graph_nodes AS n CROSS JOIN tenant_nodes AS m ON m.tenant = %1 AND m.node_id = n.id WHERE 1");
+    return QStringLiteral("SELECT %1 FROM %2 AND n.scope = ? ORDER BY m.degree DESC, m.node_id LIMIT %3")
+        .arg(columns, from.arg(tenant))
+        .arg(std::max(1, limit));
+}
 
 // "?, ?, ?" for as many values as there are.
 [[nodiscard]] inline QString marks(qsizetype count) { return QStringList(count, QStringLiteral("?")).join(QStringLiteral(", ")); }

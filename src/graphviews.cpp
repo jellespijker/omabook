@@ -376,10 +376,31 @@ GraphView Graph::acrossBooks(int limit) const {
 }
 
 GraphView Graph::whole(const QString &scope, int limit) const {
-    // The most connected first, by the relations the tenant sees.
-    GraphView view = collect("scope = ?", {text(scope)}, limit,
-                             "(SELECT COUNT(*) FROM graph_edges WHERE (source = graph_nodes.id OR target = graph_nodes.id)"
-                                 + andWithin(&TenantFilter::edges, u"graph_edges.id") + ") DESC, id");
+    const std::optional<TenantFilter> &filter = within();
+    if (!filter) {
+        // The whole graph, of no tenant, by every relation each thing has.
+        GraphView view = collect("scope = ?", {text(scope)}, limit,
+                                 "(SELECT COUNT(*) FROM graph_edges WHERE source = graph_nodes.id OR target = graph_nodes.id) DESC, id");
+        view.edges = edgesAmong(view.nodes);
+        return view;
+    }
+    // The most connected first, by the relations the tenant sees: its own
+    // and those of what every tenant sees (tenant 0), each by the degree kept
+    // there (#101). A thing is in one or the other, never both
+    // (TenancySchema), so the two are merged, not added.
+    const bool general = text(scope).isEmpty();
+    QString sql = mostConnected(0, general, limit);
+    QVariantList values{text(scope)};
+    if (filter->id() > 0) {
+        sql = QString("SELECT * FROM (%1) UNION ALL SELECT * FROM (%2) ORDER BY 9 DESC, 1 LIMIT %3")
+                  .arg(mostConnected(filter->id(), general, limit), sql)
+                  .arg(std::max(1, limit));
+        values << text(scope);
+    }
+    GraphView view;
+    for (QSqlQuery query = m_library->query(sql, values); query.next();)
+        view.nodes << nodeFrom(query);
+    told(view.nodes);
     view.edges = edgesAmong(view.nodes);
     return view;
 }
