@@ -74,6 +74,23 @@ class OpeningTests : public QObject {
         return value;
     }
 
+    // The first value `statement` answers on the library's database, as text.
+    [[nodiscard]] static QString textOf(const QString &root, const QString &statement) {
+        QString value;
+        {
+            QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("outside"));
+            database.setDatabaseName(root + QStringLiteral("/omabook.db"));
+            if (database.open()) {
+                QSqlQuery query(database);
+                if (query.exec(statement) && query.next())
+                    value = query.value(0).toString();
+            }
+            database.close();
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("outside"));
+        return value;
+    }
+
     [[nodiscard]] static int personalSpaces(const QString &root) {
         return run(root, QStringLiteral("SELECT COUNT(*) FROM spaces WHERE kind = 'personal'"));
     }
@@ -85,6 +102,13 @@ class OpeningTests : public QObject {
     static void countMigrations(QtMsgType type, const QMessageLogContext &context, const QString &message) {
         if (message.contains(QStringLiteral("bringing")) && message.contains(QStringLiteral("from format")))
             ++s_migrations;
+        s_previous(type, context, message);
+    }
+    // The last time a library was brought to a newer format, as the log says it.
+    static inline QString s_brought;
+    static void keepMigration(QtMsgType type, const QMessageLogContext &context, const QString &message) {
+        if (message.contains(QStringLiteral("bringing")) && message.contains(QStringLiteral("from format")))
+            s_brought = message;
         s_previous(type, context, message);
     }
 
@@ -181,6 +205,42 @@ private slots:
         // Once it is set up, it opens.
         Library after(root);
         QVERIFY(after.open());
+    }
+
+    // A library of 0.1.8.1, at format 32 (#112's step), takes the steps that
+    // came after it on main (#76's, format 33, and #110's, 34) and not its
+    // own again: the steps are positional, so #112's is 32 on main too.
+    void aLibraryOf0181TakesTheStepsAfterItsOwn() {
+        QCOMPARE(LibraryMigrations::currentFormat(), 34);
+        const QTemporaryDir dir;
+        QVERIFY(dir.isValid());
+        const QString root = dir.filePath(QStringLiteral("Library"));
+        {
+            Library library(root);
+            QVERIFY(library.open());
+        }
+        // As 0.1.8.1 left it: the rows made of every space but the published
+        // and shared ones (no plugin's left out yet), and no index of names.
+        const QString view = textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'"));
+        const QString plugins = QStringLiteral(" OR (name >= 'plugin:' AND name < 'plugin;')");
+        QVERIFY(view.contains(plugins));
+        QCOMPARE(run(root, QStringLiteral("DROP VIEW live_ops")), 0);
+        QCOMPARE(run(root, QString(view).replace(plugins, QString())), 0);
+        QCOMPARE(run(root, QStringLiteral("DROP INDEX graph_facts_names")), 0);
+        QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 32")), 0);
+
+        s_brought.clear();
+        s_previous = qInstallMessageHandler(keepMigration);
+        {
+            const auto restore = qScopeGuard([] { qInstallMessageHandler(s_previous); });
+            Library library(root);
+            QVERIFY(library.open());
+            QCOMPARE(library.formatVersion(), 34);
+            QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-32-*.db")}).size(), 1);
+        }
+        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 34")), qPrintable(s_brought));
+        QVERIFY(textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'")).contains(plugins));
+        QCOMPARE(run(root, QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = 'graph_facts_names'")), 1);
     }
 
     // A command that brings a library up to date says so on standard error
