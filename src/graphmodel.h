@@ -317,6 +317,8 @@ private:
     QTimer m_settle, m_refreshSoon;
 };
 
-// Makes GraphBrowser, GraphCanvas and GraphMark known to QML, as
-// `import Omabook`. Safe to call more than once.
+// Makes the views of the graph known to QML, as `import Omabook`:
+// GraphBrowser, GraphCanvas and GraphMark, and the chronology's
+// ChronologyBrowser and ChronologyCanvas (graphtypes.cpp). Safe to call
+// more than once.
 void registerGraphTypes();

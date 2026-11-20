@@ -58,11 +58,25 @@ public:
         // Where on the axis it is; none when it isn't on it, or is no moment
         // or span (only the book's words).
         [[nodiscard]] std::optional<Extent> extent(const EventTime &time) const;
+        // The moment a minute of the axis is in, to the minute: the other
+        // way round from extent().
+        [[nodiscard]] EventTime::Point point(qint64 minute) const;
+        // Round moments from `from` to `to`, for a ruler along the axis:
+        // whole thousands of years down to single minutes, the finest step
+        // of which there are no more than `most`, each given as far as it
+        // needs (a day as a day, the first of a month as the month),
+        // earliest first.
+        struct Tick {
+            qint64 minute = 0;
+            EventTime::Point point;
+        };
+        [[nodiscard]] QList<Tick> ticks(qint64 from, qint64 to, int most) const;
 
     private:
         friend class Calendars;
         [[nodiscard]] qint64 start(const EventTime::Point &point) const;
         [[nodiscard]] qint64 end(const EventTime::Point &point) const;
+        [[nodiscard]] bool real() const { return m_calendar == EventTime::gregorianName(); }
 
         QString m_calendar;
         Shape m_shape;

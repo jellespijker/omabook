@@ -76,7 +76,7 @@ ApplicationWindow {
                                        || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
-                                       || aiSearch.opened
+                                       || aiSearch.opened || chronologyLayer.popupOpen
     readonly property bool keys: !typing && !dialogOpen
 
     // Whether anything is being worked on anywhere: the AI, a catalog, an
@@ -106,6 +106,8 @@ ApplicationWindow {
     // The knowledge graph in place of the shelf: of one book, or of the
     // whole library when no book is named.
     property bool graphShown: false
+    // The chronology (ChronologyLayer.qml) in place of all of them.
+    readonly property bool chronologyShown: chronologyLayer.shown
     function showGraph(bookId) {
         graphLoader.active = true
         graphShown = true
@@ -150,7 +152,8 @@ ApplicationWindow {
     }
     // The keyboard, back with the shelf or the page.
     function restoreFocus() {
-        if (win.inReader && readerLoader.item && readerLoader.item.content) readerLoader.item.content.forceActiveFocus()
+        if (win.chronologyShown) chronologyLayer.takeFocus()
+        else if (win.inReader && readerLoader.item && readerLoader.item.content) readerLoader.item.content.forceActiveFocus()
         else if (win.graphShown && graphLoader.item) graphLoader.item.takeFocus()
         else library.takeFocus()
     }
@@ -292,8 +295,8 @@ ApplicationWindow {
             id: library
             objectName: "library"
             anchors.fill: parent
-            visible: !win.inReader && !win.graphShown
-            active: !win.inReader && !win.graphShown && win.keys
+            visible: !win.inReader && !win.graphShown && !win.chronologyShown
+            active: visible && win.keys
         }
 
         // The knowledge graph, built the first time it is asked for. It
@@ -302,7 +305,7 @@ ApplicationWindow {
             id: graphLoader
             anchors.fill: parent
             active: false
-            visible: win.graphShown && !win.inReader
+            visible: win.graphShown && !win.inReader && !win.chronologyShown
             sourceComponent: GraphPane {
                 objectName: "libraryGraph"
                 active: visible && win.keys
@@ -325,8 +328,13 @@ ApplicationWindow {
             id: readerLoader
             anchors.fill: parent
             active: false
-            visible: win.inReader
-            sourceComponent: ReaderView { active: win.inReader && win.keys }
+            visible: win.inReader && !win.chronologyShown
+            sourceComponent: ReaderView { active: win.inReader && win.keys && !win.chronologyShown }
+        }
+        ChronologyLayer {
+            id: chronologyLayer
+            objectName: "chronologyLayer"
+            anchors.fill: parent
         }
         Connections {
             target: reader

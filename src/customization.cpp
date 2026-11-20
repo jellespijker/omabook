@@ -163,7 +163,7 @@ void Customization::loadKeys() {
     auto [file, exists, problem] = readObject(m_folder + "/keys.json");
     for (auto place = file.begin(); place != file.end() && problem.isEmpty(); ++place) {
         if (!isPlace(place.key()) || !place.value().isObject()) {
-            problem = "\"" + place.key() + "\" isn't a place keys work in: use \"global\", \"library\", \"reader\" or \"graph\".";
+            problem = "\"" + place.key() + R"(" isn't a place keys work in: use "global", "library", "reader", "graph" or "chronology".)";
             break;
         }
         const QJsonObject keys = place.value().toObject();
@@ -435,7 +435,7 @@ center`, or the reader's "Aa" panel), which win over these.
 `{"reader": {"Space": "next", "N": ""}, "library": {"T": "read"}, "global": {"F2": "settings"}, "graph": {"X": "remove"}}`
 
 A key and the command it runs in that place (`graph` is the knowledge graph,
-over the shelf or beside the page); `""` frees the key. Whatever
+over the shelf or beside the page, `chronology` when its events happen); `""` frees the key. Whatever
 the file doesn't mention keeps its default. A key given to a command is
 taken from whatever had it in that place. Keys are written the way Qt does:
 `A`, `Shift+A`, `Ctrl+F`, `PgDown`, `Escape`, `F11`. Keys pressed alone are

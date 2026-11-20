@@ -13,7 +13,7 @@
 namespace CommandTable {
 
 // Where keys work: what a command's id begins with, and what keys.json is divided into.
-inline constexpr std::array<std::string_view, 4> places{"global", "library", "reader", "graph"};
+inline constexpr std::array<std::string_view, 5> places{"global", "library", "reader", "graph", "chronology"};
 
 [[nodiscard]] constexpr std::string_view placeOf(std::string_view command) noexcept { return command.substr(0, command.find('.')); }
 
@@ -88,6 +88,7 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"library.graph", {"6"}, tr("Show the library as a graph of what is known: books, people, places, ideas and how they relate")},
     {"library.graph_book", {"U"}, tr("Show what is known of the selected book as a graph")},
     {"library.graph_build", {"Shift+U"}, tr("Build the knowledge graph for books you have already read")},
+    {"library.chronology_book", {"T"}, tr("Show when the selected book's events happen, on their timelines, as far as you have read it")},
     {"reader.back", {"Escape", "Backspace"}, tr("Close a pane, or go back to the library")},
     {"reader.page_down", {"Space", "Right"}, tr("Turn the page, or scroll on a screen, on into the next chapter")},
     {"reader.page_up", {"Shift+Space", "Left"}, tr("Turn the page back, or scroll back a screen")},
@@ -119,6 +120,7 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"reader.layout",
      {"Shift+L"},
      tr("Read as pages that turn, as one column that scrolls on through the chapters, or automatically, and round again")},
+    {"reader.chronology", {"Shift+T"}, tr("Show when the book's events happen, on their timelines, as far as you have read")},
     // The graph view, wherever it is open: over the shelf or beside the page.
     {"graph.left", {"H", "Left"}, tr("Select the nearest related thing to the left")},
     {"graph.right", {"L", "Right"}, tr("Select the nearest related thing to the right")},
@@ -151,6 +153,31 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"graph.edit", {"E"}, tr("Rename the selected thing, or rewrite what is said of it")},
     {"graph.merge", {"Shift+M"}, tr("Fold another thing into the selected one: they are the same")},
     {"graph.remove", {"D", "Delete"}, tr("Remove the selected thing from the graph (asks first)")},
+    {"graph.chronology", {"T"}, tr("Show when the events of what the graph shows happen, on their timelines")},
+    // The chronology: when the events happen in their stories, in place of
+    // the shelf, the graph or the page.
+    {"chronology.close", {"Escape"}, tr("Close the chronology")},
+    {"chronology.left", {"H", "Left"}, tr("Select the event before on its lane")},
+    {"chronology.right", {"L", "Right"}, tr("Select the event after on its lane")},
+    {"chronology.up", {"K", "Up"}, tr("Select the nearest event on the lane above")},
+    {"chronology.down", {"J", "Down"}, tr("Select the nearest event on the lane below")},
+    {"chronology.zoom_in", {"+", "="}, tr("Zoom in on the chronology, down to minutes")},
+    {"chronology.zoom_out", {"-"}, tr("Zoom out of the chronology, up to centuries")},
+    {"chronology.fit", {"0"}, tr("Fit the whole chronology in the view")},
+    {"chronology.pan_left", {"Shift+H", "Shift+Left"}, tr("Move the view of the chronology back in time")},
+    {"chronology.pan_right", {"Shift+L", "Shift+Right"}, tr("Move the view of the chronology on in time")},
+    {"chronology.pan_up", {"Shift+K", "Shift+Up"}, tr("Move the view of the chronology up the lanes")},
+    {"chronology.pan_down", {"Shift+J", "Shift+Down"}, tr("Move the view of the chronology down the lanes")},
+    {"chronology.find", {"/", "Ctrl+F"}, tr("Find an event in the chronology by name")},
+    {"chronology.filter",
+     {"F"},
+     tr("Filter the chronology: by timeline, book, series, collection, character, place, group or theme, or only what was met in a book")},
+    {"chronology.range", {"R"}, tr("Show only a stretch of story time, from one year or date to another")},
+    {"chronology.filter_clear", {"Shift+F"}, tr("Take every filter off the chronology")},
+    {"chronology.unplaced", {"U"}, tr("Show or hide the events of which no time or order is known")},
+    {"chronology.details", {"I"}, tr("Show or hide what is known of the selected event")},
+    {"chronology.page", {"O", "Return", "Enter"}, tr("Go back to the page where the selected event was revealed")},
+    {"chronology.graph", {"G"}, tr("Show the selected event in the graph")},
 });
 
 // A command is found by its id, which begins with the place it works in.
@@ -167,7 +194,8 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
 
 // A key does one thing where it is pressed: no two commands of one place
 // have the same key by default, and none has a key that works everywhere.
-// (The graph's keys are its own: it lies over the shelf or beside the page.)
+// (The graph's keys are its own: it lies over the shelf or beside the page;
+// so are the chronology's, in place of the shelf, the graph or the page.)
 // Each command's place is found once, as its number in `places` (global is
 // the first), not once for every pair: clang's constant evaluation stops at
 // a number of steps a table this long reaches otherwise.

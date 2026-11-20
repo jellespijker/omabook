@@ -3,6 +3,7 @@
 #include <QSet>
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <utility>
 
 using Chronology::Calendars;
@@ -78,6 +79,149 @@ constexpr qint64 minutesInDay = qint64{24} * 60;
     there.from = move(reckoned.from);
     there.to = move(reckoned.to);
     return there;
+}
+
+// Rounded down, also for a minute before the year 0.
+[[nodiscard]] qint64 floorDiv(qint64 value, qint64 by) { return value / by - (value % by != 0 && (value < 0) != (by < 0) ? 1 : 0); }
+
+// The day of the real calendar so many days from the start of its year 0:
+// civilDays() the other way round (Hinnant's civil_from_days).
+[[nodiscard]] EventTime::Point civil(qint64 days) {
+    const qint64 fromMarch = days - 60;
+    const qint64 era = (fromMarch >= 0 ? fromMarch : fromMarch - 146096) / 146097;
+    const qint64 ofEra = fromMarch - era * 146097;
+    const qint64 yearOfEra = (ofEra - ofEra / 1460 + ofEra / 36524 - ofEra / 146096) / 365;
+    const qint64 ofYear = ofEra - (365 * yearOfEra + yearOfEra / 4 - yearOfEra / 100);
+    const qint64 shifted = (5 * ofYear + 2) / 153;
+    const int month = static_cast<int>(shifted < 10 ? shifted + 3 : shifted - 9);
+    return {.year = yearOfEra + era * 400 + (month <= 2 ? 1 : 0),
+            .month = month,
+            .day = static_cast<int>(ofYear - (153 * shifted + 2) / 5 + 1),
+            .hour = {},
+            .minute = {}};
+}
+
+// A tick as far as it needs: the first month of a year as the year,
+// midnight as its day.
+// Whether a point's last part is the first of its unit: month or day 1, hour or minute 0.
+[[nodiscard]] bool first(const EventTime::Point &point, Precision unit) {
+    switch (unit) {
+    case Precision::Minute:
+        return point.minute.value_or(0) == 0;
+    case Precision::Hour:
+        return point.hour.value_or(0) == 0;
+    case Precision::Day:
+        return point.day.value_or(1) == 1;
+    case Precision::Month:
+        return point.month.value_or(1) == 1;
+    case Precision::None:
+    case Precision::Year:
+        break;
+    }
+    return false;
+}
+
+[[nodiscard]] EventTime::Point roundest(EventTime::Point point, Precision unit) {
+    point = cut(point, unit);
+    while (unit > Precision::Year) {
+        if (!first(point, unit))
+            break;
+        unit = static_cast<Precision>(static_cast<int>(unit) - 1);
+        point = cut(point, unit);
+    }
+    return point;
+}
+
+// A ruler's step: so many of a unit (a year, a month, ... a minute).
+struct Step {
+    Precision unit = Precision::Year;
+    qint64 count = 1;
+};
+
+// The steps a ruler can go by, the finest first.
+[[nodiscard]] QList<Step> steps() {
+    QList<Step> all;
+    for (const qint64 count : {1, 5, 10, 15, 30})
+        all.append({.unit = Precision::Minute, .count = count});
+    for (const qint64 count : {1, 3, 6, 12})
+        all.append({.unit = Precision::Hour, .count = count});
+    for (const qint64 count : {1, 2, 5, 10})
+        all.append({.unit = Precision::Day, .count = count});
+    for (const qint64 count : {1, 3, 6})
+        all.append({.unit = Precision::Month, .count = count});
+    for (qint64 tens = 1; tens <= 1'000'000'000; tens *= 10)
+        for (const qint64 times : {1, 2, 5})
+            all.append({.unit = Precision::Year, .count = tens * times});
+    return all;
+}
+
+// The finest step a ruler of `most` ticks can go by over `minutes`, on a
+// calendar with years of `days` days and `months` months.
+[[nodiscard]] Step stepFor(double minutes, int most, double days, int months) {
+    const double year = days * minutesInDay;
+    const auto length = [&](const Step &step) {
+        double unit = 1;
+        switch (step.unit) {
+        case Precision::None:
+        case Precision::Year:
+            unit = year;
+            break;
+        case Precision::Month:
+            unit = year / months;
+            break;
+        case Precision::Day:
+            unit = static_cast<double>(minutesInDay);
+            break;
+        case Precision::Hour:
+            unit = 60;
+            break;
+        case Precision::Minute:
+            break;
+        }
+        return unit * static_cast<double>(step.count);
+    };
+    const QList<Step> all = steps();
+    const auto fits = std::ranges::find_if(all, [&](const Step &step) { return minutes / length(step) <= most; });
+    return fits != all.end() ? *fits : all.last();
+}
+
+// An hour or a minute: every so many from the start of a day, which they divide.
+[[nodiscard]] QList<Calendars::Scale::Tick> clockTicks(const Calendars::Scale &scale, qint64 from, qint64 to, int most, const Step &step) {
+    QList<Calendars::Scale::Tick> ticks;
+    const qint64 by = (step.unit == Precision::Hour ? 60 : 1) * step.count;
+    for (qint64 minute = -floorDiv(-from, by) * by; minute <= to && ticks.size() <= qsizetype{2} * most; minute += by)
+        ticks.append({.minute = minute, .point = roundest(scale.point(minute), step.unit)});
+    return ticks;
+}
+
+// How long a calendar's years and months are: so many months, of so many days each.
+struct Calendar {
+    int months = 12;
+    std::function<int(qint64, int)> days;
+};
+
+// The round moment a step of years, months or days after `at`.
+[[nodiscard]] EventTime::Point advanced(EventTime::Point at, const Step &step, const Calendar &calendar) {
+    const auto nextMonth = [&calendar](EventTime::Point &point, int by) {
+        const int month = point.month.value_or(1) + by;
+        point.year += (month - 1) / calendar.months;
+        point.month = (month - 1) % calendar.months + 1;
+    };
+    const int count = static_cast<int>(step.count);
+    if (step.unit == Precision::Year) {
+        at.year += step.count;
+    } else if (step.unit == Precision::Month) {
+        nextMonth(at, count);
+    } else {
+        // Every so many days from the first, none so near the end of the
+        // month that it runs into the next month's first.
+        const int day = at.day.value_or(1) + count;
+        const bool over = day > calendar.days(at.year, at.month.value_or(1)) - count / 2;
+        at.day = over ? 1 : day;
+        if (over)
+            nextMonth(at, 1);
+    }
+    return at;
 }
 
 void widen(Calendars::Shape &shape, const EventTime::Reckoning &reckoned) {
@@ -204,4 +348,43 @@ qint64 Calendars::Scale::end(const EventTime::Point &point) const {
         return start(point) + 1;
     }
     return start(point);
+}
+
+EventTime::Point Calendars::Scale::point(qint64 minute) const {
+    const qint64 days = floorDiv(minute, minutesInDay);
+    const qint64 rest = minute - days * minutesInDay;
+    EventTime::Point point;
+    if (real()) {
+        point = civil(days);
+    } else {
+        const qint64 perYear = qint64{m_shape.months} * m_shape.days;
+        point.year = floorDiv(days, perYear);
+        const qint64 ofYear = days - point.year * perYear;
+        point.month = static_cast<int>(ofYear / m_shape.days) + 1;
+        point.day = static_cast<int>(ofYear % m_shape.days) + 1;
+    }
+    point.hour = static_cast<int>(rest / 60);
+    point.minute = static_cast<int>(rest % 60);
+    return point;
+}
+
+QList<Calendars::Scale::Tick> Calendars::Scale::ticks(qint64 from, qint64 to, int most) const {
+    if (to <= from || most < 1)
+        return {};
+    const int months = real() ? 12 : m_shape.months;
+    const Step step = stepFor(static_cast<double>(to - from), most, real() ? 365.2425 : static_cast<double>(months) * m_shape.days, months);
+    if (step.unit == Precision::Hour || step.unit == Precision::Minute)
+        return clockTicks(*this, from, to, most, step);
+    QList<Tick> ticks;
+    // From the start of the year or the month `from` is in, so that the steps are round.
+    EventTime::Point at = cut(point(from), step.unit == Precision::Day ? Precision::Month : Precision::Year);
+    if (step.unit == Precision::Year)
+        at.year = floorDiv(at.year, step.count) * step.count;
+    const Calendar shape{.months = months, .days = [this](qint64 year, int month) { return real() ? daysIn(year, month) : m_shape.days; }};
+    for (qint64 minute = start(at); minute <= to && ticks.size() <= qsizetype{2} * most; minute = start(at)) {
+        if (minute >= from)
+            ticks.append({.minute = minute, .point = roundest(at, step.unit)});
+        at = advanced(at, step, shape);
+    }
+    return ticks;
 }

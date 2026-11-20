@@ -83,7 +83,7 @@ AppPopup {
     }
     function placeName(place) {
         return place === "reader" ? qsTr("Reading") : place === "library" ? qsTr("Library") : place === "graph" ? qsTr("Graph")
-             : place === "plugins" ? qsTr("Plugins") : qsTr("Everywhere")
+             : place === "chronology" ? qsTr("Chronology") : place === "plugins" ? qsTr("Plugins") : qsTr("Everywhere")
     }
 
     // The rows of what is shown: the results of a search, the keys by
@@ -128,7 +128,7 @@ AppPopup {
             return rows
         }
         if (popup.page === "keys") {
-            const places = popup.reading ? ["reader", "graph", "global", "library"] : ["library", "graph", "global", "reader"]
+            const places = popup.reading ? ["reader", "graph", "chronology", "global", "library"] : ["library", "graph", "chronology", "global", "reader"]
             for (const place of places) {
                 const here = popup.commands.filter(command => command.place === place)
                 if (here.length === 0)
@@ -237,7 +237,7 @@ AppPopup {
             note = row.place === "panel" ? qsTr("That one works in its panel or dialog: %1.").arg(row.panelTitle)
                  : row.where === "reader" ? qsTr("That one works while a book is open.")
                  : row.where === "library" ? qsTr("That one works on the shelf.")
-                 : row.where === "graph" ? qsTr("That one works in the graph.")
+                 : row.where === "graph" ? qsTr("That one works in the graph.") : row.where === "chronology" ? qsTr("That one works in the chronology.")
                  : qsTr("That can't be done right now.")
         }
     }

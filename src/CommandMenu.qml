@@ -20,7 +20,7 @@ AppPopup {
     padding: 12
     widest: 460
 
-    // "library", "book", "reader" or "graph".
+    // "library", "book", "reader", "graph" or "chronology".
     property string kind: "library"
     // What gets the keyboard back before the command runs: a command of
     // the graph beside the page works while the graph has it.
@@ -41,15 +41,19 @@ AppPopup {
                     "library.graph", "library.graph_build", "library.group", "library.details", "library.plugins",
                     "global.settings", "global.change", "global.help", "global.quit"],
         "book": ["library.read", "library.details", "library.edit", "library.lookup", "library.collection_book",
-                 "library.graph_book", "library.found_graph", "library.found_moment", "library.export", "library.remove"],
+                 "library.graph_book", "library.chronology_book", "library.found_graph", "library.found_moment", "library.export", "library.remove"],
         "reader": ["reader.back", "reader.contents", "reader.find", "reader.bookmark", "reader.ask", "reader.catch_up",
-                   "reader.cast", "reader.graph", "reader.marks", "reader.select", "reader.format", "reader.pages", "reader.layout",
+                   "reader.cast", "reader.graph", "reader.chronology", "reader.marks", "reader.select", "reader.format", "reader.pages", "reader.layout",
                    "reader.larger", "reader.smaller", "reader.expand", "reader.previous", "reader.next", "reader.start",
                    "reader.end", "global.settings", "global.change", "global.help", "global.quit"],
         "graph": ["graph.find", "graph.filter", "graph.list", "graph.details", "graph.open", "graph.moments", "graph.expand",
                   "graph.back", "graph.next", "graph.previous", "graph.further", "graph.nearer", "graph.zoom_in",
-                  "graph.zoom_out", "graph.fit", "graph.beyond", "graph.add", "graph.edit", "graph.merge", "graph.remove",
-                  "graph.close"]
+                  "graph.zoom_out", "graph.fit", "graph.beyond", "graph.chronology", "graph.add", "graph.edit", "graph.merge",
+                  "graph.remove", "graph.close"],
+        "chronology": ["chronology.find", "chronology.filter", "chronology.range", "chronology.filter_clear", "chronology.unplaced",
+                       "chronology.details", "chronology.page", "chronology.graph", "chronology.left", "chronology.right",
+                       "chronology.up", "chronology.down", "chronology.zoom_in", "chronology.zoom_out", "chronology.fit",
+                       "chronology.pan_left", "chronology.pan_right", "chronology.pan_up", "chronology.pan_down", "chronology.close"]
     })
     // Where the plugins' commands for a kind work.
     function pluginsFit(kind, where) {
