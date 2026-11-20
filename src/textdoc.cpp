@@ -11,10 +11,10 @@ namespace {
 // is turned into HTML chapters once and cleaned when the reader asks.
 class TextDocument : public Document {
 public:
-    std::expected<void, QString> load(const QString &path) {
+    std::expected<void, Failure> load(const QString &path) {
         QFile file(path);
         if (!file.open(QIODevice::ReadOnly))
-            return std::unexpected("The file can't be read: " + file.errorString());
+            return std::unexpected(Failure(Failure::Code::FileUnreadable, {file.errorString()}));
         const QString text = decodeText(file.readAll());
         const QString lower = path.toLower();
         if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
@@ -30,7 +30,7 @@ public:
             m_sections << text;
         }
         if (m_sections.isEmpty())
-            return std::unexpected("The file has no text.");
+            return std::unexpected(Failure(Failure::Code::FileWithoutText));
         return {};
     }
 

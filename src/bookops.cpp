@@ -161,8 +161,8 @@ BookOps::LookUp BookOps::lookUp(const Library &library, const Book &book, bool a
                 if (--waiting == 0)
                     loop.quit();
             });
-            QObject::connect(source, &MetadataSource::failed, &loop, [&result, &waiting, &loop](const QString &problem) {
-                result.problems << problem;
+            QObject::connect(source, &MetadataSource::failed, &loop, [&result, &waiting, &loop](const Failure &problem) {
+                result.problems << problem.text();
                 if (--waiting == 0)
                     loop.quit();
             });

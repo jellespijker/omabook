@@ -3,10 +3,12 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <expected>
 #include <memory>
 #include <optional>
 
 #include "document.h"
+#include "failure.h"
 
 // A format a plugin Omabook knows of reads (the plugins' registry says
 // which), whether that plugin is installed here or not. A file in it is
@@ -55,8 +57,10 @@ std::optional<PluginFormat> neededPlugin(const QStringList &extensions);
 // Formats of one book in the order the reader prefers them.
 QStringList byPreference(QStringList extensions);
 
-// Opens a book for reading; on failure the result is null and `error` says
-// why in English, for the caller to show.
+// Opens a book for reading, or says why it can't be.
+[[nodiscard]] std::expected<std::unique_ptr<Document>, Failure> opened(const QString &path);
+// The same for a caller that shows the reason as it is: on failure the result
+// is null and `error` says why, worded in the language of whoever shows it.
 std::unique_ptr<Document> open(const QString &path, QString *error = nullptr);
 
 // What the file says about itself, with the file name standing in for a

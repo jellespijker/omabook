@@ -812,7 +812,7 @@ private slots:
         goodreads.answer = [](const QString &) -> FakeSite::Reply { return {200, "<html>Sign in</html>"}; };
         source.search(book);
         QTRY_COMPARE(failed.count(), 1);
-        QVERIFY(failed.first().first().toString().contains("doesn't understand"));
+        QVERIFY(failed.first().first().value<Failure>().text().contains("doesn't understand"));
     }
 
     void shelvesAreFetchedPageByPage() {

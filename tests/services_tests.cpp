@@ -925,7 +925,7 @@ private slots:
                     if (book.title == "the first book")
                         emit found({other, right});
                     else
-                        emit failed("unreachable");
+                        emit failed(Failure::said("unreachable"));
                 });
             }
         };
@@ -1232,12 +1232,12 @@ private slots:
         QSignalSpy failed(&broken, &MetadataSource::failed);
         broken.search(book);
         QVERIFY(failed.wait(5000));
-        QCOMPARE(failed.first().first().toString(), QString("Broken: no api key set"));
+        QCOMPARE(failed.first().first().value<Failure>().text(), QString("Broken: no api key set"));
         ProcessMetadataSource explained("Polite", {}, script(dir.filePath("polite"), "cat > /dev/null\necho '{\"error\": \"rate limited\"}'\n"), {}, dir.path());
         QSignalSpy explainedFailed(&explained, &MetadataSource::failed);
         explained.search(book);
         QVERIFY(explainedFailed.wait(5000));
-        QCOMPARE(explainedFailed.first().first().toString(), QString("Polite: rate limited"));
+        QCOMPARE(explainedFailed.first().first().value<Failure>().text(), QString("Polite: rate limited"));
     }
 
     void calibresPluginsAreListedSwitchedAndAsked() {

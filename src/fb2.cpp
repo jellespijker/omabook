@@ -16,7 +16,7 @@ namespace {
 // chapter when the reader asks for it.
 class Fb2Document : public Document {
 public:
-    std::expected<void, QString> load(const QString &path) {
+    std::expected<void, Failure> load(const QString &path) {
         QByteArray bytes;
         if (path.endsWith(".fb2", Qt::CaseInsensitive)) {
             QFile file(path);
@@ -29,10 +29,10 @@ public:
                     bytes = archive.read(name);
         }
         if (bytes.isEmpty())
-            return std::unexpected("The file is empty or holds no FictionBook.");
+            return std::unexpected(Failure(Failure::Code::FictionBookEmpty));
         convert(tokenizeHtml(decodeText(bytes)));
         if (m_sections.isEmpty())
-            return std::unexpected("This FictionBook has no text.");
+            return std::unexpected(Failure(Failure::Code::FictionBookWithoutText));
         return {};
     }
 

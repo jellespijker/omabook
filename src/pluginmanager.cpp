@@ -275,7 +275,7 @@ void PluginManager::tryOut(const QString &id, const QString &title) {
     for (MetadataSource *source : std::as_const(sources)) {
         connect(source, &MetadataSource::found, this,
                 [this, source](const QList<MetaCandidate> &candidates) { answered(source, candidates, {}); });
-        connect(source, &MetadataSource::failed, this, [this, source](const QString &problem) { answered(source, {}, problem); });
+        connect(source, &MetadataSource::failed, this, [this, source](const Failure &problem) { answered(source, {}, problem.text()); });
     }
     m_trialLimit.start();
     for (MetadataSource *source : std::as_const(sources))

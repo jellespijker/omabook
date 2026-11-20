@@ -10,6 +10,7 @@
 
 #include "ai.h"
 #include "bookmeta.h"
+#include "failure.h"
 
 struct MetaCandidate {
     QString source; // "Open Library", "Google Books", "Amazon.com · Calibre", or the AI's name
@@ -52,7 +53,7 @@ public:
 
 signals:
     void found(const QList<MetaCandidate> &candidates);
-    void failed(const QString &error);
+    void failed(const Failure &failure);
 };
 
 // A catalog asked over HTTP: the subclass says which address to ask and how

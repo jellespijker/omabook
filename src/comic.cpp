@@ -28,11 +28,11 @@ class ComicDocument : public Document {
 public:
     explicit ComicDocument(const QString &path) : m_archive(path) {}
 
-    std::expected<void, QString> load(const QString &path) {
+    std::expected<void, Failure> load(const QString &path) {
         const QStringList names = m_archive.entries();
         m_pages = names | std::views::filter(isPicture) | std::ranges::to<QStringList>();
         if (m_pages.isEmpty())
-            return std::unexpected("This archive holds no pictures to read as a comic.");
+            return std::unexpected(Failure(Failure::Code::ComicWithoutPictures));
         BookSource::sortNaturally(m_pages);
 
         m_meta.title = QFileInfo(path).completeBaseName();

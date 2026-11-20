@@ -99,9 +99,9 @@ void WebMetadataSource::search(const BookMeta &book) {
         reply->deleteLater();
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         if (status == 429)
-            emit failed(name() + " is turning requests away for now; it allows only so many without an account.");
+            emit failed(Failure(Failure::Code::CatalogTurnsAway, {name()}));
         else if (reply->error() != QNetworkReply::NoError)
-            emit failed(name() + " can't be reached: " + reply->errorString());
+            emit failed(Failure(Failure::Code::CatalogUnreachable, {name(), reply->errorString()}));
         else
             emit found(parse(reply->readAll()));
     });
@@ -277,16 +277,18 @@ ProcessMetadataSource::ProcessMetadataSource(const QString &name, const QStringL
         const QList<MetaCandidate> candidates = read(m_process.readAllStandardOutput(), &problem);
         const QString said = QString::fromUtf8(m_process.readAllStandardError()).trimmed().section('\n', -1);
         if (m_timedOut)
-            emit failed(m_name + " took too long to answer.");
+            emit failed(Failure(Failure::Code::SourceTooSlow, {m_name}, m_timeout.interval() / 1000));
         else if (!candidates.isEmpty() || (code == 0 && status == QProcess::NormalExit && problem.isEmpty()))
             emit found(candidates);
         else
-            emit failed(m_name + ": " + (!problem.isEmpty() ? problem : !said.isEmpty() ? said : "it stopped with an error."));
+            emit failed(!problem.isEmpty() || !said.isEmpty()
+                            ? Failure(Failure::Code::SourceSaid, {m_name, !problem.isEmpty() ? problem : said})
+                            : Failure(Failure::Code::SourceStopped, {m_name}));
     });
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart) {
             m_timeout.stop();
-            emit failed(m_name + " can't be started: " + m_program);
+            emit failed(Failure(Failure::Code::ProgramWontStart, {m_name, m_program}));
         }
     });
 }
@@ -352,7 +354,7 @@ QList<MetaCandidate> CalibreMetadataSource::read(const QByteArray &output, QStri
 AiMetadataSource::AiMetadataSource(AiProvider *provider, const QString &fileName, const QString &opening, QObject *parent)
     : MetadataSource(parent), m_provider(provider), m_fileName(fileName), m_opening(opening) {
     connect(provider, &AiProvider::delta, this, [this](const QString &text) { m_answer += text; });
-    connect(provider, &AiProvider::failed, this, &MetadataSource::failed);
+    connect(provider, &AiProvider::failed, this, [this](const QString &error) { emit failed(Failure::said(error)); });
     connect(provider, &AiProvider::finished, this, [this] {
         MetaCandidate candidate = Prompts::parseMetadata(m_answer, m_found);
         candidate.source = name();
@@ -363,7 +365,7 @@ AiMetadataSource::AiMetadataSource(AiProvider *provider, const QString &fileName
                 && found.meta.title.compare(candidate.meta.title, Qt::CaseInsensitive) == 0)
                 candidate.coverUrl = found.coverUrl;
         if (candidate.meta.title.isEmpty())
-            emit failed(name() + " gave no details for this book.");
+            emit failed(Failure(Failure::Code::NoDetailsFound, {name()}));
         else
             emit found({candidate});
     });

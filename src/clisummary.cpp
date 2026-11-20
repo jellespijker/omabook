@@ -49,5 +49,6 @@ QString cliSummary() {
            "<book> is a number from omabook list, or a book file. Every command takes --json and\n"
            "--library <folder> (that library for this run only), before or after its name, and\n"
            "omabook <command> --help says more. A command that asks the AI takes --model <name>:\n"
-           "main, quick, or a model's own name, for that run.";
+           "main, quick, or a model's own name, for that run. Errors are in English, or in the\n"
+           "desktop's language with --translated.";
 }

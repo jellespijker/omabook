@@ -15,7 +15,7 @@ void ScriptMetadataSource::search(const BookMeta &book) {
             if (problem.isEmpty())
                 emit found(candidates);
             else
-                emit failed(m_name + ": " + problem);
+                emit failed(Failure(Failure::Code::SourceSaid, {m_name, problem}));
         });
     };
     if (!m_plugin) {

@@ -396,9 +396,9 @@ QString Library::bookFolder(qint64 id) const {
 Library::Added Library::add(const QString &file, const std::optional<BookMeta> &known) {
     const QFileInfo info(file);
     if (!info.isFile() || !info.isReadable())
-        return {.error = "There is no readable file at " + file};
+        return {.error = Failure(Failure::Code::NoReadableFile, {file}).text()};
     if (!Formats::isBook(file))
-        return {.error = info.fileName() + " is not a book format Omabook knows."};
+        return {.error = Failure(Failure::Code::NotABookFormat, {info.fileName()}).text()};
     const QString hash = hashFile(file);
     if (const qint64 existing = bookWithHash(hash))
         return {.id = existing, .duplicate = true, .error = {}};
@@ -415,7 +415,7 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
                             meta.isbn, meta.published, meta.description, meta.tags.join(", "),
                             Spaces::wallSeconds(*this), Spaces::wallSeconds(*this)});
     if (!id)
-        return {.error = "The library can't be written: " + id.error()};
+        return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
     const QString folder = folderFor(meta, *id);
     exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
     guard.reset();
@@ -484,7 +484,7 @@ bool Library::addFormat(qint64 id, const QString &file, QString *error) {
 
 Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
     if (meta.title.trimmed().isEmpty())
-        return {.error = "A book needs a title."};
+        return {.error = Failure(Failure::Code::BookNeedsTitle).text()};
     const Batch batch(*this);
     const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
                            "description, tags, added, paper, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -492,7 +492,7 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
                             meta.isbn, meta.published, meta.description, meta.tags.join(", "),
                             Spaces::wallSeconds(*this), paper, Spaces::wallSeconds(*this)});
     if (!id)
-        return {.error = "The library can't be written: " + id.error()};
+        return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
     // The folder is made when there is something to put in it: a cover, or
     // a file the book is given later.
     exec("UPDATE books SET path = ? WHERE id = ?", {folderFor(meta, *id), *id});

@@ -101,10 +101,11 @@ Registry &registry() {
     return extensions;
 }
 
-// Opens a book, or says why it can't be.
-[[nodiscard]] OpenedDocument opened(const QString &path) {
+} // namespace
+
+OpenedDocument Formats::opened(const QString &path) {
     if (!QFileInfo::exists(path))
-        return std::unexpected("There is no such file: " + path);
+        return std::unexpected(Failure(Failure::Code::NoSuchFile, {path}));
     // A format added as a provider: by the file's extension, or for a folder
     // or a plain archive by what is in it.
     if (const auto provider = Formats::providerFor(path)) {
@@ -112,24 +113,21 @@ Registry &registry() {
         QString why;
         const auto description = provider->describe ? provider->describe(source, &why) : std::nullopt;
         if (!description || description->chapters.isEmpty())
-            return std::unexpected(why.isEmpty() ? provider->name + " found no chapters in " + fileName(path) + "." : why);
+            return std::unexpected(why.isEmpty() ? Failure(Failure::Code::NoChaptersFound, {provider->name, fileName(path)})
+                                                 : Failure::said(why));
         return Formats::fromDescription(*description, source);
     }
     if (!QFileInfo(path).isFile())
-        return std::unexpected("Omabook doesn't know what kind of book the folder " + fileName(path) + " is.");
+        return std::unexpected(Failure(Failure::Code::UnknownFolder, {fileName(path)}));
     const Format *format = find(Formats::extension(path));
     if (const auto kept = format ? std::nullopt : Formats::pluginFormat(Formats::extension(path)))
-        return std::unexpected(
-            QString("%1 is a %2, which the %3 plugin reads, and it isn't installed here. Install it: omabook plugin add %4")
-                .arg(fileName(path), kept->name, kept->title, kept->plugin));
+        return std::unexpected(Failure(Failure::Code::FormatOfMissingPlugin, {fileName(path), kept->name, kept->title, kept->plugin}));
     if (!format)
-        return std::unexpected("Omabook doesn't know the format of " + fileName(path) + ".");
+        return std::unexpected(Failure(Failure::Code::UnknownFormat, {fileName(path)}));
     if (!format->open)
-        return std::unexpected(QString(format->name) + " files are read by converting them to EPUB first.");
+        return std::unexpected(Failure(Failure::Code::ReadAfterConverting, {QString(format->name)}));
     return format->open(path);
 }
-
-} // namespace
 
 void Formats::addProvider(const FormatProvider &provider) {
     removeProvider(provider.id);
@@ -266,8 +264,10 @@ std::unique_ptr<Document> Formats::open(const QString &path, QString *error) {
     auto document = opened(path);
     if (document)
         return std::move(*document);
+    // Worded here, for callers that show it as it is: in the window's
+    // language there, in English on the command line.
     if (error)
-        *error = document.error();
+        *error = document.error().text();
     return nullptr;
 }
 

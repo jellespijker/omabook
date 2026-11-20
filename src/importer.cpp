@@ -282,7 +282,7 @@ void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QLi
         } else if (const auto provider = Formats::providerFor(entry.filePath())) {
             const QString file = packed(entry.filePath(), *provider, scratch, counter);
             if (file.isEmpty())
-                problems << entry.fileName() + " couldn't be made into one book.";
+                problems << Failure(Failure::Code::NotOneBook, {entry.fileName()}).text();
             else
                 incoming.append(Incoming::file(file));
         } else {
@@ -303,13 +303,13 @@ void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QLi
             // The whole folder or archive is one book of a provider's format.
             const QString file = packed(path, *provider, scratch, unpacked);
             if (file.isEmpty())
-                problems << QFileInfo(path).fileName() + " couldn't be made into one book.";
+                problems << Failure(Failure::Code::NotOneBook, {QFileInfo(path).fileName()}).text();
             else
                 incoming.append(Incoming::file(file));
         } else if (isArchive(path)) {
             const QStringList files = unpack(path, scratch, unpacked);
             if (files.isEmpty())
-                problems << "There are no books inside " + QFileInfo(path).fileName() + ".";
+                problems << Failure(Failure::Code::NoBooksInside, {QFileInfo(path).fileName()}).text();
             for (const QString &file : files)
                 incoming.append(Incoming::file(file));
         } else if (!QFileInfo(path).isDir()) {

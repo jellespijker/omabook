@@ -99,6 +99,17 @@ void setUpReader(Reader &reader, const Backend &backend, const CalibrePlugin &ca
                      [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
 }
 
+// A command says what went wrong in English, which scripts can rely on;
+// --translated says it in the desktop's language, as the window does.
+int runCommand(QStringList words) {
+    std::optional<Translator> translator;
+    if (words.removeAll("--translated") > 0) {
+        translator.emplace();
+        QCoreApplication::installTranslator(&*translator);
+    }
+    return runCli(words);
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -151,7 +162,7 @@ int main(int argc, char *argv[]) {
     if (!command)
         qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
     if (command)
-        return runCli(commandFirst(app.arguments()));
+        return runCommand(commandFirst(QCoreApplication::arguments()));
 
     QCommandLineParser arguments;
     arguments.setApplicationDescription("An ebook library and reader.\n\n" + cliSummary());

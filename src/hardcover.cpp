@@ -530,7 +530,7 @@ void HardcoverSource::search(const BookMeta &book) {
     if (token.isEmpty() || words.isEmpty()) {
         QMetaObject::invokeMethod(this, [this, token] {
             if (token.isEmpty())
-                emit failed("Hardcover needs your token to be asked: connect it under Reading Sites.");
+                emit failed(Failure(Failure::Code::SourceNeedsToken, {name()}));
             else
                 emit found({});
         }, Qt::QueuedConnection);
@@ -542,7 +542,7 @@ void HardcoverSource::search(const BookMeta &book) {
         const QByteArray body = reply->readAll();
         SiteProblem kind = SiteProblem::None;
         if (const QString problem = Hardcover::problem(reply, body, &kind); !problem.isEmpty()) {
-            emit failed(problem);
+            emit failed(Failure::said(problem));
             return;
         }
         QList<MetaCandidate> candidates;

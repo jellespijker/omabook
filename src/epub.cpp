@@ -43,26 +43,26 @@ class EpubDocument : public Document {
 public:
     explicit EpubDocument(const QString &path) : m_archive(path) {}
 
-    std::expected<void, QString> load() {
+    std::expected<void, Failure> load() {
         const QStringList names = m_archive.entries();
         m_files = QSet<QString>(names.begin(), names.end());
         if (m_files.isEmpty())
-            return std::unexpected("Not an EPUB: the file is not a readable zip archive.");
+            return std::unexpected(Failure(Failure::Code::EpubNotAnArchive));
         // Font obfuscation also lists files as encrypted; rights.xml and
         // AES-encrypted content are what a locked book has.
         if (m_files.contains("META-INF/rights.xml")
             || m_archive.read("META-INF/encryption.xml").contains("xmlenc#aes"))
-            return std::unexpected("This book is protected by DRM, so only the app it was bought for can open it.");
+            return std::unexpected(Failure(Failure::Code::EpubProtected));
 
         QXmlStreamReader container(m_archive.read("META-INF/container.xml"));
         while (!container.atEnd() && m_opf.isEmpty())
             if (container.readNext() == QXmlStreamReader::StartElement && container.name() == u"rootfile")
                 m_opf = resolve({}, container.attributes().value("full-path").toString());
         if (m_opf.isEmpty() || !m_files.contains(m_opf))
-            return std::unexpected("Not an EPUB: it has no package document.");
+            return std::unexpected(Failure(Failure::Code::EpubWithoutPackage));
         readPackage();
         if (m_spine.isEmpty())
-            return std::unexpected("This EPUB lists no chapters to read.");
+            return std::unexpected(Failure(Failure::Code::EpubWithoutChapters));
         readToc();
         for (const ManifestItem &item : std::as_const(m_manifest))
             if (item.type == "text/css")

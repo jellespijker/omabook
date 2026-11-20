@@ -668,7 +668,7 @@ void GoodreadsSource::search(const BookMeta &book) {
             // Goodreads has no edition with this ISBN; the title may find the book.
             searchByTitle(book, !book.authors.isEmpty());
         else if (const QString problem = httpProblem(reply); !problem.isEmpty())
-            emit failed(problem);
+            emit failed(Failure::said(problem));
         else
             emit found({});
     });
@@ -683,13 +683,13 @@ void GoodreadsSource::searchByTitle(const BookMeta &book, bool withAuthor) {
     connect(reply, &QNetworkReply::finished, this, [this, reply, book, withAuthor] {
         reply->deleteLater();
         if (const QString problem = httpProblem(reply); !problem.isEmpty()) {
-            emit failed(problem);
+            emit failed(Failure::said(problem));
             return;
         }
         bool understood = false;
         QList<Goodreads::Found> answers = Goodreads::parseSuggestions(reply->readAll(), &understood);
         if (!understood) {
-            emit failed(notUnderstood);
+            emit failed(Failure::said(notUnderstood));
             return;
         }
         // The search box puts study guides and books about the book beside
@@ -739,7 +739,7 @@ void GoodreadsSource::fetchPage(const QString &id, const QList<MetaCandidate> &o
             // What the search box said is still true.
             emit found(others);
         } else {
-            emit failed(problem);
+            emit failed(Failure::said(problem));
         }
     });
 }

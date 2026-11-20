@@ -22,17 +22,17 @@ void addOutline(const QVector<Poppler::OutlineItem> &items, int level, int pages
 // the GUI thread while it asks for text, so one lock guards the document.
 class PdfDocument : public Document {
 public:
-    std::expected<void, QString> load(const QString &path) {
+    std::expected<void, Failure> load(const QString &path) {
         m_document = Poppler::Document::load(path);
         if (!m_document)
-            return std::unexpected("Not a PDF, or one too damaged to read.");
+            return std::unexpected(Failure(Failure::Code::PdfUnreadable));
         if (m_document->isLocked())
-            return std::unexpected("This PDF needs a password to open.");
+            return std::unexpected(Failure(Failure::Code::PdfLocked));
         m_document->setRenderHint(Poppler::Document::Antialiasing);
         m_document->setRenderHint(Poppler::Document::TextAntialiasing);
         m_pages = m_document->numPages();
         if (m_pages < 1)
-            return std::unexpected("This PDF has no pages.");
+            return std::unexpected(Failure(Failure::Code::PdfWithoutPages));
         m_meta.title = m_document->info("Title").simplified();
         m_meta.authors = BookMeta::splitAuthors(m_document->info("Author"));
         m_meta.description = m_document->info("Subject").trimmed();

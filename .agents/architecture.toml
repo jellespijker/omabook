@@ -16,7 +16,7 @@ uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "markupfilter", "pagelayout",
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptapiui", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
-  "translator", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "highlightcolors", "textgeometry",
+  "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist",
   "oggpages", "opuswriter", "opusreader", "scriptapireach",
 ]

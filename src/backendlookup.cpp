@@ -81,7 +81,8 @@ void Backend::lookUp(qint64 id) {
         m_sourceStates.append({source->name(), source->fields(), true, 0, {}});
         connect(source, &MetadataSource::found, this,
                 [this, index](const QList<MetaCandidate> &candidates) { sourceAnswered(index, candidates, {}); });
-        connect(source, &MetadataSource::failed, this, [this, index](const QString &problem) { sourceAnswered(index, {}, problem); });
+        connect(source, &MetadataSource::failed, this,
+                [this, index](const Failure &problem) { sourceAnswered(index, {}, problem.text()); });
     }
     m_pendingSources = static_cast<int>(m_sources.size());
     emit candidatesChanged();
