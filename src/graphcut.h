@@ -1,8 +1,11 @@
 #pragma once
 
+#include <QHash>
 #include <QJsonObject>
+#include <QList>
 #include <QString>
 #include <QtTypes>
+#include <utility>
 
 #include "graph.h"
 #include "library.h"
@@ -42,4 +45,11 @@ struct GraphCut {
 private:
     // The relations among a scope's things, as Graph answers them.
     [[nodiscard]] static qint64 relationsIn(const Library &library, const Graph &graph, const QString &scope);
+    // A relation's two ends: its source and its target.
+    using Ends = std::pair<qint64, qint64>;
+    // How many things are within `steps` relations of `start`, and how many
+    // relations there are among them, going along only relations `along` allows.
+    [[nodiscard]] static std::pair<qint64, qint64> within(const Library &library, qint64 start, int steps, const QString &along);
+    // The relations touching any of `ids`, by their id.
+    [[nodiscard]] static QHash<qint64, Ends> touching(const Library &library, const QList<qint64> &ids, const QString &along);
 };

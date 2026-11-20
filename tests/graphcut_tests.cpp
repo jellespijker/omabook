@@ -5,13 +5,18 @@
 // `graph node` and the MCP tools that run them answer how many there are in
 // all; and a view of which nothing was left out says nothing of the kind.
 
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QQmlComponent>
 #include <QQmlContext>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QQuickStyle>
+#include <QRandomGenerator>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
+#include <QUuid>
 #include <QtTest>
 #include <algorithm>
 #include <memory>
@@ -45,6 +50,55 @@ Made chained(Graph &graph, int count, const QString &scope = {}) {
             made.relations += graph.link(made.ids.at(i - i % 10), made.ids.at(i), "holds") != 0;
     }
     return made;
+}
+
+// A graph of `count` things like a library's, made the same every time:
+// each thing near a few made just before it, a hub every two hundred things
+// that many tie to, and now and then a relation far across, so that the
+// steps around a thing reach further and further, and hubs at most of them.
+QList<qint64> likeALibrary(Library &library, Graph &graph, int count) {
+    const Library::Batch batch(library);
+    QRandomGenerator random(64);
+    QList<qint64> ids;
+    for (int i = 0; i < count; ++i) {
+        ids << graph.upsert(QString(), i % 200 == 0 ? "place" : "character", QString("Thing %1").arg(i));
+        if (i == 0)
+            continue;
+        graph.link(ids.at(i - 1 - static_cast<int>(random.bounded(std::min(i, 5)))), ids.at(i), "near");
+        if (random.bounded(3) == 0)
+            graph.link(ids.at(i - i % 200), ids.at(i), "holds");
+        if (random.bounded(20) == 0)
+            graph.link(ids.at(static_cast<int>(random.bounded(i))), ids.at(i), "knows");
+    }
+    return ids;
+}
+
+// What is around a thing as #64 counted it, in one recursive query: the
+// things within `steps`, and the relations among them.
+std::pair<qint64, qint64> countedInOneQuery(const Library &library, qint64 node, int steps) {
+    const QString connection = "old-count-" + QUuid::createUuid().toString(QUuid::Id128);
+    std::pair<qint64, qint64> counted;
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", connection);
+        database.setDatabaseName(library.databasePath());
+        if (database.open()) {
+            QSqlQuery query(database);
+            query.prepare("WITH RECURSIVE near(id, step) AS (SELECT ?, 0 "
+                          "UNION SELECT target, step + 1 FROM graph_edges JOIN near ON source = near.id WHERE step < ? "
+                          "UNION SELECT source, step + 1 FROM graph_edges JOIN near ON target = near.id WHERE step < ?), "
+                          "reached AS (SELECT DISTINCT id FROM near) "
+                          "SELECT (SELECT COUNT(*) FROM reached), (SELECT COUNT(*) FROM graph_edges WHERE source IN reached "
+                          "AND target IN reached)");
+            query.addBindValue(node);
+            query.addBindValue(steps);
+            query.addBindValue(steps);
+            if (query.exec() && query.next())
+                counted = {query.value(0).toLongLong(), query.value(1).toLongLong()};
+        }
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(connection);
+    return counted;
 }
 
 // The count at the top of the graph's pane, as the window shows it, in a
@@ -148,6 +202,46 @@ private slots:
         QCOMPARE(cut.things, static_cast<qint64>(whole.view.nodes.size()));
         QCOMPARE(cut.relations, static_cast<qint64>(whole.view.edges.size()));
         QCOMPARE(cut.toJson().value("cut").toString(), QString("nearest"));
+    }
+
+    void theCountAroundAThingIsTheOneTheRecursiveQueryGave() {
+        // Thousands of things, counted around a hub, a thing among others
+        // and a thing on its own, at every depth the view goes to (#100).
+        QTemporaryDir dir;
+        Library library(dir.filePath("library"));
+        QVERIFY(library.open());
+        Graph graph(library);
+        QVERIFY(!graph.sides().apart());
+        const QList<qint64> ids = likeALibrary(library, graph, 4000);
+        const qint64 alone = graph.upsert(QString(), "character", "On its own");
+        for (const qint64 centre : {ids.at(1000), ids.at(2345), alone})
+            for (int depth = 0; depth <= 6; ++depth) {
+                // A limit of one is always reached, so it is always counted.
+                const GraphCut cut = GraphCut::around(library, centre, depth, 1);
+                const auto [things, relations] = countedInOneQuery(library, centre, depth);
+                QVERIFY2(things > 0, "the recursive query answered");
+                QCOMPARE(cut.things, things);
+                QCOMPARE(cut.relations, relations);
+            }
+        // Farther is more, up to all of it.
+        QVERIFY(GraphCut::around(library, ids.at(2345), 2, 1).things < GraphCut::around(library, ids.at(2345), 4, 1).things);
+    }
+
+    void theCountAroundAThingAtDepthFourTakesLittleTime() {
+        // On a copy of a real library the recursive query took over a second
+        // at depth four, every step reaching a hub; level by level it is tens
+        // of milliseconds.
+        QTemporaryDir dir;
+        Library library(dir.filePath("library"));
+        QVERIFY(library.open());
+        Graph graph(library);
+        const QList<qint64> ids = likeALibrary(library, graph, 6000);
+        QElapsedTimer clock;
+        clock.start();
+        const GraphCut cut = GraphCut::around(library, ids.at(3000), 4, 1);
+        const qint64 took = clock.elapsed();
+        QVERIFY(cut.things > 100);
+        QVERIFY2(took < 250, qPrintable(QString("%1 things counted in %2 ms").arg(cut.things).arg(took)));
     }
 
     void theHeaderSaysHowManyThereAreAndThatTheMostConnectedAreShown() {

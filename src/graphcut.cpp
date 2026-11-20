@@ -1,7 +1,9 @@
 #include "graphcut.h"
 
 #include <QHash>
+#include <QSet>
 #include <QSqlQuery>
+#include <QStringList>
 #include <algorithm>
 #include <limits>
 #include <utility>
@@ -33,6 +35,61 @@ qint64 GraphCut::relationsIn(const Library &library, const Graph &graph, const Q
     return count;
 }
 
+// The relations that touch any of `ids`, either way along them, by their id.
+// The walk around a thing asks the storage only here, a batch of things at a
+// time, so whatever narrows the relations it may go along (`along`) is said
+// in this one place.
+QHash<qint64, GraphCut::Ends> GraphCut::touching(const Library &library, const QList<qint64> &ids, const QString &along) {
+    // Each id is bound twice: 800 stays under the fewest variables an SQLite
+    // statement takes (999).
+    constexpr qsizetype batch = 400;
+    QHash<qint64, Ends> found;
+    for (qsizetype from = 0; from < ids.size(); from += batch) {
+        const QList<qint64> part = ids.mid(from, batch);
+        const QString marks = QStringList(part.size(), QStringLiteral("?")).join(',');
+        QVariantList values;
+        values.reserve(part.size() * 2);
+        for (int twice = 0; twice < 2; ++twice)
+            for (const qint64 id : part)
+                values << id;
+        QSqlQuery query = library.query(
+            QString("SELECT id, source, target FROM graph_edges WHERE (source IN (%1) OR target IN (%1))%2").arg(marks, along), values);
+        while (query.next())
+            found.insert(query.value(0).toLongLong(), Ends{query.value(1).toLongLong(), query.value(2).toLongLong()});
+    }
+    return found;
+}
+
+// How many things are within `steps` relations of `start`, and how many
+// relations there are among them. Walked level by level: each thing's
+// relations are asked for once, when the walk first reaches it, so a hub
+// reached at every step costs no more than one reached once. Every relation
+// among what was reached touches a thing of some level, the last one too, so
+// they are all among those asked for.
+std::pair<qint64, qint64> GraphCut::within(const Library &library, qint64 start, int steps, const QString &along) {
+    QSet<qint64> reached{start};
+    QHash<qint64, Ends> relations;
+    QList<qint64> frontier{start};
+    for (int step = 0; step <= steps && !frontier.isEmpty(); ++step) {
+        const QHash<qint64, Ends> found = touching(library, frontier, along);
+        frontier.clear();
+        for (const auto &[id, relation] : found.asKeyValueRange()) {
+            relations.insert(id, relation);
+            if (step == steps)
+                continue;
+            for (const qint64 end : {relation.first, relation.second})
+                if (!reached.contains(end)) {
+                    reached.insert(end);
+                    frontier << end;
+                }
+        }
+    }
+    const qint64 among = std::count_if(relations.cbegin(), relations.cend(), [&](const Ends &relation) {
+        return reached.contains(relation.first) && reached.contains(relation.second);
+    });
+    return {reached.size(), among};
+}
+
 GraphCut::GraphCut(GraphView whole) : view(std::move(whole)), things(view.nodes.size()), relations(view.edges.size()) {}
 
 QJsonObject GraphCut::toJson() const {
@@ -62,22 +119,11 @@ GraphCut GraphCut::around(const Library &library, qint64 node, int depth, int li
     made.by = By::Nearest;
     if (made.view.nodes.size() < limit)
         return made;
-    // Everything within `depth` relations, walked in the storage both ways
-    // along each relation, and the relations among what was reached.
+    // Everything within `depth` relations, both ways along each relation,
+    // and the relations among what was reached.
     const QString along = graph.sides().apart() ? " AND kind NOT LIKE 'across: %'" : "";
-    const int steps = std::clamp(depth, 0, 6);
-    QSqlQuery query =
-        library.query(QString("WITH RECURSIVE near(id, step) AS (SELECT ?, 0 "
-                              "UNION SELECT target, step + 1 FROM graph_edges JOIN near ON source = near.id WHERE step < ?%1 "
-                              "UNION SELECT source, step + 1 FROM graph_edges JOIN near ON target = near.id WHERE step < ?%1), "
-                              "reached AS (SELECT DISTINCT id FROM near) "
-                              "SELECT (SELECT COUNT(*) FROM reached), (SELECT COUNT(*) FROM graph_edges WHERE source IN reached "
-                              "AND target IN reached%1)")
-                          .arg(along),
-                      {node, steps, steps});
-    if (query.next()) {
-        made.things = std::max(made.things, query.value(0).toLongLong());
-        made.relations = std::max(made.relations, query.value(1).toLongLong());
-    }
+    const auto [things, relations] = within(library, node, std::clamp(depth, 0, 6), along);
+    made.things = std::max(made.things, things);
+    made.relations = std::max(made.relations, relations);
     return made;
 }
