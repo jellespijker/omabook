@@ -430,6 +430,17 @@ const QList<QStringList> migrations{
     // format 31): a full-text index of its things, and the things touched
     // since a count of the graph, both kept by triggers (GraphIndex).
     GraphIndex::step(),
+    // A plugin's data in the change log (ADR 0002, #76, format 32): each
+    // plugin's "plugin:…" space is never the library's rows, as a published
+    // or shared one isn't, and is read by itself (PluginData).
+    {"DROP VIEW IF EXISTS live_ops",
+     "CREATE VIEW live_ops AS SELECT space, device, seq, hlc, author, entity, id, field, value, signer, signature FROM snapshot_ops "
+     "WHERE space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
+     "OR (name >= 'shared:' AND name < 'shared;') OR (name >= 'plugin:' AND name < 'plugin;')) "
+     "UNION ALL SELECT o.space, o.device, o.seq, o.hlc, o.author, o.entity, o.id, o.field, o.value, o.signer, o.signature FROM ops AS o "
+     "LEFT JOIN snapshot_marks AS m ON m.space = o.space AND m.device = o.device WHERE o.seq > COALESCE(m.seq, 0) "
+     "AND o.space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
+     "OR (name >= 'shared:' AND name < 'shared;') OR (name >= 'plugin:' AND name < 'plugin;'))"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
