@@ -12,6 +12,12 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.9.1] - 2026-11-20
+
+### Fixed
+
+- Under fingers the contents pane stays inside its edge: its selected chapter, its scroll bar and *Close* no longer run over the page and the book's title beside it in a narrow window; the *Contents* and *Highlights* tabs shorten instead (#122).
+
 ## [0.1.9] - 2026-11-20
 
 ### Added
@@ -256,7 +262,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.9.1...HEAD
+[0.1.9.1]: https://github.com/jellespijker/omabook/compare/v0.1.9...v0.1.9.1
 [0.1.9]: https://github.com/jellespijker/omabook/compare/v0.1.8.1...v0.1.9
 [0.1.8.1]: https://github.com/jellespijker/omabook/compare/v0.1.8...v0.1.8.1
 [0.1.8]: https://github.com/jellespijker/omabook/compare/v0.1.7.1...v0.1.8
