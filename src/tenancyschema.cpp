@@ -408,3 +408,7 @@ const QStringList &TenancySchema::writtenInTheirTenant() {
     }();
     return made;
 }
+
+// The same statements as format 30's, which can be taken again: they make
+// the triggers by the rules as they are now.
+const QStringList &TenancySchema::endsSeenFromEveryTenant() { return writtenInTheirTenant(); }

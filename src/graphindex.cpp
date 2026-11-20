@@ -17,7 +17,7 @@ namespace {
 }
 
 // The facts whose words the index holds as said of a thing: the summaries
-// it was given (format 31), and since format 33 the names a tenant gave it
+// it was given (format 31), and since format 34 the names a tenant gave it
 // by hand too (#110).
 constexpr auto summaries = "'summary'"_L1;
 constexpr auto summariesAndNames = "'summary', 'name'"_L1;

@@ -142,7 +142,7 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
   names of it there.
 - **Found by it**: the word index holds the names given in tenants as said of the thing, so search and
   `knows:` find it in its tenant by its name there, and `Graph::named` finds it by any such name for
-  what a book says next (format 33, `GraphIndex::names`, with an index of those names).
+  what a book says next (format 34, `GraphIndex::names`, with an index of those names).
 
 ## Considered options
 

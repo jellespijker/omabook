@@ -22,6 +22,7 @@
 #include "graph.h"
 #include "graphcut.h"
 #include "library.h"
+#include "librarymigrations.h"
 #include "publishedspace.h"
 #include "scriptplugin.h"
 #include "scriptplugins.h"
@@ -518,6 +519,35 @@ private slots:
             const QStringList moved = memberships(ann.library);
             QCOMPARE(rebuilt(ann.library), moved);
         }
+    }
+
+    // A library of format 31, whose plan lost those relations, has them back
+    // as it is brought up to date.
+    void aPlanThatLostItsRelationsHasThemBackAsTheLibraryIsBroughtUpToDate() {
+        QTemporaryDir dir;
+        QString root;
+        {
+            Someone ann(dir, "Ann");
+            QVERIFY(threeChapters(dir.filePath("story.epub"), "The Glass Tithe"));
+            const qint64 story = ann.story(dir.filePath("story.epub"), "story.epub");
+            QVERIFY(story > 0);
+            QCOMPARE(ann.call("plan", {"world:s1:plan", story}).toBool(), true);
+            // As format 31 kept them: in no tenant, with one end in tenant 0 and the other not.
+            QVERIFY(ChangeLog::exec(ann.library,
+                                    "DELETE FROM tenant_edges WHERE edge_id IN (SELECT e.id FROM graph_edges AS e JOIN tenant_nodes AS s "
+                                    "ON s.node_id = e.source JOIN tenant_nodes AS t ON t.node_id = e.target WHERE (s.tenant = 0) <> (t.tenant = 0))"));
+            QCOMPARE(relationsOf(ann, "world:s1:plan"), QStringList({"sits in", "works in"}));
+            QVERIFY(ChangeLog::exec(ann.library, "PRAGMA user_version = 31"));
+            root = ann.library.root();
+        }
+        Library library(root);
+        QVERIFY(library.open());
+        QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
+        QStringList kinds;
+        for (const GraphEdge &edge : Graph::ofScope(library, "world:s1:plan").whole("world:s1:plan", 100).edges)
+            kinds << edge.kind;
+        kinds.sort();
+        QCOMPARE(kinds, QStringList({"godfather of", "keeps tallies for", "owes", "sits in", "works in"}));
     }
 };
 

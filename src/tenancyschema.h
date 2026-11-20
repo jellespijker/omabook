@@ -58,6 +58,9 @@ namespace TenancySchema {
 // again whole (format 30, which can be taken again).
 [[nodiscard]] const QStringList &writtenColumns();
 [[nodiscard]] const QStringList &writtenInTheirTenant();
+// The step after those (#112, format 32): the triggers again, with an end in
+// tenant 0 counted as in each tenant, and the membership placed again whole.
+[[nodiscard]] const QStringList &endsSeenFromEveryTenant();
 
 // Whether the thing of `row` (a table's alias, or NEW) was made by hand in a tenant.
 [[nodiscard]] QString madeHere(const QString &row);

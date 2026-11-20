@@ -51,7 +51,7 @@ the library's own personal parts.
   it, so no plugin's field is taken for the library's or another plugin's where compaction keeps the latest
   of each (it matches a field by device, entity, thing and field, not by space). A plugin reads and writes
   its own space alone (`omabook.log.*`, `ScriptChangeLog`).
-- **Out of the rows.** What the rows are made of (`live_ops`) leaves `plugin:` spaces out (format 32), as it
+- **Out of the rows.** What the rows are made of (`live_ops`) leaves `plugin:` spaces out (format 33), as it
   does published and shared ones; `space_ops` holds them for replication, compaction and `PluginData`.
 - **Three kinds of operation.** A field (its JSON value, the latest winning); a change of a set
   (`set:<name>`, `{"add": {key: value}, "remove": [key]}`), so one operation carries a batch, or an

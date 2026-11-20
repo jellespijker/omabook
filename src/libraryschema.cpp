@@ -430,7 +430,11 @@ const QList<QStringList> migrations{
     // format 31): a full-text index of its things, and the things touched
     // since a count of the graph, both kept by triggers (GraphIndex).
     GraphIndex::step(),
-    // A plugin's data in the change log (ADR 0002, #76, format 32): each
+    // A relation of no book to a thing every tenant sees is in the tenant of
+    // its other end (#112, format 32): the tenancy triggers again by that
+    // rule, and the membership placed again whole.
+    TenancySchema::endsSeenFromEveryTenant(),
+    // A plugin's data in the change log (ADR 0002, #76, format 33): each
     // plugin's "plugin:…" space is never the library's rows, as a published
     // or shared one isn't, and is read by itself (PluginData).
     {"DROP VIEW IF EXISTS live_ops",
@@ -442,7 +446,7 @@ const QList<QStringList> migrations{
      "AND o.space NOT IN (SELECT id FROM log_ids WHERE (name >= 'published:' AND name < 'published;') "
      "OR (name >= 'shared:' AND name < 'shared;') OR (name >= 'plugin:' AND name < 'plugin;'))"},
     // A thing renamed by hand in a tenant is called so there alone (ADR 0003,
-    // #110, format 33): the name a tenant gave it found by the word index
+    // #110, format 34): the name a tenant gave it found by the word index
     // and by the name (GraphIndex).
     GraphIndex::names(),
 };
