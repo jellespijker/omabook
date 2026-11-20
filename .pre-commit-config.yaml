@@ -61,6 +61,13 @@ repos:
         pass_filenames: false
         files: ^(src/|\.agents/architecture)
 
+      - id: wording
+        name: Failures below the front ends are codes, not English sentences (new lines)
+        entry: python3 .agents/hooks/check_wording.py --staged
+        language: system
+        pass_filenames: false
+        types_or: [c++]
+
       - id: ruff
         name: ruff (new lines; new files formatted)
         entry: python3 .agents/hooks/check_python.py --staged

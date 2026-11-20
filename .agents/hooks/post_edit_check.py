@@ -19,7 +19,15 @@ from pathlib import Path
 from harness import ROOT, relative
 
 HOOKS = Path(__file__).resolve().parent
-CHECKS = ("check_format.py", "check_ast_grep.py", "check_architecture.py", "check_python.py", "check_file_size.py", "check_complexity.py")
+CHECKS = (
+    "check_format.py",
+    "check_ast_grep.py",
+    "check_architecture.py",
+    "check_wording.py",
+    "check_python.py",
+    "check_file_size.py",
+    "check_complexity.py",
+)
 
 
 def main() -> int:

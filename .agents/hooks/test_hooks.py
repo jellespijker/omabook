@@ -192,6 +192,24 @@ class Architecture(HarnessTest):
         self.assertFires(self.repo.run("check_architecture.py", "--changed", "src/stray.cpp"), "unplaced")
 
 
+class Wording(HarnessTest):
+    def test_a_sentence_below_the_front_ends_is_a_finding(self) -> None:
+        self.repo.write("src/formats.cpp", "int open() {\n    return 0;\n}\n")
+        self.repo.commit()
+        self.repo.write("src/formats.cpp", 'auto open() {\n    return std::unexpected(\n        "There is no such file: " + path);\n}\n')
+        self.assertFires(self.repo.run("check_wording.py", "--changed", "src/formats.cpp"), "English sentence")
+        self.repo.write("src/formats.cpp", "auto open() {\n    return std::unexpected(Failure(Failure::Code::NoSuchFile, {path}));\n}\n")
+        self.assertQuiet(self.repo.run("check_wording.py", "--changed", "src/formats.cpp"))
+
+    def test_the_front_ends_and_old_lines_are_left_alone(self) -> None:
+        self.repo.write("src/reader.cpp", 'void f() { fail(std::unexpected("This book is gone.")); }\n')
+        self.assertQuiet(self.repo.run("check_wording.py", "--changed", "src/reader.cpp"))
+        self.repo.write("src/library.cpp", 'auto a() { return std::unexpected("A book needs a title."); }\nint b() {\n    return 1;\n}\n')
+        self.repo.commit()
+        self.repo.write("src/library.cpp", 'auto a() { return std::unexpected("A book needs a title."); }\nint b() {\n    return 2;\n}\n')
+        self.assertQuiet(self.repo.run("check_wording.py", "--changed", "src/library.cpp"))
+
+
 class FileSize(HarnessTest):
     def setUp(self) -> None:
         super().setUp()

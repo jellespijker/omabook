@@ -9,7 +9,7 @@ cd "$root"
 base="${1:-$(git rev-parse --verify -q origin/main >/dev/null && echo origin/main || echo main)}"
 
 status=0
-for check in format ast_grep architecture python file_size complexity clang_tidy; do
+for check in format ast_grep architecture wording python file_size complexity clang_tidy; do
   python3 .agents/hooks/check_$check.py --base "$base" || status=1
 done
 python3 .agents/hooks/check_commit_msg.py --range "$(git merge-base "$base" HEAD)..HEAD" || status=1
