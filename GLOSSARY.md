@@ -20,6 +20,18 @@ _Avoid_: Note (alone), comment, annotation (for this kind only)
 Handwriting or drawing directly on a page of a book whose pages don't reflow, such as a PDF or a comic.
 _Avoid_: Drawing, scribble, ink (alone, which is the notebook plugin's)
 
+**Ink surface**:
+Where a pen writes and draws, in Omabook or a plugin's panel: pressure makes the line wider, the pen's other end erases, a palm is ignored while the pen is near (`InkSurface`).
+_Avoid_: Canvas, drawing area
+
+**Stroke**:
+One line of ink, from the pen touching down to lifting: its points, each with its pressure, tilt and moment, kept as data rather than a picture (`Ink::Stroke`).
+_Avoid_: Path, line (alone), scribble
+
+**Ink batch**:
+What an ink surface did between two pauses of the pen, strokes added and removed, kept as one change wherever its strokes are kept; erasing part of a stroke is its removal and its pieces' addition (`Ink::Change`).
+_Avoid_: Diff, delta, update
+
 **Lost annotation**:
 An annotation whose passage can no longer be found in its book, kept until the reader places or removes it.
 _Avoid_: Orphan, broken annotation

@@ -16,7 +16,7 @@ uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "markupfilter", "pagelayout",
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
-  "translator",
+  "translator", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting",
 ]
 
 [layers.formats]
@@ -73,6 +73,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "spacedesk",
+  "inksurface", "inknodes",
 ]
 
 [layers.app]
