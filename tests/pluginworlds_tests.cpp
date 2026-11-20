@@ -20,6 +20,7 @@
 #include "collectionshare.h"
 #include "fixtures.h"
 #include "graph.h"
+#include "graphcut.h"
 #include "library.h"
 #include "publishedspace.h"
 #include "scriptplugin.h"
@@ -260,6 +261,8 @@ private slots:
         bo.library.setProgress(mine, {2, 0.5, 90});
         QCOMPARE(bo.call("names", {scope}).toArray(), strings({"Hollow", "Ilse"}));
         QCOMPARE(bo.call("relations", {scope}).toArray(), strings({"was born in"}));
+        // The command line and the window show it the same (graph show --scope).
+        QCOMPARE(GraphCut::whole(bo.library, scope, 50).view.nodes.size(), 2);
         QCOMPARE(bo.call("names", {"world:s1"}).toArray(), strings({"Bo's Own"}));
 
         // Copied into a world of Bo's plugin's own; the layer itself is never written to.
