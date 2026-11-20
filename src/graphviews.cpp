@@ -19,40 +19,73 @@
 using namespace Qt::StringLiterals;
 using namespace GraphRows;
 
+namespace {
+
+// A thing as a tenant calls it, from the names it was given there by hand
+// (`given`, #110), the latest last: in a tenant of its own the latest is its
+// name, and the one it has elsewhere and those given before are among its
+// other names; in the whole library's (`own` false) its name stays, and
+// those a tenant gave it are other names of it.
+void calledBy(GraphNode &node, const QList<GraphFact> &given, bool own) {
+    if (given.isEmpty())
+        return;
+    const QString name = own ? given.last().value : node.name;
+    QStringList aliases = node.aliases();
+    QStringList names{node.name};
+    for (const GraphFact &fact : given)
+        names << fact.value;
+    for (const QString &other : std::as_const(names))
+        if (other.compare(name, Qt::CaseInsensitive) != 0 && !aliases.contains(other, Qt::CaseInsensitive))
+            aliases << other;
+    aliases.removeIf([&name](const QString &alias) { return alias.compare(name, Qt::CaseInsensitive) == 0; });
+    node.name = name;
+    if (aliases.isEmpty())
+        node.data.remove("aliases");
+    else
+        node.data.insert("aliases", QJsonArray::fromStringList(aliases));
+}
+
+} // namespace
+
 void Graph::told(QList<GraphNode> &nodes) const {
     const std::optional<TenantFilter> &filter = within();
     if (!filter || nodes.isEmpty())
         return;
     // What another tenant was told of these things: only those things are
-    // told again, by what this tenant was told.
+    // told again, by what this tenant was told. And the names this tenant
+    // gave them by hand (#110), which are its alone.
     QHash<qint64, QList<GraphFact>> elsewhere;
+    QHash<qint64, QList<GraphFact>> given;
     const QList<qint64> ids = nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QList<qint64>>();
     for (const auto batch : ids | std::views::chunk(500))
-        for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_facts AS f WHERE f.node_id IN (%2) AND f.kind IN ('summary', "
-                                                        "'alias') AND NOT %3")
+        for (QSqlQuery query = m_library->query(QString("SELECT %1, %3 FROM graph_facts AS f WHERE f.node_id IN (%2) AND (f.kind = 'name' "
+                                                        "OR (f.kind IN ('summary', 'alias') AND NOT %3)) ORDER BY f.id")
                                                     .arg(factColumns, marks(std::ranges::ssize(batch)), filter->hasFact(u"f.id")),
                                                 batch | std::ranges::to<QVariantList>());
              query.next();) {
+            const bool here = query.value(8).toBool();
             GraphFact fact = factFrom(query);
-            elsewhere[fact.node].append(std::move(fact));
+            if (fact.kind != "name")
+                elsewhere[fact.node].append(std::move(fact));
+            else if (here)
+                given[fact.node].append(std::move(fact));
         }
-    if (elsewhere.isEmpty())
-        return;
     const QHash<qint64, QList<GraphFact>> here = factsOf(elsewhere.keys());
     // Another tenant's facts are kept at no place any reader is at, so that
     // asKnown leaves them out as it leaves out what is past a reader's page:
     // its summary the latest this tenant was told, and only its names.
     const GraphKnown known = [](const GraphPlace &at) { return at.bookId >= 0; };
+    const bool own = m_tenant && *m_tenant != Tenant::wholeLibrary() && *m_tenant != Tenant::everyone();
     for (GraphNode &node : nodes) {
-        const auto theirs = elsewhere.constFind(node.id);
-        if (theirs == elsewhere.cend())
-            continue;
-        QList<GraphFact> all = here.value(node.id);
-        for (GraphFact fact : *theirs) {
-            fact.revealed.place.bookId = -1;
-            all << fact;
+        if (const auto theirs = elsewhere.constFind(node.id); theirs != elsewhere.cend()) {
+            QList<GraphFact> all = here.value(node.id);
+            for (GraphFact fact : *theirs) {
+                fact.revealed.place.bookId = -1;
+                all << fact;
+            }
+            node = asKnown(std::move(node), all, 0, known);
         }
-        node = asKnown(std::move(node), all, 0, known);
+        calledBy(node, given.value(node.id), own);
     }
 }
 

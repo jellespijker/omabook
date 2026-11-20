@@ -541,9 +541,10 @@ private slots:
         other.showScope();
         Graph graph(story.library);
 
-        // Renamed, it is still found by the name it had.
+        // Renamed, it is still found by the name it had; renamed in the
+        // library's tenant, it is called so there (#110).
         QVERIFY(browser.edit(story.mara, "Mara Venn", "A ferry pilot who sings tides."));
-        QCOMPARE(graph.node(story.mara)->name, QString("Mara Venn"));
+        QCOMPARE(Graph::ofLibrary(story.library).node(story.mara)->name, QString("Mara Venn"));
         QCOMPARE(graph.named({}, "character", "Mara"), story.mara);
         QVERIFY(names(browser).contains("Mara Venn"));
         // Not to a name another of its kind has: those two are to be merged.

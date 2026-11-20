@@ -88,7 +88,7 @@ QList<GraphNode> Graph::holding(QList<GraphNode> page, const QStringList &phrase
     told(asTold);
     QList<GraphNode> kept;
     for (const auto &[node, toldSo] : std::views::zip(page, asTold)) {
-        const bool otherwise = toldSo.summary != node.summary || toldSo.data != node.data;
+        const bool otherwise = toldSo.name != node.name || toldSo.summary != node.summary || toldSo.data != node.data;
         if (otherwise ? GraphIndex::holds(textOf(toldSo), words) : byOwn.contains(node.id))
             kept << node;
     }

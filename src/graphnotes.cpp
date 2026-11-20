@@ -1,7 +1,8 @@
-// What is written by hand in a tenant, and what a relation was noted in each
-// book and tenant (graph.h, ADR 0003, #109). A relation is one row however
-// many books say it: its own note is that of the book it was first learned
-// in (or of none), and graph_edges.notes keeps the rest,
+// What is written by hand in a tenant (a fact, a relation, a thing's name:
+// #109, #110), and what a relation was noted in each book and tenant
+// (graph.h, ADR 0003). A relation is one row however many books say it: its
+// own note is that of the book it was first learned in (or of none), and
+// graph_edges.notes keeps the rest,
 //
 //   {"books": {book's global id: note}, "tenants": {tenant's global id: note}}
 //
@@ -185,4 +186,67 @@ QJsonObject Graph::madeIn(QJsonObject data, qint64 id, const QString &scope, con
     if (!tenants.contains(m_tenant->globalId()))
         data.insert(Tenancy::madeInKey(), QJsonArray::fromStringList(tenants << m_tenant->globalId()));
     return data;
+}
+
+bool Graph::edit(qint64 id, const QString &name, const QString &summary) {
+    const auto shown = node(id);
+    const QString called = name.simplified();
+    if (!shown || called.isEmpty())
+        return false;
+    // Renamed in a tenant, the name is that tenant's (#110): it clashes only
+    // with a thing the tenant sees by that name.
+    const QString tenant = writtenIn(id);
+    const auto goesBy = [&](qint64 other) {
+        const auto there = node(other);
+        return there && (there->name.compare(called, Qt::CaseInsensitive) == 0 || there->aliases().contains(called, Qt::CaseInsensitive));
+    };
+    if (const qint64 other = named(shown->scope, shown->kind, called); other != 0 && other != id && (tenant.isEmpty() || goesBy(other)))
+        return false;
+    return tenant.isEmpty() ? editOwn(id, called, summary.trimmed()) : editHere(*shown, called, summary.trimmed());
+}
+
+bool Graph::editHere(const GraphNode &shown, const QString &called, const QString &said) {
+    if (!m_library->exec("UPDATE graph_nodes SET summary = ?, updated = ? WHERE id = ?", {said, Spaces::wallSeconds(*m_library), shown.id}))
+        return false;
+    if (said != shown.summary && !said.isEmpty())
+        recordFact(shown.id, "summary", said, std::nullopt);
+    // The tenant's latest name for it; the name it had stays one of its names (told()).
+    if (shown.name != called)
+        recordFact(shown.id, "name", called, std::nullopt);
+    return true;
+}
+
+bool Graph::editOwn(qint64 id, const QString &called, const QString &said) {
+    // The thing's own name: as it is, not as a tenant tells it.
+    const auto own = Graph(*m_library).node(id);
+    if (!own)
+        return false;
+    const GraphNode &known = *own;
+    QJsonObject data = known.data;
+    QStringList aliases = known.aliases();
+    aliases.removeAll(called);
+    if (known.name.compare(called, Qt::CaseInsensitive) != 0 && !aliases.contains(known.name, Qt::CaseInsensitive))
+        aliases << known.name;
+    if (aliases.isEmpty())
+        data.remove("aliases");
+    else
+        data.insert("aliases", QJsonArray::fromStringList(aliases));
+    if (!m_library->exec(
+            "UPDATE graph_nodes SET name = ?, summary = ?, data = ?, updated = ? WHERE id = ?",
+            {called, said, QString::fromUtf8(QJsonDocument(data).toJson(QJsonDocument::Compact)), Spaces::wallSeconds(*m_library), id}))
+        return false;
+    // Written by hand, it is the latest word on it, at no place of a book.
+    if (said != known.summary && !said.isEmpty())
+        recordFact(id, "summary", said, std::nullopt);
+    // The name it had is one of its names from where it was met, as the
+    // name itself was; a name given by hand is known everywhere.
+    if (known.name.compare(called, Qt::CaseInsensitive) != 0) {
+        m_library->exec("DELETE FROM graph_facts WHERE node_id = ? AND kind = 'alias' AND value = ? COLLATE NOCASE", {id, called});
+        const QList<GraphPlace> places = seen(id);
+        if (places.isEmpty())
+            recordFact(id, "alias", known.name, std::nullopt);
+        for (const GraphPlace &place : places)
+            recordFact(id, "alias", known.name, GraphMoment{place, firstMet(id, place.bookId).value_or(GraphMoment()).anchor});
+    }
+    return true;
 }

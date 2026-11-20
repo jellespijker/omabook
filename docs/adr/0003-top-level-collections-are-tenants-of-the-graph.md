@@ -127,7 +127,22 @@ read, merged or shown within it. Books in no top-level collection are the **Unfi
   tenant it shares with the book, in one deterministic offer; a link made is seen only where both its
   ends are, so its links to other things differ per tenant.
 - **Still shared**: a thing's own name, renamed by hand (`Graph::edit`), is one column for every
-  tenant that sees it.
+  tenant that sees it (until #110).
+
+### As built (#110)
+
+- **Renamed by hand in a tenant, a thing is called so in that tenant.** The name is a fact of no book of
+  the kind `name`, kept in the tenant it was given in (`graph_facts.tenant`, as #109's), which travels in
+  the log with it; the thing's own name (`graph_nodes.name`) stays as its books taught it. A tenant reads
+  the latest name it gave the thing, with the thing's own and those it gave before among its other names
+  (`Graph::told`); another tenant reads its own, or the thing's. A rename clashes only with a thing the
+  tenant sees by that name.
+- **In the whole library's tenant, and the graph of no tenant, a rename is the thing's own name**, as
+  before: in the one-tenant setting it is the name everywhere, and the names tenants gave are other
+  names of it there.
+- **Found by it**: the word index holds the names given in tenants as said of the thing, so search and
+  `knows:` find it in its tenant by its name there, and `Graph::named` finds it by any such name for
+  what a book says next (format 33, `GraphIndex::names`, with an index of those names).
 
 ## Considered options
 

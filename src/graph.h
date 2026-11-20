@@ -59,7 +59,8 @@ struct GraphMoment {
 };
 
 // One thing learned of a node, with the moment it was revealed: what is
-// said of it ("summary"), another name it goes by ("alias"), or for an
+// said of it ("summary"), another name it goes by ("alias"), what a tenant
+// calls it, renamed there by hand ("name", of no book, #110), or for an
 // event when it happens in its world ("when", chronology.h). A node's
 // summary changes as its book goes on, and each version is kept here, so
 // what was known at any place is known later too. A fact of no book (put
@@ -67,14 +68,14 @@ struct GraphMoment {
 struct GraphFact {
     qint64 id = 0;
     qint64 node = 0;
-    QString kind;  // "summary", "alias" or "when"
+    QString kind;  // "summary", "alias", "name" or "when"
     QString value; // for "when", an EventTime as it is kept (EventTime::written)
     GraphMoment revealed;
 
     // What a fact of `kind` keeps of `value`: a name on one line, a time as
     // EventTime writes it (nothing when it is no time), the rest trimmed.
     [[nodiscard]] static QString kept(const QString &kind, const QString &value) {
-        if (kind == "alias")
+        if (kind == "alias" || kind == "name")
             return value.simplified();
         if (kind == "when")
             return EventTime::kept(value);
@@ -261,6 +262,9 @@ public:
     // Changes a node by hand: what it is called and what is said of it. The
     // old name stays as one of its names, so what is read later still finds
     // it. False when another node of its kind already goes by the new name.
+    // Renamed in a tenant, the name is that tenant's (a fact "name" kept
+    // there, #110), and the others call it as they did; in the graph of no
+    // tenant, the whole library's or a world's, it is the thing's own name.
     bool edit(qint64 node, const QString &name, const QString &summary);
 
     std::optional<GraphNode> node(qint64 id) const;
@@ -306,7 +310,8 @@ public:
     // its moment, in the order a reader comes to them. With a book, only
     // what that book revealed and what no book did.
     QList<GraphReveal> timeline(qint64 node, qint64 bookId = 0) const;
-    // The node known by a name or alias; 0 when there is none.
+    // The node known by a name or alias, or by a name a tenant gave it by
+    // hand (#110); 0 when there is none.
     qint64 named(const QString &scope, const QString &kind, const QString &name) const;
     // Nodes whose name, aliases or summary hold every word, each as the start
     // of one of their words, case and accents aside (through the graph's
@@ -380,6 +385,10 @@ private:
     // hand (its global id), "" when it is not one tenant's: the graph of no
     // tenant's, the whole library's, or a world's (#109).
     [[nodiscard]] QString writtenIn(qint64 node) const;
+    // edit() of a thing renamed in the graph's tenant, as it is shown there
+    // (a name of the tenant's own, #110), and of its own name otherwise.
+    bool editHere(const GraphNode &shown, const QString &called, const QString &said);
+    bool editOwn(qint64 id, const QString &called, const QString &said);
     // Relations as the tenant knows them: each with the note it was told
     // there, by hand or by one of its books, never another tenant's (#109).
     void told(QList<GraphEdge> &edges) const;

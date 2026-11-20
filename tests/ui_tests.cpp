@@ -4082,7 +4082,7 @@ private slots:
         Graph stored(*desk.backend->library());
         const qint64 tamsin = ids.value("Tamsin Roe"), pell = ids.value("Pell");
 
-        // E renames a thing and rewrites what is said of it.
+        // E renames a thing (in the graph's tenant, #110) and rewrites what is said of it.
         graph.browser->select(tamsin);
         desk.key(Qt::Key_E);
         QTRY_VERIFY(desk.value("graphEdit", "opened").toBool());
@@ -4093,7 +4093,7 @@ private slots:
         desk.type("tamsin of the stairs");
         desk.key(Qt::Key_Return);
         QTRY_VERIFY(!desk.value("graphEdit", "visible").toBool());
-        QCOMPARE(stored.node(tamsin)->name, QString("tamsin of the stairs"));
+        QCOMPARE(Graph::ofLibrary(*desk.backend->library()).node(tamsin)->name, QString("tamsin of the stairs"));
         QCOMPARE(stored.named({}, "character", "Tamsin Roe"), tamsin);
         QTRY_COMPARE(desk.value("graphDetailsName", "text").toString(), QString("tamsin of the stairs"));
         // A name another of its kind has is refused, and says to merge.

@@ -162,6 +162,12 @@ qint64 Graph::named(const QString &scope, const QString &kind, const QString &na
                                            {text(scope), kind, wanted});
         exact.next())
         return exact.value(0).toLongLong();
+    // A name a tenant gave it by hand, through the index of those names.
+    if (QSqlQuery given = m_library->query("SELECT n.id FROM graph_facts AS f JOIN graph_nodes AS n ON n.id = f.node_id WHERE "
+                                           "f.kind = 'name' AND f.value = ? COLLATE NOCASE AND n.scope = ? AND n.kind = ? LIMIT 1",
+                                           {wanted, text(scope), kind});
+        given.next())
+        return given.value(0).toLongLong();
     // Then the nodes whose details mention the name at all, which are few,
     // and of those the one that has it as another name. Where SQLite can't
     // fold the name's case (letters beyond ASCII), every node of the kind is
@@ -341,42 +347,6 @@ bool Graph::merge(qint64 keep, qint64 other) {
     for (const GraphMoment &moment : std::as_const(met))
         upsert(kept->scope, kept->kind, kept->name, {}, {}, moment.place, moment.anchor);
     return remove(other);
-}
-
-bool Graph::edit(qint64 id, const QString &name, const QString &summary) {
-    const auto known = node(id);
-    const QString called = name.simplified();
-    if (!known || called.isEmpty())
-        return false;
-    const qint64 other = named(known->scope, known->kind, called);
-    if (other != 0 && other != id)
-        return false;
-    QJsonObject data = known->data;
-    QStringList aliases = known->aliases();
-    aliases.removeAll(called);
-    if (known->name.compare(called, Qt::CaseInsensitive) != 0 && !aliases.contains(known->name, Qt::CaseInsensitive))
-        aliases << known->name;
-    if (aliases.isEmpty())
-        data.remove("aliases");
-    else
-        data.insert("aliases", QJsonArray::fromStringList(aliases));
-    if (!m_library->exec("UPDATE graph_nodes SET name = ?, summary = ?, data = ?, updated = ? WHERE id = ?",
-                         {called, summary.trimmed(), compact(data), Spaces::wallSeconds(*m_library), id}))
-        return false;
-    // Written by hand, it is the latest word on it, at no place of a book.
-    if (summary.trimmed() != known->summary && !summary.trimmed().isEmpty())
-        recordFact(id, "summary", summary.trimmed(), std::nullopt);
-    // The name it had is one of its names from where it was met, as the
-    // name itself was; a name given by hand is known everywhere.
-    if (known->name.compare(called, Qt::CaseInsensitive) != 0) {
-        m_library->exec("DELETE FROM graph_facts WHERE node_id = ? AND kind = 'alias' AND value = ? COLLATE NOCASE", {id, called});
-        const QList<GraphPlace> places = seen(id);
-        if (places.isEmpty())
-            recordFact(id, "alias", known->name, std::nullopt);
-        for (const GraphPlace &place : places)
-            recordFact(id, "alias", known->name, GraphMoment{place, firstMet(id, place.bookId).value_or(GraphMoment()).anchor});
-    }
-    return true;
 }
 
 std::optional<GraphNode> Graph::node(qint64 id) const {
