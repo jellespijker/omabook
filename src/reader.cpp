@@ -12,6 +12,7 @@
 #include <QtConcurrent>
 
 #include "backend.h"
+#include "documenttext.h"
 #include "formatreaders.h"
 #include "formats.h"
 #include "pagelayout.h"
@@ -517,27 +518,7 @@ void Reader::removeBookmark(qint64 id) {
 }
 
 QVariantList Reader::find(const QString &words) const {
-    QVariantList results;
-    const QString needle = words.simplified();
-    if (!m_document || needle.size() < 2)
-        return results;
-    const QList<TocEntry> toc = m_document->toc();
-    for (int section = 0; section < m_document->count() && results.size() < 200; ++section) {
-        const QString text = m_document->text(section).simplified();
-        QString title;
-        for (const TocEntry &entry : toc)
-            if (entry.section <= section)
-                title = entry.title;
-        for (qsizetype at = text.indexOf(needle, 0, Qt::CaseInsensitive); at >= 0 && results.size() < 200;
-             at = text.indexOf(needle, at + needle.size(), Qt::CaseInsensitive)) {
-            const qsizetype from = qMax<qsizetype>(0, at - 40);
-            results << QVariantMap{{"section", section},
-                                   {"title", title},
-                                   {"fraction", text.isEmpty() ? 0.0 : double(at) / text.size()},
-                                   {"snippet", (from > 0 ? "…" : "") + text.mid(from, needle.size() + 100) + "…"}};
-        }
-    }
-    return results;
+    return m_document ? DocumentText::find(*m_document, words) : QVariantList();
 }
 
 BookMeta Reader::meta() const {
@@ -553,23 +534,8 @@ QString Reader::textSoFar() const { return textFrom(0, 0, true); }
 
 QString Reader::textSince(int section, double fraction) const { return textFrom(section, fraction, false); }
 
-// A flowing book's place is partway down a chapter; a paged one's is its
-// page, which has been read once the reader is on it.
 QString Reader::textFrom(int fromSection, double fromFraction, bool withFirstPage) const {
-    if (!m_document || fromSection > m_section)
-        return {};
-    const bool flows = m_document->kind() == Document::Flow;
-    QString text;
-    for (int section = fromSection; section <= m_section; ++section) {
-        if (!flows && section == fromSection && !withFirstPage)
-            continue;
-        const QString whole = m_document->text(section);
-        const qsizetype from = flows && section == fromSection ? qRound(whole.size() * qBound(0.0, fromFraction, 1.0)) : 0;
-        const qsizetype to = flows && section == m_section ? qMin(whole.size(), qRound(whole.size() * m_fraction) + 1) : whole.size();
-        if (to > from)
-            text += whole.mid(from, to - from) + "\n\n";
-    }
-    return text.trimmed();
+    return m_document ? DocumentText::between(*m_document, {fromSection, fromFraction, m_section, m_fraction}, withFirstPage) : QString();
 }
 
 QList<GraphBuild::Passage> Reader::passagesSince(const std::optional<GraphPlace> &after) const {

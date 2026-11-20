@@ -26,7 +26,7 @@ summary = "Opening and reading book files: archives, EPUB, PDF, comics, FictionB
 uses = ["foundation"]
 modules = [
   "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
-  "formatprovider", "formatreaders", "formats", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
+  "formatprovider", "formatreaders", "formats", "documenttext", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
 ]
 
 [layers.library]
