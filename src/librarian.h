@@ -8,6 +8,7 @@
 #include <memory>
 
 #include "ai.h"
+#include "aicall.h"
 #include "aisearch.h"
 #include "curation.h"
 #include "customization.h"

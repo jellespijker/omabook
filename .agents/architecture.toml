@@ -14,7 +14,7 @@
 summary = "Settings, logging, theme and interface files, text cleaning, the script API table: no knowledge of books."
 uses = []
 modules = [
-  "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "pagelayout",
+  "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "htmlclean", "log", "markupfilter", "pagelayout",
   "person", "readingformat", "scriptapi", "scriptapigraph", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator",
 ]
@@ -44,7 +44,7 @@ modules = [
 summary = "What talks to the outside or to a model: AI, metadata sources, reading sites, Calibre, plugins, the help's content."
 uses = ["library", "formats", "foundation"]
 modules = [
-  "ai", "aichoice", "aiendpoint", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
+  "ai", "aicall", "aichoice", "aiendpoint", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
   "graphbuilder", "graphlinks", "graphpassages", "graphtimes", "hardcover", "helptopics", "importer", "interfacechange", "manual",
   "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptplugins", "scriptsharing", "scriptwatchdog", "sitedesk", "spacetransport", "thinkingfilter", "tour", "whatsnew",

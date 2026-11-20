@@ -15,6 +15,7 @@
 #include <algorithm>
 #include <cstdio>
 
+#include "aicall.h"
 #include "calibreplugin.h"
 #include "converter.h"
 #include "formats.h"
@@ -128,6 +129,7 @@ AiRequest BookOps::bookQuestion(const Document &document, const QString &questio
     AiRequest request;
     request.system = Prompts::companion(document.meta());
     request.messages.append({"user", Prompts::question(excerpt.text, {}, question, known)});
+    request.prose = true;
     return request;
 }
 

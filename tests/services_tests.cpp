@@ -142,7 +142,7 @@ QByteArray sse(const QByteArray &json) { return "event: x\ndata: " + json + "\n\
 // What a test asks: the instructions and what was said, with the tier and
 // the model left as a request has them when nothing is said of either.
 AiRequest asking(const QString &system, const QList<AiMessage> &messages) {
-    return {.system = system, .messages = messages, .tier = AiRequest::Main, .model = {}};
+    return {.system = system, .messages = messages, .tier = AiRequest::Main, .model = {}, .prose = false};
 }
 
 } // namespace

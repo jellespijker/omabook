@@ -6,6 +6,7 @@
 #include <QThreadPool>
 #include <QtConcurrent>
 
+#include "aicall.h"
 #include "backend.h"
 
 namespace {

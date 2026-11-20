@@ -43,8 +43,12 @@ void Assistant::refresh() {
     m_problem.clear();
     m_provider = m_factory(&m_problem);
     if (m_provider) {
+        // Every answer here is for the reader to read: without the markup some models wrap it in.
         connect(m_provider.get(), &AiProvider::delta, this, [this](const QString &text) {
-            m_streaming += text;
+            const QString shown = m_markup.take(text);
+            if (shown.isEmpty())
+                return;
+            m_streaming += shown;
             emit streamingChanged();
         });
         connect(m_provider.get(), &AiProvider::finished, this, [this] {
@@ -219,6 +223,7 @@ void Assistant::sendFromNotes(const QString &kind, const QString &notes, const Q
 // What has been written joins the conversation, whether the answer ended,
 // failed partway, or was stopped.
 void Assistant::finishAnswer() {
+    m_streaming += m_markup.finish();
     // A whole catch-up becomes the notes the next one starts from, and is
     // when the graph is brought up to where the reader is too.
     const bool whole = !m_failed && !m_streaming.trimmed().isEmpty();

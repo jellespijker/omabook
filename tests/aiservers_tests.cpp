@@ -12,8 +12,10 @@
 #include <QtTest>
 
 #include "ai.h"
+#include "aicall.h"
 #include "aiendpoint.h"
 #include "fixtures.h"
+#include "markupfilter.h"
 #include "omarchylocal.h"
 #include "openaiprovider.h"
 #include "secretstore.h"
@@ -103,7 +105,7 @@ AiServer serverAt(const FakeServer &fake, const QString &key = {}) {
 }
 
 AiRequest asking(const QString &question, AiRequest::Tier tier = AiRequest::Main) {
-    return {.system = "Be brief.", .messages = {{"user", question}}, .tier = tier, .model = {}};
+    return {.system = "Be brief.", .messages = {{"user", question}}, .tier = tier, .model = {}, .prose = false};
 }
 
 // Asks and waits for the end: the whole answer, or why it failed.
@@ -242,6 +244,77 @@ private slots:
         for (const QChar character : std::as_const(answer))
             characters << QString(character);
         QCOMPARE(through(characters), shown);
+    }
+
+    void markupAroundAnAnswerIsTakenOut_data() {
+        QTest::addColumn<QString>("answer");
+        QTest::addColumn<QString>("shown");
+        QTest::newRow("wrapped") << "<panel>Edda Marlowe came to keep the harbour light.</panel>"
+                                 << "Edda Marlowe came to keep the harbour light.";
+        QTest::newRow("nested, on lines of their own") << "<div class=\"answer\">\n  <p>Edda keeps the light.</p>\n</div>\n"
+                                                       << "Edda keeps the light.\n";
+        QTest::newRow("stray tags, known or not") << "Edda <span>keeps</span> the <x-glow/>light.</p>" << "Edda keeps the light.";
+        QTest::newRow("a break") << "One<br>two<br/>\nthree" << "One\ntwo\nthree";
+        QTest::newRow("markdown kept")
+            << "**Edda** keeps the *light*:\n\n- one\n- two\n\n> said\n\n<https://example.com>, a < b, <- and 1<2."
+            << "**Edda** keeps the *light*:\n\n- one\n- two\n\n> said\n\n<https://example.com>, a < b, <- and 1<2.";
+        QTest::newRow("indented markdown kept") << "<div>\n- a\n    - b\n</div>" << "- a\n    - b\n";
+        QTest::newRow("a code span kept") << "<p>Write `<b>bold</b>` or ``a `<i>` b``.</p>"
+                                          << "Write `<b>bold</b>` or ``a `<i>` b``.";
+        QTest::newRow("a code block kept")
+            << "<div>Like this:\n\n```html\n<panel>\n  <b>x</b>\n</panel>\n```\n\n~~~\n<i>\n~~~\n<b>done</b></div>"
+            << "Like this:\n\n```html\n<panel>\n  <b>x</b>\n</panel>\n```\n\n~~~\n<i>\n~~~\ndone";
+        QTest::newRow("a code block in a list kept") << "1. Run:\n   ```\n   echo <x>\n   ```\n<p>ok</p>"
+                                                     << "1. Run:\n   ```\n   echo <x>\n   ```\nok";
+        QTest::newRow("a tag never closed is text") << "Edda <div class" << "Edda <div class";
+        QTest::newRow("only markup") << "<div></div>" << "";
+    }
+
+    void markupAroundAnAnswerIsTakenOut() {
+        QFETCH(QString, answer);
+        QFETCH(QString, shown);
+        // However the answer is cut: whole, in two at every place, in three
+        // at every pair of places, and a character at a time.
+        auto through = [](const QStringList &pieces) {
+            MarkupFilter filter;
+            QString out;
+            for (const QString &piece : pieces)
+                out += filter.take(piece);
+            return out + filter.finish();
+        };
+        QCOMPARE(through({answer}), shown);
+        for (qsizetype i = 0; i <= answer.size(); ++i) {
+            QCOMPARE(through({answer.left(i), answer.mid(i)}), shown);
+            for (qsizetype j = i; j <= answer.size(); ++j)
+                QCOMPARE(through({answer.left(i), answer.mid(i, j - i), answer.mid(j)}), shown);
+        }
+        QStringList characters;
+        for (const QChar character : std::as_const(answer))
+            characters << QString(character);
+        QCOMPARE(through(characters), shown);
+    }
+
+    void anAnswerToReadComesWithoutItsMarkup() {
+        // As gemma did through Ollama: the answer wrapped, a tag split between chunks.
+        FakeServer fake;
+        fake.answer({"<pan", "el>Edda Marlowe", " came.</pa", "nel>"});
+        fake.answer({"{\\\"say\\\": \\\"<b>x</b>\\\"}"});
+        auto provider = std::make_unique<OpenAiProvider>(serverAt(fake));
+        provider->setModels({"gemma", "gemma"});
+        AiCall call(std::move(provider));
+        QStringList pieces;
+        connect(&call, &AiCall::delta, this, [&pieces](const QString &text) { pieces << text; });
+        QSignalSpy done(&call, &AiCall::done);
+        AiRequest request = asking("Who came?");
+        request.prose = true;
+        call.ask(request);
+        QVERIFY(done.wait(10000));
+        QCOMPARE(done.last().first().toString(), QString("Edda Marlowe came."));
+        QCOMPARE(pieces.join(QString()), QString("Edda Marlowe came."));
+        // What is read as data, not by a person, comes as it was written.
+        call.ask(asking("As JSON."));
+        QVERIFY(done.wait(10000));
+        QCOMPARE(done.last().first().toString(), QString(R"({"say": "<b>x</b>"})"));
     }
 
     void aServerThatThinksInItsAnswerShowsOnlyTheAnswer() {

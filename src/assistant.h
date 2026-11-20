@@ -7,8 +7,10 @@
 #include <memory>
 
 #include "ai.h"
+#include "aicall.h"
 #include "blurb.h"
 #include "graphbuilder.h"
+#include "markupfilter.h"
 
 class Reader;
 
@@ -100,6 +102,7 @@ private:
     // What is shown: the reader's questions as asked, and the answers.
     QList<AiMessage> m_messages;
     QString m_streaming;
+    MarkupFilter m_markup; // takes markup out of the answer being written
     QString m_note;
     bool m_busy = false;
     void askFromNotes(const QString &kind, const QString &asked);

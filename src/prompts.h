@@ -24,6 +24,9 @@ struct Excerpt {
 };
 Excerpt fit(const QString &text);
 
+// The standing instructions for the librarian of the whole library, who
+// answers questions about what it holds.
+QString librarian();
 // The standing instructions for the reading companion of one book.
 // `earlier` is what was noted in the books before it in its series, which
 // the reader has read too.

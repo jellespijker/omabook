@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "ai.h"
+#include "aicall.h"
 #include "document.h"
 #include "graph.h"
 #include "graphpassages.h"

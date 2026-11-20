@@ -19,7 +19,7 @@
 #include <QUrl>
 #include <algorithm>
 
-#include "ai.h"
+#include "aicall.h"
 #include "formats.h"
 #include "graphlinks.h"
 #include "graphtools.h"

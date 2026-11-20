@@ -520,23 +520,6 @@ void AntigravityProvider::cancel() {
     m_process.waitForFinished(1000);
 }
 
-AiCall::AiCall(std::unique_ptr<AiProvider> provider, QObject *parent) : QObject(parent), m_provider(std::move(provider)) {
-    connect(m_provider.get(), &AiProvider::delta, this, [this](const QString &text) {
-        m_answer += text;
-        emit delta(text);
-    });
-    connect(m_provider.get(), &AiProvider::finished, this, [this] { emit done(m_answer); });
-    connect(m_provider.get(), &AiProvider::failed, this, &AiCall::failed);
-    connect(m_provider.get(), &AiProvider::noted, this, &AiCall::noted);
-}
-
-void AiCall::ask(const AiRequest &request) {
-    m_answer.clear();
-    m_provider->ask(request);
-}
-
-void AiCall::cancel() { m_provider->cancel(); }
-
 void Ai::useModel(AiRequest &request, const QString &word) {
     const QString named = word.trimmed();
     if (named == "main" || named == "quick") {

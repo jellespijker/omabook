@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "ai.h"
+#include "aicall.h"
 #include "knowledgesearch.h"
 #include "library.h"
 

@@ -36,6 +36,9 @@ struct AiRequest {
     Tier tier = Main;
     // A model named for this one request, over the tier's; see Ai::useModel.
     QString model;
+    // The answer is for a person to read as it is written: the HTML-like
+    // tags some models wrap one in are taken out (see AiCall, MarkupFilter).
+    bool prose = false;
 };
 
 // The model each kind of work goes to, by the name the provider knows it
@@ -228,28 +231,6 @@ private:
     QString m_error;
     bool m_answered = false;
     bool m_cancelled = false;
-};
-
-// One question whose whole answer is wanted at once: it owns its provider,
-// gathers the pieces, and says when the answer is complete.
-class AiCall : public QObject {
-    Q_OBJECT
-
-public:
-    explicit AiCall(std::unique_ptr<AiProvider> provider, QObject *parent = nullptr);
-
-    void ask(const AiRequest &request);
-    void cancel();
-
-signals:
-    void delta(const QString &text);
-    void done(const QString &answer);
-    void failed(const QString &error);
-    void noted(const QString &note);
-
-private:
-    std::unique_ptr<AiProvider> m_provider;
-    QString m_answer;
 };
 
 // Which model answers, and why that one. Omabook's own setting decides:
