@@ -38,6 +38,7 @@ QString cliSummary() {
            "  change <wish> | --undo          Ask the AI to change how Omabook looks or works\n"
            "  logs [-n N] [--level l] [--since 1h]  What Omabook did and what went wrong, from the window and every command\n"
            "  progress <id> [--section N]     Show or set how far a book has been read\n"
+           "  annotations <id|all> [--add|--export]  Highlights, margin notes and bookmarks: list, add, export (Markdown, Readwise, PDF)\n"
            "  format [id] [--align justify]   Show or change how books are set: type, spacing, margins, alignment\n"
            "  sync <computer[:folder]>        Bring this library and another computer's in step over ssh\n"
            "  manifest                        Print the whole library as JSON, as sync reads it\n"

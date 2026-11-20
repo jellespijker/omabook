@@ -23,6 +23,7 @@
 #include "ai.h"
 #include "aicommands.h"
 #include "aisearch.h"
+#include "annotationcommands.h"
 #include "bookmarkcommands.h"
 #include "bookops.h"
 #include "calibreplugin.h"
@@ -1854,15 +1855,12 @@ int ask(const QStringList &arguments) {
                 return fail("There is no collection called " + command.parser.value("collection") + ". omabook collections lists them.");
             asked = collection->of(asked);
         }
-        QList<Curation::BookNotes> books;
-        for (const Book &book : asked)
-            books.append({book, library->notes(book.id, "recap").text});
         // The knowledge graph's picture of what was read goes along, and the
         // question joins the graph once it is answered; neither with it off.
         const QString question = command.parser.positionalArguments().mid(1).join(' ');
         const bool graph = Settings().graph() != "off";
         const auto picture = GraphContext::pictureIn(*library, command.parser.value("collection"), question, graph);
-        const auto answer = picture ? askAi(Curation::libraryQuestion(books, question, *picture), !command.json()) : std::expected<QString, QString>(std::unexpected(picture.error()));
+        const auto answer = picture ? askAi(Curation::libraryQuestion(BookOps::booksWithNotes(*library, asked), question, *picture), !command.json()) : std::expected<QString, QString>(std::unexpected(picture.error()));
         if (!answer)
             return fail(answer.error());
         if (graph)
@@ -1878,7 +1876,7 @@ int ask(const QStringList &arguments) {
         return fail(error);
     // A book of the library has a knowledge graph: what it holds on the
     // things the question names goes along, up to the same section as the
-    // text, and the question joins it once it is answered.
+    // text, and the question joins it once it is answered; and the reader's annotations (#86).
     QString libraryError;
     const auto library = command.library(&libraryError);
     bool inLibrary = false;
@@ -1889,7 +1887,8 @@ int ask(const QStringList &arguments) {
     const GraphPlace asked{id, upTo < 0 ? document->count() - 1 : upTo, 1.0};
     bool trimmed = false;
     const AiRequest request = BookOps::bookQuestion(*document, question, upTo, &trimmed,
-                                                    graph ? GraphContext::forQuestion(Graph::ofReader(*library, id), id, asked, question) : QString());
+                                                    graph ? GraphContext::forQuestion(Graph::ofReader(*library, id), id, asked, question) : QString(),
+                                                    BookOps::readersMarks(library.get(), inLibrary ? id : 0, upTo));
     if (trimmed)
         print(stderr, "The text is longer than fits in one question, so only its last part was sent.");
     const auto answer = askAi(request, !command.json());
@@ -2048,6 +2047,7 @@ constexpr std::array cliCommands{
     CliCommand{"add"_L1, add},
     CliCommand{"folio"_L1, Folio::run},
     CliCommand{"bookmarks"_L1, runBookmarksCli},
+    CliCommand{"annotations"_L1, runAnnotationsCli},
     CliCommand{"logs"_L1, runLogsCli},
     CliCommand{"notes"_L1, notes},
     CliCommand{"libraries"_L1, libraries},

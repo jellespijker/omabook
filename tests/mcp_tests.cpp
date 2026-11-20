@@ -99,6 +99,8 @@ private slots:
             {"book_convert", "convert"}, {"book_contents", "toc"}, {"book_text", "text"}, {"book_find", "find"},
             {"progress_get", "progress"}, {"progress_set", "progress"}, {"bookmarks_list", "bookmarks"},
             {"bookmark_add", "bookmarks"}, {"bookmark_remove", "bookmarks"}, {"notes_get", "notes"},
+            {"annotations_list", "annotations"}, {"annotation_add", "annotations"}, {"annotation_change", "annotations"},
+            {"annotation_remove", "annotations"}, {"annotations_export", "annotations"},
             {"lookup_candidates", "lookup"}, {"lookup_apply", "lookup"}, {"tidy_propose", "tidy"},
             {"tidy_apply", "tidy"}, {"ask_book", "ask"}, {"ask_library", "ask"}, {"suggest_reading", "suggest"},
             {"catalog_export", "catalog"}, {"sync_status", "sync"}, {"sync_run", "sync"}, {"plugins_list", "plugins"},
@@ -188,12 +190,12 @@ private slots:
             return QJsonValue();
         };
         // What takes something away says so; what only reads says that.
-        for (const char *tool : {"book_remove", "bookmark_remove", "tidy_apply", "lookup_apply", "book_add_format"}) {
+        for (const char *tool : {"book_remove", "bookmark_remove", "annotation_remove", "tidy_apply", "lookup_apply", "book_add_format"}) {
             QVERIFY2(hint(tool, "destructiveHint").toBool(false), tool);
             QVERIFY2(!hint(tool, "readOnlyHint").toBool(true), tool);
         }
         for (const char *tool : {"books_search", "book_get", "book_text", "book_find", "book_contents", "progress_get",
-                                 "bookmarks_list", "notes_get", "tidy_propose", "plugins_list", "customize_get", "library_list"})
+                                 "bookmarks_list", "annotations_list", "notes_get", "tidy_propose", "plugins_list", "customize_get", "library_list"})
             QVERIFY2(hint(tool, "readOnlyHint").toBool(false), tool);
         for (const char *tool : {"book_add", "book_add_entry", "book_set_details", "book_set_reading", "progress_set",
                                  "customize_set", "library_switch"}) {

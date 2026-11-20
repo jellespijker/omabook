@@ -16,6 +16,7 @@
 #include <cstdio>
 
 #include "aicall.h"
+#include "annotationcontext.h"
 #include "calibreplugin.h"
 #include "converter.h"
 #include "formats.h"
@@ -117,8 +118,8 @@ bool BookOps::ask(const AiRequest &request, QString *answer, QString *error, con
     return ok;
 }
 
-AiRequest BookOps::bookQuestion(const Document &document, const QString &question, int lastSection, bool *trimmed,
-                                const QString &known) {
+AiRequest BookOps::bookQuestion(const Document &document, const QString &question, int lastSection, bool *trimmed, const QString &known,
+                                const QString &marks) {
     const int last = lastSection < 0 ? document.count() - 1 : qBound(0, lastSection, document.count() - 1);
     QString words;
     for (int section = 0; section <= last; ++section)
@@ -128,16 +129,24 @@ AiRequest BookOps::bookQuestion(const Document &document, const QString &questio
         *trimmed = excerpt.trimmed;
     AiRequest request;
     request.system = Prompts::companion(document.meta());
-    request.messages.append({"user", Prompts::question(excerpt.text, {}, question, known)});
+    request.messages.append({"user", Prompts::question(excerpt.text, {}, question, known, marks)});
     request.prose = true;
     return request;
 }
 
-QList<Curation::BookNotes> BookOps::booksWithNotes(const Library &library) {
-    QList<Curation::BookNotes> books;
-    for (const Book &book : library.books())
-        books.append({book, library.notes(book.id, "recap").text});
-    return books;
+QString BookOps::readersMarks(const Library *library, qint64 bookId, int lastSection) {
+    if (!library || bookId <= 0 || !library->book(bookId))
+        return {};
+    return AnnotationContext::forQuestion(*library, bookId, AnnotationContext::cutFor(*library, bookId, lastSection), Settings());
+}
+
+QList<Curation::BookNotes> BookOps::booksWithNotes(const Library &library) { return booksWithNotes(library, library.books()); }
+
+QList<Curation::BookNotes> BookOps::booksWithNotes(const Library &library, const QList<Book> &books) {
+    QList<Curation::BookNotes> noted;
+    for (const Book &book : books)
+        noted.append({book, library.notes(book.id, "recap").text});
+    return noted;
 }
 
 BookOps::LookUp BookOps::lookUp(const Library &library, const Book &book, bool ai) {

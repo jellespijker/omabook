@@ -718,61 +718,6 @@ QList<Tool> coreTools() {
                       return Result::ok(placeJson(at.library->progress(at.id)));
                   }};
 
-    tools << Tool{"bookmarks_list", "A book's bookmarks",
-                  "The places bookmarked in a book: each with its bookmark_id, section, how far into it, and the "
-                  "text and note kept with it.",
-                  schema({{"id", integer("The book's number.", 1)}}, {"id"}), ReadOnly, [](const QJsonObject &arguments) {
-                      const Shelf at = shelf(arguments);
-                      if (!at)
-                          return Result::fail(at.error);
-                      QJsonArray bookmarks;
-                      for (const Annotation &mark : at.library->annotations(at.id))
-                          if (mark.kind == "bookmark")
-                              bookmarks << mark.place.toJson(
-                                  {{"bookmark_id", mark.id}, {"text", mark.text}, {"note", mark.note}, {"created", mark.created}});
-                      return Result::ok({{"bookmarks", bookmarks}});
-                  }};
-
-    tools << Tool{"bookmark_add", "Bookmark a place",
-                  "Bookmarks a place in a book, with the words found there and a note of your own if you like.",
-                  schema({{"id", integer("The book's number.", 1)},
-                          {"section", integer("The section, counted from 0.", 0)},
-                          {"fraction", number("How far into the section; 0 when not given.", 0, 1)},
-                          {"text", string("The words at that place, to recognize it by.")},
-                          {"note", string("A note to keep with it.")}},
-                         {"id", "section"}),
-                  Changes, [](const QJsonObject &arguments) {
-                      const Shelf at = shelf(arguments);
-                      if (!at)
-                          return Result::fail(at.error);
-                      Annotation mark;
-                      mark.kind = "bookmark";
-                      mark.place = BookPlace::fromJson(arguments);
-                      mark.text = arguments.value("text").toString().simplified();
-                      mark.note = arguments.value("note").toString().trimmed();
-                      const qint64 added = at.library->addAnnotation(at.id, mark);
-                      if (added <= 0)
-                          return Result::fail("The bookmark can't be written.");
-                      return Result::ok({{"bookmark_id", added}});
-                  }};
-
-    tools << Tool{"bookmark_remove", "Remove a bookmark",
-                  "Takes one bookmark away from a book. It can't be put back.",
-                  schema({{"id", integer("The book's number.", 1)},
-                          {"bookmark_id", integer("The bookmark, as bookmarks_list gives it.", 1)}},
-                         {"id", "bookmark_id"}),
-                  Destructive, [](const QJsonObject &arguments) {
-                      const Shelf at = shelf(arguments);
-                      if (!at)
-                          return Result::fail(at.error);
-                      const qint64 wanted = arguments.value("bookmark_id").toInteger();
-                      const QList<Annotation> marks = at.library->annotations(at.id);
-                      if (std::ranges::none_of(marks, [&](const Annotation &mark) { return mark.id == wanted; }))
-                          return Result::fail(QString("Book %1 has no bookmark %2; see bookmarks_list.").arg(at.id).arg(wanted));
-                      at.library->removeAnnotation(wanted);
-                      return Result::ok({{"removed", wanted}});
-                  }};
-
     tools << Tool{"notes_get", "The companion's notes on a book",
                   "The notes Omabook's reading companion keeps with a book, each written up to the place the reader "
                   "had reached: \"recap\" (the story so far) and \"cast\" (who is who). Empty text means none was "
@@ -932,7 +877,8 @@ QList<Tool> coreTools() {
     tools << Tool{"ask_book", "Ask Omabook's AI about a book",
                   "Has the model Omabook is set up with answer a question from a book's text. When you can read the "
                   "text yourself with book_text and book_find, prefer that; this is for a question that needs the "
-                  "whole book at once. up_to_section keeps later sections unsent, so nothing is spoiled.",
+                  "whole book at once. up_to_section keeps later sections unsent, so nothing is spoiled. The reader's own "
+                  "highlights and notes up to their place go along when the privacy rule lets them (see annotations_list).",
                   readingSchema({{"question", string("What to ask.")},
                                  {"up_to_section", integer("Send the text only up to and including this section.", 0)},
                                  {"model", string(modelIs)}},
@@ -945,8 +891,11 @@ QList<Tool> coreTools() {
                       if (!document)
                           return Result::fail(error);
                       bool trimmed = false;
-                      const AiRequest request = BookOps::bookQuestion(*document, arguments.value("question").toString(),
-                                                                      arguments.value("up_to_section").toInt(-1), &trimmed);
+                      // With the reader's own highlights and notes up to their place, where the privacy rule lets them go (#86).
+                      const int upTo = arguments.value("up_to_section").toInt(-1);
+                      const auto library = arguments.contains("id") ? Mcp::library(&error) : nullptr;
+                      const AiRequest request = BookOps::bookQuestion(*document, arguments.value("question").toString(), upTo, &trimmed, {},
+                                                                      BookOps::readersMarks(library.get(), arguments.value("id").toInteger(), upTo));
                       QString answer, note;
                       if (!BookOps::ask(request, &answer, &error, {}, &note))
                           return Result::fail(error);

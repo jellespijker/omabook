@@ -140,6 +140,10 @@ QList<Manual::Step> inkRelease() {
          Manual::tr("Write and draw on the pages of a PDF or a comic with a pen or the mouse: {reader.ink}. The ink stays where you "
                     "put it at every zoom, and goes to your other computers."),
          "", "reader.ink", "reader", ""},
+        {"ask-highlights", "0.1.10", Manual::tr("Ask about what you marked"),
+         Manual::tr("With an AI of your own, {reader.ask} is given your highlights and notes up to where you are, never past "
+                    "it: ask what you highlighted about something. Calibre's come across in their colours, with their notes."),
+         "", "reader.ask", "reader", ""},
     };
 }
 

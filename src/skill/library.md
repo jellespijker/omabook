@@ -95,6 +95,18 @@ omabook calibre import             # import the ones not imported yet (or <path>
 omabook calibre plugins --json     # Calibre's own plugins of every kind: type, usable by Omabook or why not
 ```
 
+## Highlights, margin notes and bookmarks
+
+```bash
+omabook annotations 12 --json                    # a book's highlights, margin notes, bookmarks, pages with ink; "all" for every book
+omabook annotations 12 --add highlight --section 2 --words "the words as omabook text shows them" --color blue
+omabook annotations 12 --add margin-note --section 2 --words "..." --note "what the reader wrote"
+omabook annotations 12 --change 7 --note "..."   # or --color, or --name for a bookmark; --remove 7 takes one away
+omabook annotations 12 --export markdown         # or readwise (CSV); pdf --output copy.pdf writes them into a copy of a PDF book
+```
+
+They are the reader's own: one in a book read before may be on what lies past their place now, so don't tell it unasked.
+
 ## Reading sites
 
 ```bash

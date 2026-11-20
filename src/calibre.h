@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QJsonObject>
 #include <QList>
 #include <QMap>
 #include <QString>
@@ -19,14 +20,15 @@
 // plugin's to say (calibreplugin.h), which is what the rest of the app asks.
 namespace Calibre {
 
-// A highlight or bookmark made in Calibre's viewer.
+// A highlight, a note on one, or a bookmark made in Calibre's viewer.
 struct Note {
-    QString id;           // Calibre's own name for it, so it comes across once
-    QString kind;         // "bookmark" or "highlight"
+    QString id;           // Calibre's own name for it, with its kind, so it comes across once
+    QString kind;         // "bookmark", "highlight" or "margin-note"
     int section = 0;      // the chapter file it is in, counted from 0
-    QString text;         // the words marked, or the bookmark's title
-    QString note;
+    QString text;         // the words marked (its passage's), or the bookmark's title
+    QString note;         // a margin note's words
     qint64 created = 0;   // seconds since the epoch
+    QString color;        // a highlight's colour by Omabook's name for it (HighlightColors), '' for the first
 };
 
 // What Calibre knows of how a book was read.
@@ -70,6 +72,10 @@ Books read(const QString &folder);
 QString columnRole(const QString &label, const QString &name, const QString &datatype);
 // The shelf a column's value names ("Currently Reading" is "reading"), or empty.
 QString shelfFor(const QString &value);
+// The colour of a highlight of Calibre's viewer, by its style
+// ({"kind": "color", "type": "builtin", "which": "yellow"}), as Omabook names
+// its colours; '' (the first) for a colour Omabook has none like.
+QString colorOf(const QJsonObject &style);
 // Calibre counts stars in halves, 0 to 10.
 int starsFor(int calibreRating);
 

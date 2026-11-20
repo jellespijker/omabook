@@ -1,5 +1,6 @@
 #include "importer.h"
 
+#include <QDateTime>
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QHash>
@@ -77,6 +78,29 @@ private:
 // replaced only while it still is what the last import put there (or nothing,
 // for a book never imported from Calibre), so a shelf or a star changed in
 // Omabook since stays as the user left it. True when something changed.
+// A highlight or a note of Calibre's viewer on the passage of its words in
+// its chapter, found by them when the book is first opened or its
+// annotations are listed (ADR 0004); a bookmark is the start of its chapter.
+[[nodiscard]] Annotation annotationOf(const Calibre::Note &note) {
+    // When it was made in Calibre, not when it came across.
+    Annotation annotation{.id = 0,
+                          .kind = note.kind,
+                          .place = {.section = note.section, .fraction = 0},
+                          .text = {},
+                          .note = note.note,
+                          .created = note.created > 0 ? note.created : QDateTime::currentSecsSinceEpoch()};
+    if (note.kind == "bookmark") {
+        annotation.text = note.text;
+        return annotation;
+    }
+    annotation.setPassage({.from = annotation.place, .to = annotation.place, .quote = note.text.trimmed(), .before = {}, .after = {}});
+    annotation.color = note.color;
+    // A margin note is listed by the start of its words, as one made in the reader is.
+    if (note.kind == "margin-note")
+        annotation.text = note.text.simplified().left(200);
+    return annotation;
+}
+
 [[nodiscard]] bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, CalibreMemory &memory) {
     const auto now = library.book(id);
     if (!now)
@@ -117,15 +141,13 @@ private:
         changed = true;
     }
 
-    // Each highlight and bookmark comes across once, so one removed here
-    // doesn't return with the next import.
+    // Each highlight, note and bookmark comes across once, so one removed
+    // here doesn't return with the next import.
     QJsonArray notes = before.value("notes").toArray();
     for (const Calibre::Note &note : said.notes) {
         if (notes.contains(note.id))
             continue;
-        const Annotation annotation{
-            .id = 0, .kind = note.kind, .place = {.section = note.section, .fraction = 0}, .text = note.text, .note = note.note};
-        if (library.addAnnotation(id, annotation) > 0) {
+        if (library.storeAnnotation(id, annotationOf(note)).value_or(0) > 0) {
             notes << note.id;
             changed = true;
         }

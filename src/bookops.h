@@ -42,11 +42,19 @@ bool ask(const AiRequest &request, QString *answer, QString *error, const std::f
 // A question about one book, with its text up to and including `lastSection`
 // (all of it when negative) to go on. `trimmed` says the text was too long to
 // send whole.
-// `known` is what the knowledge graph holds on what the question names.
+// `known` is what the knowledge graph holds on what the question names, and
+// `marks` the reader's own highlights and notes up to their place (AnnotationContext).
 AiRequest bookQuestion(const Document &document, const QString &question, int lastSection = -1, bool *trimmed = nullptr,
-                       const QString &known = {});
+                       const QString &known = {}, const QString &marks = {});
+// The reader's own highlights and notes in a book of the library, up to
+// their place and that section (all of it when negative), for a question
+// about it where the privacy rule lets them go (AnnotationContext); empty
+// for none, no library or no such book.
+QString readersMarks(const Library *library, qint64 bookId, int lastSection = -1);
 // The library as the model is told of it: every book with the notes kept on it.
 QList<Curation::BookNotes> booksWithNotes(const Library &library);
+// Those of some of its books (a collection's).
+QList<Curation::BookNotes> booksWithNotes(const Library &library, const QList<Book> &books);
 
 // A book's details looked up with every metadata plugin that is on and, with
 // `ai`, judged by the model, whose recommendation then leads.

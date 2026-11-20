@@ -172,12 +172,16 @@ private slots:
         QCOMPARE(half.shelf, QString("reading"));
         QCOMPARE(half.percent, 40.0);
         QCOMPARE(half.section, 2);
-        QCOMPARE(half.notes.size(), 2);
+        // The highlight's note is a margin note on its words, as Omabook keeps one.
+        QCOMPARE(half.notes.size(), 3);
         QCOMPARE(half.notes.at(0).kind, QString("highlight"));
         QCOMPARE(half.notes.at(0).text, QString("Half Way."));
-        QCOMPARE(half.notes.at(0).note, QString("Remember this"));
-        QCOMPARE(half.notes.at(1).kind, QString("bookmark"));
-        QCOMPARE(half.notes.at(1).text, QString("Where I stopped"));
+        QCOMPARE(half.notes.at(0).note, QString());
+        QCOMPARE(half.notes.at(1).kind, QString("margin-note"));
+        QCOMPARE(half.notes.at(1).text, QString("Half Way."));
+        QCOMPARE(half.notes.at(1).note, QString("Remember this"));
+        QCOMPARE(half.notes.at(2).kind, QString("bookmark"));
+        QCOMPARE(half.notes.at(2).text, QString("Where I stopped"));
 
         // A shelf column, a tick that is off, and nothing else.
         QCOMPARE(books.value("Some Day").reading.shelf, QString("to-read"));
@@ -231,12 +235,12 @@ private slots:
         QCOMPARE(half.shelf, QString("reading"));
         QCOMPARE(half.percent, 40.0);
         const QList<Annotation> notes = library.annotations(half.id);
-        QCOMPARE(notes.size(), 2);
+        QCOMPARE(notes.size(), 3);
         QStringList kinds;
         for (const Annotation &note : notes)
-            kinds << note.kind + ":" + note.text + ":" + note.note;
+            kinds << note.kind + ":" + (note.kind == "bookmark" ? note.text : note.passage().quote) + ":" + note.note;
         kinds.sort();
-        QCOMPARE(kinds, (QStringList{"bookmark:Where I stopped:", "highlight:Half Way.:Remember this"}));
+        QCOMPARE(kinds, (QStringList{"bookmark:Where I stopped:", "highlight:Half Way.:", "margin-note:Half Way.:Remember this"}));
 
         QCOMPARE(books.value("Some Day").shelf, QString("to-read"));
         QCOMPARE(books.value("Some Day").status(), QString("to-read"));
@@ -268,7 +272,7 @@ private slots:
         QCOMPARE(same.duplicates, 5);
         QCOMPARE(same.updated, 0);
         QCOMPARE(same.read, 2);
-        QCOMPARE(library.annotations(half).size(), 2);
+        QCOMPARE(library.annotations(half).size(), 3);
 
         // Meanwhile, in Omabook: stars changed, a book taken up, a highlight
         // removed, and the first book opened again.
@@ -321,7 +325,7 @@ private slots:
         // The later reading wins: the book was opened here after Calibre's place.
         QCOMPARE(books.value("Calibre's Title").percent, 20.0);
         // The new highlight came; the one removed here did not come back.
-        QCOMPARE(library.annotations(half).size(), 2);
+        QCOMPARE(library.annotations(half).size(), 3);
         QCOMPARE(again.read, 3);
 
         // A third import finds nothing left to do.

@@ -1,8 +1,10 @@
 #include "assistant.h"
 
+#include "annotationcontext.h"
 #include "graphcontext.h"
 #include "prompts.h"
 #include "reader.h"
+#include "settings.h"
 
 Assistant::Assistant(Reader *reader, Factory factory, QObject *parent)
     : QObject(parent), m_reader(reader), m_factory(std::move(factory)),
@@ -97,7 +99,20 @@ void Assistant::ask(const QString &question, const QString &scope, const QString
                               ? GraphContext::forQuestion(Graph::ofReader(*library, m_reader->bookId()), m_reader->bookId(),
                                                           m_reader->place(), question + "\n" + selection)
                               : QString();
-    request.messages.append({"user", Prompts::question(excerpt.text, selection, question, known)});
+    // The reader's own highlights and notes up to their place, where the
+    // privacy rule lets them go (#86); why not is said once, as a
+    // conversation begins, when there are some to keep back.
+    QString marks;
+    if (library) {
+        const Settings settings;
+        marks = AnnotationContext::lines(library->annotations(m_reader->bookId()), m_reader->place(), settings.highlightNames());
+        if (const QString why = marks.isEmpty() ? QString() : AnnotationContext::whyNot(settings); !why.isEmpty()) {
+            marks.clear();
+            if (m_messages.isEmpty())
+                m_note = m_note.isEmpty() ? why : m_note + "\n" + why;
+        }
+    }
+    request.messages.append({"user", Prompts::question(excerpt.text, selection, question, known, marks)});
     m_asked = question.trimmed();
     m_askedAt = m_reader->place();
 

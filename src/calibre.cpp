@@ -138,7 +138,10 @@ void readCustomColumns(const Connection &calibre, QHash<qint64, Calibre::Reading
     }
 }
 
-// Highlights and bookmarks from Calibre's viewer, each a small JSON document.
+// Highlights, their notes and bookmarks from Calibre's viewer, each a small
+// JSON document. A highlight with a note is a highlight and a margin note on
+// the same words, as Omabook keeps them; each has a name of its own, so the
+// note of a highlight brought in before notes were comes along the next time.
 void readNotes(const Connection &calibre, QHash<qint64, Calibre::Reading> &readings) {
     QSqlQuery notes = calibre.query("SELECT book, annot_id, annot_type, annot_data, timestamp FROM annotations ORDER BY timestamp");
     while (notes.next()) {
@@ -147,15 +150,35 @@ void readNotes(const Connection &calibre, QHash<qint64, Calibre::Reading> &readi
         // A highlight taken away again stays in Calibre's table, marked.
         if (data.value("removed").toBool() || (kind != "highlight" && kind != "bookmark"))
             continue;
-        const bool highlight = kind == "highlight";
-        readings[notes.value(0).toLongLong()].notes.append({
-            .id = kind + ":" + notes.value(1).toString(),
-            .kind = kind,
-            .section = highlight ? data.value("spine_index").toInt() : sectionOfCfi(data.value("pos").toString()),
-            .text = data.value(highlight ? "highlighted_text" : "title").toString(),
-            .note = highlight ? data.value("notes").toString() : QString(),
-            .created = qint64(notes.value(4).toDouble()),
-        });
+        QList<Calibre::Note> &kept = readings[notes.value(0).toLongLong()].notes;
+        const QString id = notes.value(1).toString();
+        const auto created = static_cast<qint64>(notes.value(4).toDouble());
+        if (kind == "bookmark") {
+            kept.append({.id = "bookmark:" + id,
+                         .kind = kind,
+                         .section = sectionOfCfi(data.value("pos").toString()),
+                         .text = data.value("title").toString(),
+                         .note = {},
+                         .created = created,
+                         .color = {}});
+            continue;
+        }
+        const Calibre::Note highlight{.id = "highlight:" + id,
+                                      .kind = kind,
+                                      .section = data.value("spine_index").toInt(),
+                                      .text = data.value("highlighted_text").toString(),
+                                      .note = {},
+                                      .created = created,
+                                      .color = Calibre::colorOf(data.value("style").toObject())};
+        kept.append(highlight);
+        if (const QString note = data.value("notes").toString().trimmed(); !note.isEmpty())
+            kept.append({.id = "margin-note:" + id,
+                         .kind = "margin-note",
+                         .section = highlight.section,
+                         .text = highlight.text,
+                         .note = note,
+                         .created = created,
+                         .color = {}});
     }
 }
 
@@ -232,6 +255,16 @@ QString Calibre::shelfFor(const QString &value) {
         {"wishlist", "to-read"},
     };
     return shelves.value(plainName(value));
+}
+
+QString Calibre::colorOf(const QJsonObject &style) {
+    // Calibre's own colours by name; red is nearest Omabook's orange. A
+    // colour of one's own, or a line rather than a colour, is the first.
+    static const QHash<QString, QString> colors{{"yellow", "yellow"}, {"green", "green"}, {"blue", "blue"},
+                                                {"purple", "purple"}, {"red", "orange"},  {"orange", "orange"}};
+    if (style.value("kind").toString() != "color" || style.value("type").toString() != "builtin")
+        return {};
+    return colors.value(style.value("which").toString().toLower());
 }
 
 int Calibre::starsFor(int calibreRating) { return calibreRating <= 0 ? 0 : std::clamp((calibreRating + 1) / 2, 1, 5); }

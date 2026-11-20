@@ -415,7 +415,7 @@ cp "$config" "$work/config.before"
 # What each command is given to get as far as the library.
 arguments_for() {
   case "$1" in
-    show|bookmarks|notes|toc|text|progress|format) words=(1) ;;
+    show|bookmarks|annotations|notes|toc|text|progress|format) words=(1) ;;
     add) words=("$work/elsewhere.txt") ;;
     set) words=(1 --tags elsewhere) ;;
     find) words=(1 dark) ;;

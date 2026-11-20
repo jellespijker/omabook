@@ -345,7 +345,8 @@ private slots:
         QVERIFY2(imported.problems.isEmpty(), qPrintable(imported.problems.join('\n')));
         const QList<Book> halfHere = here.books("Half Way");
         QCOMPARE(halfHere.size(), 1);
-        QCOMPARE(here.annotations(halfHere.first().id).size(), 2);
+        // The highlight, the note on it, the bookmark.
+        QCOMPARE(here.annotations(halfHere.first().id).size(), 3);
 
         const Remote remote("laptop:" + dir.filePath("There"), {ssh(dir, "ssh-log", false)});
         const SyncSummary summary = syncLibrary(here, remote);
@@ -355,11 +356,11 @@ private slots:
         QCOMPARE(halfThere.size(), 1);
         QStringList kinds;
         for (const Annotation &note : there.annotations(halfThere.first().id))
-            kinds << note.kind + ":" + note.text + ":" + note.note;
+            kinds << note.kind + ":" + (note.kind == "bookmark" ? note.text : note.passage().quote) + ":" + note.note;
         kinds.sort();
-        QCOMPARE(kinds, (QStringList{"bookmark:Where I stopped:", "highlight:Half Way.:Remember this"}));
+        QCOMPARE(kinds, (QStringList{"bookmark:Where I stopped:", "highlight:Half Way.:", "margin-note:Half Way.:Remember this"}));
         QCOMPARE(changed(syncLibrary(here, remote)), 0);
-        QCOMPARE(there.annotations(halfThere.first().id).size(), 2);
+        QCOMPARE(there.annotations(halfThere.first().id).size(), 3);
     }
 
     // Two copies of one library (a sample from 0.1.5, with a bookmark) each

@@ -36,8 +36,12 @@ QString seriesSoFar(const QList<SeriesNotes> &earlier);
 // The first message of a conversation: what the reader has in front of them
 // (and has selected, if anything), then their question.
 // `known` is the part of the book's knowledge graph the question touches (see
-// GraphContext::forQuestion), empty when there is none.
-QString question(const QString &excerpt, const QString &selection, const QString &question, const QString &known = {});
+// GraphContext::forQuestion), empty when there is none; `marks` the reader's
+// own highlights and notes up to their place (AnnotationContext), likewise.
+QString question(const QString &excerpt, const QString &selection, const QString &question, const QString &known = {},
+                 const QString &marks = {});
+// The reader's highlights and notes, as the companion is given them with a question.
+QString readersMarks(const QString &marks);
 
 // Asks who or what the reader selected is, from the paragraph it stands in
 // and nothing else of the book: for a name the knowledge graph doesn't know.
