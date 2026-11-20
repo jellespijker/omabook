@@ -268,6 +268,21 @@ Item {
         const sheet = points.length > 0 ? pageAt(points[0].x, points[0].y) : null
         return sheet ? sheet.marks.penned(points.map(p => sheet.text.mapFromItem(spread, p.x, p.y))) : { kind: "" }
     }
+    // The line at a point of a page, or beside the pages in the margin
+    // column on the page nearest it, for a note written there by hand.
+    function lineAt(x, y) {
+        const under = pageAt(x, y)
+        let sheet = under
+        let nearest = Infinity
+        for (const one of sheets) {
+            const off = Math.abs(one.mapFromItem(spread, x, y).x - one.width / 2)
+            if (!under && one.there && off < nearest) {
+                nearest = off
+                sheet = one
+            }
+        }
+        return sheet ? sheet.noteMarks.lineAt(sheet.text.mapFromItem(spread, x, y).y) : null
+    }
     function placeText() {
         const start = firstText.positionAt(columnWidth / 2, breaks[page] + 8)
         return firstText.getText(start, start + 120).replace(/\u00ad/g, "")
@@ -297,6 +312,7 @@ Item {
         readonly property bool shown: offset < spread.columns
         property alias text: column
         property alias marks: pageMarks
+        property alias noteMarks: sheetNotes
         readonly property bool there: shown && index < spread.pages
         // Every page takes its place in the spread, written on or not; what
         // shows of the column is cut off after the page's last whole line.
@@ -340,6 +356,7 @@ Item {
                     onReleased: spread.selected()
                 }
                 NoteMarks {
+                    id: sheetNotes
                     anchors.fill: parent
                     visible: sheet.there
                     text: column

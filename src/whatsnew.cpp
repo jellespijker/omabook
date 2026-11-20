@@ -126,6 +126,10 @@ QList<Manual::Step> annotationsRelease() {
          Manual::tr("Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. "
                     "Hyphenate in the Aa panel ({reader.format}) turns it off."),
          "", "reader.format", "reader", ""},
+        {"handwritten-notes", "0.1.10", Manual::tr("Margin notes by hand"),
+         Manual::tr("With a pen, write on the text or in the margin beside it: a note by hand on that line, read by your own "
+                    "AI server so the book's search finds it."),
+         "", "reader.notes", "reader", ""},
     };
 }
 

@@ -24,6 +24,10 @@ _Avoid_: Ink (for this), drawing, shortcut
 Words about a passage or place in a book, typed or written by hand, shown beside it.
 _Avoid_: Note (alone), comment, annotation (for this kind only)
 
+**Handwritten margin note**:
+A margin note written with the pen: its ink is the note, kept as strokes on it; its words are what was read of the ink, searched and shown on request (`NoteRecognition`).
+_Avoid_: Ink note, scribble, drawing
+
 **Margin column**:
 The strip beside the text where margin notes stand, each at the height of its passage; part of the page's layout, there only when the window has room for it beside a comfortable page (`PageLayout::columns`).
 _Avoid_: Sidebar, notes pane, gutter (the space between pages)

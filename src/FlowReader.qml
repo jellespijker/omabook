@@ -223,6 +223,8 @@ Flickable {
         return placed
     }
     function penStroke(points) { return marks.penned(points.map(p => page.mapFromItem(flick, p.x, p.y))) }
+    // The line at a point of the page or beside it, for a note written there by hand.
+    function lineAt(x, y) { return noteMarks.lineAt(page.mapFromItem(flick, x, y).y) }
     function placeText() {
         const start = page.positionAt(page.width / 2, Math.max(0, contentY - page.y + 8))
         return page.getText(start, start + 120).replace(/\u00ad/g, "")
@@ -337,6 +339,7 @@ Flickable {
             onReleased: flick.selected()
         }
         NoteMarks {
+            id: noteMarks
             anchors.fill: parent
             text: page
             reading: flick.notes

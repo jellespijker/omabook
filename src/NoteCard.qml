@@ -7,11 +7,18 @@ import QtQuick.Layouts
 // in the same place. The keyboard edits it first: Enter (or E) to edit,
 // Escape or Ctrl+Enter when done, Delete to remove it; a note left with no
 // words is removed too. A click or a tap edits it as well.
+//
+// A note written by hand (#90) shows its ink instead (NoteInk), which the pen
+// writes on wherever it stands; edited, Ctrl+Z and Ctrl+Shift+Z undo and redo
+// a pause of the pen, X takes the eraser, W shows its words.
 FocusScope {
     id: card
     // The note's number; 0 for one being written on a passage that has none yet.
     property var noteId: 0
     property string words: ""
+    // Written by hand, and the notes (MarginNotes) its ink is kept by.
+    property bool ink: false
+    property var notes: null
     property bool editing: false
     // The keyboard is on it, going through the notes.
     property bool current: false
@@ -27,6 +34,10 @@ FocusScope {
     implicitHeight: frame.implicitHeight
     function edit() {
         editing = true
+        if (ink) {
+            card.forceActiveFocus()
+            return
+        }
         field.text = words
         field.forceActiveFocus()
         field.cursorPosition = field.length
@@ -34,14 +45,28 @@ FocusScope {
     function finish() {
         if (!editing) return
         editing = false
-        finished(field.text)
+        finished(ink ? words : field.text)
     }
-    onEditingChanged: if (editing && !field.activeFocus) field.forceActiveFocus()
+    onEditingChanged: if (editing && !ink && !field.activeFocus) field.forceActiveFocus()
 
     Keys.onPressed: (event) => {
+        if (editing && ink && inkLoader.item) inkKeys(event)
         if (editing) return
         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter || event.key === Qt.Key_E) edit()
         else if (event.key === Qt.Key_Delete || event.key === Qt.Key_D) removeAsked()
+        else return
+        event.accepted = true
+    }
+    function inkKeys(event) {
+        const ctrl = event.modifiers & Qt.ControlModifier
+        const shift = event.modifiers & Qt.ShiftModifier
+        const inked = inkLoader.item
+        if (event.key === Qt.Key_Escape || event.key === Qt.Key_Return || event.key === Qt.Key_Enter) finish()
+        else if (ctrl && (event.key === Qt.Key_Y || (event.key === Qt.Key_Z && shift))) inked.redo()
+        else if (ctrl && event.key === Qt.Key_Z) inked.undo()
+        else if (event.key === Qt.Key_X) inked.toggleEraser()
+        else if (event.key === Qt.Key_W) inked.toggleWords()
+        else if (event.key === Qt.Key_Delete) removeAsked()
         else return
         event.accepted = true
     }
@@ -75,10 +100,27 @@ FocusScope {
             LayoutMirroring.enabled: win.rightToLeft
             LayoutMirroring.childrenInherit: true
 
+            Loader {
+                id: inkLoader
+                Layout.fillWidth: true
+                active: card.ink
+                visible: active
+                sourceComponent: NoteInk {
+                    notes: card.notes
+                    noteId: card.noteId
+                    editing: card.editing
+                    words: card.words
+                    onDone: card.finish()
+                    onRemoveAsked: {
+                        card.editing = false
+                        card.removeAsked()
+                    }
+                }
+            }
             Label {
                 objectName: "noteWords"
                 Layout.fillWidth: true
-                visible: !card.editing
+                visible: !card.editing && !card.ink
                 text: card.words
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap
@@ -93,7 +135,7 @@ FocusScope {
                 objectName: "noteField"
                 Layout.fillWidth: true
                 Layout.preferredHeight: Math.max(implicitHeight, win.touch ? 40 : 0)
-                visible: card.editing
+                visible: card.editing && !card.ink
                 wrapMode: TextEdit.Wrap
                 textFormat: TextEdit.PlainText
                 font.pixelSize: card.fontSize
@@ -117,7 +159,7 @@ FocusScope {
             // For a pointer or a finger: done, or away with it.
             RowLayout {
                 id: buttons
-                visible: card.editing
+                visible: card.editing && !card.ink
                 Layout.fillWidth: true
                 spacing: 6
                 readonly property bool pressing: done.pressed || removal.pressed

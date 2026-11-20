@@ -3,7 +3,8 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 
-// Find words anywhere in the book and go to where they are.
+// Find words anywhere in the book and go to where they are: in its text,
+// and in its margin notes, typed or read from the handwriting (#90).
 AppPopup {
     id: popup
     objectName: "finder"
@@ -11,6 +12,8 @@ AppPopup {
     tallest: 600
     property var results: []
     property bool searched: false
+    // The book's margin notes (MarginNotes), whose words are found first.
+    property var notes: null
 
     // Opens on these words, found at once: words selected on the page.
     property string pending: ""
@@ -47,7 +50,7 @@ AppPopup {
             selectByMouse: true
             Material.roundedScale: theme.radius
             onAccepted: {
-                popup.results = reader.find(text)
+                popup.results = (popup.notes ? popup.notes.found(text) : []).concat(reader.find(text))
                 popup.searched = true
                 if (popup.results.length > 0) {
                     list.currentIndex = 0
@@ -93,7 +96,7 @@ AppPopup {
                     Label {
                         width: parent.width
                         visible: text !== ""
-                        text: row.modelData.title
+                        text: row.modelData.note ? qsTr("Margin note") : row.modelData.title
                         color: theme.colors.muted
                         font.pixelSize: 12
                         elide: Text.ElideRight

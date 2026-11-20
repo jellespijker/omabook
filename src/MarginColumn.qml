@@ -33,11 +33,11 @@ Item {
         const all = []
         for (const span of spans) {
             const top = place(span.start)
-            if (!isNaN(top)) all.push({ id: span.id, start: span.start, end: span.end, note: span.note, top: top })
+            if (!isNaN(top)) all.push({ id: span.id, start: span.start, end: span.end, note: span.note, ink: span.ink, top: top })
         }
         if (reading && reading.draft && reading.draftHere) {
             const top = place(reading.draft.start)
-            if (!isNaN(top)) all.push({ id: 0, start: reading.draft.start, end: reading.draft.end, note: "", top: top })
+            if (!isNaN(top)) all.push({ id: 0, start: reading.draft.start, end: reading.draft.end, note: "", ink: false, top: top })
         }
         return all.sort((a, b) => a.top - b.top)
     }
@@ -110,13 +110,19 @@ Item {
             visible: !!entry && (column.foot < 0 || y + height <= column.foot + 0.5 || current || editing)
             noteId: modelData
             words: entry ? entry.note : ""
+            ink: !!entry && !!entry.ink
+            notes: column.reading ? column.reading.notes : null
             current: !!column.reading && column.reading.current === modelData && modelData !== 0
             lines: column.foot < 0 ? 8 : 4
             fontSize: reader.format.noteFontSize
             onImplicitHeightChanged: soon.restart()
             onFinished: (words) => column.reading.finish(noteId, words)
             onRemoveAsked: column.reading.removeNote(noteId)
-            onActivated: column.reading.current = noteId
+            onActivated: {
+                column.reading.current = noteId
+                // Its tools' keys are the note's while it is edited, not the page's.
+                if (ink) column.reading.editing = noteId
+            }
             Component.onCompleted: if (noteId === 0 || (column.reading && column.reading.editing === noteId)) edit()
         }
     }

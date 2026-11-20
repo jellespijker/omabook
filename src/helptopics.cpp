@@ -195,7 +195,10 @@ Manual::Topic readingTopic() {
                             "height of its words, and are edited where they stand; in a narrower window a mark where the words end "
                             "opens the note. {reader.notes} goes through the notes on the page: Enter edits one, Delete removes it, "
                             "and a note left without words is removed. Notes go with the book to your other computers, and stay "
-                            "with their words in a new edition; those whose words are gone are listed at the foot of the page.")},
+                            "with their words in a new edition; those whose words are gone are listed at the foot of the page. "
+                            "With a pen, write on the text or in the margin column for a note by hand on that line; the pen's "
+                            "other end erases, and a click on the note gives undo, the eraser and its words, which your own AI "
+                            "server reads from the handwriting so {reader.find} finds them.")},
                 {Manual::tr("Ink on the pages"),
                  Manual::tr("On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen "
                             "or the mouse: the bar above the page picks the pen, the eraser and the ink, and the pen's other end "

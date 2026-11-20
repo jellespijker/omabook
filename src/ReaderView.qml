@@ -876,5 +876,5 @@ Item {
         }
     }
 
-    FindPopup { id: finder }
+    FindPopup { id: finder; notes: notesLayer.notes }
 }

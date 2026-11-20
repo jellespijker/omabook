@@ -38,6 +38,20 @@ Item {
         function onWidthChanged() { marks.laid++ }
     }
 
+    // The line of the text at a height of it, which a note written by hand
+    // there or beside it in the margin column is on (#90): {text, start, end},
+    // the line above where it is between paragraphs; null where the page
+    // shows none.
+    function lineAt(y) {
+        for (let up = 0; up <= 48; up += 8) {
+            const at = y - up
+            if (!text || at < Math.max(0, from) || at > Math.min(text.height, to)) continue
+            const a = text.positionAt(0, at)
+            const b = text.positionAt(text.width, at)
+            if (Math.max(a, b) > Math.min(a, b)) return { text: text, start: Math.min(a, b), end: Math.max(a, b) }
+        }
+        return null
+    }
     // The note a position of the text ends the passage of, as a rectangle.
     function endOf(span) {
         laid

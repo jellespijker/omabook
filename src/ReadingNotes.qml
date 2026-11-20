@@ -13,6 +13,11 @@ import Omabook
 // Enter edits, Delete removes, Escape goes back to the page). Notes whose
 // passages can't be found in the book any more are listed, to be placed
 // again on the words selected, or removed.
+//
+// With the pen (#90), writing on the text that isn't a highlight's gesture,
+// or in the margin column, writes a note by hand on the line beside it: its
+// first strokes are what the pen wrote there, and the pen goes on writing on
+// its card, which stands in the column (or, without one, beside the line).
 Item {
     id: layer
     objectName: "readingNotes"
@@ -40,7 +45,8 @@ Item {
     // The window's reader, by a name of the layer's own: inside MarginNotes
     // `reader` is its own property.
     readonly property QtObject windowReader: reader
-    MarginNotes { id: model; reader: layer.windowReader }
+    readonly property QtObject windowSettings: settings
+    MarginNotes { id: model; reader: layer.windowReader; settings: layer.windowSettings }
     // What another computer sent, once the library is read again after a sync.
     Connections {
         target: backend
@@ -76,8 +82,37 @@ Item {
         if (!beside) Qt.callLater(() => layer.openDraft(chosen))
     }
     function openDraft(chosen) { card.openOn(0, "", chosen.text, chosen.start, chosen.end) }
+    // What the pen wrote that meant nothing to the highlights (PenGestures):
+    // the strokes of `snapshot` that `which` counts, the first of them begun
+    // at `at`, a point of the page (`content`). A note by hand on the line
+    // there, when there is one: whether it was written.
+    function penWrote(snapshot, which, at) {
+        if (reader.kind !== "flow" || !content || typeof content.lineAt !== "function") return false
+        const line = content.lineAt(at.x, at.y)
+        if (!line) return false
+        // As wide as its card will be: the column's, or the card's beside the line.
+        const room = (beside ? reader.format.noteWidth : card.width) - 16
+        const made = model.writeInk(line.text.textDocument, line.start, line.end, snapshot, which, model.inkUnits / Math.max(40, room))
+        if (made <= 0) return false
+        if (draft) {
+            draft = null
+            model.drafting = false
+        }
+        current = made
+        backend.say(qsTr("Handwritten margin note written"))
+        if (!beside) Qt.callLater(() => layer.open(made, line.text, line.start, line.end))
+        return true
+    }
     // Done writing or editing a note: the words kept, or none (removed, never written).
     function finish(id, words) {
+        const entry = id ? model.notes.find(note => note.id === id) : null
+        if (entry && entry.ink) {
+            // Written by hand: its ink is kept as it goes, and its words are what was read of it.
+            editing = 0
+            card.close()
+            back()
+            return
+        }
         if (id === 0 && draft) {
             const made = words.trim() !== "" ? model.write(draft.text.textDocument, draft.start, draft.end, words) : 0
             draft = null
@@ -139,7 +174,7 @@ Item {
             }
         }
         const entry = model.notes.find(note => note.id === id)
-        card.openOn(id, entry ? entry.note : "", text, start, end)
+        card.openOn(id, entry ? entry.note : "", text, start, end, false, entry ? entry.ink : false)
     }
     // E: the first note on the page, and from there the others.
     function go() {
@@ -161,7 +196,10 @@ Item {
         at = at < 0 ? 0 : Math.max(0, Math.min(seen.length - 1, at + by))
         current = seen[at].id
         if (beside) keys.forceActiveFocus()
-        else card.openOn(seen[at].id, model.notes.find(note => note.id === seen[at].id).note, seen[at].text, seen[at].start, seen[at].end, true)
+        else {
+            const entry = model.notes.find(note => note.id === seen[at].id)
+            card.openOn(seen[at].id, entry.note, seen[at].text, seen[at].start, seen[at].end, true, entry.ink)
+        }
     }
     function editCurrent() {
         if (!current) return
@@ -191,9 +229,11 @@ Item {
         objectName: "noteCard"
         property bool shown: false
         property var noteId: 0
+        property bool ink: false
         property rect around: Qt.rect(0, 0, 0, 0)
-        function openOn(id, words, text, start, end, browsing) {
+        function openOn(id, words, text, start, end, browsing, handwritten) {
             noteId = id
+            ink = !!handwritten
             note.words = words
             const a = text.positionToRectangle(start)
             const b = text.positionToRectangle(end)
@@ -243,6 +283,8 @@ Item {
             id: note
             width: parent.width
             noteId: card.noteId
+            ink: card.ink
+            notes: model
             lines: 0
             current: layer.going && !editing
             fontSize: Math.max(13, reader.format.noteFontSize)
@@ -300,9 +342,22 @@ Item {
                     }
                     Label {
                         Layout.fillWidth: true
+                        visible: !lostNote.modelData.ink
                         text: lostNote.modelData.note
                         wrapMode: Text.Wrap
                         textFormat: Text.PlainText
+                    }
+                    Loader {
+                        Layout.fillWidth: true
+                        Layout.maximumWidth: 360
+                        active: !!lostNote.modelData.ink
+                        visible: active
+                        sourceComponent: NoteInk {
+                            readOnly: true
+                            notes: model
+                            noteId: lostNote.modelData.id
+                            words: lostNote.modelData.note
+                        }
                     }
                     DialogActions {
                         AppButton {
