@@ -164,8 +164,9 @@ bool settle(const Library &library, const Placed &wanted) {
         // knows of a large library would otherwise have it go tenant by
         // tenant through the things, several times slower (#104). An end in
         // tenant 0 is in each tenant.
-        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both + u", e.id FROM graph_edges AS e "
-            "CROSS JOIN tenant_nodes AS s ON s.node_id = e.source CROSS JOIN tenant_nodes AS t ON t.node_id = e.target AND "_s
+        u"INSERT OR IGNORE INTO tenant_edges (tenant, edge_id) SELECT "_s + both
+            + u", e.id FROM graph_edges AS e "
+              "CROSS JOIN tenant_nodes AS s ON s.node_id = e.source CROSS JOIN tenant_nodes AS t ON t.node_id = e.target AND "_s
             + TenancySchema::seenTogether(u"s"_s, u"t"_s) + u" WHERE "_s + TenancySchema::whereEndsAre(u"e"_s, both),
         u"INSERT OR IGNORE INTO tenants (gid) SELECT DISTINCT j.key FROM graph_edges AS e, json_each("_s + TenancySchema::notesOf(u"e"_s)
             + u", '$.tenants') AS j WHERE "_s + written + u" UNION SELECT 'library' WHERE EXISTS (SELECT 1 FROM graph_edges AS e WHERE "_s

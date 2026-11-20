@@ -589,9 +589,10 @@ private slots:
             QVERIFY(story > 0);
             QCOMPARE(ann.call("plan", {"world:s1:plan", story}).toBool(), true);
             // As format 31 kept them: in no tenant, with one end in tenant 0 and the other not.
-            QVERIFY(ChangeLog::exec(ann.library,
-                                    "DELETE FROM tenant_edges WHERE edge_id IN (SELECT e.id FROM graph_edges AS e JOIN tenant_nodes AS s "
-                                    "ON s.node_id = e.source JOIN tenant_nodes AS t ON t.node_id = e.target WHERE (s.tenant = 0) <> (t.tenant = 0))"));
+            QVERIFY(ChangeLog::exec(
+                ann.library,
+                "DELETE FROM tenant_edges WHERE edge_id IN (SELECT e.id FROM graph_edges AS e JOIN tenant_nodes AS s "
+                "ON s.node_id = e.source JOIN tenant_nodes AS t ON t.node_id = e.target WHERE (s.tenant = 0) <> (t.tenant = 0))"));
             QCOMPARE(relationsFor(ann.library, story, "world:s1:plan"), QStringList({"sits in", "works in"}));
             QVERIFY(ChangeLog::exec(ann.library, QString("PRAGMA user_version = %1").arg(LibraryMigrations::currentFormat() - 1)));
             root = ann.library.root();
@@ -600,7 +601,8 @@ private slots:
         Library library(root);
         QVERIFY(library.open());
         QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
-        QCOMPARE(relationsFor(library, book, "world:s1:plan"), QStringList({"godfather of", "keeps tallies for", "owes", "sits in", "works in"}));
+        QCOMPARE(relationsFor(library, book, "world:s1:plan"),
+                 QStringList({"godfather of", "keeps tallies for", "owes", "sits in", "works in"}));
     }
 };
 
