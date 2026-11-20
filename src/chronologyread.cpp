@@ -55,6 +55,16 @@ const auto tr = [](const char *text) { return QCoreApplication::translate("Chron
     return from.what == From::What::Book ? Tenancy::ofReader(library, from.bookId) : Tenancy::ofReader(library, sorted.value(0));
 }
 
+// The tenants it is read in: the one chosen; a whole graph's each in turn;
+// a book, a series or a collection in the tenant of its books.
+[[nodiscard]] QList<Chronology::Tenant> partsOf(const Library &library, const From &from, const QString &scope, const QSet<qint64> &books) {
+    if (!from.tenant.isEmpty())
+        return {Chronology::Tenant{.scope = scope, .in = ::Tenant::fromGlobalId(from.tenant)}};
+    if (from.what == From::What::Scope)
+        return Chronology::tenants(library, scope);
+    return {Chronology::Tenant{.scope = scope, .in = tenantOf(library, from, books)}};
+}
+
 void merge(Facts &into, const Facts &more) {
     into.events += more.events;
     into.timelines += more.timelines;
@@ -110,11 +120,7 @@ Reading::Read Reading::read(const Library &library, const From &from) {
     Read told;
     told.books = booksOf(library, from);
     const QString scope = from.what == From::What::Scope ? from.scope : QString();
-    // A whole graph a tenant at a time; a book, a series or a collection in the tenant of its books.
-    const QList<Chronology::Tenant> tenants =
-        from.what == From::What::Scope
-            ? Chronology::tenants(library, scope)
-            : QList<Chronology::Tenant>{Chronology::Tenant{.scope = scope, .in = tenantOf(library, from, told.books)}};
+    const QList<Chronology::Tenant> tenants = partsOf(library, from, scope, told.books);
     for (const Chronology::Tenant &tenant : tenants) {
         const Graph graph = Graph::forTenant(library, tenant.in);
         Facts facts = Chronology::read(library, known, tenant);

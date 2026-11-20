@@ -29,6 +29,9 @@ struct From {
     QString scope; // the graph's; "" for the general one
     qint64 bookId = 0;
     QString name; // the series' or the collection's
+    // The tenant to read in, by its global id, as the window chose it (#96);
+    // empty for that of what it was opened from, or each of a whole graph's.
+    QString tenant;
 };
 
 // What a filter can ask of an event.

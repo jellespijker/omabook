@@ -132,7 +132,7 @@ private slots:
     }
 
     void whatIsMadeByHandStaysInItsTenant() {
-        const Read split;
+        Read split;
         Graph fiction = split.fictionGraph();
         const Graph study = split.studyGraph();
         const qint64 made = fiction.upsert({}, "topic", "Lighthouses", "Put in by hand while reading fiction.");
@@ -151,6 +151,10 @@ private slots:
         Tenancy::rebuild(split.library);
         QCOMPARE(Tenancy::ofNode(split.library, made), kept);
         QVERIFY(!study.node(made));
+        // Tied to a book that then leaves the tenant, it stays where it was made (#97).
+        QVERIFY(fiction.link(made, Graph(split.library).bookNode(split.sea), "mentions") > 0);
+        QVERIFY(split.moveSeaToStudy());
+        QVERIFY(split.fictionGraph().node(made) && !split.studyGraph().node(made));
         // The whole library's tenant sees it.
         const OneTenant one;
         QVERIFY(Graph::ofLibrary(split.library).node(made));

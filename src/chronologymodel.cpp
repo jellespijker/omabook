@@ -128,7 +128,9 @@ void ChronologyBrowser::refresh() {
 
 void ChronologyBrowser::load() {
     const Library *books = library();
-    m_read = books ? Reading::read(*books, m_from) : Reading::Read{};
+    From from = m_from;
+    from.tenant = m_tenant;
+    m_read = books ? Reading::read(*books, from) : Reading::Read{};
     m_chart = Chart::chart(m_read.parts);
     m_title.clear();
     if (books && m_from.what == From::What::Book)
