@@ -23,6 +23,22 @@ omabook suggest --json         # what to read next: each suggestion looked up on
 omabook catalog --format csv > books.csv  # the library as a table; --format bibtex for references; takes a search
 ```
 
+## The chronology: when the events of the books happen
+
+The events of the books read, in the order they happen in their world rather than the order they were read: of each timeline (a book's own, a series', a world's, real history) its events in order, with each time as the book says it and where it was said, the events not placed yet, and contradictions with where each statement was revealed and which one was set aside. It is cut where the user is in each book; `--whole` gives away what happens, so only use it when the user asks. A library kept apart by its top collections answers a part for each.
+
+```bash
+omabook chronology --json                          # every book's; "events": {"shown", "total"}, "parts": [{"lanes", "axes", "unplaced", "contradictions"}]
+omabook chronology 12 --timeline "The War" --from 1940 --to 1942   # one book, one timeline, a stretch of time
+omabook chronology 12 --upto 3 --json             # as known at section 3 of book 12; --series or --collection for several
+omabook chronology set-when "The siege" 1944-06-06 # or a span 1939..1945, --calendar "Third Age", --approximate, --said "long ago"
+omabook chronology order "The flood" before "The siege"   # before, after, during, same
+omabook chronology timeline add "The Third Age" --kind world
+omabook chronology place "The siege" on "The Third Age"
+```
+
+What is put in by hand is marked `"by_hand"` and wins over what the books say; ask the user before correcting what a book said.
+
 ## Collections
 
 The user's own named parts of the library, one inside another if they wish (`Studie/Python`). A book can be in several; nothing is copied or moved. Never assume names: read them with `collections`, and propose new ones in the user's language and style.

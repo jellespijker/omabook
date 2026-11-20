@@ -15,7 +15,7 @@ Read only the part the task is about. Each is a file in `references/` next to th
 
 | Part | Read it to |
 | --- | --- |
-| [library.md](references/library.md) | look up details, tidy duplicates, import from Calibre or Goodreads, sync reading sites or computers, share a collection or subscribe to one, manage plugins, change how a book is set or how the window looks |
+| [library.md](references/library.md) | read or correct the chronology (when the events of the books happen), look up details, tidy duplicates, import from Calibre or Goodreads, sync reading sites or computers, share a collection or subscribe to one, manage plugins, change how a book is set or how the window looks |
 | [graph.md](references/graph.md) | ask the AI about a book, or read and change the knowledge graph (characters, places, ideas, where each was learned) |
 | [plugins.md](references/plugins.md) | write a plugin: a source of details, a book format, a command, a panel, a hook |
 
@@ -29,6 +29,7 @@ If you have tools named `books_search`, `book_get`, `book_text` and the like, Om
 omabook list --json                      # every book: id, title, authors, series, tags, formats, percent_read
 omabook list author:herbert format:epub  # search; bare words match title, authors, series and tags
 omabook search venn --json               # also by what the user met in the books; --ai for a question (see graph.md)
+omabook chronology 12 --json             # a book's events in the order they happen in its world, cut where the user is (see library.md)
 omabook show 12 --json                   # one book, with the paths of its files and cover
 omabook info ~/Downloads/x.epub --json   # what a file says about itself, without adding it
 omabook info --json                      # Omabook itself: version, library in use, which AI answers

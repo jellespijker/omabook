@@ -36,7 +36,7 @@ modules = [
   "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries", "library",
   "libraryannotations", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
   "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
-  "chronicle", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace", "textmarks",
+  "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace", "textmarks",
   "worldlayers",
 ]
 
@@ -54,7 +54,7 @@ modules = [
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
+  "bookmatch", "bookops", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphcommands", "graphprint", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
 ]
 
@@ -63,7 +63,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "bookmarkcommands", "cli", "clisummary", "identitycommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
+modules = ["aicommands", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "mcpcommands", "spacecommands", "spacetools", "synccommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

@@ -27,13 +27,14 @@
 #include "bookops.h"
 #include "calibreplugin.h"
 #include "catalog.h"
+#include "chronologycommands.h"
 #include "collections.h"
 #include "converter.h"
 #include "curation.h"
 #include "customization.h"
 #include "folio.h"
 #include "libraries.h"
-#include "log.h"
+#include "logcommands.h"
 #include "formats.h"
 #include "goodreads.h"
 #include "graph.h"
@@ -1972,61 +1973,6 @@ int skill(const QStringList &arguments) {
 
 // The help the window shows under ?, for a terminal and for agents: the
 // same pages from the same text, and the keys as keys.json has them now.
-int logs(const QStringList &arguments) {
-    Command command("logs", "Show what Omabook did and what went wrong: the window, every command and the MCP server write "
-                            "to one log. It holds what happened, how big and how long; never the text of a book, a question "
-                            "or an answer. The newest lines come last.");
-    command.parser.addOption({{"n", "lines"}, "How many of the newest lines; 100 when not given, 0 for all.", "count", "100"});
-    command.parser.addOption({"level", "Only this level and above: debug, info, warning, critical.", "level", "debug"});
-    command.parser.addOption({"category", "Only one part: ai, library, graph, plugins, sites, sync, app, qml.", "part"});
-    command.parser.addOption({"since", "Only since then: 30m, 2h, 1d, or a date and time like 2026-11-14T21:00.", "when"});
-    command.parser.addOption({"grep", "Only lines that hold these words.", "words"});
-    command.parser.addOption({"path", "Only say where the log file is."});
-    if (!command.parse(arguments, 0, 0))
-        return 1;
-    if (command.parser.isSet("path")) {
-        if (command.json())
-            printJson(QJsonObject{{"path", Log::path()}});
-        else
-            print(stdout, Log::path());
-        return 0;
-    }
-    Log::Filter filter;
-    filter.lines = command.parser.value("lines").toInt();
-    filter.least = command.parser.value("level").toLower();
-    filter.category = command.parser.value("category").toLower();
-    filter.words = command.parser.value("grep");
-    if (const QString since = command.parser.value("since"); !since.isEmpty()) {
-        static const QRegularExpression ago("^(\\d+)([mhd])$");
-        if (const QRegularExpressionMatch match = ago.match(since); match.hasMatch()) {
-            const qint64 amount = match.captured(1).toLongLong();
-            const qint64 seconds = match.captured(2) == "m" ? amount * 60 : match.captured(2) == "h" ? amount * 3600 : amount * 86400;
-            filter.since = QDateTime::currentDateTime().addSecs(-seconds);
-        } else if (const QDateTime at = QDateTime::fromString(since, Qt::ISODate); at.isValid()) {
-            filter.since = at;
-        } else {
-            return fail("--since takes 30m, 2h, 1d, or a date and time like 2026-11-14T21:00.");
-        }
-    }
-    static const QStringList levels{"debug", "info", "warning", "critical"};
-    if (!levels.contains(filter.least))
-        return fail("--level is one of debug, info, warning, critical.");
-    const QList<Log::Entry> entries = Log::read(filter);
-    if (command.json()) {
-        QJsonArray array;
-        for (const Log::Entry &entry : entries)
-            array << entry.toJson();
-        printJson(QJsonObject{{"path", Log::path()}, {"entries", array}});
-        return 0;
-    }
-    for (const Log::Entry &entry : entries)
-        print(stdout, QString("%1 %2 %3 %4  %5").arg(entry.when.toString("yyyy-MM-dd HH:mm:ss"), entry.level.leftJustified(8),
-                                                     entry.program.leftJustified(6), entry.category.leftJustified(8), entry.message));
-    if (entries.isEmpty())
-        print(stderr, "Nothing in the log matches. It is kept at " + Log::path() + ".");
-    return 0;
-}
-
 int help(const QStringList &arguments) {
     Command command("help", "Print a page of Omabook's help, the same the window shows under ?. Without a topic, "
                             "list the commands and the topics. The topic `keys` lists every key as it is bound now, "
@@ -2102,7 +2048,7 @@ constexpr std::array cliCommands{
     CliCommand{"add"_L1, add},
     CliCommand{"folio"_L1, Folio::run},
     CliCommand{"bookmarks"_L1, runBookmarksCli},
-    CliCommand{"logs"_L1, logs},
+    CliCommand{"logs"_L1, runLogsCli},
     CliCommand{"notes"_L1, notes},
     CliCommand{"libraries"_L1, libraries},
     CliCommand{"remove"_L1, remove},
@@ -2117,6 +2063,7 @@ constexpr std::array cliCommands{
     CliCommand{"ask"_L1, ask},
     CliCommand{"ai"_L1, runAiCli},
     CliCommand{"graph"_L1, runGraphCli},
+    CliCommand{"chronology"_L1, runChronologyCli},
     CliCommand{"progress"_L1, progress},
     CliCommand{"format"_L1, format},
     CliCommand{"sync"_L1, runSyncCli},
