@@ -178,34 +178,9 @@ GraphCut GraphBrowser::allowed() const {
     if (!books)
         return {};
     const Graph graph = this->graph();
-    if (m_what == What::Scope && m_onlyAcross && m_scope.isEmpty() && !(m_centre > 0 && m_depth > 0)) {
-        // The connections between books, each thing with the books it is in.
-        GraphView view = graph.acrossBooks(300);
-        QHash<qint64, GraphNode> bookNodes;
-        for (const GraphNode &node : graph.find({}, "book", QString(""), 100000))
-            bookNodes.insert(node.bookId, node);
-        QSet<qint64> added;
-        const QList<GraphNode> things = view.nodes;
-        qint64 made = 0;
-        for (const GraphNode &thing : things)
-            for (const GraphPlace &place : graph.seen(thing.id)) {
-                const auto book = bookNodes.constFind(place.bookId);
-                if (thing.kind == "book" || book == bookNodes.constEnd())
-                    continue;
-                if (!added.contains(book->id) && !std::ranges::contains(things, book->id, &GraphNode::id)) {
-                    added << book->id;
-                    view.nodes << *book;
-                }
-                // Not an edge the storage holds: only where the thing is from.
-                GraphEdge in;
-                in.id = --made;
-                in.source = thing.id;
-                in.target = book->id;
-                in.kind = "appears in";
-                view.edges << in;
-            }
-        return GraphCut(std::move(view));
-    }
+    // The connections between books, each thing with the books it is in.
+    if (m_what == What::Scope && m_onlyAcross && m_scope.isEmpty() && (m_centre <= 0 || m_depth <= 0))
+        return GraphCut::across(graph, m_acrossLimit);
     if (m_what == What::Scope)
         return m_centre > 0 && m_depth > 0 ? GraphCut::around(graph, m_centre, m_depth, 400) : GraphCut::whole(graph, m_scope, 2000);
     // A book's graph, with the graphs someone shared as far as its reader has
@@ -230,7 +205,7 @@ void GraphBrowser::take(GraphCut base) {
     m_wholeEdges = static_cast<int>(base.relations);
     m_cut.clear();
     if (base.cut())
-        m_cut = base.by == GraphCut::By::Nearest ? "nearest" : "connected";
+        m_cut = base.by == GraphCut::By::Connected ? "connected" : base.how();
     m_base = std::move(base.view);
 }
 
@@ -251,6 +226,7 @@ void GraphBrowser::show(What what) {
 void GraphBrowser::showScope(const QString &scope) {
     m_scope = scope;
     m_upTo.reset();
+    m_acrossLimit = acrossStep;
     // The library's own part of the general graph is brought up to date
     // when it is looked at: its books, authors, series and tags.
     if (scope.isEmpty() && library())
@@ -534,8 +510,21 @@ void GraphBrowser::setOnlyAcross(bool only) {
     if (only == m_onlyAcross)
         return;
     m_onlyAcross = only;
+    m_acrossLimit = acrossStep;
     load(false);
     emit reframed();
+}
+
+int GraphBrowser::acrossCount() const {
+    return static_cast<int>(std::ranges::count_if(m_links, [](const Link &link) { return link.edge.across(); }));
+}
+
+void GraphBrowser::showMoreAcross() {
+    if (!moreAcross())
+        return;
+    m_acrossLimit = std::min(m_acrossLimit + acrossStep, acrossMost);
+    // What was shown stays where it was; what joins it finds its place.
+    load(true);
 }
 
 QPair<qint64, QString> GraphBrowser::bookOf(const GraphNode &node) const {

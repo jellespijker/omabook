@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- The graph's *Between books* view says when it shows part of what there is: "300 of 1,240 connections between books" in its header, with a note over the picture. The connections between the most connected things of the collection's graph come first, rather than the latest, and *Show More Connections* (also under Filter) shows 300 more at a time, up to 900 (#91).
+
 ## [0.1.8] - 2026-11-20
 
 ### Fixed

@@ -359,11 +359,22 @@ GraphView Graph::beyond(qint64 bookId, const std::optional<GraphPlace> &upTo) co
 }
 
 GraphView Graph::acrossBooks(int limit) const {
+    // The most relevant first: those between the things with the most
+    // relations, by the degree the tenant keeps of each end (#101), or for
+    // the graph of no tenant by a count of every relation at either end;
+    // the latest first among equals.
+    const std::optional<TenantFilter> &filter = within();
+    const QString relevance =
+        filter ? u"(SELECT COALESCE(SUM(degree), 0) FROM tenant_nodes WHERE tenant IN (%1, 0) AND node_id IN "
+                 "(graph_edges.source, graph_edges.target))"_s.arg(filter->id())
+               : u"(SELECT COUNT(*) FROM graph_edges AS other WHERE other.source IN (graph_edges.source, graph_edges.target) "
+                 "OR other.target IN (graph_edges.source, graph_edges.target))"_s;
     GraphView view;
     QSet<qint64> taken;
-    for (QSqlQuery query = m_library->query(QString("SELECT %1 FROM graph_edges WHERE kind LIKE 'across: %'%2 ORDER BY id DESC LIMIT %3")
-                                                .arg(edgeColumns, andWithin(&TenantFilter::edges, u"graph_edges.id"))
-                                                .arg(std::max(1, limit)));
+    for (QSqlQuery query =
+             m_library->query(QString("SELECT %1 FROM graph_edges WHERE kind LIKE 'across: %'%2 ORDER BY %3 DESC, id DESC LIMIT %4")
+                                  .arg(edgeColumns, andWithin(&TenantFilter::edges, u"graph_edges.id"), relevance)
+                                  .arg(std::max(1, limit)));
          query.next();) {
         const GraphEdge edge = edgeFrom(query);
         view.edges << edge;

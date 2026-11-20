@@ -4,7 +4,8 @@ import QtQuick.Controls
 // How much of the graph is shown, at the top of its pane: "38 things · 52
 // relations", "12 of 38" when the filters leave some out, and for a picture
 // cut at a limit how many there are in all: "2,000 of 6,965 things · 8,685
-// of 17,192 relations" (GraphBrowser::cut).
+// of 17,192 relations", or "300 of 1,240 connections between books"
+// (GraphBrowser::cut).
 Label {
     id: count
     property var browser
@@ -16,6 +17,9 @@ Label {
         translator.language
         const graph = count.browser
         if (!graph || graph.knownCount === 0) return ""
+        // Only the connections between books, cut: how many of them (#91).
+        if (graph.cut === "across")
+            return qsTr("%1 of %Ln connections between books", "", graph.wholeEdges).arg(count.number(graph.acrossCount))
         if (graph.cut !== "")
             return qsTr("%1 of %Ln things", "", graph.wholeCount).arg(count.number(graph.nodeCount))
                    + (count.compact ? "" : " · " + qsTr("%1 of %Ln relations", "", graph.wholeEdges).arg(count.number(graph.edgeCount)))

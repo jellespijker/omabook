@@ -45,6 +45,7 @@
         <file alias="BookTaps.qml">BookTaps.qml</file>
         <file alias="Glyph.qml">Glyph.qml</file>
         <file alias="GraphCount.qml">GraphCount.qml</file>
+        <file alias="GraphCutNote.qml">GraphCutNote.qml</file>
         <file alias="GraphDetails.qml">GraphDetails.qml</file>
         <file alias="GraphEdit.qml">GraphEdit.qml</file>
         <file alias="GraphFaces.qml">GraphFaces.qml</file>

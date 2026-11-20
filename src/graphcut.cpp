@@ -5,6 +5,7 @@
 #include <QSqlQuery>
 #include <QStringList>
 #include <algorithm>
+#include <ranges>
 #include <utility>
 
 #include "spaceworlds.h"
@@ -85,11 +86,23 @@ std::pair<qint64, qint64> GraphCut::within(const Graph &graph, qint64 start, int
 
 GraphCut::GraphCut(GraphView whole) : view(std::move(whole)), things(view.nodes.size()), relations(view.edges.size()) {}
 
+QString GraphCut::how() const {
+    switch (by) {
+    case By::Nearest:
+        return "nearest";
+    case By::Across:
+        return "across";
+    case By::Connected:
+        break;
+    }
+    return "most connected";
+}
+
 QJsonObject GraphCut::toJson() const {
     QJsonObject answer = view.toJson();
     answer.insert("total", QJsonObject{{"nodes", things}, {"edges", relations}});
     if (cut())
-        answer.insert("cut", by == By::Nearest ? "nearest" : "most connected");
+        answer.insert("cut", how());
     return answer;
 }
 
@@ -123,5 +136,63 @@ GraphCut GraphCut::around(const Graph &graph, qint64 node, int depth, int limit)
     const auto [things, relations] = within(graph, node, std::clamp(depth, 0, 6));
     made.things = std::max(made.things, things);
     made.relations = std::max(made.relations, relations);
+    return made;
+}
+
+// The books of the tenant each thing is in, asked of the storage a batch of
+// things at a time rather than thing by thing, so that showing more
+// connections costs a few statements more, not hundreds.
+void GraphCut::withBooks(const Graph &graph, GraphView &view) {
+    QHash<qint64, GraphNode> bookNodes;
+    for (const GraphNode &node : graph.find({}, "book", QString(""), 100000))
+        bookNodes.insert(node.bookId, node);
+    const std::optional<TenantFilter> &within = graph.within();
+    const QString ofTenant = within ? " AND " + within->hasBook(u"graph_seen.book_id") : QString();
+    const QList<qint64> things = view.nodes | std::views::filter([](const GraphNode &node) { return node.kind != "book"; })
+                                 | std::views::transform(&GraphNode::id) | std::ranges::to<QList<qint64>>();
+    QSet<qint64> shown = view.nodes | std::views::transform(&GraphNode::id) | std::ranges::to<QSet<qint64>>();
+    qint64 made = 0;
+    for (const auto batch : things | std::views::chunk(500)) {
+        const QString marks = QStringList(std::ranges::ssize(batch), QStringLiteral("?")).join(',');
+        for (QSqlQuery query = graph.library().query(
+                 QString("SELECT node_id, book_id FROM graph_seen WHERE node_id IN (%1)%2 ORDER BY node_id, book_id").arg(marks, ofTenant),
+                 batch | std::ranges::to<QVariantList>());
+             query.next();) {
+            const auto book = bookNodes.constFind(query.value(1).toLongLong());
+            if (book == bookNodes.constEnd())
+                continue;
+            if (!shown.contains(book->id)) {
+                shown << book->id;
+                view.nodes << *book;
+            }
+            // Not an edge the storage holds: only where the thing is from.
+            GraphEdge in;
+            in.id = --made;
+            in.source = query.value(0).toLongLong();
+            in.target = book->id;
+            in.kind = "appears in";
+            view.edges << in;
+        }
+    }
+}
+
+GraphCut GraphCut::across(const Graph &graph, int limit) {
+    GraphCut made(graph.acrossBooks(limit));
+    made.by = By::Across;
+    made.connections = made.relations;
+    // Only a view that came to its limit can have left a connection out;
+    // then the tenant's are counted, and the things they join.
+    if (made.view.edges.size() >= limit) {
+        const std::optional<TenantFilter> &within = graph.within();
+        QSqlQuery query = graph.library().query(
+            QString("WITH across AS (SELECT source, target FROM graph_edges WHERE kind LIKE 'across: %'%1) SELECT (SELECT COUNT(*) "
+                    "FROM across), (SELECT COUNT(*) FROM (SELECT source FROM across UNION SELECT target FROM across))")
+                .arg(within ? " AND " + within->edges(u"graph_edges.id") : QString()));
+        if (query.next()) {
+            made.relations = std::max(made.relations, query.value(0).toLongLong());
+            made.things = std::max(made.things, query.value(1).toLongLong());
+        }
+    }
+    withBooks(graph, made.view);
     return made;
 }

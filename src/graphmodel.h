@@ -70,9 +70,14 @@ class GraphBrowser : public QObject {
     // A whole scope, or what is around its centre, is cut at a limit: how
     // many things and relations there are in what it was cut from, and how
     // the ones shown were picked ("connected", "nearest"; "" when it is whole).
+    // Only the connections between books, cut at a limit, is "across":
+    // wholeEdges counts the connections there are, acrossCount those shown.
     Q_PROPERTY(int wholeCount READ wholeCount NOTIFY changed)
     Q_PROPERTY(int wholeEdges READ wholeEdges NOTIFY changed)
     Q_PROPERTY(QString cut READ cut NOTIFY changed)
+    Q_PROPERTY(int acrossCount READ acrossCount NOTIFY changed)
+    // Whether more of the connections between books can be shown (showMoreAcross).
+    Q_PROPERTY(bool moreAcross READ moreAcross NOTIFY changed)
     // In a book's graph cut off at the reader's place: how many things are
     // known of it beyond that place.
     Q_PROPERTY(int hiddenCount READ hiddenCount NOTIFY changed)
@@ -164,6 +169,11 @@ public:
     int wholeCount() const noexcept { return m_wholeCount; }
     int wholeEdges() const noexcept { return m_wholeEdges; }
     QString cut() const { return m_cut; }
+    // The connections between books shown.
+    int acrossCount() const;
+    bool moreAcross() const noexcept { return m_cut == "across" && m_acrossLimit < acrossMost; }
+    // Shows another acrossStep of the connections between books, up to acrossMost.
+    Q_INVOKABLE void showMoreAcross();
     int hiddenCount() const noexcept { return m_hiddenCount; }
     // Shows all that is known of the book, past the reader's place too.
     Q_INVOKABLE void showWhole();
@@ -325,6 +335,11 @@ private:
     // What m_base was cut from (see GraphCut).
     int m_wholeCount = 0, m_wholeEdges = 0;
     QString m_cut;
+    // How many connections between books are loaded at most: a step at a
+    // time, as the reader asks, up to what a picture draws quickly (#64
+    // measured 2,000 things; a connection brings at most two, and books).
+    static constexpr int acrossStep = 300, acrossMost = 900;
+    int m_acrossLimit = acrossStep;
     QList<Shown> m_shown;
     QList<Link> m_links;
     QHash<qint64, int> m_index;

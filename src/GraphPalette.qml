@@ -67,6 +67,8 @@ AppPopup {
         if (!reading && browser.showing === "scope" && browser.scope === "")
             list.push({ kindName: "", label: qsTr("Only connections between books"), act: "across", on: browser.onlyAcross, common: true,
                         count: 0 })
+        if (browser.moreAcross)
+            list.push({ kindName: "", label: qsTr("Show more connections between books"), act: "more", on: false, common: true, count: 0 })
         for (const kind of browser.kinds)
             list.push({ kindName: qsTr("Kind"), label: words.kinds(kind.kind), act: "kind", value: kind.kind, on: kind.shown,
                         common: true, count: kind.count, mark: kind.kind })
@@ -111,6 +113,7 @@ AppPopup {
         else if (entry.act === "asked") browser.onlyAsked = !entry.on
         else if (entry.act === "beyond") browser.beyond = !entry.on
         else if (entry.act === "across") browser.onlyAcross = !entry.on
+        else if (entry.act === "more") browser.showMoreAcross()
         else if (entry.act === "kind") browser.setKindShown(entry.value, !entry.on)
         else if (entry.act === "depth") browser.depth = entry.value
         else if (entry.act === "scope") browser.showScope(entry.value)

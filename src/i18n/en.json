@@ -33,6 +33,10 @@
   "%1 needs a newer Omabook than this": "%1 needs a newer Omabook than this",
   "%1 new, %2 updated, %3 unchanged, %4 kept as they are here.": "%1 new, %2 updated, %3 unchanged, %4 kept as they are here.",
   "%1 of %2": "%1 of %2",
+  "%1 of %Ln connections between books": {
+    "one": "%1 of %Ln connection between books",
+    "other": "%1 of %Ln connections between books"
+  },
   "%1 of %Ln events": {
     "one": "%1 of %Ln event",
     "other": "%1 of %Ln events"
@@ -1197,6 +1201,7 @@
   "Show": "Show",
   "Show Everything Known": "Show Everything Known",
   "Show Me": "Show Me",
+  "Show More Connections": "Show More Connections",
   "Show Next": "Show Next",
   "Show a stretch of time": "Show a stretch of time",
   "Show all books": "Show all books",
@@ -1207,6 +1212,7 @@
   "Show in the graph": "Show in the graph",
   "Show in the graph what the search found the selected book by": "Show in the graph what the search found the selected book by",
   "Show its details": "Show its details",
+  "Show more connections between books": "Show more connections between books",
   "Show my libraries in the file manager": "Show my libraries in the file manager",
   "Show one collection of the library, or all books; make, change or sort collections": "Show one collection of the library, or all books; make, change or sort collections",
   "Show one step further around the centre of the graph": "Show one step further around the centre of the graph",
@@ -1332,6 +1338,14 @@
   "That one works on the shelf.": "That one works on the shelf.",
   "That one works while a book is open.": "That one works while a book is open.",
   "That picture can't be used as a cover.": "That picture can't be used as a cover.",
+  "The %Ln connections between the most connected things are shown. Pick a book under Filter to reach the rest.": {
+    "one": "The connection between the most connected things is shown. Pick a book under Filter to reach the rest.",
+    "other": "The %Ln connections between the most connected things are shown. Pick a book under Filter to reach the rest."
+  },
+  "The %Ln connections between the most connected things are shown. Show more of them, or pick a book under Filter to reach the rest.": {
+    "one": "The connection between the most connected things is shown. Show more, or pick a book under Filter to reach the rest.",
+    "other": "The %Ln connections between the most connected things are shown. Show more of them, or pick a book under Filter to reach the rest."
+  },
   "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.": {
     "one": "The most connected thing is shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.",
     "other": "The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest."

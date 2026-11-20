@@ -1765,5 +1765,22 @@
   "A graph for each collection": "Un graphe par collection",
   "Each top-level collection has a knowledge graph of its own, and so do the books in none. In the graph, {graph.tenant} picks whose is shown, and {graph.tenant_next} and {graph.tenant_previous} step through them; one graph for the whole library is a choice in the settings ({global.settings}).": "Chaque collection principale a son propre graphe de connaissances, et les livres qui ne sont dans aucune aussi. Dans le graphe, {graph.tenant} choisit lequel est montré, et {graph.tenant_next} et {graph.tenant_previous} passent de l'un à l'autre ; un seul graphe pour toute la bibliothèque est un choix des paramètres ({global.settings}).",
   "A large library, quick": "Une grande bibliothèque, rapide",
-  "Search, the graph's window, syncing and the first opening after an update are much quicker on a library of thousands of books. A search word now finds what starts with it: mara finds Mára.": "La recherche, la fenêtre du graphe, la synchronisation et la première ouverture après une mise à jour sont bien plus rapides sur une bibliothèque de milliers de livres. Un mot cherché trouve maintenant ce qui commence par lui : mara trouve Mára."
+  "Search, the graph's window, syncing and the first opening after an update are much quicker on a library of thousands of books. A search word now finds what starts with it: mara finds Mára.": "La recherche, la fenêtre du graphe, la synchronisation et la première ouverture après une mise à jour sont bien plus rapides sur une bibliothèque de milliers de livres. Un mot cherché trouve maintenant ce qui commence par lui : mara trouve Mára.",
+  "%1 of %Ln connections between books": {
+    "one": "%1 sur %Ln lien entre les livres",
+    "many": "%1 sur %Ln de liens entre les livres",
+    "other": "%1 sur %Ln liens entre les livres"
+  },
+  "The %Ln connections between the most connected things are shown. Show more of them, or pick a book under Filter to reach the rest.": {
+    "one": "Le lien entre les éléments les plus reliés est affiché. Affichez-en plus ou choisissez un livre dans Filtrer pour atteindre le reste.",
+    "many": "Les %Ln de liens entre les éléments les plus reliés sont affichés. Affichez-en plus ou choisissez un livre dans Filtrer pour atteindre le reste.",
+    "other": "Les %Ln liens entre les éléments les plus reliés sont affichés. Affichez-en plus ou choisissez un livre dans Filtrer pour atteindre le reste."
+  },
+  "The %Ln connections between the most connected things are shown. Pick a book under Filter to reach the rest.": {
+    "one": "Le lien entre les éléments les plus reliés est affiché. Choisissez un livre dans Filtrer pour atteindre le reste.",
+    "many": "Les %Ln de liens entre les éléments les plus reliés sont affichés. Choisissez un livre dans Filtrer pour atteindre le reste.",
+    "other": "Les %Ln liens entre les éléments les plus reliés sont affichés. Choisissez un livre dans Filtrer pour atteindre le reste."
+  },
+  "Show More Connections": "Afficher plus de liens",
+  "Show more connections between books": "Afficher plus de liens entre les livres"
 }

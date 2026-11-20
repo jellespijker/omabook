@@ -882,14 +882,11 @@ FocusScope {
                 text: qsTr("These are your books, their authors, series and tags. The people, places and ideas in them join as you read, with the knowledge graph switched on in the settings.")
             }
             // A picture cut at a limit says how, and how to reach the rest.
-            GraphNote {
-                objectName: "graphCut"
+            GraphCutNote {
                 picture: canvas
+                browser: graph
                 visible: !pane.reading && graph.cut !== "" && !pane.listing && canvas.height >= pane.pictureFloor
                 anchors.top: grows.visible ? grows.bottom : parent.top
-                text: graph.cut === "nearest"
-                      ? qsTr("The %Ln nearest things are shown. Centre on one of them to see further.", "", graph.knownCount)
-                      : qsTr("The %Ln most connected things are shown. Find a thing, centre on one, or pick a book under Filter to reach the rest.", "", graph.knownCount)
             }
 
             // Nothing to show says why, and how the graph comes to be: in

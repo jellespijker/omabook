@@ -344,7 +344,8 @@ public:
     // book's things met up to that place, and only the connections noticed
     // in this book up to it.
     GraphView beyond(qint64 bookId, const std::optional<GraphPlace> &upTo = std::nullopt) const;
-    // The connections across books there are, the latest first, with the
+    // The connections across books there are, those between the most
+    // connected things first (by their degree in the tenant), with the
     // things at both their ends.
     GraphView acrossBooks(int limit = 50) const;
     // A whole scope, the most connected nodes first when it is cut at `limit`.
