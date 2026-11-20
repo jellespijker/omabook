@@ -93,7 +93,7 @@ std::pair<std::u16string, std::vector<std::uint8_t>> pattern(QStringView written
     std::vector<std::uint8_t> values{0};
     for (const QChar character : written) {
         if (character.isDigit()) {
-            values.back() = std::uint8_t(character.digitValue());
+            values.back() = static_cast<std::uint8_t>(character.digitValue());
             continue;
         }
         letters += character.toLower().unicode();
@@ -157,7 +157,7 @@ std::expected<Dictionary, QString> Dictionary::parse(const QByteArray &bytes) {
 
 namespace {
 
-constexpr std::uint64_t edge(std::int32_t state, char16_t letter) { return (std::uint64_t(state) << 16) | letter; }
+constexpr std::uint64_t edge(std::int32_t state, char16_t letter) { return (static_cast<std::uint64_t>(state) << 16) | letter; }
 
 } // namespace
 
@@ -173,18 +173,18 @@ Dictionary::Level Dictionary::built(const Patterns &patterns) {
     for (const auto &[letters, values] : patterns) {
         std::int32_t state = 0;
         for (const char16_t one : letters) {
-            const auto [found, added] = next.try_emplace(edge(state, one), std::int32_t(parent.size()));
+            const auto [found, added] = next.try_emplace(edge(state, one), static_cast<std::int32_t>(parent.size()));
             if (added) {
                 parent.push_back(state);
                 letter.push_back(one);
-                depth.push_back(depth[size_t(state)] + 1);
+                depth.push_back(depth[static_cast<size_t>(state)] + 1);
                 level.matchAt.push_back(0);
                 level.matchSize.push_back(0);
             }
             state = found->second;
         }
-        level.matchAt[size_t(state)] = std::uint32_t(level.values.size());
-        level.matchSize[size_t(state)] = std::uint8_t(values.size());
+        level.matchAt[static_cast<size_t>(state)] = static_cast<std::uint32_t>(level.values.size());
+        level.matchSize[static_cast<size_t>(state)] = static_cast<std::uint8_t>(values.size());
         level.values.insert(level.values.end(), values.begin(), values.end());
     }
     level.next.assign(next.begin(), next.end());
@@ -193,12 +193,13 @@ Dictionary::Level Dictionary::built(const Patterns &patterns) {
     // Corasick's automaton: from the parent's fallback on by the same letter.
     std::vector<std::int32_t> order(parent.size());
     std::iota(order.begin(), order.end(), 0);
-    std::ranges::stable_sort(order, {}, [&depth](std::int32_t state) { return depth[size_t(state)]; });
+    std::ranges::stable_sort(order, {}, [&depth](std::int32_t state) { return depth[static_cast<size_t>(state)]; });
     level.fallback.assign(parent.size(), 0);
     level.fallback[0] = -1;
     for (const std::int32_t state : order | std::views::drop(1)) {
-        const std::int32_t from = parent[size_t(state)];
-        level.fallback[size_t(state)] = from == 0 ? 0 : level.step(level.fallback[size_t(from)], letter[size_t(state)]);
+        const std::int32_t from = parent[static_cast<size_t>(state)];
+        level.fallback[static_cast<size_t>(state)] =
+            from == 0 ? 0 : level.step(level.fallback[static_cast<size_t>(from)], letter[static_cast<size_t>(state)]);
     }
     return level;
 }
@@ -208,7 +209,7 @@ std::int32_t Dictionary::Level::step(std::int32_t state, char16_t letter) const 
         const auto found = std::ranges::lower_bound(next, edge(state, letter), {}, &std::pair<std::uint64_t, std::int32_t>::first);
         if (found != next.end() && found->first == edge(state, letter))
             return found->second;
-        state = fallback[size_t(state)];
+        state = fallback[static_cast<size_t>(state)];
     }
     return 0;
 }
@@ -221,13 +222,13 @@ std::vector<bool> Dictionary::Level::breaks(std::u16string_view word) const {
     std::int32_t state = 0;
     for (size_t at = 0; at < dotted.size(); ++at) {
         state = step(state, dotted[at]);
-        const size_t size = matchSize[size_t(state)];
+        const size_t size = matchSize[static_cast<size_t>(state)];
         if (size == 0)
             continue;
         // The pattern's letters end here; its values start before its first.
         const size_t start = at + 2 - size;
         for (size_t i = 0; i < size; ++i)
-            found[start + i] = std::max(found[start + i], values[matchAt[size_t(state)] + i]);
+            found[start + i] = std::max(found[start + i], values[matchAt[static_cast<size_t>(state)] + i]);
     }
     // Between word[at - 1] and word[at] is between dotted[at] and dotted[at + 1].
     std::vector<bool> breaks(word.size() + 1, false);
@@ -252,7 +253,7 @@ std::vector<bool> Dictionary::breaks(std::u16string_view word, bool start, bool 
             if (at - begin > 1) {
                 const std::vector<bool> part =
                     breaks(word.substr(begin, at - begin), start && begin == 0, end && at == word.size(), depth + 1);
-                std::copy(part.begin() + 1, part.end() - 1, joined.begin() + std::ptrdiff_t(begin) + 1);
+                std::copy(part.begin() + 1, part.end() - 1, joined.begin() + static_cast<std::ptrdiff_t>(begin) + 1);
             }
             begin = at;
         }
@@ -260,20 +261,20 @@ std::vector<bool> Dictionary::breaks(std::u16string_view word, bool start, bool 
     }
     std::vector<bool> syllables = m_levels.back().breaks(word);
     for (size_t at = 1; at < word.size(); ++at)
-        if ((!start && at < size_t(m_compoundLeft)) || (!end && word.size() - at < size_t(m_compoundRight)))
+        if ((!start && at < static_cast<size_t>(m_compoundLeft)) || (!end && word.size() - at < static_cast<size_t>(m_compoundRight)))
             syllables[at] = false;
     return syllables;
 }
 
 QList<qsizetype> Dictionary::points(QStringView word) const {
     std::u16string letters;
-    letters.reserve(size_t(word.size()));
+    letters.reserve(static_cast<size_t>(word.size()));
     for (const QChar letter : word)
         letters += letter.toLower().unicode();
     const std::vector<bool> breaks = this->breaks(letters, true, true, 0);
     QList<qsizetype> points;
     for (qsizetype at = m_left; at <= word.size() - m_right; ++at)
-        if (breaks[size_t(at)])
+        if (breaks[static_cast<size_t>(at)])
             points << at;
     return points;
 }

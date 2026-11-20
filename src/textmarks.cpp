@@ -389,11 +389,11 @@ std::optional<std::pair<int, int>> nearest(const QTextDocument &document, const 
     double closest = -1;
     for (auto found = phrase.globalMatch(plain.text()); found.hasNext();) {
         const QRegularExpressionMatch match = found.next();
-        const auto start = int(plain.toShown(match.capturedStart()));
+        const auto start = static_cast<int>(plain.toShown(match.capturedStart()));
         const double off = std::abs(start - wanted);
         if (closest < 0 || off < closest) {
             closest = off;
-            best = std::pair{start, int(plain.toShownEnd(match.capturedEnd()))};
+            best = std::pair{start, static_cast<int>(plain.toShownEnd(match.capturedEnd()))};
         }
     }
     return best;

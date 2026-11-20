@@ -5694,7 +5694,7 @@ private:
         return Fixtures::zip(file, entries);
     }
     static QTextBlock blockOf(const PageText &page, const QString &words) {
-        return page.document->find(words).block();
+        return page.document->findBlock(TextMarks::nearest(*page.document, words, 0).value_or(std::pair{-1, -1}).first);
     }
     // How far down the chapter the page is, as the view has it.
     static double through(Desk &desk) {
