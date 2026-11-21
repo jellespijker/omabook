@@ -320,7 +320,9 @@ private slots:
         server.answering = answers;
         Desk desk("en", {}, false);
         QVERIFY(fakeProviders(desk, server));
-        // Off stops every model; a voice on this computer still reads.
+        // Off stops every model, a voice that is a server's too; a voice on
+        // this computer still reads.
+        pick(desk, "text-to-speechProvider", 3);
         tick(desk, "aiOn", false);
         QCOMPARE(desk.settings->aiProvider(), QString("off"));
         for (const char *row : {"answers", "quick", "handwriting", "speech-to-text", "text-to-speech", "embeddings"})
