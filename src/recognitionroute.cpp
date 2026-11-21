@@ -42,48 +42,58 @@ namespace {
                     .model = {}};
 }
 
-[[nodiscard]] RecognitionRoute::Ways inkWays(AiServer server, const QString &model) {
-    RecognitionRoute::Ways ways;
+using RecognitionRoute::Lack;
+using RecognitionRoute::Refusal;
+using RecognitionRoute::Ways;
+
+[[nodiscard]] Ways inkWays(AiServer server, const QString &model) {
+    Ways ways;
     ways.push_back(std::make_unique<Recognizers::Vision>(std::move(server), model));
     return ways;
 }
 
-} // namespace
-
-QString RecognitionRoute::whyNot(const Settings &settings, const QString &baseUrl, const QString &model, bool hostedAsked) {
+[[nodiscard]] std::optional<Refusal> hostedRefusal(const Settings &settings, const QString &baseUrl, const QString &model,
+                                                   bool hostedAsked) {
     const bool elsewhere = AiEndpoints::runsElsewhere(model);
     if (Recognition::reach(baseUrl, ownServers(settings)) != Recognition::Reach::Hosted && !elsewhere)
-        return {};
+        return std::nullopt;
     const QString whose = elsewhere ? QObject::tr("The model %1").arg(model) : QUrl(baseUrl).host();
     if (!settings.recognitionHosted())
-        return QObject::tr("%1 is someone else's computer, and your handwriting and speech go only to your own (this computer, your "
-                           "tailnet) unless you allow hosted servers for recognition in the settings.")
-            .arg(whose);
+        return Refusal{.lack = Lack::HostedNotAllowed,
+                       .message = QObject::tr("%1 is someone else's computer, and your handwriting and speech go only to your own "
+                                              "(this computer, your tailnet) unless you allow hosted servers for recognition in the "
+                                              "settings.")
+                                      .arg(whose)};
     if (!hostedAsked)
-        return QObject::tr("%1 is someone else's computer: your handwriting and speech go there only where you chose it.").arg(whose);
-    return {};
+        return Refusal{
+            .lack = Lack::HostedNotChosen,
+            .message =
+                QObject::tr("%1 is someone else's computer: your handwriting and speech go there only where you chose it.").arg(whose)};
+    return std::nullopt;
 }
 
-std::expected<RecognitionRoute::Ways, QString> RecognitionRoute::ways(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
-    if (kind == Recognition::Kind::Ink) {
-        QString model = chosen(settings, "ink_model"_L1);
-        if (model.isEmpty())
-            model = Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
-        const auto server = AiEndpoints::server(settings, model);
-        if (!server)
-            return std::unexpected(::Failure(::Failure::Code::NoVisionServer, {server.error()}).text());
-        if (model.isEmpty())
-            model = server->model;
-        if (const QString why = whyNot(settings, server->baseUrl, model, hostedAsked); !why.isEmpty())
-            return std::unexpected(why);
-        return inkWays(*server, model);
-    }
+[[nodiscard]] std::expected<Ways, Refusal> inkPlan(const Settings &settings, bool hostedAsked) {
+    QString model = chosen(settings, "ink_model"_L1);
+    if (model.isEmpty())
+        model = Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
+    const auto server = AiEndpoints::server(settings, model);
+    if (!server)
+        return std::unexpected(
+            Refusal{.lack = Lack::NoServer, .message = ::Failure(::Failure::Code::NoVisionServer, {server.error()}).text()});
+    if (model.isEmpty())
+        model = server->model;
+    if (auto refused = hostedRefusal(settings, server->baseUrl, model, hostedAsked))
+        return std::unexpected(std::move(*refused));
+    return inkWays(*server, model);
+}
+
+[[nodiscard]] std::expected<Ways, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
     Ways ways;
-    QString refused;
+    std::optional<Refusal> refused;
     if (const auto server = transcriber(settings)) {
         const QString model = chosen(settings, "transcription_model"_L1);
-        refused = whyNot(settings, server->baseUrl, model, hostedAsked);
-        if (refused.isEmpty())
+        refused = hostedRefusal(settings, server->baseUrl, model, hostedAsked);
+        if (!refused)
             ways.push_back(std::make_unique<Recognizers::Transcription>(*server, model));
     }
     // On this computer: nothing to ask of anyone.
@@ -93,7 +103,53 @@ std::expected<RecognitionRoute::Ways, QString> RecognitionRoute::ways(const Sett
         chosen(settings, "whisper_model"_L1).isEmpty() ? WhisperLocal::findModel() : chosen(settings, "whisper_model"_L1);
     const QString missing = WhisperLocal::missing(program, modelFile);
     if (ways.empty() && !missing.isEmpty())
-        return std::unexpected(refused.isEmpty() ? missing : refused + u' ' + missing);
+        return std::unexpected(refused ? Refusal{.lack = refused->lack, .message = refused->message + u' ' + missing}
+                                       : Refusal{.lack = Lack::NoServer, .message = missing});
     ways.push_back(std::make_unique<WhisperLocal>(program, modelFile));
     return ways;
+}
+
+[[nodiscard]] std::expected<Ways, Refusal> plan(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
+    if (settings.aiOff())
+        return std::unexpected(Refusal{.lack = Lack::AiOff, .message = ::Failure(::Failure::Code::AiOff).text()});
+    return kind == Recognition::Kind::Ink ? inkPlan(settings, hostedAsked) : speechPlan(settings, hostedAsked);
+}
+
+} // namespace
+
+QString RecognitionRoute::lackName(Lack lack) {
+    switch (lack) {
+    case Lack::AiOff:
+        return u"ai-off"_s;
+    case Lack::NoServer:
+        return u"no-server"_s;
+    case Lack::HostedNotAllowed:
+        return u"hosted-not-allowed"_s;
+    case Lack::HostedNotChosen:
+        return u"hosted-not-chosen"_s;
+    case Lack::NoModel:
+        return u"no-model"_s;
+    }
+    return {};
+}
+
+QString RecognitionRoute::whyNot(const Settings &settings, const QString &baseUrl, const QString &model, bool hostedAsked) {
+    const auto refused = hostedRefusal(settings, baseUrl, model, hostedAsked);
+    return refused ? refused->message : QString();
+}
+
+std::optional<RecognitionRoute::Refusal> RecognitionRoute::refusal(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
+    auto planned = plan(settings, kind, hostedAsked);
+    return planned ? std::nullopt : std::optional<Refusal>(std::move(planned.error()));
+}
+
+std::expected<RecognitionRoute::Ways, QString> RecognitionRoute::ways(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
+    return plan(settings, kind, hostedAsked).transform_error([](const Refusal &refused) { return refused.message; });
+}
+
+QString RecognitionRoute::signature(const Ways &ways) {
+    QStringList each;
+    for (const auto &way : ways)
+        each << way->where() + u'\t' + way->model();
+    return each.join(u'\n');
 }

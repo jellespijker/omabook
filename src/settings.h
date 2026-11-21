@@ -196,6 +196,9 @@ public:
     // "off"; see AiChoice in ai.h.
     QString aiProvider() const { return m_values.value("ai_provider").toString("auto"); }
     void setAiProvider(const QString &provider) { set("ai_provider", provider); }
+    // Off: nothing is asked of any model, on whatever server (#133): no
+    // answers, no recognition, no embeddings.
+    bool aiOff() const { return aiProvider() == "off"; }
     QString aiCommand() const { return m_values.value("ai_command").toString(); }
     void setAiCommand(const QString &command) { set("ai_command", command.trimmed()); }
     // The server "openai" asks: {"preset": "ollama", "base_url": "..."}; see

@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QObject>
 #include <QString>
+#include <QVariantMap>
 #include <memory>
 
 #include "recognition.h"
@@ -38,8 +39,13 @@ public:
     Q_INVOKABLE void ask(const QString &prompt, const QString &system, const QString &model, const QJSValue &onText,
                          const QJSValue &resolve, const QJSValue &reject);
 
-    // Whether there is a way to recognise "ink" or "audio" that may be used.
-    Q_INVOKABLE bool recognizes(const QString &kind);
+    // Whether there is a way to recognise "ink" or "audio" that may be used,
+    // for one who asked for a hosted server or not: `recognize.available`.
+    Q_INVOKABLE bool recognizes(const QString &kind, bool hosted);
+    // The same, saying why not (#133): {available, why, message}, `why` a
+    // code (RecognitionRoute::lackName, or "unknown-kind", "no-settings"),
+    // `message` its plain words; `recognize.status`.
+    Q_INVOKABLE QVariantMap recognition(const QString &kind, bool hosted);
     // Each JSON here is what scriptassist.js made with JSON.stringify; the
     // options are {language, hosted, again}. Answers the request's number.
     Q_INVOKABLE int ink(const QString &strokes, const QString &options, const QJSValue &onWaiting, const QJSValue &resolve,

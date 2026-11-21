@@ -122,10 +122,22 @@ void ScriptAi::ask(const QString &prompt, const QString &system, const QString &
     asking->ask(request);
 }
 
-bool ScriptAi::recognizes(const QString &kind) {
+bool ScriptAi::recognizes(const QString &kind, bool hosted) { return recognition(kind, hosted).value(u"available"_s).toBool(); }
+
+QVariantMap ScriptAi::recognition(const QString &kind, bool hosted) {
+    const auto unavailable = [](const QString &why, const QString &message) {
+        return QVariantMap{{u"available"_s, false}, {u"why"_s, why}, {u"message"_s, message}};
+    };
     const auto named = Recognition::kindNamed(kind);
-    return named && m_plugin->m_services.settings != nullptr
-           && RecognitionRoute::ways(*m_plugin->m_services.settings, *named, false).has_value();
+    if (!named)
+        return unavailable(u"unknown-kind"_s, tr("Only \"ink\" and \"audio\" are recognised, not \"%1\".").arg(kind));
+    if (m_plugin->m_services.settings == nullptr)
+        return unavailable(u"no-settings"_s, tr("Nothing can be recognised here: Omabook's settings aren't open."));
+    if (const auto refused = RecognitionRoute::refusal(*m_plugin->m_services.settings, *named, hosted))
+        return unavailable(RecognitionRoute::lackName(refused->lack), refused->message);
+    if (const auto lacking = m_queue ? m_queue->lacking(*named, hosted) : std::nullopt)
+        return unavailable(RecognitionRoute::lackName(RecognitionRoute::Lack::NoModel), *lacking);
+    return {{u"available"_s, true}, {u"why"_s, QString()}, {u"message"_s, QString()}};
 }
 
 int ScriptAi::ink(const QString &strokes, const QString &options, const QJSValue &onWaiting, const QJSValue &resolve,

@@ -111,6 +111,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::FfmpegFailed, tr("ffmpeg couldn't read the recording: %1")},
     {Failure::Code::WhisperFailed, tr("whisper.cpp couldn't transcribe the recording: %1")},
     {Failure::Code::WhisperNoTranscript, tr("whisper.cpp wrote no transcript.")},
+    {Failure::Code::AiOff, tr("AI is turned off in the settings.")},
     {Failure::Code::AiUnreachable, tr("Can't reach the AI server at %1 (%2).")},
     {Failure::Code::AiTimedOut, tr("The AI server at %1 took too long to answer.")},
     {Failure::Code::AiWantsKey, tr("The AI server at %1 wants a key: put one in the settings.")},

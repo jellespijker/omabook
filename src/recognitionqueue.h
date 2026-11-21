@@ -8,7 +8,9 @@
 #include <expected>
 #include <functional>
 #include <list>
+#include <map>
 #include <memory>
+#include <optional>
 
 #include "recognition.h"
 #include "recognitionroute.h"
@@ -60,6 +62,11 @@ public:
     [[nodiscard]] qsizetype pending() const { return static_cast<qsizetype>(m_jobs.size()); }
     // How long the first wait for a server is, and the longest; each doubles the one before.
     void setRetry(std::chrono::milliseconds first, std::chrono::milliseconds most);
+    // Whether the last recognition of this kind failed because the server
+    // lacks a model for it (one that reads pictures, or transcribes), and the
+    // ways are still the ones it went (#133): it would fail so again.
+    // Why, in plain words, when it did; none otherwise.
+    [[nodiscard]] std::optional<QString> lacking(Recognition::Kind kind, bool hosted) const;
 
 private:
     struct Job;
@@ -69,6 +76,7 @@ private:
     void resolved(Job &job);
     void failed(Job &job, const Recognition::Failure &failure);
     void finish(const std::expected<Recognition::Result, QString> &outcome);
+    [[nodiscard]] QString signatureNow(Recognition::Kind kind, bool hosted) const;
 
     Route m_route;
     LibraryOf m_library;
@@ -78,4 +86,11 @@ private:
     QTimer m_retry;
     std::chrono::milliseconds m_firstWait;
     std::chrono::milliseconds m_longestWait;
+    // By kind: the ways (RecognitionRoute::signature) that lacked a model,
+    // and why, until one of that kind is recognised.
+    struct Lacking {
+        QString signature;
+        QString why;
+    };
+    std::map<Recognition::Kind, Lacking> m_lacking;
 };

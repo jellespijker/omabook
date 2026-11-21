@@ -15,9 +15,18 @@ QList<Entry> assistEntries() {
          "model for what a person reads), `\"quick\"` (the small, fast one, for reading text into structure) or a "
          "model's own name. (A string in place of the options is the system prompt.)"},
 
-        {"recognize.available", "recognize.available(kind)", "",
-         "Whether `\"ink\"` or `\"audio\"` can be recognised here: a server that may be asked is set up, or (for "
-         "speech) whisper.cpp is installed."},
+        {"recognize.available", "recognize.available(kind, {hosted})", "",
+         "Whether `\"ink\"` or `\"audio\"` can be recognised here, true or false: a server that may be asked is set "
+         "up (a hosted one only with `hosted: true` and hosted servers allowed in the settings), or (for speech) "
+         "whisper.cpp is installed. Never with the AI set to Off. `status` says why not."},
+        {"recognize.status", "recognize.status(kind, {hosted})", "",
+         "What `available` answers, with why not: `{available, why, message}`. `why` is a code: `\"ai-off\"` (the "
+         "AI is set to Off: nothing is asked of any server), `\"no-server\"` (none is set up, nor whisper.cpp for "
+         "speech), `\"hosted-not-allowed\"` (only someone else's computer, and hosted servers aren't allowed in "
+         "the settings), `\"hosted-not-chosen\"` (allowed, but not asked for with `hosted: true`), `\"no-model\"` "
+         "(the server was asked and lacks a model that reads handwriting, or transcribes; until the settings "
+         "change or one is recognised), `\"unknown-kind\"` or `\"no-settings\"`; empty when available. "
+         "`message` says it in the desktop's language."},
         {"recognize.ink", "recognize.ink(strokes, {language, hosted, again, onWaiting})", "",
          "Recognised text from handwriting, read by a vision model on the AI server (config.json's "
          "`recognition.ink_model`, else the server's main model). `strokes` are the items of a set of strokes as "

@@ -75,11 +75,14 @@ constexpr auto inkPrompt = "The picture is handwriting. Write out exactly what i
     // A server without the service answers that the address isn't there.
     const bool aboutTheModel = said.contains("model"_L1, Qt::CaseInsensitive);
     if (transcribing && !aboutTheModel && (status == 404 || status == 405 || status == 501))
-        return {.why = Why::Unsupported, .message = sentence(::Failure(::Failure::Code::RecognizerNoSpeech, {where}).text())};
+        return {
+            .why = Why::Unsupported, .message = sentence(::Failure(::Failure::Code::RecognizerNoSpeech, {where}).text()), .lacking = true};
     if (status == 404 || said.contains("not found"_L1, Qt::CaseInsensitive))
-        return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerNoModel, {where, model}).text())};
+        return {.why = Why::Refused,
+                .message = sentence(::Failure(::Failure::Code::RecognizerNoModel, {where, model}).text()),
+                .lacking = true};
     if (!transcribing && (said.contains("image"_L1, Qt::CaseInsensitive) || said.contains("vision"_L1, Qt::CaseInsensitive)))
-        return {.why = Why::Refused, .message = ::Failure(::Failure::Code::RecognizerNoVision, {model, where}).text()};
+        return {.why = Why::Refused, .message = ::Failure(::Failure::Code::RecognizerNoVision, {model, where}).text(), .lacking = true};
     if (!said.isEmpty())
         return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerAnswered, {where, said}).text())};
     return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerError, {where, QString::number(status)}).text())};
@@ -145,7 +148,7 @@ void Vision::resolve() {
             listed.append(model.toObject().value("id"_L1).toString());
         const auto model = OpenAiProvider::defaultModel(m_server, listed);
         if (!model) {
-            emit failed({.why = Why::Refused, .message = model.error().text()});
+            emit failed({.why = Why::Refused, .message = model.error().text(), .lacking = true});
             return;
         }
         m_model = *model;

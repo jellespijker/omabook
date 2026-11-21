@@ -131,6 +131,7 @@ public:
         NoOriginalKept,        // {}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
+        AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)
         AiUnreachable,       // {where, the network's reason}
         AiTimedOut,          // {where}
         AiWantsKey,          // {where}

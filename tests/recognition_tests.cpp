@@ -19,6 +19,8 @@
 #include <memory>
 #include <optional>
 
+#include "ai.h"
+#include "embeddings.h"
 #include "fakeaiserver.h"
 #include "fixtures.h"
 #include "inkcodec.h"
@@ -129,6 +131,37 @@ cat > "$out.json" <<'JSON'
 JSON
 )");
 }
+
+// A server that fails the test the moment anything is asked of it.
+struct Untouchable : FakeServer {
+    Untouchable() {
+        answering = [](const Request &request) {
+            QTest::qFail(qPrintable(u"Asked with the AI off: "_s + QString::fromLatin1(request.line)), __FILE__, __LINE__);
+            return Reply{.status = "500 Internal Server Error", .body = "{}"};
+        };
+    }
+};
+
+// A plugin of these functions on the desk's settings and library, loaded.
+[[nodiscard]] std::unique_ptr<ScriptPlugin> pluginOf(Desk &desk, const QString &script) {
+    const QString folder = desk.dir.filePath("plugins/notebook");
+    QDir().mkpath(folder + "/data");
+    Fixtures::write(folder + "/plugin.json", R"({"name": "Notebook", "version": "1.0", "script": "main.js"})");
+    Fixtures::write(folder + "/main.js", script.toUtf8());
+    ScriptServices services;
+    services.settings = &desk.settings;
+    services.library = [&desk] { return &desk.library; };
+    auto plugin = std::make_unique<ScriptPlugin>(ScriptManifest::read(folder), services);
+    QString problem;
+    [&] { QVERIFY2(plugin->load(&problem), qPrintable(problem)); }();
+    return plugin;
+}
+
+constexpr auto statusScript = R"js(
+function status(kind, hosted) { return omabook.recognize.status(kind, hosted ? {hosted: true} : undefined); }
+function available(kind, hosted) { return omabook.recognize.available(kind, {hosted: hosted}); }
+function read(items, hosted) { return omabook.recognize.ink(items, {hosted: hosted}); }
+)js";
 
 } // namespace
 
@@ -470,6 +503,99 @@ private slots:
         const QJsonValue thing = PluginData::read(desk.library, {.plugin = u"notebook"_s, .entity = u"omabook-recognized"_s, .id = u"k"_s});
         QCOMPARE(thing.toObject().value("sets").toObject().value("parts").toObject().size(), 1);
         QCOMPARE(RecognitionStore::find(desk.library, u"notebook"_s, u"k"_s).value_or(Recognition::Result{}).text, u"Short."_s);
+    }
+
+    // With the AI set to Off (#133) nothing is asked of any server, the
+    // person's own included: not to read handwriting, not to transcribe, not
+    // to embed a book's text, not to answer; and a plugin is told so.
+    void withTheAiOffNothingIsAskedOfAnyServer() {
+        Desk desk;
+        Untouchable server;
+        desk.serve(server.url());
+        const QString whisper = standInWhisper(desk.dir.path());
+        Fixtures::write(desk.dir.filePath("ggml-base.bin"), "model");
+        desk.choose({{"ink_model", "llava"},
+                     {"transcription_url", server.url()},
+                     {"whisper_program", whisper},
+                     {"whisper_model", desk.dir.filePath("ggml-base.bin")}});
+        desk.settings.setMeaning({{"url", server.url()}});
+        desk.settings.setAiProvider(u"off"_s);
+        QVERIFY(desk.settings.aiOff());
+
+        for (const auto kind : {Recognition::Kind::Ink, Recognition::Kind::Audio}) {
+            const auto refused = RecognitionRoute::refusal(desk.settings, kind, true);
+            QVERIFY(refused && refused->lack == RecognitionRoute::Lack::AiOff);
+            QVERIFY(!RecognitionRoute::ways(desk.settings, kind, true));
+        }
+        const Outcome read = desk.recognise(ink(), false, true);
+        QVERIFY2(!read && read.error().contains("turned off"), qPrintable(whyNot(read)));
+        Fixtures::write(desk.dir.filePath("talk.wav"), "RIFF talk");
+        const Outcome heard =
+            desk.recognise({.kind = Recognition::Kind::Audio, .strokes = {}, .file = desk.dir.filePath("talk.wav"), .language = {}});
+        QVERIFY(!heard && heard.error().contains("turned off"));
+        // Not even whisper.cpp on this computer is run.
+        QVERIFY(!QFile::exists(desk.dir.filePath("whisper-args")));
+        const auto route = Embeddings::route(desk.settings);
+        QVERIFY(!route && route.error().code() == Failure::Code::AiOff);
+        QVERIFY(makeAiProvider(desk.settings) == nullptr);
+
+        const auto plugin = pluginOf(desk, QString::fromLatin1(statusScript));
+        QString problem;
+        QCOMPARE(plugin->callNow(u"available"_s, {u"ink"_s, true}, &problem), QJsonValue(false));
+        QCOMPARE(plugin->callNow(u"available"_s, {u"audio"_s, false}, &problem), QJsonValue(false));
+        const QJsonObject status = plugin->callNow(u"status"_s, {u"ink"_s, true}, &problem).toObject();
+        QCOMPARE(status.value("available"), QJsonValue(false));
+        QCOMPARE(status.value("why").toString(), u"ai-off"_s);
+        QVERIFY(status.value("message").toString().contains("turned off"));
+        std::optional<QString> rejected;
+        plugin->callFunction(u"read"_s, {Ink::items(writing()), true},
+                             [&rejected](const QJsonValue &, const QString &why) { rejected = why; });
+        QTRY_VERIFY(rejected.has_value());
+        QVERIFY2(rejected->contains("turned off"), qPrintable(*rejected));
+        // Anything still on its way would have arrived by now.
+        QTest::qWait(200);
+        QVERIFY(server.received.isEmpty());
+    }
+
+    // recognize.status says why a plugin can't have recognition, by a code
+    // (#133); recognize.available stays the boolean it was, and takes {hosted}.
+    void aPluginIsToldWhyItCantRecognise() {
+        Desk desk;
+        FakeServer server;
+        desk.choose({{"ink_model", "llava"}, {"whisper_program", desk.dir.filePath("none/whisper-cli")}});
+        desk.settings.setAiEndpoint({{"preset", "custom"}, {"base_url", ""}});
+        const auto plugin = pluginOf(desk, QString::fromLatin1(statusScript));
+        QString problem;
+        const auto why = [&plugin, &problem](const QString &kind, bool hosted = false) {
+            return plugin->callNow(u"status"_s, {kind, hosted}, &problem).toObject().value("why").toString();
+        };
+        QCOMPARE(why(u"ink"_s), u"no-server"_s);
+        QCOMPARE(why(u"audio"_s), u"no-server"_s);
+        QCOMPARE(why(u"paper"_s), u"unknown-kind"_s);
+        desk.serve(u"https://api.example.com/v1"_s);
+        QCOMPARE(why(u"ink"_s, true), u"hosted-not-allowed"_s);
+        desk.settings.setRecognitionHosted(true);
+        QCOMPARE(why(u"ink"_s), u"hosted-not-chosen"_s);
+        QCOMPARE(why(u"ink"_s, true), QString());
+        QCOMPARE(plugin->callNow(u"available"_s, {u"ink"_s, true}, &problem), QJsonValue(true));
+        QCOMPARE(plugin->callNow(u"available"_s, {u"ink"_s, false}, &problem), QJsonValue(false));
+
+        // A server without a model that reads pictures is learnt of by asking it, until the model is another.
+        desk.serve(server.url());
+        QCOMPARE(why(u"ink"_s), QString());
+        server.answer({{"error", QJsonObject{{"message", "llava does not support images"}}}}, "400 Bad Request");
+        std::optional<QString> refused;
+        plugin->callFunction(u"read"_s, {Ink::items(writing()), false},
+                             [&refused](const QJsonValue &, const QString &said) { refused = said; });
+        QTRY_VERIFY(refused.has_value());
+        QVERIFY2(refused->contains("can't read pictures"), qPrintable(*refused));
+        const QJsonObject lacking = plugin->callNow(u"status"_s, {u"ink"_s, false}, &problem).toObject();
+        QCOMPARE(lacking.value("why").toString(), u"no-model"_s);
+        QCOMPARE(lacking.value("message").toString(), *refused);
+        QCOMPARE(plugin->callNow(u"available"_s, {u"ink"_s, false}, &problem), QJsonValue(false));
+        desk.choose({{"ink_model", "qwen3-vl"}});
+        QCOMPARE(why(u"ink"_s), QString());
+        QVERIFY2(problem.isEmpty(), qPrintable(problem));
     }
 
     void aPluginRecognisesInkAndSpeech() {

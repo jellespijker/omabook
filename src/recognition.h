@@ -82,6 +82,9 @@ struct Failure {
     };
     Why why = Why::Refused;
     QString message;
+    // It lacks what was asked for: the model, one that reads pictures, or
+    // transcription at all (#133), so it would fail the same way again.
+    bool lacking = false;
 };
 
 // One way of recognising. Each recognises one input at a time and says how

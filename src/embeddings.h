@@ -30,7 +30,8 @@ struct Route {
     bool hosted = false;
 };
 // The route the settings choose ("meaning" in config.json; Settings::meaning).
-// Fails when there is no server, or the one there is may not be sent a book's text.
+// Fails when the AI is off, when there is no server, or the one there is may
+// not be sent a book's text.
 [[nodiscard]] std::expected<Route, Failure> route(const Settings &settings, const QString &omarchyProgram = {});
 
 // What is embedded: a stretch of a book, or a question asked of it. Some

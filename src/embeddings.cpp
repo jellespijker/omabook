@@ -76,6 +76,9 @@ namespace {
 } // namespace
 
 std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &settings, const QString &omarchyProgram) {
+    // A server of the person's own is a model too: Off asks nothing of it.
+    if (settings.aiOff())
+        return std::unexpected(Failure(Failure::Code::AiOff));
     const auto server = serverOf(settings, omarchyProgram);
     if (!server)
         return std::unexpected(Failure::said(server.error()));

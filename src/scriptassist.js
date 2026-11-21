@@ -10,6 +10,13 @@
             throw new TypeError(what + " should be a " + type + ".");
     }
 
+    function hostedOf(options) {
+        if (options === undefined || options === null)
+            return false;
+        need(options, "object", "The options");
+        return options.hosted === true;
+    }
+
     // A promise of what was recognised, which cancel() stops. The options are
     // {language, hosted, again, onWaiting}.
     function recognition(start, options) {
@@ -44,7 +51,9 @@
         },
 
         recognize: {
-            available: function (kind) { return assist.recognizes(String(kind || "")); },
+            // A boolean, as it always was; status() says why not (#133).
+            available: function (kind, options) { return assist.recognizes(String(kind || ""), hostedOf(options)); },
+            status: function (kind, options) { return assist.recognition(String(kind || ""), hostedOf(options)); },
             ink: function (strokes, options) {
                 if (strokes === null || typeof strokes !== "object")
                     throw new TypeError("The strokes should be a list of strokes, or the items of a set of them.");

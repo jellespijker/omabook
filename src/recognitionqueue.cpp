@@ -21,6 +21,7 @@ struct RecognitionQueue::Job {
     QString key;         // of the way under way, once resolved
     QStringList without; // why the ways tried had no such service
     QString away;        // why a way couldn't be reached, this round
+    bool lacking = false; // a way lacked the model asked for
     std::chrono::milliseconds wait{0};
 };
 
@@ -34,6 +35,7 @@ RecognitionQueue::RecognitionQueue(Route route, LibraryOf library, QObject *pare
         job.way = 0;
         job.without.clear();
         job.away.clear();
+        job.lacking = false;
         step(job);
     });
 }
@@ -47,6 +49,19 @@ RecognitionQueue::~RecognitionQueue() {
 
 RecognitionQueue::Route RecognitionQueue::routeFor(const Settings &settings) {
     return [&settings](Recognition::Kind kind, bool hosted) { return RecognitionRoute::ways(settings, kind, hosted); };
+}
+
+std::optional<QString> RecognitionQueue::lacking(Recognition::Kind kind, bool hosted) const {
+    const auto found = m_lacking.find(kind);
+    if (found == m_lacking.end() || found->second.signature != signatureNow(kind, hosted))
+        return std::nullopt;
+    return found->second.why;
+}
+
+QString RecognitionQueue::signatureNow(Recognition::Kind kind, bool hosted) const {
+    // Made afresh, before any is asked: the ways a job went have learnt their models.
+    const auto ways = m_route(kind, hosted);
+    return ways ? RecognitionRoute::signature(*ways) : QString();
 }
 
 void RecognitionQueue::setRetry(std::chrono::milliseconds first, std::chrono::milliseconds most) {
@@ -150,6 +165,7 @@ void RecognitionQueue::resolved(Job &job) {
 }
 
 void RecognitionQueue::failed(Job &job, const Recognition::Failure &failure) {
+    job.lacking = job.lacking || failure.lacking;
     switch (failure.why) {
     case Why::Refused:
         finish(std::unexpected(failure.message));
@@ -174,6 +190,11 @@ void RecognitionQueue::finish(const std::expected<Recognition::Result, QString> 
     m_retry.stop();
     for (const auto &way : job->ways)
         way->disconnect(this);
+    const Recognition::Kind kind = job->request.input.kind;
+    if (outcome)
+        m_lacking.erase(kind);
+    else if (job->lacking)
+        m_lacking.insert_or_assign(kind, Lacking{.signature = signatureNow(kind, job->request.hosted), .why = outcome.error()});
     if (job->done)
         job->done(outcome);
     // Its ways may be the ones telling this: they go once they are done telling.

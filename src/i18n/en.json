@@ -435,6 +435,7 @@
   "A year of reading": "A year of reading",
   "A year, or a date as year, month and day: 1944, 1944-06 or 1944-06-06. A year before the common era is a minus: -43.": "A year, or a date as year, month and day: 1944, 1944-06 or 1944-06-06. A year before the common era is a minus: -43.",
   "AI": "AI",
+  "AI is turned off in the settings.": "AI is turned off in the settings.",
   "AI, when you ask": "AI, when you ask",
   "Access key (optional)": "Access key (optional)",
   "Add": "Add",
@@ -1204,6 +1205,7 @@
   "One person on every computer": "One person on every computer",
   "One time is followed: what you put in, else the more precise, else the first book's.": "One time is followed: what you put in, else the more precise, else the first book's.",
   "One, two or three pages": "One, two or three pages",
+  "Only \"ink\" and \"audio\" are recognised, not \"%1\".": "Only \"ink\" and \"audio\" are recognised, not \"%1\".",
   "Only %Ln pages fit at this width with lines of at least %1 characters": {
     "one": "Only %Ln page fits at this width with lines of at least %1 characters",
     "other": "Only %Ln pages fit at this width with lines of at least %1 characters"
