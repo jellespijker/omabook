@@ -6,8 +6,9 @@ import Omabook
 // A margin note written by hand (#90), on its card: its ink, as wide as the
 // card whatever the card's width (MarginNotes.inkUnits across), with room
 // below it to write on. The pen writes on it wherever it stands, its other
-// end erases; while the note is edited a finger and the mouse write too, and
-// its tools are there: undo and redo, the pen or the eraser, its words,
+// end erases; while the note is edited the mouse writes too, a finger as the
+// writing bar has it (#134, ReadingInk.fingers), two fingers scroll, and its
+// tools are there: undo and redo, the pen or the eraser, its words,
 // what was read of the handwriting, shown on request (and read then, if they
 // weren't yet), and done or away with it, wrapped as the column is narrow.
 // Each pause of the pen is kept (MarginNotes.ink).
@@ -75,7 +76,7 @@ ColumnLayout {
         penWidth: 1.6
         eraserWidth: 16
         batchPause: 500
-        fingers: inked.editing ? InkSurface.Draw : InkSurface.Scroll
+        fingers: inked.editing ? reader.ink.fingerUse : InkSurface.Scroll
         mouseDraws: inked.editing
         Accessible.role: Accessible.Graphic
         Accessible.name: inked.words !== "" ? qsTr("Handwritten margin note: %1").arg(inked.words) : qsTr("Handwritten margin note")

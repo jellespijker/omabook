@@ -2107,5 +2107,14 @@
   "Notes shared, and asked about": "Des notes partagées, et interrogées",
   "A space you share can carry its members' highlights and notes, each beside yours in their colour and never past your place. {reader.ask} is given your own up to where you are, so you can ask what you marked.": "Un espace partagé peut porter les surlignages et notes de ses membres, ceux de chacun à côté des vôtres dans sa couleur, jamais au-delà de là où vous en êtes. {reader.ask} reçoit les vôtres jusqu'à l'endroit où vous en êtes : demandez ce que vous avez marqué.",
   "A year of reading": "Une année de lecture",
-  "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} montre le temps passé à lire, les jours d’affilée et les livres finis, par mois et par livre, et où vous en êtes d'un objectif pour l'année. Tout est compté sur votre ordinateur."
+  "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} montre le temps passé à lire, les jours d’affilée et les livres finis, par mois et par livre, et où vous en êtes d'un objectif pour l'année. Tout est compté sur votre ordinateur.",
+  "A finger scrolls; the pen and the mouse write": "Un doigt fait défiler ; le stylet et la souris écrivent",
+  "A finger writes until a pen is used, then scrolls": "Un doigt écrit jusqu'à ce qu'un stylet serve, puis fait défiler",
+  "A finger writes; two fingers scroll": "Un doigt écrit ; deux doigts font défiler",
+  "Write with a finger: automatic": "Écrire au doigt : automatique",
+  "Write with a finger: off": "Écrire au doigt : non",
+  "Write with a finger: on": "Écrire au doigt : oui",
+  "Finger: automatic": "Doigt : automatique",
+  "Finger: on": "Doigt : oui",
+  "Finger: off": "Doigt : non"
 }

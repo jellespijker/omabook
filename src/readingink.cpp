@@ -15,6 +15,7 @@
 #include "inkcodec.h"
 #include "inksurface.h"
 #include "reader.h"
+#include "settings.h"
 
 namespace {
 
@@ -65,8 +66,11 @@ ReadingInk::ReadingInk(Reader *reader) : QObject(reader), m_reader(reader) {
     });
     if (const Backend *backend = reader->backend())
         connect(backend, &Backend::revisionChanged, this, &ReadingInk::refresh);
-    if (Backend *backend = reader->backend(); backend && backend->settings())
-        m_words = new BookInkWords(*backend->settings(), [reader] { return reader->library(); }, this);
+    if (Backend *backend = reader->backend(); backend && backend->settings()) {
+        m_settings = backend->settings();
+        m_words = new BookInkWords(*m_settings, [reader] { return reader->library(); }, this);
+        connect(m_settings, &Settings::changed, this, &ReadingInk::fingersChanged);
+    }
 }
 
 void ReadingInk::setInking(bool inking) {
@@ -110,6 +114,22 @@ void ReadingInk::setColor(const QString &color) {
 QColor ReadingInk::penColor() const {
     const auto *const ink = std::ranges::find_if(inks, [this](const InkColor &one) { return m_color == QLatin1StringView(one.key); });
     return {QLatin1StringView(ink != inks.end() ? ink->color : inks.front().color)};
+}
+
+QString ReadingInk::fingers() const { return m_settings ? m_settings->inkFingers() : QString("auto"); }
+
+void ReadingInk::setFingers(const QString &fingers) {
+    if (m_settings)
+        m_settings->setInkFingers(fingers);
+}
+
+InkSurface::FingerUse ReadingInk::fingerUse() const {
+    const QString mode = fingers();
+    return mode == "on" ? InkSurface::FingerUse::Draw : mode == "off" ? InkSurface::FingerUse::Scroll : InkSurface::FingerUse::Auto;
+}
+
+bool ReadingInk::touched(qulonglong at) const {
+    return std::ranges::any_of(m_surfaces, [at](const auto &one) { return one.second && one.second->touched(at); });
 }
 
 QVariantList ReadingInk::colors() {

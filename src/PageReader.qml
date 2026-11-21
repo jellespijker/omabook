@@ -352,7 +352,8 @@ ListView {
                     }
                     // The page's book ink (#83), at the page's zoom: ink units
                     // across its width, so it stays where it was put. Written on
-                    // while the reader writes, the mouse too; a finger scrolls.
+                    // while the reader writes, the mouse too, and a finger as
+                    // chosen (#134); two fingers scroll and zoom the pages.
                     InkSurface {
                         id: ink
                         objectName: "bookInk" + sheet.page
@@ -360,7 +361,7 @@ ListView {
                         visible: reader.ink.shown
                         readOnly: !reader.ink.inking
                         inkScale: Math.max(0.01, width / reader.ink.pageUnits)
-                        fingers: InkSurface.Scroll
+                        fingers: reader.ink.fingerUse
                         mouseDraws: reader.ink.inking
                         batchPause: 600
                         penWidth: 2.4
@@ -373,6 +374,7 @@ ListView {
                         Component.onCompleted: reader.ink.show(ink, sheet.page)
                         Component.onDestruction: reader.ink.forget(ink)
                         onInked: (batch) => reader.ink.take(ink, batch)
+                        onPinched: (scale) => view.pinch(scale)
                     }
                 }
             }

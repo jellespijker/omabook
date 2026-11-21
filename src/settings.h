@@ -40,6 +40,7 @@ class Settings : public QObject {
     Q_PROPERTY(bool recognitionHosted READ recognitionHosted WRITE setRecognitionHosted NOTIFY changed)
     Q_PROPERTY(bool graphOneTenant READ graphOneTenant WRITE setGraphOneTenant NOTIFY changed)
     Q_PROPERTY(QString marks READ marks WRITE setMarks NOTIFY changed)
+    Q_PROPERTY(QString inkFingers READ inkFingers WRITE setInkFingers NOTIFY changed)
     Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
     Q_PROPERTY(QString goodreadsUser READ goodreadsUser WRITE setGoodreadsUser NOTIFY changed)
     Q_PROPERTY(QString openLibraryUser READ openLibraryUser WRITE setOpenLibraryUser NOTIFY changed)
@@ -236,6 +237,11 @@ public:
     // or "never". Kept in config.json, so a choice lasts.
     QString marks() const;
     void setMarks(const QString &mode);
+    // Whether a finger writes on book ink and a margin note by hand (#134):
+    // "auto" (the default: until a pen is used, then it scrolls), "on" or
+    // "off" (it always scrolls).
+    QString inkFingers() const;
+    void setInkFingers(const QString &mode);
 
     // Whose shelves the reading sites are asked for: a Goodreads user id,
     // profile address or shelf feed address, and an Open Library user name.

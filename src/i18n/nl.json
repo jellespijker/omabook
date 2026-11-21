@@ -2015,5 +2015,14 @@
   "Notes shared, and asked about": "Notities gedeeld, en bevraagd",
   "A space you share can carry its members' highlights and notes, each beside yours in their colour and never past your place. {reader.ask} is given your own up to where you are, so you can ask what you marked.": "Een gedeelde ruimte kan de markeringen en notities van haar leden meenemen, die van ieder naast de jouwe in hun kleur en nooit voorbij waar je bent. {reader.ask} krijgt je eigen tot waar je bent, zodat je kunt vragen wat je markeerde.",
   "A year of reading": "Een jaar lezen",
-  "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} laat de tijd zien die je las, de dagen op rij en de uitgelezen boeken, per maand en per boek, en hoe ver je bent met een doel voor het jaar. Alles wordt op je eigen computer geteld."
+  "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} laat de tijd zien die je las, de dagen op rij en de uitgelezen boeken, per maand en per boek, en hoe ver je bent met een doel voor het jaar. Alles wordt op je eigen computer geteld.",
+  "A finger scrolls; the pen and the mouse write": "Een vinger scrolt; de pen en de muis schrijven",
+  "A finger writes until a pen is used, then scrolls": "Een vinger schrijft tot er een pen gebruikt wordt, en scrolt dan",
+  "A finger writes; two fingers scroll": "Een vinger schrijft; twee vingers scrollen",
+  "Write with a finger: automatic": "Met een vinger schrijven: automatisch",
+  "Write with a finger: off": "Met een vinger schrijven: uit",
+  "Write with a finger: on": "Met een vinger schrijven: aan",
+  "Finger: automatic": "Vinger: automatisch",
+  "Finger: on": "Vinger: aan",
+  "Finger: off": "Vinger: uit"
 }

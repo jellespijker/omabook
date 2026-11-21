@@ -12,10 +12,11 @@
 #include <vector>
 
 #include "inkstroke.h"
+#include "inksurface.h"
 
 class BookInkWords;
-class InkSurface;
 class Reader;
+class Settings;
 
 // The open book's ink (#83), as the reading view draws and shows it: one ink
 // surface over each page of a PDF or a comic as it is drawn, its strokes the
@@ -27,8 +28,9 @@ class Reader;
 //
 // While writing (`inking`) the pen, and the mouse, write and erase on the
 // pages (the pen's other end erases, as the eraser tool does), and the pen's
-// gestures that highlight rest; fingers still scroll and zoom. `shown` puts
-// the ink away, for reading the pages as they were.
+// gestures that highlight rest. A finger writes too until a pen is used, and
+// then scrolls, or always or never, as `fingers` says (#134); two fingers
+// scroll and zoom. `shown` puts the ink away, for reading the pages as they were.
 //
 // Where recognition is set up for handwriting, each page written on is read
 // once the pen rests (BookInkWords), so a search finds it by its words.
@@ -40,6 +42,10 @@ class ReadingInk : public QObject {
     // What the pen writes with: one of `colors`, by its key.
     Q_PROPERTY(QString color READ color WRITE setColor NOTIFY modeChanged)
     Q_PROPERTY(QColor penColor READ penColor NOTIFY modeChanged)
+    // Whether a finger writes: "auto", "on" or "off", kept in the settings
+    // (Settings::inkFingers); and that as what an ink surface takes.
+    Q_PROPERTY(QString fingers READ fingers WRITE setFingers NOTIFY fingersChanged)
+    Q_PROPERTY(InkSurface::FingerUse fingerUse READ fingerUse NOTIFY fingersChanged)
     // The inks there are: [{key, color}], dark enough for a white page.
     Q_PROPERTY(QVariantList colors READ colors CONSTANT)
     // Ink units across a page (BookInk::pageUnits): a page's surface draws at its width over this.
@@ -63,6 +69,9 @@ public:
     [[nodiscard]] QString color() const { return m_color; }
     void setColor(const QString &color);
     [[nodiscard]] QColor penColor() const;
+    [[nodiscard]] QString fingers() const;
+    void setFingers(const QString &fingers);
+    [[nodiscard]] InkSurface::FingerUse fingerUse() const;
     [[nodiscard]] static QVariantList colors();
     [[nodiscard]] static double pageUnits();
     [[nodiscard]] QVariantList pages() const;
@@ -81,6 +90,10 @@ public:
     Q_INVOKABLE bool erasePage(int page);
     // Reads the ink again: another computer's came.
     Q_INVOKABLE void refresh();
+    // Whether a finger is on a page's ink, writing or two of them moving the
+    // page, or the touch event of this moment (its timestamp) was the ink's:
+    // what a tap on the page then does (turn it, show the bar) waits.
+    Q_INVOKABLE bool touched(qulonglong at = 0) const;
 
     // The same for C++: a change on a page, and the strokes on one.
     bool take(int page, const Ink::Change &change);
@@ -89,6 +102,7 @@ public:
 signals:
     void changed();
     void modeChanged();
+    void fingersChanged();
 
 private:
     // A step of undo: what a batch put on a page and took off it, whole.
@@ -109,6 +123,7 @@ private:
     [[nodiscard]] QString fileHash();
 
     Reader *m_reader;
+    Settings *m_settings = nullptr;
     bool m_inking = false;
     bool m_shown = true;
     bool m_erasing = false;

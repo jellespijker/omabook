@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- A finger writes on the pages of a PDF or a comic (#134): with D on, a finger moved the page and drew nothing. Now one finger writes and draws until a pen has been used, two fingers scroll and zoom, and once a pen is used a finger scrolls, so a palm doesn't scribble. *Write with a finger* in the writing bar makes it automatic, on or off, and the choice is kept; a handwritten margin note being edited does the same.
+
 ## [0.1.10] - 2026-11-21
 
 ### Added

@@ -2015,5 +2015,14 @@
   "Notes shared, and asked about": "Notizen geteilt und befragt",
   "A space you share can carry its members' highlights and notes, each beside yours in their colour and never past your place. {reader.ask} is given your own up to where you are, so you can ask what you marked.": "Ein geteilter Bereich kann die Markierungen und Notizen seiner Mitglieder mitnehmen, jede Person neben dir in ihrer Farbe und nie über deine Stelle hinaus. {reader.ask} bekommt deine eigenen bis dorthin, wo du bist, sodass du fragen kannst, was du markiert hast.",
   "A year of reading": "Ein Jahr Lesen",
-  "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} zeigt, wie lange du gelesen hast, die Tage in Folge und die beendeten Bücher, nach Monat und nach Buch, und wie weit du mit einem Ziel für das Jahr bist. Alles wird auf deinem Computer gezählt."
+  "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} zeigt, wie lange du gelesen hast, die Tage in Folge und die beendeten Bücher, nach Monat und nach Buch, und wie weit du mit einem Ziel für das Jahr bist. Alles wird auf deinem Computer gezählt.",
+  "A finger scrolls; the pen and the mouse write": "Ein Finger scrollt; Stift und Maus schreiben",
+  "A finger writes until a pen is used, then scrolls": "Ein Finger schreibt, bis ein Stift benutzt wird, dann scrollt er",
+  "A finger writes; two fingers scroll": "Ein Finger schreibt; zwei Finger scrollen",
+  "Write with a finger: automatic": "Mit dem Finger schreiben: automatisch",
+  "Write with a finger: off": "Mit dem Finger schreiben: aus",
+  "Write with a finger: on": "Mit dem Finger schreiben: an",
+  "Finger: automatic": "Finger: automatisch",
+  "Finger: on": "Finger: an",
+  "Finger: off": "Finger: aus"
 }
