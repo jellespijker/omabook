@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QtConcurrent/QtConcurrentRun>
 #include <expected>
+#include <tuple>
 #include <vector>
 
 #include "aicall.h"
@@ -216,7 +217,7 @@ QVariantMap ScriptAi::recognition(const QString &kind, bool hosted) {
     if (m_plugin->m_services.settings == nullptr)
         return unavailable(Capabilities::name(capability), u"no-settings"_s,
                            tr("Nothing can be recognised here: Omabook's settings aren't open."));
-    const QVariantMap status = statusOf(capability, {{u"hosted"_s, hosted}});
+    QVariantMap status = statusOf(capability, {{u"hosted"_s, hosted}});
     if (!status.value(u"available"_s).toBool())
         return status;
     if (const auto lacking = m_queue ? m_queue->lacking(*named, hosted) : std::nullopt)
@@ -346,7 +347,8 @@ void ScriptAi::embed(const QString &texts, const QString &options, const QJSValu
         given << text.toString();
     const auto use = chosen.value("use"_L1).toString() == "question"_L1 ? Embeddings::Use::Question : Embeddings::Use::Document;
     m_plugin->busy(1);
-    QtConcurrent::run([route = *route, given, use] { return Embeddings::embed(route, given, use); })
+    // The continuation answers the script by itself, on the plugin's thread; nothing waits for it.
+    std::ignore = QtConcurrent::run([route = *route, given, use] { return Embeddings::embed(route, given, use); })
         .then(m_plugin, [this, resolve, reject](const std::expected<Embeddings::Vectors, Failure> &made) {
             if (made) {
                 QJsonArray vectors;
