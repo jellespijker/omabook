@@ -16,6 +16,14 @@ moves those lines under its version.
 
 - Reading a PDF aloud, a sentence broken over the lines of its page is read as one, a word hyphenated at a line's end whole, instead of a stop at every line's end (#73).
 
+## [0.2.0.1] - 2026-11-21
+
+0.2.0 was tagged but its package never built; this is the first release of 0.2.0, with this fix.
+
+### Fixed
+
+- Reading a PDF aloud keeps a sentence whole when it runs over a line, and a word hyphenated at a line's end whole (#73): a line break ended a sentence before, so a voice stopped in the middle of one.
+
 ## [0.2.0] - 2026-11-21
 
 ### Added
@@ -340,7 +348,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...HEAD
+[0.2.0.1]: https://github.com/jellespijker/omabook/compare/v0.2.0...v0.2.0.1
 [0.2.0]: https://github.com/jellespijker/omabook/compare/v0.1.10.3...v0.2.0
 [0.1.10.3]: https://github.com/jellespijker/omabook/compare/v0.1.10.1...v0.1.10.3
 [0.1.10.1]: https://github.com/jellespijker/omabook/compare/v0.1.10...v0.1.10.1
