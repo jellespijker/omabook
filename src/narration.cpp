@@ -96,6 +96,8 @@ void Narration::back() {
 }
 
 void Narration::sayCurrent() {
+    if (!m_current)
+        return;
     m_voice->say(words(), m_how);
     if (const auto upcoming = after(*m_current))
         m_voice->prepare(wordsOf(*upcoming), m_how);

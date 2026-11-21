@@ -80,14 +80,14 @@ std::expected<QString, Failure> Voices::engine(const Settings &settings) {
     if (wanted == "server"_L1) {
         if (auto reachable = server(settings); !reachable)
             return std::unexpected(reachable.error());
-        return wanted;
+        return u"server"_s;
     }
     if (wanted == "piper"_L1) {
         if (piperProgram(settings).isEmpty())
             return std::unexpected(Failure(Failure::Code::PiperMissing));
         if (PiperVoice::findModels().isEmpty())
             return std::unexpected(Failure(Failure::Code::PiperNoVoice));
-        return wanted;
+        return u"piper"_s;
     }
     if (wanted == "speech-dispatcher"_L1 || !piperReady(settings)) {
         if (!dispatcherReady())
