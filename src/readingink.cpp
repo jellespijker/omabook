@@ -125,7 +125,11 @@ void ReadingInk::setFingers(const QString &fingers) {
 
 InkSurface::FingerUse ReadingInk::fingerUse() const {
     const QString mode = fingers();
-    return mode == "on" ? InkSurface::FingerUse::Draw : mode == "off" ? InkSurface::FingerUse::Scroll : InkSurface::FingerUse::Auto;
+    if (mode == "on")
+        return InkSurface::FingerUse::Draw;
+    if (mode == "off")
+        return InkSurface::FingerUse::Scroll;
+    return InkSurface::FingerUse::Auto;
 }
 
 bool ReadingInk::touched(qulonglong at) const {
