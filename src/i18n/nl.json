@@ -2053,5 +2053,14 @@
   "Kept private": "Privé gehouden",
   "Share %1 in the spaces it is in? Its details go to everyone they reach, and as their parts say, its file and what you know and wrote of it. You can keep it private again; what others have of it by then stays theirs.": "%1 delen in de ruimtes waarin het zit? De gegevens gaan naar iedereen die ze bereiken, en naargelang hun onderdelen ook het bestand en wat je erover weet en schreef. Je kunt het weer privé houden; wat anderen er dan al van hebben, blijft van hen.",
   "Share it": "Delen",
-  "Share it…": "Delen…"
+  "Share it…": "Delen…",
+  "A finger scrolls; the pen and the mouse write": "Een vinger scrolt; de pen en de muis schrijven",
+  "A finger writes until a pen is used, then scrolls": "Een vinger schrijft tot er een pen gebruikt wordt, en scrolt dan",
+  "A finger writes; two fingers scroll": "Een vinger schrijft; twee vingers scrollen",
+  "Write with a finger: automatic": "Met een vinger schrijven: automatisch",
+  "Write with a finger: off": "Met een vinger schrijven: uit",
+  "Write with a finger: on": "Met een vinger schrijven: aan",
+  "Finger: automatic": "Vinger: automatisch",
+  "Finger: on": "Vinger: aan",
+  "Finger: off": "Vinger: uit"
 }

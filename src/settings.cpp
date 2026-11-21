@@ -21,6 +21,7 @@ namespace {
 // What a setting with a few words to choose from may be.
 constexpr std::array graphModes{"auto"_L1, "ask"_L1, "off"_L1};
 constexpr std::array markModes{"map"_L1, "always"_L1, "never"_L1};
+constexpr std::array fingerModes{"auto"_L1, "on"_L1, "off"_L1};
 constexpr std::array pluginUpdateModes{"auto"_L1, "tell"_L1, "never"_L1};
 constexpr std::array sorts{"recent"_L1, "title"_L1,  "author"_L1,    "series"_L1,  "added"_L1,
                            "progress"_L1, "rating"_L1, "published"_L1, "finished"_L1};
@@ -129,6 +130,16 @@ QString Settings::marks() const {
 void Settings::setMarks(const QString &mode) {
     if (std::ranges::contains(markModes, mode))
         set("marks", mode);
+}
+
+QString Settings::inkFingers() const {
+    const QString mode = m_values.value("ink_fingers").toString();
+    return std::ranges::contains(fingerModes, mode) ? mode : QString("auto");
+}
+
+void Settings::setInkFingers(const QString &mode) {
+    if (std::ranges::contains(fingerModes, mode))
+        set("ink_fingers", mode);
 }
 
 void Settings::setPaneWidth(const QString &pane, int width) {

@@ -24,6 +24,14 @@ Item {
         backend.say(reader.ink.inking ? qsTr("Writing on the pages: the pen's other end erases")
                                       : qsTr("Reading the pages"))
     }
+    // Whether a finger writes (#134): until a pen is used, always, never, and round again; kept.
+    function cycleFingers() {
+        const next = reader.ink.fingers === "auto" ? "on" : reader.ink.fingers === "on" ? "off" : "auto"
+        reader.ink.fingers = next
+        backend.say(next === "on" ? qsTr("A finger writes; two fingers scroll")
+                  : next === "off" ? qsTr("A finger scrolls; the pen and the mouse write")
+                  : qsTr("A finger writes until a pen is used, then scrolls"))
+    }
     function noPages() {
         backend.say(qsTr("Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note."))
     }
@@ -52,8 +60,9 @@ Item {
         onActivated: reader.ink.redo()
     }
 
-    // What the pen writes with, while it writes: the pen or the eraser, the
-    // ink's colour, a step back and on again, and done.
+    // What the pen writes with, while it writes: the pen or the eraser,
+    // whether a finger writes too, the ink's colour, a step back and on
+    // again, and done.
     Rectangle {
         id: bar
         objectName: "inkBar"
@@ -62,7 +71,7 @@ Item {
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
         // Its tools in a row where there is room, wrapped in a narrow window.
-        width: Math.min(parent.width - 16, win.touch ? 680 : 600)
+        width: Math.min(parent.width - 16, win.touch ? 860 : 760)
         height: tools.implicitHeight + 12
         radius: theme.radius
         color: theme.background
@@ -89,6 +98,19 @@ Item {
                 focusPolicy: Qt.NoFocus
                 primary: reader.ink.erasing
                 onClicked: reader.ink.erasing = true
+            }
+            AppButton {
+                objectName: "inkFingers"
+                readonly property string said: reader.ink.fingers === "on" ? qsTr("Write with a finger: on")
+                                             : reader.ink.fingers === "off" ? qsTr("Write with a finger: off")
+                                             : qsTr("Write with a finger: automatic")
+                text: reader.ink.fingers === "on" ? qsTr("Finger: on") : reader.ink.fingers === "off" ? qsTr("Finger: off") : qsTr("Finger: automatic")
+                focusPolicy: Qt.NoFocus
+                Accessible.name: said
+                ToolTip.visible: hovered
+                ToolTip.delay: 500
+                ToolTip.text: said
+                onClicked: pen.cycleFingers()
             }
             Repeater {
                 model: reader.ink.colors

@@ -2145,5 +2145,14 @@
   "Kept private": "Privados",
   "Share %1 in the spaces it is in? Its details go to everyone they reach, and as their parts say, its file and what you know and wrote of it. You can keep it private again; what others have of it by then stays theirs.": "¿Compartir %1 en los espacios en los que está? Sus datos llegan a todos los que alcanzan y, según sus partes, también su archivo y lo que usted sabe y escribió de él. Puede volver a mantenerlo privado; lo que otros tengan de él para entonces se queda con ellos.",
   "Share it": "Compartirlo",
-  "Share it…": "Compartirlo…"
+  "Share it…": "Compartirlo…",
+  "A finger scrolls; the pen and the mouse write": "Un dedo desplaza; la pluma y el mouse escriben",
+  "A finger writes until a pen is used, then scrolls": "Un dedo escribe hasta que se usa una pluma; después desplaza",
+  "A finger writes; two fingers scroll": "Un dedo escribe; dos dedos desplazan",
+  "Write with a finger: automatic": "Escribir con el dedo: automático",
+  "Write with a finger: off": "Escribir con el dedo: no",
+  "Write with a finger: on": "Escribir con el dedo: sí",
+  "Finger: automatic": "Dedo: automático",
+  "Finger: on": "Dedo: sí",
+  "Finger: off": "Dedo: no"
 }

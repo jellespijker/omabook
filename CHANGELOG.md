@@ -20,6 +20,12 @@ moves those lines under its version.
 - A plugin's files (#131): `omabook.files.writeBytes` and `files.write` keep pictures and sounds under the plugin's `data/` folder as bytes (an ArrayBuffer, a typed array, or base64), and `files.readBytes` and `files.readBase64` read them back; a file holds at most 64 MB and the folder 1 GB (`files.usage()`). `omabook.ui.pickFile({kinds, multiple})` asks you for a file with the desktop's own dialog, and `omabook.ui.clipboard` (the new `clipboard` permission) reads and writes text and pictures, both only right after you did something of that plugin's: ran one of its commands or used its view. Everything under a plugin's `data/` folder now goes to your other computers at a sync, as books do: each file once, by its content, where that plugin is installed too, and a file it removes is removed there; its `settings.json` and what is over the limits stay where they are, and none of it goes into a shared space. `omabook plugin run <name> <what> -` reads the JSON from standard input, for more than a command line holds.
 - A plugin can keep its books private (#127): with `"private": ["omanotebook"]` in its plugin.json, its books (a notebook) stay in your own collections and go to your other computers, but nothing of them goes into a shared or published space, also when a collection's rule takes them in, until you let one go. Publishing says which stay out and why, and *Share it…* asks once more before one goes; *Keep it private* undoes it, and a space you publish then takes it back. `omabook spaces private` lists them, `omabook spaces private <book> share|keep` chooses, and `collections share` and `spaces create|sync` say what was kept out. Once said, a kind stays private after its plugin is removed.
 
+## [0.1.10.1] - 2026-11-21
+
+### Fixed
+
+- A finger writes on the pages of a PDF or a comic (#134): with D on, a finger moved the page and drew nothing. Now one finger writes and draws until a pen has been used, two fingers scroll and zoom, and once a pen is used a finger scrolls, so a palm doesn't scribble. *Write with a finger* in the writing bar makes it automatic, on or off, and the choice is kept; a handwritten margin note being edited does the same.
+
 ## [0.1.10] - 2026-11-21
 
 ### Added

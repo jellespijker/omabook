@@ -429,10 +429,10 @@ Item {
 
                 TapHandler {
                     acceptedDevices: PointerDevice.TouchScreen
-                    onLongPressed: view.pressedLongAt(point.position.x, point.position.y)
+                    onLongPressed: if (!reader.ink.touched()) view.pressedLongAt(point.position.x, point.position.y)
                     onTapped: (point) => {
                         win.touchSeen = true
-                        if (!view.content) return
+                        if (!view.content || reader.ink.touched(point.timestamp)) return
                         if (menu.shown) {
                             menu.close()
                             return
