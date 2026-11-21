@@ -4,6 +4,7 @@
 #include <QHash>
 #include <QPointF>
 #include <QQuickItem>
+#include <QRectF>
 #include <QSet>
 #include <QTimer>
 #include <QVariantMap>
@@ -124,6 +125,10 @@ public:
     // (`{add, remove}`, as `inked` sends), not as an edit. False, and nothing
     // taken, when a stroke of it can't be read.
     Q_INVOKABLE bool apply(const QVariantMap &batch);
+    // Where each stroke is, {id: rect}, and where one is (an empty rect for
+    // none), in item pixels with its line's width, as `selection.box` is (#133).
+    Q_INVOKABLE QVariantMap bounds() const;
+    Q_INVOKABLE QRectF boundsOf(const QString &id) const;
     // Every stroke as one base64 text (Ink::encodeAll), and back.
     Q_INVOKABLE QString snapshot() const;
     Q_INVOKABLE bool restore(const QString &snapshot);

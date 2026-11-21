@@ -3,6 +3,8 @@
 #include <QColor>
 #include <QObject>
 #include <QRectF>
+#include <QStringList>
+#include <QVariantMap>
 
 #include <functional>
 
@@ -22,6 +24,8 @@ class InkSelection : public QObject {
     Q_OBJECT
     Q_PROPERTY(int count READ count NOTIFY changed)
     Q_PROPERTY(QRectF box READ box NOTIFY changed)
+    // The selected strokes' ids, in the order they lie (#133).
+    Q_PROPERTY(QStringList ids READ ids NOTIFY changed)
     // What the lasso and the box are drawn in: the theme's, given by whoever shows the surface.
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY colorChanged)
 
@@ -31,6 +35,7 @@ public:
 
     [[nodiscard]] int count() const { return static_cast<int>(m_lasso->selection().size()); }
     [[nodiscard]] QRectF box() const;
+    [[nodiscard]] QStringList ids() const { return m_lasso->selection(); }
     [[nodiscard]] QColor color() const { return m_color; }
     void setColor(const QColor &color);
     // Item pixels to an ink unit, and whether the selection may be changed: the surface's own.
@@ -38,6 +43,11 @@ public:
     void setReadOnly(bool readOnly);
 
     Q_INVOKABLE void selectAll();
+    // These strokes, those of them that are there (#133).
+    Q_INVOKABLE void select(const QStringList &ids) { m_lasso->select(ids); }
+    // The selected strokes, {id: base64}, as InkSurface.strokes() and
+    // `omabook.recognize.ink` take them (#133).
+    Q_INVOKABLE QVariantMap strokes() const;
     // Nothing selected.
     Q_INVOKABLE void clear();
     // By so many item pixels.
@@ -75,4 +85,5 @@ private:
     bool m_readOnly = false;
     int m_shownCount = 0;
     QRectF m_shownBox;
+    QStringList m_shownIds;
 };

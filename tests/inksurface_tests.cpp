@@ -12,6 +12,7 @@
 #include <QPointingDevice>
 #include <QQmlContext>
 #include <QQmlEngine>
+#include <QQmlExpression>
 #include <QQuickItem>
 #include <QQuickView>
 #include <QSGRendererInterface>
@@ -870,6 +871,50 @@ InkSurface {
         bench.surface->setReadOnly(true);
         selection->remove();
         QCOMPARE(bench.surface->count(), 3);
+    }
+
+    // A plugin is told where each stroke is and what the lasso selected
+    // (#133), in item pixels, from QML, without reading the strokes' bytes.
+    void aPluginIsToldWhereStrokesAreAndWhatIsSelected() {
+        Bench bench;
+        bench.surface->setInkScale(2.0);
+        bench.stroke(devices().pen, QPointF(100, 100), QPointF(300, 100));
+        bench.stroke(devices().pen, QPointF(100, 300), QPointF(300, 300));
+        std::ignore = bench.pause();
+        const QString first = beginningAt(*bench.surface, QPointF(50, 50)).front();
+        const auto ask = [&bench](const QString &code) {
+            QQmlExpression expression(qmlContext(bench.surface), bench.surface, code);
+            const QVariant answer = expression.evaluate();
+            const QString wrong = expression.hasError() ? expression.error().toString() : QString();
+            [&] { QVERIFY2(wrong.isEmpty(), qPrintable(wrong)); }();
+            return answer;
+        };
+        const QVariantMap bounds = ask(u"bounds()"_s).toMap();
+        QCOMPARE(bounds.size(), 2);
+        const QRectF where = bounds.value(first).toRectF();
+        QVERIFY(where.contains(QRectF(100, 99, 200, 2)));
+        QVERIFY(!where.contains(QPointF(100, 300)));
+        QCOMPARE(ask(u"boundsOf(\"%1\")"_s.arg(first)).toRectF(), where);
+        QCOMPARE(ask(u"boundsOf(\"nothing\")"_s).toRectF(), QRectF());
+
+        QSignalSpy told(bench.surface->selection(), &InkSelection::changed);
+        bench.surface->setTool(InkSurface::Tool::Lasso);
+        bench.mouseLoop({{80, 80}, {320, 80}, {320, 140}, {80, 140}});
+        QCOMPARE(ask(u"selection.ids"_s).toStringList(), QStringList{first});
+        QCOMPARE(ask(u"selection.box"_s).toRectF(), where);
+        // What recognize.ink takes: {id: base64}, the stroke itself.
+        const QVariantMap selected = ask(u"selection.strokes()"_s).toMap();
+        QCOMPARE(selected.keys(), QStringList{first});
+        QCOMPARE(selected.value(first), bench.surface->strokes().value(first));
+        ask(u"selection.select(Object.keys(bounds()))"_s);
+        QCOMPARE(ask(u"selection.ids.length"_s).toInt(), 2);
+        // A stroke recoloured is another: its id changes where the box doesn't, and that is told.
+        ask(u"selection.select([\"%1\"])"_s.arg(first));
+        const auto before = told.size();
+        ask(u"selection.recolor(\"red\")"_s);
+        QVERIFY(told.size() > before);
+        QVERIFY(!ask(u"selection.ids"_s).toStringList().contains(first));
+        QCOMPARE(ask(u"selection.box"_s).toRectF(), where);
     }
 
     // What is drawn is where the strokes are: dark along a line, light

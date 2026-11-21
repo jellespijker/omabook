@@ -171,6 +171,24 @@ bool InkSurface::apply(const QVariantMap &batch) {
     return true;
 }
 
+QVariantMap InkSurface::bounds() const {
+    QVariantMap each;
+    for (const Ink::Stroke &stroke : m_sheet.strokes()) {
+        const QRectF rect = Ink::bounds(stroke);
+        each.insert(stroke.id, QRectF(rect.topLeft() * m_inkScale, rect.size() * m_inkScale));
+    }
+    return each;
+}
+
+QRectF InkSurface::boundsOf(const QString &id) const {
+    const Ink::Stroke *stroke = m_sheet.find(id);
+    if (stroke == nullptr) {
+        return {};
+    }
+    const QRectF rect = Ink::bounds(*stroke);
+    return {rect.topLeft() * m_inkScale, rect.size() * m_inkScale};
+}
+
 QString InkSurface::snapshot() const { return QString::fromLatin1(Ink::encodeAll(m_sheet.strokes()).toBase64()); }
 
 bool InkSurface::restore(const QString &snapshot) {

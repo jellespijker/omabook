@@ -28,7 +28,10 @@ QList<Entry> uiEntries() {
          "the view and put it away again: in the help, keys.json and the shelf's and the page's ⋯. In it, Backspace "
          "goes back (`view.back`) and Escape closes it (`view.close`), and commands of `place: \"view\"` work while it "
          "has the keyboard. The view sees what a panel sees, and `import Omabook` gives it `InkSurface`, the pen's page "
-         "(#78). Omabook sets these on its root item, where it declares them: `beside` (true beside the page), `args` "
+         "(#78): `bounds()` says where each stroke is (`{id: rect}`, in item pixels; `boundsOf(id)` one), and its "
+         "lasso's `selection` the strokes selected (`ids`, `box`, `strokes()` as `{id: base64}` for "
+         "`omabook.recognize.ink`, `select(ids)`), so a plugin never reads the strokes' bytes itself. Omabook sets these on its root item, "
+         "where it declares them: `beside` (true beside the page), `args` "
          "(what `ui.showView` was given; `{}` from a key). It calls `back()` on it, where there is one, before the view "
          "is closed: answering true means it went back within itself; and `takeFocus()` when the view gets the keyboard. "
          "The same `id` again replaces the view."},

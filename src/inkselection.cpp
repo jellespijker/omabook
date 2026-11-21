@@ -2,6 +2,7 @@
 
 #include <QClipboard>
 #include <QGuiApplication>
+#include <QJsonObject>
 #include <QKeyEvent>
 #include <QMimeData>
 #include <QQuickItem>
@@ -74,6 +75,8 @@ void InkSelection::setReadOnly(bool readOnly) {
 void InkSelection::selectAll() { m_lasso->selectAll(); }
 
 void InkSelection::clear() { m_lasso->deselect(); }
+
+QVariantMap InkSelection::strokes() const { return Ink::items(m_lasso->selected()).toVariantMap(); }
 
 void InkSelection::moveBy(double dx, double dy) {
     if (!m_readOnly) {
@@ -189,13 +192,15 @@ void InkSelection::edit(Ink::Change change) {
 void InkSelection::told() {
     const int now = count();
     const QRectF where = box();
-    if (now != m_shownCount || where != m_shownBox) {
+    // A stroke recoloured is another stroke in the same place.
+    if (now != m_shownCount || where != m_shownBox || ids() != m_shownIds) {
         // The lasso selecting takes the keyboard, for what is selected.
         if (m_shownCount == 0 && now > 0 && !m_readOnly) {
             m_surface->forceActiveFocus(Qt::OtherFocusReason);
         }
         m_shownCount = now;
         m_shownBox = where;
+        m_shownIds = ids();
         emit changed();
     }
     m_surface->update();
