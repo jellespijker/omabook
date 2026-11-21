@@ -107,7 +107,8 @@ struct Bench {
             chapter += "<p>" + story + "</p>";
         const bool made =
             format == "pdf"
-                ? Fixtures::pdf(path, "The Ferry", {"The harbour master counted the crates twice. Mira watched.", "The lantern went out."})
+                ? Fixtures::pdf(path, "The Ferry",
+                                {"The harbour master counted the crates twice. Mira\nwatched the lan-\ntern.", "The lantern went out."})
                 : Fixtures::chapteredEpub(
                       path, "The Ferry",
                       {{"The Island", "<p>" + longWords + "</p>" + chapter}, {"The Pier", "<p>The pier was empty.</p>"}});
@@ -174,6 +175,22 @@ private slots:
         QCOMPARE(wordsOf(text, Sentences::of(text)), (QStringList{"Mira watched.", "The lantern swung!", "Did it go out?", "Chapter Two",
                                                                   "“It rained,” she said.", "Then it stopped."}));
         QVERIFY(Sentences::of(u"  \n * * * \n").isEmpty());
+    }
+    // A page of a PDF breaks its lines where they were full: a sentence goes on over them, a word hyphenated
+    // over two is said whole, and only a line well short of the others (a heading, a paragraph's end) ends one.
+    void aPagesLinesAreNotItsSentences() {
+        const QString page = "It was late in the autumn when the ferry came back for\nMira and the harbour master. She\n"
+                             "watched the lan-\ntern on the far pier go out.\nChapter Two\nIt rained.";
+        const auto sentences = Sentences::of(page, Sentences::Lines::Wrap);
+        QStringList said;
+        for (const auto &sentence : sentences)
+            said << Sentences::words(page, sentence, Sentences::Lines::Wrap);
+        QCOMPARE(said, (QStringList{"It was late in the autumn when the ferry came back for Mira and the harbour master.",
+                                    "She watched the lantern on the far pier go out.", "Chapter Two", "It rained."}));
+        // Where they are on the page is where they are in its text, line breaks and all.
+        QCOMPARE(wordsOf(page, sentences).at(1), QString("She\nwatched the lan-\ntern on the far pier go out."));
+        // A flowing book's line break still ends what is read.
+        QCOMPARE(Sentences::of(page).size(), 7);
     }
     // One without a stop for pages on end is read in pieces cut where it pauses.
     void aLongSentenceIsCutWhereItPauses() {
@@ -412,7 +429,8 @@ private slots:
         QVERIFY(bench.desk.find("highlightRect"));
         bench.desk.shot("read-aloud-justified");
     }
-    // A PDF is read a page at a time, its sentence marked over the page's words, and the pages turn.
+    // A PDF is read a page at a time, its sentence marked over the page's words, and the pages turn; a
+    // sentence broken over its lines, a word over two with a hyphen, is read as one.
     void aPdfIsReadPageByPage() {
         Bench bench("pdf");
         bench.key(Qt::Key_R);
@@ -421,6 +439,8 @@ private slots:
         QTRY_VERIFY(!bench.marked().isEmpty());
         bench.desk.shot("read-aloud-pdf");
         bench.voice->finish();
+        QCOMPARE(bench.voice->said.last(), QString("Mira watched the lantern."));
+        QTRY_VERIFY(!bench.marked().isEmpty());
         bench.voice->finish();
         QCOMPARE(bench.voice->said.last(), QString("The lantern went out."));
         QTRY_COMPARE(bench.desk.reader->section(), 1);
