@@ -7,6 +7,9 @@
 #include <QStringList>
 #include <QVariantMap>
 #include <algorithm>
+#include <initializer_list>
+
+#include "aicapability.h"
 
 // The user's choices, kept in ~/.config/omabook/config.json and written
 // atomically on every change. Tests pass their own file.
@@ -193,9 +196,12 @@ public:
 
     // "auto" (Omarchy's default agent), a harness by name ("claude", "codex",
     // "agy", "grok", "pi"), "anthropic", "openai" (a server), "command" or
-    // "off"; see AiChoice in ai.h.
-    QString aiProvider() const { return m_values.value("ai_provider").toString("auto"); }
-    void setAiProvider(const QString &provider) { set("ai_provider", provider); }
+    // "off"; see AiChoice in ai.h. A config.json written new answers with
+    // a server of one's own ("openai"), one that is older with "auto".
+    QString aiProvider() const;
+    // Also the provider of answers and quick in `capabilities`, with hosted
+    // allowed for them: chosen in the settings is chosen for them (ADR 0008).
+    void setAiProvider(const QString &provider);
     // Off: nothing is asked of any model, on whatever server (#133): no
     // answers, no recognition, no embeddings.
     bool aiOff() const { return aiProvider() == "off"; }
@@ -218,7 +224,8 @@ public:
     // chosen for it, which addresses are one's own, and whether a hosted
     // server may be sent them at all; see RecognitionRoute.
     QJsonObject recognition() const { return m_values.value("recognition").toObject(); }
-    void setRecognition(const QJsonObject &chosen) { set("recognition", chosen); }
+    // Its "hosted" is also handwriting's and speech to text's in `capabilities`.
+    void setRecognition(const QJsonObject &chosen);
     bool recognitionHosted() const { return recognition().value("hosted").toBool(false); }
     void setRecognitionHosted(bool on) {
         QJsonObject chosen = recognition();
@@ -231,7 +238,8 @@ public:
     // server may be sent a book's text at all, and "all", whether every book
     // is indexed rather than only those asked for; see Embeddings.
     QJsonObject meaning() const { return m_values.value("meaning").toObject(); }
-    void setMeaning(const QJsonObject &chosen) { set("meaning", chosen); }
+    // Its "hosted" is also embeddings' in `capabilities`.
+    void setMeaning(const QJsonObject &chosen);
     bool meaningHosted() const { return meaning().value("hosted").toBool(false); }
     void setMeaningHosted(bool on) { setMeaningChoice("hosted", on); }
     bool meaningAll() const { return meaning().value("all").toBool(false); }
@@ -240,7 +248,8 @@ public:
     // "speech-dispatcher" or "server"), "rate", "voice", "piper_program",
     // and the server's "url", "model" and "hosted"; see Voices.
     QJsonObject readAloud() const { return m_values.value("read_aloud").toObject(); }
-    void setReadAloud(const QJsonObject &chosen) { set("read_aloud", chosen); }
+    // Its "hosted" is also text to speech's in `capabilities`.
+    void setReadAloud(const QJsonObject &chosen);
     void setMeaningChoice(const QString &key, const QJsonValue &value) {
         QJsonObject chosen = meaning();
         if (value.isNull() || (value.isString() && value.toString().trimmed().isEmpty()))
@@ -249,6 +258,20 @@ public:
             chosen.insert(key, value);
         setMeaning(chosen);
     }
+
+    // Each capability's provider and whether it may be hosted (ADR 0008; see
+    // aicapability.h), kept under "capabilities". A config.json from before
+    // them has none until AiPrivacy::carryOver writes them from the older
+    // keys, which stay as they are for an older Omabook on the same file.
+    bool hasCapabilities() const { return m_values.contains("capabilities"); }
+    // Whether config.json is there yet: Omabook has started here before.
+    bool written() const;
+    QJsonObject capabilities() const { return m_values.value("capabilities").toObject(); }
+    void setCapabilities(const QJsonObject &chosen) { set("capabilities", chosen); }
+    QJsonObject capability(Capability capability) const { return capabilities().value(Capabilities::name(capability)).toObject(); }
+    // The addresses of servers the person calls their own, for every
+    // capability (`recognition`'s "own", where they were first kept).
+    QStringList ownAddresses() const;
 
     // How the knowledge graph of a book grows: "auto" (by itself, as chapters
     // are finished and with every catch-up, which costs AI calls), "ask"
@@ -318,6 +341,8 @@ signals:
 
 private:
     void set(const QString &key, const QJsonValue &value);
+    // Puts `fields` into each of these capabilities, when there are capabilities yet.
+    void followInCapabilities(std::initializer_list<Capability> which, const QJsonObject &fields);
     int number(QAnyStringView key) const;
     void setNumber(QAnyStringView key, int value);
     void save();

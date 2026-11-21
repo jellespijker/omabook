@@ -3,17 +3,20 @@
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QtConcurrent/QtConcurrentRun>
 #include <expected>
 #include <vector>
 
 #include "aicall.h"
-#include "aireach.h"
+#include "airegistry.h"
+#include "embeddings.h"
 #include "failure.h"
 #include "inkcodec.h"
 #include "recognitionqueue.h"
-#include "recognitionroute.h"
 #include "scriptplugin.h"
 #include "settings.h"
+#include "voice.h"
+#include "voices.h"
 
 using namespace Qt::StringLiterals;
 
@@ -74,6 +77,31 @@ constexpr auto assistName = "omabook-api/assist";
     return strokes;
 }
 
+// The capability the options name: the one said, else quick for the model "quick", else answers.
+[[nodiscard]] std::optional<Capability> capabilityOf(const QJsonObject &options) {
+    if (const QString named = options.value("capability"_L1).toString(); !named.isEmpty())
+        return Capabilities::named(named);
+    return options.value("model"_L1).toString().trimmed() == "quick"_L1 ? Capability::Quick : Capability::Answers;
+}
+
+[[nodiscard]] bool answering(Capability capability) { return capability == Capability::Answers || capability == Capability::Quick; }
+
+// What a plugin said of hosted providers, as the rule takes it (ADR 0008):
+// for answers and quick, where it sends a prompt it wrote, saying nothing
+// takes the person's choice; for the other four, where it sends the person's
+// own material whole, only `hosted: true` asks for a hosted one.
+[[nodiscard]] AiPrivacy::HostedAsked hostedAsked(Capability capability, const QJsonObject &options) {
+    const QJsonValue said = options.value("hosted"_L1);
+    if (answering(capability))
+        return said.isBool() ? AiPrivacy::HostedAsked(said.toBool()) : std::nullopt;
+    return said.toBool(false);
+}
+
+[[nodiscard]] QVariantMap unavailable(const QString &capability, const QString &why, const QString &message) {
+    return {{u"capability"_s, capability}, {u"available"_s, false}, {u"hosted"_s, false}, {u"provider"_s, QString()},
+            {u"model"_s, QString()},       {u"why"_s, why},          {u"message"_s, message}};
+}
+
 } // namespace
 
 ScriptAi::ScriptAi(ScriptPlugin *plugin) : m_plugin(plugin) {}
@@ -90,41 +118,67 @@ QJSValue ScriptAi::build(QJSEngine &engine) {
 
 bool ScriptAi::available() { return m_plugin->m_services.ai && m_plugin->m_services.ai(nullptr) != nullptr; }
 
-ScriptAi::Reach ScriptAi::reach(const QJsonObject &options, std::unique_ptr<AiProvider> *provider) {
-    // The model to ask is the one the settings choose, which is none with the AI set to Off.
+QVariantMap ScriptAi::statusOf(Capability capability, const QJsonObject &options, std::unique_ptr<AiProvider> *provider) {
     const Settings *settings = m_plugin->m_services.settings;
-    QString why = u"No AI is set up."_s;
+    const QString named = Capabilities::name(capability);
+    QVariantMap status;
+    if (settings) {
+        const AiRegistry::Ask ask{.model = options.value("model"_L1).toString(), .hosted = hostedAsked(capability, options)};
+        status = AiRegistry::status(*settings, capability, ask).toJson().toVariantMap();
+    } else if (!answering(capability)) {
+        return unavailable(named, u"no-settings"_s, tr("Nothing can be asked here: Omabook's settings aren't open."));
+    } else if (options.value("hosted"_L1).toBool(true)) {
+        // Where it can't be told, it is taken for someone else's.
+        status = {{u"capability"_s, named}, {u"available"_s, true}, {u"hosted"_s, true}, {u"provider"_s, QString()},
+                  {u"model"_s, QString()},  {u"why"_s, QString()},  {u"message"_s, QString()}};
+    } else {
+        status = unavailable(named, Capabilities::lackName(CapabilityLack::HostedNotChosen),
+                             tr("The AI you chose is someone else's computer, and this plugin asks only your own."));
+    }
+    if (!answering(capability))
+        return status;
+    // The privacy rule and AI Off are the registry's to say; whether there is
+    // a model is the one the plugin is handed (the window's, a command's, a test's).
+    const QString lack = status.value(u"why"_s).toString();
+    if (lack == Capabilities::lackName(CapabilityLack::AiOff) || lack == Capabilities::lackName(CapabilityLack::HostedNotAllowed)
+        || lack == Capabilities::lackName(CapabilityLack::HostedNotChosen))
+        return status;
+    QString why = tr("No AI is set up.");
     std::unique_ptr<AiProvider> made = m_plugin->m_services.ai ? m_plugin->m_services.ai(&why) : nullptr;
-    if (!made && settings && settings->aiOff())
-        return {.available = false, .hosted = false, .why = u"ai-off"_s, .message = ::Failure(::Failure::Code::AiOff).text()};
     if (!made)
-        return {.available = false, .hosted = false, .why = u"no-server"_s, .message = why};
-    // Where it can't be told, it is taken for someone else's.
-    const bool hosted = settings == nullptr || AiReach::hosted(*settings, options.value("model"_L1).toString());
-    if (hosted && options.contains("hosted"_L1) && !options.value("hosted"_L1).toBool())
-        return {.available = false,
-                .hosted = true,
-                .why = u"hosted-not-chosen"_s,
-                .message = tr("The AI you chose, %1, is someone else's computer, and this plugin asks only your own.").arg(made->name())};
+        return unavailable(named, lack.isEmpty() ? Capabilities::lackName(CapabilityLack::NoServer) : lack, why);
+    status.insert(u"available"_s, true);
+    status.insert(u"why"_s, QString());
+    status.insert(u"message"_s, QString());
     if (provider)
         *provider = std::move(made);
-    return {.available = true, .hosted = hosted, .why = {}, .message = {}};
+    return status;
 }
 
 QVariantMap ScriptAi::status(const QString &options) {
-    const Reach found = reach(QJsonDocument::fromJson(options.toUtf8()).object());
-    return {{u"available"_s, found.available}, {u"hosted"_s, found.hosted}, {u"why"_s, found.why}, {u"message"_s, found.message}};
+    const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    const auto capability = capabilityOf(chosen);
+    if (!capability)
+        return unavailable(chosen.value("capability"_L1).toString(), u"unknown-capability"_s,
+                           tr("Omabook has no capability called %1.").arg(chosen.value("capability"_L1).toString()));
+    return statusOf(*capability, chosen);
 }
 
 void ScriptAi::ask(const QString &prompt, const QString &options, const QJSValue &onText, const QJSValue &resolve, const QJSValue &reject) {
     const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    const auto capability = capabilityOf(chosen);
+    if (!capability || !answering(*capability)) {
+        reject.call({tr("ai.ask asks for answers or quick work; %1 is asked otherwise.").arg(chosen.value("capability"_L1).toString())});
+        return;
+    }
     std::unique_ptr<AiProvider> provider;
-    if (const Reach found = reach(chosen, &provider); !found.available) {
-        reject.call({found.message});
+    if (const QVariantMap found = statusOf(*capability, chosen, &provider); !found.value(u"available"_s).toBool()) {
+        reject.call({found.value(u"message"_s).toString()});
         return;
     }
     const QString system = chosen.value("system"_L1).toString();
-    const QString model = chosen.value("model"_L1).toString();
+    const QString word = chosen.value("model"_L1).toString();
+    const QString model = word.isEmpty() && *capability == Capability::Quick ? u"quick"_s : word;
     auto *asking = new AiCall(std::move(provider), m_plugin);
     m_plugin->busy(1);
     const auto finish = [this, asking](const QJSValue &callback, const QString &text) {
@@ -155,19 +209,19 @@ void ScriptAi::ask(const QString &prompt, const QString &options, const QJSValue
 bool ScriptAi::recognizes(const QString &kind, bool hosted) { return recognition(kind, hosted).value(u"available"_s).toBool(); }
 
 QVariantMap ScriptAi::recognition(const QString &kind, bool hosted) {
-    const auto unavailable = [](const QString &why, const QString &message) {
-        return QVariantMap{{u"available"_s, false}, {u"why"_s, why}, {u"message"_s, message}};
-    };
     const auto named = Recognition::kindNamed(kind);
     if (!named)
-        return unavailable(u"unknown-kind"_s, tr("Only ink and audio are recognised, not %1.").arg(kind));
+        return unavailable({}, u"unknown-kind"_s, tr("Only ink and audio are recognised, not %1.").arg(kind));
+    const Capability capability = *named == Recognition::Kind::Ink ? Capability::Handwriting : Capability::SpeechToText;
     if (m_plugin->m_services.settings == nullptr)
-        return unavailable(u"no-settings"_s, tr("Nothing can be recognised here: Omabook's settings aren't open."));
-    if (const auto refused = RecognitionRoute::refusal(*m_plugin->m_services.settings, *named, hosted))
-        return unavailable(RecognitionRoute::lackName(refused->lack), refused->message);
+        return unavailable(Capabilities::name(capability), u"no-settings"_s,
+                           tr("Nothing can be recognised here: Omabook's settings aren't open."));
+    const QVariantMap status = statusOf(capability, {{u"hosted"_s, hosted}});
+    if (!status.value(u"available"_s).toBool())
+        return status;
     if (const auto lacking = m_queue ? m_queue->lacking(*named, hosted) : std::nullopt)
-        return unavailable(RecognitionRoute::lackName(RecognitionRoute::Lack::NoModel), *lacking);
-    return {{u"available"_s, true}, {u"why"_s, QString()}, {u"message"_s, QString()}};
+        return unavailable(Capabilities::name(capability), Capabilities::lackName(CapabilityLack::NoModel), *lacking);
+    return status;
 }
 
 int ScriptAi::ink(const QString &strokes, const QString &options, const QJSValue &onWaiting, const QJSValue &resolve,
@@ -230,4 +284,82 @@ RecognitionQueue *ScriptAi::queue() {
         m_queue =
             std::make_unique<RecognitionQueue>(RecognitionQueue::routeFor(*m_plugin->m_services.settings), m_plugin->m_services.library);
     return m_queue.get();
+}
+
+void ScriptAi::speak(const QString &text, const QString &options, const QJSValue &resolve, const QJSValue &reject) {
+    const Settings *settings = m_plugin->m_services.settings;
+    if (settings == nullptr) {
+        reject.call({tr("Nothing can be read aloud here: Omabook's settings aren't open.")});
+        return;
+    }
+    const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    // A local voice reads with the AI Off too: it only reads the text (ADR 0008).
+    auto voice = AiRegistry::voice(*settings, hostedAsked(Capability::TextToSpeech, chosen));
+    if (!voice) {
+        reject.call({voice.error().text()});
+        return;
+    }
+    stopSpeaking();
+    m_voice = std::move(*voice);
+    m_spoken = resolve;
+    m_notSpoken = reject;
+    m_plugin->busy(1);
+    connect(m_voice.get(), &Voice::spoken, this, [this] { settleSpeech({}); });
+    connect(m_voice.get(), &Voice::failed, this, [this](const Failure &why) { settleSpeech(why.text()); });
+    m_voice->say(text, Voices::speech(*settings, chosen.value("language"_L1).toString()));
+}
+
+void ScriptAi::stopSpeaking() {
+    if (!m_voice)
+        return;
+    m_voice->stop();
+    // Stopped is not a failure: the promise is kept, as for a sentence read.
+    settleSpeech({});
+}
+
+void ScriptAi::settleSpeech(const QString &why) {
+    if (!m_voice)
+        return;
+    // Its signal may still be on the way out of it: let it go once that is done.
+    m_voice->disconnect(this);
+    m_voice.release()->deleteLater();
+    const QJSValue told = why.isEmpty() ? m_spoken : m_notSpoken;
+    m_spoken = m_notSpoken = QJSValue();
+    told.call(why.isEmpty() ? QJSValueList() : QJSValueList{why});
+    m_plugin->busy(-1);
+}
+
+void ScriptAi::embed(const QString &texts, const QString &options, const QJSValue &resolve, const QJSValue &reject) {
+    const Settings *settings = m_plugin->m_services.settings;
+    if (settings == nullptr) {
+        reject.call({tr("Nothing can be embedded here: Omabook's settings aren't open.")});
+        return;
+    }
+    const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    const auto route = AiRegistry::embeddings(*settings, hostedAsked(Capability::Embeddings, chosen));
+    if (!route) {
+        reject.call({route.error().text()});
+        return;
+    }
+    QStringList given;
+    for (const auto &text : QJsonDocument::fromJson(texts.toUtf8()).array())
+        given << text.toString();
+    const auto use = chosen.value("use"_L1).toString() == "question"_L1 ? Embeddings::Use::Question : Embeddings::Use::Document;
+    m_plugin->busy(1);
+    QtConcurrent::run([route = *route, given, use] { return Embeddings::embed(route, given, use); })
+        .then(m_plugin, [this, resolve, reject](const std::expected<Embeddings::Vectors, Failure> &made) {
+            if (made) {
+                QJsonArray vectors;
+                for (const auto &vector : *made) {
+                    QJsonArray numbers;
+                    for (const float number : vector)
+                        numbers.append(double{number});
+                    vectors.append(numbers);
+                }
+                resolve.call({compact(QJsonObject{{u"vectors"_s, vectors}})});
+            } else {
+                reject.call({made.error().text()});
+            }
+            m_plugin->busy(-1);
+        });
 }

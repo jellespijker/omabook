@@ -320,6 +320,55 @@ void Settings::setAiModelFor(const QString &provider, const QString &tier, const
     set("ai_models", all);
 }
 
+QString Settings::aiProvider() const {
+    const bool local = capability(Capability::Answers).value("provider").toString() == "local";
+    return m_values.value("ai_provider").toString(local ? "openai" : "auto");
+}
+
+void Settings::setAiProvider(const QString &provider) {
+    set("ai_provider", provider);
+    if (provider != "off")
+        followInCapabilities({Capability::Answers, Capability::Quick},
+                             {{"provider", Capabilities::providerFor(provider)}, {"hosted", true}});
+}
+
+void Settings::setRecognition(const QJsonObject &chosen) {
+    set("recognition", chosen);
+    followInCapabilities({Capability::Handwriting, Capability::SpeechToText}, {{"hosted", chosen.value("hosted").toBool(false)}});
+}
+
+void Settings::setMeaning(const QJsonObject &chosen) {
+    set("meaning", chosen);
+    followInCapabilities({Capability::Embeddings}, {{"hosted", chosen.value("hosted").toBool(false)}});
+}
+
+void Settings::setReadAloud(const QJsonObject &chosen) {
+    set("read_aloud", chosen);
+    followInCapabilities({Capability::TextToSpeech}, {{"hosted", chosen.value("hosted").toBool(false)}});
+}
+
+void Settings::followInCapabilities(std::initializer_list<Capability> which, const QJsonObject &fields) {
+    if (!hasCapabilities())
+        return;
+    QJsonObject all = capabilities();
+    for (const Capability capability : which) {
+        QJsonObject one = all.value(Capabilities::name(capability)).toObject();
+        for (auto field = fields.begin(); field != fields.end(); ++field)
+            one.insert(field.key(), field.value());
+        all.insert(Capabilities::name(capability), one);
+    }
+    setCapabilities(all);
+}
+
+bool Settings::written() const { return QFileInfo::exists(m_file); }
+
+QStringList Settings::ownAddresses() const {
+    QStringList own;
+    for (const auto &address : recognition().value("own").toArray())
+        own << address.toString();
+    return own;
+}
+
 bool Settings::pluginEnabled(const QString &id, bool byDefault) const {
     return m_values.value("plugins").toObject().value(id).toBool(byDefault);
 }

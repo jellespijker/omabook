@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "aiendpoint.h"
+#include "aiprivacy.h"
 #include "failure.h"
 
 class Settings;
@@ -31,8 +32,10 @@ struct Route {
 };
 // The route the settings choose ("meaning" in config.json; Settings::meaning).
 // Fails when the AI is off, when there is no server, or the one there is may
-// not be sent a book's text.
-[[nodiscard]] std::expected<Route, Failure> route(const Settings &settings, const QString &omarchyProgram = {});
+// not be sent a book's text (AiPrivacy, for the embeddings capability).
+// Asked through AiRegistry::embeddings, as every use of a model is.
+[[nodiscard]] std::expected<Route, Failure> route(const Settings &settings, AiPrivacy::HostedAsked asked = std::nullopt,
+                                                  const QString &omarchyProgram = {});
 
 // What is embedded: a stretch of a book, or a question asked of it. Some
 // models are taught to tell the two apart by a word in front.

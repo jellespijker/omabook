@@ -4,7 +4,7 @@
 #include <algorithm>
 #include <utility>
 
-#include "ai.h"
+#include "airegistry.h"
 #include "pluginfilesync.h"
 #include "scriptplugins.h"
 
@@ -33,7 +33,7 @@ ScriptServices ScriptSession::services() {
     ScriptServices services;
     services.settings = m_context.settings;
     services.library = [this] { return library(); };
-    services.ai = [this](QString *why) { return makeAiProvider(*m_context.settings, why); };
+    services.ai = AiRegistry::answerer(*m_context.settings);
     services.network = &m_network;
     services.audio = m_context.audio;
     services.microphoneGranted = m_context.microphoneGranted;

@@ -17,13 +17,16 @@
         return options.hosted === true;
     }
 
-    // What `ai.status` and `ai.ask` are asked with: the model, and `hosted`
-    // only when it is said, true or false (left out, the person's choice stands).
+    // What `ai.status` and `ai.ask` are asked with: the capability, the
+    // model, and `hosted` only when it is said, true or false (left out, the
+    // person's choice stands for answers and quick; the others keep to their own).
     function asking(options) {
         if (options === undefined || options === null)
             return {model: ""};
         need(options, "object", "The options");
         var chosen = {model: String(options.model || "")};
+        if (options.capability !== undefined && options.capability !== null)
+            chosen.capability = String(options.capability);
         if (options.hosted !== undefined && options.hosted !== null)
             chosen.hosted = options.hosted === true;
         return chosen;
@@ -60,6 +63,33 @@
                 chosen.system = String(options.system || "");
                 return new Promise(function (resolve, reject) {
                     assist.ask(prompt, JSON.stringify(chosen), options.onText || null, resolve, reject);
+                });
+            },
+            // A promise kept when the text was read aloud, or stopped; stop() stops it.
+            speak: function (text, options) {
+                need(text, "string", "The text");
+                options = options === undefined || options === null ? {} : options;
+                need(options, "object", "The options");
+                var chosen = JSON.stringify({language: String(options.language || ""), hosted: options.hosted === true});
+                var promise = new Promise(function (resolve, reject) {
+                    assist.speak(text, chosen, function () { resolve(); }, reject);
+                });
+                promise.stop = function () { assist.stopSpeaking(); };
+                return promise;
+            },
+            stopSpeaking: function () { assist.stopSpeaking(); },
+            // A promise of each text's embedding, a list of numbers of length 1.
+            embed: function (texts, options) {
+                if (typeof texts === "string")
+                    texts = [texts];
+                if (!Array.isArray(texts))
+                    throw new TypeError("The texts should be a list of strings.");
+                options = options === undefined || options === null ? {} : options;
+                need(options, "object", "The options");
+                var given = JSON.stringify(texts.map(String));
+                var chosen = JSON.stringify({use: String(options.use || "document"), hosted: options.hosted === true});
+                return new Promise(function (resolve, reject) {
+                    assist.embed(given, chosen, function (json) { resolve(JSON.parse(json).vectors); }, reject);
                 });
             }
         },

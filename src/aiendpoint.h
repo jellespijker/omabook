@@ -4,6 +4,8 @@
 #include <expected>
 #include <span>
 
+#include "aicapability.h"
+
 class SecretStore;
 class Settings;
 
@@ -71,6 +73,8 @@ namespace AiEndpoints {
 // What `server` would say is missing, without asking Omarchy anything:
 // what the choice of AI says before a request is made. Empty when nothing is.
 [[nodiscard]] QString missing(const Settings &settings);
+// The same as a code: none, no server (or no address), not installed, no key.
+[[nodiscard]] CapabilityLack lacking(const Settings &settings);
 
 // The key kept for a server at this address, in the keyring (never in
 // config.json); empty for none. Putting an empty key forgets it.

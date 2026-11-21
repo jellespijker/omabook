@@ -15,18 +15,17 @@
 #include <QtConcurrent>
 #include <algorithm>
 
+#include "airegistry.h"
 #include "graphmodel.h"
 #include "importer.h"
 #include "sync.h"
 
-Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFactory ai, Catalogs catalogs,
-                 const QString &pluginFolder, const QString &calibreDebug)
-    : QObject(parent), m_settings(settings), m_picker(picker), m_aiFactory(std::move(ai)), m_catalogs(std::move(catalogs)),
-      m_plugins(settings, pluginFolder, calibreDebug) {
+Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFactory ai, Catalogs catalogs, const QString &pluginFolder,
+                 const QString &calibreDebug)
+    : QObject(parent), m_settings(settings), m_picker(picker), m_aiFactory(ai ? std::move(ai) : AiRegistry::answerer(*settings)),
+      m_catalogs(std::move(catalogs)), m_plugins(settings, pluginFolder, calibreDebug) {
     // The graph views are QML types of the app's own, known before any window loads.
     registerGraphTypes();
-    if (!m_aiFactory)
-        m_aiFactory = [settings](QString *why) { return makeAiProvider(*settings, why); };
     if (!m_catalogs)
         m_catalogs = [this](QObject *parent) {
             return m_plugins.sources(m_plugins.known(), &m_network, parent)

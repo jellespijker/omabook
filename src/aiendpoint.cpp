@@ -68,7 +68,13 @@ const AiEndpoint *AiEndpoints::find(const QString &id) {
     return row == endpoints.end() ? nullptr : &*row;
 }
 
-QString AiEndpoints::preset(const Settings &settings) { return settings.aiEndpoint().value("preset"_L1).toString(u"ollama"_s); }
+QString AiEndpoints::preset(const Settings &settings) {
+    // Local by default (ADR 0008): where nothing was chosen in a config.json
+    // written new, Omarchy's local models come before Ollama.
+    const bool local = settings.capability(Capability::Answers).value("provider"_L1).toString() == "local"_L1;
+    const QString fallback = local && OmarchyLocal::installed() ? u"omarchy-local"_s : u"ollama"_s;
+    return settings.aiEndpoint().value("preset"_L1).toString(fallback);
+}
 
 QString AiEndpoints::baseUrl(const Settings &settings) {
     QString typed = trimmedUrl(settings.aiEndpoint().value("base_url"_L1).toString());
@@ -106,6 +112,16 @@ QString AiEndpoints::missing(const Settings &settings) {
         return u"Set %1, or put a key in the settings, to use %2."_s.arg(QString::fromLatin1(row->keyVariable),
                                                                          QString::fromLatin1(row->name));
     return {};
+}
+
+CapabilityLack AiEndpoints::lacking(const Settings &settings) {
+    if (missing(settings).isEmpty())
+        return CapabilityLack::None;
+    const QString named = preset(settings);
+    const AiEndpoint *row = find(named);
+    if (row && named == "omarchy-local"_L1)
+        return CapabilityLack::NotInstalled;
+    return row && !baseUrl(settings).isEmpty() ? CapabilityLack::NoKey : CapabilityLack::NoServer;
 }
 
 std::expected<AiServer, QString> AiEndpoints::server(const Settings &settings, const QString &wanted, const QString &omarchyProgram) {

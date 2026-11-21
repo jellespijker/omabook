@@ -20,7 +20,7 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "ai.h"
+#include "airegistry.h"
 #include "aicommands.h"
 #include "aisearch.h"
 #include "annotationcommands.h"
@@ -261,9 +261,9 @@ int search(const QStringList &arguments) {
     if (!picks) {
         const Settings settings;
         QString why;
-        if (!makeAiProvider(settings, &why))
+        if (!AiRegistry::answerer(settings)(&why))
             return fail(why);
-        AiSearch::Run run([&settings](QString *problem) { return makeAiProvider(settings, problem); }, words, books, known);
+        AiSearch::Run run(AiRegistry::answerer(settings), words, books, known);
         requests = run.total();
         if (!command.json() && requests > 1)
             print(stderr, QString("Looking through %1 books, %2 requests…").arg(run.books()).arg(requests));

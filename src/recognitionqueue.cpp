@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "airegistry.h"
 #include "failure.h"
 #include "log.h"
 #include "recognitionstore.h"
@@ -48,7 +49,7 @@ RecognitionQueue::~RecognitionQueue() {
 }
 
 RecognitionQueue::Route RecognitionQueue::routeFor(const Settings &settings) {
-    return [&settings](Recognition::Kind kind, bool hosted) { return RecognitionRoute::ways(settings, kind, hosted); };
+    return [&settings](Recognition::Kind kind, bool hosted) { return AiRegistry::recognizers(settings, kind, hosted); };
 }
 
 std::optional<QString> RecognitionQueue::lacking(Recognition::Kind kind, bool hosted) const {

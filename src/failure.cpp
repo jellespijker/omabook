@@ -112,6 +112,11 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::WhisperFailed, tr("whisper.cpp couldn't transcribe the recording: %1")},
     {Failure::Code::WhisperNoTranscript, tr("whisper.cpp wrote no transcript.")},
     {Failure::Code::AiOff, tr("AI is turned off in the settings.")},
+    {Failure::Code::AiHostedNotAllowed,
+     tr("%1 is someone else's computer, and answers come only from your own unless you allow a hosted one for them in the settings.")},
+    {Failure::Code::AiQuickHostedNotAllowed,
+     tr("%1 is someone else's computer, and quick work is done only by your own unless you allow a hosted one for it in the settings.")},
+    {Failure::Code::HostedNotChosen, tr("%1 is someone else's computer, and the plugin asked for your own computers only.")},
     {Failure::Code::NoVoice,
      tr("Nothing on this computer reads aloud: install Piper (piper-tts) and a voice for it (piper-voices-en-us, say), or "
         "speech-dispatcher.")},

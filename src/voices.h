@@ -5,6 +5,7 @@
 #include <expected>
 #include <memory>
 
+#include "aiprivacy.h"
 #include "failure.h"
 #include "voice.h"
 
@@ -25,10 +26,12 @@ class Settings;
 namespace Voices {
 
 // The engine that reads with these settings: "piper", "speech-dispatcher" or
-// "server"; or why there is none that may.
-[[nodiscard]] std::expected<QString, Failure> engine(const Settings &settings);
-// That engine's voice, made; or why there is none.
-[[nodiscard]] std::expected<std::unique_ptr<Voice>, Failure> choose(const Settings &settings);
+// "server"; or why there is none that may (a server by AiPrivacy's rule, for
+// text to speech, with `asked` what the one asking said of hosted ones).
+[[nodiscard]] std::expected<QString, Failure> engine(const Settings &settings, AiPrivacy::HostedAsked asked = std::nullopt);
+// That engine's voice, made; or why there is none. Asked through
+// AiRegistry::voice, as every use of a model is.
+[[nodiscard]] std::expected<std::unique_ptr<Voice>, Failure> choose(const Settings &settings, AiPrivacy::HostedAsked asked = std::nullopt);
 // The voices it has to choose from, by name; none when there is no engine.
 [[nodiscard]] QStringList offered(const Settings &settings);
 // How fast and in which voice, as chosen, for a book in `language`.

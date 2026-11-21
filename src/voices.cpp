@@ -8,8 +8,8 @@
 #include <algorithm>
 
 #include "aiendpoint.h"
+#include "aiprivacy.h"
 #include "localvoices.h"
-#include "recognition.h"
 #include "secretstore.h"
 #include "servervoice.h"
 #include "settings.h"
@@ -25,13 +25,6 @@ namespace {
 [[nodiscard]] QString piperProgram(const Settings &settings) {
     const QString named = chosen(settings, "piper_program"_L1);
     return named.isEmpty() ? PiperVoice::findProgram() : QStandardPaths::findExecutable(named);
-}
-
-[[nodiscard]] QStringList ownServers(const Settings &settings) {
-    QStringList own;
-    for (const auto &address : settings.recognition().value("own"_L1).toArray())
-        own << address.toString();
-    return own;
 }
 
 [[nodiscard]] QString serverModel(const Settings &settings) {
@@ -50,7 +43,7 @@ namespace {
 
 // The server chosen to read aloud, if it may be asked: the one named for it,
 // else the AI server.
-[[nodiscard]] std::expected<AiServer, Failure> server(const Settings &settings) {
+[[nodiscard]] std::expected<AiServer, Failure> server(const Settings &settings, AiPrivacy::HostedAsked asked) {
     if (settings.aiProvider() == "off"_L1)
         return std::unexpected(Failure(Failure::Code::VoiceAiOff));
     QString base = chosen(settings, "url"_L1);
@@ -61,11 +54,15 @@ namespace {
     if (!found)
         return std::unexpected(Failure::said(found.error()));
     const QString model = serverModel(settings);
-    const bool elsewhere = AiEndpoints::runsElsewhere(model);
-    const bool hosted = elsewhere || Recognition::reach(found->baseUrl, ownServers(settings)) == Recognition::Reach::Hosted;
-    if (hosted && !settings.readAloud().value("hosted"_L1).toBool(false))
-        return std::unexpected(Failure(Failure::Code::VoiceServerHosted, {elsewhere ? model : found->host()}));
-    return *found;
+    const QString where = AiEndpoints::runsElsewhere(model) ? model : found->host();
+    switch (AiPrivacy::refusal(settings, Capability::TextToSpeech, AiPrivacy::hosted(settings, found->baseUrl, model), asked)) {
+    case CapabilityLack::None:
+        return *found;
+    case CapabilityLack::HostedNotChosen:
+        return std::unexpected(Failure(Failure::Code::HostedNotChosen, {where}));
+    default:
+        return std::unexpected(Failure(Failure::Code::VoiceServerHosted, {where}));
+    }
 }
 
 [[nodiscard]] bool piperReady(const Settings &settings) { return !piperProgram(settings).isEmpty() && !PiperVoice::findModels().isEmpty(); }
@@ -75,10 +72,10 @@ namespace {
 
 } // namespace
 
-std::expected<QString, Failure> Voices::engine(const Settings &settings) {
+std::expected<QString, Failure> Voices::engine(const Settings &settings, AiPrivacy::HostedAsked asked) {
     const QString wanted = chosen(settings, "engine"_L1);
     if (wanted == "server"_L1) {
-        if (auto reachable = server(settings); !reachable)
+        if (auto reachable = server(settings, asked); !reachable)
             return std::unexpected(reachable.error());
         return u"server"_s;
     }
@@ -98,14 +95,14 @@ std::expected<QString, Failure> Voices::engine(const Settings &settings) {
     return u"piper"_s;
 }
 
-std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &settings) {
-    const auto which = engine(settings);
+std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &settings, AiPrivacy::HostedAsked asked) {
+    const auto which = engine(settings, asked);
     if (!which)
         return std::unexpected(which.error());
     if (*which == "piper"_L1)
         return std::make_unique<PiperVoice>(piperProgram(settings), PiperVoice::findModels());
     if (*which == "server"_L1) {
-        auto reachable = server(settings);
+        auto reachable = server(settings, asked);
         if (!reachable)
             return std::unexpected(reachable.error());
         return std::make_unique<ServerVoice>(*std::move(reachable), serverModel(settings));

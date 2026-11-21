@@ -5,6 +5,7 @@
 #include <QUrl>
 
 #include "ai.h"
+#include "aiprivacy.h"
 #include "failure.h"
 #include "recognizers.h"
 #include "secretstore.h"
@@ -17,13 +18,6 @@ namespace {
 
 [[nodiscard]] QString chosen(const Settings &settings, QLatin1StringView key) {
     return settings.recognition().value(key).toString().trimmed();
-}
-
-[[nodiscard]] QStringList ownServers(const Settings &settings) {
-    QStringList own;
-    for (const auto &address : settings.recognition().value("own"_L1).toArray())
-        own << address.toString();
-    return own;
 }
 
 // The server speech is sent to: the one named for it, else the AI server.
@@ -52,24 +46,22 @@ using RecognitionRoute::Ways;
     return ways;
 }
 
-[[nodiscard]] std::optional<Refusal> hostedRefusal(const Settings &settings, const QString &baseUrl, const QString &model,
-                                                   bool hostedAsked) {
-    const bool elsewhere = AiEndpoints::runsElsewhere(model);
-    if (Recognition::reach(baseUrl, ownServers(settings)) != Recognition::Reach::Hosted && !elsewhere)
+[[nodiscard]] std::optional<Refusal> hostedRefusal(const Settings &settings, Capability capability, const QString &baseUrl,
+                                                   const QString &model, bool hostedAsked) {
+    const CapabilityLack refused = AiPrivacy::refusal(settings, capability, AiPrivacy::hosted(settings, baseUrl, model), hostedAsked);
+    if (refused == CapabilityLack::None)
         return std::nullopt;
-    const QString whose = elsewhere ? QObject::tr("The model %1").arg(model) : QUrl(baseUrl).host();
-    if (!settings.recognitionHosted())
+    const QString whose = AiEndpoints::runsElsewhere(model) ? QObject::tr("The model %1").arg(model) : QUrl(baseUrl).host();
+    if (refused == CapabilityLack::HostedNotAllowed)
         return Refusal{.lack = Lack::HostedNotAllowed,
                        .message = QObject::tr("%1 is someone else's computer, and your handwriting and speech go only to your own "
                                               "(this computer, your tailnet) unless you allow hosted servers for recognition in the "
                                               "settings.")
                                       .arg(whose)};
-    if (!hostedAsked)
-        return Refusal{
+    return Refusal{
             .lack = Lack::HostedNotChosen,
             .message =
                 QObject::tr("%1 is someone else's computer: your handwriting and speech go there only where you chose it.").arg(whose)};
-    return std::nullopt;
 }
 
 [[nodiscard]] std::expected<Ways, Refusal> inkPlan(const Settings &settings, bool hostedAsked) {
@@ -82,7 +74,7 @@ using RecognitionRoute::Ways;
             Refusal{.lack = Lack::NoServer, .message = ::Failure(::Failure::Code::NoVisionServer, {server.error()}).text()});
     if (model.isEmpty())
         model = server->model;
-    if (auto refused = hostedRefusal(settings, server->baseUrl, model, hostedAsked))
+    if (auto refused = hostedRefusal(settings, Capability::Handwriting, server->baseUrl, model, hostedAsked))
         return std::unexpected(std::move(*refused));
     return inkWays(*server, model);
 }
@@ -92,7 +84,7 @@ using RecognitionRoute::Ways;
     std::optional<Refusal> refused;
     if (const auto server = transcriber(settings)) {
         const QString model = chosen(settings, "transcription_model"_L1);
-        refused = hostedRefusal(settings, server->baseUrl, model, hostedAsked);
+        refused = hostedRefusal(settings, Capability::SpeechToText, server->baseUrl, model, hostedAsked);
         if (!refused)
             ways.push_back(std::make_unique<Recognizers::Transcription>(*server, model));
     }
@@ -117,24 +109,8 @@ using RecognitionRoute::Ways;
 
 } // namespace
 
-QString RecognitionRoute::lackName(Lack lack) {
-    switch (lack) {
-    case Lack::AiOff:
-        return u"ai-off"_s;
-    case Lack::NoServer:
-        return u"no-server"_s;
-    case Lack::HostedNotAllowed:
-        return u"hosted-not-allowed"_s;
-    case Lack::HostedNotChosen:
-        return u"hosted-not-chosen"_s;
-    case Lack::NoModel:
-        return u"no-model"_s;
-    }
-    return {};
-}
-
 QString RecognitionRoute::whyNot(const Settings &settings, const QString &baseUrl, const QString &model, bool hostedAsked) {
-    const auto refused = hostedRefusal(settings, baseUrl, model, hostedAsked);
+    const auto refused = hostedRefusal(settings, Capability::Handwriting, baseUrl, model, hostedAsked);
     return refused ? refused->message : QString();
 }
 

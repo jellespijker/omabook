@@ -16,6 +16,7 @@
 #include <print>
 
 #include "aicall.h"
+#include "airegistry.h"
 #include "annotationcontext.h"
 #include "calibreplugin.h"
 #include "converter.h"
@@ -87,9 +88,13 @@ QJsonArray BookOps::find(const Document &document, const QString &words, int lim
 bool BookOps::ask(const AiRequest &request, QString *answer, QString *error, const std::function<void(const QString &)> &piece,
                   QString *note) {
     const Settings settings;
-    std::unique_ptr<AiProvider> provider = makeAiProvider(settings, error);
-    if (!provider)
+    auto made = AiRegistry::answers(settings);
+    if (!made) {
+        if (error)
+            *error = made.error().text();
         return false;
+    }
+    std::unique_ptr<AiProvider> provider = std::move(*made);
     AiCall call(std::move(provider));
     QEventLoop loop;
     bool ok = false;
@@ -190,7 +195,7 @@ BookOps::LookUp BookOps::lookUp(const Library &library, const Book &book, bool a
     if (!ai)
         return result;
 
-    const std::unique_ptr<AiProvider> provider = makeAiProvider(settings, &result.error);
+    const std::unique_ptr<AiProvider> provider = AiRegistry::answerer(settings)(&result.error);
     if (!provider)
         return result;
     QString opening;

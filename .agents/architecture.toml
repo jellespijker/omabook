@@ -19,7 +19,7 @@ modules = [
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
-  "deviceoptions", "threadclock", "pdfsketch",
+  "deviceoptions", "threadclock", "pdfsketch", "aicapability",
 ]
 
 [layers.formats]
@@ -66,7 +66,7 @@ modules = [
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
-  "narration", "aireach", "voiceinstall",
+  "narration", "voiceinstall", "aiprivacy", "airegistry",
 ]
 
 [layers.operations]

@@ -21,6 +21,8 @@
 #include <QTimer>
 #include <QUrl>
 
+#include "aiprivacy.h"
+#include "airegistry.h"
 #include "assistant.h"
 #include "backend.h"
 #include "booklink.h"
@@ -65,6 +67,9 @@ void drawNoWindow() {
 // own library where it was left, without the file being read through to
 // recognise it.
 std::optional<Folio::Found> chooseLibrary(Settings &settings, const QCommandLineParser &arguments, const QString &book) {
+    // Today's choice of AI becomes each capability's, once (ADR 0008): an
+    // older config.json keeps what it chose, and only one written new starts local.
+    AiPrivacy::carryOver(settings);
     if (arguments.isSet("library"))
         settings.useLibraryForSession(arguments.value("library"));
     const auto known = book.isEmpty() || arguments.isSet("library") ? std::nullopt : Folio::find(settings, book);
@@ -108,6 +113,9 @@ void setUpReader(Reader &reader, const Backend &backend, const CalibrePlugin &ca
 // A command says what went wrong in English, which scripts can rely on;
 // --translated says it in the desktop's language, as the window does.
 int runCommand(QStringList words) {
+    // As the window does at its start (chooseLibrary).
+    Settings first;
+    AiPrivacy::carryOver(first);
     std::optional<Translator> translator;
     if (words.removeAll("--translated") > 0) {
         translator.emplace();
@@ -287,7 +295,7 @@ int main(int argc, char *argv[]) {
     const CalibrePlugin &calibre = backend.pluginRegistry()->calibre();
     Reader reader(&backend, calibre.converter());
     setUpReader(reader, backend, calibre, settings);
-    Assistant assistant(&reader, [&settings](QString *why) { return makeAiProvider(settings, why); });
+    Assistant assistant(&reader, AiRegistry::answerer(settings));
     QObject::connect(&settings, &Settings::changed, &assistant, &Assistant::refresh);
     // Whether the knowledge graph grows while reading is the user's choice.
     assistant.setGraphMode([&settings] { return settings.graph(); });

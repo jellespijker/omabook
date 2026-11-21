@@ -10,6 +10,7 @@
 #include <tuple>
 
 #include "aiendpoint.h"
+#include "airegistry.h"
 #include "omarchylocal.h"
 #include "openaiprovider.h"
 #include "secretstore.h"
@@ -55,8 +56,9 @@ constexpr auto harnesses = std::to_array<Harness>({
     {"commandcode", "Command Code", false},
 });
 
-AiChoice none(AiChoice choice, const QString &problem) {
+AiChoice none(AiChoice choice, const QString &problem, CapabilityLack lack = CapabilityLack::NoServer) {
     choice.source = AiChoice::None;
+    choice.lack = lack;
     choice.id.clear();
     choice.name.clear();
     choice.program.clear();
@@ -131,12 +133,12 @@ AiChoice api(AiChoice choice, AiChoice::Source source) {
 // The AI named in the settings, which is used or nothing is.
 AiChoice named(AiChoice choice, const Settings &settings, const QString &wanted) {
     if (wanted == "anthropic")
-        return qEnvironmentVariable("ANTHROPIC_API_KEY").isEmpty() ? none(choice, "Set ANTHROPIC_API_KEY to use the Anthropic API.")
+        return qEnvironmentVariable("ANTHROPIC_API_KEY").isEmpty() ? none(choice, "Set ANTHROPIC_API_KEY to use the Anthropic API.", CapabilityLack::NoKey)
                                                                    : api(choice, AiChoice::Setting);
     if (wanted == "openai") {
         // A server is used only when it is chosen, and then nothing else is.
         if (const QString missing = AiEndpoints::missing(settings); !missing.isEmpty())
-            return none(choice, missing);
+            return none(choice, missing, AiEndpoints::lacking(settings));
         choice.source = AiChoice::Setting;
         choice.id = "openai";
         choice.name = AiEndpoints::name(settings);
@@ -157,7 +159,8 @@ AiChoice named(AiChoice choice, const Settings &settings, const QString &wanted)
         return none(choice, "Omabook doesn't know an AI called \"" + wanted + "\"; see the settings.");
     const QString program = QStandardPaths::findExecutable(wanted);
     if (program.isEmpty())
-        return none(choice, QString("%1 isn't installed (there is no %2 command).").arg(Ai::agentName(wanted), wanted));
+        return none(choice, QString("%1 isn't installed (there is no %2 command).").arg(Ai::agentName(wanted), wanted),
+                    CapabilityLack::NotInstalled);
     return harness(choice, AiChoice::Setting, wanted, program);
 }
 
@@ -178,7 +181,7 @@ AiChoice automatic(const AiChoice &choice) {
             return harness(choice, AiChoice::Automatic, "claude", claude);
         if (!agy.isEmpty())
             return harness(choice, AiChoice::Automatic, "agy", agy);
-        return none(choice, nothing);
+        return none(choice, nothing, CapabilityLack::NotInstalled);
     }
 
     // With Omarchy, its default agent is the companion.
@@ -197,7 +200,7 @@ AiChoice automatic(const AiChoice &choice) {
     else if (!key.isEmpty())
         fallback = api(choice, AiChoice::Fallback);
     else
-        return none(choice, why + " " + nothing);
+        return none(choice, why + " " + nothing, CapabilityLack::NotInstalled);
     fallback.problem = why + " " + fallback.name + " answers instead.";
     return fallback;
 }
@@ -209,7 +212,7 @@ AiChoice Ai::choose(const Settings &settings, const QString &defaultsFile) {
     choice.omarchyDefault = omarchyDefault(defaultsFile);
     const QString wanted = settings.aiProvider();
     if (wanted == "off")
-        return none(choice, "AI is turned off in the settings.");
+        return none(choice, "AI is turned off in the settings.", CapabilityLack::AiOff);
     return wanted == "auto" ? automatic(choice) : named(choice, settings, wanted);
 }
 
@@ -293,6 +296,8 @@ QJsonObject Ai::describe(const Settings &settings, const QString &defaultsFile) 
     // Empty is the provider's own default.
     object.insert("main_model", choice.available() ? chosen.main : QString());
     object.insert("quick_model", choice.available() ? chosen.quick : QString());
+    // Each capability's provider, and why one isn't available (ADR 0008).
+    object.insert("capabilities", AiRegistry::describe(settings, defaultsFile));
     // Where a server is, and whether a key is set: never the key.
     if (settings.aiProvider() == "openai") {
         const QString url = AiEndpoints::baseUrl(settings);
@@ -372,7 +377,7 @@ QString AiAgent::omarchyDefaultName() const { return Ai::agentName(m_choice.omar
 
 bool AiAgent::omarchyDefaultRuns() const { return Ai::canRun(m_choice.omarchyDefault); }
 
-std::unique_ptr<AiProvider> AiAgent::makeProvider(QString *why) const { return makeAiProvider(*m_settings, why, m_file); }
+std::unique_ptr<AiProvider> AiAgent::makeProvider(QString *why) const { return AiRegistry::answerer(*m_settings, m_file)(why); }
 
 QStringList AiAgent::knownModels() const {
     // A server's are the ones it listed; the others' are known beforehand.

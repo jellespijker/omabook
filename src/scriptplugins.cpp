@@ -17,7 +17,7 @@
 #include <QUrl>
 #include <algorithm>
 
-#include "ai.h"
+#include "airegistry.h"
 #include "formatprovider.h"
 #include "scriptmetadatasource.h"
 #include "settings.h"
@@ -688,7 +688,7 @@ CommandScripts::CommandScripts(Settings *settings, const QString &libraryRoot, c
     ScriptServices services;
     services.settings = settings;
     services.library = [this] { return m_opened ? &m_library : nullptr; };
-    services.ai = [settings](QString *why) { return makeAiProvider(*settings, why); };
+    services.ai = AiRegistry::answerer(*settings);
     m_plugins = std::make_unique<ScriptPlugins>(services, folder, nullptr, false);
 }
 
@@ -710,7 +710,7 @@ public:
             }
             return m_opened ? m_library.get() : nullptr;
         };
-        services.ai = [this](QString *why) { return makeAiProvider(m_settings, why); };
+        services.ai = AiRegistry::answerer(m_settings);
         m_plugins = std::make_unique<ScriptPlugins>(services, QString(), nullptr, false);
         m_plugins->provideFormats();
         m_looked.start();

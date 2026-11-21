@@ -14,6 +14,7 @@
 #include <memory>
 #include <optional>
 
+#include "aicapability.h"
 #include "failure.h"
 
 class QNetworkReply;
@@ -268,6 +269,7 @@ struct AiChoice {
     QString program;        // the harness's executable, when it is one
     QString omarchyDefault; // the id Omarchy names, when it names one
     QString problem;        // English
+    CapabilityLack lack = CapabilityLack::None; // why there is none, as a code
     QString modelsUnder;    // for "openai": the server's own, as AiEndpoints::modelsKey says
 
     bool available() const noexcept { return source != None; }

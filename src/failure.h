@@ -157,6 +157,9 @@ public:
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)
+        AiHostedNotAllowed,      // {name}: someone else's computer, and hosted isn't allowed for answers (ADR 0008)
+        AiQuickHostedNotAllowed, // {name}: the same for quick work
+        HostedNotChosen,         // {where}: someone else's computer, and the plugin asking didn't ask for a hosted one
         AiUnreachable,       // {where, the network's reason}
         AiTimedOut,          // {where}
         AiWantsKey,          // {where}

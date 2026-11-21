@@ -12,8 +12,8 @@
 #include <utility>
 
 #include "aifailures.h"
+#include "aiprivacy.h"
 #include "meaningindex.h"
-#include "recognition.h"
 #include "secretstore.h"
 #include "settings.h"
 
@@ -39,13 +39,6 @@ namespace {
                     .key = AiEndpoints::keptKey(url, Secrets::shared()),
                     .keyFile = {},
                     .model = {}};
-}
-
-[[nodiscard]] QStringList ownServers(const Settings &settings) {
-    QStringList own;
-    for (const auto &address : settings.recognition().value("own"_L1).toArray())
-        own << address.toString();
-    return own;
 }
 
 // The vectors of an answer: OpenAI's {"data": [{"index", "embedding"}]}, in
@@ -75,7 +68,8 @@ namespace {
 
 } // namespace
 
-std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &settings, const QString &omarchyProgram) {
+std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &settings, AiPrivacy::HostedAsked asked,
+                                                           const QString &omarchyProgram) {
     // A server of the person's own is a model too: Off asks nothing of it.
     if (settings.aiOff())
         return std::unexpected(Failure(Failure::Code::AiOff));
@@ -84,10 +78,16 @@ std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &sett
         return std::unexpected(Failure::said(server.error()));
     const QString chosen = settings.meaning().value("model"_L1).toString().trimmed();
     const QString model = chosen.isEmpty() ? QString::fromLatin1(defaultModel) : chosen;
-    const bool elsewhere = AiEndpoints::runsElsewhere(model);
-    const bool hosted = elsewhere || Recognition::reach(server->baseUrl, ownServers(settings)) == Recognition::Reach::Hosted;
-    if (hosted && !settings.meaningHosted())
-        return std::unexpected(Failure(Failure::Code::MeaningHosted, {elsewhere ? model : server->host()}));
+    const bool hosted = AiPrivacy::hosted(settings, server->baseUrl, model);
+    const QString where = AiEndpoints::runsElsewhere(model) ? model : server->host();
+    switch (AiPrivacy::refusal(settings, Capability::Embeddings, hosted, asked)) {
+    case CapabilityLack::None:
+        break;
+    case CapabilityLack::HostedNotChosen:
+        return std::unexpected(Failure(Failure::Code::HostedNotChosen, {where}));
+    default:
+        return std::unexpected(Failure(Failure::Code::MeaningHosted, {where}));
+    }
     return Route{.server = *server, .model = model, .hosted = hosted};
 }
 

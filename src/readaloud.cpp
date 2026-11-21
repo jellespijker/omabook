@@ -7,6 +7,7 @@
 #include <cmath>
 #include <utility>
 
+#include "airegistry.h"
 #include "backend.h"
 #include "pagetext.h"
 #include "reader.h"
@@ -191,7 +192,7 @@ void ReadAloud::start(const QString &atTop) {
     const std::shared_ptr<const Document> document = m_reader->document();
     if (!document)
         return;
-    auto voice = m_maker ? m_maker() : Voices::choose(*m_reader->backend()->settings());
+    auto voice = m_maker ? m_maker() : AiRegistry::voice(*m_reader->backend()->settings());
     if (!voice) {
         if (voice.error().code() == Failure::Code::NoVoice && VoiceInstall::offered())
             offer(m_reader->bookId(), atTop);

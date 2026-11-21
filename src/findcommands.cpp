@@ -11,6 +11,7 @@
 #include <print>
 #include <tuple>
 
+#include "airegistry.h"
 #include "bookops.h"
 #include "document.h"
 #include "embeddings.h"
@@ -126,7 +127,7 @@ int indexBooks(const Library &library, const Embeddings::Route &route, const QLi
 }
 
 int status(const Library &library, const Settings &settings, bool json) {
-    const auto route = Embeddings::route(settings);
+    const auto route = AiRegistry::embeddings(settings);
     const QString model =
         route ? route->model : settings.meaning().value("model"_L1).toString(QString::fromLatin1(Embeddings::defaultModel));
     QJsonArray books;
@@ -181,7 +182,7 @@ int use(const QCommandLineParser &parser) {
 }
 
 int search(const Library &library, const QCommandLineParser &parser, const QStringList &words) {
-    const auto route = Embeddings::route(Settings());
+    const auto route = AiRegistry::embeddings(Settings());
     if (!route)
         return failLine(route.error().text());
     MeaningSearch::Question question{.words = words.mid(1).join(u' '), .books = {}, .whole = parser.isSet("whole"), .limit = 10};
@@ -225,7 +226,7 @@ int forget(const Library &library, const QString &word) {
 // `index <book>...` the books named; `update` those due.
 int indexAsked(const Library &library, const QStringList &words, bool json) {
     const Settings settings;
-    const auto route = Embeddings::route(settings);
+    const auto route = AiRegistry::embeddings(settings);
     if (!route)
         return failLine(route.error().text());
     QList<qint64> books;

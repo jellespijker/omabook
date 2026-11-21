@@ -3,6 +3,7 @@
 #include <QVariantMap>
 #include <QtConcurrent>
 
+#include "airegistry.h"
 #include "document.h"
 #include "library.h"
 #include "log.h"
@@ -77,7 +78,7 @@ void MeaningFinder::look() {
     m_bookId = m_reader->bookId();
     m_look.setFuture(QtConcurrent::run([root = library->root(), bookId = m_bookId] {
         const Settings settings;
-        Look look{.route = Embeddings::route(settings), .freshness = MeaningSearch::Freshness::None, .due = false};
+        Look look{.route = AiRegistry::embeddings(settings), .freshness = MeaningSearch::Freshness::None, .due = false};
         const auto library = opened(root);
         if (!look.route || !library)
             return look;

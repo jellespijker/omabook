@@ -8,6 +8,7 @@
 #include <optional>
 #include <vector>
 
+#include "aicapability.h"
 #include "recognition.h"
 
 class Settings;
@@ -37,16 +38,10 @@ namespace RecognitionRoute {
 using Ways = std::vector<std::unique_ptr<Recognition::Recognizer>>;
 
 // Why nothing may be recognised, as a plugin is told it
-// (`omabook.recognize.status`): a code, and its plain words.
-enum class Lack {
-    AiOff,            // the AI is set to Off
-    NoServer,         // no server is set up (and, for speech, no whisper.cpp)
-    HostedNotAllowed, // only someone else's computer, and hosted servers aren't allowed in the settings
-    HostedNotChosen,  // only someone else's computer, allowed, but the one asking didn't ask for it
-    NoModel,          // the server lacks a model that reads handwriting, or that transcribes (learnt by asking)
-};
-// "ai-off", "no-server", "hosted-not-allowed", "hosted-not-chosen", "no-model".
-[[nodiscard]] QString lackName(Lack lack);
+// (`omabook.recognize.status`): the registry's codes (aicapability.h), of
+// which recognition says AiOff, NoServer (and, for speech, no whisper.cpp),
+// HostedNotAllowed, HostedNotChosen and NoModel (learnt by asking).
+using Lack = CapabilityLack;
 
 struct Refusal {
     Lack lack = Lack::NoServer;

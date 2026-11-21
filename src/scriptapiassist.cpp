@@ -9,16 +9,22 @@ namespace ScriptApi {
 QList<Entry> assistEntries() {
     return {
         {"ai.available", "ai.available()", "", "Whether a model is set up to ask."},
-        {"ai.status", "ai.status({model, hosted})", "",
-         "Whether the model the person chose may be asked, and where it is (#138): `{available, hosted, why, message}`. "
+        {"ai.status", "ai.status({capability, model, hosted})", "",
+         "Whether a capability may be used, and where it goes (#138, ADR 0008): `{capability, available, hosted, provider, "
+         "model, why, message}`. `capability` is `\"answers\"` (the default, or `\"quick\"` with the model `\"quick\"`), "
+         "`\"quick\"`, `\"handwriting\"`, `\"speech-to-text\"`, `\"text-to-speech\"` or `\"embeddings\"`, each with the "
+         "provider and model the person chose for it; a plugin never picks one. For answers and quick, "
          "`hosted` is true when it is someone else's computer: Claude's API, an agent (Claude Code, Codex, ...), a "
          "command of the person's own (where it goes can't be known), a server that is neither this computer, the "
          "tailnet nor an address in config.json's `recognition.own`, or a model that runs elsewhere (`...:cloud`); "
          "false for their own server with a model of its own. `hosted: false` asks for their own computers alone; "
-         "true, or left out, takes the one they chose. `why` is a code: `\"ai-off\"` (the AI is set to Off: nothing "
-         "is asked of any model), `\"no-server\"` (none is set up), `\"hosted-not-chosen\"` (the chosen model is "
-         "someone else's and `hosted: false` was asked); empty when available. `message` says it in the desktop's "
-         "language. `model` is as for `ask`."},
+         "true, or left out, takes the one they chose; for the other four only `hosted: true` asks for a hosted one, "
+         "and only where the person allowed hosted for that capability. `why` is a code: `\"ai-off\"` (the AI is set "
+         "to Off: nothing is asked of any model; a local voice still reads aloud), `\"no-server\"` (none is set up), "
+         "`\"hosted-not-allowed\"` (only someone else's computer, and the person didn't allow hosted for it), "
+         "`\"hosted-not-chosen\"` (someone else's, and the plugin kept to the person's own), `\"no-model\"`, "
+         "`\"not-installed\"`, `\"no-key\"`, `\"unreachable\"` or `\"unknown-capability\"`; empty when available. "
+         "`message` says it in the desktop's language. `model` is as for `ask`."},
         {"ai.ask", "ai.ask(prompt, {system, onText, model, hosted})", "",
          "Asks the model the user chose in the settings; a promise of its whole answer as text, however long it takes "
          "to write. `onText(piece)` is called with each piece as it arrives. `model` is `\"main\"` (the default: the "
@@ -26,6 +32,18 @@ QList<Entry> assistEntries() {
          "model's own name. `hosted: false` keeps it to the person's own computers: when the model they chose is someone "
          "else's, the promise is refused with `status`'s message and nothing is sent (`ai.status` says so first). "
          "(A string in place of the options is the system prompt.)"},
+        {"ai.speak", "ai.speak(text, {language, hosted})", "",
+         "Reads `text` aloud with the voice the person chose for text to speech (Piper or speech-dispatcher on this "
+         "computer, or a server); a promise kept when it was read or stopped, which has `stop()`. A new one stops the "
+         "one before. A server that is someone else's computer reads only with `hosted: true` and hosted allowed for "
+         "reading aloud; with the AI set to Off only a voice on this computer reads."},
+        {"ai.stopSpeaking", "ai.stopSpeaking()", "", "Stops what `ai.speak` is reading."},
+        {"ai.embed", "ai.embed(texts, {use, hosted})", "",
+         "The embeddings of a list of texts (or one), made by the provider the person chose for embeddings: a promise "
+         "of a list of vectors, each a list of numbers of length 1, in the texts' order. `use` is `\"document\"` (the "
+         "default) or `\"question\"`, which some models tell apart. Keep them in the plugin's own folder "
+         "(`files.writeBytes`), never in its data in the change log (ADR 0007). A hosted provider only with `hosted: "
+         "true` and hosted allowed for embeddings; never with the AI set to Off."},
 
         {"recognize.available", "recognize.available(kind, {hosted})", "",
          "Whether `\"ink\"` or `\"audio\"` can be recognised here, true or false: a server that may be asked is set "

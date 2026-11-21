@@ -280,7 +280,10 @@ private slots:
         QString problem;
         QJsonObject status = plugin->callNow("status", {QJsonObject{{"hosted", false}}}, &problem).toObject();
         QVERIFY2(problem.isEmpty(), qPrintable(problem));
-        QCOMPARE(status, (QJsonObject{{"available", true}, {"hosted", false}, {"why", ""}, {"message", ""}}));
+        QCOMPARE(status.value("available").toBool(), true);
+        QCOMPARE(status.value("hosted").toBool(), false);
+        QCOMPARE(status.value("why").toString(), QString());
+        QCOMPARE(status.value("capability").toString(), QString("answers"));
         QCOMPARE(called(*plugin, "ask", {QJsonObject{{"hosted", false}}}).result.toString(), QString("answered"));
         QCOMPARE(bench.asked, 1);
 
