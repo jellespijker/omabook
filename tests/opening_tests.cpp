@@ -213,10 +213,10 @@ private slots:
 
     // A library of 0.1.8.1, at format 32 (#112's step), takes the steps that
     // came after it on main (#76's, format 33, #110's, 34, #80's, 35, #81's, 36,
-    // #118's, 37, #115's, 38, #68's, 39, #72's, 40, and #74's, 41) and not its own
-    // again: the steps are positional, so #112's is 32 on main too.
+    // #118's, 37, #115's, 38, #68's, 39, #72's, 40, #74's, 41, and #136's, 42) and
+    // not its own again: the steps are positional, so #112's is 32 on main too.
     void aLibraryOf0181TakesTheStepsAfterItsOwn() {
-        QCOMPARE(LibraryMigrations::currentFormat(), 41);
+        QCOMPARE(LibraryMigrations::currentFormat(), 42);
         const QTemporaryDir dir;
         QVERIFY(dir.isValid());
         const QString root = dir.filePath(QStringLiteral("Library"));
@@ -240,10 +240,10 @@ private slots:
             const auto restore = qScopeGuard([] { qInstallMessageHandler(s_previous); });
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 41);
+            QCOMPARE(library.formatVersion(), 42);
             QCOMPARE(QDir(library.backupFolder()).entryList({QStringLiteral("omabook-format-32-*.db")}).size(), 1);
         }
-        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 41")), qPrintable(s_brought));
+        QVERIFY2(s_brought.contains(QStringLiteral("from format 32 to 42")), qPrintable(s_brought));
         QVERIFY(textOf(root, QStringLiteral("SELECT sql FROM sqlite_master WHERE name = 'live_ops'")).contains(plugins));
         QCOMPARE(run(root, QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = 'graph_facts_names'")), 1);
     }
@@ -275,7 +275,7 @@ private slots:
             QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 35")), 0);
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 41);
+            QCOMPARE(library.formatVersion(), 42);
             QCOMPARE(textOf(root, QStringLiteral("SELECT quote FROM annotations WHERE id = %1").arg(id)),
                      QStringLiteral("the ferry came back"));
             QCOMPARE(textOf(root, QStringLiteral("SELECT color FROM annotations WHERE id = %1").arg(id)), QString());
@@ -315,7 +315,7 @@ private slots:
             QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 37")), 0);
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 41);
+            QCOMPARE(library.formatVersion(), 42);
             QCOMPARE(textOf(root, QStringLiteral("SELECT note FROM annotations WHERE id = %1").arg(id)),
                      QStringLiteral("Lighthouse keepers"));
             QCOMPARE(textOf(root, QStringLiteral("SELECT area FROM annotations WHERE id = %1").arg(id)), QString());
@@ -354,7 +354,7 @@ private slots:
             QCOMPARE(run(root, QStringLiteral("PRAGMA user_version = 38")), 0);
             Library library(root);
             QVERIFY(library.open());
-            QCOMPARE(library.formatVersion(), 41);
+            QCOMPARE(library.formatVersion(), 42);
             const QList<ReadingDay> days = Graph(library).readingLog(book);
             QCOMPARE(days.size(), 1);
             QCOMPARE(days.first().to, putBack ? 55.0 : 40.0);

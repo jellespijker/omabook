@@ -4,6 +4,7 @@
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <functional>
 #include <optional>
 
 #include "library.h"
@@ -42,5 +43,13 @@ namespace AnnotationWords {
 // first must not outlive the library.
 [[nodiscard]] Book::Noted noted(const Library &library);
 [[nodiscard]] Book::Noted noted(const QString &root);
+
+// What the lookups above are made of, for the other word indexes too (BookWords):
+// a lookup that asks `books` once for each value, and remembers; and the
+// numbers a statement with one value bound answers of the library in the
+// folder `root`, by a connection of its own that only reads (none when it
+// can't be read).
+[[nodiscard]] Book::Noted remembering(std::function<QSet<qint64>(const QString &)> books);
+[[nodiscard]] QSet<qint64> numbersIn(const QString &root, const QString &statement, const QString &value);
 
 } // namespace AnnotationWords

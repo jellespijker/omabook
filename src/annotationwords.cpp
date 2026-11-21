@@ -29,8 +29,9 @@ constexpr auto matching = "SELECT rowid FROM annotation_words WHERE annotation_w
 
 [[nodiscard]] QString booksStatement() { return u"SELECT DISTINCT book_id FROM annotations WHERE id IN (%1)"_s.arg(matching); }
 
-// A lookup that asks `books` once for each value, and remembers.
-[[nodiscard]] Book::Noted remembering(std::function<QSet<qint64>(const QString &)> books) {
+} // namespace
+
+Book::Noted AnnotationWords::remembering(std::function<QSet<qint64>(const QString &)> books) {
     const auto known = std::make_shared<QHash<QString, QSet<qint64>>>();
     return [books = std::move(books), known](const Book &book, const QString &words) {
         auto found = known->constFind(words);
@@ -40,7 +41,27 @@ constexpr auto matching = "SELECT rowid FROM annotation_words WHERE annotation_w
     };
 }
 
-} // namespace
+QSet<qint64> AnnotationWords::numbersIn(const QString &root, const QString &statement, const QString &value) {
+    if (root.isEmpty())
+        return {};
+    const QString connection = u"omabook-words-"_s + QUuid::createUuid().toString(QUuid::Id128);
+    QSet<qint64> found;
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(u"QSQLITE"_s, connection);
+        database.setDatabaseName(Library::databaseIn(root));
+        database.setConnectOptions(u"QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=2000"_s);
+        if (database.open()) {
+            QSqlQuery query(database);
+            query.prepare(statement);
+            query.addBindValue(value);
+            if (query.exec())
+                found = numbersOf(std::move(query));
+        }
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(connection);
+    return found;
+}
 
 QStringList AnnotationWords::phrases(const QString &typed) {
     QStringList phrases;
@@ -91,25 +112,7 @@ QSet<qint64> AnnotationWords::books(const Library &library, const QStringList &p
 
 QSet<qint64> AnnotationWords::books(const QString &root, const QStringList &phrases) {
     const std::optional<QString> asked = query(phrases);
-    if (!asked || root.isEmpty())
-        return {};
-    const QString connection = u"omabook-words-"_s + QUuid::createUuid().toString(QUuid::Id128);
-    QSet<qint64> found;
-    {
-        QSqlDatabase database = QSqlDatabase::addDatabase(u"QSQLITE"_s, connection);
-        database.setDatabaseName(Library::databaseIn(root));
-        database.setConnectOptions(u"QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=2000"_s);
-        if (database.open()) {
-            QSqlQuery query(database);
-            query.prepare(booksStatement());
-            query.addBindValue(*asked);
-            if (query.exec())
-                found = numbersOf(std::move(query));
-        }
-        database.close();
-    }
-    QSqlDatabase::removeDatabase(connection);
-    return found;
+    return asked ? numbersIn(root, booksStatement(), *asked) : QSet<qint64>();
 }
 
 Book::Noted AnnotationWords::noted(const Library &library) {

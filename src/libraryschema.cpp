@@ -1,6 +1,7 @@
 #include "libraryschema.h"
 
 #include "annotationschema.h"
+#include "bookwords.h"
 #include "fileschema.h"
 #include "graphindex.h"
 #include "meaningindex.h"
@@ -482,6 +483,9 @@ const QList<QStringList> migrations{
     // written into it (#74, format 41): what other libraries still know it
     // by. Empty for every file of an older library, as it came.
     FileSchema::originals(),
+    // A plugin's own books found by their words (#136, format 42): what its
+    // format says they hold, read here from each file and never logged.
+    BookWords::step(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
