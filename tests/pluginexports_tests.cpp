@@ -408,7 +408,7 @@ private slots:
         QCOMPARE(BookLink::find(bench.library, "b:none"), qint64{0});
         QCOMPARE(BookLink::find(bench.library, "999"), qint64{0});
 
-        const auto plugin = bench.plugin(QByteArray("function gid(id) { return omabook.library.get(id).gid; }"), {});
+        const auto plugin = bench.plugin(QByteArray("function gid(id) { return omabook.library.get(id).global_id; }"), {});
         QString problem;
         QCOMPARE(plugin->callNow("gid", {id}, &problem).toString(), gid);
     }

@@ -113,8 +113,8 @@ omabook.commands.register({id: "export", title: "Export as PDF", place: "view", 
 ```
 
 A link to a place in a book opens Omabook there, from Markdown, a note or
-a browser: `"omabook://book/" + book.gid + "/section/" + section` (a book's
-`gid` from `library.get`, the same on each of the person's computers;
+a browser: `"omabook://book/" + book.global_id + "/section/" + section` (a
+book's `global_id` from `library.get`, the same on each of the person's computers;
 `section` from 0, or left out for where they left it). A window already
 open takes it.
 
