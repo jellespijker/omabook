@@ -1,6 +1,7 @@
 #include <QQmlEngine>
 
 #include "annotationfinder.h"
+#include "annotationlayerview.h"
 #include "chronologycanvas.h"
 #include "chronologymodel.h"
 #include "graphcanvas.h"
@@ -28,6 +29,8 @@ void registerGraphTypes() {
         qmlRegisterType<AnnotationFinder>("Omabook", 1, 0, "AnnotationFinder");
         // The reading statistics and the year's goal (#68).
         qmlRegisterType<ReadingStatsView>("Omabook", 1, 0, "ReadingStats");
+        // Others' annotations on it, as a layer beside one's own (#85).
+        qmlRegisterType<AnnotationLayerView>("Omabook", 1, 0, "AnnotationLayerView");
         return true;
     }();
 }

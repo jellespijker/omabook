@@ -114,6 +114,12 @@ public:
     QVariantMap highlightNames() const { return m_values.value("highlight_names").toObject().toVariantMap(); }
     // An empty name forgets it.
     Q_INVOKABLE void setHighlightName(const QString &color, const QString &name);
+    // Whether others' annotations are shown beside one's own (#85), and the
+    // people (by person id) whose aren't, each switched off by hand.
+    bool othersAnnotations() const { return m_values.value("others_annotations").toBool(true); }
+    void setOthersAnnotations(bool shown) { set("others_annotations", shown); }
+    QStringList hiddenAnnotators() const;
+    void setAnnotatorHidden(const QString &person, bool hidden);
 
     // "recent", "title", "author", "series", "added", "progress", "rating",
     // "published" or "finished", and whether that order is turned round.

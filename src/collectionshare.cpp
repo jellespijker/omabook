@@ -13,6 +13,7 @@
 #include <tuple>
 
 #include "changelog.h"
+#include "failure.h"
 #include "githublink.h"
 #include "person.h"
 #include "scriptplugins.h"
@@ -125,8 +126,12 @@ void countGraph(const ReducedState &state, Counts &counts) {
                 parts.graph = true;
             else if (part == "files"_L1)
                 parts.files = true;
+            else if (part == "annotations"_L1)
+                parts.annotations = true;
             else
-                return std::unexpected(u"--with takes questions, ratings, progress and files, and \"%1\" is none of them."_s.arg(given));
+                return std::unexpected(
+                    Failure(Failure::Code::UnknownPart, {u"--with"_s, u"questions, ratings, progress, files, annotations"_s, given})
+                        .text());
         }
     return parts;
 }
@@ -157,6 +162,8 @@ void printPreview(const QJsonObject &shown) {
     if (parts.contains("files"_L1))
         say(stdout, u"  the books' files (%1), beside the space's file: to everyone it reaches, whoever you give it to and "
                     "whoever they pass it to"_s.arg(counted(shown.value("files").toInteger(), u"file", u"files")));
+    if (parts.contains("annotations"_L1))
+        say(stdout, u"  your highlights, margin notes and ink in its books, seen by each as far as they have read"_s);
     say(stdout, u"Left out:"_s);
     for (const QJsonValue value : shown.value("left_out").toArray()) {
         const QJsonObject part = value.toObject();
@@ -212,7 +219,8 @@ void printPublished(const QJsonObject &done) {
 void CollectionShare::addOptions(QCommandLineParser &parser) {
     parser.addOption({u"with-graph"_s, u"share: with what the knowledge graph knows of its books, up to where you have read."_s});
     parser.addOption({u"with"_s,
-                      u"share: also these of yours: questions, ratings, progress, files (the books' own, to everyone it reaches)."_s,
+                      u"share: also these of yours: questions, ratings, progress, files (the books' own, to everyone it reaches), "
+                      "annotations (your highlights, margin notes and ink)."_s,
                       u"parts"_s});
     parser.addOption({u"output"_s, u"share: write the space's snapshot to this file."_s, u"file"_s});
     parser.addOption({u"gist"_s, u"share: send the space's snapshot to a gist, through GitHub's command line gh, and print its link; "

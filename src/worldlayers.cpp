@@ -2,17 +2,13 @@
 
 #include <QHash>
 #include <QJsonArray>
-#include <QSqlQuery>
-#include <QVariant>
 #include <algorithm>
 #include <span>
 
-#include "changelog.h"
 #include "graphcontext.h"
 #include "graphlayers.h"
+#include "heldspaces.h"
 #include "library.h"
-#include "person.h"
-#include "sharedspace.h"
 #include "spacereducer.h"
 #include "spaceworlds.h"
 #include "subscribedspace.h"
@@ -24,39 +20,7 @@ namespace {
 
 using WorldLayers::Layer;
 
-// A space as this library holds it, and who it is there.
-struct Held {
-    SubscribedSpace::Subscription space;
-    QString kind;
-    QString role;
-    QString me; // whose worlds are this library's own, which are no layer here
-    QList<SpaceOperation> ops;
-};
-
-[[nodiscard]] QString memberName(const Library &library, const QString &space, const QString &person) {
-    QSqlQuery query = ChangeLog::query(library, "SELECT name FROM space_members WHERE space = ? AND person = ?", {space, person});
-    return query.next() ? query.value(0).toString() : QString();
-}
-
-[[nodiscard]] QList<Held> held(const Library &library) {
-    QList<Held> spaces;
-    for (const SubscribedSpace::Subscription &space : SubscribedSpace::list(library))
-        spaces << Held{.space = space,
-                       .kind = u"published"_s,
-                       .role = QString::fromLatin1(SubscribedSpace::readerRole),
-                       .me = {},
-                       .ops = SubscribedSpace::operations(library, space.space)};
-    for (const QString &space : SharedSpace::spaces(library)) {
-        SharedSpace::State state = SharedSpace::state(library, space);
-        const QString me = SharedSpace::memberAs(library, state);
-        spaces << Held{.space = {.space = space, .name = state.name, .owner = state.founder, .ownerName = {}, .collection = 0},
-                       .kind = u"shared"_s,
-                       .role = SharedSpace::roleName(state.roleOf(me)),
-                       .me = me.isEmpty() && library.person() != nullptr ? library.person()->id() : me,
-                       .ops = std::move(state.accepted)};
-    }
-    return spaces;
-}
+using HeldSpaces::Held;
 
 // The layers of one space's worlds.
 void layersOf(const Library &library, const Held &space, bool known, const GraphKnown &knows, QList<Layer> &layers) {
@@ -73,7 +37,7 @@ void layersOf(const Library &library, const Held &space, bool known, const Graph
         const std::optional<Book> copy = here > 0 ? library.book(here) : std::nullopt;
         SubscribedSpace::Subscription from = space.space;
         if (space.kind == "shared"_L1)
-            from.ownerName = memberName(library, space.space.space, world.author);
+            from.ownerName = HeldSpaces::memberName(library, space.space.space, world.author);
         Layer layer{.scope = SpaceWorlds::layerName(space.space.space, world.scope),
                     .space = space.space.space,
                     .kind = space.kind,
@@ -100,7 +64,7 @@ QJsonObject WorldLayers::Layer::toJson() const {
 QList<Layer> WorldLayers::list(const Library &library, bool known) {
     QList<Layer> layers;
     const GraphKnown knows = known ? GraphContext::readerKnows(library) : GraphKnown();
-    for (const Held &space : held(library))
+    for (const Held &space : HeldSpaces::held(library))
         layersOf(library, space, known, knows, layers);
     return layers;
 }

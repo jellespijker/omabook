@@ -6,6 +6,7 @@
 #include <QtTypes>
 #include <expected>
 
+#include "spaceparts.h"
 #include "spacereplay.h"
 #include "spacesnapshot.h"
 
@@ -31,23 +32,8 @@ namespace PublishedSpace {
 
 inline constexpr auto kind = "published";
 
-// The parts of a published space beyond the collection and its books.
-struct Parts {
-    bool graph = false;     // the knowledge graph of its books: things, what is known of them, how they relate
-    bool questions = false; // the questions asked of its books
-    bool ratings = false;   // the stars given them
-    bool reading = false;   // how far each was read, its shelf and finished day, and the days it was read on
-    // Which file each book has (format, hash and size, never where it lies),
-    // so that whoever the space reaches can fetch it (SpaceFiles, #63).
-    bool files = false;
-
-    // By name ("graph", "questions", "ratings", "reading", "files"), as a snapshot keeps
-    // them; a name not known here is left out.
-    [[nodiscard]] QStringList names() const;
-    [[nodiscard]] static Parts fromNames(const QStringList &names);
-
-    bool operator==(const Parts &) const = default;
-};
+// The parts of a published space beyond the collection and its books (the registry's).
+using SpaceParts::Parts;
 
 // The id of the space `person` publishes a collection as: the same each time,
 // so that publishing it again is publishing the same space.

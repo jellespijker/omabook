@@ -20,6 +20,7 @@
 #include "graphcontext.h"
 #include "library.h"
 #include "publishedlog.h"
+#include "spaceannotations.h"
 #include "spacereducer.h"
 #include "spaces.h"
 #include "spaceworlds.h"
@@ -61,6 +62,7 @@ struct Members {
     QHash<QString, GraphContext::Reach> reach;
     QHash<QString, QSet<QString>> worlds; // a plugin's scope given to the space, and the books it goes with (#65)
     QSet<QString> files;                  // the books whose plugin gave the space their file with their world (#107)
+    SpaceAnnotations::Chosen annotations; // of its books, when its annotations part is on (#85)
 
     [[nodiscard]] bool holds(const Canon &canon, const QString &bookGid) const {
         return !bookGid.isEmpty() && books.contains(canon.book(bookGid));
@@ -283,6 +285,8 @@ struct Place {
         return members.collections.contains(op.id) && (among(collectionFields, op.field) || op.field.startsWith("book:"_L1));
     if (op.entity == "reading_log"_L1)
         return parts.reading && members.days.contains(op.id) && op.field == "range"_L1;
+    if (op.entity == "annotation"_L1)
+        return SpaceAnnotations::goes(op, members.annotations);
     return graphOpIn(op, members, canon);
 }
 
@@ -296,6 +300,8 @@ struct Place {
         op.value.clear();
     if (op.entity == "book"_L1 && op.field == "formats"_L1)
         op.value = PublishedSpace::filesSaid(op.value);
+    if (op.entity == "annotation"_L1 && op.field == "book"_L1)
+        op.value = canon.book(op.value);
     if (op.entity == "node"_L1 && op.field == "data"_L1) {
         const QString kind = members.kinds.value(canon.thing(op.id));
         if (kind == "book"_L1)
@@ -350,23 +356,6 @@ void disguise(QList<SpaceOperation> &ops, const QString &space) {
 
 } // namespace
 
-QStringList PublishedSpace::Parts::names() const {
-    QStringList names;
-    for (const auto &[on, name] :
-         {std::pair{graph, u"graph"_s}, {questions, u"questions"_s}, {ratings, u"ratings"_s}, {reading, u"reading"_s}, {files, u"files"_s}})
-        if (on)
-            names << name;
-    return names;
-}
-
-PublishedSpace::Parts PublishedSpace::Parts::fromNames(const QStringList &names) {
-    return {.graph = names.contains("graph"_L1),
-            .questions = names.contains("questions"_L1),
-            .ratings = names.contains("ratings"_L1),
-            .reading = names.contains("reading"_L1),
-            .files = names.contains("files"_L1)};
-}
-
 QString PublishedSpace::filesSaid(const QString &formats) {
     QJsonArray said;
     for (const QJsonValue file : QJsonDocument::fromJson(formats.toUtf8()).array())
@@ -408,6 +397,8 @@ std::expected<QList<SpaceOperation>, QString> PublishedSpace::operations(const L
     collectGraph(state, canon, parts, members);
     if (parts.reading)
         collectDays(state, canon, members);
+    if (parts.annotations)
+        members.annotations = SpaceAnnotations::choose(state, [&](const QString &book) { return members.holds(canon, book); });
 
     QList<SpaceOperation> chosen;
     for (const SpaceOperation &op : std::as_const(personal)) {

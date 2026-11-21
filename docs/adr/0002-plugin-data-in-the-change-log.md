@@ -69,3 +69,17 @@ the library's own personal parts.
 - **Still open.** A part of a space for a plugin's data (the parts registry), so a space takes it only when
   switched on; reading it cut at a place in a book; and an event that tells a plugin its data changed at a
   sync.
+
+## As built (#85)
+
+- **The parts registry.** What a space holds beyond its collection and its books is one table, `SpaceParts`
+  (graph, questions, ratings, reading, files, annotations), which publishing, founding, switching, the command
+  line and the MCP server read. A part the registry says is *switched* is switched on and off after a shared
+  space's founding by an operation of the space (entity `space`, field `part:<name>`, the latest by clock
+  winning, by the role rules), and in a space published here by its owner, whose log then follows. A plugin's
+  part is still to come.
+- **The first switched part is a person's annotations** (highlights, margin notes, book ink, `SpaceAnnotations`),
+  off until switched on. Others' annotations are read as a layer, never as rows (`AnnotationLayers`), and
+  what another person sent is held to this ADR's limits: an operation of more than 64 KiB, or a change of a set of
+  more than 1000 items, is left out and counted; of an annotation no more than 1000 strokes are drawn; its words
+  are plain text, without controls or the characters that turn text around.

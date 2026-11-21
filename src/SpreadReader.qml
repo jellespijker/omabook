@@ -346,7 +346,7 @@ Item {
                 // A page that isn't part of the spread lays nothing out.
                 text: sheet.shown ? reader.format.html : ""
                 onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
-                PageHighlights { anchors.fill: parent; z: -1; text: column; visible: sheet.there }
+                PageHighlights { anchors.fill: parent; z: -1; text: column; visible: sheet.there; others: spread.notes ? spread.notes.others : null }
                 PageMarks {
                     id: pageMarks
                     anchors.fill: parent

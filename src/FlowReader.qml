@@ -329,7 +329,7 @@ Flickable {
         }
         onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
 
-        PageHighlights { anchors.fill: parent; z: -1; text: page }
+        PageHighlights { anchors.fill: parent; z: -1; text: page; others: flick.notes ? flick.notes.others : null }
         PageMarks {
             id: marks
             anchors.fill: parent

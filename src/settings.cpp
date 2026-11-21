@@ -151,6 +151,22 @@ void Settings::setHighlightName(const QString &color, const QString &name) {
         set("highlight_names", names);
 }
 
+QStringList Settings::hiddenAnnotators() const {
+    QStringList hidden;
+    for (const QJsonValue person : m_values.value("hidden_annotators").toArray())
+        hidden << person.toString();
+    return hidden;
+}
+
+void Settings::setAnnotatorHidden(const QString &person, bool hidden) {
+    QStringList now = hiddenAnnotators();
+    now.removeAll(person);
+    if (hidden && !person.isEmpty())
+        now << person;
+    if (now != hiddenAnnotators())
+        set("hidden_annotators", QJsonArray::fromStringList(now));
+}
+
 QJsonObject Settings::shelf(const QString &library) const {
     return m_values.value("shelves").toObject().value(library).toObject();
 }

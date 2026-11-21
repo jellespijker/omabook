@@ -69,8 +69,12 @@ An annotation whose passage can no longer be found in its book, kept until the r
 _Avoid_: Orphan, broken annotation
 
 **Annotation layer**:
-Someone else's annotations on a book, shown beside one's own and cut at one's own place.
+Someone else's annotations on a book, shown beside one's own, under their name and in their colour, and cut at one's own place: carried by a space whose annotations part is on, switched off one person at a time or all (`AnnotationLayers`).
 _Avoid_: Shared highlights, overlay
+
+**Part of a space**:
+What a space holds beyond its collection and its books, switched on by name: its graph, questions, ratings, reading, files and annotations. What is one's own is off until one switches it on (`SpaceParts`).
+_Avoid_: Section, feature, scope (for this meaning)
 
 **Place**:
 A point in a book in the book's own terms: its section (a chapter, or a page of a PDF or comic) and how far into it, so it is the same text in any window. Where a book was read to, where the graph met a thing, and where a bookmark is are all places (`BookPlace`).

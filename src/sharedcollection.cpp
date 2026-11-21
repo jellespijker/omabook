@@ -9,6 +9,7 @@
 
 #include "changelog.h"
 #include "library.h"
+#include "person.h"
 #include "publishedspace.h"
 #include "sharedspace.h"
 #include "spacereducer.h"
@@ -115,6 +116,8 @@ struct Said {
         return std::nullopt; // how this library lines up its own ids
     if (op.entity == "book"_L1)
         op.id = books.value(op.id, op.id);
+    if (op.entity == "annotation"_L1 && op.field == "book"_L1)
+        op.value = books.value(op.value, op.value);
     if (op.entity != "collection"_L1)
         return op;
     if (!collections.contains(op.id))
@@ -132,10 +135,23 @@ struct Said {
 // member's own may go by another name, or sit elsewhere, here. And a member
 // who lacks a book's file (a wishlist entry of the space's book) says
 // nothing of the files others have (#63).
-[[nodiscard]] bool goes(const std::optional<SpaceOperation> &op, const QString &top) {
-    if (!op || (op->id == top && (op->field == "name"_L1 || op->field == "parent"_L1)))
+[[nodiscard]] bool goes(const SpaceOperation &op, const QString &top) {
+    if (op.id == top && (op.field == "name"_L1 || op.field == "parent"_L1))
         return false;
-    return op->entity != "book"_L1 || op->field != "formats"_L1 || !QJsonDocument::fromJson(op->value.toUtf8()).array().isEmpty();
+    return op.entity != "book"_L1 || op.field != "formats"_L1 || !QJsonDocument::fromJson(op.value.toUtf8()).array().isEmpty();
+}
+
+// One's annotations are one's own, beside another member's of the same id
+// (a page's ink is known by its book and page, ADR 0006): what is news of
+// them is what this member hasn't said yet, compared with theirs alone.
+[[nodiscard]] QList<SpaceOperation> annotationsBy(QList<SpaceOperation> ops, const Library &library) {
+    const QString person = library.person() != nullptr ? library.person()->id() : QString();
+    ops.removeIf([&person](const SpaceOperation &op) { return op.entity != "annotation"_L1 || op.author != person; });
+    return ops;
+}
+
+[[nodiscard]] bool isNews(const SpaceOperation &op, const Said &all, const Said &mine) {
+    return (op.entity == "annotation"_L1 ? mine : all).isNews(op);
 }
 
 } // namespace
@@ -177,15 +193,17 @@ std::expected<qsizetype, QString> SharedCollection::contribute(const Library &li
     QString top;
     const QHash<QString, QString> collections = collectionIds(library, space, root, state, top);
     const bool hasTop = state.collections.contains(top);
-    const Said said(now.accepted);
+    const Said saidAll(now.accepted);
+    const Said saidByMe(annotationsBy(now.accepted, library));
     QList<ChangeLog::Entry> entries;
     for (const SpaceOperation &op : *home) {
         const std::optional<SpaceOperation> theirs = inSpace(op, books, collections);
-        if (!goes(theirs, top))
+        if (!theirs)
             continue;
-        if (said.isNews(*theirs))
+        const SpaceOperation &said = *theirs;
+        if (goes(said, top) && isNews(said, saidAll, saidByMe))
             entries << ChangeLog::Entry{
-                .space = space, .entity = theirs->entity, .id = theirs->id, .field = theirs->field, .value = theirs->value, .hlc = {}};
+                .space = space, .entity = said.entity, .id = said.id, .field = said.field, .value = said.value, .hlc = {}};
     }
     if (!hasTop)
         entries.prepend({.space = space, .entity = u"collection"_s, .id = top, .field = u"name"_s, .value = now.name, .hlc = {}});

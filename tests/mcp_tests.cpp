@@ -100,7 +100,7 @@ private slots:
             {"progress_get", "progress"}, {"progress_set", "progress"}, {"reading_stats", "stats"}, {"reading_goal_set", "stats"}, {"bookmarks_list", "bookmarks"},
             {"bookmark_add", "bookmarks"}, {"bookmark_remove", "bookmarks"}, {"notes_get", "notes"},
             {"annotations_list", "annotations"}, {"annotation_add", "annotations"}, {"annotation_change", "annotations"},
-            {"annotation_remove", "annotations"}, {"annotations_export", "annotations"},
+            {"annotation_remove", "annotations"}, {"annotations_export", "annotations"}, {"annotations_others", "annotations"}, {"annotation_to_fact", "annotations"},
             {"lookup_candidates", "lookup"}, {"lookup_apply", "lookup"}, {"tidy_propose", "tidy"},
             {"tidy_apply", "tidy"}, {"ask_book", "ask"}, {"ask_library", "ask"}, {"suggest_reading", "suggest"},
             {"catalog_export", "catalog"}, {"sync_status", "sync"}, {"sync_run", "sync"}, {"plugins_list", "plugins"},
@@ -125,7 +125,7 @@ private slots:
             {"collection_put", "collections"}, {"collection_remove", "collections"}, {"collection_format", "collections"},
             {"collections_sort", "collections"}, {"collections_sort_apply", "collections"}, {"books_find", "search"},
             {"spaces_list", "spaces"}, {"space_create", "spaces"}, {"space_invite", "spaces"}, {"space_remove_member", "spaces"},
-            {"space_join", "spaces"}, {"space_sync", "spaces"}, {"space_files", "spaces"}, {"space_fetch_file", "spaces"},
+            {"space_join", "spaces"}, {"space_sync", "spaces"}, {"space_files", "spaces"}, {"space_annotations", "spaces"}, {"space_fetch_file", "spaces"},
             {"chronology", "chronology"}, {"chronology_set_when", "chronology"}, {"chronology_order", "chronology"},
             {"chronology_place", "chronology"}, {"chronology_timeline_add", "chronology"},
         };

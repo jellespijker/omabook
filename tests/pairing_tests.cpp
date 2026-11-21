@@ -17,6 +17,7 @@
 #include <sodium.h>
 #include <utility>
 
+#include "annotationlayers.h"
 #include "crypto.h"
 #include "fixtures.h"
 #include "graph.h"
@@ -207,7 +208,13 @@ struct OwnComputers {
         || graph.upsert({}, "character", "Alia", "Born later.", {}, GraphPlace{dune, 0, 0.8}, "Alia") <= 0)
         qFatal("Cy's graph could not be made");
     cy.library.setProgress(dune, {.place = {.section = 0, .fraction = 1.0}, .percent = 100}); // read through: all of it goes
-    auto snapshot = PublishedSpace::snapshot(cy.library, *out, {.graph = true}, {.name = "Cy", .person = cy.id()});
+    // And a margin note of Cy's, with the space's annotations part on (#85).
+    Annotation note{.id = 0, .kind = "margin-note", .place = {}, .text = "spice", .note = "Cy: the spice", .created = 0};
+    note.setPassage(
+        {.from = {.section = 0, .fraction = 0.2}, .to = {.section = 0, .fraction = 0.3}, .quote = "spice", .before = {}, .after = {}});
+    if (cy.library.addAnnotation(dune, note) <= 0)
+        qFatal("Cy's note could not be made");
+    auto snapshot = PublishedSpace::snapshot(cy.library, *out, {.graph = true, .annotations = true}, {.name = "Cy", .person = cy.id()});
     if (!snapshot)
         qFatal("%s", qPrintable(snapshot.error()));
     return *snapshot;
@@ -736,6 +743,11 @@ private slots:
         QVERIFY(dune > 0);
         there->setProgress(dune, {.place = {.section = 0, .fraction = 0.5}, .percent = 50});
         QCOMPARE(layerNames(*there, dune), QStringList({"Paul"}));
+        // And Cy's annotations, as an annotation layer there too (#85).
+        const AnnotationLayers::Layers notes = AnnotationLayers::read(*there, dune);
+        QCOMPARE(notes.people.size(), 1);
+        QCOMPARE(notes.people.first().name, QString("Cy"));
+        QCOMPARE(notes.people.first().annotations.first().note, QString("Cy: the spice"));
 
         // Given up there: given up here too, the collection kept.
         QVERIFY(Subscriptions::unsubscribe(*there, out.space).has_value());

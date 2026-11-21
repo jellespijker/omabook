@@ -34,12 +34,14 @@ namespace {
 // is taken back from those who had it, not only no longer sent.
 [[nodiscard]] bool removable(const QString &entity) {
     return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1 || entity == "fact"_L1 || entity == "edge"_L1
-           || entity == "reading_log"_L1 || entity == "world"_L1;
+           || entity == "reading_log"_L1 || entity == "world"_L1 || entity == "annotation"_L1;
 }
 
 // What a removal of "0" brings back; a fact, a relation or a reading day
 // comes back by saying what it says again, later than its removal.
-[[nodiscard]] bool backByZero(const QString &entity) { return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1; }
+[[nodiscard]] bool backByZero(const QString &entity) {
+    return entity == "book"_L1 || entity == "collection"_L1 || entity == "node"_L1 || entity == "annotation"_L1;
+}
 
 struct Said {
     qint64 hlc = -1;

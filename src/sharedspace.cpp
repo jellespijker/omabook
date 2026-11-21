@@ -16,6 +16,7 @@
 #include "library.h"
 #include "person.h"
 #include "signedops.h"
+#include "spaceparts.h"
 #include "spaces.h"
 
 using namespace Qt::StringLiterals;
@@ -28,6 +29,15 @@ using SharedSpace::Role;
 using SharedSpace::State;
 
 [[nodiscard]] bool isFoundingLike(const SpaceOperation &op) { return op.entity == "space"_L1 && op.field == "founded"_L1; }
+
+// A part switched on or off after the founding (SpaceParts::switchedBy), the latest by clock winning.
+void switchPart(QStringList &parts, const SpaceOperation &op) {
+    if (const SpaceParts::Part *part = SpaceParts::switchedBy(op.field)) {
+        parts.removeAll(part->name);
+        if (op.value == "1"_L1)
+            parts << QString(part->name);
+    }
+}
 
 [[nodiscard]] QJsonObject object(const QString &json) { return QJsonDocument::fromJson(json.toUtf8()).object(); }
 
@@ -109,6 +119,8 @@ void judge(const QList<SpaceOperation> &judged, qsizetype founding, State &state
         state.accepted << op;
         if (op.entity == "space"_L1 && op.field == "files"_L1)
             state.files = op.value == "1"_L1; // the latest by clock, as they are judged in that order
+        if (op.entity == "space"_L1)
+            switchPart(state.parts, op);
         if (const std::optional<Role> given = at == founding ? std::nullopt : roleGiven(op)) {
             if (!roles.contains(op.id))
                 order << op.id;

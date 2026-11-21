@@ -11,7 +11,8 @@ import QtQuick.Layouts
 // shown is copied as Markdown, to take elsewhere. Under them, on a PDF or a
 // comic, the pages with book ink (#83), each the part of the page its ink
 // covers, going there and taken away as a highlight is; a highlight on a
-// part of a comic's page (#115) shows that part, as small.
+// part of a comic's page (#115) shows that part, as small. Above all of them,
+// whose annotations are shown beside one's own (OthersAnnotations, #85).
 //
 // Keys: Up and Down (J, K) walk the list, Enter goes, 1 to 5 colour the one
 // selected anew, Delete removes it, Escape leaves.
@@ -62,6 +63,8 @@ Item {
         anchors.fill: parent
         spacing: 8
 
+        // Whose annotations are shown beside one's own (#85).
+        OthersAnnotations { Layout.fillWidth: true }
         // The colours: all, or one alone, each with its name and how many.
         Flow {
             Layout.fillWidth: true

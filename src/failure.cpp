@@ -137,6 +137,15 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::AiQuickModelToDefault,
      tr("The model \"%1\", chosen for reading and parsing, was refused, so the default model answered instead. Check its name in "
         "the settings.")},
+    {Failure::Code::NoSuchSpace, tr("This library shares or publishes no space called %1 (omabook spaces lists them).")},
+    {Failure::Code::SpaceNameTaken, tr("More than one space goes by %1; name one by its id (omabook spaces lists them).")},
+    {Failure::Code::PartNotSwitched, tr("%1 is no part of a space that is switched on and off: %2.")},
+    {Failure::Code::UnknownPart, tr("%1 takes %2, and \"%3\" is none of them.")},
+    {Failure::Code::OnlyOwnerSwitches, tr("Only the owner of %1 switches what it holds, and you follow it.")},
+    {Failure::Code::NoSuchAnnotation, tr("There is no annotation %1, of yours or in an annotation layer.")},
+    {Failure::Code::AnnotationWithoutWords, tr("Only a margin note or a highlight with words becomes a fact.")},
+    {Failure::Code::NoSuchThing, tr("There is no thing %1 in the book's graph; give a kind to make it.")},
+    {Failure::Code::FactNotKept, tr("The words could not be kept as a fact.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

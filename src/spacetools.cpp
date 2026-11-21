@@ -1,4 +1,5 @@
 #include "mcp.h"
+#include "spaceparts.h"
 
 // The tools of the `spaces` command (#38): each names the command, which does
 // the work and prints JSON.
@@ -23,7 +24,7 @@ const bool registered = [] {
                   "alone. Members are then invited with space_invite and it syncs through a shared folder with space_sync.",
                   schema({{"name", string("The space's name.")},
                           {"collection", string("The collection to share; the space's name when not given (made when there is none).")},
-                          {"parts", list("More than the collection.", choice("A part.", {"graph", "questions", "ratings", "reading"}))}},
+                          {"parts", list("More than the collection.", choice("A part.", SpaceParts::names()))}},
                          {"name"}),
                   Changes, [](const QJsonObject &arguments) {
                       QStringList asked{"spaces", "create", arguments.value("name").toString()};
@@ -97,6 +98,17 @@ const bool registered = [] {
                   Changes, [](const QJsonObject &arguments) {
                       return command(
                           {"spaces", "files", arguments.value("space").toString(), arguments.value("on").toBool() ? "on" : "off"});
+                  }});
+
+    registerTool({"space_annotations", "Carry annotations into a space, or stop them",
+                  "Switches whether the highlights, margin notes and book ink in a space's books go into it: a shared space, as one "
+                  "of its writers (every member's then go, each member seeing the others' as far as they have read), or a space "
+                  "the user published (theirs, to whoever has it). Off unless switched on. Before turning it on, tell the user "
+                  "plainly who will see their annotations and ask.",
+                  schema({{"space", string("The space's name or id.")}, {"on", boolean("Whether the annotations go.")}}, {"space", "on"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command(
+                          {"spaces", "annotations", arguments.value("space").toString(), arguments.value("on").toBool() ? "on" : "off"});
                   }});
 
     registerTool({"space_fetch_file", "Fetch a book's file from a space",

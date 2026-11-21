@@ -150,6 +150,15 @@ hand) has no place to cut at and is left out. Its things have ids below zero and
 Where each of the space's books is here is recorded when subscribing (`global_ids`, per space), so a
 book matched by identifier or title, or a wishlist entry, is the same book to the cut.
 
+As built (#85): a space's annotations part (ADR 0002, *As built (#85)*) carries a person's highlights, margin
+notes and book ink in its books: of a published space its owner's, as part of what the space says (one removed
+goes as its removal alone); of a shared space each writer's, as theirs, compared only with what that writer said
+(a page's ink is known by its book and page, so two members' are one id). Each other person's is an annotation
+layer, read from the space's operations (`AnnotationLayers`, beside `GraphLayers`, both of the spaces held
+`HeldSpaces`), cut where the receiver is in the book by the same rule (`GraphContext::readerKnows`): an
+annotation whose passage ends further on stays out. A margin note made a fact is written into the receiver's own
+graph, in the book's tenant, learned at the note's place.
+
 As built (#3): on the owner's computer a published space has a log of its own, `published_ops`,
 apart from `ops`, though `live_ops` now leaves published spaces out. In `ops` it would be a space like
 those its members sync, compacted by snapshot marks it doesn't keep and sent by replication to the

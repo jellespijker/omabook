@@ -133,7 +133,7 @@ QList<Manual::Step> annotationsRelease() {
     };
 }
 
-// The 0.1.10 release's entries: book ink (#83), notes on fixed pages (#115), and asking about what was marked (#86).
+// The 0.1.10 release's entries: book ink (#83), notes on fixed pages (#115), and asking about what was marked (#86), and others' annotations (#85).
 QList<Manual::Step> inkRelease() {
     return {
         {"book-ink", "0.1.10", Manual::tr("Ink on the pages"),
@@ -148,6 +148,10 @@ QList<Manual::Step> inkRelease() {
          Manual::tr("With an AI of your own, {reader.ask} is given your highlights and notes up to where you are, never past "
                     "it: ask what you highlighted about something. Calibre's come across in their colours, with their notes."),
          "", "reader.ask", "reader", ""},
+        {"others-annotations", "0.1.10", Manual::tr("Others' notes, as far as you read"),
+         Manual::tr("A space you share can carry its members' highlights and margin notes: each person's beside yours, in their "
+                    "colour, never past your place. {reader.annotations} switches them off, one person or all."),
+         "", "reader.annotations", "reader", ""},
     };
 }
 

@@ -8,6 +8,7 @@
 #include <print>
 #include <tuple>
 
+#include "failure.h"
 #include "library.h"
 #include "librarymigrations.h"
 #include "person.h"
@@ -16,13 +17,15 @@
 #include "settings.h"
 #include "sharedspaces.h"
 #include "spacefiles.h"
+#include "spaceparts.h"
+#include "spaceswitch.h"
 
 namespace {
 
 using namespace Qt::StringLiterals;
 using SharedSpaces::Summary;
 
-constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sync|files|fetch] …\n\n"
+constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sync|files|annotations|fetch] …\n\n"
                        "Every piece of your library belongs to a space: your personal one (your own computers), a collection\n"
                        "you published or subscribed to, or a shared space several people write, as a household library or a\n"
                        "book club. A shared space holds a collection (its tree and its books' details; their files only when\n"
@@ -32,7 +35,7 @@ constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sy
                        "is refused.\n\n"
                        "  list                                      The spaces you are in, their kind, your role and the members\n"
                        "  create <name> [--collection c] [--parts p]  Found a shared space of a collection (the name's, or c);\n"
-                       "                                            p: graph,questions,ratings,reading, as for sharing one\n"
+                       "                                            p: graph,questions,ratings,reading,annotations\n"
                        "  invite <space> <person-id> [--role r] [--out f]  Make someone a member (reader or writer; writer\n"
                        "                                            unless said) and write their invite: a file only they can open\n"
                        "  remove <space> <person-id>                What they write from now on is refused; what they had stays theirs\n"
@@ -41,6 +44,9 @@ constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sy
                        "                                            a mounted share), and write what is new here into it, sealed\n"
                        "  files <space> on|off                      Let the books' files of a shared space (as a writer) or of one\n"
                        "                                            you published travel to everyone it reaches; off unless switched\n"
+                       "  annotations <space> on|off                Carry its members' highlights, margin notes and ink into it,\n"
+                       "                                            each seen by the others as far as they have read; off unless\n"
+                       "                                            switched\n"
                        "  fetch <book>                              Fetch a book's file from the space that carries it, checked\n"
                        "                                            against its hash; a book with a file of its own keeps it\n\n"
                        "A person's id is what omabook identity --export prints. Invite someone, then sync, so the operation that\n"
@@ -120,6 +126,9 @@ struct Command {
     if (command.words.size() != 2)
         return fail(u"Name the space: omabook spaces create <name>"_s);
     const QStringList parts = command.parser.value("parts").split(u',', Qt::SkipEmptyParts);
+    for (const QString &part : parts)
+        if (SpaceParts::named(part.trimmed()) == nullptr)
+            return fail(Failure(Failure::Code::UnknownPart, {u"--parts"_s, SpaceParts::names().join(", "_L1), part}).text());
     // The plugins are asked what of theirs goes with it (#65).
     Settings settings;
     CommandScripts scripts(&settings, library.root());
@@ -259,6 +268,31 @@ struct Command {
     return 0;
 }
 
+// A part of a space switched on or off (SpaceSwitch): its annotations.
+[[nodiscard]] int part(const Library &library, const Command &command, const QString &name) {
+    const QString to = command.words.value(2);
+    if (command.words.size() != 3 || (to != "on"_L1 && to != "off"_L1))
+        return fail(u"Name the space, and on or off: omabook spaces %1 <space> on|off"_s.arg(name));
+    const auto switched = SpaceSwitch::set(library, command.words.at(1), name, to == "on"_L1);
+    if (!switched)
+        return fail(switched.error().text());
+    const QString said = switched->on ? u"The %1 in the books of %2 (highlights, margin notes and ink) go into it now: whoever it "
+                                        "reaches sees each person's as far as they have read."_s.arg(name, switched->name)
+                                      : u"The %1 in the books of %2 no longer go into it."_s.arg(name, switched->name);
+    if (command.json) {
+        printJson(QJsonObject{{"space", switched->space},
+                              {"kind", switched->kind},
+                              {"name", switched->name},
+                              {"part", switched->part},
+                              {"on", switched->on},
+                              {"changed", switched->changed},
+                              {"said", said}});
+        return 0;
+    }
+    printLine(stdout, (switched->changed ? QString() : u"It was so already. "_s) + said);
+    return 0;
+}
+
 [[nodiscard]] int fetch(Library &library, const Command &command) {
     if (command.words.size() != 2)
         return fail(u"Name the book by its number: omabook spaces fetch <book>"_s);
@@ -287,14 +321,14 @@ int runSpacesCli(const QStringList &arguments) {
     Command command;
     QCommandLineParser &parser = command.parser;
     parser.addOption({{"h", "help"}, "Show this help."});
-    parser.addPositionalArgument("command", "list, create, invite, remove, join, sync, files or fetch.", "[command]");
+    parser.addPositionalArgument("command", "list, create, invite, remove, join, sync, files, annotations or fetch.", "[command]");
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
                       "Use the library in this folder instead of the current one, for this run only "
                       "(omabook libraries --use changes the one in use).",
                       "folder"});
     parser.addOption({"collection", "create: the collection here to share (the space's name when not given).", "collection"});
-    parser.addOption({"parts", "create: more than the collection, by name: graph, questions, ratings, reading.", "parts"});
+    parser.addOption({"parts", "create: more than the collection, by name: " + SpaceParts::names().join(", "_L1) + ".", "parts"});
     parser.addOption({"role", "invite: reader or writer (writer when not given).", "role"});
     parser.addOption({"out", "invite: the file to write the invite to, or a folder for it (this one when not given).", "file"});
     parser.addOption({"as", "join: the collection here for the space's books (the space's name when not given).", "name"});
@@ -332,5 +366,7 @@ int runSpacesCli(const QStringList &arguments) {
         return files(library, command);
     if (sub == "fetch"_L1)
         return fetch(library, command);
+    if (sub == "annotations"_L1)
+        return part(library, command, sub);
     return fail(QString::fromUtf8(usage));
 }

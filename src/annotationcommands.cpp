@@ -14,6 +14,8 @@
 #include "annotationanchors.h"
 #include "annotationedits.h"
 #include "annotationexport.h"
+#include "annotationfacts.h"
+#include "annotationlayers.h"
 #include "highlightcolors.h"
 #include "highlights.h"
 #include "library.h"
@@ -75,6 +77,15 @@ void describe(QCommandLineParser &parser) {
     parser.addOption({"remove", "Remove the annotation with this number.", "annotation"});
     parser.addOption({"export", "Export them: markdown, readwise (CSV) or pdf (a copy of a PDF book with them in it).", "format"});
     parser.addOption({"output", "The file an export is written to; printed when not given (a PDF needs one).", "file"});
+    parser.addOption({"others",
+                      "List the others' annotations instead: those of the people you share a space with whose annotations part is "
+                      "on, as far as you have read the book."});
+    parser.addOption({"fact",
+                      "Make the words of this annotation (a number of yours, or the id of someone else's that --others lists) a fact "
+                      "of the thing --thing names, learned where it is in the book.",
+                      "annotation"});
+    parser.addOption({"thing", "--fact: the thing of the book's graph, by its number or name.", "thing"});
+    parser.addOption({"thing-kind", "--fact: the kind of thing to make when there is none of that name (character, place, ...).", "kind"});
 }
 
 [[nodiscard]] QString wordsOf(const Annotation &annotation) {
@@ -172,6 +183,44 @@ int exportThem(Library &library, const QList<qint64> &books, bool all, const QCo
     return parser.isSet(name) ? std::optional(parser.value(name)) : std::nullopt;
 }
 
+// The others' annotations of the books, as far as the reader has read each.
+int others(const Library &library, const QList<qint64> &books, bool all, const QCommandLineParser &parser) {
+    const AnnotationLayers::Layers layers = AnnotationLayers::read(library, all ? 0 : books.first());
+    if (parser.isSet("json")) {
+        printJson({{"people", AnnotationLayers::toJson(layers)}, {"refused", layers.refused}});
+        return 0;
+    }
+    for (const AnnotationLayers::Person &person : layers.people)
+        for (const AnnotationLayers::Annotation &one : person.annotations)
+            printLine(stdout,
+                      u"%1\t%2\t%3\tbook %4, section %5, %6%\t%7"_s.arg(one.id, AnnotationLayers::calledOf(person), one.kind)
+                          .arg(one.book)
+                          .arg(one.place.section)
+                          .arg(qRound(one.place.fraction * 100))
+                          .arg(one.note.isEmpty() ? one.quote.simplified() : one.quote.simplified() + u" — "_s + one.note.simplified()));
+    if (layers.refused > 0)
+        printLine(stderr, u"%1 of what others sent was over the limits, and left out."_s.arg(layers.refused));
+    return 0;
+}
+
+// --fact: an annotation's words made a fact of a thing of the book's graph.
+int fact(const Library &library, const QCommandLineParser &parser) {
+    const auto source = AnnotationFacts::of(library, parser.value("fact"));
+    if (!source)
+        return failLine(source.error().text());
+    const auto made = AnnotationFacts::make(library, *source, {.which = parser.value("thing"), .kind = parser.value("thing-kind")});
+    if (!made)
+        return failLine(made.error().text());
+    if (parser.isSet("json"))
+        printJson({{"node", made->node}, {"fact", made->fact}, {"made_node", made->madeNode}, {"book_id", source->book}});
+    else
+        printLine(stdout, u"Kept as fact %1 of thing %2, learned in book %3 at section %4."_s.arg(made->fact)
+                              .arg(made->node)
+                              .arg(source->book)
+                              .arg(source->place.section));
+    return 0;
+}
+
 // What --add, --change or --remove asks of one of the book's annotations, said as it is then.
 int edit(Library &library, qint64 book, const QCommandLineParser &parser) {
     const QVariantMap names = Settings().highlightNames();
@@ -237,6 +286,8 @@ int runAnnotationsCli(const QStringList &arguments) {
     const qint64 id = asked.toLongLong();
     if (!all && !(*library)->book(id))
         return failLine("There is no book " + asked + " in the library.");
+    if (parser.isSet("fact"))
+        return fact(**library, parser);
     const bool editing = parser.isSet("add") || parser.isSet("change") || parser.isSet("remove");
     if (all && editing)
         return failLine(u"Say which book: an annotation is added, changed or removed in one."_s);
@@ -245,6 +296,8 @@ int runAnnotationsCli(const QStringList &arguments) {
     const QList<qint64> books = all ? AnnotationExport::booksWithAnnotations(**library) : QList<qint64>{id};
     if (parser.isSet("export"))
         return exportThem(**library, books, all, parser);
+    if (parser.isSet("others"))
+        return others(**library, books, all, parser);
     // Passages placed in another file of the book are found again in this one first (#80); never for a sweep of the library.
     if (!all)
         std::ignore = AnnotationAnchors::anchor(**library, id); // A book without a file Omabook reads is listed as it is.

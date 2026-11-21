@@ -143,8 +143,15 @@ void MarginNotes::announce() {
     ++m_revision;
     // The layout makes room for them (PageLayout::columns), the same in every chapter of the book.
     if (m_reader && m_reader->format())
-        m_reader->format()->setNotes(!m_notes.isEmpty() || m_drafting);
+        m_reader->format()->setNotes(!m_notes.isEmpty() || m_drafting || m_othersWanted);
     emit changed();
+}
+
+void MarginNotes::setOthersWanted(bool wanted) {
+    if (m_othersWanted == wanted)
+        return;
+    m_othersWanted = wanted;
+    announce();
 }
 
 void MarginNotes::refresh() { read(); }

@@ -50,11 +50,18 @@ Item {
     // `reader` is its own property.
     readonly property QtObject windowReader: reader
     readonly property QtObject windowSettings: settings
-    MarginNotes { id: model; reader: layer.windowReader; settings: layer.windowSettings }
+    MarginNotes { id: model; reader: layer.windowReader; settings: layer.windowSettings; othersWanted: othersModel.notes > 0 }
+    // Others' annotations on the book (#85): their highlights under the
+    // words, their notes in the margin column, as far as the reader has read.
+    readonly property alias others: othersModel
+    AnnotationLayerView { id: othersModel; reader: layer.windowReader; settings: layer.windowSettings }
     // What another computer sent, once the library is read again after a sync.
     Connections {
         target: backend
-        function onRevisionChanged() { model.refresh() }
+        function onRevisionChanged() {
+            model.refresh()
+            othersModel.refresh()
+        }
     }
     Connections {
         target: reader

@@ -26,12 +26,12 @@ AppPopup {
     readonly property bool canPublish: counted && problem === "" && !backend.spaces.working && (file.text.trim() !== "" || asLink.checked)
                                        && (!firstTime || name.text.trim() !== "")
     readonly property var parts: ({ graph: graph.checked, questions: questions.checked, ratings: ratings.checked, reading: reading.checked,
-                                    files: files.checked })
+                                    files: files.checked, annotations: annotations.checked })
 
     function show(id) {
         const known = backend.collections.find(collection => collection.id === id)
         collectionId = known ? id : (backend.collections.length > 0 ? backend.collections[0].id : 0)
-        for (const part of [graph, questions, ratings, reading, files, asLink, openLink])
+        for (const part of [graph, questions, ratings, reading, files, annotations, asLink, openLink])
             part.checked = false
         name.text = ""
         file.text = ""
@@ -155,6 +155,11 @@ AppPopup {
             objectName: "publishReading"
             text: qsTr("Your reading: how far you are in %1, and %2 of reading")
                   .arg(qsTr("%Ln books", "", dialog.seen.places || 0)).arg(qsTr("%Ln days", "", dialog.seen.days || 0))
+        }
+        PartSwitch {
+            id: annotations
+            objectName: "publishAnnotations"
+            text: qsTr("Your highlights, margin notes and ink in its books, seen by each only as far as they have read")
         }
         PartSwitch {
             id: files

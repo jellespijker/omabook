@@ -102,6 +102,16 @@ public:
         FfmpegFailed,          // {what it said}
         WhisperFailed,         // {what it said}
         WhisperNoTranscript,   // {}
+        // Spaces and others' annotations (library, operations; #85).
+        NoSuchSpace,            // {the name or id asked for}
+        SpaceNameTaken,         // {the name asked for}
+        PartNotSwitched,        // {the part asked for, the parts that are switched}
+        UnknownPart,            // {the option, the parts it takes, the part asked for}
+        OnlyOwnerSwitches,      // {the space's name}
+        NoSuchAnnotation,       // {the annotation asked for}
+        AnnotationWithoutWords, // {}
+        NoSuchThing,            // {the thing asked for}
+        FactNotKept,            // {}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiUnreachable,       // {where, the network's reason}

@@ -35,7 +35,8 @@ using namespace Qt::StringLiterals;
             .questions = parts.value("questions").toBool(),
             .ratings = parts.value("ratings").toBool(),
             .reading = parts.value("reading").toBool(),
-            .files = parts.value("files").toBool()};
+            .files = parts.value("files").toBool(),
+            .annotations = parts.value("annotations").toBool()};
 }
 
 // Where a collection's snapshot is offered to be written: among the user's

@@ -70,7 +70,9 @@ struct Refused {
 struct State {
     QString founder;
     QString name;
-    QStringList parts; // the optional parts it holds (PublishedSpace::Parts), as founded
+    // The optional parts it holds (SpaceParts), as founded, and as its writers
+    // last switched those that are switched (entity "space", field "part:<name>").
+    QStringList parts;
     // Whether its books' files travel in it (#63): as its writers last said
     // (entity "space", its id, field "files", "1" or "0"); off until one did.
     bool files = false;

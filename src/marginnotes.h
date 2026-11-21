@@ -59,6 +59,8 @@ class MarginNotes : public QObject {
     // A note being written on a passage that has none yet, which the page
     // makes room for as for one that is there.
     Q_PROPERTY(bool drafting READ drafting WRITE setDrafting NOTIFY changed)
+    // Others' notes are shown on the book too (AnnotationLayerView, #85), which want the margin column as these do.
+    Q_PROPERTY(bool othersWanted READ othersWanted WRITE setOthersWanted NOTIFY changed)
     // Changes with every write and every new chapter, for what is worked out from them.
     Q_PROPERTY(int revision READ revision NOTIFY changed)
 
@@ -82,6 +84,8 @@ public:
     bool drafting() const noexcept { return m_drafting; }
     void setDrafting(bool drafting);
     int revision() const noexcept { return m_revision; }
+    bool othersWanted() const noexcept { return m_othersWanted; }
+    void setOthersWanted(bool wanted);
 
     // Where the notes of the chapter shown are in a text showing it (a
     // TextEdit's document): [{id, start, end, note, ink}], in the order of their
@@ -178,6 +182,7 @@ private:
     QSet<qint64> m_inked; // the notes written by hand
     QString m_fileHash; // of the file the open book is read from, which a new note is placed in
     bool m_drafting = false;
+    bool m_othersWanted = false;
     int m_revision = 0;
     // The spans of the last text asked about, while neither it nor the notes changed.
     size_t m_spannedText = 0;

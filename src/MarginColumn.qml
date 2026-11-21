@@ -6,7 +6,9 @@ import QtQuick
 // another (PageLayout::stack). The column is part of the page's geometry,
 // which the layout decides (PageLayout::columns); a page that is laid out
 // again, wider, narrower or in another size of type, moves its notes with
-// the lines they are on.
+// the lines they are on. Others' notes (#85, AnnotationLayerView) stand among
+// them, each under its writer's name and in their colour, to read and to keep
+// as a fact of the graph, never to edit.
 Item {
     id: column
     objectName: "marginColumn"
@@ -25,8 +27,10 @@ Item {
     property int relaid: 0
     readonly property real spacing: 8
 
-    // The notes of the chapter on the page, and the one being written.
+    // The notes of the chapter on the page, and the one being written; and others'.
     property var spans: []
+    property var otherSpans: []
+    readonly property var others: reading ? reading.others : null
     readonly property var entries: {
         laid
         relaid
@@ -34,6 +38,10 @@ Item {
         for (const span of spans) {
             const top = place(span.start)
             if (!isNaN(top)) all.push({ id: span.id, start: span.start, end: span.end, note: span.note, ink: span.ink, top: top })
+        }
+        for (const span of otherSpans) {
+            const top = place(span.start)
+            if (!isNaN(top)) all.push({ id: "o:" + span.id, other: span, top: top })
         }
         if (reading && reading.draft && reading.draftHere) {
             const top = place(reading.draft.start)
@@ -51,9 +59,13 @@ Item {
         for (const entry of entries) if (entry.id === id) return entry
         return null
     }
+    // Others' notes shown, by their ids ("o:" and the note's in its space).
+    property var otherIds: []
     function arrange() {
-        const now = entries.map(entry => entry.id)
+        const now = entries.filter(entry => !entry.other).map(entry => entry.id)
         if (now.length !== ids.length || now.some((id, i) => id !== ids[i])) ids = now
+        const theirs = entries.filter(entry => !!entry.other).map(entry => entry.id)
+        if (theirs.length !== otherIds.length || theirs.some((id, i) => id !== otherIds[i])) otherIds = theirs
         const wanted = []
         for (const entry of entries) {
             const card = cardOf(entry.id)
@@ -68,7 +80,10 @@ Item {
     onEntriesChanged: soon.restart()
     onFootChanged: soon.restart()
     onWidthChanged: soon.restart()
-    function respan() { spans = reading && text ? reading.notes.spans(text.textDocument) : [] }
+    function respan() {
+        spans = reading && text ? reading.notes.spans(text.textDocument) : []
+        otherSpans = others && others.shown && text ? others.notesIn(text.textDocument) : []
+    }
     Timer { id: spanSoon; interval: 0; onTriggered: column.respan() }
     onTextChanged: spanSoon.restart()
     onReadingChanged: spanSoon.restart()
@@ -81,18 +96,24 @@ Item {
         target: column.reading ? column.reading.notes : null
         function onChanged() { spanSoon.restart() }
     }
+    Connections {
+        target: column.others
+        function onChanged() { spanSoon.restart() }
+    }
     // The notes on the page, top to bottom, for the keyboard to go through.
     function shown() {
         const found = []
         for (const entry of entries) {
             const card = cardOf(entry.id)
-            if (entry.id && card && card.visible) found.push(entry.id)
+            if (entry.id && !entry.other && card && card.visible) found.push(entry.id)
         }
         return found
     }
     function cardOf(id) {
         for (let i = 0; i < cards.count; ++i)
             if (cards.itemAt(i) && cards.itemAt(i).noteId === id) return cards.itemAt(i)
+        for (let i = 0; i < otherCards.count; ++i)
+            if (otherCards.itemAt(i) && otherCards.itemAt(i).cardId === id) return otherCards.itemAt(i)
         return null
     }
 
@@ -124,6 +145,25 @@ Item {
                 if (ink) column.reading.editing = noteId
             }
             Component.onCompleted: if (noteId === 0 || (column.reading && column.reading.editing === noteId)) edit()
+        }
+    }
+
+    Repeater {
+        id: otherCards
+        model: column.otherIds
+        delegate: OthersNoteCard {
+            required property var modelData
+            readonly property var entry: column.entryOf(modelData)
+            readonly property string cardId: modelData
+            objectName: "othersNote"
+            width: column.width
+            y: column.tops[modelData] !== undefined ? column.tops[modelData] : (entry ? entry.top : 0)
+            visible: !!entry && (column.foot < 0 || y + height <= column.foot + 0.5)
+            note: entry ? entry.other : null
+            annotationLayer: column.others
+            lines: column.foot < 0 ? 8 : 4
+            fontSize: reader.format.noteFontSize
+            onImplicitHeightChanged: soon.restart()
         }
     }
 }

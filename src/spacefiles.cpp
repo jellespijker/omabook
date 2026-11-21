@@ -27,6 +27,7 @@
 #include "spacelinks.h"
 #include "spacereducer.h"
 #include "spaces.h"
+#include "spaceswitch.h"
 #include "spaceworlds.h"
 #include "subscribedspace.h"
 
@@ -96,18 +97,8 @@ constexpr auto byFile = "file"_L1;
     return std::nullopt;
 }
 
-// The space `which` names, of those this library shares or publishes.
 [[nodiscard]] std::expected<Spaces::Recorded, QString> resolve(const Library &library, const QString &which) {
-    QList<Spaces::Recorded> meant;
-    for (const Spaces::Recorded &space : Spaces::recorded(library))
-        if ((isShared(space) || isPublished(space))
-            && (space.id == which.trimmed() || space.name.compare(which.simplified(), Qt::CaseInsensitive) == 0))
-            meant << space;
-    if (meant.isEmpty())
-        return std::unexpected(u"This library shares or publishes no space called %1 (omabook spaces lists them)."_s.arg(which));
-    if (meant.size() > 1)
-        return std::unexpected(u"More than one space goes by %1; name one by its id (omabook spaces lists them)."_s.arg(which));
-    return meant.first();
+    return SpaceSwitch::resolve(library, which).transform_error([](const Failure &why) { return why.text(); });
 }
 
 [[nodiscard]] std::expected<SpaceFiles::Switched, QString> setShared(const Library &library, const Spaces::Recorded &space, bool on) {
