@@ -126,32 +126,30 @@ QList<Manual::Step> annotationsRelease() {
          Manual::tr("Justified text breaks a long word at the end of a line by the book's language, as LibreOffice does. "
                     "Hyphenate in the Aa panel ({reader.format}) turns it off."),
          "", "reader.format", "reader", ""},
-        {"handwritten-notes", "0.1.10", Manual::tr("Margin notes by hand"),
-         Manual::tr("With a pen, write on the text or in the margin beside it: a note by hand on that line, read by your own "
-                    "AI server so the book's search finds it."),
-         "", "reader.notes", "reader", ""},
     };
 }
 
-// The 0.1.10 release's entries: book ink (#83), notes on fixed pages (#115), and asking about what was marked (#86), and others' annotations (#85).
+// The 0.1.10 release's entries: writing by hand, on a PDF's or a comic's pages (#83) and in a book's margin (#90);
+// notes on fixed pages, and searched (#115); others' annotations in a space (#85) and asking about one's own (#86);
+// and reading statistics with a goal for the year (#68).
 QList<Manual::Step> inkRelease() {
     return {
-        {"book-ink", "0.1.10", Manual::tr("Ink on the pages"),
-         Manual::tr("Write and draw on the pages of a PDF or a comic with a pen or the mouse: {reader.ink}. The ink stays where you "
-                    "put it at every zoom, and goes to your other computers."),
+        {"book-ink", "0.1.10", Manual::tr("Write by hand"),
+         Manual::tr("{reader.ink} writes and draws on the pages of a PDF or a comic, with a pen or the mouse. In other books a "
+                    "pen writes a margin note on the line, read by your own AI server so the book's search finds it."),
          "", "reader.ink", "reader", ""},
         {"page-notes", "0.1.10", Manual::tr("Notes on PDFs and comics"),
          Manual::tr("Highlight and write margin notes on a PDF's words, and on a part of a comic's page: drag over a panel, or "
                     "{reader.select}. {reader.find} finds the words of your notes too, and `notes:` searches them in the library."),
          "", "reader.find", "reader", ""},
-        {"ask-highlights", "0.1.10", Manual::tr("Ask about what you marked"),
-         Manual::tr("With an AI of your own, {reader.ask} is given your highlights and notes up to where you are, never past "
-                    "it: ask what you highlighted about something. Calibre's come across in their colours, with their notes."),
+        {"others-annotations", "0.1.10", Manual::tr("Notes shared, and asked about"),
+         Manual::tr("A space you share can carry its members' highlights and notes, each beside yours in their colour and never "
+                    "past your place. {reader.ask} is given your own up to where you are, so you can ask what you marked."),
          "", "reader.ask", "reader", ""},
-        {"others-annotations", "0.1.10", Manual::tr("Others' notes, as far as you read"),
-         Manual::tr("A space you share can carry its members' highlights and margin notes: each person's beside yours, in their "
-                    "colour, never past your place. {reader.annotations} switches them off, one person or all."),
-         "", "reader.annotations", "reader", ""},
+        {"reading-stats", "0.1.10", Manual::tr("A year of reading"),
+         Manual::tr("{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, "
+                    "and how far you are with a goal for the year. It is all counted on your computer."),
+         "", "library.stats", "library", ""},
     };
 }
 
