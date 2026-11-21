@@ -129,8 +129,9 @@ public:
     void replace(std::vector<Ink::Stroke> strokes);
     void applyChange(const Ink::Change &change);
 
-    // What tells a palm from a finger. It starts knowing a pen when Qt
-    // already does (one used in another window); a test starts it afresh.
+    // What tells a palm from a finger. It starts knowing a pen when one was
+    // used in this run, on another surface; a pen Qt merely lists is none
+    // (#134). A test starts it afresh.
     [[nodiscard]] Ink::InputRules &rules() { return m_rules; }
 
 signals:

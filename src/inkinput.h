@@ -31,7 +31,7 @@ struct PalmLimits {
 
 class InputRules {
 public:
-    // `penKnown`: Qt already knows a pen on this computer, before any of its events.
+    // `penKnown`: a pen was already used, before any of its events here.
     explicit InputRules(bool penKnown = false) : m_penSeen(penKnown) {}
 
     // Times are the events' own, in milliseconds.

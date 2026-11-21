@@ -11,8 +11,6 @@
 #include <QScreen>
 #include <QTabletEvent>
 
-#include <algorithm>
-
 #include "inkcodec.h"
 #include "inknodes.h"
 
@@ -25,9 +23,12 @@ constexpr int defaultBatchPause = 1000;
 
 qint64 deviceId(const QPointingDevice *device) { return device != nullptr ? device->systemId() : -1; }
 
-bool knowsAPen() {
-    return std::ranges::any_of(QInputDevice::devices(),
-                               [](const QInputDevice *device) { return device->type() == QInputDevice::DeviceType::Stylus; });
+// Whether a pen was used in this run, on any surface (#134): its press, its
+// hover or its coming near. A pen Qt only lists (a laptop's own digitizer,
+// known at the start) is not one, or a finger would never write there.
+bool &penUsed() {
+    static bool used = false;
+    return used;
 }
 
 bool can(const QPointingDevice *device, QInputDevice::Capability capability) {
@@ -36,7 +37,7 @@ bool can(const QPointingDevice *device, QInputDevice::Capability capability) {
 
 } // namespace
 
-InkSurface::InkSurface(QQuickItem *parent) : QQuickItem(parent), m_rules(knowsAPen()), m_nodes(std::make_unique<InkNodes>()) {
+InkSurface::InkSurface(QQuickItem *parent) : QQuickItem(parent), m_rules(penUsed()), m_nodes(std::make_unique<InkNodes>()) {
     setFlag(ItemHasContents);
     setAcceptTouchEvents(true);
     setAcceptedMouseButtons(Qt::LeftButton);
@@ -234,6 +235,7 @@ bool InkSurface::eventFilter(QObject *watched, QEvent *event) {
         // NOLINTNEXTLINE(cppcoreguidelines-pro-type-static-cast-downcast): the event's type says its class, Qt's own idiom
         const auto *proximity = static_cast<const QTabletEvent *>(event);
         m_rules.proximity(event->type() == QEvent::TabletEnterProximity, proximity->timestamp());
+        penUsed() = true;
         emit penChanged();
         return false;
     }
@@ -253,6 +255,7 @@ bool InkSurface::tablet(QTabletEvent &event) {
     const QPointingDevice *device = event.pointingDevice();
     const bool seen = m_rules.penSeen();
     m_rules.penEvent(event.timestamp());
+    penUsed() = true;
     if (!seen) {
         emit penChanged();
     }
