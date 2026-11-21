@@ -14,6 +14,7 @@
 
 #include "library.h"
 #include "metadatasource.h"
+#include "pluginnews.h"
 #include "scriptplugin.h"
 
 // The script plugins in ~/.config/omabook/plugins: each folder there whose
@@ -89,6 +90,11 @@ public:
     // the last time is told to the scripts, and their importers have their
     // say in the new ones. A book is announced once, whenever it came in.
     void libraryChanged(const QList<Book> &books, const QString &libraryPath);
+    // Looks at the library's change log for data of a plugin's that came from
+    // elsewhere (a sync, a pairing, a space, operations kept until known), and
+    // a moment after the last of it tells each running plugin of its own
+    // alone: `log.changed`, and logChanged for its view (scriptpluginlog.cpp).
+    void lookAtTheLog();
 
     // A source for each one the scripts registered, owned by `parent`.
     QList<MetadataSource *> metadataSources(QObject *parent) const;
@@ -178,6 +184,9 @@ signals:
     // whichever book is open).
     void reloadBookRequested(qint64 id);
     void questionChanged();
+    // A plugin's data came from elsewhere, `{entity: [id, ...]}`: for its
+    // view, which is handed it (PluginView.qml).
+    void logChanged(const QString &plugin, const QVariantMap &entities);
 
 private:
     void watch();
@@ -230,6 +239,8 @@ private:
     // The library as the scripts last heard of it.
     QString m_libraryPath;
     QHash<qint64, QJsonObject> m_books;
+    void tellLog(const QString &plugin, const QJsonObject &entities);
+    PluginNews::Feed m_logFeed{[this](const QString &plugin, const QJsonObject &entities) { tellLog(plugin, entities); }};
 };
 
 // The script plugins for a command, which has no window: read once and not

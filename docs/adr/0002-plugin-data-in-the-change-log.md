@@ -83,3 +83,12 @@ the library's own personal parts.
   what another person sent is held to this ADR's limits: an operation of more than 64 KiB, or a change of a set of
   more than 1000 items, is left out and counted; of an annotation no more than 1000 strokes are drawn; its words
   are plain text, without controls or the characters that turn text around.
+
+## As built (#126)
+
+- **Told of what came.** What the log holds of each plugin's space from each other computer is its `seen` mark;
+  the window looks at the marks whenever the library's files change and after its own sync, and what lies past
+  the marks it looked at before is told to its plugin, as `log.changed` `{entities: {entity: [id, ...]}}`, a moment
+  after the last of a burst (`PluginNews::Feed`), and to its open view as `logChanged(entities)`. Whatever stored
+  it (a sync, a pairing, a space, operations kept until known) is told the same; this computer's own writes never
+  are, and the first look at a library only marks where it is.

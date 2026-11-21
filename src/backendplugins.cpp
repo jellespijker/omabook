@@ -34,5 +34,11 @@ void Backend::startScripts(const QString &pluginFolder) {
     connect(m_pluginManager.get(), &PluginManager::said, this, &Backend::say);
     if (m_library)
         m_scripts->libraryChanged(m_library->books(), libraryPath());
+    // A plugin hears of its data that came from elsewhere: after the window's
+    // own sync (which reloads), and whenever the database's files change, by a
+    // sync from the command line too. The first look marks where the log is.
+    m_scripts->lookAtTheLog();
+    connect(this, &Backend::revisionChanged, m_scripts.get(), &ScriptPlugins::lookAtTheLog);
+    connect(&m_reloadSoon, &QTimer::timeout, m_scripts.get(), &ScriptPlugins::lookAtTheLog);
     QTimer::singleShot(0, m_scripts.get(), [this] { m_scripts->emitEvent("app.started"); });
 }

@@ -11,7 +11,8 @@ import QtQuick.Layouts
 // (view.back), Escape closes it (view.close), and the plugin's commands of the
 // place "view" work while it has the keyboard. Omabook sets on the plugin's
 // root item what it declares of `beside` and `args`, asks its back() before
-// the view is closed, and gives it the keyboard by its takeFocus().
+// the view is closed, gives it the keyboard by its takeFocus(), and hands
+// its logChanged(entities) what of the plugin's data came from elsewhere.
 FocusScope {
     id: frame
     // As custom.mods has it: {plugin, pluginName, view, title, url, width}; null for none.
@@ -143,4 +144,15 @@ FocusScope {
     }
     onBesideChanged: hand()
     onArgsChanged: hand()
+
+    // What of the plugin's data came from elsewhere (log.changed), for a view that
+    // declares logChanged(entities) to show it without being asked.
+    Connections {
+        target: backend.scripts
+        function onLogChanged(plugin, entities) {
+            const item = loader.item
+            if (frame.entry && frame.entry.plugin === plugin && item && typeof item.logChanged === "function")
+                item.logChanged(entities)
+        }
+    }
 }

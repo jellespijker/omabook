@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Added
+
+- A plugin hears when its data came from elsewhere (#126): after a sync with another computer, a pairing or anything else that brings in what it keeps in the change log (`omabook.log`), it is told `log.changed` with `{entities: {entity: [id, ...]}}`, once a sync is done, of its own things alone and never of its own writes; its open view is handed the same as `logChanged(entities)`, so a notebook open on one computer shows the page written on the other.
+
 ## [0.1.10] - 2026-11-21
 
 ### Added

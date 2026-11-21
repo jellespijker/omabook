@@ -116,6 +116,11 @@ const QList<Event> &events() {
          "The reader moved to another page or chapter (told a moment after they stop), or the open book was read anew "
          "because it changed. The same as `reader.current()`."},
         {"lookup.finished", "{id, candidates}", "Every source of a look-up has answered."},
+        {"log.changed", "{entities}",
+         "The plugin's own data in the change log (`omabook.log`) came from elsewhere: a sync with another computer, a "
+         "pairing, a space, or an update that took it in. `entities` is `{entity: [id, ...]}`, the things touched; told "
+         "once a sync is done, never of its own writes. Its open view is handed the same, as `logChanged(entities)` on its "
+         "root item."},
     };
     return events;
 }

@@ -77,7 +77,7 @@ AppPopup {
         "book.added": qsTr("a book is added"), "book.removed": qsTr("a book is removed"),
         "book.changed": qsTr("a book's details change"), "book.opened": qsTr("a book is opened"),
         "book.closed": qsTr("a book is closed"), "page.turned": qsTr("a page is turned"),
-        "lookup.finished": qsTr("a look-up has finished")
+        "lookup.finished": qsTr("a look-up has finished"), "log.changed": qsTr("its data comes from another computer")
     })
     function fieldList(fields) { return (fields || []).map(field => fieldNames[field] || field).join(", ") }
     function permissionText(permissions) {
