@@ -122,6 +122,11 @@ Item {
     function selectWordAt(x, y) {
         const word = reader.marks.wordAt(text.textDocument, text.positionAt(x, y))
         if (word.end <= word.start) return false
+        // The word under the point (#140), not the nearest one, which beside
+        // a line or between paragraphs is on another line, maybe out of sight.
+        const a = text.positionToRectangle(word.start), b = text.positionToRectangle(word.end)
+        const near = a.y === b.y ? x >= Math.min(a.x, b.x) - 6 && x <= Math.max(a.x, b.x) + 6 : true
+        if (!near || y < a.y - 2 || y > b.y + b.height + 2) return false
         text.select(word.start, word.end)
         return true
     }

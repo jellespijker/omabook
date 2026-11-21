@@ -248,6 +248,24 @@ private slots:
         QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(warned(bench.desk)));
     }
 
+    // A long press beside the words, between two paragraphs, selects
+    // nothing: not the nearest word, which is on another line and may be
+    // out of sight.
+    void aLongPressBetweenParagraphsSelectsNothing() {
+        Bench bench("epub");
+        const int second = bench.find("It was", 10);
+        QRectF last, first;
+        QMetaObject::invokeMethod(bench.text(), "positionToRectangle", Q_RETURN_ARG(QRectF, last), Q_ARG(int, second - 2));
+        QMetaObject::invokeMethod(bench.text(), "positionToRectangle", Q_RETURN_ARG(QRectF, first), Q_ARG(int, second));
+        QVERIFY(first.top() - last.bottom() > 4);
+        const QPointF gap = bench.text()->mapToScene(QPointF(bench.text()->width() / 2, (last.bottom() + first.top()) / 2));
+        bench.hold(gap);
+        QTest::qWait(200);
+        QCOMPARE(bench.selected(), QString());
+        QVERIFY(!bench.shows("selectHandles"));
+        QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(warned(bench.desk)));
+    }
+
     // The end's handle grows the selection on and shrinks it back, the
     // start's grows it back and shrinks it on, a whole word at a time, and
     // across a line; the menu comes back beside it.
@@ -482,16 +500,28 @@ private slots:
                                 .arg(bench.desk.window->height()));
         };
         // A word at a point of the page, the first of those tried that has one.
+        // A word of a line wholly in sight, found from the layout from that
+        // far down the page upwards: whatever the fonts, a press lands on one.
         const auto pressNear = [&](double across, double down) {
-            for (int step = 0; step < 8; ++step) {
-                // Across a little, and up a little where that falls between paragraphs.
-                const QPointF at = handles->mapFromItem(
-                    area, QPointF(area->width() * (across + (step * 0.04)), (area->height() * down) - ((step % 2) * 14 * (step / 2))));
-                QVariant done;
-                QMetaObject::invokeMethod(handles, "pressAt", Q_RETURN_ARG(QVariant, done), Q_ARG(QVariant, at.x()),
-                                          Q_ARG(QVariant, at.y()), Q_ARG(QVariant, false));
-                if (done.toBool())
-                    return true;
+            QQuickItem *text = bench.text();
+            const QRectF sight = area->mapRectToScene(QRectF(0, 0, area->width(), area->height()));
+            for (int up = 0; up < 40; ++up) {
+                const QPointF row = text->mapFromScene(area->mapToScene(QPointF(0, (area->height() * down) - (up * 6))));
+                for (const double x : {across, 0.1, 0.3, 0.5}) {
+                    int position = -1;
+                    QMetaObject::invokeMethod(text, "positionAt", Q_RETURN_ARG(int, position), Q_ARG(qreal, text->width() * x),
+                                              Q_ARG(qreal, row.y()));
+                    QRectF line;
+                    QMetaObject::invokeMethod(text, "positionToRectangle", Q_RETURN_ARG(QRectF, line), Q_ARG(int, position));
+                    if (!sight.contains(text->mapRectToScene(line)))
+                        continue;
+                    const QPointF at = handles->mapFromScene(bench.at(position));
+                    QVariant done;
+                    QMetaObject::invokeMethod(handles, "pressAt", Q_RETURN_ARG(QVariant, done), Q_ARG(QVariant, at.x()),
+                                              Q_ARG(QVariant, at.y()), Q_ARG(QVariant, false));
+                    if (done.toBool())
+                        return true;
+                }
             }
             return false;
         };
