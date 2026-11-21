@@ -45,20 +45,21 @@ std::vector<const Ink::Stroke *> InkNodes::shown(const Ink::Sheet &sheet, const 
     return order;
 }
 
-void InkNodes::styled(std::vector<const Ink::Stroke *> &strokes, const Style &style, std::vector<Ink::Stroke> &styled) {
+void InkNodes::styled(std::vector<const Ink::Stroke *> &strokes, const QSet<QString> &hidden, const QSet<QString> &emphasized,
+                      QColor emphasis, std::vector<Ink::Stroke> &styled) {
     styled.clear();
-    if (style.hidden.isEmpty() && style.emphasized.isEmpty())
+    if (hidden.isEmpty() && emphasized.isEmpty())
         return;
-    std::erase_if(strokes, [&style](const Ink::Stroke *stroke) { return style.hidden.contains(stroke->id); });
+    std::erase_if(strokes, [&](const Ink::Stroke *stroke) { return hidden.contains(stroke->id); });
     // Room for every copy before any is pointed to, so none moves after.
     styled.reserve(static_cast<std::size_t>(
-        std::ranges::count_if(strokes, [&style](const Ink::Stroke *stroke) { return style.emphasized.contains(stroke->id); })));
+        std::ranges::count_if(strokes, [&](const Ink::Stroke *stroke) { return emphasized.contains(stroke->id); })));
     for (const Ink::Stroke *&stroke : strokes) {
-        if (!style.emphasized.contains(stroke->id))
+        if (!emphasized.contains(stroke->id))
             continue;
         Ink::Stroke &copy = styled.emplace_back(*stroke);
-        QColor color = style.emphasis;
-        color.setAlphaF(style.emphasis.alphaF() * stroke->color.alphaF());
+        QColor color = emphasis;
+        color.setAlphaF(emphasis.alphaF() * stroke->color.alphaF());
         copy.color = color;
         stroke = &copy;
     }

@@ -2,12 +2,13 @@
 
 #include <QFileInfo>
 #include <algorithm>
+#include <utility>
 
 #include "ai.h"
 #include "pluginfilesync.h"
 #include "scriptplugins.h"
 
-ScriptSession::ScriptSession(const ScriptTools::Context &context) : m_context(context) {
+ScriptSession::ScriptSession(ScriptTools::Context context) : m_context(std::move(context)) {
     if (!m_context.settings) {
         m_ownSettings = std::make_unique<Settings>();
         m_context.settings = m_ownSettings.get();
@@ -49,8 +50,8 @@ ScriptServices ScriptSession::services() {
 bool ScriptSession::scratch(const Settings &settings, const QString &folder) {
     // The same folder by any path to it, links followed.
     const auto same = [](const QString &one, const QString &other) {
-        const QString a = QFileInfo(one).canonicalFilePath(), b = QFileInfo(other).canonicalFilePath();
-        return !a.isEmpty() && a == b;
+        const QString first = QFileInfo(one).canonicalFilePath();
+        return !first.isEmpty() && first == QFileInfo(other).canonicalFilePath();
     };
     if (folder.isEmpty() || same(folder, settings.libraryPath()))
         return false;

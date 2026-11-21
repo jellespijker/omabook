@@ -60,7 +60,7 @@ struct Exchange {
 
 // One file here lacks and there holds: fetched at once, or (one the plugin
 // marked on demand) remembered where it is there, to fetch when it is asked for.
-void takeHere(Exchange &exchange, const QString &id, const QString &path, const QString &hash, bool onDemand,
+void takeHere(const Exchange &exchange, const QString &id, const QString &path, const QString &hash, bool onDemand,
               PluginFiles::Away &away) {
     const QString source = exchange.sides->there.value("folder"_L1).toString() + u'/' + id + u"/data/"_s + path;
     if (onDemand) {
@@ -209,7 +209,10 @@ PluginFileSync::Fetched PluginFileSync::fetch(const Library &library, const QStr
         return Fetched::Here;
     PluginFiles::Away away = PluginFiles::elsewhere(folder, plugin);
     const auto where = away.constFind(path);
-    const QString target = where == away.cend() ? QString() : where->target.isEmpty() ? syncTarget : where->target;
+    // Where it is said to be, or else the computer this one syncs with.
+    QString target;
+    if (where != away.cend())
+        target = where->target.isEmpty() ? syncTarget : where->target;
     if (known.hash.isEmpty() || known.removed || target.isEmpty())
         return Fetched::Nowhere;
     const QTemporaryDir scratch;

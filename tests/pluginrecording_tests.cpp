@@ -176,7 +176,7 @@ private slots:
         std::vector<const Ink::Stroke *> shown{&strokes[0], &strokes[1], &strokes[2]};
         const QSet<QString> hidden{"a"}, emphasized{"b", "gone"};
         std::vector<Ink::Stroke> styled;
-        InkNodes::styled(shown, {.hidden = hidden, .emphasized = emphasized, .emphasis = QColor(Qt::red)}, styled);
+        InkNodes::styled(shown, hidden, emphasized, QColor(Qt::red), styled);
         QCOMPARE(shown.size(), std::size_t{2});
         QCOMPARE(shown[0]->id, QString("b"));
         QCOMPARE(shown[0]->color.red(), 255);

@@ -169,7 +169,7 @@ public:
     Q_INVOKABLE void answer(int id, const QString &text);
     Q_INVOKABLE void dismiss(int id);
     // The person pressed the button of a plugin's notice.
-    Q_INVOKABLE void act(const QString &plugin, int token);
+    Q_INVOKABLE void act(const QString &plugin, int token) const;
 
     // Lets everything the scripts started finish (promises, requests,
     // programs), for a caller with no event loop of its own. False when the

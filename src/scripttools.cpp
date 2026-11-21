@@ -135,6 +135,40 @@ QString pretty(const QJsonValue &value) {
     return value.isNull() || value.isUndefined() ? QString() : value.toVariant().toString();
 }
 
+// The library a command was given (--library), and the sound `run` tries a
+// plugin with (#135): a test microphone and a yes to recording given
+// beforehand, never on the person's own library, since what is recorded there
+// goes to their other computers. False, with why said, when it can't be.
+bool whatRunUses(const QCommandLineParser &parser, ScriptTools::Context &context, std::unique_ptr<Library> &library,
+                 std::optional<AudioDevices> &room) {
+    if (parser.isSet("library")) {
+        library = std::make_unique<Library>(parser.value("library"));
+        QString error;
+        if (!library->open(&error)) {
+            print(stderr, error);
+            return false;
+        }
+        context.library = [&library] { return library.get(); };
+    }
+    const bool testing = parser.isSet("test-microphone");
+    if (!testing && !parser.isSet("allow-microphone"))
+        return true;
+    if (!parser.isSet("library") || !ScriptSession::scratch(Settings(), parser.value("library"))) {
+        print(stderr, "--test-microphone and --allow-microphone are for a scratch library: name one with --library that is "
+                      "none of your own libraries, such as a new folder.");
+        return false;
+    }
+    const auto hears = testing ? TestAudio::microphone(parser.value("test-microphone")) : std::nullopt;
+    if (testing && !hears) {
+        print(stderr, "--test-microphone hears tone, silence, or a WAV file of mono 16-bit samples at 48 kHz.");
+        return false;
+    }
+    if (hears)
+        context.audio = &room.emplace(*hears, [] { return TestAudio::speakers(); });
+    context.microphoneGranted = parser.isSet("allow-microphone");
+    return true;
+}
+
 } // namespace
 
 bool ScriptTools::failed(const QJsonObject &answer) { return !answer.value("error").toString().isEmpty(); }
@@ -325,40 +359,6 @@ QJsonObject ScriptTools::enable(const Context &context, const QString &name, boo
         return problem("There is no script plugin " + name + " in " + session.folder() + ".");
     session.settings()->setPluginEnabled("folder:" + name, enabled);
     return {{"name", name}, {"id", "folder:" + name}, {"enabled", enabled}};
-}
-
-// The library a command was given (--library), and the sound `run` tries a
-// plugin with (#135): a test microphone and a yes to recording given
-// beforehand, never on the person's own library, since what is recorded there
-// goes to their other computers. False, with why said, when it can't be.
-bool whatRunUses(const QCommandLineParser &parser, ScriptTools::Context &context, std::unique_ptr<Library> &library,
-                 std::optional<AudioDevices> &room) {
-    if (parser.isSet("library")) {
-        library = std::make_unique<Library>(parser.value("library"));
-        QString error;
-        if (!library->open(&error)) {
-            print(stderr, error);
-            return false;
-        }
-        context.library = [&library] { return library.get(); };
-    }
-    const bool testing = parser.isSet("test-microphone");
-    if (!testing && !parser.isSet("allow-microphone"))
-        return true;
-    if (!parser.isSet("library") || !ScriptSession::scratch(Settings(), parser.value("library"))) {
-        print(stderr, "--test-microphone and --allow-microphone are for a scratch library: name one with --library that is "
-                      "none of your own libraries, such as a new folder.");
-        return false;
-    }
-    const auto hears = testing ? TestAudio::microphone(parser.value("test-microphone")) : std::nullopt;
-    if (testing && !hears) {
-        print(stderr, "--test-microphone hears tone, silence, or a WAV file of mono 16-bit samples at 48 kHz.");
-        return false;
-    }
-    if (hears)
-        context.audio = &room.emplace(*hears, [] { return TestAudio::speakers(); });
-    context.microphoneGranted = parser.isSet("allow-microphone");
-    return true;
 }
 
 int runPluginCli(const QStringList &arguments) {
@@ -600,7 +600,7 @@ int runPluginCli(const QStringList &arguments) {
         return name + ": up to date.";
     };
     if (action == "sources") {
-        ScriptSession session(context);
+        const ScriptSession session(context);
         if (parser.isSet("updates")) {
             if (!QStringList{"auto", "tell", "never"}.contains(parser.value("updates"))) {
                 print(stderr, "Updates are auto (installed by themselves), tell (only said) or never (not checked).");
@@ -757,7 +757,7 @@ int runPluginCli(const QStringList &arguments) {
                                   : words.at(1) + " is no longer updated from " + answer.value("repository").toString() + ". It stays installed.");
     }
     if (action == "token") {
-        ScriptSession session(context);
+        const ScriptSession session(context);
         if (parser.isSet("forget")) {
             Secrets::shared().forget("github");
             session.settings()->setPluginToken(false);

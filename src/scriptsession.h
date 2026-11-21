@@ -15,7 +15,7 @@
 // library is only opened when a script asks for it.
 class ScriptSession {
 public:
-    explicit ScriptSession(const ScriptTools::Context &context);
+    explicit ScriptSession(ScriptTools::Context context);
 
     [[nodiscard]] QString folder() const { return m_context.folder; }
     [[nodiscard]] Settings *settings() const { return m_context.settings; }

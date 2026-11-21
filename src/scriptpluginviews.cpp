@@ -40,7 +40,7 @@ void ScriptPlugins::listenToWindow(ScriptPlugin *plugin) {
             [this, id](const QString &text, const QString &action, int token) { emit notified(id, text, action, token); });
 }
 
-void ScriptPlugins::act(const QString &plugin, int token) {
+void ScriptPlugins::act(const QString &plugin, int token) const {
     if (ScriptPlugin *running = this->plugin(plugin))
         running->window().act(token);
 }

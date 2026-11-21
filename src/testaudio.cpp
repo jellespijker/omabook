@@ -17,19 +17,27 @@ using namespace std::chrono_literals;
 
 namespace {
 
-constexpr int sampleRate = 48000;
+constexpr qsizetype sampleRate = 48000;
 // How often the stand-ins move on, and so how much at a time.
 constexpr auto step = 20ms;
-constexpr qsizetype bytesPerStep = sampleRate * 2 * step.count() / 1000;
+constexpr qsizetype bytesPerStep = sampleRate * 2 * qsizetype{step.count()} / 1000;
 
 // A second of an A, half as loud as a sample can be.
 [[nodiscard]] QByteArray tone() {
-    QByteArray bytes(sampleRate * 2, Qt::Uninitialized);
-    for (int i = 0; i < sampleRate; ++i) {
-        const auto sample = static_cast<qint16>(16000 * std::sin(2 * std::numbers::pi * 440 * i / sampleRate));
-        qToLittleEndian(sample, bytes.data() + (2 * i));
+    QByteArray bytes;
+    bytes.reserve(sampleRate * 2);
+    for (qsizetype i = 0; i < sampleRate; ++i) {
+        const auto sample =
+            static_cast<quint16>(static_cast<qint16>(16000 * std::sin(2 * std::numbers::pi * 440 * static_cast<double>(i) / sampleRate)));
+        bytes.append(static_cast<char>(sample & 0xffU));
+        bytes.append(static_cast<char>(sample >> 8U));
     }
     return bytes;
+}
+
+// A little-endian number of a file's bytes at `at`.
+template <typename Number> [[nodiscard]] Number number(const QByteArray &bytes, qsizetype at) {
+    return qFromLittleEndian<Number>(bytes.sliced(at, sizeof(Number)).constData());
 }
 
 // The samples of a WAV file, when they are mono 16-bit at 48 kHz.
@@ -43,13 +51,13 @@ constexpr qsizetype bytesPerStep = sampleRate * 2 * step.count() / 1000;
     bool fits = false;
     for (qsizetype at = 12; at + 8 <= bytes.size();) {
         const QByteArray id = bytes.mid(at, 4);
-        const qsizetype size = qFromLittleEndian<quint32>(bytes.constData() + at + 4);
-        const char *chunk = bytes.constData() + at + 8;
-        if (id == "fmt " && size >= 16 && at + 8 + 16 <= bytes.size())
-            fits = qFromLittleEndian<quint16>(chunk) == 1 && qFromLittleEndian<quint16>(chunk + 2) == 1
-                   && qFromLittleEndian<quint32>(chunk + 4) == sampleRate && qFromLittleEndian<quint16>(chunk + 14) == 16;
+        const qsizetype size = number<quint32>(bytes, at + 4);
+        const qsizetype chunk = at + 8;
+        if (id == "fmt " && size >= 16 && chunk + 16 <= bytes.size())
+            fits = number<quint16>(bytes, chunk) == 1 && number<quint16>(bytes, chunk + 2) == 1
+                   && number<quint32>(bytes, chunk + 4) == sampleRate && number<quint16>(bytes, chunk + 14) == 16;
         if (id == "data")
-            return fits ? std::optional(bytes.mid(at + 8, size & ~qsizetype{1})) : std::nullopt;
+            return fits ? std::optional(bytes.mid(chunk, size - (size % 2))) : std::nullopt;
         at += 8 + size + (size % 2);
     }
     return std::nullopt;

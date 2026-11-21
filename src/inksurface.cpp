@@ -273,7 +273,7 @@ QSGNode *InkSurface::updatePaintNode(QSGNode *old, [[maybe_unused]] UpdatePaintN
     const bool fresh = old == nullptr;
     QSGNode *root = m_nodes->root(old);
     std::vector<const Ink::Stroke *> order = InkNodes::shown(m_sheet, m_writing, m_lasso, m_dirty);
-    InkNodes::styled(order, {.hidden = m_hidden, .emphasized = m_emphasized, .emphasis = m_emphasis}, m_styled);
+    InkNodes::styled(order, m_hidden, m_emphasized, m_emphasis, m_styled);
     const double pixelRatio = window() != nullptr ? window()->effectiveDevicePixelRatio() : 1.0;
     m_nodes->sync(order, m_dirty, m_restructured || fresh, m_allDirty || fresh,
                   InkNodes::Look{.scale = m_inkScale, .feather = 1.0 / pixelRatio});
