@@ -104,6 +104,17 @@ public:
         FfmpegFailed,          // {what it said}
         WhisperFailed,         // {what it said}
         WhisperNoTranscript,   // {}
+        // Reading a book aloud (services; #73); "name" is the engine's, "where" a server's address.
+        NoVoice,            // {}: neither Piper with a voice nor speech-dispatcher is installed
+        PiperMissing,       // {}
+        PiperNoVoice,       // {}
+        DispatcherMissing,  // {}
+        VoiceAiOff,         // {}: the AI is off, so no server is asked
+        VoiceServerHosted,  // {where}: someone else's computer, and hosted servers aren't allowed for it
+        VoiceServerFailed,  // {where, HTTP status or the network's reason}
+        VoiceStopped,       // {name, what it said}
+        VoiceUnplayed,      // {the player's reason}
+        NothingToReadAloud, // {}: pages of pictures
         // Spaces and others' annotations (library, operations; #85).
         NoSuchSpace,            // {the name or id asked for}
         SpaceNameTaken,         // {the name asked for}

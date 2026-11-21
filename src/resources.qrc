@@ -13,6 +13,10 @@
         <file alias="PluginViewLayer.qml">PluginViewLayer.qml</file>
         <file alias="PluginSide.qml">PluginSide.qml</file>
         <file alias="ReaderKeys.qml">ReaderKeys.qml</file>
+        <file alias="ReaderCycles.qml">ReaderCycles.qml</file>
+        <file alias="ReadAloudBar.qml">ReadAloudBar.qml</file>
+        <file alias="SentenceMark.qml">SentenceMark.qml</file>
+        <file alias="ReadAloudControls.qml">ReadAloudControls.qml</file>
         <file alias="FormatControls.qml">FormatControls.qml</file>
         <file alias="FormatPane.qml">FormatPane.qml</file>
         <file alias="AiSearchDialog.qml">AiSearchDialog.qml</file>

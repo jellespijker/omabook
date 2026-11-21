@@ -24,8 +24,10 @@
 #include "aisearch.h"
 #include "assistant.h"
 #include "backend.h"
+#include "chronology.h"
 #include "customization.h"
 #include "devicedesk.h"
+#include "eventtime.h"
 #include "secretstore.h"
 #include "fixtures.h"
 #include "graph.h"
@@ -621,6 +623,48 @@ struct Survey {
         }
     }
 };
+
+// What the commands need to be there: a plugin with a command for the
+// shelf, one for the page and a view of its own, and a thing known of
+// `book` for its graph with an event of it, timed, for its chronology,
+// which is answered (0 when it couldn't be).
+inline qint64 forEveryCommand(Desk &desk, qint64 book) {
+    QDir().mkpath(desk.dir.filePath("plugins/shelver"));
+    Fixtures::write(desk.dir.filePath("plugins/shelver/View.qml"), "import QtQuick\nItem {}\n");
+    Fixtures::write(desk.dir.filePath("plugins/shelver/plugin.json"), "{\"name\": \"Shelver\", \"script\": \"main.js\"}");
+    Fixtures::write(desk.dir.filePath("plugins/shelver/main.js"),
+                    "omabook.commands.register({id: \"shelve\", title: \"Shelve it\", place: \"library\", key: \"Ctrl+Shift+E\", "
+                    "run: function () {}});\n"
+                    "omabook.commands.register({id: \"note\", title: \"Note the page\", place: \"reader\", run: function () {}});\n"
+                    "omabook.ui.view({id: \"shelf\", title: \"Shelf notes\", source: \"View.qml\"});\n");
+    desk.backend->scripts()->reload();
+    Graph known(*desk.backend->library());
+    known.upsert({}, "character", "Wilhelmina Overbeck", "Keeps the long lighthouse.", {}, GraphPlace{book, 0, 0.1}, "Wilhelmina");
+    const qint64 storm = known.upsert({}, "event", "The storm", {}, {}, GraphPlace{book, 0, 0.2});
+    const auto year = EventTime::parse(QString(R"({"calendar": "gregorian", "at": "1911"})"));
+    return year && Chronology::setWhen(known, storm, *year) ? storm : 0;
+}
+
+// A voice that holds its sentence and never finishes it, for the reader's
+// controls of reading aloud to be there (#73).
+class HeldVoice : public Voice {
+public:
+    void say(const QString &, const Speech &) override {}
+    void stop() override {}
+    [[nodiscard]] QString name() const override { return QStringLiteral("Stand-in"); }
+};
+
+// A book open in the reader and read aloud by a voice that holds its
+// sentence, so its control is over the page (#73); whether it is.
+inline bool readingAloud(Desk &desk, qint64 book) {
+    desk.reader->openBook(book);
+    if (!QTest::qWaitFor([&] { return desk.reader->isOpen() && desk.shows("touchArea"); }, 5000))
+        return false;
+    desk.reader->readAloud()->setVoiceMaker(
+        [] { return std::expected<std::unique_ptr<Voice>, Failure>(std::make_unique<HeldVoice>()); }, "Stand-in");
+    desk.reader->readAloud()->toggle();
+    return QTest::qWaitFor([&] { return desk.shows("readAloudBar"); }, 5000);
+}
 
 // Of every command and every plugin's command, those without a control
 // (`reached`: the smaller side of the largest of each), under fingers

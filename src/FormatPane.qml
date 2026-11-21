@@ -6,7 +6,7 @@ import QtQuick.Layouts
 // at it. Changes go to the defaults, or to this book alone while "Only this
 // book" is on. Reset puts back what there was when the panel opened, and
 // Escape or Done closes it. Pages that are pictures can't be set: the panel
-// says so.
+// says so. Below, how a book is read aloud (#73).
 FocusScope {
     id: pane
     // The reading view, which keeps what there was when the panel opened,
@@ -138,6 +138,10 @@ FocusScope {
                     reader.format.resetBook()
                     pane.host.formatBookOnly = false
                 }
+            }
+            ReadAloudControls {
+                Layout.fillWidth: true
+                placeText: function() { return pane.host.content ? pane.host.content.placeText() : "" }
             }
             RowLayout {
                 Layout.fillWidth: true

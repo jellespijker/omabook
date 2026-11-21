@@ -16,6 +16,7 @@
 #include "library.h"
 #include "metadatasource.h"
 #include "pageformat.h"
+#include "readaloud.h"
 #include "readinghighlights.h"
 #include "readingink.h"
 #include "readinglog.h"
@@ -76,6 +77,8 @@ class Reader : public QObject {
     Q_PROPERTY(ReadingInk *ink READ ink CONSTANT)
     // How the text is set: the options in force, and the chapter set with them.
     Q_PROPERTY(PageFormat *format READ format CONSTANT)
+    // The book read aloud, the sentence being read marked on the page (#73).
+    Q_PROPERTY(ReadAloud *readAloud READ readAloud CONSTANT)
 
 public:
     // The reader reads from the backend's library. `converter` is the program
@@ -115,6 +118,7 @@ public:
     ReadingMarks *marks() const noexcept { return m_marks; }
     ReadingHighlights *highlights() const noexcept { return m_highlights; }
     ReadingInk *ink() const noexcept { return m_ink; }
+    ReadAloud *readAloud() const noexcept { return m_readAloud; }
     // The opened book itself, none while none is open, and the backend it is read for.
     std::shared_ptr<const Document> document() const { return m_document; }
     Backend *backend() const noexcept { return m_backend; }
@@ -233,4 +237,5 @@ private:
     // Made last, when the backend it follows is known; a child, gone with the reader.
     ReadingHighlights *m_highlights = new ReadingHighlights(this);
     ReadingInk *m_ink = new ReadingInk(this);
+    ReadAloud *m_readAloud = new ReadAloud(this);
 };

@@ -489,27 +489,6 @@ class LayoutTests : public QObject {
                                               : QJsonObject();
     }
 
-    // What the commands need to be there: a plugin with a command for the
-    // shelf, one for the page and a view of its own, and a thing known of
-    // `book` for its graph with an event of it, timed, for its chronology,
-    // which is answered (0 when it couldn't be).
-    static qint64 forEveryCommand(Desk &desk, qint64 book) {
-        QDir().mkpath(desk.dir.filePath("plugins/shelver"));
-        Fixtures::write(desk.dir.filePath("plugins/shelver/View.qml"), "import QtQuick\nItem {}\n");
-        Fixtures::write(desk.dir.filePath("plugins/shelver/plugin.json"), "{\"name\": \"Shelver\", \"script\": \"main.js\"}");
-        Fixtures::write(desk.dir.filePath("plugins/shelver/main.js"),
-                        "omabook.commands.register({id: \"shelve\", title: \"Shelve it\", place: \"library\", key: \"Ctrl+Shift+E\", "
-                        "run: function () {}});\n"
-                        "omabook.commands.register({id: \"note\", title: \"Note the page\", place: \"reader\", run: function () {}});\n"
-                        "omabook.ui.view({id: \"shelf\", title: \"Shelf notes\", source: \"View.qml\"});\n");
-        desk.backend->scripts()->reload();
-        Graph known(*desk.backend->library());
-        known.upsert({}, "character", "Wilhelmina Overbeck", "Keeps the long lighthouse.", {}, GraphPlace{book, 0, 0.1}, "Wilhelmina");
-        const qint64 storm = known.upsert({}, "event", "The storm", {}, {}, GraphPlace{book, 0, 0.2});
-        const auto year = EventTime::parse(QString(R"({"calendar": "gregorian", "at": "1911"})"));
-        return year && Chronology::setWhen(known, storm, *year) ? storm : 0;
-    }
-
 private slots:
     void initTestCase() { QQuickStyle::setStyle("Material"); }
 
@@ -1286,11 +1265,9 @@ private slots:
             QVERIFY(desk.run("view.close"));
             QTRY_VERIFY(desk.shows("library"));
 
-            // The open book: the bar a finger brings up, and the list
-            // behind its "More" or the ⋯ in the corner.
-            desk.reader->openBook(ids.first());
-            QTRY_VERIFY(desk.reader->isOpen());
-            QTRY_VERIFY(desk.shows("touchArea"));
+            // The open book, read aloud with its control over the page, the bar
+            // a finger brings up, and the list behind its "More" or the ⋯ in the corner.
+            QVERIFY(readingAloud(desk, ids.first()));
             gather("page");
             if (touch) {
                 pressItem("menuButton");

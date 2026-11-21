@@ -287,6 +287,11 @@ Item {
         const start = firstText.positionAt(columnWidth / 2, breaks[page] + 8)
         return firstText.getText(start, start + 120).replace(/\u00ad/g, "")
     }
+    // The sentence read aloud (#73) on a page past the spread, or before it: the spread that has it.
+    function keepInSight(r) {
+        const index = pageOf(r.y)
+        if (index < page || index >= page + columns) turnTo(index)
+    }
     PlainCopy { id: plainCopy }
 
     onPageHeightChanged: later.restart()
@@ -347,6 +352,7 @@ Item {
                 text: sheet.shown ? reader.format.html : ""
                 onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
                 PageHighlights { anchors.fill: parent; z: -1; text: column; visible: sheet.there; others: spread.notes ? spread.notes.others : null }
+                SentenceMark { anchors.fill: parent; z: -1; text: column; visible: sheet.there; onMarked: (r) => { if (sheet.offset === 0) spread.keepInSight(r) } }
                 PageMarks {
                     id: pageMarks
                     anchors.fill: parent

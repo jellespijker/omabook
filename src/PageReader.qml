@@ -350,6 +350,8 @@ ListView {
                         onDraggingChanged: { if (dragging) view.choose(words); view.mouseSelecting = dragging }
                         onSelected: view.selected()
                     }
+                    // The sentence read aloud (#73), over the page's words.
+                    SentenceMark { anchors.fill: parent; page: sheet.page }
                     // Others' book ink on the page (#124, AnnotationLayerView), as far
                     // as the reader has read: each person's in their colour, under
                     // one's own and never written on.

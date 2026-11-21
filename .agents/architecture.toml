@@ -28,8 +28,7 @@ uses = ["foundation"]
 modules = [
   "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
   "formatprovider", "formatreaders", "formats", "documenttext", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
-  "textstretches", "koreaderdocument",
-  "zipedit", "opfdetails", "epubdetails",
+  "textstretches", "koreaderdocument", "zipedit", "opfdetails", "epubdetails", "sentences",
 ]
 
 [layers.library]
@@ -66,7 +65,8 @@ modules = [
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy",
-  "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail",
+  "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
+  "narration",
 ]
 
 [layers.operations]
@@ -94,8 +94,8 @@ modules = [
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
-  "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk",
-  "backenddetails",
+  "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
+  "readaloud",
 ]
 
 [layers.app]

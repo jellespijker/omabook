@@ -259,9 +259,26 @@ Manual::Topic readingBasics() {
             }};
 }
 
+// Listening to a book (#73).
+QList<Manual::Section> readAloudSections() {
+    return {
+        {Manual::tr("Reading aloud"),
+         Manual::tr("{reader.read_aloud} reads the book aloud from the top of the page (Read aloud in the bar, with fingers), and "
+                    "pauses and goes on. The sentence being read is marked, the page follows it and the next chapter opens by "
+                    "itself, so your place is kept as you listen. {reader.sentence_back} and {reader.sentence_next} go a sentence "
+                    "back or on, and {reader.read_aloud_stop} stops. How fast, and in which voice, is in the Aa panel "
+                    "({reader.format}).")},
+        {Manual::tr("The voice"),
+         Manual::tr("It is read on this computer, and nothing is sent anywhere: by Piper (piper-tts and a voice for your language, "
+                    "such as piper-voices-en-us) or else by speech-dispatcher. A server of your own that reads aloud can do it "
+                    "instead: `read_aloud` in config.json, with `engine` set to `server` and its `url`. It is never asked while "
+                    "the AI is off, nor a hosted one unless you allow it there.")},
+    };
+}
+
 Manual::Topic readingTopic() {
     Manual::Topic topic = readingBasics();
-    topic.sections << pageNoteSections();
+    topic.sections << pageNoteSections() << readAloudSections();
     return topic;
 }
 

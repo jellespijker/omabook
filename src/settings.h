@@ -236,6 +236,11 @@ public:
     void setMeaningHosted(bool on) { setMeaningChoice("hosted", on); }
     bool meaningAll() const { return meaning().value("all").toBool(false); }
     void setMeaningAll(bool on) { setMeaningChoice("all", on); }
+    // How a book is read aloud (#73): "engine" ("auto", "piper",
+    // "speech-dispatcher" or "server"), "rate", "voice", "piper_program",
+    // and the server's "url", "model" and "hosted"; see Voices.
+    QJsonObject readAloud() const { return m_values.value("read_aloud").toObject(); }
+    void setReadAloud(const QJsonObject &chosen) { set("read_aloud", chosen); }
     void setMeaningChoice(const QString &key, const QJsonValue &value) {
         QJsonObject chosen = meaning();
         if (value.isNull() || (value.isString() && value.toString().trimmed().isEmpty()))

@@ -112,6 +112,22 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::WhisperFailed, tr("whisper.cpp couldn't transcribe the recording: %1")},
     {Failure::Code::WhisperNoTranscript, tr("whisper.cpp wrote no transcript.")},
     {Failure::Code::AiOff, tr("AI is turned off in the settings.")},
+    {Failure::Code::NoVoice,
+     tr("Nothing on this computer reads aloud: install Piper (piper-tts) and a voice for it (piper-voices-en-us, say), or "
+        "speech-dispatcher.")},
+    {Failure::Code::PiperMissing, tr("Piper isn't installed on this computer (there is no piper-tts or piper command).")},
+    {Failure::Code::PiperNoVoice,
+     tr("Piper has no voice to read with; install one (piper-voices-en-us, say) or put a voice's .onnx file in "
+        "~/.local/share/piper-voices.")},
+    {Failure::Code::DispatcherMissing, tr("speech-dispatcher isn't installed on this computer (there is no spd-say command).")},
+    {Failure::Code::VoiceAiOff, tr("The AI is off, so no server is asked to read aloud.")},
+    {Failure::Code::VoiceServerHosted,
+     tr("%1 is someone else's computer, and a book is read aloud only by your own servers, unless you allow hosted servers for it "
+        "in the settings.")},
+    {Failure::Code::VoiceServerFailed, tr("%1 couldn't read it aloud (%2).")},
+    {Failure::Code::VoiceStopped, tr("%1 stopped reading aloud: %2")},
+    {Failure::Code::VoiceUnplayed, tr("The sound couldn't be played: %1")},
+    {Failure::Code::NothingToReadAloud, tr("These pages are pictures, so there are no words to read aloud.")},
     {Failure::Code::AiUnreachable, tr("Can't reach the AI server at %1 (%2).")},
     {Failure::Code::AiTimedOut, tr("The AI server at %1 took too long to answer.")},
     {Failure::Code::AiWantsKey, tr("The AI server at %1 wants a key: put one in the settings.")},

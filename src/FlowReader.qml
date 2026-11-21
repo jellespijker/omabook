@@ -229,6 +229,14 @@ Flickable {
         const start = page.positionAt(page.width / 2, Math.max(0, contentY - page.y + 8))
         return page.getText(start, start + 120).replace(/\u00ad/g, "")
     }
+    // The sentence read aloud stays in sight (#73): one below the screen or
+    // above it is brought to a third of the way down, which keeps the place.
+    function keepInSight(r) {
+        const top = page.y + r.y
+        if (top >= contentY && top + r.height <= contentY + height - page.font.pixelSize) return
+        wanted = -1
+        place(top - height / 3)
+    }
     PlainCopy { id: plainCopy }
 
     onContentYChanged: {
@@ -330,6 +338,7 @@ Flickable {
         onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
 
         PageHighlights { anchors.fill: parent; z: -1; text: page; others: flick.notes ? flick.notes.others : null }
+        SentenceMark { anchors.fill: parent; z: -1; text: page; onMarked: (r) => flick.keepInSight(r) }
         PageMarks {
             id: marks
             anchors.fill: parent
