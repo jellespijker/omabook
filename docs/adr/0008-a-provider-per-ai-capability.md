@@ -209,9 +209,12 @@ Where the code asked for it, #143 differs from the decision above, as follows:
 - **Models and providers' set-up stay in their keys**, as #143 left them: each provider is set up once and
   an older Omabook on the same file reads them, and answers' and quick's models are each provider's own
   (`ai_models`), kept for when it is chosen again. `capabilities` gains a `provider` where the page offers a
-  choice: speech to text (`"server"`, a transcription server then whisper.cpp, or `"whisper.cpp"` alone,
-  which the registry follows) and text to speech (the `read_aloud` engine, followed there). Handwriting has
-  the AI server only, and embeddings a server (the AI server unless an address is given), until Gemini,
-  voxtype and more voices come (#145 to #147): each is an id more in the row's `offered`.
+  choice: speech to text (none for #146's order, the first there is of voxtype, whisper.cpp and the
+  server, with a server or whisper.cpp named before going first; `"voxtype"` or `"whisper.cpp"` alone; or
+  `"server"` first, then this computer; the registry follows it) and text to speech (the `read_aloud`
+  engine, followed there). Speech to text's row says when its first way gives no word timestamps (`timed`,
+  #146) and offers voxtype's install on Omarchy, which #146 had put in the old dialog. Handwriting has
+  the AI server only, and embeddings a server (the AI server unless an address is given), until Gemini
+  and more voices come (#145, #147): each is an id more in the row's `offered`.
 - **AI Off** is a switch at the top of the page; on again, answers come back to the provider
   `capabilities` kept for them.
