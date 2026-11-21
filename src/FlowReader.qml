@@ -23,6 +23,9 @@ Flickable {
     property bool runsOn: false
     // A finger is on the page: it scrolls, rather than selecting words.
     property bool fingerDown: false
+    // A finger moves an end of what it selected (#140): the page holds still under it.
+    property bool holding: false
+    interactive: !holding
     // The book's margin notes (ReadingNotes), and the room their column
     // takes beside the text, a gutter beyond it (PageLayout::columns).
     property var notes: null
@@ -183,6 +186,23 @@ Flickable {
         else if (page.y + r.y + r.height > contentY + height) scrollBy(page.y + r.y + r.height - contentY - height + page.font.pixelSize * 2)
     }
     function endSelecting() { marks.finish() }
+    // A finger's selection (SelectHandles, #140): its ends, one held while
+    // the other goes to the word at a point, and at the page's foot or head
+    // the column scrolls on.
+    function selectionEnds() {
+        const ends = marks.ends()
+        return ends ? { start: fromPage(ends.start), end: fromPage(ends.end), rtl: ends.rtl } : null
+    }
+    function holdSelection(which) { return marks.hold(which) }
+    function extendSelection(x, y) {
+        const at = page.mapFromItem(flick, x, y)
+        return marks.extendTo(page.positionAt(at.x, at.y))
+    }
+    function edgeStep(direction) {
+        if (direction > 0 ? atEnd() : atStart()) return false
+        scrollBy(direction * page.font.pixelSize)
+        return true
+    }
     function clearSelection() {
         marks.finish()
         page.deselect()

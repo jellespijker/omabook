@@ -93,6 +93,8 @@
         <file alias="NoteMarks.qml">NoteMarks.qml</file>
         <file alias="ReadingNotes.qml">ReadingNotes.qml</file>
         <file alias="SelectKeys.qml">SelectKeys.qml</file>
+        <file alias="SelectHandles.qml">SelectHandles.qml</file>
+        <file alias="ReaderTouch.qml">ReaderTouch.qml</file>
         <file alias="PageHighlights.qml">PageHighlights.qml</file>
         <file alias="HighlightLine.qml">HighlightLine.qml</file>
         <file alias="PageWords.qml">PageWords.qml</file>

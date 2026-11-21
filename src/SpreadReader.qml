@@ -19,6 +19,8 @@ Item {
     }
     // Whether the graph's things are marked in the text.
     property bool marking: false
+    // A finger is on the page: the text doesn't select under it as under a mouse.
+    property bool fingerDown: false
     // The book's margin notes (ReadingNotes), and the room their column
     // takes beyond the spread's last page (PageLayout::columns).
     property var notes: null
@@ -96,8 +98,7 @@ Item {
     function turnTo(index) {
         wanted = -1
         show(index)
-        placeAt = startOf(page)
-        reader.fraction = lastLeft > 0 ? page / lastLeft : 0
+        kept()
     }
     // A turn past the last spread goes on to the next chapter.
     function pageDown() {
@@ -190,10 +191,62 @@ Item {
         const r = page0.marks.activeRect()
         if (r.y >= breaks[Math.min(breaks.length - 1, page + columns)] && page < lastLeft) show(page + columns)
         else if (r.y < breaks[page] && page > 0) show(page - columns)
+        kept()
+    }
+    // Where the reader is, after the selection took the spread on or back.
+    function kept() {
         placeAt = startOf(page)
         reader.fraction = lastLeft > 0 ? page / lastLeft : 0
     }
     function endSelecting() { page0.marks.finish() }
+    // A finger's selection (SelectHandles, #140), held on the first page's
+    // text and shown on every page, as the keyboard's is. Its ends, on the
+    // pages that show them; a point between or beside the pages is asked of
+    // the nearest; a finger below the last page's lines turns the spread on,
+    // above the first's back.
+    function selectionEnds() {
+        const sheet = selectedSheet()
+        const ends = sheet ? sheet.marks.ends() : null
+        if (!ends) return null
+        const shown = (r) => { const on = sheetShowing(r.y); return on ? fromText(on, r) : null }
+        return { start: shown(ends.start), end: shown(ends.end), rtl: ends.rtl }
+    }
+    function holdSelection(which) {
+        const sheet = selectedSheet()
+        if (!sheet) return false
+        if (sheet !== page0) page0.text.select(sheet.text.selectionStart, sheet.text.selectionEnd)
+        mirror()
+        return page0.marks.hold(which)
+    }
+    function nearestSheet(x) {
+        let best = null, off = Infinity
+        for (const sheet of sheets) {
+            const at = sheet.mapFromItem(spread, x, 0).x
+            const away = at < 0 ? -at : Math.max(0, at - sheet.width)
+            if (sheet.there && away < off) { off = away; best = sheet }
+        }
+        return best
+    }
+    function extendSelection(x, y) {
+        const sheet = nearestSheet(x)
+        if (!sheet) return false
+        const at = sheet.text.mapFromItem(spread, x, y)
+        const down = Math.max(breaks[sheet.index], Math.min(breaks[sheet.index + 1] - 2, at.y))
+        const done = page0.marks.extendTo(sheet.text.positionAt(Math.max(0, Math.min(sheet.width, at.x)), down))
+        mirror()
+        return done
+    }
+    function edgeOf(x, y) {
+        const sheet = nearestSheet(x)
+        if (sheet && sheet.offset === Math.min(columns, pages - page) - 1 && y > Math.min(above + pageHeight, height - 24)) return 1
+        return sheet === page0 && y < Math.max(above, 24) ? -1 : 0
+    }
+    function edgeStep(direction) {
+        if (direction > 0 ? page >= lastLeft : page <= 0) return false
+        show(page + direction * columns)
+        kept()
+        return true
+    }
     function clearSelection() {
         page0.marks.finish()
         for (const sheet of sheets) sheet.text.deselect()
@@ -333,7 +386,7 @@ Item {
                 width: spread.columnWidth
                 visible: sheet.there
                 readOnly: true
-                selectByMouse: true
+                selectByMouse: !spread.fingerDown
                 persistentSelection: true
                 activeFocusOnPress: false
                 textFormat: TextEdit.RichText

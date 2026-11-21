@@ -161,6 +161,37 @@ Item {
     // Where the keyboard's selection is, to keep it in sight.
     function activeRect() { return text.positionToRectangle(activeAt >= 0 ? activeAt : text.selectionEnd) }
 
+    // A finger's selection (#140): the word at one end held while the other
+    // end ("start" or "end") moves, or the whole of it ("word") while the
+    // finger of a long press moves on; then from the words held to the word at
+    // a position, whichever side of them it is, a whole word at a time.
+    property int heldStart: -1
+    property int heldEnd: -1
+    function hold(which) {
+        if (!text || text.selectionEnd <= text.selectionStart) return false
+        const start = text.selectionStart, end = text.selectionEnd
+        const word = which === "start" ? reader.marks.wordAt(text.textDocument, end - 1)
+                   : which === "end" ? reader.marks.wordAt(text.textDocument, start) : { start: start, end: end }
+        const whole = word.end > word.start
+        heldStart = whole ? Math.max(start, word.start) : start
+        heldEnd = whole ? Math.min(end, word.end) : end
+        return true
+    }
+    function extendTo(position) {
+        if (heldStart < 0) return false
+        const word = reader.marks.wordAt(text.textDocument, position)
+        if (word.end <= word.start) return false
+        text.select(Math.min(heldStart, word.start), Math.max(heldEnd, word.end))
+        return true
+    }
+    // The carets at the selection's two ends, in the text, and whether it runs right to left.
+    function ends() {
+        if (!text || text.selectionEnd <= text.selectionStart) return null
+        const a = text.positionToRectangle(text.selectionStart)
+        const next = text.positionToRectangle(text.selectionStart + 1)
+        return { start: a, end: text.positionToRectangle(text.selectionEnd), rtl: Math.abs(next.y - a.y) < 1 ? next.x < a.x : win.rightToLeft }
+    }
+
     // Its highlights (#81). The one at a point of the text: {id, color, rect}, or null.
     function highlightAt(x, y) {
         if (!text) return null

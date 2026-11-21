@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- A finger selects more than one word (#140): a long press still selects the word under it, and now shows a handle at each end of it; dragging either grows or shrinks the selection a whole word at a time, across lines, and held at the foot or head of the page scrolls on or turns the page. Moving the finger on after the long press, without lifting it, grows the selection too, and so does the pen held still and then moved (unless D is on). Highlights and margin notes of more than one word can now be made by touch, in every book with words and on a PDF's pages; the menu comes back beside the words, clear of the handles, and in a right-to-left text the handles change sides.
+
 ## [0.1.10.1] - 2026-11-21
 
 ### Fixed
