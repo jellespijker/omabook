@@ -18,7 +18,10 @@ constexpr quint8 strokeVersion = 1;
 constexpr quint8 snapshotVersion = 1;
 constexpr quint8 pressuredFlag = 0x01;
 constexpr quint8 tiltedFlag = 0x02;
-constexpr quint8 knownFlags = pressuredFlag | tiltedFlag;
+// A bit of the flags and no byte more (#130): a stroke of before reads as it did.
+constexpr quint8 highlighterFlag = 0x04;
+// Every flag above.
+constexpr quint8 knownFlags = 0x07;
 constexpr double positionSteps = 8.0;
 constexpr double pressureSteps = 255.0;
 // Far beyond any page, and well inside what the differences can say.
@@ -200,7 +203,8 @@ std::expected<void, QString> readPoints(Reader &in, Stroke &stroke, quint8 flags
 
 QByteArray encode(const Stroke &stroke) {
     Writer out;
-    const quint8 flags = (stroke.pressured ? pressuredFlag : 0U) | (stroke.tilted ? tiltedFlag : 0U);
+    const quint8 flags =
+        (stroke.pressured ? pressuredFlag : 0U) | (stroke.tilted ? tiltedFlag : 0U) | (stroke.highlighter ? highlighterFlag : 0U);
     out.byte(strokeVersion);
     out.byte(flags);
     const QRgb argb = stroke.color.rgba();
@@ -248,6 +252,7 @@ std::expected<Stroke, QString> decode(QByteArrayView bytes, const QString &id) {
                   .width = static_cast<double>(*width) / positionSteps,
                   .pressured = (*flags & pressuredFlag) != 0,
                   .tilted = (*flags & tiltedFlag) != 0,
+                  .highlighter = (*flags & highlighterFlag) != 0,
                   .began = *began,
                   .points = {}};
     if (const auto read = readPoints(in, stroke, *flags); !read) {

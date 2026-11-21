@@ -13,7 +13,8 @@
 #include "inkstroke.h"
 
 // Strokes as bytes (#78): compact enough to keep thousands in the change log.
-// A stroke is a small header (its colour, width, flags and when it began)
+// A stroke is a small header (its colour, width, flags (pressure, tilt, a
+// highlighter's) and when it began)
 // and its points, the first whole and each after it as the difference from
 // the one before, every number a varint (zig-zag where it may be negative):
 // a point of handwriting takes four to six bytes, against several dozen as

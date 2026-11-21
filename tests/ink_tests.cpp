@@ -2,10 +2,13 @@
 // touches are a palm, and the triangles a stroke is drawn with. No window:
 // the ink surface's own tests (inksurface_tests.cpp) drive it with events.
 
+#include <QElapsedTimer>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QPainter>
 #include <QtTest>
 
+#include <array>
 #include <cmath>
 #include <numbers>
 
@@ -63,7 +66,7 @@ Ink::Stroke line(double fromX, double toX, double y, std::optional<float> pressu
 // Two strokes alike once kept: positions to an eighth, pressure to 1/255, tilt to a degree.
 bool alike(const Ink::Stroke &a, const Ink::Stroke &b) {
     if (a.id != b.id || a.color != b.color || std::abs(a.width - b.width) > 0.07 || a.pressured != b.pressured || a.tilted != b.tilted
-        || a.began != b.began || a.points.size() != b.points.size())
+        || a.highlighter != b.highlighter || a.began != b.began || a.points.size() != b.points.size())
         return false;
     for (std::size_t i = 0; i < a.points.size(); ++i) {
         const Ink::Point &p = a.points.at(i);
@@ -86,6 +89,61 @@ double thickness(const Ink::Mesh &mesh, double atX) {
         }
     }
     return bottom - top;
+}
+
+// A highlighter's line through `corners`, a point every unit along each piece, without pressure.
+Ink::Stroke highlighter(const QList<QPointF> &corners) {
+    Ink::Stroke stroke{.id = Ink::newId(),
+                       .color = QColor(240, 200, 0, 102),
+                       .width = 10.0,
+                       .pressured = false,
+                       .tilted = false,
+                       .highlighter = true,
+                       .began = 1000,
+                       .points = {}};
+    for (qsizetype i = 1; i < corners.size(); ++i) {
+        const double length = QLineF(corners.at(i - 1), corners.at(i)).length();
+        for (int step = 0; step < static_cast<int>(length); ++step)
+            stroke.points.push_back(Ink::Point{.at = corners.at(i - 1) + (corners.at(i) - corners.at(i - 1)) * (step / length)});
+    }
+    stroke.points.push_back(Ink::Point{.at = corners.back()});
+    return stroke;
+}
+
+// How many of the mesh's triangles that aren't wholly clear cover `at`.
+int coverings(const Ink::Mesh &mesh, QPointF at) {
+    int count = 0;
+    for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+        const std::array corners{mesh.vertices.at(mesh.indices.at(i)), mesh.vertices.at(mesh.indices.at(i + 1)),
+                                 mesh.vertices.at(mesh.indices.at(i + 2))};
+        if (corners[0].a == 0 && corners[1].a == 0 && corners[2].a == 0)
+            continue;
+        const QPolygonF triangle{QPointF(corners[0].x, corners[0].y), QPointF(corners[1].x, corners[1].y),
+                                 QPointF(corners[2].x, corners[2].y)};
+        count += triangle.containsPoint(at, Qt::OddEvenFill) ? 1 : 0;
+    }
+    return count;
+}
+
+// The mesh's triangles painted on white, each its colour, as the scene graph blends them.
+QImage painted(const Ink::Mesh &mesh, QSize size) {
+    QImage image(size, QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::white);
+    QPainter painter(&image);
+    painter.setPen(Qt::NoPen);
+    for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+        const std::array corners{mesh.vertices.at(mesh.indices.at(i)), mesh.vertices.at(mesh.indices.at(i + 1)),
+                                 mesh.vertices.at(mesh.indices.at(i + 2))};
+        const int alpha = (corners[0].a + corners[1].a + corners[2].a) / 3;
+        if (alpha == 0)
+            continue;
+        const auto unmultiplied = [&](quint8 value) { return std::min(255, value * 255 / std::max<int>(1, corners[0].a)); };
+        painter.setBrush(QColor(unmultiplied(corners[0].r), unmultiplied(corners[0].g), unmultiplied(corners[0].b), alpha));
+        const std::array<QPointF, 3> points{QPointF(corners[0].x, corners[0].y), QPointF(corners[1].x, corners[1].y),
+                                            QPointF(corners[2].x, corners[2].y)};
+        painter.drawPolygon(points.data(), 3);
+    }
+    return image;
 }
 
 } // namespace
@@ -234,6 +292,94 @@ private slots:
         Ink::tessellate(dot, 1.0, 1.0, mesh);
         QVERIFY(!mesh.indices.empty());
         QVERIFY2(std::abs(thickness(mesh, 5) - 5.0) < 0.3, qPrintable(QString::number(thickness(mesh, 5))));
+    }
+
+    // A highlighter is a bit of a stroke's flags (#130), no byte more: it
+    // reads back as it was written, and a stroke of before (its bytes as
+    // they were kept) reads as it did and is written as it was.
+    void aHighlighterIsKeptWithItsStroke() {
+        const Ink::Stroke marked = highlighter({QPointF(0, 0), QPointF(40, 0)});
+        Ink::Stroke plain = marked;
+        plain.highlighter = false;
+        QCOMPARE(Ink::encode(marked).size(), Ink::encode(plain).size());
+        const auto back = Ink::decode(Ink::encode(marked), marked.id);
+        QVERIFY2(back.has_value(), qPrintable(whyNot(back)));
+        QVERIFY(alike(*back, marked) && back->highlighter && !back->pressured);
+        QCOMPARE(back->color.alpha(), 102);
+        plain.id = Ink::newId();
+        const Ink::Read read = Ink::fromItems(Ink::items(std::vector{marked, plain}));
+        QCOMPARE(read.strokes.size(), std::size_t{2});
+        QVERIFY(read.problems.isEmpty());
+        QCOMPARE(std::ranges::count(read.strokes, true, &Ink::Stroke::highlighter), 1);
+        // Version 1, no flags, black, width 2, began at 1000, one point at (10, 0).
+        const QByteArray before("\x01\x00\xff\x00\x00\x00\x10\xd0\x0f\x01\xa0\x01\x00\x00", 14);
+        const auto old = Ink::decode(before, u"old"_s);
+        QVERIFY2(old.has_value(), qPrintable(whyNot(old)));
+        QVERIFY(!old->highlighter && !old->pressured && !old->tilted);
+        QCOMPARE(old->color, QColor(Qt::black));
+        QCOMPARE(old->width, 2.0);
+        QCOMPARE(old->began, qint64{1000});
+        QCOMPARE(old->points.size(), std::size_t{1});
+        QCOMPARE(old->points.front().at, QPointF(10, 0));
+        QCOMPARE(Ink::encode(*old), before);
+    }
+
+    // A highlighter's line is laid on once (#130): where it crosses itself,
+    // and where it folds at a sharp turn, one triangle covers each place and
+    // the colour is what it is elsewhere on the line; a pen's line is darker there.
+    void aHighlighterIsNoDarkerWhereItCrossesItself() {
+        // Down the diagonal, up, and back across the diagonal: the two cross at (50, 50).
+        const Ink::Stroke marked = highlighter({QPointF(10, 10), QPointF(90, 90), QPointF(90, 10), QPointF(10, 90)});
+        Ink::Stroke pen = marked;
+        pen.highlighter = false;
+        Ink::Mesh mesh;
+        QElapsedTimer clock;
+        clock.start();
+        Ink::tessellate(marked, 2.0, 1.0, mesh);
+        qInfo() << "A highlighter's line of" << marked.points.size() << "points as one shape:" << clock.nsecsElapsed() / 1e6 << "ms,"
+                << mesh.indices.size() / 3 << "triangles";
+        QVERIFY(!mesh.indices.empty() && mesh.vertices.size() < 65536);
+        QVERIFY(std::ranges::all_of(mesh.indices, [&](quint16 i) { return i < mesh.vertices.size(); }));
+        // Pixels, each at its middle: where the two cross, where the line is
+        // alone, at a sharp turn, and on each diagonal.
+        const QPoint crossing(100, 100);
+        const QPoint alone(180, 100);
+        const QPoint turn(178, 178);
+        const auto middle = [](QPoint pixel) { return QPointF(pixel) + QPointF(0.5, 0.5); };
+        for (const QPoint at : {crossing, alone, turn, QPoint(40, 40), QPoint(60, 140)})
+            QVERIFY2(coverings(mesh, middle(at)) == 1,
+                     qPrintable(u"%1 at %2, %3"_s.arg(coverings(mesh, middle(at))).arg(at.x()).arg(at.y())));
+        const QImage image = painted(mesh, QSize(200, 200));
+        // 40% of the colour over white.
+        const QRgb single = image.pixel(alone);
+        QVERIFY2(std::abs(qBlue(single) - 153) <= 3 && std::abs(qRed(single) - 249) <= 3, qPrintable(QString::number(single, 16)));
+        for (const QPoint at : {crossing, turn})
+            QVERIFY2(std::abs(qBlue(image.pixel(at)) - qBlue(single)) <= 2, qPrintable(QString::number(image.pixel(at), 16)));
+        // Nothing beyond the line's edge and its soft edge.
+        QCOMPARE(image.pixel(100, 80), QColor(Qt::white).rgb());
+        // A pen's line of the same colour lays it on twice where it crosses.
+        Ink::tessellate(pen, 2.0, 1.0, mesh);
+        QVERIFY(coverings(mesh, middle(crossing)) > 1);
+        const QImage twice = painted(mesh, QSize(200, 200));
+        QVERIFY(qBlue(twice.pixel(crossing)) + 20 < qBlue(twice.pixel(alone)));
+    }
+
+    // Without pressure a highlighter's line is its width all along: 20
+    // pixels at twice the scale, its soft edge half a pixel each side.
+    void aHighlighterWithoutPressureIsItsWidth() {
+        Ink::Mesh mesh;
+        Ink::tessellate(highlighter({QPointF(0, 50), QPointF(100, 50)}), 2.0, 1.0, mesh);
+        const QImage image = painted(mesh, QSize(200, 200));
+        const auto across = [&image](int x) {
+            int inked = 0;
+            for (int y = 0; y < image.height(); ++y)
+                inked += image.pixel(x, y) != QColor(Qt::white).rgb() ? 1 : 0;
+            return inked;
+        };
+        const int first = across(30);
+        QVERIFY2(first >= 20 && first <= 22, qPrintable(QString::number(first)));
+        for (const int x : {60, 100, 140, 170})
+            QVERIFY2(across(x) == first, qPrintable(u"%1 across at %2"_s.arg(across(x)).arg(x)));
     }
 
     // An eraser over the middle of a line cuts it in two where its edge

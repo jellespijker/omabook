@@ -13,7 +13,8 @@ if(NOT CMAKE_BUILD_TYPE)
 endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Core Gui Network Qml Quick QuickControls2 DBus Sql Concurrent Test Multimedia)
-# The ink surface's tests send pen and touch events as the window system does (#78).
+# The ink surface's tests send pen and touch events as the window system does
+# (#78); a highlighter's line is triangulated with Qt's own triangulator (#130).
 find_package(Qt6 REQUIRED COMPONENTS GuiPrivate)
 find_package(PkgConfig REQUIRED)
 # libarchive opens EPUB, CBZ, CBR and friends; Poppler renders PDF; libsodium
@@ -33,6 +34,7 @@ target_include_directories(omabook_core PUBLIC src)
 target_link_libraries(omabook_core PUBLIC
   Qt6::Core Qt6::Gui Qt6::Network Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::DBus Qt6::Sql Qt6::Concurrent Qt6::Multimedia
   PkgConfig::LIBARCHIVE PkgConfig::POPPLER_QT6 PkgConfig::LIBSODIUM PkgConfig::OPUS)
+target_link_libraries(omabook_core PRIVATE Qt6::GuiPrivate)
 target_compile_options(omabook_core PUBLIC -Wall -Wextra)
 target_compile_definitions(omabook_core PUBLIC OMABOOK_VERSION="${PROJECT_VERSION}")
 # The standard library's own checks (error() on an expected holding a value, an

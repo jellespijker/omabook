@@ -30,6 +30,7 @@ constexpr auto assistName = "omabook-api/assist";
                        .width = given.value("width"_L1).toDouble(2.0),
                        .pressured = false,
                        .tilted = false,
+                       .highlighter = false,
                        .began = given.value("began"_L1).toInteger(index),
                        .points = {}};
     for (const auto &value : given.value("points"_L1).toArray()) {

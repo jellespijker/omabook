@@ -365,6 +365,25 @@ private slots:
         QCOMPARE(Ink::widthAt(stroke, stroke.points.front()), bench.surface->penWidth());
     }
 
+    // A highlighter (#130) turns the pressure off: its line is its width
+    // however hard the pen presses, and is kept, and sent, as a highlighter's.
+    void aHighlighterDrawsWithoutPressure() {
+        Bench bench;
+        bench.surface->setPressure(false);
+        bench.surface->setHighlighter(true);
+        bench.surface->setColor(QColor(240, 200, 0, 102));
+        bench.stroke(devices().pen, QPointF(100, 100), QPointF(400, 100), 0.1, 0.9);
+        const Ink::Stroke &stroke = bench.surface->sheet().strokes().front();
+        QVERIFY(!stroke.pressured && stroke.highlighter);
+        QVERIFY(stroke.points.size() > 25 && std::ranges::all_of(stroke.points, [&](const Ink::Point &point) {
+                    return Ink::widthAt(stroke, point) == bench.surface->penWidth();
+                }));
+        const auto batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        const auto sent = Ink::fromBatch(QJsonObject::fromVariantMap(batches.front()));
+        QVERIFY(sent.has_value() && sent->added.front().highlighter && sent->added.front().color.alpha() == 102);
+    }
+
     // The pen's other end erases what it goes over, cutting a stroke in
     // two: one batch removes it and adds both pieces. Undo puts it back.
     void theEraserEndErasesPartOfAStroke() {

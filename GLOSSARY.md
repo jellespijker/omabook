@@ -48,6 +48,10 @@ _Avoid_: Canvas, drawing area
 One line of ink, from the pen touching down to lifting: its points, each with its pressure, tilt and moment, kept as data rather than a picture (`Ink::Stroke`).
 _Avoid_: Path, line (alone), scribble
 
+**Highlighter stroke**:
+A stroke laid on as one shape, its colour see-through and no darker where the line crosses itself, as a highlighter pen's; ink, not a highlight of the book's words (`Ink::Stroke::highlighter`).
+_Avoid_: Highlight (for ink), marker
+
 **Ink batch**:
 What an ink surface did between two pauses of the pen, strokes added and removed, kept as one change wherever its strokes are kept; erasing part of a stroke is its removal and its pieces' addition (`Ink::Change`).
 _Avoid_: Diff, delta, update

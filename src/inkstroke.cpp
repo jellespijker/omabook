@@ -65,6 +65,7 @@ public:
                                       .width = m_stroke->width,
                                       .pressured = m_stroke->pressured,
                                       .tilted = m_stroke->tilted,
+                                      .highlighter = m_stroke->highlighter,
                                       .began = m_stroke->began,
                                       .points = std::move(m_current)});
         }

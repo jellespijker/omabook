@@ -45,6 +45,13 @@ class InkSurface : public QQuickItem {
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY lookChanged)
     // In ink units, at a middling pressure.
     Q_PROPERTY(double penWidth READ penWidth WRITE setPenWidth NOTIFY lookChanged)
+    // Whether the pen's pressure makes the line wider (#130); without it a
+    // line is `penWidth` all along, whatever the pen says.
+    Q_PROPERTY(bool pressure READ pressure WRITE setPressure NOTIFY lookChanged)
+    // Draws as a highlighter (#130): the line laid on once, `color`'s alpha
+    // and all, so it is no darker where it crosses itself. Kept with each
+    // stroke, so it looks the same wherever the stroke is shown.
+    Q_PROPERTY(bool highlighter READ highlighter WRITE setHighlighter NOTIFY lookChanged)
     // In item pixels, whatever the scale.
     Q_PROPERTY(double eraserWidth READ eraserWidth WRITE setEraserWidth NOTIFY lookChanged)
     Q_PROPERTY(double inkScale READ inkScale WRITE setInkScale NOTIFY lookChanged)
@@ -83,6 +90,10 @@ public:
     void setColor(const QColor &color);
     [[nodiscard]] double penWidth() const { return m_penWidth; }
     void setPenWidth(double width);
+    [[nodiscard]] bool pressure() const { return m_pressure; }
+    void setPressure(bool pressure);
+    [[nodiscard]] bool highlighter() const { return m_highlighter; }
+    void setHighlighter(bool highlighter);
     [[nodiscard]] double eraserWidth() const { return m_eraserWidth; }
     void setEraserWidth(double width);
     [[nodiscard]] double inkScale() const { return m_inkScale; }
@@ -204,6 +215,8 @@ private:
 
     QColor m_color{Qt::black};
     double m_penWidth = 2.0;
+    bool m_pressure = true;
+    bool m_highlighter = false;
     double m_eraserWidth = 24.0;
     double m_inkScale = 1.0;
     Tool m_tool = Tool::Pen;

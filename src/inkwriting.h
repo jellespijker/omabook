@@ -34,6 +34,7 @@ struct Nib {
     double width = 2.0;
     bool pressured = false;
     bool tilted = false;
+    bool highlighter = false;
 };
 
 // What it erases with: a circle, in ink units.

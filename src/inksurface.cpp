@@ -69,6 +69,20 @@ void InkSurface::setPenWidth(double width) {
     }
 }
 
+void InkSurface::setPressure(bool pressure) {
+    if (m_pressure != pressure) {
+        m_pressure = pressure;
+        emit lookChanged();
+    }
+}
+
+void InkSurface::setHighlighter(bool highlighter) {
+    if (m_highlighter != highlighter) {
+        m_highlighter = highlighter;
+        emit lookChanged();
+    }
+}
+
 void InkSurface::setEraserWidth(double width) {
     if (width > 0.0 && m_eraserWidth != width) {
         m_eraserWidth = width;
@@ -354,8 +368,9 @@ void InkSurface::begin(Ink::Pointer pointer, const Ink::Input &input, bool erasi
         m_writing.write(pointer, input,
                         Ink::Nib{.color = m_color,
                                  .width = m_penWidth,
-                                 .pressured = can(device, QInputDevice::Capability::Pressure),
-                                 .tilted = can(device, QInputDevice::Capability::XTilt)},
+                                 .pressured = m_pressure && can(device, QInputDevice::Capability::Pressure),
+                                 .tilted = can(device, QInputDevice::Capability::XTilt),
+                                 .highlighter = m_highlighter},
                         touch);
     }
     m_batchTimer.stop();

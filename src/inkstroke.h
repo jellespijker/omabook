@@ -47,6 +47,10 @@ struct Stroke {
     double width = 2.0;
     bool pressured = false;
     bool tilted = false;
+    // A highlighter's (#130): its colour see-through (its alpha), and laid
+    // on once, as one shape, so that where the line crosses or folds over
+    // itself it is no darker than anywhere else.
+    bool highlighter = false;
     // Milliseconds since the epoch: when it began, which also orders the
     // strokes one over the other.
     qint64 began = 0;

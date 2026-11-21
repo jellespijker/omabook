@@ -29,6 +29,7 @@ void Writing::write(Pointer pointer, const Input &input, const Nib &nib, bool to
                                .width = nib.width,
                                .pressured = nib.pressured,
                                .tilted = nib.tilted,
+                               .highlighter = nib.highlighter,
                                .began = QDateTime::currentMSecsSinceEpoch(),
                                .points = {pointOf(input, 0)}},
               .erasing = false,
@@ -157,6 +158,7 @@ Change Writing::extend(Live &live, const Input &input) {
                 .width = live.stroke.width,
                 .pressured = live.stroke.pressured,
                 .tilted = live.stroke.tilted,
+                .highlighter = live.stroke.highlighter,
                 .began = live.stroke.began + from.ms,
                 .points = {}};
     live.startMs += from.ms;
