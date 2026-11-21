@@ -1,7 +1,9 @@
 // What of the plugins is about books (ScriptPlugins, scriptplugins.h): the
 // formats they read, which go into Formats, the books that are a plugin's
-// own (PluginClaims) and their words, for the search (BookWords, #136), and
-// a plugin's own kind of book opening in its view, in place of the reader (#125).
+// own (PluginClaims) and their words, for the search (BookWords, #136),
+// a plugin's own kind of book opening in its view, in place of the reader
+// (#125), and what the scripts are told of books and of where the reader is,
+// with each book's global id (#137).
 
 #include <algorithm>
 
@@ -10,11 +12,58 @@
 #include "pluginclaims.h"
 #include "scriptplugin.h"
 #include "scriptplugins.h"
+#include "scriptreading.h"
+#include "spaces.h"
 
-QJsonObject ScriptPlugins::told(const Book &book) {
-    QJsonObject object = book.toJson();
-    object.insert("has_cover", book.hasCover);
-    return object;
+QJsonObject ScriptPlugins::told(const Book &book) const { return ScriptBook::of(m_services.library ? m_services.library() : nullptr, book); }
+
+namespace {
+
+// What an event says, each book in it by the id that is the same on every
+// computer too (#137): the one the reader's place is of, and one told of whole.
+[[nodiscard]] QJsonObject withGlobalIds(const Library &library, const QString &event, QJsonObject out) {
+    const qint64 id = out.value("id").toInteger();
+    if (id > 0 && (event.startsWith("book.") || event.startsWith("page.")) && !out.contains("global_id")) {
+        const QString known = out.value("book").toObject().value("global_id").toString();
+        out.insert("global_id", known.isEmpty() ? Spaces::bookId(library, id) : known);
+    }
+    if (QJsonObject book = out.value("book").toObject(); !book.isEmpty() && !book.contains("global_id")) {
+        book.insert("global_id", Spaces::bookId(library, book.value("id").toInteger()));
+        out.insert("book", book);
+    }
+    return out;
+}
+
+} // namespace
+
+QJsonObject ScriptPlugins::follow(const QString &event, const QJsonObject &payload) {
+    const Library *library = m_services.library ? m_services.library() : nullptr;
+    const QJsonObject out = library ? withGlobalIds(*library, event, payload) : payload;
+    // What was selected was of the book before.
+    if (event == "book.closed" || event == "book.opened")
+        setSelection({});
+    if (event == "book.closed") {
+        m_reading = {};
+    } else if (event == "book.opened" || event == "page.turned") {
+        // Where the reader is, as the events say it: the same for all three.
+        m_reading = out;
+        m_reading.remove("book");
+    }
+    if (event.startsWith("book."))
+        lookAtTheBook();
+    return out;
+}
+
+void ScriptPlugins::setSelection(const QJsonObject &selection) {
+    if (selection == m_selection)
+        return;
+    m_selection = selection;
+    // None, of the book it was in.
+    const QJsonObject said = !selection.isEmpty() ? selection
+                                                  : QJsonObject{{"book", m_reading.value("id")},
+                                                                {"global_id", m_reading.value("global_id")},
+                                                                {"passage", QJsonValue::Null}};
+    emitEvent("reader.selected", said);
 }
 
 // Formats holds what the running plugins register, no more and no less: a

@@ -326,16 +326,11 @@ std::vector<QJsonObject> batches(const Change &change) {
         removed = {};
         bytes = 0;
     };
-    // The removals first, then what is added, so an erasing in part goes
-    // in one batch with its pieces unless it is too large for one.
-    for (const QString &id : change.removed) {
-        const qsizetype more = id.size() + 4;
-        if (full(more)) {
-            close();
-        }
-        removed.append(id);
-        bytes += more;
-    }
+    // What is added first, then the removals, so an erasing in part goes in
+    // one batch with its pieces unless it is too large for one; and a change
+    // too large for one (the lasso moving a page's every stroke, #137) adds
+    // its strokes before it takes the old ones away: kept batch by batch,
+    // stopped half way, a stroke is there twice, never lost.
     for (const Stroke &stroke : change.added) {
         const QString value = QString::fromLatin1(encode(stroke).toBase64());
         const qsizetype more = stroke.id.size() + value.size() + 6;
@@ -343,6 +338,14 @@ std::vector<QJsonObject> batches(const Change &change) {
             close();
         }
         added.insert(stroke.id, value);
+        bytes += more;
+    }
+    for (const QString &id : change.removed) {
+        const qsizetype more = id.size() + 4;
+        if (full(more)) {
+            close();
+        }
+        removed.append(id);
         bytes += more;
     }
     close();

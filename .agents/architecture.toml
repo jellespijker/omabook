@@ -17,7 +17,7 @@ modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "collation", "htmlclean", "log", "markupfilter", "pagelayout",
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptapiui", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
-  "inkpicture", "scriptapiassist",
+  "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
   "deviceoptions", "threadclock",
 ]
@@ -47,7 +47,7 @@ modules = [
   "booksearch", "annotationwords", "meaningindex", "bookwords",
   "readinglog", "readingstats", "readinggoal",
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
-  "privatebooks", "koreaderbooks",
+  "privatebooks", "koreaderbooks", "bookspaces",
   "fileschema",
   "libraryfiles",
 ]
@@ -64,7 +64,7 @@ modules = [
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
-  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy",
+  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
   "narration",
 ]
@@ -93,7 +93,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inksurfacetouch", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
+  "inksurface", "inksurfacetouch", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
   "readaloud",
 ]

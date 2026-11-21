@@ -48,7 +48,8 @@ inline constexpr qsizetype maxBatchItems = 1000;
 inline constexpr qsizetype maxBatchBytes = qsizetype{56} * 1024;
 
 // A change as ink batches, each `{"add": {id: base64 of the stroke}, "remove": [id]}`,
-// the change of a set `omabook.log.add` writes: one, unless it is over a batch's limits.
+// the change of a set `omabook.log.add` writes: one, unless it is over a batch's limits, and
+// then those that add strokes before those that remove them.
 [[nodiscard]] std::vector<QJsonObject> batches(const Change &change);
 // A batch read back. A stroke that can't be read is an error, and nothing of the batch is taken.
 [[nodiscard]] std::expected<Change, QString> fromBatch(const QJsonObject &batch);

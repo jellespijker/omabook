@@ -27,6 +27,7 @@
 #include "scriptapi.h"
 #include "scriptform.h"
 #include "scriptgraph.h"
+#include "scriptreading.h"
 #include "scriptdesk.h"
 #include "scriptfiles.h"
 #include "scriptsharing.h"
@@ -73,19 +74,6 @@ QString htmlFromText(const QString &text) {
     return html;
 }
 
-QJsonObject bookJson(const Library &library, const Book &book, bool whole) {
-    QJsonObject object = book.toJson();
-    object.insert("has_cover", book.hasCover);
-    if (whole) {
-        QJsonObject files;
-        for (const QString &format : book.formats)
-            files.insert(format, library.formatPath(book.id, format));
-        object.insert("files", files);
-        object.insert("cover", library.coverPath(book.id));
-    }
-    return object;
-}
-
 } // namespace
 
 // The C++ side of the `omabook` object: what scriptprelude.js builds it
@@ -111,6 +99,7 @@ public:
     Q_INVOKABLE QObject *graph() { return p->m_graph.get(); }
     Q_INVOKABLE QJSValue window() { return p->m_window->build(p->m_engine); }
     Q_INVOKABLE QJSValue files() { return p->m_files->build(p->m_engine); }
+    Q_INVOKABLE QJSValue beside() { return (p->m_beside = std::make_unique<ScriptReading>(p))->build(p->m_engine); }
     Q_INVOKABLE void say(const QString &text) { emit p->said(text); }
     Q_INVOKABLE void log(const QString &level, const QString &text) {
         p->m_log << (level == "log" ? text : level + ": " + text);
@@ -240,14 +229,14 @@ public:
             const Book::Lookups lookups{.knows = {}, .noted = {}, .written = BookWords::written(*library)};
             for (const Book &book : library->books())
                 if (book.matches(query, lookups))
-                    books << bookJson(*library, book, false);
+                    books << ScriptBook::of(library, book, false);
         }
         return compact(books);
     }
     Q_INVOKABLE QString libraryBook(double id) {
         const Library *library = this->library(false);
         const auto book = library ? library->book(qint64(id)) : std::nullopt;
-        return book ? compact(bookJson(*library, *book, true)) : QString("null");
+        return book ? compact(ScriptBook::of(library, *book, true)) : QString("null");
     }
     Q_INVOKABLE QString librarySetMeta(double id, const QString &details) {
         Library *library = this->library(true);
@@ -272,7 +261,7 @@ public:
             return "null";
         }
         emit p->touchedLibrary();
-        return compact(bookJson(*library, *library->book(book->id), true));
+        return compact(ScriptBook::of(library, *library->book(book->id), true));
     }
     Q_INVOKABLE void librarySetReading(double id, const QString &reading) {
         Library *library = this->library(true);
@@ -329,7 +318,7 @@ public:
         library->setIdentifier(added.id, "generated", p->m_manifest.id);
         emit p->touchedLibrary();
         indexWordsLater();
-        return compact(bookJson(*library, *library->book(added.id), true));
+        return library->book(added.id).transform([library](const Book &made) { return compact(ScriptBook::of(library, made, true)); }).value_or("null");
     }
     Q_INVOKABLE QString libraryReplaceFile(double id, const QString &name) {
         Library *library = this->library(true);
@@ -352,7 +341,7 @@ public:
         indexWordsLater();
         // The reader follows a book that grew under it, asked or not.
         emit p->reloadBookRequested(book->id);
-        return compact(bookJson(*library, *library->book(book->id), true));
+        return compact(ScriptBook::of(library, *library->book(book->id), true));
     }
     Q_INVOKABLE bool libraryRemove(double id) {
         Library *library = this->library(true);

@@ -41,6 +41,8 @@ struct ScriptServices {
     QNetworkAccessManager *network = nullptr;
     // The book open in the reader: {id, section, fraction, percent}, or empty.
     std::function<QJsonObject()> reading;
+    // The words selected in it, as a passage: {book, global_id, passage}, or empty (#137).
+    std::function<QJsonObject()> selection;
     // The microphone and speakers, and who records now (#79); without them
     // the desktop's own, with no window to show a recording in.
     AudioDevices *audio = nullptr;
@@ -74,6 +76,7 @@ class ScriptFiles;
 class ScriptGraph;
 class ScriptHost;
 class ScriptPlugin;
+class ScriptReading;
 class ScriptSharing;
 class ScriptWindow;
 
@@ -272,6 +275,7 @@ private:
     friend class ScriptGraph;
     friend class ScriptAudio;
     friend class ScriptFiles;
+    friend class ScriptReading;
     friend class ScriptWindow;
 
     QJSValue fromJson(const QJsonValue &value);
@@ -300,6 +304,7 @@ private:
     std::unique_ptr<ScriptAi> m_ai;
     std::unique_ptr<ScriptWindow> m_window;
     std::unique_ptr<ScriptFiles> m_files;
+    std::unique_ptr<ScriptReading> m_beside; // made when the prelude asks for it
     // When the person last called into the script: a command, a launcher, a view.
     std::chrono::steady_clock::time_point m_acted;
     QJSValue m_settle, m_parse;

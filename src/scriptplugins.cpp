@@ -69,6 +69,7 @@ ScriptPlugins::ScriptPlugins(const ScriptServices &services, const QString &fold
     if (!m_services.network)
         m_services.network = &m_network;
     m_services.reading = [this] { return m_reading; };
+    m_services.selection = [this] { return m_selection; };
     // Registering is told once for a burst of it, after the script is done.
     m_announce.setSingleShot(true);
     m_announce.setInterval(0);
@@ -418,21 +419,8 @@ ScriptPlugin *ScriptPlugins::plugin(const QString &id) const {
     return found == m_plugins.end() ? nullptr : found->second.get();
 }
 
-void ScriptPlugins::follow(const QString &event, const QJsonObject &payload) {
-    if (event == "book.closed") {
-        m_reading = {};
-    } else if (event == "book.opened" || event == "page.turned") {
-        // Where the reader is, as the events say it: the same for all three.
-        m_reading = payload;
-        m_reading.remove("book");
-    }
-    if (event.startsWith("book.")) {
-        lookAtTheBook();
-    }
-}
-
-void ScriptPlugins::emitEvent(const QString &event, const QJsonObject &payload) {
-    follow(event, payload);
+void ScriptPlugins::emitEvent(const QString &event, const QJsonObject &given) {
+    const QJsonObject payload = follow(event, given);
     // A handler may switch a plugin off, or change a file that loads one anew.
     QList<QPointer<ScriptPlugin>> plugins;
     for (const auto &entry : m_plugins)

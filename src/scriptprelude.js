@@ -2,7 +2,8 @@
 // host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp,
 // and ScriptSharing in scriptsharing.cpp, which it hands over, for what goes
 // into spaces, ScriptGraph for the graph, what scriptassist.js builds from ScriptAi, `omabook.ui`
-// from scriptui.js, and `omabook.files` from scriptfiles.js). The hosts are
+// from scriptui.js, `omabook.files` from scriptfiles.js, and the reader and
+// what is written beside a book being read from scriptreading.js). The hosts are
 // only ever reachable through these functions: the host is an argument of
 // this one, never a global, so a script can call what is listed in
 // scriptapi.cpp and nothing else. A test holds this object and that table to
@@ -17,6 +18,8 @@
     var windowed = host.window();
     // `omabook.files`, and what of `omabook.ui` reaches the person's files and clipboard (scriptfiles.js).
     var filed = host.files();
+    // The reader, its selection, passages, and books by their global id (scriptreading.js).
+    var beside = host.beside()(host, parse);
 
     function may(permission) { return info.permissions.indexOf(permission) >= 0; }
 
@@ -325,19 +328,16 @@
             setProgress: function (id, place) {
                 need(place, "object", "The place");
                 return parse(host.librarySetProgress(Number(id) || 0, JSON.stringify(place)));
-            }
+            },
+            byGlobalId: beside.library.byGlobalId,
+            sharedIn: beside.library.sharedIn
         },
+        passages: beside.passages,
 
         graph: graphApi(),
 
-        reader: {
-            current: function () { return parse(host.reading()); },
-            open: function (id, place) {
-                var at = place && place.section !== undefined;
-                host.openBook(Number(id) || 0, at ? Number(place.section) || 0 : -1, at ? Number(place.fraction) || 0 : 0);
-            },
-            reload: function () { host.reloadBook(); }
-        },
+        // The reader and what is written beside it, from scriptreading.js.
+        reader: beside.reader,
 
         settings: {
             get: function (key, fallback) {

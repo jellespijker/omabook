@@ -99,7 +99,7 @@ const QList<Entry> &entries() {
          "Moves a book this plugin made to the trash. Any other book throws: those are the reader's to remove."},
     };
     // After the library's, what a plugin puts in the window, the graph's and what goes into spaces, then the rest.
-    static const QList<Entry> entries = library + uiEntries() + deskEntries() + graphEntries() + spaceEntries() + laterEntries() + assistEntries();
+    static const QList<Entry> entries = library + uiEntries() + deskEntries() + graphEntries() + spaceEntries() + laterEntries() + assistEntries() + readingEntries();
     return entries;
 }
 
@@ -110,11 +110,14 @@ const QList<Event> &events() {
         {"book.added", "{book}", "A book came into the library, by any road: the window, the command line, a sync."},
         {"book.removed", "{id, book}", "A book left the library; `book` is what it was."},
         {"book.changed", "{book, before}", "A book's details, shelf, rating, status or formats changed. Turning its pages is not a change."},
-        {"book.opened", "{book, id, generated, identifiers, section, sections, fraction, percent}", "A book was opened in the reader."},
-        {"book.closed", "{id, generated, identifiers, section, sections, fraction, percent}", "The reader went back to the shelf."},
-        {"page.turned", "{id, generated, identifiers, section, sections, fraction, percent}",
+        {"book.opened", "{book, id, global_id, generated, identifiers, section, sections, fraction, percent}", "A book was opened in the reader."},
+        {"book.closed", "{id, global_id, generated, identifiers, section, sections, fraction, percent}", "The reader went back to the shelf."},
+        {"page.turned", "{id, global_id, generated, identifiers, section, sections, fraction, percent}",
          "The reader moved to another page or chapter (told a moment after they stop), or the open book was read anew "
          "because it changed. The same as `reader.current()`."},
+        {"reader.selected", "{book, global_id, passage, confidence}",
+         "The words selected in the reader changed (told a moment after they stop): the same as `reader.selection()`, "
+         "and `passage` `null` once nothing is selected, or another book is opened."},
         {"lookup.finished", "{id, candidates}", "Every source of a look-up has answered."},
         {"log.changed", "{entities}",
          "The plugin's own data in the change log (`omabook.log`) came from elsewhere: a sync with another computer, a "

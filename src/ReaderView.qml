@@ -304,7 +304,7 @@ Item {
         ignoreUnknownSignals: true
         function onPointed(thing) { view.pointed(thing) }
         function onSelected() { view.released() }
-        function onSelectedTextChanged() { if (menu.shown && menu.mode === "menu" && view.content.selectedText === "") menu.close() }
+        function onSelectedTextChanged() { reader.selection.changed(view.content.selectedText); if (menu.shown && menu.mode === "menu" && view.content.selectedText === "") menu.close() }
     }
     // A card or a menu is about what is on the page; the page moved on.
     Connections {

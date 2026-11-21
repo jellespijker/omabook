@@ -71,6 +71,11 @@ struct Passage {
     // reader's page) its words are right and its places near, and findAgain
     // then places it in the book's text.
     [[nodiscard]] static Passage of(QStringView sectionText, int section, qsizetype start, qsizetype end);
+    // The passage of `words` words that starts at a place of a book's text,
+    // from the start of the word the place is in (#137): what a plugin refers
+    // to when it is given a place and no words. On a page without words (a
+    // comic's) it is the place alone, with no words.
+    [[nodiscard]] static Passage at(const BookText &text, const BookPlace &place, qsizetype words = 12);
     // The passage in a book's text, as it is now: by its words first, the
     // words around them and its place telling one occurrence from another,
     // nearest its own section first; then by most of its words, when some

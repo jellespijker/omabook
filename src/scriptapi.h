@@ -45,6 +45,9 @@ QList<Entry> spaceEntries();
 QList<Entry> laterEntries();
 // Asking the model and recognising ink and speech (scriptapiassist.cpp).
 QList<Entry> assistEntries();
+// What a plugin writes beside a book being read: the reader's selection,
+// passages, and books by their global id (scriptapireading.cpp, #137).
+QList<Entry> readingEntries();
 const QList<Event> &events();
 const QList<Permission> &permissions();
 QStringList eventNames();

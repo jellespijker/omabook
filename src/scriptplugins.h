@@ -96,8 +96,14 @@ public:
     // alone: `log.changed`, and logChanged for its view (scriptpluginlog.cpp).
     void lookAtTheLog();
 
-    // A book as the scripts are told of it: what `omabook list --json` prints.
-    static QJsonObject told(const Book &book);
+    // A book as the scripts are told of it: what `omabook list --json` prints,
+    // with its global id (ScriptBook::of).
+    QJsonObject told(const Book &book) const;
+    // The words the reader selected in the open book, as a passage of it
+    // ({book, global_id, passage}), or none (empty), which the window says a
+    // moment after the selection changes: `omabook.reader.selection()`, and
+    // `reader.selected` to every plugin when it is another (#137).
+    void setSelection(const QJsonObject &selection);
     // Shows a book that is a running plugin's own kind (a format it reads
     // with a view, omabook.format.register or plugin.json) in that view, with
     // {book} as its args, in place of the reader (#125). False for any other
@@ -201,7 +207,9 @@ private:
     void adopt(std::unique_ptr<ScriptPlugin> plugin);
     void report(const QString &id, const QString &problem, bool stillRunning);
     QByteArray stamp(const QString &folder, bool enabled) const;
-    void follow(const QString &event, const QJsonObject &payload);
+    // Follows where the reader is from what it tells, and answers what the
+    // scripts are told: the same, each book in it with its global id (scriptpluginbooks.cpp).
+    QJsonObject follow(const QString &event, const QJsonObject &payload);
     void syncFormats();
     // Marks the books (the library's, for none) that are a running plugin's
     // own as its (PluginClaims); only the window's set does. Whether any was.
@@ -239,6 +247,7 @@ private:
     bool m_providesFormats = false;
     QStringList m_formatIds; // the providers this set has in Formats
     QJsonObject m_reading;
+    QJsonObject m_selection;
     qint64 m_selectedBook = 0;
     QString m_maker; // the plugin that made the book in front of the reader, if one did
     int m_nextRequest = 1;

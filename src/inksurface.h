@@ -164,6 +164,9 @@ signals:
     void writingChanged();
     // What was done since the last batch, `{"add": {id: base64}, "remove": [id]}`,
     // once the pen pauses: one `omabook.log.add(entity, id, set, batch.add, batch.remove)`.
+    // Each is within what one change of the log takes (1000 items, 64 KiB, #76):
+    // more than that (the lasso moving a whole page) comes as several, one
+    // after another, those that add before those that remove (Ink::batches, #137).
     void inked(const QVariantMap &batch);
     // Two fingers spread apart (more than 1) or came together, by this much since the last time.
     void pinched(double scale);

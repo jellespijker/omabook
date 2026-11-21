@@ -4,7 +4,9 @@
 #include <QLocale>
 #include <QStringList>
 #include <QtGlobal>
+#include <algorithm>
 #include <cstdlib>
+#include <iterator>
 #include <utility>
 
 #include "booktext.h"
@@ -124,6 +126,21 @@ Passage Passage::of(QStringView sectionText, int section, qsizetype start, qsize
             .quote = sectionText.sliced(start, end - start).toString(),
             .before = contextBefore(sectionText, start),
             .after = contextAfter(sectionText, end)};
+}
+
+Passage Passage::at(const BookText &text, const BookPlace &place, qsizetype words) {
+    const int section = qBound(0, place.section, qMax(0, text.sections() - 1));
+    const QString &whole = text.text(section);
+    const BookPlace there{.section = section, .fraction = qBound(0.0, place.fraction, 1.0)};
+    const qsizetype offset = text.offsetOf(there);
+    const QList<PassageMatch::Word> &all = text.index(section).words();
+    // The first word that ends after the place: the one it is in, or the next.
+    const auto first = std::ranges::find_if(all, [offset](const PassageMatch::Word &word) { return word.end > offset; });
+    if (first == all.end() || words <= 0)
+        return {.from = there, .to = there, .quote = {}, .before = {}, .after = {}};
+    const auto index = std::distance(all.begin(), first);
+    const qsizetype last = qMin(all.size(), index + words) - 1;
+    return of(whole, section, first->start, all.at(last).end);
 }
 
 std::optional<FoundPassage> Passage::findAgain(const BookText &text) const {

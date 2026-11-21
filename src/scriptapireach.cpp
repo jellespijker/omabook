@@ -10,7 +10,7 @@ namespace ScriptApi {
 QList<Entry> laterEntries() {
     return {
         {"reader.current", "reader.current()", "",
-         "Where the reader is: `{id, generated, identifiers, section, sections, fraction, percent}`, or `null` when no "
+         "Where the reader is: `{id, global_id, generated, identifiers, section, sections, fraction, percent}`, or `null` when no "
          "book is open. `section` counts from 0 and `sections` is how many there are; `fraction` is how far into the "
          "section (0 to 1), `percent` how far into the book."},
         {"reader.open", "reader.open(id, {section, fraction})", "",

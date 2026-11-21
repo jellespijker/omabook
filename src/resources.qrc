@@ -133,6 +133,7 @@
         <file alias="scriptassist.js">scriptassist.js</file>
         <file alias="scriptaudio.js">scriptaudio.js</file>
         <file alias="scriptfiles.js">scriptfiles.js</file>
+        <file alias="scriptreading.js">scriptreading.js</file>
         <file alias="scriptui.js">scriptui.js</file>
         <file>plugin-templates/metadata/plugin.json</file>
         <file>plugin-templates/metadata/main.js</file>

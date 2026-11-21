@@ -19,6 +19,7 @@
 #include "readaloud.h"
 #include "readinghighlights.h"
 #include "readingink.h"
+#include "readingselection.h"
 #include "readinglog.h"
 #include "readingmarks.h"
 
@@ -75,6 +76,8 @@ class Reader : public QObject {
     Q_PROPERTY(ReadingHighlights *highlights READ highlights CONSTANT)
     // The ink on the pages of a PDF or a comic, as they show it and the pen writes it (#83).
     Q_PROPERTY(ReadingInk *ink READ ink CONSTANT)
+    // The words selected on the page, as the plugins are told of them (#137).
+    Q_PROPERTY(ReadingSelection *selection READ selection CONSTANT)
     // How the text is set: the options in force, and the chapter set with them.
     Q_PROPERTY(PageFormat *format READ format CONSTANT)
     // The book read aloud, the sentence being read marked on the page (#73).
@@ -119,6 +122,7 @@ public:
     ReadingHighlights *highlights() const noexcept { return m_highlights; }
     ReadingInk *ink() const noexcept { return m_ink; }
     ReadAloud *readAloud() const noexcept { return m_readAloud; }
+    ReadingSelection *selection() const noexcept { return m_selection; }
     // The opened book itself, none while none is open, and the backend it is read for.
     std::shared_ptr<const Document> document() const { return m_document; }
     Backend *backend() const noexcept { return m_backend; }
@@ -238,4 +242,5 @@ private:
     ReadingHighlights *m_highlights = new ReadingHighlights(this);
     ReadingInk *m_ink = new ReadingInk(this);
     ReadAloud *m_readAloud = new ReadAloud(this);
+    ReadingSelection *m_selection = new ReadingSelection(this);
 };
