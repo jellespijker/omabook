@@ -197,22 +197,32 @@ ColumnLayout {
         }
 
         // What writes out recordings, and voxtype to install on Omarchy (#146).
-        Label {
-            objectName: "speechHeardBy"
+        // Each part of one capability only is made in its row alone, so that
+        // its names are found once.
+        Loader {
             Layout.fillWidth: true
-            visible: row.capability === "speech-to-text" && text !== ""
-            wrapMode: Text.Wrap
-            color: theme.colors.muted
-            text: backend.speech.installing ? qsTr("Installing voxtype in the terminal that opened. Once it is closed, Omabook looks for it again.")
-                  : backend.speech.heardBy === "" ? ""
-                  : backend.speech.timed ? qsTr("Recordings are written out by %1, each word with its moment.").arg(backend.speech.heardBy)
-                  : qsTr("Recordings are written out by %1, which doesn't give each word its moment; whisper.cpp or a transcription server does.").arg(backend.speech.heardBy)
-        }
-        AppButton {
-            objectName: "speechInstall"
-            visible: row.capability === "speech-to-text" && backend.speech.installable && !backend.speech.installing
-            text: qsTr("Install voxtype…")
-            onClicked: backend.speech.install()
+            active: row.capability === "speech-to-text"
+            visible: active
+            sourceComponent: ColumnLayout {
+                spacing: 8
+                Label {
+                    objectName: "speechHeardBy"
+                    Layout.fillWidth: true
+                    visible: text !== ""
+                    wrapMode: Text.Wrap
+                    color: theme.colors.muted
+                    text: backend.speech.installing ? qsTr("Installing voxtype in the terminal that opened. Once it is closed, Omabook looks for it again.")
+                          : backend.speech.heardBy === "" ? ""
+                          : backend.speech.timed ? qsTr("Recordings are written out by %1, each word with its moment.").arg(backend.speech.heardBy)
+                          : qsTr("Recordings are written out by %1, which doesn't give each word its moment; whisper.cpp or a transcription server does.").arg(backend.speech.heardBy)
+                }
+                AppButton {
+                    objectName: "speechInstall"
+                    visible: backend.speech.installable && !backend.speech.installing
+                    text: qsTr("Install voxtype…")
+                    onClicked: backend.speech.install()
+                }
+            }
         }
 
         // The provider: a choice where there is more than one.
@@ -222,25 +232,36 @@ ColumnLayout {
         }
 
         // Its set-up: the AI's own for answers and quick work, else a server's.
-        AiAnswersSetup { Layout.fillWidth: true; visible: row.capability === "answers" }
-        ModelPicker {
+        Loader {
             Layout.fillWidth: true
-            visible: row.capability === "quick" && aiAgent.available
-            tier: "quick"
-            label: qsTr("Model")
+            active: row.capability === "answers"
+            visible: active
+            sourceComponent: AiAnswersSetup {}
+        }
+        Loader {
+            Layout.fillWidth: true
+            active: row.capability === "quick"
+            visible: active && aiAgent.available
+            sourceComponent: ModelPicker {
+                tier: "quick"
+                label: qsTr("Model")
+            }
         }
         AiServerSetup {
             Layout.fillWidth: true
             visible: row.capability !== "answers" && row.capability !== "quick"
             info: row.info
         }
-        CheckBox {
-            objectName: "meaningAll"
+        Loader {
             Layout.fillWidth: true
-            visible: row.capability === "embeddings"
-            text: qsTr("Index every book by its meaning, not only those I ask for")
-            checked: settings.meaningAll
-            onToggled: settings.meaningAll = checked
+            active: row.capability === "embeddings"
+            visible: active
+            sourceComponent: CheckBox {
+                objectName: "meaningAll"
+                text: qsTr("Index every book by its meaning, not only those I ask for")
+                checked: settings.meaningAll
+                onToggled: settings.meaningAll = checked
+            }
         }
 
         // Whether it may go to someone else's computer: for this one alone.
