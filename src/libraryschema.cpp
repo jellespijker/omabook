@@ -486,6 +486,10 @@ const QList<QStringList> migrations{
     // A plugin's own books found by their words (#136, format 42): what its
     // format says they hold, read here from each file and never logged.
     BookWords::step(),
+    // The same-as links an older Omabook made between books that are not one
+    // book (#158, format 43): judged once, as the library is brought up to
+    // date, and kept apart from then on (LibraryMigrations::judgeLinks).
+    {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('judge_links', '1')"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

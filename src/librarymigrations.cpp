@@ -18,11 +18,13 @@
 #include <ranges>
 #include <tuple>
 
+#include "booklinks.h"
 #include "changelog.h"
 #include "keptops.h"
 #include "library.h"
 #include "libraryschema.h"
 #include "log.h"
+#include "replication.h"
 #include "statements.h"
 #include "tenancy.h"
 
@@ -199,6 +201,7 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
         // now that it does: after the copy an upgrade keeps, in the same
         // transaction as the upgrade.
         KeptOps::takeKnown(library);
+        judgeLinks(library);
         // The books' tenants as the collections and the user's choice say
         // now: the first time after the step that adds tenants, the whole
         // graph's (#94); after that, what changed while it was closed.
@@ -228,6 +231,23 @@ void LibraryMigrations::sayBringingUpToDate(const Library &library, int schema) 
                                            "a minute for a large library…")
                                        .arg(schema)
                                        .arg(currentFormat()));
+}
+
+void LibraryMigrations::judgeLinks(const Library &library) {
+    QSqlQuery due = library.query("SELECT 1 FROM library_state WHERE key = 'judge_links'");
+    const bool judge = due.next();
+    due.finish();
+    if (!judge)
+        return;
+    const QStringList apart = BookLinks::record(library, Replication::operations(library));
+    library.exec("DELETE FROM library_state WHERE key = 'judge_links'");
+    if (apart.isEmpty())
+        return;
+    qCInfo(lcLibrary).noquote() << apart.size() << "links an older Omabook made between books that are not one book were dropped";
+    if (library.m_bringingUpToDate)
+        library.m_bringingUpToDate(
+            QString("An older Omabook took %1 for one book; a sync keeps them apart now: %2.")
+                .arg(apart.size() == 1 ? QString("1 pair of books") : QString("%1 pairs of books").arg(apart.size()), apart.join("; ")));
 }
 
 void LibraryMigrations::sayOnStandardError(const QString &said) { std::println(stderr, "{}", said.toStdString()); }
