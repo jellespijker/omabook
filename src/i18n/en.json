@@ -1205,13 +1205,13 @@
   "One person on every computer": "One person on every computer",
   "One time is followed: what you put in, else the more precise, else the first book's.": "One time is followed: what you put in, else the more precise, else the first book's.",
   "One, two or three pages": "One, two or three pages",
-  "Only \"ink\" and \"audio\" are recognised, not \"%1\".": "Only \"ink\" and \"audio\" are recognised, not \"%1\".",
   "Only %Ln pages fit at this width with lines of at least %1 characters": {
     "one": "Only %Ln page fits at this width with lines of at least %1 characters",
     "other": "Only %Ln pages fit at this width with lines of at least %1 characters"
   },
   "Only a margin note or a highlight with words becomes a fact.": "Only a margin note or a highlight with words becomes a fact.",
   "Only connections between books": "Only connections between books",
+  "Only ink and audio are recognised, not %1.": "Only ink and audio are recognised, not %1.",
   "Only met in a book": "Only met in a book",
   "Only the books in %1": "Only the books in %1",
   "Only the events met in a book, not those only implied": "Only the events met in a book, not those only implied",

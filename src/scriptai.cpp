@@ -130,7 +130,7 @@ QVariantMap ScriptAi::recognition(const QString &kind, bool hosted) {
     };
     const auto named = Recognition::kindNamed(kind);
     if (!named)
-        return unavailable(u"unknown-kind"_s, tr("Only \"ink\" and \"audio\" are recognised, not \"%1\".").arg(kind));
+        return unavailable(u"unknown-kind"_s, tr("Only ink and audio are recognised, not %1.").arg(kind));
     if (m_plugin->m_services.settings == nullptr)
         return unavailable(u"no-settings"_s, tr("Nothing can be recognised here: Omabook's settings aren't open."));
     if (const auto refused = RecognitionRoute::refusal(*m_plugin->m_services.settings, *named, hosted))
