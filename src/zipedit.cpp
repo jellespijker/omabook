@@ -17,19 +17,19 @@ constexpr quint32 zip64LocatorSignature = 0x07064b50;
 constexpr qsizetype localSize = 30;
 constexpr qsizetype centralSize = 46;
 constexpr qsizetype endSize = 22;
-constexpr quint16 encrypted = 1U << 0;
-constexpr quint16 utf8Names = 1U << 11;
+constexpr quint16 encrypted = 0x0001; // bit 0
+constexpr quint16 utf8Names = 0x0800; // bit 11
 constexpr quint16 deflated = 8;
 constexpr quint16 versionNeeded = 20;
 constexpr quint32 tooLarge = std::numeric_limits<quint32>::max();
 // Made on Unix by zip 3.0, a file anyone may read: what a new record says.
-constexpr quint16 madeBy = (3U << 8) | 30U;
-constexpr quint32 fileAttributes = 0100644U << 16;
+constexpr quint16 madeBy = 0x031E;             // 3 (Unix) in the high byte, 30 the low
+constexpr quint32 fileAttributes = 0x81A40000; // 0100644, shifted to the high half
 // 1980-01-01 at midnight, the first day a zip can say, for a file with no time of its own.
-constexpr quint16 firstDay = (1U << 5) | 1U;
+constexpr quint16 firstDay = 0x0021; // day 1 of month 1 of 1980
 
-[[nodiscard]] quint16 u16(QByteArrayView data, qsizetype at) { return qFromLittleEndian<quint16>(data.data() + at); }
-[[nodiscard]] quint32 u32(QByteArrayView data, qsizetype at) { return qFromLittleEndian<quint32>(data.data() + at); }
+[[nodiscard]] quint16 u16(QByteArrayView data, qsizetype at) { return qFromLittleEndian<quint16>(data.sliced(at, 2).data()); }
+[[nodiscard]] quint32 u32(QByteArrayView data, qsizetype at) { return qFromLittleEndian<quint32>(data.sliced(at, 4).data()); }
 
 void put16(QByteArray &out, quint16 value) {
     std::array<char, 2> bytes{};
@@ -43,8 +43,8 @@ void put32(QByteArray &out, quint32 value) {
     out.append(bytes.data(), bytes.size());
 }
 
-void set16(QByteArray &out, qsizetype at, quint16 value) { qToLittleEndian(value, out.data() + at); }
-void set32(QByteArray &out, qsizetype at, quint32 value) { qToLittleEndian(value, out.data() + at); }
+void set16(QByteArray &out, qsizetype at, quint16 value) { qToLittleEndian(value, &out[at]); }
+void set32(QByteArray &out, qsizetype at, quint32 value) { qToLittleEndian(value, &out[at]); }
 
 [[nodiscard]] std::unexpected<Failure> unchangeable() { return std::unexpected(Failure(Failure::Code::ZipUnchangeable)); }
 
@@ -115,13 +115,13 @@ struct Directory {
     const std::optional<qsizetype> end = endRecord(zip);
     if (!end)
         return unchangeable();
-    const quint16 count = u16(zip, *end + 10);
+    const qsizetype count = u16(zip, *end + 10);
     const quint32 size = u32(zip, *end + 12);
     const quint32 start = u32(zip, *end + 16);
     // Spanning disks, or a zip64, which says its directory elsewhere.
     const bool zip64 =
         (*end >= 20 && u32(zip, *end - 20) == zip64LocatorSignature) || count == 0xFFFF || size == tooLarge || start == tooLarge;
-    if (zip64 || u16(zip, *end + 4) != 0 || u16(zip, *end + 6) != 0 || u16(zip, *end + 8) != count
+    if (zip64 || u16(zip, *end + 4) != 0 || u16(zip, *end + 6) != 0 || qsizetype{u16(zip, *end + 8)} != count
         || qsizetype{start} + qsizetype{size} > *end)
         return unchangeable();
     Directory found{.files = {}, .start = start, .comment = zip.sliced(*end + endSize)};
@@ -140,7 +140,8 @@ struct Directory {
 // Raw deflate: what qCompress makes, without zlib's header and checksum.
 [[nodiscard]] QByteArray deflate(const QByteArray &data) {
     const QByteArray zlib = qCompress(data, 9);
-    constexpr qsizetype before = 4 + 2, after = 4; // its length, zlib's header; Adler-32
+    constexpr qsizetype before = 4 + 2; // its length, zlib's header
+    constexpr qsizetype after = 4;      // Adler-32
     return zlib.size() > before + after ? zlib.mid(before, zlib.size() - before - after) : QByteArray();
 }
 

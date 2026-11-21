@@ -59,7 +59,7 @@ void Backend::changeFile(qint64 id, bool restore) {
     if (!m_library)
         return;
     // Its end is shown when it comes, unless the window has gone by then.
-    std::ignore = QtConcurrent::run([root = m_library->root(), id, restore]() -> std::optional<Failure> {
+    std::ignore = QtConcurrent::run([root = m_library->root(), id, restore] -> std::optional<Failure> {
                       Library library(root);
                       if (QString error; !library.open(&error))
                           return Failure::said(error);

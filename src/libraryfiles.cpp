@@ -232,10 +232,13 @@ std::expected<Library::DetailsWritten, Failure> Library::writeDetails(qint64 id)
     const auto file = epubFile(id);
     if (!file)
         return std::unexpected(file.error());
+    const std::optional<Book> book = this->book(id);
+    if (!book)
+        return std::unexpected(Failure(Failure::Code::NoSuchBook, {QString::number(id)}));
     clearPartials(file->path);
     const QString partial = partialFor(file->path);
     const auto leftOver = qScopeGuard([&partial] { QFile::remove(partial); });
-    if (const auto made = writtenBeside(file->path, partial, detailsFor(*this->book(id), coverPath(id), file->path)); !made)
+    if (const auto made = writtenBeside(file->path, partial, detailsFor(*book, coverPath(id), file->path)); !made)
         return std::unexpected(made.error());
     const QString hash = hashFile(partial);
     if (hash == file->hash)

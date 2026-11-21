@@ -136,7 +136,10 @@ void declared(const QXmlStreamReader &xml, Package &package) {
 [[nodiscard]] bool identifierOwned(const Child &child, const OpfDetails::Details &details) {
     if (!isbnOf(child.text).isEmpty() || child.scheme.compare(u"isbn"_s, Qt::CaseInsensitive) == 0)
         return true;
-    const QString scheme = !child.scheme.isEmpty() ? child.scheme : child.text.contains(u':') ? child.text.section(u':', 0, 0) : QString();
+    // Said by its scheme attribute (EPUB 2), or in front of its value (EPUB 3's "goodreads:4671").
+    QString scheme = child.scheme;
+    if (scheme.isEmpty() && child.text.contains(u':'))
+        scheme = child.text.section(u':', 0, 0);
     const QStringList known = details.identifiers.keys();
     return !scheme.isEmpty() && travelsOut(scheme)
            && std::ranges::any_of(known, [&scheme](const QString &key) { return key.compare(scheme, Qt::CaseInsensitive) == 0; });

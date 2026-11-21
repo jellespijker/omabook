@@ -125,7 +125,7 @@ struct Named {
 
 [[nodiscard]] Named namedHere(const Library &library, const QJsonArray &files, QSet<QString> &theirHashes) {
     Named named;
-    for (const QJsonValue &value : files) {
+    for (const auto &value : files) {
         const QJsonObject file = value.toObject();
         const QString hash = file.value("hash").toString();
         named.hashes << hash;
