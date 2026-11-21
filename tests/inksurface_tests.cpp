@@ -91,6 +91,26 @@ Item {
 }
 )";
 
+// A surface on a Flickable, as a book's page is (#134): what two fingers move.
+constexpr const char *scrolled = R"(import QtQuick
+import Omabook
+
+Flickable {
+    objectName: "under"
+    width: 640
+    height: 480
+    contentWidth: 640
+    contentHeight: 2000
+    contentY: 500
+    InkSurface {
+        objectName: "ink"
+        width: 640
+        height: 2000
+        batchPause: 30
+    }
+}
+)";
+
 // A surface in a window, and the batches it sends.
 class Bench {
 public:
@@ -135,8 +155,7 @@ public:
         QWindowSystemInterface::flushWindowSystemEvents();
     }
     // A finger's touch, its contact `diameter` pixels across (0: the device says none).
-    void touch(QEventPoint::State state, QPointF at, double diameter, int id = 1) {
-        clock += 8;
+    [[nodiscard]] QWindowSystemInterface::TouchPoint finger(QEventPoint::State state, QPointF at, double diameter, int id = 1) const {
         QWindowSystemInterface::TouchPoint point;
         point.id = id;
         point.state = state;
@@ -146,7 +165,13 @@ public:
         point.area.moveCenter(global);
         const QRect screen = m_view.screen()->geometry();
         point.normalPosition = QPointF(global.x() / screen.width(), global.y() / screen.height());
-        QWindowSystemInterface::handleTouchEvent<QWindowSystemInterface::SynchronousDelivery>(&m_view, clock, devices().finger, {point});
+        return point;
+    }
+    void touch(QEventPoint::State state, QPointF at, double diameter, int id = 1) { touches({finger(state, at, diameter, id)}); }
+    // Every finger on the screen, in one event.
+    void touches(const QList<QWindowSystemInterface::TouchPoint> &points) {
+        clock += 8;
+        QWindowSystemInterface::handleTouchEvent<QWindowSystemInterface::SynchronousDelivery>(&m_view, clock, devices().finger, points);
     }
     void swipe(QPointF from, QPointF to, double diameter, double grownTo = -1) {
         touch(QEventPoint::State::Pressed, from, diameter);
@@ -395,6 +420,64 @@ private slots:
         bench.touch(QEventPoint::State::Released, QPointF(440, 420), 9);
         QCOMPARE(bench.surface->count(), 1);
         QVERIFY(bench.surface->sheet().strokes().front().pressured);
+    }
+
+    // Always or never, as the surface says, whether a pen was seen or not.
+    void fingersDrawOrScrollAsAsked() {
+        Bench bench;
+        bench.surface->setFingers(InkSurface::FingerUse::Scroll);
+        bench.swipe(QPointF(100, 100), QPointF(300, 120), 9);
+        QCOMPARE(bench.surface->count(), 0);
+        QCOMPARE(bench.presses(), 1);
+        bench.stroke(devices().pen, QPointF(100, 200), QPointF(300, 200));
+        bench.clock += 2000;
+        bench.surface->setFingers(InkSurface::FingerUse::Draw);
+        bench.swipe(QPointF(100, 300), QPointF(300, 320), 9);
+        QCOMPARE(bench.surface->count(), 2);
+        QCOMPARE(bench.presses(), 1);
+    }
+
+    // Where fingers draw, two of them don't (#134): what the first began
+    // goes, and together they move the Flickable the surface is on, and say
+    // how far they spread, for what zooms. After, one finger writes again.
+    void twoFingersMoveWhatIsUnder() {
+        using State = QEventPoint::State;
+        Bench bench(QString::fromUtf8(scrolled));
+        const QQuickItem *under = bench.view().rootObject();
+        QSignalSpy pinched(bench.surface, &InkSurface::pinched);
+        bench.touch(State::Pressed, QPointF(200, 200), 9);
+        bench.touch(State::Updated, QPointF(210, 210), 9);
+        QVERIFY(bench.surface->writing());
+        bench.touches({bench.finger(State::Stationary, QPointF(210, 210), 9), bench.finger(State::Pressed, QPointF(400, 210), 9, 2)});
+        QVERIFY(!bench.surface->writing());
+        QVERIFY(bench.surface->touched());
+        for (int step = 1; step <= 10; ++step)
+            bench.touches({bench.finger(State::Updated, QPointF(210, 210 - (step * 10)), 9),
+                           bench.finger(State::Updated, QPointF(400, 210 - (step * 10)), 9, 2)});
+        // The window delivers the moves of a touch at its next frame, together.
+        QTRY_VERIFY2(std::abs(under->property("contentY").toDouble() - 600) < 0.5,
+                     qPrintable(under->property("contentY").toString()));
+        QVERIFY(pinched.isEmpty());
+        for (int step = 1; step <= 5; ++step)
+            bench.touches({bench.finger(State::Updated, QPointF(210 - (step * 10), 110), 9),
+                           bench.finger(State::Updated, QPointF(400 + (step * 10), 110), 9, 2)});
+        const auto spread = [&pinched] {
+            double scale = 1.0;
+            for (const QList<QVariant> &one : std::as_const(pinched))
+                scale *= one.first().toDouble();
+            return scale;
+        };
+        QTRY_VERIFY2(std::abs(spread() - (290.0 / 190.0)) < 0.01, qPrintable(QString::number(spread())));
+        QVERIFY(std::abs(under->property("contentY").toDouble() - 600) < 0.5);
+        bench.touches({bench.finger(State::Released, QPointF(160, 110), 9), bench.finger(State::Updated, QPointF(450, 110), 9, 2)});
+        bench.touches({bench.finger(State::Released, QPointF(450, 110), 9, 2)});
+        QVERIFY(!bench.surface->touched());
+        QCOMPARE(bench.surface->count(), 0);
+        QVERIFY(bench.pause().isEmpty());
+        bench.swipe(QPointF(100, 300), QPointF(300, 320), 9);
+        QCOMPARE(bench.surface->count(), 1);
+        QVERIFY2(std::abs(under->property("contentY").toDouble() - 600) < 0.5,
+                 qPrintable(under->property("contentY").toString()));
     }
 
     // A mouse draws, unless the surface says it doesn't.

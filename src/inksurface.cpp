@@ -10,7 +10,6 @@
 #include <QQuickWindow>
 #include <QScreen>
 #include <QTabletEvent>
-#include <QTouchEvent>
 
 #include <algorithm>
 
@@ -33,18 +32,6 @@ bool knowsAPen() {
 
 bool can(const QPointingDevice *device, QInputDevice::Capability capability) {
     return device != nullptr && device->capabilities().testFlag(capability);
-}
-
-Ink::Fingers fingersOf(InkSurface::FingerUse use) {
-    switch (use) {
-    case InkSurface::FingerUse::Draw:
-        return Ink::Fingers::Draw;
-    case InkSurface::FingerUse::Scroll:
-        return Ink::Fingers::Scroll;
-    case InkSurface::FingerUse::Auto:
-        break;
-    }
-    return Ink::Fingers::Auto;
 }
 
 } // namespace
@@ -297,72 +284,6 @@ bool InkSurface::tablet(QTabletEvent &event) {
     return true;
 }
 
-void InkSurface::touchEvent(QTouchEvent *event) {
-    if (event->type() == QEvent::TouchCancel) {
-        dropTouches();
-        return;
-    }
-    if (m_readOnly) {
-        event->ignore();
-        return;
-    }
-    bool taken = false;
-    for (qsizetype i = 0; i < event->pointCount(); ++i) {
-        QEventPoint &point = event->point(i);
-        touchPoint(*event, point);
-        if (point.isAccepted() && point.state() == QEventPoint::State::Pressed) {
-            event->setExclusiveGrabber(point, this);
-        }
-        taken = taken || point.isAccepted();
-    }
-    event->setAccepted(taken);
-}
-
-void InkSurface::touchPoint(const QTouchEvent &event, QEventPoint &point) {
-    const Ink::Pointer pointer{deviceId(event.pointingDevice()), point.id()};
-    const quint64 ms = event.timestamp();
-    const QSizeF contact = point.ellipseDiameters();
-    const double contactMm = std::max(contact.width(), contact.height()) * millimetresPerPixel();
-    const bool released = point.state() == QEventPoint::State::Released;
-    if (point.state() == QEventPoint::State::Pressed) {
-        const Ink::Act act = m_writing.toolDown() ? Ink::Act::Palm : m_rules.finger(contactMm, ms, fingersOf(m_fingers));
-        if (act == Ink::Act::Draw) {
-            begin(pointer, inputAt(point.position(), ms), m_tool == Tool::Eraser, true);
-        } else if (act == Ink::Act::Palm) {
-            m_palms.insert(pointer);
-        }
-        point.setAccepted(act != Ink::Act::Pass);
-        return;
-    }
-    if (m_palms.contains(pointer)) {
-        if (released) {
-            m_palms.remove(pointer);
-        }
-        point.setAccepted(true);
-        return;
-    }
-    if (!m_writing.has(pointer)) {
-        point.setAccepted(false);
-        return;
-    }
-    point.setAccepted(true);
-    // A palm that landed as a fingertip, and spread, or the pen coming near
-    // while it was down: it was never a stroke.
-    if (m_rules.finger(contactMm, ms, Ink::Fingers::Draw) == Ink::Act::Palm) {
-        drop(pointer);
-        if (!released) {
-            m_palms.insert(pointer);
-        }
-    } else if (released) {
-        lift(pointer, inputAt(point.position(), ms));
-    } else if (point.state() != QEventPoint::State::Stationary) {
-        edited(m_writing.move(pointer, inputAt(point.position(), ms)));
-        update();
-    }
-}
-
-void InkSurface::touchUngrabEvent() { dropTouches(); }
-
 void InkSurface::mousePressEvent(QMouseEvent *event) {
     // Only a mouse's own: Qt makes mouse events of a pen and a finger too,
     // and those the surface has had as what they are.
@@ -448,6 +369,7 @@ void InkSurface::drop(Ink::Pointer pointer) {
 }
 
 void InkSurface::dropTouches() {
+    m_gesture.clear();
     // Neither the pen nor the mouse is cut short; they lift as they will.
     const std::vector<Ink::Pointer> dropped = m_writing.dropTouches();
     if (dropped.empty()) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QColor>
+#include <QHash>
 #include <QPointF>
 #include <QQuickItem>
 #include <QSet>
@@ -8,6 +9,7 @@
 #include <QVariantMap>
 
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "inkinput.h"
@@ -23,8 +25,10 @@ class QTabletEvent;
 // line wider, its other end (or the eraser tool) erases parts of strokes or
 // whole ones, and a palm on the screen is ignored while the pen is near
 // (Ink::InputRules). A finger draws until a pen has been seen, then scrolls
-// what is under the surface; a mouse draws too. Undo and redo go a step
-// at a time: a stroke, or an eraser's sweep.
+// what is under the surface; a mouse draws too. Where fingers draw, two of
+// them (#134) don't: what they began goes, and they move the Flickable the
+// surface is on and say how far they spread (`pinched`), for what zooms.
+// Undo and redo go a step at a time: a stroke, or an eraser's sweep.
 //
 // The strokes are data (Ink::Stroke), not a picture: the surface draws them
 // with the scene graph, and says what changed once the pen pauses, as an
@@ -95,6 +99,9 @@ public:
     [[nodiscard]] bool penSeen() const { return m_rules.penSeen(); }
     [[nodiscard]] bool penNear() const { return m_rules.penNear(); }
     [[nodiscard]] bool writing() const { return !m_writing.empty(); }
+    // Writing, or two fingers moving what is under the surface; or a touch
+    // of the event of this moment (its timestamp) was the surface's.
+    [[nodiscard]] bool touched(quint64 at = 0) const { return writing() || !m_gesture.isEmpty() || (at != 0 && at == m_touchedAt); }
 
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
@@ -135,6 +142,8 @@ signals:
     // What was done since the last batch, `{"add": {id: base64}, "remove": [id]}`,
     // once the pen pauses: one `omabook.log.add(entity, id, set, batch.add, batch.remove)`.
     void inked(const QVariantMap &batch);
+    // Two fingers spread apart (more than 1) or came together, by this much since the last time.
+    void pinched(double scale);
 
 protected:
     QSGNode *updatePaintNode(QSGNode *old, UpdatePaintNodeData *data) override;
@@ -149,6 +158,15 @@ protected:
 private:
     bool tablet(QTabletEvent &event);
     void touchPoint(const QTouchEvent &event, QEventPoint &point);
+    // What a touch just down does, by the rules and the tool down.
+    [[nodiscard]] Ink::Act actOf(const QTouchEvent &event, const QEventPoint &point) const;
+    // Two fingers that would write, one just down: a gesture, not writing.
+    [[nodiscard]] bool twoFingers(const QTouchEvent &event) const;
+    void beginGesture(const QTouchEvent &event);
+    void gesture(QTouchEvent &event);
+    // The fingers moved from the first of each pair to the second, in the scene.
+    void follow(const std::vector<std::pair<QPointF, QPointF>> &moved);
+    void moveUnder(QPointF by);
     // A pointer down: it writes, or erases with the eraser chosen (or its own end).
     void begin(Ink::Pointer pointer, const Ink::Input &input, bool erasing, bool touch, const QPointingDevice *device = nullptr);
     void lift(Ink::Pointer pointer, const Ink::Input &input);
@@ -163,6 +181,10 @@ private:
     Ink::Writing m_writing{m_sheet};
     Ink::InputRules m_rules;
     QSet<Ink::Pointer> m_palms;
+    // The fingers of a gesture, where each was last, in the scene.
+    QHash<Ink::Pointer, QPointF> m_gesture;
+    // When the last touch the surface took came.
+    quint64 m_touchedAt = 0;
     Ink::Change m_pending;
     QTimer m_batchTimer;
 
