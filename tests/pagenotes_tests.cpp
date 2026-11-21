@@ -573,6 +573,8 @@ private slots:
                 look(pdf, "pdf-mark");
                 pdf.find("twice");
                 QTRY_VERIFY(pdf.desk.find("findList")->property("count").toInt() >= 2);
+                // Measured once it has grown into place, not partway (on a busy machine it still is).
+                QVERIFY(pdf.desk.waitForPopup());
                 look(pdf, "find");
                 pdf.desk.closePopups();
                 QVERIFY2(pdf.desk.warnings.isEmpty(), qPrintable(pdf.desk.warnings.join('\n')));
