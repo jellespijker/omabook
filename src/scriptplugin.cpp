@@ -76,9 +76,6 @@ QString htmlFromText(const QString &text) {
 QJsonObject bookJson(const Library &library, const Book &book, bool whole) {
     QJsonObject object = book.toJson();
     object.insert("has_cover", book.hasCover);
-    // Always there, so a script can tell its own books without looking twice.
-    object.insert("identifiers", book.identifiers);
-    object.insert("generated", book.identifiers.value("generated").toString());
     if (whole) {
         QJsonObject files;
         for (const QString &format : book.formats)

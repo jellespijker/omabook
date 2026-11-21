@@ -56,8 +56,8 @@ const QList<Entry> &entries() {
          "not among the shortcuts and its key does nothing. `id` is as given to `register`."},
         {"library.list", "library.list()", "", "Every book: `{id, title, authors, series, series_index, publisher, language, "
                                                "isbn, published, description, tags, formats, added, percent_read, held, status, "
-                                               "rating, finished, identifiers, generated}`. `generated` is the name of "
-                                               "the plugin that made the book, or `\"\"` for one a person added."},
+                                               "rating, finished, identifiers, generated}`. `generated` is the name of the plugin that made the book, or `\"\"` "
+                                               "for one a person added, as events and `omabook list --json` say (and `identifiers.generated`)."},
         {"library.search", "library.search(query)", "",
          "The books matching a search, as the shelf's search takes it: bare words, and `author:`, `title:`, `series:`, "
          "`tag:`, `format:`, `lang:`, `status:`, `is:`, `rating:`."},

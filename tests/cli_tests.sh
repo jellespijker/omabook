@@ -81,6 +81,9 @@ expect "adding what is not a book fails" 1 "not a book format" "$omabook" add --
 
 expect "list" 0 "Command Book" "$omabook" list --library "$library"
 expect "list as JSON" 0 '"title": "Sea Story"' "$omabook" list --library "$library" --json
+# Who made a book, as plugin events say it (#128): "" for a person's, and its identifiers always there.
+expect "list as JSON says who made each book" 0 '"generated": ""' "$omabook" list --library "$library" --json
+expect "list as JSON gives the identifiers always" 0 '"identifiers": {' "$omabook" list --library "$library" --json
 expect "search by author" 0 "Sea Story" "$omabook" list --library "$library" author:sailor
 [ -z "$("$omabook" list --library "$library" author:sailor | grep Command)" ] || fail "search did not filter"
 expect "show" 0 '"authors"' "$omabook" show 2 --library "$library" --json

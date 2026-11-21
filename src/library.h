@@ -86,6 +86,8 @@ struct Book {
     // field it doesn't know ("auther:"), a quote left open, or "knows:" and
     // "notes:", which are for a search and not a rule. Empty when it is fine.
     static QString searchProblem(const QString &query);
+    // The book as the command line, the MCP server and plugin events give it, with `identifiers` always and
+    // `generated` (identifiers.generated: the plugin that made it, "" for a person's), in one shape (#128).
     QJsonObject toJson() const;
 };
 

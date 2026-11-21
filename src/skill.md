@@ -26,7 +26,7 @@ If you have tools named `books_search`, `book_get`, `book_text` and the like, Om
 ## Find and inspect
 
 ```bash
-omabook list --json                      # every book: id, title, authors, series, tags, formats, percent_read
+omabook list --json                      # every book: id, title, authors, series, tags, formats, percent_read, identifiers, generated (the plugin that made it, "" for yours)
 omabook list author:herbert format:epub  # search; bare words match title, authors, series and tags
 omabook search venn --json               # also by what the user met in the books; --ai for a question (see graph.md)
 omabook chronology 12 --json             # a book's events in the order they happen in its world, cut where the user is (see library.md)

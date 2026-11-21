@@ -278,8 +278,6 @@ void Reader::loaded() {
     if (const auto book = m_backend->library()->book(m_bookId)) {
         QJsonObject opened = book->toJson();
         opened.insert("has_cover", book->hasCover);
-        opened.insert("identifiers", book->identifiers);
-        opened.insert("generated", book->identifiers.value("generated").toString());
         QJsonObject where = whereabouts();
         where.insert("book", opened);
         m_backend->scripts()->emitEvent("book.opened", where);

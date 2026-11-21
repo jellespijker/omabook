@@ -165,8 +165,8 @@ QJsonObject Book::toJson() const {
         object.insert("rating", rating);
     if (!finished.isEmpty())
         object.insert("finished", finished);
-    if (!identifiers.isEmpty())
-        object.insert("identifiers", identifiers);
+    object.insert("identifiers", identifiers);
+    object.insert("generated", identifiers.value("generated").toString()); // the plugin that made it, as plugin events say (#128)
     object.insert("details_at", detailsAt);
     object.insert("reading_at", readingAt);
     return object;

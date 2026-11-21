@@ -14,8 +14,6 @@
 QJsonObject ScriptPlugins::told(const Book &book) {
     QJsonObject object = book.toJson();
     object.insert("has_cover", book.hasCover);
-    object.insert("identifiers", book.identifiers);
-    object.insert("generated", book.identifiers.value("generated").toString());
     return object;
 }
 
