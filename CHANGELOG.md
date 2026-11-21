@@ -21,6 +21,10 @@ moves those lines under its version.
 ### Changed
 
 - The Notebooks plugin is in Omabook's list of plugins (#155): find it by its name in the plugins, or `omabook plugin add notebooks`, as Storyteller is.
+- Each use of AI is a capability of its own (#143, ADR 0008): answers, the quick model, handwriting, speech to text, reading aloud and embeddings, each with its provider and its own say over whether a hosted one may be used. Allowing Claude to answer allows nothing for handwriting or recordings. Your current choices carry over unchanged; only a new install starts local, answering from Omarchy's local models or Ollama until you choose a hosted one. `omabook info --json` says per capability whether it is available and why not.
+### Added
+- Plugins may use all six AI capabilities through `omabook.ai` (#143): `ai.speak` reads aloud with the voice you chose, `ai.embed` makes embeddings, and `ai.status({capability})` says of each whether it may be used and why not. A plugin sends your ink, recordings, notes or what it reads aloud to someone else's computer only when it asks for that and you allowed it for that capability; with the AI Off nothing is asked of any model, and only a voice on this computer reads.
+- Read aloud on a computer with no voice offers to install one (#156), on Omarchy the way its own apps do, in a terminal that asks for the password: speech-dispatcher with espeak-ng from Arch's packages, or Piper's natural voice for the book's language from the AUR. Once the terminal is closed the book is read from where it was asked. The Aa panel offers the same.
 
 ### Fixed
 

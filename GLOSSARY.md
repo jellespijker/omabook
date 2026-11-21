@@ -117,7 +117,7 @@ _Avoid_: None, default, uncategorised
 ## AI
 
 **Capability**:
-One kind of thing Omabook asks a model to do, chosen on its own: answers, the quick model, handwriting, speech to text, text to speech or embeddings. Each has its own provider and model, and its own say over whether a hosted one may be used (ADR 0008).
+One kind of thing Omabook asks a model to do, chosen on its own: answers, the quick model, handwriting, speech to text, text to speech or embeddings. Each has its own provider and model, and its own say over whether a hosted one may be used (`Capability`, resolved by `AiRegistry`, ADR 0008).
 _Avoid_: Feature, tier (for all six), task, skill
 
 **Provider**:

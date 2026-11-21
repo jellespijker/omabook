@@ -149,3 +149,35 @@ computer.
 - Not every speech-to-text provider gives each word its moment (whether voxtype's `transcribe` does is
   #146's to find); a transcript without them says so (#146, #151), and whisper.cpp or a server is the
   choice where they are needed.
+
+## As built in #143
+
+Where the code asked for it, #143 differs from the decision above, as follows:
+
+- **`capabilities` keeps what is new, and the providers stay set up where they are.** Each capability
+  has `hosted` there, and answers and quick their `provider` (`ai_provider`'s words, with
+  `"omarchy-default"` for `auto` and `"local"` for Omarchy's local models, then Ollama). The models stay
+  in their keys (`ai_models`, `recognition.ink_model`, `.transcription_model`, `meaning.model`,
+  `read_aloud.model`), and so do the other capabilities' providers (`recognition`, `meaning`,
+  `read_aloud`): each provider is set up once, today's Settings dialog writes those keys, and an older
+  Omabook reads them. The carry-over is accordingly only `hosted` (and answers' and quick's provider).
+  #144 gives the other capabilities a `provider` of their own when the Settings page offers a choice.
+- **The carry-over runs at start, not in Settings' upgrade.** It needs the privacy rule (is the server
+  one's own?), which is above `foundation`; `AiPrivacy::carryOver` writes it when Omabook starts (the
+  window and every command). A config.json that isn't there yet at that start is a new one, and starts
+  local. Until a file is carried over (an older Omabook wrote it, or nothing has started since), the
+  registry reads its capabilities from the older keys, with answers and quick going where they always did.
+- **Quick work shares answers' provider** for now: one `AiProvider` serves both tiers, as today. Its own
+  hosted choice holds all the same: where hosted is allowed for one and not the other, the registry's
+  provider refuses the other's requests before anything is sent. A provider of quick's own is a change to
+  `AiRegistry::answers` alone.
+- **Today's Settings dialog** has no row per capability until #144: choosing an AI there chooses it for
+  answers and quick and allows hosted for them, as choosing it always sent the text there; recognition's,
+  the meaning index's and reading aloud's "hosted" switch their capability's.
+- **Text to speech with the AI Off** is available with a local voice (its status says no `ai-off`), and
+  `ai-off` where its voice is a server: a local voice only reads the text.
+- **`ai.speak`** is read by Omabook, one at a time, and the plugin can stop it (`stop()`); showing it in
+  the window, where the person can stop it too, is still to come.
+- The registry is `AiRegistry` (`airegistry.h`), the privacy rule `AiPrivacy` (`aiprivacy.h`), and the
+  names and codes `Capability` and `CapabilityLack` (`aicapability.h`). The harness rule is
+  `rules/cpp/ai-only-through-the-registry.yml`.
