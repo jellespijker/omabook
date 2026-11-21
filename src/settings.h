@@ -295,6 +295,11 @@ public:
     // Whether the site's plugin is on; a site without a plugin always is.
     bool siteOn(const QString &scheme) const;
 
+    // How Omabook meets e-readers and phones (#71): the server, KOReader's
+    // sync and sending books, as DeviceOptions reads them; all off unless set.
+    QJsonObject devices() const { return m_values.value("devices").toObject(); }
+    void setDevices(const QJsonObject &devices) { set("devices", devices); }
+
     // How far the feature tour got ("" for never offered, "library" once the
     // shelf's half was taken, "done"), and the version whose new features
     // were last shown or turned down. See Manual.

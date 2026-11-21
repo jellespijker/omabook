@@ -31,9 +31,9 @@
 #include "catalog.h"
 #include "chronologycommands.h"
 #include "collections.h"
-#include "converter.h"
 #include "curation.h"
 #include "customization.h"
+#include "devicecommands.h"
 #include "findcommands.h"
 #include "folio.h"
 #include "libraries.h"
@@ -52,7 +52,6 @@
 #include "manual.h"
 #include "mcp.h"
 #include "metadatasource.h"
-#include "openlibrarylog.h"
 #include "plugins.h"
 #include "prompts.h"
 #include "readingformat.h"
@@ -814,28 +813,6 @@ int text(const QStringList &arguments) {
     }
     if (command.json())
         printJson(sections);
-    return 0;
-}
-
-int convert(const QStringList &arguments) {
-    Command command("convert", "Convert a book to another format with Calibre's ebook-convert and add the result to the book.");
-    command.parser.addPositionalArgument("id", "The book's number.");
-    command.parser.addOption({"to", "The format to make; epub when not given.", "format", "epub"});
-    command.parser.addOption({"from", "Which of the book's formats to convert; the one the reader prefers when not given.", "format"});
-    if (!command.parse(arguments, 1, 1))
-        return 1;
-    QString error;
-    const auto library = command.library(&error);
-    if (!library)
-        return fail(error);
-    const qint64 id = command.argument(0).toLongLong();
-    const QString file = BookOps::convert(*library, id, command.parser.value("to"), command.parser.value("from"), &error);
-    if (file.isEmpty())
-        return fail(error);
-    if (command.json())
-        printJson(QJsonObject{{"id", id}, {"file", file}});
-    else
-        print(stdout, file);
     return 0;
 }
 
@@ -1991,7 +1968,8 @@ constexpr std::array cliCommands{
     CliCommand{"find"_L1, runFindCli},
     CliCommand{"meaning"_L1, runMeaningCli},
     CliCommand{"lookup"_L1, lookup},
-    CliCommand{"convert"_L1, convert},
+    CliCommand{"convert"_L1, runConvertCli},
+    CliCommand{"send"_L1, runSendCli},
     CliCommand{"export"_L1, runExportCli},
     CliCommand{"embed"_L1, runEmbedCli},
     CliCommand{"ask"_L1, ask},
@@ -2002,6 +1980,9 @@ constexpr std::array cliCommands{
     CliCommand{"stats"_L1, runStatsCli},
     CliCommand{"format"_L1, format},
     CliCommand{"sync"_L1, runSyncCli},
+    CliCommand{"koreader"_L1, runKoreaderCli},
+    CliCommand{"serve"_L1, runServeCli},
+    CliCommand{"opds"_L1, runOpdsCli},
     CliCommand{"manifest"_L1, runManifestCli},
     CliCommand{"identity"_L1, runIdentityCli},
     CliCommand{"spaces"_L1, runSpacesCli},
