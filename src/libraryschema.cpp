@@ -2,6 +2,7 @@
 
 #include "annotationschema.h"
 #include "graphindex.h"
+#include "meaningindex.h"
 #include "readinglog.h"
 #include "tenancyschema.h"
 
@@ -473,6 +474,9 @@ const QList<QStringList> migrations{
     // How long each day's reading of a book took (#68, format 39), in
     // seconds, the time away left out; nothing for a day read before.
     ReadingLog::timedStep(),
+    // A book's text found by what it means (#72, format 40): its stretches,
+    // their embeddings and their words, worked out here and never logged.
+    MeaningIndex::step(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 

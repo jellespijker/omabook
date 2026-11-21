@@ -42,7 +42,7 @@ modules = [
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginnews", "highlights", "bookink",
   "annotationink", "opkinds", "keptops",
-  "booksearch", "annotationwords",
+  "booksearch", "annotationwords", "meaningindex",
   "readinglog", "readingstats", "readinggoal",
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
 ]

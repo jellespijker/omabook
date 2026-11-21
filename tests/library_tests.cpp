@@ -1014,7 +1014,7 @@ private slots:
             model.setDatabaseName(dir.filePath("fresh/omabook.db"));
             QVERIFY(model.open());
             QSqlQuery tables(model);
-            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND name NOT LIKE 'annotation_words%' AND name NOT LIKE 'collection%' AND type != 'trigger' AND tbl_name NOT IN ('ops', 'snapshot_ops', 'live_ops', 'space_ops')");
+            tables.exec("SELECT sql FROM sqlite_master WHERE sql IS NOT NULL AND name NOT LIKE 'sqlite_%' AND name NOT IN ('removed', 'recaps', 'notes', 'reading_log', 'library_state', 'book_format') AND name NOT LIKE 'graph_%' AND name NOT LIKE 'annotation_words%' AND name NOT LIKE 'meaning_words%' AND name NOT LIKE 'collection%' AND type != 'trigger' AND tbl_name NOT IN ('ops', 'snapshot_ops', 'live_ops', 'space_ops')");
             while (tables.next())
                 QVERIFY(QSqlQuery(database).exec(tables.value(0).toString()));
             // The columns that came later are not there yet either, nor the change log's tables (left out above) they are added to.
