@@ -119,7 +119,8 @@ void Reader::openBook(qint64 id) {
     m_wantedSection = -1;
     Library *library = m_backend->library();
     const auto book = library ? library->book(id) : std::nullopt;
-    if (!book)
+    // A plugin's own kind of book opens in the plugin's view, never here (#125).
+    if (!book || m_backend->scripts()->openInView(*book))
         return;
     // A paper book, or one only on a list, has nothing to open, unless a space it is in brings its file (#63).
     if (book->formats.isEmpty()) {
@@ -133,11 +134,10 @@ void Reader::openBook(qint64 id) {
     m_loading = true;
     emit loadingChanged();
 
-    for (const QString &format : book->formats) {
-        if (Formats::readable(format)) {
-            load(library->formatPath(id, format));
-            return;
-        }
+    // Read here, or a book of a plugin that isn't, which says which.
+    if (const QString format = Formats::openedAs(book->formats); !format.isEmpty()) {
+        load(library->formatPath(id, format));
+        return;
     }
     const QString source = library->formatPath(id);
     if (source.isEmpty()) {

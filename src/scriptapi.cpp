@@ -35,7 +35,7 @@ const QList<Entry> &entries() {
         {"importer.register", "importer.register({name, added(book)})", "",
          "Has a say in every book that comes in. `added` answers nothing, or the details to change "
          "(`{tags: [...], series: \"...\"}`), or a promise of them; they are laid over the book's own."},
-        {"format.register", "format.register({name, extensions, claims(source), open(source)})", "",
+        {"format.register", "format.register({name, extensions, claims(source), open(source), view})", "",
          "Adds a book format, read everywhere a book is: the reader, search, the command line, the AI. `extensions` are "
          "its files' (the first is what a folder or zip of it is packed as in a library). `open` answers the book: "
          "`{title, authors, series, language, description, tags, ..., cover, chapters: [{title, html, file, level}]}`, "
@@ -43,7 +43,7 @@ const QList<Entry> &entries() {
          "may be left out, says whether a folder or a plain archive is a book of this format. `source` is that one "
          "book's files and nothing else, good only while the call runs: `source.name`, `source.isFolder`, "
          "`source.entries()`, `source.contains(file)`, `source.text(file)`, `source.bytes(file)` (base64, or `null`), "
-         "`source.resolve(fromFile, relativePath)`. A book whose every file is in this format, and in no other plugin's, is this plugin's own (`generated`), one synced from another computer included; a format Omabook reads itself (EPUB, PDF, ...) stays Omabook's."},
+         "`source.resolve(fromFile, relativePath)`. A book whose every file is in this format, and in no other plugin's, is this plugin's own (`generated`), one synced from another computer included; a format Omabook reads itself (EPUB, PDF, ...) stays Omabook's. With `view`, the id of one of the plugin's views (`ui.view`), a book in it is the plugin's own kind: opening it, by key, click or touch, from search or the command line, shows that view with `args` `{book}` (as `library.list` lists it) in place of the reader, and `open` may be left out, when the book is not read anywhere as text. plugin.json's `\"formats\": [{extension, name, view}]` registers formats so before the script runs, known while the plugin is off too: a book in one then stays, and says which plugin opens it."},
         {"markdown.toHtml", "markdown.toHtml(text)", "", "Markdown as HTML, for a format whose chapters are partly Markdown."},
         {"commands.register", "commands.register({id, title, place, key, when, run(context)})", "",
          "Adds a command. `place` is `library`, `reader`, `global` or `view` (while the plugin's own view has the keyboard: `ui.view`); `key` is its default key, written like `Ctrl+R` "

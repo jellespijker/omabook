@@ -2018,5 +2018,8 @@
   "A year of reading": "Ein Jahr Lesen",
   "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} zeigt, wie lange du gelesen hast, die Tage in Folge und die beendeten Bücher, nach Monat und nach Buch, und wie weit du mit einem Ziel für das Jahr bist. Alles wird auf deinem Computer gezählt.",
   "%1's note": "Notiz von %1",
-  "A name to go by in a space is one line of at most %1 characters.": "Ein Name, unter dem man in einem Raum bekannt ist, ist eine Zeile von höchstens %1 Zeichen."
+  "A name to go by in a space is one line of at most %1 characters.": "Ein Name, unter dem man in einem Raum bekannt ist, ist eine Zeile von höchstens %1 Zeichen.",
+  "%1 is a %2, which its plugin opens in a view of its own rather than the reader.": "%1 ist ein %2, das sein Plugin in einer eigenen Ansicht öffnet statt im Leser.",
+  "%1 is a %2, which the %3 plugin opens, and it isn't running. Switch it on under Plugins.": "%1 ist ein %2, das das Plugin %3 öffnet, und es läuft nicht. Schalte es unter Plugins ein.",
+  "Opened by the %1 plugin, which isn't running. Switch it on under Plugins.": "Wird vom Plugin %1 geöffnet, das nicht läuft. Schalte es unter Plugins ein."
 }

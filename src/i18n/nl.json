@@ -2018,5 +2018,8 @@
   "A year of reading": "Een jaar lezen",
   "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} laat de tijd zien die je las, de dagen op rij en de uitgelezen boeken, per maand en per boek, en hoe ver je bent met een doel voor het jaar. Alles wordt op je eigen computer geteld.",
   "%1's note": "Notitie van %1",
-  "A name to go by in a space is one line of at most %1 characters.": "Een naam waaronder je in een ruimte bekendstaat is één regel van hoogstens %1 tekens."
+  "A name to go by in a space is one line of at most %1 characters.": "Een naam waaronder je in een ruimte bekendstaat is één regel van hoogstens %1 tekens.",
+  "%1 is a %2, which its plugin opens in a view of its own rather than the reader.": "%1 is een %2, die de plug-in in een eigen weergave opent in plaats van in de lezer.",
+  "%1 is a %2, which the %3 plugin opens, and it isn't running. Switch it on under Plugins.": "%1 is een %2, die de plug-in %3 opent, en die draait niet. Zet hem aan bij Plug-ins.",
+  "Opened by the %1 plugin, which isn't running. Switch it on under Plugins.": "Wordt geopend door de plug-in %1, die niet draait. Zet hem aan bij Plug-ins."
 }

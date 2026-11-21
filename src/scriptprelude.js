@@ -232,7 +232,11 @@
             register: function (format) {
                 need(format, "object", "A format");
                 need(format.name, "string", "The format's name");
-                need(format.open, "function", "The format's open");
+                // With a view of the plugin's, a book in it opens there and needs no open (#125).
+                var view = format.view === undefined || format.view === null ? "" : format.view;
+                need(view, "string", "The format's view");
+                if (view === "" || (format.open !== undefined && format.open !== null))
+                    need(format.open, "function", "The format's open");
                 if (!Array.isArray(format.extensions) || format.extensions.length === 0)
                     throw new TypeError("The format's extensions should be a list with at least one in it, such as [\"txtbook\"].");
                 var extensions = format.extensions.map(function (extension) { return String(extension).toLowerCase().replace(/^\./, ""); });
@@ -244,7 +248,7 @@
                     need(format.claims, "function", "The format's claims");
                 host.registerFormat(format.name, extensions,
                                     format.claims ? function (source) { return !!format.claims(source); } : null,
-                                    function (source) { return format.open(source); });
+                                    format.open ? function (source) { return format.open(source); } : null, view);
             }
         },
         markdown: {

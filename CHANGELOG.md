@@ -15,6 +15,7 @@ moves those lines under its version.
 ### Added
 
 - A plugin hears when its data came from elsewhere (#126): after a sync with another computer, a pairing or anything else that brings in what it keeps in the change log (`omabook.log`), it is told `log.changed` with `{entities: {entity: [id, ...]}}`, once a sync is done, of its own things alone and never of its own writes; its open view is handed the same as `logChanged(entities)`, so a notebook open on one computer shows the page written on the other.
+- A plugin's own kind of book opens in the plugin's view (#125): a plugin that keeps books of its own on the shelf (a notebook) says so with `"formats": [{"extension", "name", "view"}]` in plugin.json or `omabook.format.register({name, extensions, view})`, and opening such a book, by key, click or touch, from search, the command line or the recent books, shows that view with the book (`args.book`) in place of the reader. With its plugin switched off, the book stays on the shelf and it and the reader say which plugin opens it and to switch it on under *Plugins*.
 
 ## [0.1.10] - 2026-11-21
 

@@ -96,6 +96,14 @@ public:
     // alone: `log.changed`, and logChanged for its view (scriptpluginlog.cpp).
     void lookAtTheLog();
 
+    // A book as the scripts are told of it: what `omabook list --json` prints.
+    static QJsonObject told(const Book &book);
+    // Shows a book that is a running plugin's own kind (a format it reads
+    // with a view, omabook.format.register or plugin.json) in that view, with
+    // {book} as its args, in place of the reader (#125). False for any other
+    // book, and for one with a file Omabook reads itself.
+    bool openInView(const Book &book);
+
     // A source for each one the scripts registered, owned by `parent`.
     QList<MetadataSource *> metadataSources(QObject *parent) const;
     // The catalog formats the scripts add, with what each says of itself.

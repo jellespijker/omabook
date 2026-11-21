@@ -89,54 +89,6 @@ QJsonObject bookJson(const Library &library, const Book &book, bool whole) {
 
 } // namespace
 
-ScriptManifest ScriptManifest::read(const QString &folder) {
-    ScriptManifest manifest;
-    manifest.folder = QDir(folder).absolutePath();
-    manifest.id = QFileInfo(manifest.folder).fileName();
-    manifest.name = manifest.id;
-    QFile file(manifest.folder + "/plugin.json");
-    if (!file.open(QIODevice::ReadOnly)) {
-        manifest.problem = "There is no plugin.json in " + manifest.folder + ".";
-        return manifest;
-    }
-    QJsonParseError error;
-    const QJsonDocument document = QJsonDocument::fromJson(file.readAll(), &error);
-    const QJsonObject object = document.object();
-    manifest.name = object.value("name").toString(manifest.id);
-    manifest.version = object.value("version").toString();
-    manifest.author = object.value("author").toString();
-    manifest.description = object.value("description").toString();
-    manifest.script = object.value("script").toString();
-    manifest.permissions = stringList(object.value("permissions"));
-    if (error.error != QJsonParseError::NoError) {
-        manifest.problem = QString("plugin.json isn't valid JSON: %1 (at character %2).").arg(error.errorString()).arg(error.offset);
-        return manifest;
-    }
-    if (!document.isObject()) {
-        manifest.problem = "plugin.json should be a JSON object.";
-        return manifest;
-    }
-    // One written for a newer Omabook is not loaded: what it calls may not be here.
-    bool malformed = false;
-    const QString need = ScriptApi::needsNewer(object.value("omabook"), &malformed);
-    if (!need.isEmpty()) {
-        manifest.problem = need;
-        manifest.needsNewer = !malformed;
-        return manifest;
-    }
-    if (!manifest.isScript())
-        return manifest;
-    for (const QString &permission : std::as_const(manifest.permissions))
-        if (!ScriptApi::permissionNames().contains(permission))
-            manifest.problem = "plugin.json asks for the permission \"" + permission + "\", which there isn't; there are: "
-                               + ScriptApi::permissionNames().join(", ") + ".";
-    // The script is a file of the plugin's own folder, not a way out of it.
-    const QString script = QDir::cleanPath(manifest.folder + "/" + manifest.script);
-    if (!script.startsWith(manifest.folder + "/") || !QFileInfo(script).isFile())
-        manifest.problem = "plugin.json names the script \"" + manifest.script + "\", and there is no such file in the plugin's folder.";
-    return manifest;
-}
-
 // The C++ side of the `omabook` object: what scriptprelude.js builds it
 // from. Objects cross as JSON text, which keeps what a script can hand over
 // to what JSON can hold. A permission is checked here as well as there.
@@ -247,14 +199,15 @@ public:
     }
     Q_INVOKABLE void showGraph(const QString &scope, double book) { emit p->graphRequested(scope, qint64(book)); }
     Q_INVOKABLE void hold(int change) { p->m_holds = qMax(0, p->m_holds + change); }
-    Q_INVOKABLE void registerFormat(const QString &name, const QJSValue &extensions, const QJSValue &claims, const QJSValue &open) {
+    Q_INVOKABLE void registerFormat(const QString &name, const QJSValue &extensions, const QJSValue &claims, const QJSValue &open,
+                                    const QString &view) {
         QStringList list;
         for (int i = 0; i < extensions.property("length").toInt(); ++i)
             list << extensions.property(i).toString();
         for (qsizetype i = p->m_formats.size() - 1; i >= 0; --i)
             if (p->m_formats.at(i).name == name)
                 p->m_formats.removeAt(i);
-        p->m_formats.append({name, list, claims, open});
+        p->m_formats.append({name, list, claims, open, view});
         emit p->registered();
     }
     Q_INVOKABLE QString markdownToHtml(const QString &text) { return htmlFromMarkdown(text); }
@@ -943,6 +896,8 @@ ScriptPlugin::ScriptPlugin(const ScriptManifest &manifest, const ScriptServices 
       }) {
     QJSEngine::setObjectOwnership(m_host.get(), QJSEngine::CppOwnership);
     QJSEngine::setObjectOwnership(m_sharing.get(), QJSEngine::CppOwnership);
+    for (const PluginFormat &format : m_manifest.formats)
+        m_formats.append({format.name, {format.extension}, {}, {}, format.view});
 }
 
 ScriptPlugin::~ScriptPlugin() {
@@ -1287,6 +1242,9 @@ FormatProvider ScriptPlugin::provider(const Format &format) const {
             return asked && *claimed;
         };
     }
+    // A book only its view opens (#125): Formats says so, and reads nothing.
+    if (!format.open.isCallable())
+        return provider;
     provider.describe = [gate = m_gate, name, plugin, patience](const BookSource &source, QString *error) -> std::optional<BookDescription> {
         struct Answer {
             QJsonObject book;

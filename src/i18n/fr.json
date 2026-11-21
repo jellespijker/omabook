@@ -2110,5 +2110,8 @@
   "A year of reading": "Une année de lecture",
   "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} montre le temps passé à lire, les jours d’affilée et les livres finis, par mois et par livre, et où vous en êtes d'un objectif pour l'année. Tout est compté sur votre ordinateur.",
   "%1's note": "Note de %1",
-  "A name to go by in a space is one line of at most %1 characters.": "Le nom sous lequel on apparaît dans un espace tient sur une ligne d’au plus %1 caractères."
+  "A name to go by in a space is one line of at most %1 characters.": "Le nom sous lequel on apparaît dans un espace tient sur une ligne d’au plus %1 caractères.",
+  "%1 is a %2, which its plugin opens in a view of its own rather than the reader.": "%1 est un %2, que son plugin ouvre dans une vue à lui plutôt que dans le lecteur.",
+  "%1 is a %2, which the %3 plugin opens, and it isn't running. Switch it on under Plugins.": "%1 est un %2, qu'ouvre le plugin %3, qui ne tourne pas. Activez-le dans Plugins.",
+  "Opened by the %1 plugin, which isn't running. Switch it on under Plugins.": "Ouvert par le plugin %1, qui ne tourne pas. Activez-le dans Plugins."
 }

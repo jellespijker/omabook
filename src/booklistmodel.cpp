@@ -187,9 +187,9 @@ QVariantMap bookToMap(const Book &book, const QString &libraryRoot) {
         {"tags", book.meta.tags.join(", ")},
         {"formats", book.formats},
         {"formatNames", Formats::names(book.formats)},
-        // The plugin it needs to be read here, which isn't installed: its title and where it is installed from.
+        // The plugin it needs here: its title, and where it is installed from; none when it is installed and isn't running.
         {"needsPlugin", needed ? needed->title : QString()},
-        {"pluginAddress", needed ? needed->address : QString()},
+        {"pluginAddress", needed && !needed->installed ? needed->address : QString()},
         {"cover", cover},
         {"percent", book.percent},
         {"folder", folder},

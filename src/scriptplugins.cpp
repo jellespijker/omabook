@@ -19,20 +19,10 @@
 
 #include "ai.h"
 #include "formatprovider.h"
-#include "pluginclaims.h"
 #include "scriptmetadatasource.h"
 #include "settings.h"
 
 namespace {
-
-// A book as the scripts are told of it: what `omabook list --json` prints.
-QJsonObject told(const Book &book) {
-    QJsonObject object = book.toJson();
-    object.insert("has_cover", book.hasCover);
-    object.insert("identifiers", book.identifiers);
-    object.insert("generated", book.identifiers.value("generated").toString());
-    return object;
-}
 
 // Reading a book changes how far it was read many times an hour; that is
 // what page.turned is for, and not a change to the book.
@@ -103,6 +93,8 @@ ScriptPlugins::ScriptPlugins(const ScriptServices &services, const QString &fold
 ScriptPlugins::~ScriptPlugins() {
     for (const QString &id : std::as_const(m_formatIds))
         Formats::removeProvider(id);
+    if (m_providesFormats)
+        Formats::setInstalledPluginFormats({});
 }
 
 void ScriptPlugins::provideFormats() {
@@ -116,25 +108,6 @@ void ScriptPlugins::provideFormats() {
                 entry.second->closeGate();
         });
     syncFormats();
-}
-
-// Formats holds what the running plugins register, no more and no less: a
-// plugin loaded again brings its formats anew, one that is gone takes them.
-void ScriptPlugins::syncFormats() {
-    if (!m_providesFormats)
-        return;
-    QStringList wanted;
-    for (const auto &entry : m_plugins) {
-        for (const ScriptPlugin::Format &format : entry.second->formats()) {
-            const FormatProvider provider = entry.second->provider(format);
-            Formats::addProvider(provider);
-            wanted << provider.id;
-        }
-    }
-    for (const QString &id : std::as_const(m_formatIds))
-        if (!wanted.contains(id))
-            Formats::removeProvider(id);
-    m_formatIds = wanted;
 }
 
 // Editors replace files rather than write into them, which drops a file from
@@ -469,31 +442,12 @@ void ScriptPlugins::emitEvent(const QString &event, const QJsonObject &payload) 
             plugin->emitEvent(event, payload);
 }
 
-// The books that came without their plugin's mark (by sync) are its own
-// again, once it is running: when it loads, and when they arrive.
-bool ScriptPlugins::claimBooks(const QList<Book> &books) {
-    Library *library = m_follow && m_services.library ? m_services.library() : nullptr;
-    PluginClaims::Registered registered;
-    for (const auto &[id, plugin] : m_plugins)
-        for (const ScriptPlugin::Format &format : plugin->formats())
-            registered[id] << format.extensions;
-    if (!library || registered.empty() || PluginClaims::claim(*library, books.isEmpty() ? library->books() : books, registered).isEmpty())
-        return false;
-    emit touchedLibrary();
-    return true;
-}
-
-QList<Book> ScriptPlugins::claimed(const QList<Book> &books) {
-    const Library *library = m_services.library ? m_services.library() : nullptr;
-    return claimBooks(books) && library ? library->books() : books;
-}
-
 void ScriptPlugins::libraryChanged(const QList<Book> &books, const QString &libraryPath) {
     QHash<qint64, QJsonObject> now;
     qint64 highest = 0;
     // Those that came without their plugin's mark are told of as its own.
     for (const Book &book : claimed(books)) {
-        now.insert(book.id, told(book));
+        now.insert(book.id, ScriptPlugins::told(book));
         highest = qMax(highest, book.id);
     }
     // Which books this library's plugins have been told of is kept beside
@@ -592,7 +546,7 @@ QString ScriptPlugins::describeCatalog(const QString &format) const {
 QByteArray ScriptPlugins::makeCatalog(const QString &format, const QList<Book> &books, QString *problem) {
     QJsonArray list;
     for (const Book &book : books)
-        list << told(book);
+        list << ScriptPlugins::told(book);
     for (const auto &entry : m_plugins) {
         for (const ScriptPlugin::Catalog &catalog : entry.second->catalogs()) {
             if (catalog.format != format)

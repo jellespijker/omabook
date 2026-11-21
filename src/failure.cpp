@@ -31,6 +31,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::UnknownFormat, tr("Omabook doesn't know the format of %1.")},
     {Failure::Code::FormatOfMissingPlugin,
      tr("%1 is a %2, which the %3 plugin reads, and it isn't installed here. Install it: omabook plugin add %4")},
+    {Failure::Code::OpenedInItsView, tr("%1 is a %2, which its plugin opens in a view of its own rather than the reader.")},
+    {Failure::Code::FormatOfIdlePlugin, tr("%1 is a %2, which the %3 plugin opens, and it isn't running. Switch it on under Plugins.")},
     {Failure::Code::ReadAfterConverting, tr("%1 files are read by converting them to EPUB first.")},
     {Failure::Code::EpubNotAnArchive, tr("Not an EPUB: the file is not a readable zip archive.")},
     {Failure::Code::EpubProtected, tr("This book is protected by DRM, so only the app it was bought for can open it.")},

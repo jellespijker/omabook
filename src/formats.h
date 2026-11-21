@@ -21,6 +21,12 @@ struct PluginFormat {
     QString plugin;    // the plugin's name, as `omabook plugin add` takes it: "storyteller"
     QString title;     // what the plugin is called: "Storyteller"
     QString address;   // where the plugin is installed from: "jellespijker/omabook-storyteller"
+    // The plugin's view a book in it opens in, in place of the reader (#125):
+    // "notebook"; empty for a format that is read.
+    QString view;
+    // The plugin is installed here and isn't running (switched off, or
+    // failing): a book in it says to switch it on rather than to install it.
+    bool installed = false;
 };
 
 // The one place that knows which formats exist. A format Omabook reads itself
@@ -48,11 +54,19 @@ QString names(const QStringList &extensions);
 // The formats the plugins Omabook knows of read. One of Omabook's own is
 // left out: it stays Omabook's.
 void setPluginFormats(const QList<PluginFormat> &formats);
+// The formats the plugins installed here that aren't running say in their
+// plugin.json they read; looked through before the registry's.
+void setInstalledPluginFormats(const QList<PluginFormat> &formats);
 // The plugin Omabook knows of that reads a format, installed here or not.
 std::optional<PluginFormat> pluginFormat(const QString &extension);
 // The plugin a book in these formats needs to be read here: when it has a
 // file and none it has is read here, the plugin of the first that has one.
 std::optional<PluginFormat> neededPlugin(const QStringList &extensions);
+
+// The one of a book's formats the reader opens it in: the first it reads,
+// else that of the plugin it needs, which says so; empty for none, a book
+// that is read after converting it.
+QString openedAs(const QStringList &extensions);
 
 // Formats of one book in the order the reader prefers them.
 QStringList byPreference(QStringList extensions);

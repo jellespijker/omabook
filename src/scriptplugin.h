@@ -21,6 +21,7 @@
 #include <mutex>
 
 #include "formatprovider.h"
+#include "formats.h"
 #include "scriptwatchdog.h"
 
 class AiProvider;
@@ -44,9 +45,10 @@ struct ScriptServices {
     AudioDevices *audio = nullptr;
 };
 
-// plugin.json of a script plugin:
+// plugin.json of a script plugin (read in scriptmanifest.cpp):
 //   {"name": "Gutenberg", "version": "1.0", "author": "...", "description": "...",
-//    "script": "main.js", "permissions": ["http", "files", "run"]}
+//    "script": "main.js", "permissions": ["http", "files", "run"],
+//    "formats": [{"extension": "omanotebook", "name": "Notebook", "view": "notebook"}]}
 struct ScriptManifest {
     QString id;          // the folder's name, which is what the command line calls it
     QString name, version, author, description;
@@ -55,6 +57,9 @@ struct ScriptManifest {
     QStringList permissions;
     QString problem;     // why it can't be used as it is, if it can't
     bool needsNewer = false; // the problem is that it asks for a newer Omabook than this
+    // The formats it says it reads, known while it isn't running too (#125):
+    // a book in one says which plugin opens it; with a view, it opens there.
+    QList<PluginFormat> formats;
 
     static ScriptManifest read(const QString &folder);
     bool isScript() const noexcept { return !script.isEmpty(); }
@@ -132,7 +137,10 @@ public:
     struct Format {
         QString name;
         QStringList extensions;
-        QJSValue claims, open; // claims is not callable when the script gave none
+        QJSValue claims, open; // claims is not callable when the script gave none, open when it gave a view
+        // The plugin's view (omabook.ui.view) a book in it opens in, in place
+        // of the reader (#125); empty for a format the reader reads.
+        QString view;
     };
     // An entry on the shelf that is not a book: opening it calls the
     // script (omabook.ui.launcher). Nothing of it is in the library.

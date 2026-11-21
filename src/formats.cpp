@@ -75,6 +75,7 @@ struct Registry {
     QList<FormatProvider> providers{markdownBookProvider()};
     std::function<void()> loader;
     QList<PluginFormat> pluginFormats;
+    QList<PluginFormat> installedFormats;
 };
 Registry &registry() {
     static Registry registry;
@@ -109,9 +110,12 @@ OpenedDocument Formats::opened(const QString &path) {
     // A format added as a provider: by the file's extension, or for a folder
     // or a plain archive by what is in it.
     if (const auto provider = Formats::providerFor(path)) {
+        // One whose books only its plugin's view opens (#125).
+        if (!provider->describe)
+            return std::unexpected(Failure(Failure::Code::OpenedInItsView, {fileName(path), provider->name}));
         const BookSource source(path);
         QString why;
-        const auto description = provider->describe ? provider->describe(source, &why) : std::nullopt;
+        const auto description = provider->describe(source, &why);
         if (!description || description->chapters.isEmpty())
             return std::unexpected(why.isEmpty() ? Failure(Failure::Code::NoChaptersFound, {provider->name, fileName(path)})
                                                  : Failure::said(why));
@@ -121,7 +125,9 @@ OpenedDocument Formats::opened(const QString &path) {
         return std::unexpected(Failure(Failure::Code::UnknownFolder, {fileName(path)}));
     const Format *format = find(Formats::extension(path));
     if (const auto kept = format ? std::nullopt : Formats::pluginFormat(Formats::extension(path)))
-        return std::unexpected(Failure(Failure::Code::FormatOfMissingPlugin, {fileName(path), kept->name, kept->title, kept->plugin}));
+        return std::unexpected(
+            kept->installed ? Failure(Failure::Code::FormatOfIdlePlugin, {fileName(path), kept->name, kept->title})
+                            : Failure(Failure::Code::FormatOfMissingPlugin, {fileName(path), kept->name, kept->title, kept->plugin}));
     if (!format)
         return std::unexpected(Failure(Failure::Code::UnknownFormat, {fileName(path)}));
     if (!format->open)
@@ -140,20 +146,44 @@ void Formats::removeProvider(const QString &id) {
     registry().providers.removeIf([&id](const FormatProvider &provider) { return provider.id == id; });
 }
 
-void Formats::setPluginFormats(const QList<PluginFormat> &formats) {
+namespace {
+// The formats of these that aren't Omabook's own.
+QList<PluginFormat> notOwn(const QList<PluginFormat> &formats) {
     QList<PluginFormat> kept;
     for (const PluginFormat &format : formats)
-        if (!find(format.extension) && !markdownBookProvider().extensions.contains(format.extension))
+        if (!Formats::ownFormat(format.extension))
             kept << format;
+    return kept;
+}
+} // namespace
+
+void Formats::setPluginFormats(const QList<PluginFormat> &formats) {
+    QList<PluginFormat> kept = notOwn(formats);
     const QWriteLocker locker(&registry().lock);
     registry().pluginFormats = std::move(kept);
 }
 
+void Formats::setInstalledPluginFormats(const QList<PluginFormat> &formats) {
+    QList<PluginFormat> kept = notOwn(formats);
+    for (PluginFormat &format : kept)
+        format.installed = true;
+    const QWriteLocker locker(&registry().lock);
+    registry().installedFormats = std::move(kept);
+}
+
 std::optional<PluginFormat> Formats::pluginFormat(const QString &extension) {
     const QReadLocker locker(&registry().lock);
-    const QList<PluginFormat> &known = registry().pluginFormats;
-    const auto found = std::ranges::find(known, extension, &PluginFormat::extension);
-    return found != known.end() ? std::optional(*found) : std::nullopt;
+    for (const QList<PluginFormat> *known : {&registry().installedFormats, &registry().pluginFormats})
+        if (const auto found = std::ranges::find(*known, extension, &PluginFormat::extension); found != known->end())
+            return *found;
+    return std::nullopt;
+}
+
+QString Formats::openedAs(const QStringList &extensions) {
+    for (const QString &extension : extensions)
+        if (readable(extension))
+            return extension;
+    return neededPlugin(extensions).transform([](const PluginFormat &format) { return format.extension; }).value_or(QString());
 }
 
 std::optional<PluginFormat> Formats::neededPlugin(const QStringList &extensions) {

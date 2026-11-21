@@ -114,20 +114,23 @@ Item {
             }
             // A book in the format of a plugin that isn't installed here (one
             // a sync brought from a computer that has it): kept, and read
-            // once the plugin is installed.
+            // once the plugin is installed. One installed here that isn't
+            // running has nowhere to be installed from: it is switched on (#125).
             Label {
                 objectName: "detailsNeedsPlugin"
                 Layout.fillWidth: true
                 visible: (pane.book.needsPlugin || "") !== ""
                 // "Needs the Storyteller plugin to be read here."
-                text: qsTr("Needs the %1 plugin to be read here.").arg(pane.book.needsPlugin || "")
+                text: (pane.book.pluginAddress || "") === ""
+                      ? qsTr("Opened by the %1 plugin, which isn't running. Switch it on under Plugins.").arg(pane.book.needsPlugin || "")
+                      : qsTr("Needs the %1 plugin to be read here.").arg(pane.book.needsPlugin || "")
                 textFormat: Text.PlainText
                 color: theme.accent
                 wrapMode: Text.Wrap
             }
             AppButton {
                 objectName: "installNeededPlugin"
-                visible: (pane.book.needsPlugin || "") !== ""
+                visible: (pane.book.needsPlugin || "") !== "" && (pane.book.pluginAddress || "") !== ""
                 // "Install Storyteller"
                 text: qsTr("Install %1").arg(pane.book.needsPlugin || "")
                 focusPolicy: Qt.NoFocus

@@ -27,6 +27,8 @@ public:
         UnknownFolder,          // {folder name}
         UnknownFormat,          // {file name}
         FormatOfMissingPlugin,  // {file name, format, plugin's title, plugin's id}
+        FormatOfIdlePlugin,     // {file name, format, plugin's title}: installed, and switched off or failing
+        OpenedInItsView,        // {file name, format}: its plugin's view opens it, not the reader (#125)
         ReadAfterConverting,    // {format}
         EpubNotAnArchive,       // {}
         EpubProtected,          // {}
