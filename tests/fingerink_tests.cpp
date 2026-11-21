@@ -195,9 +195,19 @@ private slots:
     // never used: a finger still writes (#134). First, before any test
     // here uses the pen, which is remembered for the run.
     void aPenListedButNeverUsedLeavesFingersWriting() {
-        QVERIFY(std::ranges::any_of(QInputDevice::devices(), [](const QInputDevice *device) {
-            return device == &pen() && device->type() == QInputDevice::DeviceType::Stylus;
-        }));
+        // Registered through the window system, it is listed once that is heard.
+        const QPointingDevice &listed = pen();
+        const auto names = [] {
+            QStringList all;
+            for (const QInputDevice *device : QInputDevice::devices())
+                all << QString("%1 (%2)").arg(device->name()).arg(static_cast<int>(device->type()));
+            return all.join(", ");
+        };
+        QTRY_VERIFY2(std::ranges::any_of(QInputDevice::devices(),
+                                         [&listed](const QInputDevice *device) {
+                                             return device == &listed && device->type() == QInputDevice::DeviceType::Stylus;
+                                         }),
+                     qPrintable(names()));
         Pages pages("pdf", false);
         QVERIFY(!pages.surface()->penSeen());
         pages.swipe(pages.on(0.2, 0.3), pages.on(0.6, 0.35));
