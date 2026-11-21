@@ -8,10 +8,12 @@
 // pages. Notes are written, edited and removed from the keyboard first; they
 // travel between one's own computers in the change log (annotationsync_tests).
 
+#include <QGuiApplication>
 #include <QPainter>
 #include <QPdfWriter>
 #include <QQuickStyle>
 #include <QQuickTextDocument>
+#include <QStyleHints>
 #include <QtTest>
 
 #include "annotationanchors.h"
@@ -392,6 +394,88 @@ private slots:
         QTest::keyClick(desk.window, Qt::Key_Escape);
         QTRY_VERIFY(!desk.shows("noteCard"));
         QCOMPARE(desk.backend->library()->annotations(ids.first(), "margin-note").first().note, QString("Changed by keys, by a finger"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Where the window has no room for the margin column beside the pages
+    // (#157: large type on a laptop), a note is written on its card beside
+    // the words, however they were selected and the note asked for: the
+    // mouse and the menu's button, a finger's long press and the button, the
+    // keyboard's Shift+N; in pages and in a column that scrolls. The column
+    // hidden there wrote a field of its own for it, which took the keyboard
+    // from the card and closed it unwritten.
+    void aNoteIsWrittenOnItsCardWhereThereIsNoColumn_data() {
+        QTest::addColumn<QString>("layout");
+        QTest::addColumn<QString>("way");
+        for (const char *layout : {"pages", "scroll"})
+            for (const char *way : {"mouse", "finger", "key"})
+                QTest::newRow(qPrintable(QString("%1-%2").arg(layout, way))) << QString(layout) << QString(way);
+    }
+
+    void aNoteIsWrittenOnItsCardWhereThereIsNoColumn() {
+        QFETCH(QString, layout);
+        QFETCH(QString, way);
+        Desk desk("en", {}, way == "finger");
+        const QString file = desk.dir.filePath("The Ferry.epub");
+        QVERIFY(writeBook(file, firstEdition));
+        const qint64 book = desk.backend->library()->add(file).id;
+        QVERIFY(book > 0);
+        desk.backend->reload();
+        // As the laptop of #157 reads: large type, long lines, narrow margins.
+        for (const auto &[key, value] : std::initializer_list<std::pair<QString, QJsonValue>>{
+                 {"font_size", 34}, {"measure", 83}, {"margins", 24}, {"align", "justify"}, {"pages", "auto"}})
+            QVERIFY2(desk.settings->setOption(key, value), qPrintable(key));
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        QVERIFY(desk.resize(QSize(1512, 914)));
+        desk.quicken();
+        desk.reader->format()->set("layout", layout, false);
+        desk.reader->openBook(book);
+        QTRY_VERIFY(desk.reader->isOpen() && desk.shows("flowText"));
+        desk.settle();
+        QQuickItem *text = desk.item("flowText");
+        const QString words = way == "finger" ? "lantern" : "watched the lantern";
+        const auto [start, end] = spanOf(textOf(text), words);
+        QVERIFY(start >= 0);
+        QObject *menu = desk.find("readingMenu");
+        if (way == "key") {
+            QMetaObject::invokeMethod(text, "select", Q_ARG(int, static_cast<int>(start)), Q_ARG(int, static_cast<int>(end)));
+            QTest::keyClick(desk.window, Qt::Key_N, Qt::ShiftModifier);
+        } else {
+            // From the first word's middle for a finger; for the mouse, from where the words begin to where they end.
+            const QPointF from = charRect(text, static_cast<int>(way == "finger" ? start + 2 : start)).center();
+            const QPointF to = charRect(text, static_cast<int>(end)).center();
+            if (way == "mouse") {
+                QTest::mousePress(desk.window, Qt::LeftButton, {}, from.toPoint());
+                for (int i = 1; i <= 8; ++i)
+                    QTest::mouseMove(desk.window, (from + (to - from) * (i / 8.0)).toPoint(), 10);
+                QTest::mouseRelease(desk.window, Qt::LeftButton, {}, to.toPoint());
+            } else {
+                static QPointingDevice *const finger = QTest::createTouchDevice();
+                QTest::touchEvent(desk.window, finger).press(0, from.toPoint(), desk.window);
+                QTest::qWait(QGuiApplication::styleHints()->mousePressAndHoldInterval() + 300);
+                QTest::touchEvent(desk.window, finger).release(0, from.toPoint(), desk.window);
+            }
+            QTRY_VERIFY(menu->property("shown").toBool());
+            QQuickItem *button = desk.item("readingAction_note");
+            // Once the menu is laid out: the row is there before it has its place.
+            QTRY_VERIFY(button && button->isVisible() && button->width() > 0 && button->height() > 0);
+            desk.settle();
+            QTest::mouseClick(desk.window, Qt::LeftButton, {}, sceneRect(button).center().toPoint());
+        }
+        // No column here: the card, its field taking what is typed.
+        QTRY_VERIFY(desk.shows("noteCard"));
+        QCOMPARE(desk.reader->format()->noteWidth(), 0.0);
+        desk.settle();
+        QVERIFY(desk.shows("noteCard"));
+        QQuickItem *focused = desk.window->activeFocusItem();
+        QVERIFY(focused && focused->objectName() == "noteField" && desk.item("noteCard")->isAncestorOf(focused));
+        type(desk.window, "The lantern");
+        QTest::keyClick(desk.window, Qt::Key_Escape);
+        QTRY_COMPARE(notesOf(desk)->count(), 1);
+        const QList<Annotation> kept = desk.backend->library()->annotations(book, "margin-note");
+        QCOMPARE(kept.size(), 1);
+        QCOMPARE(kept.first().note, QString("The lantern"));
+        QCOMPARE(kept.first().quote.simplified(), words);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

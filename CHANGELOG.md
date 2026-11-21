@@ -12,6 +12,12 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.2.0.2] - 2026-11-21
+
+### Fixed
+
+- A margin note opens on its card again where the window has no room for the margin column beside the pages (large type, a laptop's screen): asked for from the selection's menu or with Shift+N, it closed at once, unwritten (#157).
+
 ## [0.2.0.1] - 2026-11-21
 
 0.2.0 was tagged but its package never built; this is the first release of 0.2.0, with this fix.
@@ -344,7 +350,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.0.2...HEAD
+[0.2.0.2]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...v0.2.0.2
 [0.2.0.1]: https://github.com/jellespijker/omabook/compare/v0.2.0...v0.2.0.1
 [0.2.0]: https://github.com/jellespijker/omabook/compare/v0.1.10.3...v0.2.0
 [0.1.10.3]: https://github.com/jellespijker/omabook/compare/v0.1.10.1...v0.1.10.3
