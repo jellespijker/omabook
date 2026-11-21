@@ -153,13 +153,28 @@ QList<Manual::Step> inkRelease() {
     };
 }
 
-// The 0.1.11 release's entries: e-readers and phones (#71).
-QList<Manual::Step> devicesRelease() {
+// The 0.2.0 release's entries: a book searched by what it means (#72), read aloud (#73), e-readers and phones (#71),
+// and the Notebooks plugin that the plugin API of this release was made for (#125 to #138).
+QList<Manual::Step> listeningRelease() {
     return {
-        {"devices", "0.1.11", Manual::tr("E-readers and phones"),
+        {"meaning", "0.2.0", Manual::tr("Find by what it means"),
+         Manual::tr("{reader.find} finds a passage by what it means, not only by its words: \"where do they cross the river?\" "
+                    "finds them wading over the ford. The book is indexed by your own AI server first, once you say so."),
+         "", "reader.find", "reader", ""},
+        {"read-aloud", "0.2.0", Manual::tr("Read aloud"),
+         Manual::tr("{reader.read_aloud} reads the book aloud from the top of the page in a voice on this computer, marking "
+                    "each sentence and turning the pages as it goes; pressed again, it pauses. Nothing leaves the computer unless "
+                    "you choose a speech server."),
+         "", "reader.read_aloud", "reader", ""},
+        {"devices", "0.2.0", Manual::tr("E-readers and phones"),
          Manual::tr("Under {global.settings}, Omabook can serve your books to KOReader and other e-reader and phone apps on your "
                     "tailnet, keep KOReader's reading place in step with yours, and send a book to a Kobo, a Kindle or a PocketBook."),
          "", "global.settings", "", ""},
+        {"notebooks", "0.2.0", Manual::tr("Notebooks, by hand"),
+         Manual::tr("The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with "
+                    "recordings of what was said as you wrote. Add it in the plugins ({library.plugins}) by its address, "
+                    "jellespijker/omabook-notebooks."),
+         "", "library.plugins", "library", ""},
     };
 }
 
@@ -241,5 +256,5 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    } + collectionsRelease() + annotationsRelease() + inkRelease() + devicesRelease();
+    } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease();
 }

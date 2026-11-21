@@ -2264,5 +2264,25 @@
   "{reader.read_aloud} reads the book aloud from the top of the page (Read aloud in the bar, with fingers), and pauses and goes on. The sentence being read is marked, the page follows it and the next chapter opens by itself, so your place is kept as you listen. {reader.sentence_back} and {reader.sentence_next} go a sentence back or on, and {reader.read_aloud_stop} stops. How fast, and in which voice, is in the Aa panel ({reader.format}).": "{reader.read_aloud} lit le livre à voix haute depuis le haut de la page (Lire à voix haute dans la barre, avec les doigts), fait une pause et continue. La phrase lue est marquée, la page la suit et le chapitre suivant s'ouvre de lui-même, de sorte que votre place est gardée pendant que vous écoutez. {reader.sentence_back} et {reader.sentence_next} reviennent ou avancent d'une phrase, et {reader.read_aloud_stop} arrête. La vitesse et la voix se règlent dans le panneau Aa ({reader.format}).",
   "Save a File": "Enregistrer un fichier",
   "The AI you chose, %1, is someone else's computer, and this plugin asks only your own.": "L'IA que vous avez choisie, %1, est l'ordinateur de quelqu'un d'autre, et ce plugin ne s'adresse qu'aux vôtres.",
-  "The book that link opens isn't in this library.": "Le livre qu'ouvre ce lien n'est pas dans cette bibliothèque."
+  "The book that link opens isn't in this library.": "Le livre qu'ouvre ce lien n'est pas dans cette bibliothèque.",
+  "%Ln bookmarks and highlights updated": {
+    "many": "%Ln signets et surlignages mis à jour",
+    "one": "%Ln signet ou surlignage mis à jour",
+    "other": "%Ln signets et surlignages mis à jour"
+  },
+  "%Ln graph changes sent": {
+    "many": "%Ln modifications du graphe envoyées",
+    "one": "%Ln modification du graphe envoyée",
+    "other": "%Ln modifications du graphe envoyées"
+  },
+  "%Ln graph changes taken": {
+    "many": "%Ln modifications du graphe reçues",
+    "one": "%Ln modification du graphe reçue",
+    "other": "%Ln modifications du graphe reçues"
+  },
+  "Find by what it means": "Chercher par le sens",
+  "Notebooks, by hand": "Des carnets, à la main",
+  "The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with recordings of what was said as you wrote. Add it in the plugins ({library.plugins}) by its address, jellespijker/omabook-notebooks.": "Le plugin Notebooks met sur l'étagère des carnets où écrire au stylet, sur papier ligné ou quadrillé, avec l'enregistrement de ce qui a été dit pendant que vous écriviez. Ajoutez-le dans les plugins ({library.plugins}) par son adresse, jellespijker/omabook-notebooks.",
+  "{reader.find} finds a passage by what it means, not only by its words: \"where do they cross the river?\" finds them wading over the ford. The book is indexed by your own AI server first, once you say so.": "{reader.find} trouve un passage par son sens, pas seulement par ses mots : « où traversent-ils la rivière ? » les trouve passant le gué. Le livre est d'abord indexé par votre propre serveur d'IA, quand vous le décidez.",
+  "{reader.read_aloud} reads the book aloud from the top of the page in a voice on this computer, marking each sentence and turning the pages as it goes; pressed again, it pauses. Nothing leaves the computer unless you choose a speech server.": "{reader.read_aloud} lit le livre à voix haute depuis le haut de la page, avec une voix de cet ordinateur, en marquant chaque phrase et en tournant les pages ; pressé à nouveau, il fait une pause. Rien ne quitte l'ordinateur, sauf si vous choisissez un serveur vocal."
 }

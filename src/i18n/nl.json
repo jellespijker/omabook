@@ -2170,5 +2170,22 @@
   "{reader.read_aloud} reads the book aloud from the top of the page (Read aloud in the bar, with fingers), and pauses and goes on. The sentence being read is marked, the page follows it and the next chapter opens by itself, so your place is kept as you listen. {reader.sentence_back} and {reader.sentence_next} go a sentence back or on, and {reader.read_aloud_stop} stops. How fast, and in which voice, is in the Aa panel ({reader.format}).": "{reader.read_aloud} leest het boek voor vanaf de bovenkant van de pagina (Voorlezen in de balk, met je vingers), en pauzeert en gaat verder. De zin die wordt gelezen is gemarkeerd, de pagina volgt hem en het volgende hoofdstuk gaat vanzelf open, zodat je plek bewaard blijft terwijl je luistert. {reader.sentence_back} en {reader.sentence_next} gaan een zin terug of verder, en {reader.read_aloud_stop} stopt. Hoe snel, en met welke stem, staat in het Aa-paneel ({reader.format}).",
   "Save a File": "Bestand opslaan",
   "The AI you chose, %1, is someone else's computer, and this plugin asks only your own.": "De AI die je koos, %1, is de computer van iemand anders, en deze plug-in vraagt alleen je eigen computers.",
-  "The book that link opens isn't in this library.": "Het boek dat die link opent, staat niet in deze bibliotheek."
+  "The book that link opens isn't in this library.": "Het boek dat die link opent, staat niet in deze bibliotheek.",
+  "%Ln bookmarks and highlights updated": {
+    "one": "%Ln bladwijzer of markering bijgewerkt",
+    "other": "%Ln bladwijzers en markeringen bijgewerkt"
+  },
+  "%Ln graph changes sent": {
+    "one": "%Ln graafwijziging verstuurd",
+    "other": "%Ln graafwijzigingen verstuurd"
+  },
+  "%Ln graph changes taken": {
+    "one": "%Ln graafwijziging overgenomen",
+    "other": "%Ln graafwijzigingen overgenomen"
+  },
+  "Find by what it means": "Zoeken op betekenis",
+  "Notebooks, by hand": "Notitieboeken, met de hand",
+  "The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with recordings of what was said as you wrote. Add it in the plugins ({library.plugins}) by its address, jellespijker/omabook-notebooks.": "De plugin Notebooks zet notitieboeken op de plank om met een pen in te schrijven, op gelinieerd of geruit papier, met opnames van wat er gezegd werd terwijl je schreef. Voeg hem toe bij de plugins ({library.plugins}) met zijn adres, jellespijker/omabook-notebooks.",
+  "{reader.find} finds a passage by what it means, not only by its words: \"where do they cross the river?\" finds them wading over the ford. The book is indexed by your own AI server first, once you say so.": "{reader.find} vindt een passage op wat ze betekent, niet alleen op haar woorden: \"waar steken ze de rivier over?\" vindt hoe ze door het doorwaadbare deel waden. Je eigen AI-server indexeert het boek eerst, zodra je dat zegt.",
+  "{reader.read_aloud} reads the book aloud from the top of the page in a voice on this computer, marking each sentence and turning the pages as it goes; pressed again, it pauses. Nothing leaves the computer unless you choose a speech server.": "{reader.read_aloud} leest het boek voor vanaf de bovenkant van de pagina, met een stem op deze computer, markeert elke zin en slaat de pagina's om; nog eens drukken pauzeert. Er gaat niets van de computer af, tenzij je een spraakserver kiest."
 }
