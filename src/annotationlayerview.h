@@ -6,9 +6,12 @@
 #include <QQuickTextDocument>
 #include <QString>
 #include <QVariantList>
+#include <vector>
 
 #include "annotationlayers.h"
+#include "inkstroke.h"
 
+class InkSurface;
 class Reader;
 class Settings;
 
@@ -19,7 +22,12 @@ class Settings;
 // or one person at a time, in the settings (Settings::othersAnnotations,
 // hiddenAnnotators), which every computer of the reader's keeps for itself.
 //
-// Their words are shown as plain text (AnnotationLayers::plain), never as
+// Their book ink (#83) is drawn over the pages of a PDF or a comic, and the
+// ink of a margin note they wrote by hand on its card, each by a read-only
+// ink surface, in their colour, no more strokes of an annotation than
+// AnnotationLayers reads (PluginData::maxItems).
+//
+// Their words are shown as plain text (UntrustedText::plain), never as
 // markup. A margin note of theirs can be kept as a fact of the graph
 // (AnnotationFacts), which then is the reader's own.
 class AnnotationLayerView : public QObject {
@@ -35,6 +43,8 @@ class AnnotationLayerView : public QObject {
     Q_PROPERTY(int count READ count NOTIFY changed)
     Q_PROPERTY(int notes READ notes NOTIFY changed)
     Q_PROPERTY(int revision READ revision NOTIFY changed)
+    // Ink units across a handwritten note's card (MarginNotes::inkUnits).
+    Q_PROPERTY(double noteInkUnits READ noteInkUnits CONSTANT)
 
 public:
     explicit AnnotationLayerView(QObject *parent = nullptr);
@@ -49,6 +59,7 @@ public:
     int count() const;
     int notes() const;
     int revision() const noexcept { return m_revision; }
+    double noteInkUnits() const;
 
     Q_INVOKABLE void setPersonShown(const QString &person, bool shown);
     // On the chapter a TextEdit shows: the passages of their highlights and
@@ -60,8 +71,21 @@ public:
     // book's graph, by its number or name, made of `kind` when there is none.
     // Why not, in the window's language; empty when it was kept.
     Q_INVOKABLE QString makeFact(const QString &id, const QString &thing, const QString &kind);
+    // Their ink on a page of the open book, drawn by `surface` (a read-only
+    // InkSurface over it) until it is forgotten or goes.
+    Q_INVOKABLE void showInk(QQuickItem *surface, int page);
+    // The ink of their handwritten note `id`, drawn by `surface` on its card the same way.
+    Q_INVOKABLE void showNoteInk(QQuickItem *surface, const QString &id);
+    Q_INVOKABLE void forgetInk(QQuickItem *surface);
+    // How far down a surface's strokes reach, in ink units.
+    Q_INVOKABLE double inkBottom(QQuickItem *surface) const;
     // Reads them again: a sync brought more, or the reader read on.
     Q_INVOKABLE void refresh();
+
+    // The strokes shown of others' ink on a page, or of a note by its id,
+    // each in its person's colour, in the order they were drawn.
+    [[nodiscard]] std::vector<Ink::Stroke> inkOn(int page) const;
+    [[nodiscard]] std::vector<Ink::Stroke> noteInk(const QString &id) const;
 
     // The same as passagesIn and notesIn, of a text as it is shown, for the tests.
     struct Placed {
@@ -76,9 +100,18 @@ signals:
 
 private:
     [[nodiscard]] bool isShown(const QString &person) const;
+    // What an ink surface draws: of a page, or of a note.
+    struct Drawn {
+        int page = -1;
+        QString note;
+        QPointer<InkSurface> surface;
+    };
+    [[nodiscard]] std::vector<Ink::Stroke> strokesOf(const Drawn &drawn) const;
+    void redraw();
 
     QPointer<Reader> m_reader;
     QPointer<Settings> m_settings;
     AnnotationLayers::Layers m_layers;
+    QList<Drawn> m_drawn;
     int m_revision = 0;
 };

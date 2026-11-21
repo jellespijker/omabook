@@ -143,6 +143,12 @@ expect "the space syncs through a folder" 0 "written to the folder" "$omabook" s
 expect "the invitee joins" 0 "Joined Club" other spaces join "$work/bo.omabook-invite" --library "$work/Bo"
 expect "and takes what is in the folder" 0 '"taken": ' other spaces sync Club --folder "$work/synced" --json --library "$work/Bo"
 expect "and is a writer of it" 0 '"role": "writer"' other spaces list --json --library "$work/Bo"
+# The name a member goes by there (#124), which the others see once they sync.
+expect "a member chooses a name" 0 "You go by Bo Ek in Club" other spaces name Club "Bo Ek" --library "$work/Bo"
+expect "a name is one short line" 1 "at most 64 characters" other spaces name Club "$(printf 'x%.0s' $(seq 65))" --library "$work/Bo"
+other spaces sync Club --folder "$work/synced" --library "$work/Bo" >/dev/null
+"$omabook" spaces sync Club --folder "$work/synced" --library "$work/Ada" >/dev/null
+expect "and the others see it" 0 "(Bo Ek)" "$omabook" spaces list --library "$work/Ada"
 ! grep -rqa "Club" "$work/synced" || fail "the folder holds plaintext"
 expect "spaces is in the help" 0 "spaces [create|invite" "$omabook" help
 # Its help is its usage, once, as collections --help is (#52).

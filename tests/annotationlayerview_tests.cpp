@@ -4,15 +4,22 @@
 // are plain text, never markup; each person is switched off on their own, or
 // all at once; and a note of theirs is kept as a fact. At every size, in a
 // language that reads right to left, and under fingers, with nothing cut off
-// or overlapping (the layout survey).
+// or overlapping (the layout survey). Where there is no margin column, their
+// notes are marked in the text and open on a card (#124); their book ink is
+// drawn over the pages of a PDF in their colour, as far as the reader has
+// read and no more strokes than an annotation may have.
 
 #include <QtTest>
+#include <algorithm>
 
 #include "annotationedits.h"
 #include "annotationlayerview.h"
+#include "bookink.h"
 #include "desk.h"
 #include "graph.h"
+#include "inksurface.h"
 #include "person.h"
+#include "plugindata.h"
 #include "publishedspace.h"
 #include "subscriptions.h"
 
@@ -51,6 +58,49 @@ struct Sharer {
     QString id;
 };
 
+// Someone who drew on the first two pages of a PDF and shares the ink: on
+// the first `strokes` strokes, on the second a few. Written as their pen
+// would, a batch of at most 500 at a time.
+struct Inker {
+    Inker(Desk &desk, const QString &file, int strokes) : library(desk.dir.filePath("Inker")) {
+        QVERIFY(library.open());
+        const qint64 theirs = library.add(file).id;
+        QVERIFY(theirs > 0);
+        const auto shelf = library.addCollection("Ferries");
+        QVERIFY(shelf && library.putInCollection(*shelf, theirs, true));
+        for (int page = 0; page < 2; ++page) {
+            const int many = page == 0 ? strokes : 3;
+            for (int from = 0; from < many; from += 500) {
+                Ink::Change change;
+                for (int i = from; i < std::min(many, from + 500); ++i)
+                    change.added.push_back(line(i));
+                const auto written = BookInk::write(library, theirs, page, change);
+                QVERIFY2(written.has_value(), qPrintable(Fixtures::whyNot(written)));
+            }
+        }
+        const auto person = Person::generate();
+        QVERIFY(person.has_value());
+        id = person->id();
+        const auto snapshot = PublishedSpace::snapshot(library, *shelf, {.annotations = true}, {.name = "Ada Lovelace", .person = id});
+        QVERIFY(snapshot.has_value());
+        QVERIFY(Subscriptions::subscribe(*desk.backend->library(), *snapshot, {}).has_value());
+    }
+    // A short line down the page, the i-th, in a colour of their own.
+    static Ink::Stroke line(int i) {
+        Ink::Stroke stroke{
+            .id = Ink::newId(), .color = Qt::black, .width = 3, .pressured = false, .tilted = false, .began = 1000 + i, .points = {}};
+        const double x = 80 + (i % 40) * 20.0;
+        const double y = 60 + (i / 40 % 30) * 40.0;
+        for (int k = 0; k < 3; ++k)
+            stroke.points.push_back(
+                {.at = {x + k * 6.0, y + k * 8.0}, .pressure = 0.5F, .xTilt = 0, .yTilt = 0, .ms = static_cast<quint32>(k)});
+        return stroke;
+    }
+
+    Library library;
+    QString id;
+};
+
 // The items of that name on screen, wherever they are: a repeater's are no QObject children.
 [[nodiscard]] QList<QQuickItem *> shownItems(Desk &desk, const QString &name) {
     QList<QQuickItem *> shown;
@@ -62,6 +112,28 @@ struct Sharer {
         items << item->childItems();
     }
     return shown;
+}
+
+// Of those, the ones within the window: a mark of the chapter's text may be scrolled out of it.
+[[nodiscard]] QList<QQuickItem *> inSight(Desk &desk, const QString &name) {
+    QList<QQuickItem *> seen = shownItems(desk, name);
+    const QRectF window(QPointF(0, 0), desk.window->size());
+    seen.removeIf(
+        [&](const QQuickItem *item) { return !window.contains(item->mapToScene(QPointF(item->width() / 2, item->height() / 2))); });
+    return seen;
+}
+
+// The page scrolled to the first mark of their notes: the reader's place is a little past their passages.
+void scrollToMark(Desk &desk) {
+    const QList<QQuickItem *> marks = shownItems(desk, "othersNoteMark");
+    QQuickItem *flick = marks.isEmpty() ? nullptr : marks.first();
+    while (flick != nullptr && !flick->inherits("QQuickFlickable"))
+        flick = flick->parentItem();
+    if (flick == nullptr)
+        return;
+    const double markAt = marks.first()->mapToScene(QPointF(0, 0)).y();
+    flick->setProperty("contentY", std::max(0.0, flick->property("contentY").toDouble() + markAt - desk.window->height() / 3.0));
+    desk.settle();
 }
 
 [[nodiscard]] QList<QQuickItem *> shownCards(Desk &desk) { return shownItems(desk, "othersNote"); }
@@ -123,7 +195,146 @@ class AnnotationLayerViewTests : public QObject {
         return true;
     }
 
+    // A click (or, under fingers, a tap) in the middle of an item.
+    static void tap(Desk &desk, const QQuickItem *item) {
+        const QPoint at = item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint();
+        QTest::mouseClick(desk.window, Qt::LeftButton, {}, at);
+    }
+
+    // A PDF open at its first page, someone's ink on its first two.
+    static bool openPdf(Desk &desk, qint64 book) {
+        desk.settings->setOption("layout", "scroll");
+        desk.backend->library()->setReading(book, "reading", 0, {});
+        desk.backend->library()->setProgress(book, {0, 0.5, 1});
+        desk.reader->openBook(book);
+        if (!QTest::qWaitFor([&] { return desk.reader->isOpen() && desk.item("othersInk0") != nullptr; }, 5000))
+            return false;
+        desk.settle();
+        return true;
+    }
+
 private slots:
+    // Where the window has no room for the margin column, their notes are
+    // marked at the end of their passages in their colour; a mark opens the
+    // note on a card under their name, and Escape puts it away.
+    void othersNotesOpenOnCardsWithoutTheColumn() {
+        Desk desk("en", {}, false);
+        const QList<qint64> ids = stock(desk);
+        const Sharer ada(desk, ids.first());
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.quicken();
+        QVERIFY(desk.resize(QSize(1440, 900)));
+        QVERIFY(open(desk, ids.first(), ada.section));
+        QTRY_COMPARE(shownCards(desk).size(), 2);
+        QVERIFY(shownItems(desk, "othersNoteMark").isEmpty()); // they stand in the column
+        QVERIFY(desk.resize(QSize(560, 800)));
+        QTRY_VERIFY(!desk.find("readingNotes")->property("beside").toBool());
+        QTRY_COMPARE(shownItems(desk, "othersNoteMark").size(), 2);
+        QCOMPARE(shownCards(desk).size(), 0);
+
+        scrollToMark(desk);
+        QTRY_VERIFY(!inSight(desk, "othersNoteMark").isEmpty());
+        tap(desk, inSight(desk, "othersNoteMark").first());
+        QTRY_VERIFY(desk.shows("othersNoteCard"));
+        QCOMPARE(shownCards(desk).size(), 1);
+        QQuickItem *card = shownCards(desk).first();
+        QCOMPARE(within(card, "othersNoteName")->property("text").toString(), QString("Ada Lovelace"));
+        QCOMPARE(within(card, "othersNoteWords")->property("textFormat").toInt(), 0);
+        QVERIFY(within(card, "othersNoteWords")->property("text").toString().contains("second paragraph"));
+        look(desk, "narrow-card");
+        QTest::keyClick(desk.window, Qt::Key_Escape);
+        QTRY_VERIFY(!desk.shows("othersNoteCard"));
+
+        // Switched off, no mark of theirs is left.
+        layerOf(desk)->setShown(false);
+        QTRY_VERIFY(shownItems(desk, "othersNoteMark").isEmpty());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Their ink is drawn over the pages in their colour, under one's own:
+    // of the pages the reader has reached, and of a page no more strokes than
+    // an annotation may hold; switched off, it is gone.
+    void othersInkIsDrawnOnThePagesInTheirColour() {
+        Desk desk("en", {}, false);
+        const QString file = desk.dir.filePath("The Ferry.pdf");
+        QVERIFY(Fixtures::pdf(file, "The Ferry", {"The harbour master counted the crates twice.", "Mira watched the lantern."}));
+        const qint64 book = desk.backend->library()->add(file).id;
+        QVERIFY(book > 0);
+        const Inker ada(desk, file, PluginData::maxItems + 200);
+        desk.backend->reload();
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.quicken();
+        QVERIFY(desk.resize(QSize(1180, 780)));
+        QVERIFY(openPdf(desk, book));
+        AnnotationLayerView *layer = layerOf(desk);
+        QVERIFY(layer);
+
+        const auto *surface = qobject_cast<InkSurface *>(desk.item("othersInk0"));
+        QVERIFY(surface);
+        QTRY_COMPARE(static_cast<qsizetype>(surface->count()), PluginData::maxItems);
+        QVERIFY(surface->isVisible());
+        QVERIFY(surface->readOnly());
+        const std::vector<Ink::Stroke> drawn = layer->inkOn(0);
+        QCOMPARE(static_cast<qsizetype>(drawn.size()), PluginData::maxItems);
+        const QColor theirs = AnnotationLayers::colorOf(ada.id);
+        QVERIFY(std::ranges::all_of(drawn, [&](const Ink::Stroke &stroke) { return stroke.color == theirs; }));
+        // The earliest they drew, as an annotation's strokes are capped.
+        QCOMPARE(drawn.front().began, qint64(1000));
+        QCOMPARE(drawn.back().began, qint64(1000 + PluginData::maxItems - 1));
+        // The page after is past the reader: nothing of it.
+        QVERIFY(layer->inkOn(1).empty());
+        // One's own ink is still one's own, and empty.
+        QCOMPARE(qobject_cast<InkSurface *>(desk.item("bookInk0"))->count(), 0);
+        look(desk, "ink");
+
+        // Read on to the second page: its ink comes.
+        desk.backend->library()->setProgress(book, {1, 0.5, 2});
+        layer->refresh();
+        QCOMPARE(static_cast<qsizetype>(layer->inkOn(1).size()), 3);
+
+        layer->setPersonShown(ada.id, false);
+        QTRY_COMPARE(surface->count(), 0);
+        QVERIFY(!surface->isVisible());
+        layer->setPersonShown(ada.id, true);
+        QTRY_COMPARE(static_cast<qsizetype>(surface->count()), PluginData::maxItems);
+        layer->setShown(false);
+        QTRY_COMPARE(surface->count(), 0);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Their ink on the pages, at every size, in German, right to left and under fingers.
+    void othersInkAtEverySize() {
+        struct Way {
+            QByteArray language;
+            bool touch;
+        };
+        for (const Way &way : {Way{"en", false}, Way{"de", false}, Way{"ar", false}, Way{"nl", true}}) {
+            Desk desk(way.language, way.language == "ar" ? lightTheme : QByteArray(), way.touch);
+            const QString file = desk.dir.filePath("The Ferry.pdf");
+            QVERIFY(Fixtures::pdf(file, "The Ferry", {"The harbour master counted the crates twice.", "Mira watched the lantern."}));
+            const qint64 book = desk.backend->library()->add(file).id;
+            const Inker ada(desk, file, 120);
+            desk.backend->reload();
+            QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            if (desk.window->minimumWidth() > 420 || desk.window->minimumHeight() > 360)
+                desk.window->setMinimumSize(QSize(420, 360));
+            desk.quicken();
+            QVERIFY(desk.resize(QSize(1180, 780)));
+            QVERIFY(openPdf(desk, book));
+            QTRY_COMPARE(qobject_cast<InkSurface *>(desk.item("othersInk0"))->count(), 120);
+            for (const QSize &size : sizes()) {
+                QVERIFY(desk.resize(size));
+                look(desk, "ink");
+            }
+            QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+        }
+        const QStringList problems = found;
+        found.clear();
+        if (!problems.isEmpty())
+            QFAIL(qPrintable(
+                QString("%1 layout problems in %2 looks:\n%3").arg(problems.size()).arg(looked).arg(problems.mid(0, 40).join('\n'))));
+    }
+
     // Their notes beside the text, theirs alone and as far as the reader is,
     // their words as words; switched off by person and all at once; kept as a fact.
     void othersNotesStandBesideTheTextAsFarAsTheReaderRead() {
@@ -192,6 +403,23 @@ private slots:
             for (const QSize &size : sizes()) {
                 QVERIFY(desk.resize(size));
                 look(desk, "notes");
+            }
+            // Where there is no column, a note of theirs opened from its mark, on its card.
+            for (const QSize &size : sizes()) {
+                QVERIFY(desk.resize(size));
+                if (desk.find("readingNotes")->property("beside").toBool())
+                    continue;
+                desk.settle();
+                scrollToMark(desk);
+                const QList<QQuickItem *> marks = inSight(desk, "othersNoteMark");
+                if (marks.isEmpty())
+                    continue;
+                tap(desk, marks.first());
+                if (!QTest::qWaitFor([&] { return desk.shows("othersNoteCard"); }, 2000))
+                    continue;
+                look(desk, "card");
+                QTest::keyClick(desk.window, Qt::Key_Escape);
+                desk.settle();
             }
             // A card asked to keep a note as a fact.
             QVERIFY(desk.resize(QSize(1440, 900)));

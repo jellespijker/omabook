@@ -74,10 +74,6 @@ struct Layers {
 // What a person is called where they have no name: the start of their id.
 [[nodiscard]] QString calledOf(const Person &person);
 
-// Words as others wrote them, made plain: no control characters (but new
-// lines and tabs), none that turn the text's direction around.
-[[nodiscard]] QString plain(const QString &words);
-
 // {person, name, color, spaces, annotations: [{id, kind, book, section,
 // fraction, to: {section, fraction}, quote, note, color, strokes}]}, the
 // strokes as how many there are.

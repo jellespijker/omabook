@@ -4,8 +4,10 @@ import QtQuick
 // marked in its text: a small mark where each note's passage ends, and the
 // passage lit while its note is the one being read, written or gone to. In a
 // window with no room for the margin column the mark is how a note is
-// opened, by a click or a tap; it is a finger's width to hit then. Like
-// PageMarks it lies over the text and changes nothing of its layout.
+// opened, by a click or a tap; it is a finger's width to hit then. There
+// others' notes (#85, #124) are marked too, a ring in their writer's colour,
+// and open on a card of their own. Like PageMarks it lies over the text and
+// changes nothing of its layout.
 Item {
     id: marks
     // The TextEdit it serves, and the notes (ReadingNotes).
@@ -17,7 +19,14 @@ Item {
     property real to: 1e9
     // Where each note is in the text: [{id, start, end, note}].
     property var spans: []
-    function respan() { spans = reading && text ? reading.notes.spans(text.textDocument) : [] }
+    // Others' notes, where no margin column stands them beside the text:
+    // [{id, start, end, note, called, color, person, ink}] (AnnotationLayerView::notesIn).
+    readonly property var others: reading ? reading.others : null
+    property var otherSpans: []
+    function respan() {
+        spans = reading && text ? reading.notes.spans(text.textDocument) : []
+        otherSpans = others && others.shown && reading && !reading.beside && text ? others.notesIn(text.textDocument) : []
+    }
     Timer { id: soon; interval: 0; onTriggered: marks.respan() }
     onTextChanged: soon.restart()
     onReadingChanged: soon.restart()
@@ -28,6 +37,14 @@ Item {
     Connections {
         target: marks.reading ? marks.reading.notes : null
         function onChanged() { soon.restart() }
+    }
+    Connections {
+        target: marks.others
+        function onChanged() { soon.restart() }
+    }
+    Connections {
+        target: marks.reading
+        function onBesideChanged() { soon.restart() }
     }
     // Laid out again (another width, another size of type): the same
     // characters, elsewhere.
@@ -84,6 +101,37 @@ Item {
             HoverHandler { cursorShape: Qt.PointingHandCursor }
             TapHandler {
                 onTapped: if (marks.reading) marks.reading.open(mark.modelData.id, marks.text, mark.modelData.start, mark.modelData.end)
+            }
+        }
+    }
+
+    Repeater {
+        model: marks.otherSpans
+        delegate: Item {
+            id: theirs
+            required property var modelData
+            readonly property rect end: marks.endOf(modelData)
+            readonly property real hit: win.touch ? 36 : 22
+            objectName: "othersNoteMark"
+            visible: end.y + end.height > marks.from && end.y < marks.to
+            x: end.x - hit / 2 + 4
+            y: end.y + end.height / 2 - hit / 2 - end.height * 0.3
+            width: hit
+            height: hit
+            Accessible.role: Accessible.Button
+            Accessible.name: qsTr("%1's note").arg(modelData.called)
+            Rectangle {
+                anchors.centerIn: parent
+                width: 9
+                height: 9
+                radius: 4.5
+                color: "transparent"
+                border.width: 2
+                border.color: theirs.modelData.color
+            }
+            HoverHandler { cursorShape: Qt.PointingHandCursor }
+            TapHandler {
+                onTapped: if (marks.reading) marks.reading.openOther(theirs.modelData, marks.text)
             }
         }
     }

@@ -22,6 +22,7 @@
 #include "fixtures.h"
 #include "graph.h"
 #include "library.h"
+#include "membernames.h"
 #include "person.h"
 #include "plugindata.h"
 #include "publishedspace.h"
@@ -31,6 +32,7 @@
 #include "spaceswitch.h"
 #include "subscribedspace.h"
 #include "subscriptions.h"
+#include "untrustedtext.h"
 
 namespace {
 
@@ -205,6 +207,64 @@ private slots:
         QVERIFY(seen(ada.library).isEmpty());
     }
 
+    // Two members, each going by the name they chose (#124): it travels in the
+    // space as their own operation, and is shown with their annotations. A
+    // name is untrusted: plain, on one line, no longer than 64 characters; a
+    // name one member gives another, or one too long, is passed over.
+    void membersGoByTheNamesTheyChose() {
+        QTemporaryDir dir;
+        Someone ada(dir, "ada"), bo(dir, "bo");
+        const QString folder = dir.filePath("Shared");
+        const QString space = clubOf(ada, bo, dir, folder);
+        ada.readTo(9);
+        bo.readTo(9);
+        QVERIFY(SpaceSwitch::set(ada.library, space, "annotations", true).has_value());
+        annotate(ada, "margin-note", 2, "the spice must flow", "Ada's note");
+        annotate(bo, "margin-note", 1, "a desert planet", "Bo's note");
+        // Before either chose one, each is the start of their id.
+        synced(ada, space, folder);
+        synced(bo, space, folder);
+        synced(ada, space, folder);
+        QCOMPARE(AnnotationLayers::calledOf(AnnotationLayers::read(ada.library).people.first()), bo.id.left(8));
+
+        const auto named = SharedSpaces::goBy(bo.library, space, QString("Bo\u202E\n  Ek\x07"));
+        QVERIFY2(named.has_value(), qPrintable(whyNot(named)));
+        QVERIFY(SharedSpaces::goBy(ada.library, "Club", "Ada Lovelace").has_value());
+        const auto tooLong = SharedSpaces::goBy(bo.library, space, QString(UntrustedText::maxNameLength + 1, 'x'));
+        QVERIFY(!tooLong.has_value());
+        QCOMPARE(tooLong.error().code(), Failure::Code::NotAName);
+        QVERIFY(!SharedSpaces::goBy(bo.library, space, " \t ").has_value());
+        synced(bo, space, folder);
+        synced(ada, space, folder);
+        synced(bo, space, folder);
+
+        const Layers atAda = AnnotationLayers::read(ada.library);
+        QCOMPARE(atAda.people.size(), 1);
+        QCOMPARE(atAda.people.first().name, QString("Bo Ek"));
+        QCOMPARE(AnnotationLayers::toJson(atAda.people.first()).value("name").toString(), QString("Bo Ek"));
+        QCOMPARE(AnnotationLayers::read(bo.library).people.first().name, QString("Ada Lovelace"));
+        // The members as the space lists them: each by their name, oneself as you.
+        const QList<SharedSpaces::Summary> spaces = SharedSpaces::list(ada.library);
+        const auto club = std::ranges::find(spaces, space, &SharedSpaces::Summary::space);
+        QVERIFY(club != spaces.cend());
+        QStringList members;
+        for (const SharedSpaces::Member &member : club->members)
+            members << member.name;
+        members.sort();
+        QCOMPARE(members, (QStringList{"Bo Ek", "you, Ada Lovelace"}));
+
+        // Ada names Bo, and Bo writes a name too long by hand: neither counts.
+        const QList<ChangeLog::Entry> forged{MemberNames::entry(space, bo.id, "Mallory")};
+        QVERIFY(SharedSpace::write(ada.library, space, forged).has_value());
+        const QList<ChangeLog::Entry> byHand{MemberNames::entry(space, bo.id, QString(500, 'y'))};
+        QVERIFY(SharedSpace::write(bo.library, space, byHand).has_value());
+        synced(ada, space, folder);
+        synced(bo, space, folder);
+        synced(ada, space, folder);
+        QCOMPARE(AnnotationLayers::read(ada.library).people.first().name, QString("Bo Ek"));
+        QCOMPARE(MemberNames::of(SharedSpace::state(ada.library, space).accepted).value(bo.id), QString("Bo Ek"));
+    }
+
     // A published space with the part carries its owner's annotations to whoever
     // subscribes, cut at the subscriber's place; one removed is taken back.
     void aPublishedSpaceCarriesItsOwnersAnnotations() {
@@ -306,7 +366,7 @@ private slots:
         const auto ink = std::ranges::find(theirs, QString("Inked"), &AnnotationLayers::Annotation::note);
         QVERIFY(ink != theirs.end());
         QCOMPARE(static_cast<qsizetype>(ink->strokes.size()), PluginData::maxItems);
-        QCOMPARE(AnnotationLayers::plain(QString("a\u200Fb\u2066c\td") + QChar(0) + "e"), QString("abc\tde"));
+        QCOMPARE(UntrustedText::plain(QString("a\u200Fb\u2066c\td") + QChar(0) + "e"), QString("abc\tde"));
     }
 
     // A margin note, one's own or someone else's, becomes a fact of a thing of

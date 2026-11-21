@@ -112,6 +112,7 @@ public:
         AnnotationWithoutWords, // {}
         NoSuchThing,            // {the thing asked for}
         FactNotKept,            // {}
+        NotAName,               // {the longest a name may be, in characters} (#124)
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiUnreachable,       // {where, the network's reason}

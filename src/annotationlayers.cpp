@@ -15,6 +15,7 @@
 #include "spaceannotations.h"
 #include "spacereducer.h"
 #include "subscribedspace.h"
+#include "untrustedtext.h"
 
 using namespace Qt::StringLiterals;
 
@@ -117,16 +118,16 @@ private:
                               .book = book,
                               .place = placeOf(reduced, u"section"_s, u"fraction"_s),
                               .to = {},
-                              .quote = AnnotationLayers::plain(text(reduced, u"quote"_s)),
-                              .before = AnnotationLayers::plain(text(reduced, u"before"_s)),
-                              .after = AnnotationLayers::plain(text(reduced, u"after"_s)),
-                              .note = AnnotationLayers::plain(text(reduced, u"note"_s)),
-                              .color = AnnotationLayers::plain(text(reduced, u"color"_s)),
+                              .quote = UntrustedText::plain(text(reduced, u"quote"_s)),
+                              .before = UntrustedText::plain(text(reduced, u"before"_s)),
+                              .after = UntrustedText::plain(text(reduced, u"after"_s)),
+                              .note = UntrustedText::plain(text(reduced, u"note"_s)),
+                              .color = UntrustedText::plain(text(reduced, u"color"_s)),
                               .created = text(reduced, u"created"_s).toLongLong(),
                               .strokes = {}};
         annotation.to = reduced.fields.contains(u"to_section"_s) ? placeOf(reduced, u"to_section"_s, u"to_fraction"_s) : annotation.place;
         if (annotation.quote.isEmpty())
-            annotation.quote = AnnotationLayers::plain(text(reduced, u"text"_s));
+            annotation.quote = UntrustedText::plain(text(reduced, u"text"_s));
         // Never ahead of the reader: the whole of it lies where they have been.
         if (!(*m_known)(GraphPlace{book, std::max(annotation.place, annotation.to)}))
             return std::nullopt;
@@ -184,8 +185,7 @@ AnnotationLayers::Layers AnnotationLayers::read(const Library &library, const Gr
             layers.refused += reading.read(*ops, person.annotations);
             person.spaces << space.space.space;
             if (person.name.isEmpty())
-                person.name = space.kind == "shared"_L1 ? plain(HeldSpaces::memberName(library, space.space.space, ops.key()))
-                                                        : plain(space.space.ownerName);
+                person.name = space.nameOf(ops.key());
         }
     }
     // Of a person with nothing the reader has reached, nothing is said.
@@ -213,20 +213,6 @@ QColor AnnotationLayers::colorOf(const QString &person) {
 }
 
 QString AnnotationLayers::calledOf(const Person &person) { return person.name.isEmpty() ? person.person.left(8) : person.name; }
-
-QString AnnotationLayers::plain(const QString &words) {
-    QString kept;
-    kept.reserve(words.size());
-    for (const QChar c : words) {
-        const char16_t unit = c.unicode();
-        const bool turns =
-            (unit >= 0x202A && unit <= 0x202E) || (unit >= 0x2066 && unit <= 0x2069) || unit == 0x200E || unit == 0x200F || unit == 0x061C;
-        const bool control = c.category() == QChar::Other_Control && unit != u'\n' && unit != u'\t';
-        if (!turns && !control)
-            kept += c;
-    }
-    return kept;
-}
 
 QJsonObject AnnotationLayers::toJson(const Person &person) {
     QJsonArray annotations;

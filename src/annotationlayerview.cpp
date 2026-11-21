@@ -3,8 +3,11 @@
 #include <QTextDocument>
 #include <QVariantMap>
 #include <algorithm>
+#include <utility>
 
 #include "annotationfacts.h"
+#include "inksurface.h"
+#include "marginnotes.h"
 #include "reader.h"
 #include "settings.h"
 #include "textgeometry.h"
@@ -18,6 +21,17 @@ namespace {
     for (const QRectF &rect : rects)
         list << rect;
     return list;
+}
+
+// Their strokes, in their colour: what tells their ink from one's own, and
+// one person's from another's. Each id is made theirs, so two people's never meet.
+void addTheirs(std::vector<Ink::Stroke> &into, const AnnotationLayers::Person &person, const AnnotationLayers::Annotation &annotation) {
+    const QColor color = AnnotationLayers::colorOf(person.person);
+    for (Ink::Stroke stroke : annotation.strokes) {
+        stroke.id = person.person.left(12) + u':' + stroke.id;
+        stroke.color = color;
+        into.push_back(std::move(stroke));
+    }
 }
 
 [[nodiscard]] QString shownText(const QQuickTextDocument *chapter) {
@@ -56,6 +70,7 @@ void AnnotationLayerView::setSettings(QObject *settings) {
     if (m_settings)
         connect(m_settings, &Settings::changed, this, [this] {
             ++m_revision;
+            redraw();
             emit changed();
         });
     ++m_revision;
@@ -166,10 +181,72 @@ QString AnnotationLayerView::makeFact(const QString &id, const QString &thing, c
     return made ? QString() : made.error().text();
 }
 
+std::vector<Ink::Stroke> AnnotationLayerView::strokesOf(const Drawn &drawn) const {
+    std::vector<Ink::Stroke> strokes;
+    for (const AnnotationLayers::Person &person : m_layers.people) {
+        if (!isShown(person.person))
+            continue;
+        for (const AnnotationLayers::Annotation &annotation : person.annotations) {
+            const bool wanted =
+                drawn.note.isEmpty() ? annotation.kind == "ink"_L1 && annotation.place.section == drawn.page : annotation.id == drawn.note;
+            if (wanted)
+                addTheirs(strokes, person, annotation);
+        }
+    }
+    std::ranges::stable_sort(strokes, {}, &Ink::Stroke::began);
+    return strokes;
+}
+
+std::vector<Ink::Stroke> AnnotationLayerView::inkOn(int page) const { return strokesOf({.page = page, .note = {}, .surface = {}}); }
+
+std::vector<Ink::Stroke> AnnotationLayerView::noteInk(const QString &id) const {
+    return id.isEmpty() ? std::vector<Ink::Stroke>() : strokesOf({.page = -1, .note = id, .surface = {}});
+}
+
+void AnnotationLayerView::showInk(QQuickItem *surface, int page) {
+    auto *ink = qobject_cast<InkSurface *>(surface);
+    if (ink == nullptr)
+        return;
+    forgetInk(ink);
+    m_drawn << Drawn{.page = page, .note = {}, .surface = ink};
+    ink->replace(strokesOf(m_drawn.last()));
+}
+
+void AnnotationLayerView::showNoteInk(QQuickItem *surface, const QString &id) {
+    auto *ink = qobject_cast<InkSurface *>(surface);
+    if (ink == nullptr || id.isEmpty())
+        return;
+    forgetInk(ink);
+    m_drawn << Drawn{.page = -1, .note = id, .surface = ink};
+    ink->replace(strokesOf(m_drawn.last()));
+}
+
+double AnnotationLayerView::inkBottom(QQuickItem *surface) const {
+    const auto *ink = qobject_cast<InkSurface *>(surface);
+    double bottom = 0;
+    if (ink != nullptr)
+        for (const Ink::Stroke &stroke : ink->sheet().strokes())
+            bottom = std::max(bottom, Ink::bounds(stroke).bottom());
+    return bottom;
+}
+
+double AnnotationLayerView::noteInkUnits() const { return MarginNotes::inkWidth; }
+
+void AnnotationLayerView::forgetInk(QQuickItem *surface) {
+    m_drawn.removeIf([surface](const Drawn &drawn) { return drawn.surface.isNull() || drawn.surface == surface; });
+}
+
+void AnnotationLayerView::redraw() {
+    m_drawn.removeIf([](const Drawn &drawn) { return drawn.surface.isNull(); });
+    for (const Drawn &drawn : std::as_const(m_drawn))
+        drawn.surface->replace(strokesOf(drawn));
+}
+
 void AnnotationLayerView::refresh() {
     m_layers = {};
     if (m_reader && m_reader->library() != nullptr && m_reader->bookId() > 0)
         m_layers = AnnotationLayers::read(*m_reader->library(), m_reader->bookId());
     ++m_revision;
+    redraw();
     emit changed();
 }

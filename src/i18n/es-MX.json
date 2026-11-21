@@ -2108,4 +2108,6 @@
   "A space you share can carry its members' highlights and notes, each beside yours in their colour and never past your place. {reader.ask} is given your own up to where you are, so you can ask what you marked.": "Un espacio compartido puede llevar los resaltados y notas de sus miembros, los de cada persona junto a los tuyos en su color, nunca más allá de donde vas. {reader.ask} recibe los tuyos hasta donde vas, para que preguntes qué marcaste.",
   "A year of reading": "Un año de lectura",
   "{library.stats} shows the time you read, the days in a row and the books finished, by month and by book, and how far you are with a goal for the year. It is all counted on your computer.": "{library.stats} muestra el tiempo que leíste, los días seguidos y los libros terminados, por mes y por libro, y cuánto llevas de una meta para el año. Todo se cuenta en tu computadora."
+  "%1's note": "Nota de %1",
+  "A name to go by in a space is one line of at most %1 characters.": "El nombre con el que apareces en un espacio es una sola línea de %1 caracteres como máximo."
 }

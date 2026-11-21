@@ -7,6 +7,7 @@
 #include <algorithm>
 
 #include "library.h"
+#include "membernames.h"
 #include "person.h"
 #include "sharedcollection.h"
 #include "sharedkeys.h"
@@ -17,6 +18,7 @@
 #include "spacekeys.h"
 #include "spaces.h"
 #include "subscribedspace.h"
+#include "untrustedtext.h"
 
 using namespace Qt::StringLiterals;
 
@@ -41,10 +43,13 @@ using SharedSpaces::Summary;
                     .members = {},
                     .collection = collectionPath(library, space),
                     .files = state.files};
-    for (const SharedSpace::Member &member : state.members)
-        summary.members << Member{.person = member.person,
-                                  .name = library.personFile().isMine(member.person) ? u"you"_s : QString(),
-                                  .role = SharedSpace::roleName(member.role)};
+    const QHash<QString, QString> names = MemberNames::of(state.accepted);
+    for (const SharedSpace::Member &member : state.members) {
+        QString name = names.value(member.person);
+        if (library.personFile().isMine(member.person))
+            name = name.isEmpty() ? u"you"_s : u"you, %1"_s.arg(name);
+        summary.members << Member{.person = member.person, .name = name, .role = SharedSpace::roleName(member.role)};
+    }
     return summary;
 }
 
@@ -297,6 +302,21 @@ std::expected<Summary, QString> SharedSpaces::join(Library &library, const QStri
     if (summary.role.isEmpty())
         summary.role = opened->invite.role;
     return summary;
+}
+
+std::expected<Summary, Failure> SharedSpaces::goBy(const Library &library, const QString &which, const QString &name) {
+    const auto space = resolve(library, which);
+    if (!space)
+        return std::unexpected(Failure::said(space.error()));
+    const std::optional<QString> chosen = UntrustedText::name(name);
+    if (!chosen)
+        return std::unexpected(Failure(Failure::Code::NotAName, {QString::number(UntrustedText::maxNameLength)}));
+    // Written as the library's person, whose role the space's rules then judge (SharedSpace::write).
+    const Person *me = library.person();
+    const ChangeLog::Entry entry = MemberNames::entry(*space, me != nullptr ? me->id() : QString(), *chosen);
+    if (const auto written = SharedSpace::write(library, *space, std::span(&entry, 1)); !written)
+        return std::unexpected(Failure::said(written.error()));
+    return sharedSummary(library, *space, which);
 }
 
 std::expected<SharedSpaces::Synced, QString> SharedSpaces::sync(Library &library, const QString &which, const QString &folder) {

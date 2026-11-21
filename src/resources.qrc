@@ -87,6 +87,7 @@
         <file alias="PageMarks.qml">PageMarks.qml</file>
         <file alias="MarginColumn.qml">MarginColumn.qml</file>
         <file alias="OthersNoteCard.qml">OthersNoteCard.qml</file>
+        <file alias="OthersNotePopup.qml">OthersNotePopup.qml</file>
         <file alias="OthersAnnotations.qml">OthersAnnotations.qml</file>
         <file alias="NoteCard.qml">NoteCard.qml</file>
         <file alias="NoteInk.qml">NoteInk.qml</file>

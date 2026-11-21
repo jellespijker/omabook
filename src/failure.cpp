@@ -146,6 +146,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::AnnotationWithoutWords, tr("Only a margin note or a highlight with words becomes a fact.")},
     {Failure::Code::NoSuchThing, tr("There is no thing %1 in the book's graph; give a kind to make it.")},
     {Failure::Code::FactNotKept, tr("The words could not be kept as a fact.")},
+    {Failure::Code::NotAName, tr("A name to go by in a space is one line of at most %1 characters.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

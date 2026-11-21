@@ -22,6 +22,10 @@ import Omabook
 // On the pages of a PDF or a comic (#115), which stand still, a note is on
 // words of a PDF's page or on a part of a comic's (a panel, chosen as words
 // are selected), marked where it is (PageNotes) and opened on a card beside it.
+//
+// Others' notes (#85) stand in the margin column beside one's own; where
+// there is none, each is marked in the text in its writer's colour and opens
+// on a card of its own beside its passage (#124), to read, never to edit.
 Item {
     id: layer
     objectName: "readingNotes"
@@ -41,7 +45,7 @@ Item {
     // The keyboard is going through the notes on the page.
     property bool going: false
     // While it is, a card is up, or the lost ones are listed, the keys are the notes'.
-    readonly property bool focused: going || card.shown || lostList.opened || writing
+    readonly property bool focused: going || card.shown || othersCard.shown || lostList.opened || writing
     readonly property bool writing: !!draft || editing !== 0
     // The note whose words are being changed, 0 for none.
     property var editing: 0
@@ -63,6 +67,8 @@ Item {
             othersModel.refresh()
         }
     }
+    // Where the column comes, others' notes stand in it, no more on a card.
+    onBesideChanged: othersCard.close()
     Connections {
         target: reader
         function onSectionChanged() { layer.leave() }
@@ -90,6 +96,18 @@ Item {
         if (!beside) Qt.callLater(() => layer.openDraft(chosen))
     }
     function openDraft(chosen) { card.openOn(0, "", chosen.text, chosen.start, chosen.end) }
+    // Of a TextEdit's characters from `start` to `end`, the rectangle in this layer they take.
+    function around(text, start, end) {
+        const a = text.positionToRectangle(start)
+        const b = text.positionToRectangle(end)
+        const at = text.mapToItem(layer, Math.min(a.x, b.x), a.y)
+        return Qt.rect(at.x, at.y, a.y === b.y ? Math.max(4, b.x - a.x) : text.width, b.y + b.height - a.y)
+    }
+    // Someone else's note, from its mark in the text (NoteMarks), on its card.
+    function openOther(note, text) {
+        card.close()
+        othersCard.openAround(note, layer.around(text, note.start, note.end))
+    }
     // What the pen wrote that meant nothing to the highlights (PenGestures):
     // the strokes of `snapshot` that `which` counts, the first of them begun
     // at `at`, a point of the page (`content`). A note by hand on the line
@@ -196,6 +214,7 @@ Item {
         }
         editing = 0
         card.close()
+        othersCard.close()
         if (had && content && host.active) content.forceActiveFocus()
     }
     // The notes on the page, top to bottom: [{id, text, start, end}].
@@ -277,11 +296,7 @@ Item {
         property bool ink: false
         property rect around: Qt.rect(0, 0, 0, 0)
         function openOn(id, words, text, start, end, browsing, handwritten) {
-            const a = text.positionToRectangle(start)
-            const b = text.positionToRectangle(end)
-            const at = text.mapToItem(layer, Math.min(a.x, b.x), a.y)
-            openAround(id, words, Qt.rect(at.x, at.y, a.y === b.y ? Math.max(4, b.x - a.x) : text.width, b.y + b.height - a.y), browsing,
-                       handwritten)
+            openAround(id, words, layer.around(text, start, end), browsing, handwritten)
         }
         // Beside what it is about, a rectangle of this layer.
         function openAround(id, words, rect, browsing, handwritten) {
@@ -341,6 +356,14 @@ Item {
             onFinished: (words) => layer.finish(card.noteId, words)
             onRemoveAsked: layer.removeNote(card.noteId)
         }
+    }
+
+    // Someone else's note on a card beside its passage, where there is no margin column (#124).
+    OthersNotePopup {
+        id: othersCard
+        room: Qt.size(layer.width, layer.height)
+        annotationLayer: othersModel
+        onLeaveAsked: layer.leave()
     }
 
     // The notes whose passages are gone: how many, and the list of them.

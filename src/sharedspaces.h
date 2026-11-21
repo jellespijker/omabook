@@ -6,6 +6,7 @@
 #include <QtTypes>
 #include <expected>
 
+#include "failure.h"
 #include "sharedspace.h"
 #include "spaceworlds.h"
 #include "subscriptions.h"
@@ -90,6 +91,12 @@ struct Invited {
 // Joins the space of the invite in `file`, its books going in the collection
 // `as` here (the space's name when empty).
 [[nodiscard]] std::expected<Summary, QString> join(Library &library, const QString &file, const QString &as = {});
+
+// The name the library's person goes by in the shared space `which` (#124),
+// as a writer of it: an operation of the space (MemberNames), which goes to
+// every member with the next sync. One line of at most
+// UntrustedText::maxNameLength characters.
+[[nodiscard]] std::expected<Summary, Failure> goBy(const Library &library, const QString &which, const QString &name);
 
 struct Synced {
     Summary space;

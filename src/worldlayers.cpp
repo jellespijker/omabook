@@ -37,7 +37,7 @@ void layersOf(const Library &library, const Held &space, bool known, const Graph
         const std::optional<Book> copy = here > 0 ? library.book(here) : std::nullopt;
         SubscribedSpace::Subscription from = space.space;
         if (space.kind == "shared"_L1)
-            from.ownerName = HeldSpaces::memberName(library, space.space.space, world.author);
+            from.ownerName = space.nameOf(world.author);
         Layer layer{.scope = SpaceWorlds::layerName(space.space.space, world.scope),
                     .space = space.space.space,
                     .kind = space.kind,

@@ -350,6 +350,22 @@ ListView {
                         onDraggingChanged: { if (dragging) view.choose(words); view.mouseSelecting = dragging }
                         onSelected: view.selected()
                     }
+                    // Others' book ink on the page (#124, AnnotationLayerView), as far
+                    // as the reader has read: each person's in their colour, under
+                    // one's own and never written on.
+                    InkSurface {
+                        id: theirInk
+                        objectName: "othersInk" + sheet.page
+                        readonly property var others: view.notes ? view.notes.others : null
+                        anchors.fill: parent
+                        visible: reader.ink.shown && count > 0
+                        readOnly: true
+                        enabled: false
+                        inkScale: Math.max(0.01, width / reader.ink.pageUnits)
+                        onOthersChanged: if (others) others.showInk(theirInk, sheet.page)
+                        Component.onCompleted: if (others) others.showInk(theirInk, sheet.page)
+                        Component.onDestruction: if (others) others.forgetInk(theirInk)
+                    }
                     // The page's book ink (#83), at the page's zoom: ink units
                     // across its width, so it stays where it was put. Written on
                     // while the reader writes, the mouse too; a finger scrolls.

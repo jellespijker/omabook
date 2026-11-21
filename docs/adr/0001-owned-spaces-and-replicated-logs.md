@@ -159,6 +159,15 @@ layer, read from the space's operations (`AnnotationLayers`, beside `GraphLayers
 annotation whose passage ends further on stays out. A margin note made a fact is written into the receiver's own
 graph, in the book's tenant, learned at the note's place.
 
+As built (#124): a member of a shared space goes by a name of their choosing, as an operation of their own
+(entity `person`, their person id, field `name`), signed and judged by the role rules like the rest, so it goes
+wherever the space goes; an Omabook from before keeps it and passes it over (an entity `member` would have been
+refused by it, and lost to it for good past its version vector). Of each member only the name they gave
+themselves counts, the latest by clock (`MemberNames`), and only one that is a name: untrusted, made plain (no
+controls, nothing that turns the text around), on one line, at most 64 characters, never shortened; an empty one
+takes it away. A published space's owner goes by the name they published under, by the same rule. A name of a
+person given up at a pairing (#50) stays theirs; the person now chooses again.
+
 As built (#3): on the owner's computer a published space has a log of its own, `published_ops`,
 apart from `ops`, though `live_ops` now leaves published spaces out. In `ops` it would be a space like
 those its members sync, compacted by snapshot marks it doesn't keep and sent by replication to the

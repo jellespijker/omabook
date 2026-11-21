@@ -18,7 +18,7 @@ modules = [
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptapiui", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist",
-  "oggpages", "opuswriter", "opusreader", "scriptapireach",
+  "oggpages", "opuswriter", "opusreader", "scriptapireach", "untrustedtext",
 ]
 
 [layers.formats]
@@ -44,7 +44,7 @@ modules = [
   "annotationink", "opkinds", "keptops",
   "booksearch", "annotationwords",
   "readinglog", "readingstats", "readinggoal",
-  "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts",
+  "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
 ]
 
 [layers.services]

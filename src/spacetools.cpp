@@ -78,6 +78,14 @@ const bool registered = [] {
                       return command(asked);
                   }});
 
+    registerTool({"space_name", "Choose the name to go by in a shared space",
+                  "Sets the name the user goes by in a shared space they write, which every member sees beside their "
+                  "annotations once they sync: one line of at most 64 characters. Ask the user which name they want.",
+                  schema({{"space", string("The shared space's name or id.")}, {"name", string("The name to go by.")}}, {"space", "name"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command({"spaces", "name", arguments.value("space").toString(), arguments.value("name").toString()});
+                  }});
+
     registerTool({"space_sync", "Sync a shared space through a folder",
                   "Takes what the members wrote into a folder something else syncs (Syncthing, a mounted share): every "
                   "batch is checked, and what isn't signed by a writer of the space at its time is refused and said. Its "

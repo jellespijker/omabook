@@ -69,7 +69,7 @@ An annotation whose passage can no longer be found in its book, kept until the r
 _Avoid_: Orphan, broken annotation
 
 **Annotation layer**:
-Someone else's annotations on a book, shown beside one's own, under their name and in their colour, and cut at one's own place: carried by a space whose annotations part is on, switched off one person at a time or all (`AnnotationLayers`).
+Someone else's annotations on a book, shown beside one's own, under the name they chose (`MemberNames`) and in their colour, and cut at one's own place: carried by a space whose annotations part is on, switched off one person at a time or all (`AnnotationLayers`).
 _Avoid_: Shared highlights, overlay
 
 **Part of a space**:

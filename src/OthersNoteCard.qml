@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import Omabook
 
 // Someone else's margin note (#85), as it stands in the margin column beside
 // one's own: under their name, its edge in their colour, its words as plain
@@ -72,9 +73,41 @@ FocusScope {
                 font.weight: Font.DemiBold
                 color: theme.colors.muted
             }
+            // Written by hand (#90): their ink, as wide as the card, in their colour (#124).
+            InkSurface {
+                id: theirInk
+                objectName: "othersNoteInk"
+                readonly property bool inked: !!card.note && !!card.note.ink
+                readonly property real unit: width / (card.annotationLayer ? card.annotationLayer.noteInkUnits : 240)
+                property real lowest: 0
+                visible: inked
+                Layout.fillWidth: true
+                Layout.preferredHeight: inked ? Math.max(24, lowest + 6) * unit : 0
+                inkScale: Math.max(0.01, unit)
+                readOnly: true
+                enabled: false
+                Accessible.role: Accessible.Graphic
+                Accessible.name: card.note && card.note.note !== "" ? qsTr("Handwritten margin note: %1").arg(card.note.note)
+                                                                    : qsTr("Handwritten margin note")
+                function draw() {
+                    if (!card.annotationLayer) return
+                    if (inked) card.annotationLayer.showNoteInk(theirInk, card.note.id)
+                    else card.annotationLayer.forgetInk(theirInk)
+                }
+                onInkedChanged: draw()
+                onStrokesChanged: lowest = card.annotationLayer ? card.annotationLayer.inkBottom(theirInk) : 0
+                Component.onCompleted: draw()
+                Component.onDestruction: if (card.annotationLayer) card.annotationLayer.forgetInk(theirInk)
+                Connections {
+                    target: card
+                    function onNoteChanged() { theirInk.draw() }
+                    function onAnnotationLayerChanged() { theirInk.draw() }
+                }
+            }
             Label {
                 objectName: "othersNoteWords"
                 Layout.fillWidth: true
+                visible: !!card.note && (card.note.note !== "" || !card.note.ink)
                 text: !card.note ? "" : card.note.note !== "" ? card.note.note : qsTr("A handwritten note")
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap

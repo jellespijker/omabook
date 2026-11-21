@@ -25,7 +25,7 @@ namespace {
 using namespace Qt::StringLiterals;
 using SharedSpaces::Summary;
 
-constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sync|files|annotations|fetch] …\n\n"
+constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|name|sync|files|annotations|fetch] …\n\n"
                        "Every piece of your library belongs to a space: your personal one (your own computers), a collection\n"
                        "you published or subscribed to, or a shared space several people write, as a household library or a\n"
                        "book club. A shared space holds a collection (its tree and its books' details; their files only when\n"
@@ -40,6 +40,8 @@ constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|sy
                        "                                            unless said) and write their invite: a file only they can open\n"
                        "  remove <space> <person-id>                What they write from now on is refused; what they had stays theirs\n"
                        "  join <invite-file> [--as name]            Join the space an invite is for; its books go in a collection\n"
+                       "  name <space> <name>                       The name you go by in a shared space, as a writer of it: what\n"
+                       "                                            the others see of you beside your annotations\n"
                        "  sync <space> --folder <dir>               Take what is new in a folder something else syncs (Syncthing,\n"
                        "                                            a mounted share), and write what is new here into it, sealed\n"
                        "  files <space> on|off                      Let the books' files of a shared space (as a writer) or of one\n"
@@ -248,6 +250,21 @@ struct Command {
     return 0;
 }
 
+// The name one goes by in a shared space (#124).
+[[nodiscard]] int name(const Library &library, const Command &command) {
+    if (command.words.size() != 3)
+        return fail(u"Name the space, and the name you go by in it: omabook spaces name <space> <name>"_s);
+    const auto named = SharedSpaces::goBy(library, command.words.at(1), command.words.at(2));
+    if (!named)
+        return fail(named.error().text());
+    if (command.json) {
+        printJson(toJson(*named));
+        return 0;
+    }
+    printLine(stdout, u"You go by %1 in %2 now; the others see it once they sync."_s.arg(command.words.at(2).simplified(), named->name));
+    return 0;
+}
+
 [[nodiscard]] int files(const Library &library, const Command &command) {
     const QString to = command.words.value(2);
     if (command.words.size() != 3 || (to != "on"_L1 && to != "off"_L1))
@@ -321,7 +338,7 @@ int runSpacesCli(const QStringList &arguments) {
     Command command;
     QCommandLineParser &parser = command.parser;
     parser.addOption({{"h", "help"}, "Show this help."});
-    parser.addPositionalArgument("command", "list, create, invite, remove, join, sync, files, annotations or fetch.", "[command]");
+    parser.addPositionalArgument("command", "list, create, invite, remove, join, name, sync, files, annotations or fetch.", "[command]");
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
                       "Use the library in this folder instead of the current one, for this run only "
@@ -360,6 +377,8 @@ int runSpacesCli(const QStringList &arguments) {
         return remove(library, command);
     if (sub == "join"_L1)
         return join(library, command);
+    if (sub == "name"_L1)
+        return name(library, command);
     if (sub == "sync"_L1)
         return sync(library, command);
     if (sub == "files"_L1)
