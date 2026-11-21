@@ -15,6 +15,8 @@ ignores:
   # The schema's steps, moved out of librarymigrations.cpp (#54): its triggers write the counters.
   - "src/libraryschema.cpp"
   - "src/library.cpp"
+  # The book files' half of Library, moved out of library.cpp (#74): written alongside the log as library.cpp's are.
+  - "src/libraryfiles.cpp"
   - "src/graph.cpp"
   # Its relations' half, moved out of graph.cpp (#109): written alongside the log as graph.cpp's are.
   - "src/graphnotes.cpp"
