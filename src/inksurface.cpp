@@ -1,7 +1,6 @@
 #include "inksurface.h"
 
 #include <QCoreApplication>
-#include <QElapsedTimer>
 #include <QInputDevice>
 #include <QJsonObject>
 #include <QMouseEvent>
@@ -16,6 +15,7 @@
 
 #include "inkcodec.h"
 #include "inknodes.h"
+#include "threadclock.h"
 
 using Ink::can;
 using Ink::deviceId;
@@ -224,8 +224,7 @@ void InkSurface::applyChange(const Ink::Change &change) {
 }
 
 QSGNode *InkSurface::updatePaintNode(QSGNode *old, [[maybe_unused]] UpdatePaintNodeData *data) {
-    QElapsedTimer clock;
-    clock.start();
+    const ThreadClock clock;
     const bool fresh = old == nullptr;
     QSGNode *root = m_nodes->root(old);
     const std::vector<const Ink::Stroke *> order = InkNodes::shown(m_sheet, m_writing, m_lasso, m_dirty);
@@ -238,7 +237,7 @@ QSGNode *InkSurface::updatePaintNode(QSGNode *old, [[maybe_unused]] UpdatePaintN
     m_dirty.clear();
     m_restructured = false;
     m_allDirty = false;
-    m_frameTime = static_cast<double>(clock.nsecsElapsed()) / 1e6;
+    m_frameTime = clock.milliseconds();
     return root;
 }
 

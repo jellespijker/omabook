@@ -132,7 +132,7 @@ public:
     // Every stroke as one base64 text (Ink::encodeAll), and back.
     Q_INVOKABLE QString snapshot() const;
     Q_INVOKABLE bool restore(const QString &snapshot);
-    // How long the last frame's strokes took to put together, in milliseconds.
+    // What the last frame's strokes took to put together, in milliseconds of its thread's work (ThreadClock).
     Q_INVOKABLE double frameTime() const { return m_frameTime; }
 
     // The same for C++ (book ink, #83).

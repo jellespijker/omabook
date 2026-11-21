@@ -67,7 +67,7 @@ public:
     double zoom() const noexcept { return m_zoom; }
     qint64 hovered() const noexcept { return m_hovered; }
     void setHovered(qint64 node);
-    // How long the last frame took to paint, in milliseconds.
+    // What the last frame took to paint, in milliseconds of the painting thread's work (ThreadClock).
     Q_INVOKABLE double paintTime() const { return m_paintTime; }
 
     void paint(QPainter *painter) override;

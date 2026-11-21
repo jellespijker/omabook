@@ -1,6 +1,5 @@
 #include "chronologycanvas.h"
 
-#include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QQuickWindow>
 #include <QSGRectangleNode>
@@ -12,6 +11,7 @@
 #include <ranges>
 
 #include "graphcanvas.h"
+#include "threadclock.h"
 
 using Chronology::Chart::Mark;
 
@@ -444,8 +444,7 @@ void ChronologyCanvas::addName(Words &words, const Mark &mark, double to, double
 }
 
 QSGNode *ChronologyCanvas::updatePaintNode(QSGNode *old, [[maybe_unused]] UpdatePaintNodeData *data) {
-    QElapsedTimer clock;
-    clock.start();
+    const ThreadClock clock;
     QSGNode *root = old;
     // The scene graph owns the nodes; they are made again whenever it let them go.
     if (!root) {
@@ -484,6 +483,6 @@ QSGNode *ChronologyCanvas::updatePaintNode(QSGNode *old, [[maybe_unused]] Update
         for (const Words::Placed &word : *written.first)
             text->addTextLayout(word.at, word.layout);
     }
-    m_frameTime = static_cast<double>(clock.nsecsElapsed()) / 1e6;
+    m_frameTime = clock.milliseconds();
     return root;
 }

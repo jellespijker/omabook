@@ -74,7 +74,7 @@ public:
     Q_INVOKABLE void fit();
     // Moves the view just enough to have the selected mark well inside it.
     Q_INVOKABLE void reveal();
-    // How long the last frame took to put together, in milliseconds, and how many marks it drew.
+    // What the last frame took to put together, in milliseconds of its thread's work (ThreadClock), and how many marks it drew.
     Q_INVOKABLE double frameTime() const noexcept { return m_frameTime; }
     Q_INVOKABLE int drawn() const noexcept { return m_drawn; }
 

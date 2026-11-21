@@ -1,6 +1,5 @@
 #include "graphcanvas.h"
 
-#include <QElapsedTimer>
 #include <QFontMetricsF>
 #include <QGuiApplication>
 #include <QHash>
@@ -8,6 +7,8 @@
 #include <algorithm>
 #include <cmath>
 #include <ranges>
+
+#include "threadclock.h"
 
 namespace {
 
@@ -389,8 +390,7 @@ QPointF GraphCanvas::pointOf(qint64 node) const {
 }
 
 void GraphCanvas::paint(QPainter *painter) {
-    QElapsedTimer clock;
-    clock.start();
+    const ThreadClock clock;
     if (!m_browser)
         return;
     const QList<GraphBrowser::Shown> &shown = m_browser->shown();
@@ -571,7 +571,7 @@ void GraphCanvas::paint(QPainter *painter) {
         painter->setPen(faint(m_foreground, ofSelected ? 0.85 : 0.6));
         painter->drawText(box, Qt::AlignCenter, m_relations.at(index).text);
     }
-    m_paintTime = clock.nsecsElapsed() / 1e6;
+    m_paintTime = clock.milliseconds();
 }
 
 GraphMark::GraphMark(QQuickItem *parent) : QQuickPaintedItem(parent) {

@@ -811,8 +811,8 @@ private slots:
             whole = canvas.paintTime();
             // Zoomed in on a selected node, most of it is off the page.
             browser.select(ids.at(0));
-            canvas.zoomBy(8);
-            QTest::qWait(300);
+            // About a point, which zooms at once rather than gliding there.
+            canvas.zoomBy(8, 590, 350);
             canvas.paint(&painter);
             near = canvas.paintTime();
         }
