@@ -29,4 +29,4 @@ rule:
     - pattern: std::make_unique<$KIND>($$$ARGS)
 constraints:
   KIND:
-    regex: '^(Recognizers::\w+|AnthropicProvider|CommandProvider|AntigravityProvider|OpenAiProvider|PiperVoice|SpeechDispatcherVoice|ServerVoice|WhisperLocal)$'
+    regex: '^(Recognizers::\w+|AnthropicProvider|CommandProvider|AntigravityProvider|OpenAiProvider|PiperVoice|SpeechDispatcherVoice|ServerVoice|WhisperLocal|VoxtypeLocal)$'
