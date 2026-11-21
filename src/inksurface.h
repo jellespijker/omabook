@@ -199,6 +199,8 @@ protected:
 
 private:
     bool tablet(QTabletEvent &event);
+    // Something drawn over the surface takes the pen at a point of the scene (#141, inksurfacecover.cpp).
+    [[nodiscard]] bool coveredAt(QPointF scene) const;
     void touchPoint(const QTouchEvent &event, QEventPoint &point);
     // What a touch just down does, by the rules and the tool down.
     [[nodiscard]] Ink::Act actOf(const QTouchEvent &event, const QEventPoint &point) const;

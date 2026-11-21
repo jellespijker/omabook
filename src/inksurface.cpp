@@ -323,7 +323,7 @@ bool InkSurface::tablet(QTabletEvent &event) {
     input.xTilt = static_cast<float>(event.xTilt());
     input.yTilt = static_cast<float>(event.yTilt());
     if (event.type() == QEvent::TabletPress) {
-        if (m_readOnly || !isVisible() || !isEnabled() || !contains(at)) {
+        if (m_readOnly || !isVisible() || !isEnabled() || !contains(at) || coveredAt(event.scenePosition())) {
             return false;
         }
         // A palm that came down before the pen did is no stroke.

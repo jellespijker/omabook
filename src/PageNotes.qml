@@ -54,6 +54,8 @@ Item {
             }
             Item {
                 objectName: "pageNoteMark_" + spot.modelData.id
+                // A finger's tap on it is its own, not the page's under it (ReaderTouch, #141).
+                readonly property bool takesTaps: true
                 // At a panel's corner; just past a passage's last word, high on its line, clear of the letters.
                 x: Math.max(0, Math.min(marks.width - width, spot.modelData.endX - spot.hit / 2 + (spot.modelData.part ? 0 : 5)))
                 y: Math.max(0, Math.min(marks.height - height, (spot.modelData.part ? spot.modelData.endY : spot.modelData.endTop + 2) - spot.hit / 2))

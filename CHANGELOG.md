@@ -12,6 +12,11 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- A finger's tap on a margin note, its mark in the text or a note's mark on a PDF's page opens the note and nothing else (#141): it no longer turns the page as well, where the note is at the page's edge, nor shows or hides the bar.
+- The pen presses what lies over the page (#141): the selection's menu, the ☰ button, a pane or a popup over it take the pen as they take a finger, where before the pen wrote or drew a gesture on the page under them.
+
 ## [0.2.0] - 2026-11-21
 
 ### Added

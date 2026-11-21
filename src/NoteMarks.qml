@@ -81,6 +81,8 @@ Item {
         delegate: Item {
             id: mark
             required property var modelData
+            // A finger's tap on it is its own, not the page's under it (ReaderTouch, #141).
+            readonly property bool takesTaps: true
             readonly property rect end: marks.endOf(modelData)
             readonly property bool lit: !!marks.reading && marks.reading.current === modelData.id
             readonly property real hit: win.touch ? 36 : 22
@@ -110,6 +112,8 @@ Item {
         delegate: Item {
             id: theirs
             required property var modelData
+            // A finger's tap on it is its own, not the page's under it (ReaderTouch, #141).
+            readonly property bool takesTaps: true
             readonly property rect end: marks.endOf(modelData)
             readonly property real hit: win.touch ? 36 : 22
             objectName: "othersNoteMark"

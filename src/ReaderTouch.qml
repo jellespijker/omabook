@@ -29,6 +29,18 @@ Item {
         host.readingMenu.openCard(found, host.fromContent(found.rect), false, false)
         return true
     }
+    // Something of the page's own that a finger taps at a point of an item
+    // (a note's mark, a note in the margin): the tap is its, and the page
+    // doesn't turn or show the bar as well (#141). They say so by `takesTaps`.
+    function ownTap(item, x, y) {
+        if (!item.visible || !item.enabled) return false
+        if (item.takesTaps === true && x >= 0 && y >= 0 && x <= item.width && y <= item.height) return true
+        for (const child of item.children) {
+            const at = item.mapToItem(child, x, y)
+            if (area.ownTap(child, at.x, at.y)) return true
+        }
+        return false
+    }
     // A point of this item on a selection's handle, which is the handle's to take.
     function onHandle(point) {
         const at = area.mapToItem(handles, point.x, point.y)
@@ -55,9 +67,9 @@ Item {
                 content.clearSelection()
                 return
             }
-            if (area.tappedAt(point.position.x, point.position.y)) return
-            // What the page has to tap on itself: the line at a chapter's end.
             const on = area.mapToItem(content, point.position.x, point.position.y)
+            if (area.ownTap(content, on.x, on.y) || area.tappedAt(point.position.x, point.position.y)) return
+            // What the page has to tap on itself: the line at a chapter's end.
             if (typeof content.activateAt === "function" && content.activateAt(on.x, on.y)) return
             const x = win.rightToLeft ? area.width - point.position.x : point.position.x
             if (x < area.width * 0.25) area.host.turn(false)

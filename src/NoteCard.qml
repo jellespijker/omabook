@@ -30,6 +30,8 @@ FocusScope {
     signal removeAsked()
     // Pressed while not being edited.
     signal activated()
+    // A finger's tap on it, its field or its buttons is its own, not the page's under it (ReaderTouch, #141).
+    readonly property bool takesTaps: true
 
     implicitHeight: frame.implicitHeight
     function edit() {

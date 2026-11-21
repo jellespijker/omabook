@@ -17,6 +17,8 @@ FocusScope {
     property int lines: 6
     property int fontSize: 13
     property bool keeping: false
+    // A finger's tap on it is its own, not the page's under it (ReaderTouch, #141).
+    readonly property bool takesTaps: true
 
     implicitHeight: frame.implicitHeight
     activeFocusOnTab: true
