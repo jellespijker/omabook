@@ -67,6 +67,8 @@ QString guide();
 // travels to their other computers (#131).
 QString booksGuide();
 QString filesGuide();
+// And on writing beside a book being read, and recording beside it (#137, #135).
+QString besideGuide();
 
 // The version of this Omabook, which a plugin's plugin.json may ask for at
 // least: {"omabook": "0.1.0"}. A plugin that asks for a newer one is not

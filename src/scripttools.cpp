@@ -14,6 +14,7 @@
 #include <QTimer>
 #include <cstdio>
 #include <memory>
+#include <optional>
 
 #include "ai.h"
 #include "formatprovider.h"
@@ -26,6 +27,8 @@
 #include "secretstore.h"
 #include "scriptapi.h"
 #include "scriptplugins.h"
+#include "scriptsession.h"
+#include "testaudio.h"
 #include "settings.h"
 
 namespace {
@@ -33,50 +36,6 @@ namespace {
 QJsonObject problem(const QString &why) { return {{"error", why}}; }
 
 constexpr auto nameRule = "A plugin's name is its folder's: lower-case letters, digits, - and _, such as \"reading-log\".";
-
-// What a call works with: the settings, the plugin folder and the library,
-// each the caller's when it brought one and the user's otherwise. The
-// library is only opened when a script asks for it.
-class Session {
-public:
-    explicit Session(const ScriptTools::Context &context) : m_context(context) {
-        if (!m_context.settings) {
-            m_ownSettings = std::make_unique<Settings>();
-            m_context.settings = m_ownSettings.get();
-        }
-        if (m_context.folder.isEmpty())
-            m_context.folder = ScriptPlugins::defaultFolder();
-    }
-
-    QString folder() const { return m_context.folder; }
-    Settings *settings() const { return m_context.settings; }
-    Library *library() {
-        if (m_context.library)
-            return m_context.library();
-        if (!m_ownLibrary && !m_libraryTried) {
-            m_libraryTried = true;
-            auto library = std::make_unique<Library>(m_context.settings->libraryPath());
-            if (library->open())
-                m_ownLibrary = std::move(library);
-        }
-        return m_ownLibrary.get();
-    }
-    ScriptServices services() {
-        ScriptServices services;
-        services.settings = m_context.settings;
-        services.library = [this] { return library(); };
-        services.ai = [this](QString *why) { return makeAiProvider(*m_context.settings, why); };
-        services.network = &m_network;
-        return services;
-    }
-
-private:
-    ScriptTools::Context m_context;
-    std::unique_ptr<Settings> m_ownSettings;
-    std::unique_ptr<Library> m_ownLibrary;
-    bool m_libraryTried = false;
-    QNetworkAccessManager m_network;
-};
 
 QJsonObject registered(const ScriptPlugin &plugin) {
     QJsonArray sources, catalogs, importers, commands, panels;
@@ -110,7 +69,7 @@ struct Loaded {
     QStringList said, failures;
     QString error; // why it didn't load
 
-    Loaded(Session &session, const QString &name) {
+    Loaded(ScriptSession &session, const QString &name) {
         const ScriptManifest manifest = ScriptManifest::read(session.folder() + "/" + name);
         if (!ScriptTools::validName(name) || !QFileInfo(manifest.folder).isDir()) {
             error = "There is no plugin " + name + " in " + session.folder() + ".";
@@ -200,7 +159,7 @@ QJsonObject ScriptTools::api() {
 }
 
 QJsonObject ScriptTools::list(const Context &context) {
-    Session session(context);
+    ScriptSession session(context);
     const ScriptPlugins plugins(session.services(), session.folder(), nullptr, false);
     QJsonArray array;
     for (const ScriptPlugins::Info &info : plugins.list())
@@ -209,7 +168,7 @@ QJsonObject ScriptTools::list(const Context &context) {
 }
 
 QJsonObject ScriptTools::create(const Context &context, const QString &name, const QString &templateName) {
-    const Session session(context);
+    const ScriptSession session(context);
     if (!validName(name))
         return problem(nameRule);
     if (!ScriptApi::templates().contains(templateName))
@@ -233,7 +192,7 @@ QJsonObject ScriptTools::create(const Context &context, const QString &name, con
 }
 
 QJsonObject ScriptTools::write(const Context &context, const QString &name, const QString &file, const QString &contents) {
-    const Session session(context);
+    const ScriptSession session(context);
     if (!validName(name))
         return problem(nameRule);
     const QString folder = session.folder() + "/" + name;
@@ -262,7 +221,7 @@ QJsonObject ScriptTools::write(const Context &context, const QString &name, cons
 }
 
 QJsonObject ScriptTools::check(const Context &context, const QString &name) {
-    Session session(context);
+    ScriptSession session(context);
     Loaded loaded(session, name);
     if (!loaded.plugin)
         return problem(loaded.error);
@@ -286,7 +245,7 @@ QJsonObject ScriptTools::check(const Context &context, const QString &name) {
 }
 
 QJsonObject ScriptTools::run(const Context &context, const QString &name, const QString &what, const QJsonValue &arguments) {
-    Session session(context);
+    ScriptSession session(context);
     Loaded loaded(session, name);
     if (!loaded.plugin || !loaded.error.isEmpty())
         return problem(loaded.error);
@@ -360,12 +319,46 @@ QJsonObject ScriptTools::run(const Context &context, const QString &name, const 
 }
 
 QJsonObject ScriptTools::enable(const Context &context, const QString &name, bool enabled) {
-    const Session session(context);
+    const ScriptSession session(context);
     const ScriptManifest manifest = ScriptManifest::read(session.folder() + "/" + name);
     if (!validName(name) || !QFileInfo(manifest.folder).isDir() || !manifest.isScript())
         return problem("There is no script plugin " + name + " in " + session.folder() + ".");
     session.settings()->setPluginEnabled("folder:" + name, enabled);
     return {{"name", name}, {"id", "folder:" + name}, {"enabled", enabled}};
+}
+
+// The library a command was given (--library), and the sound `run` tries a
+// plugin with (#135): a test microphone and a yes to recording given
+// beforehand, never on the person's own library, since what is recorded there
+// goes to their other computers. False, with why said, when it can't be.
+bool whatRunUses(const QCommandLineParser &parser, ScriptTools::Context &context, std::unique_ptr<Library> &library,
+                 std::optional<AudioDevices> &room) {
+    if (parser.isSet("library")) {
+        library = std::make_unique<Library>(parser.value("library"));
+        QString error;
+        if (!library->open(&error)) {
+            print(stderr, error);
+            return false;
+        }
+        context.library = [&library] { return library.get(); };
+    }
+    const bool testing = parser.isSet("test-microphone");
+    if (!testing && !parser.isSet("allow-microphone"))
+        return true;
+    if (!parser.isSet("library") || !ScriptSession::scratch(Settings(), parser.value("library"))) {
+        print(stderr, "--test-microphone and --allow-microphone are for a scratch library: name one with --library that is "
+                      "none of your own libraries, such as a new folder.");
+        return false;
+    }
+    const auto hears = testing ? TestAudio::microphone(parser.value("test-microphone")) : std::nullopt;
+    if (testing && !hears) {
+        print(stderr, "--test-microphone hears tone, silence, or a WAV file of mono 16-bit samples at 48 kHz.");
+        return false;
+    }
+    if (hears)
+        context.audio = &room.emplace(*hears, [] { return TestAudio::speakers(); });
+    context.microphoneGranted = parser.isSet("allow-microphone");
+    return true;
 }
 
 int runPluginCli(const QStringList &arguments) {
@@ -406,6 +399,9 @@ int runPluginCli(const QStringList &arguments) {
     parser.addOption({"library", "Use the library in this folder instead of the current one.", "folder"});
     parser.addOption({"folder", "Use this plugin folder instead of ~/.config/omabook/plugins.", "folder"});
     parser.addOption({"wait", "How many minutes `run` waits for an answer before giving up; 10 when not given.", "minutes", "10"});
+    parser.addOption({"test-microphone", "run, in a scratch library (--library): the microphone hears this: tone, silence, or a WAV "
+                                         "file of mono 16-bit samples at 48 kHz; what plays goes nowhere.", "sound"});
+    parser.addOption({"allow-microphone", "run, in a scratch library (--library): the plugin may record without asking."});
     parser.addOption({"name", "install: the folder name to install under, instead of the package's own.", "name"});
     parser.addOption({"enable", "install: switch the plugin on at once."});
     parser.addOption({"replace", "install: replace a plugin of the same name, which goes to the trash."});
@@ -436,15 +432,9 @@ int runPluginCli(const QStringList &arguments) {
     context.folder = parser.value("folder");
     context.waitMinutes = parser.value("wait").toDouble();
     std::unique_ptr<Library> library;
-    if (parser.isSet("library")) {
-        library = std::make_unique<Library>(parser.value("library"));
-        QString error;
-        if (!library->open(&error)) {
-            print(stderr, error);
-            return 1;
-        }
-        context.library = [&library] { return library.get(); };
-    }
+    std::optional<AudioDevices> testRoom;
+    if (!whatRunUses(parser, context, library, testRoom))
+        return 1;
     auto finish = [&](const QJsonObject &answer, const QString &text) {
         if (json)
             print(stdout, pretty(answer));
@@ -610,7 +600,7 @@ int runPluginCli(const QStringList &arguments) {
         return name + ": up to date.";
     };
     if (action == "sources") {
-        Session session(context);
+        ScriptSession session(context);
         if (parser.isSet("updates")) {
             if (!QStringList{"auto", "tell", "never"}.contains(parser.value("updates"))) {
                 print(stderr, "Updates are auto (installed by themselves), tell (only said) or never (not checked).");
@@ -767,7 +757,7 @@ int runPluginCli(const QStringList &arguments) {
                                   : words.at(1) + " is no longer updated from " + answer.value("repository").toString() + ". It stays installed.");
     }
     if (action == "token") {
-        Session session(context);
+        ScriptSession session(context);
         if (parser.isSet("forget")) {
             Secrets::shared().forget("github");
             session.settings()->setPluginToken(false);

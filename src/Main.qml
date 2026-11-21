@@ -365,30 +365,12 @@ ApplicationWindow {
             onDropped: (drop) => { if (drop.hasUrls) backend.addUrls(backend.spaces.takeSpaces(drop.urls)) }
         }
 
-        // What just happened, said once at the bottom and dismissed by a click
-        // or by the next thing that happens.
-        Rectangle {
+        // What just happened, said once at the bottom (Toast.qml).
+        Toast {
             id: toast
-            objectName: "toast"
-            visible: backend.message !== ""
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.bottom: parent.bottom
             anchors.bottomMargin: 24
-            width: Math.min(parent.width - 2 * win.dialogEdge, toastText.implicitWidth + 40)
-            height: toastText.implicitHeight + 24
-            radius: theme.radius
-            color: theme.colors.selection
-            border.color: theme.colors.muted
-            Label {
-                id: toastText
-                objectName: "toastText"
-                anchors.centerIn: parent
-                width: Math.min(implicitWidth, toast.width - 40)
-                text: backend.message
-                wrapMode: Text.Wrap
-                horizontalAlignment: Text.AlignHCenter
-            }
-            TapHandler { onTapped: backend.dismissMessage() }
         }
 
         // A Calibre library found on this computer, offered for import.

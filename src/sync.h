@@ -74,6 +74,7 @@ struct SyncSummary {
     int pluginFilesTaken = 0;   // files of plugins' data/ folders that came from there
     int pluginFilesSent = 0;    // the same, that went there
     int pluginFilesHeld = 0;    // the same, kept where they are, over what a plugin may keep (PluginFiles)
+    int pluginFilesOnDemand = 0; // the same, left where they are until a plugin opens them (#135)
     bool dryRun = false;        // nothing was changed; the counts are what would be
     // The titles each count is of, for showing on a terminal (never logged).
     struct Titles {

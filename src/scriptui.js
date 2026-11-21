@@ -79,7 +79,17 @@
                                         function (context) { return launcher.open(context); },
                                         launcher.removed ? function (context) { return launcher.removed(context); } : null);
             },
-            removeLauncher: function (id) { window.removeLauncher(String(id)); }
+            removeLauncher: function (id) { window.removeLauncher(String(id)); },
+            // Said briefly in the window, with a button that acts on it (#135).
+            notify: function (text, options) {
+                need(text, "string", "What to say");
+                options = options || {};
+                if (options.run !== undefined && options.run !== null)
+                    need(options.run, "function", "What the notice's button does");
+                if (options.run && typeof options.action !== "string")
+                    throw new TypeError("A notice that acts says on its button what it does: {action: \"Open\", run: ...}.");
+                window.notify(text, String(options.action || ""), options.run ? function () { return options.run(); } : null);
+            }
         };
     };
 })

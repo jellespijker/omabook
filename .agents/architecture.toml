@@ -64,7 +64,7 @@ modules = [
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
-  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading",
+  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
   "narration",
 ]
@@ -73,7 +73,7 @@ modules = [
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "pluginpackage", "plugintools",
+  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "scriptsession", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
   "kosyncroutes", "opdsroutes", "deviceserver", "koreadersync", "sendbook",

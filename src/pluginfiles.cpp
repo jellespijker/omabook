@@ -194,3 +194,60 @@ bool PluginFiles::take(const Library &library, const QString &plugin, const QStr
             return false;
     return saved.commit();
 }
+
+bool PluginFiles::setOnDemand(const Library &library, const QString &plugin, const QString &path, bool onDemand) {
+    const QString marked = path.endsWith(u'/') ? path.chopped(1) : path;
+    return travels(marked)
+           && PluginData::set(library, {.plugin = plugin, .entity = QString::fromLatin1(demandEntity), .id = marked}, {{"on", onDemand}})
+                  .has_value();
+}
+
+QStringList PluginFiles::onDemand(const Library &library, const QString &plugin) {
+    QStringList marked;
+    for (const auto &thing : PluginData::list(library, plugin, QString::fromLatin1(demandEntity)))
+        if (thing["fields"_L1]["on"_L1].toBool() && travels(thing["id"_L1].toString()))
+            marked << thing["id"_L1].toString();
+    return marked;
+}
+
+bool PluginFiles::isOnDemand(const QStringList &marked, const QString &path) {
+    return std::ranges::any_of(marked, [&path](const QString &one) { return path == one || path.startsWith(one + u'/'); });
+}
+
+namespace {
+
+[[nodiscard]] QString awayFile(const QString &plugins) { return plugins + u"/.elsewhere.json"_s; }
+
+[[nodiscard]] QJsonObject allAway(const QString &plugins) {
+    QFile file(awayFile(plugins));
+    return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject();
+}
+
+} // namespace
+
+PluginFiles::Away PluginFiles::elsewhere(const QString &plugins, const QString &plugin) {
+    Away away;
+    const QJsonObject kept = allAway(plugins).value(plugin).toObject();
+    for (auto it = kept.begin(); it != kept.end(); ++it) {
+        const QJsonObject where = it.value().toObject();
+        if (travels(it.key()) && isHash(where.value("hash"_L1).toString()))
+            away.insert(it.key(), {.hash = where.value("hash"_L1).toString(), .target = where.value("target"_L1).toString(),
+                                   .source = where.value("source"_L1).toString()});
+    }
+    return away;
+}
+
+void PluginFiles::setElsewhere(const QString &plugins, const QString &plugin, const Away &away) {
+    QJsonObject all = allAway(plugins);
+    QJsonObject files;
+    for (auto it = away.cbegin(); it != away.cend(); ++it)
+        files.insert(it.key(), QJsonObject{{"hash", it->hash}, {"target", it->target}, {"source", it->source}});
+    if (files.isEmpty())
+        all.remove(plugin);
+    else
+        all.insert(plugin, files);
+    QSaveFile file(awayFile(plugins));
+    file.setDirectWriteFallback(false);
+    if (QDir().mkpath(plugins) && file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(all).toJson(QJsonDocument::Compact)) > 0)
+        std::ignore = file.commit(); // the next sync says again where what is missing is
+}

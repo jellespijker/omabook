@@ -172,6 +172,63 @@ QString ScriptFiles::usage() {
                                {"plugin", PluginFiles::maxPluginBytes}});
 }
 
+QString ScriptFiles::underData(const QString &path) {
+    const QString real = writable(path);
+    return real.isEmpty() ? QString() : QDir(QFileInfo(m_plugin->m_manifest.dataFolder()).canonicalFilePath()).relativeFilePath(real);
+}
+
+bool ScriptFiles::setOnDemand(const QString &path, bool onDemand) {
+    // The folder is there, so a path in it is judged as one of it.
+    QDir().mkpath(m_plugin->m_manifest.dataFolder());
+    const QString under = underData(path);
+    const Library *library = m_plugin->m_services.library ? m_plugin->m_services.library() : nullptr;
+    if (under.isEmpty() || !library)
+        return false;
+    return PluginFiles::setOnDemand(*library, m_plugin->m_manifest.id, under, onDemand);
+}
+
+QString ScriptFiles::status(const QString &path) {
+    const QString under = allowed(u"files"_s) ? underData(path) : QString();
+    const Library *library = m_plugin->m_services.library ? m_plugin->m_services.library() : nullptr;
+    if (under.isEmpty())
+        return u"null"_s;
+    const QString plugins = QFileInfo(m_plugin->m_manifest.folder).absolutePath();
+    return compact(QJsonObject{
+        {"here", QFileInfo(m_plugin->inside(path, false)).isFile()},
+        {"elsewhere", PluginFiles::elsewhere(plugins, m_plugin->m_manifest.id).contains(under)},
+        {"onDemand", library && PluginFiles::isOnDemand(PluginFiles::onDemand(*library, m_plugin->m_manifest.id), under)}});
+}
+
+void ScriptFiles::fetch(const QString &path, const QJSValue &done) {
+    const QString under = allowed(u"files"_s) ? underData(path) : QString();
+    if (under.isEmpty())
+        return;
+    const auto answer = [plugin = QPointer<ScriptPlugin>(m_plugin), done](bool here, const QString &why) {
+        if (!plugin)
+            return;
+        QString problem;
+        plugin->call(done, {QJSValue(here), QJSValue(why)}, &problem);
+        if (!problem.isEmpty())
+            plugin->report(problem);
+    };
+    if (QFileInfo(m_plugin->inside(path, false)).isFile()) {
+        answer(true, {});
+        return;
+    }
+    if (!m_plugin->m_services.fetchFile) {
+        answer(false, u"\"%1\" isn't here, and nothing here fetches it: it is fetched in the window."_s.arg(path));
+        return;
+    }
+    m_plugin->busy(1);
+    m_plugin->m_services.fetchFile(m_plugin->m_manifest.id, under, [plugin = QPointer<ScriptPlugin>(m_plugin), answer, path](bool here) {
+        if (plugin)
+            plugin->busy(-1);
+        answer(here, here ? QString()
+                          : u"\"%1\" couldn't be fetched: it isn't on the computer this one syncs with, or that one can't be "
+                            "reached now."_s.arg(path));
+    });
+}
+
 QJsonObject ScriptFiles::hold(Held held, const QString &name) {
     held.id = m_next++;
     const QMimeDatabase types;

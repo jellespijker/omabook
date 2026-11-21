@@ -30,7 +30,9 @@ QList<Entry> uiEntries() {
          "has the keyboard. The view sees what a panel sees, and `import Omabook` gives it `InkSurface`, the pen's page "
          "(#78): `bounds()` says where each stroke is (`{id: rect}`, in item pixels; `boundsOf(id)` one), and its "
          "lasso's `selection` the strokes selected (`ids`, `box`, `strokes()` as `{id: base64}` for "
-         "`omabook.recognize.ink`, `select(ids)`), so a plugin never reads the strokes' bytes itself. Omabook sets these on its root item, "
+         "`omabook.recognize.ink`, `select(ids)`), so a plugin never reads the strokes' bytes itself; `hiddenStrokes` and "
+         "`emphasizedStrokes` (ids) hide strokes or draw them in `emphasisColor` (#135), and each `inked` batch is one "
+         "the change log takes. Omabook sets these on its root item, "
          "where it declares them: `beside` (true beside the page), `args` "
          "(what `ui.showView` was given; `{}` from a key). It calls `back()` on it, where there is one, before the view "
          "is closed: answering true means it went back within itself; and `takeFocus()` when the view gets the keyboard. "
@@ -72,6 +74,10 @@ QList<Entry> uiEntries() {
          "off the shelf (Remove), `removed({launcher})` is called and it stays off until the script puts it back; keep "
          "that choice in `settings` and offer the way back. The same `id` again replaces it; at most three a plugin."},
         {"ui.removeLauncher", "ui.removeLauncher(id)", "", "Takes one of the plugin's launchers off the shelf."},
+        {"ui.notify", "ui.notify(text, {action, run})", "",
+         "Says something briefly at the bottom of the window, as Omabook says what it just did: gone at a click or the "
+         "next thing said. With `action` (the words of a button, such as `\"Open\"`) and `run`, a function, the button "
+         "calls `run` once when pressed. Where there is no window (`omabook plugin run`) it is said as `say` says it."},
     };
 }
 

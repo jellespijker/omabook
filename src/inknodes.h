@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QColor>
 #include <QHash>
 #include <QSet>
 #include <QString>
@@ -26,6 +27,16 @@ public:
     // what changes from frame to frame, or was dragged and is let go, is dirty.
     static std::vector<const Ink::Stroke *> shown(const Ink::Sheet &sheet, const Ink::Writing &writing, Ink::Lasso &lasso,
                                                   QSet<QString> &dirty);
+
+    // How single strokes are drawn (#135): some not at all, some in another colour.
+    struct Style {
+        const QSet<QString> &hidden;
+        const QSet<QString> &emphasized;
+        QColor emphasis;
+    };
+    // The strokes shown with `style`: the hidden ones taken out, the
+    // emphasized ones in its colour, as copies kept in `styled`.
+    static void styled(std::vector<const Ink::Stroke *> &strokes, const Style &style, std::vector<Ink::Stroke> &styled);
 
     // The root of the strokes' nodes: `old`, or a new one when the scene graph has none.
     QSGNode *root(QSGNode *old);

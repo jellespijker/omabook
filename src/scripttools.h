@@ -6,6 +6,7 @@
 #include <QStringList>
 #include <functional>
 
+class AudioDevices;
 class Library;
 class Settings;
 
@@ -25,6 +26,10 @@ struct Context {
     Settings *settings = nullptr;       // the settings; the user's when null
     std::function<Library *()> library; // the library; the one the settings name when not given
     double waitMinutes = 10;            // how long `run` waits for an answer before it gives up
+    // What a plugin records from and plays to: the desktop's when null, or a
+    // test's; and a yes to recording given beforehand (#135, ScriptSession::scratch).
+    AudioDevices *audio = nullptr;
+    bool microphoneGranted = false;
 };
 
 // The host API: ScriptApi::json(), with the Markdown beside it.

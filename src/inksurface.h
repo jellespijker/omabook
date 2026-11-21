@@ -40,6 +40,9 @@ class QTabletEvent;
 // ink batch (`inked`), for whoever keeps them; `load` and `apply` take them
 // back, from there or from another computer. Their points are in ink units:
 // `inkScale` item pixels to one, so that book ink can follow a page's zoom.
+// Single strokes can be hidden or stand out (#135), by id, to show what was
+// written at a moment of a recording: only how they are drawn changes, never
+// the strokes, and the pen, the eraser and the lasso still reach them.
 class InkSurface : public QQuickItem {
     Q_OBJECT
     Q_PROPERTY(QColor color READ color WRITE setColor NOTIFY lookChanged)
@@ -70,6 +73,12 @@ class InkSurface : public QQuickItem {
     Q_PROPERTY(bool penNear READ penNear NOTIFY penChanged)
     Q_PROPERTY(bool writing READ writing NOTIFY writingChanged)
     Q_PROPERTY(InkSelection *selection READ selection CONSTANT)
+    // Strokes not drawn, and strokes drawn in `emphasisColor`, by id (#135);
+    // an id of no stroke is kept, for a stroke that comes later.
+    Q_PROPERTY(QStringList hiddenStrokes READ hiddenStrokes WRITE setHiddenStrokes NOTIFY styleChanged)
+    Q_PROPERTY(QStringList emphasizedStrokes READ emphasizedStrokes WRITE setEmphasizedStrokes NOTIFY styleChanged)
+    // Its alpha goes with the stroke's own: a highlighter's stroke stands out see-through.
+    Q_PROPERTY(QColor emphasisColor READ emphasisColor WRITE setEmphasisColor NOTIFY styleChanged)
 
 public:
     enum class Tool { Pen, Eraser, Lasso };
@@ -117,6 +126,12 @@ public:
     [[nodiscard]] bool penNear() const { return m_rules.penNear(); }
     [[nodiscard]] bool writing() const { return !m_writing.empty(); }
     [[nodiscard]] InkSelection *selection() { return &m_selection; }
+    [[nodiscard]] QStringList hiddenStrokes() const { return m_hidden.values(); }
+    void setHiddenStrokes(const QStringList &ids);
+    [[nodiscard]] QStringList emphasizedStrokes() const { return m_emphasized.values(); }
+    void setEmphasizedStrokes(const QStringList &ids);
+    [[nodiscard]] QColor emphasisColor() const { return m_emphasis; }
+    void setEmphasisColor(const QColor &color);
     // Writing, or two fingers moving what is under the surface; or a touch
     // of the event of this moment (its timestamp) was the surface's.
     [[nodiscard]] bool touched(quint64 at = 0) const { return writing() || !m_gesture.isEmpty() || (at != 0 && at == m_touchedAt); }
@@ -162,6 +177,7 @@ signals:
     void strokesChanged();
     void penChanged();
     void writingChanged();
+    void styleChanged();
     // What was done since the last batch, `{"add": {id: base64}, "remove": [id]}`,
     // once the pen pauses: one `omabook.log.add(entity, id, set, batch.add, batch.remove)`.
     // Each is within what one change of the log takes (1000 items, 64 KiB, #76):
@@ -227,6 +243,10 @@ private:
     FingerUse m_fingers = FingerUse::Auto;
     bool m_mouseDraws = true;
     bool m_readOnly = false;
+    QSet<QString> m_hidden, m_emphasized;
+    QColor m_emphasis{0xe0, 0x8a, 0x1e};
+    // The emphasized strokes as the last frame drew them, recoloured.
+    std::vector<Ink::Stroke> m_styled;
 
     // What the next frame redraws: the strokes whose lines changed, and
     // whether any came, went or moved one over another.

@@ -5,6 +5,7 @@
 #include <QJSEngine>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMetaMethod>
 #include <algorithm>
 
 #include "scriptplugin.h"
@@ -109,4 +110,32 @@ void ScriptWindow::registerLauncher(const QString &launcher, const QJSValue &ope
 void ScriptWindow::removeLauncher(const QString &id) {
     if (m_plugin->m_launchers.removeIf([&id](const ScriptPlugin::Launcher &launcher) { return launcher.id == id; }) > 0)
         emit m_plugin->registered();
+}
+
+void ScriptWindow::notify(const QString &text, const QString &action, const QJSValue &run) {
+    const QString said = text.simplified();
+    if (said.isEmpty())
+        return;
+    static const QMetaMethod shown = QMetaMethod::fromSignal(&ScriptPlugin::notified);
+    if (!m_plugin->isSignalConnected(shown)) {
+        emit m_plugin->said(said);
+        return;
+    }
+    const bool acts = run.isCallable() && !action.simplified().isEmpty();
+    const int token = acts ? m_plugin->m_nextToken++ : 0;
+    if (acts) {
+        // A notice is soon gone: only the last few can still be acted on.
+        m_actions.removeIf([token](QHash<int, QJSValue>::iterator kept) { return kept.key() < token - 8; });
+        m_actions.insert(token, run);
+    }
+    emit m_plugin->notified(said, acts ? action.simplified() : QString(), token);
+}
+
+void ScriptWindow::act(int token) {
+    const QJSValue run = m_actions.take(token);
+    if (run.isCallable())
+        m_plugin->invoke(run, QJsonValue(), [this](const QJsonValue &, const QString &problem) {
+            if (!problem.isEmpty())
+                m_plugin->report(problem);
+        });
 }

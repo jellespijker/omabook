@@ -46,8 +46,15 @@ struct ScriptServices {
     // The microphone and speakers, and who records now (#79); without them
     // the desktop's own, with no window to show a recording in.
     AudioDevices *audio = nullptr;
+    // The person said yes to recording before the plugin asked: only for a
+    // test in a scratch library (`omabook plugin run --allow-microphone`, #135).
+    bool microphoneGranted = false;
     // Files the person picks, and the clipboard (#131); none where there is no window.
     ScriptDesk *desk = nullptr;
+    // Fetches an on-demand file of a plugin's (by its path under data/) from
+    // where the last sync saw it (PluginFileSync::fetch), and says whether it
+    // is here then, later or at once; none where nothing can fetch (#135).
+    std::function<void(const QString &plugin, const QString &path, const std::function<void(bool here)> &done)> fetchFile;
 };
 
 // plugin.json of a script plugin (read in scriptmanifest.cpp):
@@ -198,6 +205,8 @@ public:
     void indexWords();
     // What of the plugin's goes into spaces (omabook.sharing).
     ScriptSharing &sharing() { return *m_sharing; }
+    // What it puts in the window: the notices it gives among it (#135).
+    ScriptWindow &window() { return *m_window; }
     // The events the script listens to.
     QStringList events() const;
     // What the script set for its panels.
@@ -256,6 +265,10 @@ signals:
     // The window should show one of the plugin's views (ScriptWindow), or put it away.
     void viewRequested(const QString &view, const QJsonObject &args, bool toggle);
     void viewClosed(const QString &view);
+    // Something said briefly in the window (omabook.ui.notify), with the
+    // words of a button that acts on it (empty for none) and the number
+    // window().act takes for it.
+    void notified(const QString &text, const QString &action, int token);
     // The reader should open this book's file anew and stay where it is:
     // the book grew. 0 is whichever book is open.
     void reloadBookRequested(qint64 id);

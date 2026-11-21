@@ -92,7 +92,8 @@ void ScriptAudio::check(const QString &file) {
 }
 
 void ScriptAudio::ask(const QJSValue &answered) {
-    if (m_consented) {
+    // Said beforehand for a test (ScriptServices::microphoneGranted): neither the desktop nor the person is asked.
+    if (m_consented || m_plugin->m_services.microphoneGranted) {
         answered.call({QJSValue(u"{}"_s)});
         return;
     }

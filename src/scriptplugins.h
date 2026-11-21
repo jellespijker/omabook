@@ -168,6 +168,8 @@ public:
     // The reader's words for the question with this id, or their leaving it.
     Q_INVOKABLE void answer(int id, const QString &text);
     Q_INVOKABLE void dismiss(int id);
+    // The person pressed the button of a plugin's notice.
+    Q_INVOKABLE void act(const QString &plugin, int token);
 
     // Lets everything the scripts started finish (promises, requests,
     // programs), for a caller with no event loop of its own. False when the
@@ -191,6 +193,9 @@ signals:
     // and the view's id, as `panels` has them.
     void viewRequested(const QString &plugin, const QString &view, const QVariantMap &args, bool toggle);
     void viewClosed(const QString &plugin, const QString &view);
+    // A plugin said something briefly (omabook.ui.notify), with a button
+    // that acts on it when `action` isn't empty: act() presses it (#135).
+    void notified(const QString &plugin, const QString &text, const QString &action, int token);
     // What a `request` came to.
     void answered(int id, const QVariant &result, const QString &error);
     void selectedBookChanged();

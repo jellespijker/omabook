@@ -27,11 +27,19 @@ class Library;
 // Held to what a plugin may keep: a file of at most maxFileBytes, and of one
 // plugin's files at most maxPluginBytes, the first by path; what is over stays
 // where it is, unrecorded. settings.json (omabook.settings) stays on its computer.
+//
+// A file, or every file of a folder, may be marked to travel on demand (#135),
+// as a plugin does for large recordings: a sync carries its record and not
+// the file, and the computer that lacks it remembers where it is (elsewhere)
+// and fetches it when the plugin first opens it (PluginFileSync::fetch). The
+// mark is the plugin's, in its space (entity `omabook-on-demand`, by the path
+// or the folder), so it holds on every computer.
 namespace PluginFiles {
 
 inline constexpr qint64 maxFileBytes = qint64{64} * 1024 * 1024;
 inline constexpr qint64 maxPluginBytes = qint64{1024} * 1024 * 1024;
 inline constexpr auto entity = "omabook-file";
+inline constexpr auto demandEntity = "omabook-on-demand";
 
 struct File {
     QString hash;
@@ -71,5 +79,24 @@ int settle(const Library &library, const QString &plugin, const QString &dataFol
 // Puts `file` into the data folder as `path`: only when the log says that
 // path holds its content, and within the limits.
 [[nodiscard]] bool take(const Library &library, const QString &plugin, const QString &dataFolder, const QString &path, const QString &file);
+
+// Marks a path under data/, a file or a folder of them, to travel on demand,
+// or (`onDemand` false) at every sync again. Whether it was written.
+[[nodiscard]] bool setOnDemand(const Library &library, const QString &plugin, const QString &path, bool onDemand);
+// The paths a plugin marked so, and whether a path is one or lies in one.
+[[nodiscard]] QStringList onDemand(const Library &library, const QString &plugin);
+[[nodiscard]] bool isOnDemand(const QStringList &marked, const QString &path);
+
+// Where an on-demand file this computer lacks is: on the computer `target`
+// (as ssh knows it, Remote; empty for the one this computer syncs with), at
+// `source` there, holding `hash`. Kept beside the plugins, in their folder's
+// .elsewhere.json, on this computer alone; by the path under data/.
+struct Elsewhere {
+    QString hash, target, source;
+    bool operator==(const Elsewhere &) const = default;
+};
+using Away = QHash<QString, Elsewhere>;
+[[nodiscard]] Away elsewhere(const QString &plugins, const QString &plugin);
+void setElsewhere(const QString &plugins, const QString &plugin, const Away &away);
 
 } // namespace PluginFiles

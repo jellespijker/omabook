@@ -3,6 +3,13 @@
 // shelf. Kept apart from the rest of Backend, which starts them once.
 
 #include "backend.h"
+
+#include <QCoreApplication>
+#include <QPointer>
+#include <QThreadPool>
+#include <utility>
+
+#include "pluginfilesync.h"
 #include "pluginprivacy.h"
 
 void Backend::startScripts(const QString &pluginFolder) {
@@ -15,10 +22,35 @@ void Backend::startScripts(const QString &pluginFolder) {
     services.network = &m_network;
     services.audio = &m_audio;
     services.desk = &m_pluginDesk;
+    // A file that travels on demand comes from the computer it is on, beside the window (#135).
+    services.fetchFile = [this](const QString &plugin, const QString &path, const std::function<void(bool)> &done) {
+        if (!m_library || !m_scripts) {
+            done(false);
+            return;
+        }
+        QThreadPool::globalInstance()->start([self = QPointer<Backend>(this), root = m_library->root(), plugins = m_scripts->folder(),
+                                              target = m_settings->syncTarget(), ssh = m_ssh, plugin, path, done] {
+            Library library(root);
+            const PluginFileSync::Fetched fetched =
+                library.open() ? PluginFileSync::fetch(library, plugins, plugin, path, target, ssh) : PluginFileSync::Fetched::Failed;
+            const bool here = fetched == PluginFileSync::Fetched::Here || fetched == PluginFileSync::Fetched::Fetched;
+            QMetaObject::invokeMethod(
+                qApp,
+                [self, done, here] {
+                    if (self)
+                        done(here);
+                },
+                Qt::QueuedConnection);
+        });
+    };
     m_scripts = std::make_unique<ScriptPlugins>(services, pluginFolder);
     // The book formats scripts add are read like Omabook's own.
     m_scripts->provideFormats();
     connect(m_scripts.get(), &ScriptPlugins::said, this, &Backend::say);
+    connect(m_scripts.get(), &ScriptPlugins::notified, this, [this](const QString &plugin, const QString &text, const QString &action, int token) {
+        m_notice = {.text = text, .action = action, .plugin = plugin, .token = token};
+        say(text);
+    });
     connect(m_scripts.get(), &ScriptPlugins::touchedLibrary, &m_reloadSoon, qOverload<>(&QTimer::start));
     connect(m_scripts.get(), &ScriptPlugins::changed, this, &Backend::pluginsChanged);
     // What plugins put on the shelf comes and goes with them.
@@ -50,4 +82,11 @@ void Backend::startScripts(const QString &pluginFolder) {
     connect(this, &Backend::revisionChanged, m_scripts.get(), &ScriptPlugins::lookAtTheLog);
     connect(&m_reloadSoon, &QTimer::timeout, m_scripts.get(), &ScriptPlugins::lookAtTheLog);
     QTimer::singleShot(0, m_scripts.get(), [this] { m_scripts->emitEvent("app.started"); });
+}
+
+void Backend::actOnMessage() {
+    const Notice notice = std::exchange(m_notice, {});
+    if (m_scripts && !notice.action.isEmpty() && notice.text == m_message)
+        m_scripts->act(notice.plugin, notice.token);
+    dismissMessage();
 }

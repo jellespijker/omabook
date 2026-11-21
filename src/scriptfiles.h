@@ -46,6 +46,12 @@ public:
     Q_INVOKABLE bool exists(const QString &path);
     Q_INVOKABLE bool remove(const QString &path);
     Q_INVOKABLE QString usage();
+    // On demand (#135): a path under data/ (a file or a folder) marked, or no
+    // longer; what is known of a file, {here, elsewhere, onDemand}; and the
+    // file fetched, `done` given whether it is here then, and why not.
+    Q_INVOKABLE bool setOnDemand(const QString &path, bool onDemand);
+    Q_INVOKABLE QString status(const QString &path);
+    Q_INVOKABLE void fetch(const QString &path, const QJSValue &done);
 
     // `kinds` is JSON; `answered` is given JSON: a list of what hold() describes.
     // Throws at once when the plugin may not ask the person for a file now.
@@ -75,6 +81,8 @@ private:
     [[nodiscard]] bool acting(const QString &what);
     // A path of the plugin's to write, or empty with the script told why.
     [[nodiscard]] QString writable(const QString &path);
+    // The same as the change log names it: under data/, as "pictures/one.png".
+    [[nodiscard]] QString underData(const QString &path);
     // Writes `bytes` as `path`, held to the limits; false with the script told why.
     bool put(const QString &path, const QByteArray &bytes);
     // A handle's description: {id, name, size, type, width, height}.

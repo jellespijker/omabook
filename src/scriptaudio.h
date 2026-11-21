@@ -21,7 +21,8 @@ class ScriptPlugin;
 // letting Omabook use the microphone, and once the person said yes to it in
 // the window (asked the first time it records while it is loaded); and only
 // while the window shows that it records (AudioDevices), where the person
-// can stop it. Where nobody can be asked (a command), it can't record.
+// can stop it. Where nobody can be asked (a command), it can't record,
+// unless the yes was given beforehand for a test in a scratch library (#135).
 class ScriptAudio : public QObject {
     Q_OBJECT
 

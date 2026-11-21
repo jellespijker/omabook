@@ -2,6 +2,8 @@
 
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
+#include <cstdint>
 #include <optional>
 
 #include "library.h"
@@ -14,7 +16,9 @@
 // once, by its hash, and what was removed goes on the side that still has it.
 // Only for a plugin installed on the side that takes the file; the others'
 // wait in the log until it is. Between two Omabooks that speak the log, and
-// never in a dry run.
+// never in a dry run. A file the plugin marked to travel on demand (#135)
+// goes neither way: the side that lacks it remembers where it is, and
+// fetches it once the plugin asks for it (fetch).
 namespace PluginFileSync {
 
 // This computer's side, `omabook sync --plugin-files`: records what each
@@ -34,5 +38,18 @@ struct Sides {
 [[nodiscard]] std::optional<Sides> begin(const Library &library, const Remote &remote, const QString &plugins);
 // Here, once it went: fetches and sends what each side lacks, counted in `summary`.
 void finish(const Library &library, const Remote &remote, const QString &plugins, const Sides &sides, SyncSummary &summary);
+
+// Puts an on-demand file of a plugin's into its data/ folder, from where the
+// last sync saw it (PluginFiles::elsewhere): from the computer it names, or
+// else from `syncTarget`, the one this computer syncs with, through `ssh`
+// (Remote; the system's when empty). It must hold what the log says it does.
+enum class Fetched : std::uint8_t {
+    Here,     // it was here already
+    Fetched,  // it is here now
+    Nowhere,  // nothing says where it is, or there is no computer to ask
+    Failed,   // it didn't arrive whole
+};
+[[nodiscard]] Fetched fetch(const Library &library, const QString &plugins, const QString &plugin, const QString &path,
+                            const QString &syncTarget, const QStringList &ssh = {});
 
 } // namespace PluginFileSync

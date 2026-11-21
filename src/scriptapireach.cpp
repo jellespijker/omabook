@@ -53,6 +53,18 @@ QList<Entry> laterEntries() {
          "Removes a file under the plugin's `data/` folder, and on the person's other computers at their next sync."},
         {"files.usage", "files.usage()", "files",
          "`{used, file, plugin}`: the bytes the `data/` folder holds now, and the most a file and the folder may hold."},
+        {"files.onDemand", "files.onDemand(path, onDemand)", "files",
+         "Marks a file under `data/`, or a folder of them (`\"data/recordings\"`, every file in it now and later), to go "
+         "to the person's other computers only when it is opened there, for large files such as recordings: a sync "
+         "carries what it is and where, not the file. `false` has it go at every sync again. The mark goes to every "
+         "computer. True when it was kept."},
+        {"files.status", "files.status(path)", "files",
+         "`{here, elsewhere, onDemand}` of a file under `data/`: whether it is on this computer, whether the last sync "
+         "saw it on another one to fetch from (an on-demand file this one lacks), and whether it travels on demand."},
+        {"files.fetch", "files.fetch(path)", "files",
+         "A promise of the path once the file is here: at once when it is, else fetched from the computer the last sync "
+         "saw it on (or the one this one syncs with), beside the window. It rejects when it isn't there or that "
+         "computer can't be reached. Fetch an on-demand file before reading or playing it."},
 
         {"run", "run(program, args, {input, timeout})", "run",
          "Starts a program in the plugin's folder; a promise of `{code, stdout, stderr}`. `timeout` is in seconds (30 "

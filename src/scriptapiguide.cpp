@@ -1,5 +1,6 @@
 // The parts of the plugin guide (scriptapi.cpp) on what a plugin makes and
-// keeps: books of its own, and files, the person's among them (#131).
+// keeps: books of its own, and files, the person's among them (#131);
+// and what it writes and records beside a book being read (#137, #135).
 
 #include "scriptapi.h"
 
@@ -94,6 +95,58 @@ None of it goes into a space shared with others.
 
 To hand `omabook plugin run` more than a command line holds, give `-` for
 the JSON and pipe it in: `omabook plugin run notes import - < pages.json`.
+)guide");
+}
+
+QString besideGuide() {
+    return QStringLiteral(R"guide(
+### Writing beside a book, and recording beside it
+
+A plugin that keeps notes beside what is read (a notebook) refers to the
+book by a **passage**, as Omabook keeps a highlight: its words, a few just
+before and after them, and where they are. The words find it again when the
+book's file changes (a new edition, a typo fixed); the place finds it fast.
+
+```js
+const selected = omabook.reader.selection();          // {book, global_id, passage, confidence}, or null
+const here = omabook.passages.make(book.id, {section: 3, fraction: 0.4});      // the words that start there
+const chosen = omabook.passages.make(book.id, {section: 3, fraction: 0.4, quote: "the far pier"});
+const again = omabook.passages.find(book.id, chosen);  // {passage, confidence} in the book as it is now, or null
+omabook.on("reader.selected", function (event) { /* event.passage, null once nothing is selected */ });
+```
+
+A book's number (`id`) is this computer's; what a plugin keeps that travels
+names a book by its `global_id`, which every book it is told of carries
+(`library.list`, the events, `reader.current()`), the same on every computer,
+and `omabook.library.byGlobalId(id)` finds it here. `library.sharedIn(id)`
+says the shared and published spaces a book goes into: beside a book in one,
+write as for others to read, and say nothing past where they read to.
+
+On `InkSurface`, `hiddenStrokes` and `emphasizedStrokes` take stroke ids:
+those strokes are not drawn, or drawn in `emphasisColor`, which is how a
+page shows what was written at a moment of a recording. Only how they are
+drawn changes. Each `inked` batch is one write of the change log
+(`omabook.log.add`): a change too large for one (the lasso moving a whole
+page) comes as several, those that add strokes before those that remove.
+
+`omabook.ui.notify("Recording kept", {action: "Play", run: play})` says
+something briefly at the bottom of the window, with a button.
+
+A recording is large: `omabook.files.onDemand("data/recordings")` keeps the
+recordings on the computer they were made on until another one opens them;
+`omabook.files.status(path)` says whether one is here, and
+`omabook.files.fetch(path)` brings it, a promise of its path:
+
+```js
+omabook.files.fetch(file).then(function () { return omabook.audio.play(file); });
+```
+
+Try recording without a window or a sound card in a **scratch library**, a
+new folder that is none of your own libraries:
+`omabook plugin run notes record --library /tmp/scratch --test-microphone tone --allow-microphone`.
+The microphone hears a tone (or `silence`, or a WAV file of mono 16-bit
+samples at 48 kHz) as fast as a real one would, what plays goes nowhere at
+the speed it would play, and the yes to recording is given beforehand.
 )guide");
 }
 

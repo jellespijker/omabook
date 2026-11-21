@@ -138,6 +138,37 @@ void InkSurface::setReadOnly(bool readOnly) {
     }
 }
 
+void InkSurface::setHiddenStrokes(const QStringList &ids) {
+    const QSet<QString> hidden(ids.cbegin(), ids.cend());
+    if (hidden == m_hidden)
+        return;
+    // Those that come and go are drawn again, in the strokes' order.
+    m_dirty += (hidden - m_hidden) + (m_hidden - hidden);
+    m_hidden = hidden;
+    m_restructured = true;
+    update();
+    emit styleChanged();
+}
+
+void InkSurface::setEmphasizedStrokes(const QStringList &ids) {
+    const QSet<QString> emphasized(ids.cbegin(), ids.cend());
+    if (emphasized == m_emphasized)
+        return;
+    m_dirty += (emphasized - m_emphasized) + (m_emphasized - emphasized);
+    m_emphasized = emphasized;
+    update();
+    emit styleChanged();
+}
+
+void InkSurface::setEmphasisColor(const QColor &color) {
+    if (!color.isValid() || color == m_emphasis)
+        return;
+    m_emphasis = color;
+    m_dirty += m_emphasized;
+    update();
+    emit styleChanged();
+}
+
 void InkSurface::setBatchPause(int milliseconds) {
     if (milliseconds >= 0 && m_batchTimer.interval() != milliseconds) {
         m_batchTimer.setInterval(milliseconds);
@@ -241,7 +272,8 @@ QSGNode *InkSurface::updatePaintNode(QSGNode *old, [[maybe_unused]] UpdatePaintN
     const ThreadClock clock;
     const bool fresh = old == nullptr;
     QSGNode *root = m_nodes->root(old);
-    const std::vector<const Ink::Stroke *> order = InkNodes::shown(m_sheet, m_writing, m_lasso, m_dirty);
+    std::vector<const Ink::Stroke *> order = InkNodes::shown(m_sheet, m_writing, m_lasso, m_dirty);
+    InkNodes::styled(order, {.hidden = m_hidden, .emphasized = m_emphasized, .emphasis = m_emphasis}, m_styled);
     const double pixelRatio = window() != nullptr ? window()->effectiveDevicePixelRatio() : 1.0;
     m_nodes->sync(order, m_dirty, m_restructured || fresh, m_allDirty || fresh,
                   InkNodes::Look{.scale = m_inkScale, .feather = 1.0 / pixelRatio});

@@ -58,7 +58,21 @@
             list: function (folder) { return parse(native.list(String(folder || "."))); },
             exists: function (path) { return native.exists(String(path)); },
             remove: function (path) { return native.remove(String(path)); },
-            usage: function () { return parse(native.usage()); }
+            usage: function () { return parse(native.usage()); },
+            // Large files that travel to one's other computers only when opened there (#135).
+            onDemand: function (path, onDemand) { return native.setOnDemand(aPath(path, "What travels on demand"), onDemand !== false); },
+            status: function (path) { return parse(native.status(aPath(path, "The file"))); },
+            fetch: function (path) {
+                aPath(path, "The file");
+                return new Promise(function (resolve, reject) {
+                    native.fetch(path, function (here, why) {
+                        if (here)
+                            resolve(path);
+                        else
+                            reject(new Error(why));
+                    });
+                });
+            }
         });
         made.ui.pickFile = function (options) {
             options = options || {};

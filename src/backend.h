@@ -39,6 +39,9 @@ class Backend : public QObject {
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
     Q_PROPERTY(QString status READ status NOTIFY busyChanged)
     Q_PROPERTY(QString message READ message NOTIFY messageChanged)
+    // The words of a button that acts on the message, when a plugin's notice
+    // has one (omabook.ui.notify, #135); empty for none.
+    Q_PROPERTY(QString messageAction READ messageAction NOTIFY messageChanged)
     Q_PROPERTY(bool searching READ searching NOTIFY candidatesChanged)
     Q_PROPERTY(QVariantList candidates READ candidates NOTIFY candidatesChanged)
     Q_PROPERTY(QString searchProblem READ searchProblem NOTIFY candidatesChanged)
@@ -138,6 +141,7 @@ public:
     bool busy() const noexcept { return m_jobs > 0; }
     QString status() const noexcept { return m_status; }
     QString message() const noexcept { return m_message; }
+    QString messageAction() const { return m_message == m_notice.text ? m_notice.action : QString(); }
     bool searching() const noexcept { return m_pendingSources > 0; }
     QVariantList candidates() const;
     QString searchProblem() const noexcept { return m_searchProblem; }
@@ -216,6 +220,8 @@ public:
     Q_INVOKABLE void forgetLibrary(const QString &path, bool trash = false);
     Q_INVOKABLE void dismissMessage();
     Q_INVOKABLE void say(const QString &message);
+    // Presses the message's button: its plugin is told, and the message goes.
+    Q_INVOKABLE void actOnMessage();
     // Asks for a reading site's export file to read, or where to write
     // one; the answer is readingFilePicked.
     void pickReadingFile(bool save, const QString &suggested = {});
@@ -313,6 +319,12 @@ private:
     int m_jobs = 0;
     QString m_status;
     QString m_message;
+    // The last notice a plugin gave with a button, while it is the message.
+    struct Notice {
+        QString text, action, plugin;
+        int token = 0;
+    };
+    Notice m_notice;
     qint64 m_pickingFor = 0;
 
     QNetworkAccessManager m_network;

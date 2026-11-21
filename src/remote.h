@@ -17,6 +17,8 @@ public:
     explicit Remote(const QString &target, const QStringList &ssh = {});
 
     QString host() const { return m_host; }
+    // As it was given: "computer" or "computer:library folder".
+    [[nodiscard]] QString target() const { return m_folder.isEmpty() ? m_host : m_host + ':' + m_folder; }
 
     struct Result {
         int code = -1;

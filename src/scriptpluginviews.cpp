@@ -1,11 +1,13 @@
 // What of the plugins the window shows (ScriptPlugins, scriptplugins.h): the
-// panels and views they put there, and what they ask it to show (#77).
+// panels and views they put there, what they ask it to show (#77), and
+// what they say there briefly (#135).
 
 #include <QFileInfo>
 #include <QUrl>
 
 #include "scriptplugin.h"
 #include "scriptplugins.h"
+#include "scriptwindow.h"
 
 QVariantList ScriptPlugins::panels() const {
     QVariantList list;
@@ -34,4 +36,11 @@ void ScriptPlugins::listenToWindow(ScriptPlugin *plugin) {
         emit viewRequested(id, view, args.toVariantMap(), toggle);
     });
     connect(plugin, &ScriptPlugin::viewClosed, this, [this, id](const QString &view) { emit viewClosed(id, view); });
+    connect(plugin, &ScriptPlugin::notified, this,
+            [this, id](const QString &text, const QString &action, int token) { emit notified(id, text, action, token); });
+}
+
+void ScriptPlugins::act(const QString &plugin, int token) {
+    if (ScriptPlugin *running = this->plugin(plugin))
+        running->window().act(token);
 }

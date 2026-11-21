@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QHash>
 #include <QJSValue>
 #include <QObject>
 #include <QString>
@@ -35,6 +36,12 @@ public:
     // `launcher` is JSON: {id, title, author, description, cover}.
     Q_INVOKABLE void registerLauncher(const QString &launcher, const QJSValue &open, const QJSValue &removed);
     Q_INVOKABLE void removeLauncher(const QString &id);
+    // Says something briefly in the window (#135), with a button `action`
+    // that calls `run` when it is given; with no window, it is said as
+    // omabook.say says it.
+    Q_INVOKABLE void notify(const QString &text, const QString &action, const QJSValue &run);
+    // The person pressed the button of the notice with this number; once.
+    void act(int token);
 
 private:
     // The file a panel or view names, as a path in the plugin's folder; empty, with an error thrown, when there is none.
@@ -43,4 +50,6 @@ private:
     void fail(const QString &why);
 
     ScriptPlugin *m_plugin;
+    // What a notice's button calls, by its number; the latest few.
+    QHash<int, QJSValue> m_actions;
 };
