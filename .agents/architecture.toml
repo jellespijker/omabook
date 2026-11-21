@@ -47,6 +47,7 @@ modules = [
   "readinglog", "readingstats", "readinggoal",
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
   "privatebooks",
+  "fileschema",
 ]
 
 [layers.services]

@@ -1,6 +1,7 @@
 #include "libraryschema.h"
 
 #include "annotationschema.h"
+#include "fileschema.h"
 #include "graphindex.h"
 #include "meaningindex.h"
 #include "readinglog.h"
@@ -477,6 +478,10 @@ const QList<QStringList> migrations{
     // A book's text found by what it means (#72, format 40): its stretches,
     // their embeddings and their words, worked out here and never logged.
     MeaningIndex::step(),
+    // The hash a book's file came in with, once its details have been
+    // written into it (#74, format 41): what other libraries still know it
+    // by. Empty for every file of an older library, as it came.
+    FileSchema::originals(),
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
