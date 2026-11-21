@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <initializer_list>
 
+#include "bookpairing.h"
 #include "changelog.h"
 #include "collections.h"
 #include "graphsync.h"
@@ -112,11 +113,19 @@ void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qin
 // its place and its removal are the log's. The keys are a book's with a file
 // too, as an older Omabook makes them of its details: a book without a file
 // there that has one of them is this one, never sent here nor removed there (#58).
-QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files) {
+// What pairs it with a book there it never met (BookPairing, #158) is its
+// title ("pair_title": its details are the log's) and its strong keys no
+// other book here has.
+QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files, const QStringList &pairKeys) {
     const QString cover = library.coverPath(book.id);
-    return {{"id", book.id},  {"gid", Spaces::bookId(library, book.id)},
-            {"files", files}, {"keys", QJsonArray::fromStringList(Library::entryKeys(book))},
-            {"cover", cover}, {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)}};
+    return {{"id", book.id},
+            {"gid", Spaces::bookId(library, book.id)},
+            {"files", files},
+            {"keys", QJsonArray::fromStringList(Library::entryKeys(book))},
+            {"pair_keys", QJsonArray::fromStringList(pairKeys)},
+            {"pair_title", book.meta.title},
+            {"cover", cover},
+            {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)}};
 }
 
 // A book as an Omabook from before the log needs it: everything of it.
@@ -163,6 +172,7 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
     const bool log = peer == ManifestFor::LogPeer;
     ChangeLog::reconcile(library);
     QJsonArray books;
+    const QHash<qint64, QStringList> pairKeys = log ? BookPairing::keysAlone(library) : QHash<qint64, QStringList>();
     for (const Book &book : library.books()) {
         QJsonArray files;
         for (const FormatFile &file : library.formatFiles(book.id)) {
@@ -172,7 +182,7 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
                 listed.insert("original", file.original);
             files << listed;
         }
-        books << (log ? logPeerBook(library, book, files) : olderPeerBook(library, book, files));
+        books << (log ? logPeerBook(library, book, files, pairKeys.value(book.id)) : olderPeerBook(library, book, files));
     }
     QJsonObject manifest{
         {"version", manifestVersion}, {"hlc", Spaces::lastHlc(library)}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books}};
@@ -215,9 +225,16 @@ QJsonObject SyncSummary::toJson() const {
                        {"plugin_files_taken", pluginFilesTaken},
                        {"plugin_files_sent", pluginFilesSent},
                        {"plugin_files_held", pluginFilesHeld},
+                       {"renamed_here", renamedHere},
+                       {"renamed_there", renamedThere},
+                       {"renames_held", renamesHeld},
                        {"dry_run", dryRun},
                        {"problems", list(problems)}};
-    QJsonObject named{{"details_undecided", list(titles.detailsUndecided)}};
+    // The renames and the books kept apart are named whatever the run (#158).
+    QJsonObject named{{"details_undecided", list(titles.detailsUndecided)},
+                      {"renamed_here", list(titles.renamedHere)},
+                      {"renamed_there", list(titles.renamedThere)},
+                      {"apart", list(titles.apart)}};
     if (dryRun)
         named = QJsonObject{{"received", list(titles.received)},
                             {"sent", list(titles.sent)},
@@ -229,7 +246,10 @@ QJsonObject SyncSummary::toJson() const {
                             {"reading_sent", list(titles.readingSent)},
                             {"removed_here", list(titles.removedHere)},
                             {"removed_there", list(titles.removedThere)},
-                            {"details_undecided", list(titles.detailsUndecided)}};
+                            {"details_undecided", list(titles.detailsUndecided)},
+                            {"renamed_here", list(titles.renamedHere)},
+                            {"renamed_there", list(titles.renamedThere)},
+                            {"apart", list(titles.apart)}};
     result.insert("titles", named);
     return result;
 }

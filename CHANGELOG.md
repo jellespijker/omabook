@@ -15,6 +15,8 @@ moves those lines under its version.
 ### Added
 
 - Recordings are written out by voxtype on this computer where it is installed (#146), the speech to text Omarchy ships for dictation, then by whisper.cpp, then by your transcription server; nothing leaves the computer unless you allowed a hosted server for speech and the plugin asked for it. voxtype gives the text without each word's moment, and the transcript says so (`timed`). A transcription server or whisper.cpp you chose before stays first. On Omarchy without voxtype, the settings offer to install it, with its model, in a terminal.
+### Fixed
+- A sync never gives one book's title, authors or ISBN to another (#158). A book is one book on two computers by its id once they are paired; the first time, a book without a file is paired only by an ISBN, Goodreads id or Calibre id that names one book on each side, and only when the titles agree, so Calibre's custom columns and two books with one ISBN pair nothing. A book paired by an identifier is renamed only when asked: a dry run lists the rename, and `omabook sync --accept-renames` (or `--details`) does it. Links an older Omabook recorded between books that are not one are dropped, once, as the library is brought up to date.
 
 ## [0.2.1] - 2026-11-21
 

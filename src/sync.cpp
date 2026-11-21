@@ -22,6 +22,7 @@
 #include "olderpeer.h"
 #include "pluginfilesync.h"
 #include "replication.h"
+#include "spaces.h"
 #include "synclog.h"
 #include "syncmanifest.h"
 #include "synctake.h"
@@ -140,6 +141,18 @@ struct Named {
     return named;
 }
 
+// A book without a file taken from there, which keeps the global id it has
+// there: it is the same book, paired from the start, and never again by its
+// identifiers (#158). An id a book here has already stays that book's.
+[[nodiscard]] Library::Added addTheirs(Library &library, const BookMeta &meta, const QJsonObject &theirs) {
+    const Library::Batch batch(library);
+    const Library::Added added = library.addEntry(meta, theirs.value("paper").toBool());
+    const QString gid = theirs.value("gid").toString();
+    if (added.error.isEmpty() && !gid.isEmpty() && Spaces::localId(library, QStringLiteral("book"), gid) == 0)
+        Spaces::setGlobalId(library, QStringLiteral("book"), added.id, gid);
+    return added;
+}
+
 // Whether the other side has this file: by its hash, or by the one it came in with (#74).
 [[nodiscard]] bool knownThere(const FormatFile &file, const QSet<QString> &theirHashes) {
     return theirHashes.contains(file.hash) || (!file.original.isEmpty() && theirHashes.contains(file.original));
@@ -249,7 +262,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             const QString cover = theirs.value("cover").toString();
             if (!cover.isEmpty() && remote.fetch(cover, scratch.filePath("cover.jpg")))
                 meta.cover = QImageReader(scratch.filePath("cover.jpg")).read();
-            const Library::Added added = library.addEntry(meta, theirs.value("paper").toBool());
+            const Library::Added added = addTheirs(library, meta, theirs);
             if (!added.error.isEmpty()) {
                 summary.problems << added.error;
                 continue;

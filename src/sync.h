@@ -19,17 +19,20 @@
 // a network filesystem (where two writers can corrupt a SQLite file), and a
 // dropped connection leaves both libraries whole.
 //
-// A book is the same book on two computers when they hold a file with the
-// same content, or, for a book without a file, when it has an entry key
-// (identifiers, ISBN, else title and authors) of a book there; never by an
-// empty value, nor by bookkeeping such as "goodreads:synced", which every
-// book to read shares, and a link a rule like that made before is not
-// followed (BookLinks). So one copy
-// there can be two here: an entry without a file (from Goodreads) and the
-// book's file, of one ISBN. The change log then knows the three as one book,
-// and a sync decides its details once, from what both copies here say, and
-// gives both of them what it settles on; the copy with a file speaks for the
-// book, by its cover and its title, on both sides alike (SyncCopies, #154).
+// A book is the same book on two computers when it has the same global id on
+// both, or the change log links the two ids (ADR 0009, #158): once paired, it
+// stays paired by that, and nothing else pairs it again. A book never synced
+// before is paired by a file with the same content, or, without a file, by an
+// identifier of a strong scheme (a valid ISBN, a Goodreads id, a Calibre
+// uuid) that names one book on each side, and only when the two titles agree
+// (BookPairing); a link an older Omabook made between books whose titles
+// disagree is not followed (BookLinks). A book paired on less than its global
+// id (by an identifier) never has its title, authors or ISBN changed by a
+// sync alone: that is a rename, listed by a dry run, and done only with
+// `accept_renames` or `--details` (SyncOptions). A book held twice on one side
+// and once on the other is the book of the one copy that is the same by its
+// id; should the log know all three as one, a sync decides its details once
+// and gives both copies here what it settles on (SyncCopies, #154).
 // Of a book both have, the newer details win (Book::detailsAt).
 // A book removed on one computer is not fetched back to it, and is removed
 // on the other too, to the trash, unless it changed there since. The
@@ -56,6 +59,11 @@ struct SyncOptions {
     // neither (they are only counted), this side's, or the other side's.
     enum class Details { Undecided, Mine, Theirs };
     Details details = Details::Undecided;
+    // Whether a book paired on less than its global id takes the title,
+    // authors or ISBN the other side gives it (a rename), by their time as
+    // the rest of its details. Without it, or `details`, a sync leaves those
+    // as they are and lists the rename (#158).
+    bool acceptRenames = false;
     // Changes nothing on either side, and says what a sync would do.
     bool dryRun = false;
     // The plugins whose data/ files travel (PluginFileSync); the person's when empty.
@@ -74,6 +82,9 @@ struct SyncSummary {
     int removedHere = 0;        // books removed here, as they were there
     int removedThere = 0;       // books removed there, as they were here
     int detailsUndecided = 0;   // books whose details differ with no time to say which are newer
+    int renamedHere = 0;        // books here the other side would rename (#158): renamed with consent, else left
+    int renamedThere = 0;       // the same there, as this side would rename them
+    int renamesHeld = 0;        // of those, the ones left as they are, for want of consent
     int collectionsTaken = 0;   // collections that changed there last, brought here
     int collectionsSent = 0;    // collections that changed here last, brought there
     int graphTaken = 0;         // things, facts and relations of the knowledge graph new here
@@ -88,8 +99,11 @@ struct SyncSummary {
     bool dryRun = false;        // nothing was changed; the counts are what would be
     // The titles each count is of, for showing on a terminal (never logged).
     struct Titles {
-        QStringList received, sent, placesTaken, placesSent, detailsTaken, detailsSent, readingTaken, readingSent,
-            removedHere, removedThere, detailsUndecided;
+        QStringList received, sent, placesTaken, placesSent, detailsTaken, detailsSent, readingTaken, readingSent, removedHere,
+            removedThere, detailsUndecided, renamedHere, renamedThere;
+        // Books kept apart: they share an identifier but not a title, or an
+        // older Omabook linked them as one when they are not (#158).
+        QStringList apart;
     } titles;
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all
