@@ -200,8 +200,12 @@ public:
     // a server of one's own ("openai"), one that is older with "auto".
     QString aiProvider() const;
     // Also the provider of answers and quick in `capabilities`, with hosted
-    // allowed for them: chosen in the settings is chosen for them (ADR 0008).
+    // allowed for them: chosen on the command line (`ai use`) is chosen for
+    // them, as it always sent the text there (ADR 0008).
     void setAiProvider(const QString &provider);
+    // The same without a word about hosted: the AI page (#144), where
+    // whether it may be hosted is a choice of its own.
+    void chooseAiProvider(const QString &provider);
     // Off: nothing is asked of any model, on whatever server (#133): no
     // answers, no recognition, no embeddings.
     bool aiOff() const { return aiProvider() == "off"; }
@@ -224,7 +228,10 @@ public:
     // chosen for it, which addresses are one's own, and whether a hosted
     // server may be sent them at all; see RecognitionRoute.
     QJsonObject recognition() const { return m_values.value("recognition").toObject(); }
-    // Its "hosted" is also handwriting's and speech to text's in `capabilities`.
+    // Its "hosted" is also handwriting's and speech to text's in `capabilities`,
+    // when it is what changed (the command line, or an older Omabook, switched
+    // it): anything else set here leaves each capability's own choice alone.
+    // So for the meaning index's and reading aloud's.
     void setRecognition(const QJsonObject &chosen);
     bool recognitionHosted() const { return recognition().value("hosted").toBool(false); }
     void setRecognitionHosted(bool on) {

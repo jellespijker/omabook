@@ -72,7 +72,7 @@ ApplicationWindow {
     property bool touchSeen: false
     readonly property bool touch: touchscreen || touchSeen
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
-                                       || libraries.opened || pluginList.opened || pluginAsk.opened
+                                       || libraries.opened || pluginList.opened || pluginAsk.opened || aiSettings.opened
                                        || tidyUp.opened || readingStats.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
                                        || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
@@ -136,6 +136,7 @@ ApplicationWindow {
         else library.resizePane(steps)
     }
     function showSettings() { prefs.open() }
+    function showAiSettings() { aiSettings.open() }
     function showHelp() { help.show() }
     // The tour of the window ("tour"), or of what a release brought ("news"
     // since the version last seen, "allnews" for the newest again).
@@ -443,6 +444,7 @@ ApplicationWindow {
     PublishDialog { id: publishing }
     SubscribeDialog { id: subscribing }
     ReadingSitesDialog { id: readingSites }
+    AiSettingsDialog { id: aiSettings }
     ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }
     AskDialog {

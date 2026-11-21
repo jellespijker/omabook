@@ -326,25 +326,39 @@ QString Settings::aiProvider() const {
 }
 
 void Settings::setAiProvider(const QString &provider) {
+    chooseAiProvider(provider);
+    if (provider != "off")
+        followInCapabilities({Capability::Answers, Capability::Quick}, {{"hosted", true}});
+}
+
+void Settings::chooseAiProvider(const QString &provider) {
     set("ai_provider", provider);
     if (provider != "off")
-        followInCapabilities({Capability::Answers, Capability::Quick},
-                             {{"provider", Capabilities::providerFor(provider)}, {"hosted", true}});
+        followInCapabilities({Capability::Answers, Capability::Quick}, {{"provider", Capabilities::providerFor(provider)}});
 }
 
 void Settings::setRecognition(const QJsonObject &chosen) {
+    const bool was = recognitionHosted();
     set("recognition", chosen);
-    followInCapabilities({Capability::Handwriting, Capability::SpeechToText}, {{"hosted", chosen.value("hosted").toBool(false)}});
+    if (recognitionHosted() != was)
+        followInCapabilities({Capability::Handwriting, Capability::SpeechToText}, {{"hosted", recognitionHosted()}});
 }
 
 void Settings::setMeaning(const QJsonObject &chosen) {
+    const bool was = meaningHosted();
     set("meaning", chosen);
-    followInCapabilities({Capability::Embeddings}, {{"hosted", chosen.value("hosted").toBool(false)}});
+    if (meaningHosted() != was)
+        followInCapabilities({Capability::Embeddings}, {{"hosted", meaningHosted()}});
 }
 
 void Settings::setReadAloud(const QJsonObject &chosen) {
+    const bool was = readAloud().value("hosted").toBool(false);
     set("read_aloud", chosen);
-    followInCapabilities({Capability::TextToSpeech}, {{"hosted", chosen.value("hosted").toBool(false)}});
+    // The engine is text to speech's provider (ADR 0008), set up here.
+    QJsonObject fields{{"provider", chosen.value("engine").toString("auto")}};
+    if (chosen.value("hosted").toBool(false) != was)
+        fields.insert("hosted", chosen.value("hosted").toBool(false));
+    followInCapabilities({Capability::TextToSpeech}, fields);
 }
 
 void Settings::followInCapabilities(std::initializer_list<Capability> which, const QJsonObject &fields) {

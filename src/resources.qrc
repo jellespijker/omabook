@@ -116,6 +116,11 @@
         <file alias="InkThumb.qml">InkThumb.qml</file>
         <file alias="AnnotationsList.qml">AnnotationsList.qml</file>
         <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
+        <file alias="AiSettingsDialog.qml">AiSettingsDialog.qml</file>
+        <file alias="AiCapabilityRow.qml">AiCapabilityRow.qml</file>
+        <file alias="AiProviderChoice.qml">AiProviderChoice.qml</file>
+        <file alias="AiServerSetup.qml">AiServerSetup.qml</file>
+        <file alias="AiAnswersSetup.qml">AiAnswersSetup.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>

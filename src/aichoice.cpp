@@ -310,7 +310,10 @@ QJsonObject Ai::describe(const Settings &settings, const QString &defaultsFile) 
 }
 
 AiAgent::AiAgent(Settings *settings, const QString &defaultsFile, QObject *parent)
-    : QObject(parent), m_settings(settings), m_file(defaultsFile.isEmpty() ? Ai::omarchyDefaultFile() : defaultsFile) {
+    : QObject(parent), m_settings(settings), m_file(defaultsFile.isEmpty() ? Ai::omarchyDefaultFile() : defaultsFile),
+      m_rows(settings, m_file) {
+    // Omarchy's default agent changing changes who answers.
+    connect(this, &AiAgent::changed, &m_rows, &AiCapabilityRows::refresh);
     m_debounce.setSingleShot(true);
     m_debounce.setInterval(80);
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_debounce.start(); });

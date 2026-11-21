@@ -129,9 +129,16 @@ void addVoxtype(const Settings &settings, Speech &speech) {
 
 // voxtype, whisper.cpp, then the server (ADR 0008); where the person chose
 // one of the others, as they always went, and voxtype after them.
+// A way chosen alone on the AI page (#144) is the only one: "voxtype" or
+// "whisper.cpp"; "server" puts the server first, as one chosen before did.
 [[nodiscard]] std::expected<Ways, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
     Speech speech;
-    if (chosenBefore(settings)) {
+    const QString provider = AiPrivacy::chosen(settings, Capability::SpeechToText).value("provider"_L1).toString();
+    if (provider == "voxtype"_L1) {
+        addVoxtype(settings, speech);
+    } else if (provider == "whisper.cpp"_L1) {
+        addWhisper(settings, speech);
+    } else if (provider == "server"_L1 || chosenBefore(settings)) {
         addServer(settings, hostedAsked, speech);
         addWhisper(settings, speech);
         addVoxtype(settings, speech);

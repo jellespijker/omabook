@@ -196,3 +196,22 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   without transcription does.
 - **Installing it on Omarchy** is `omarchy-pkg-add voxtype-bin` and `voxtype setup --download` in a
   floating terminal (#156's), not Omarchy's dictation install, which would also make it the dictation.
+
+## As built in #144
+
+- **The AI page** (`AiSettingsDialog.qml`, a row per capability, its model `AiCapabilityRows`) shows each
+  capability's status from the registry, its `why` worded in the window with what to do, and its choices.
+- **Hosted is chosen in each row, never with a provider.** Choosing an AI on the page sets `ai_provider`
+  and answers' and quick's `provider` and allows nothing (`Settings::chooseAiProvider`); `omabook ai use`
+  still allows it for answers and quick, as typing it always sent the text there. The older keys'
+  `hosted` (`recognition`, `meaning`, `read_aloud`) are written only as far as every capability they
+  stand for allows it, and are followed in `capabilities` only when they are what changed.
+- **Models and providers' set-up stay in their keys**, as #143 left them: each provider is set up once and
+  an older Omabook on the same file reads them, and answers' and quick's models are each provider's own
+  (`ai_models`), kept for when it is chosen again. `capabilities` gains a `provider` where the page offers a
+  choice: speech to text (`"server"`, a transcription server then whisper.cpp, or `"whisper.cpp"` alone,
+  which the registry follows) and text to speech (the `read_aloud` engine, followed there). Handwriting has
+  the AI server only, and embeddings a server (the AI server unless an address is given), until Gemini,
+  voxtype and more voices come (#145 to #147): each is an id more in the row's `offered`.
+- **AI Off** is a switch at the top of the page; on again, answers come back to the provider
+  `capabilities` kept for them.

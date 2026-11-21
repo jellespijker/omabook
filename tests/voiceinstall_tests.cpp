@@ -165,7 +165,7 @@ private slots:
         QVERIFY(VoiceInstall::offered(VoiceInstall::Kind::Voxtype));
     }
 
-    // On Omarchy without voxtype, the settings offer it; installed with its
+    // On Omarchy without voxtype, the AI page offers it; installed with its
     // model in the terminal, once that is closed it is what hears recordings,
     // said with what it doesn't give.
     void voxtypeIsOfferedInTheSettings() {
@@ -174,8 +174,10 @@ private slots:
         QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
         SpeechInstall *speech = desk.backend->speech();
         QVERIFY(speech->installable());
-        desk.call("showSettings");
+        // In speech to text's row of the AI page (#144).
+        desk.call("showAiSettings");
         QVERIFY(desk.waitForPopup());
+        desk.find("aiSettings")->setProperty("current", QString("speech-to-text"));
         QTRY_VERIFY(desk.shows("speechInstall"));
         desk.shot("speech-install");
         QVERIFY(omarchy.calls().isEmpty());

@@ -15,6 +15,7 @@
 #include <optional>
 
 #include "aicapability.h"
+#include "aicapabilityrows.h"
 #include "failure.h"
 
 class QNetworkReply;
@@ -376,6 +377,8 @@ class AiAgent : public QObject {
     Q_PROPERTY(bool omarchyLocal READ omarchyLocal NOTIFY changed)
     Q_PROPERTY(QStringList elsewhereModels READ elsewhereModels NOTIFY changed)
     Q_PROPERTY(QString modelsProblem READ modelsProblem NOTIFY changed)
+    // The AI page's row per capability (#144).
+    Q_PROPERTY(AiCapabilityRows *capabilities READ capabilities CONSTANT)
 
 public:
     explicit AiAgent(Settings *settings, const QString &defaultsFile = {}, QObject *parent = nullptr);
@@ -413,6 +416,7 @@ public:
     Q_INVOKABLE QString setServerKey(const QString &key);
 
     std::unique_ptr<AiProvider> makeProvider(QString *why = nullptr) const;
+    AiCapabilityRows *capabilities() { return &m_rows; }
 
 signals:
     void changed();
@@ -433,4 +437,5 @@ private:
     int m_listing = 0; // which listing is the latest, so an older one's answer is dropped
     QFileSystemWatcher m_watcher;
     QTimer m_debounce;
+    AiCapabilityRows m_rows;
 };

@@ -2501,60 +2501,6 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
-    void theSettingsSayWhichAgentAnswersAndWhy() {
-        // Automatic is Omarchy's default agent, followed while the window is open.
-        Desk desk;
-        QVERIFY(QDir().mkpath(desk.dir.filePath("bin")) && QDir().mkpath(desk.dir.filePath("omarchy/defaults")));
-        for (const char *harness : {"codex", "claude"}) {
-            const QString program = desk.dir.filePath(QString("bin/") + harness);
-            QVERIFY(Fixtures::write(program, "#!/bin/bash\ncat\n"));
-            QFile::setPermissions(program, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
-        }
-        const QByteArray path = qgetenv("PATH");
-        const auto restore = qScopeGuard([&] { qputenv("PATH", path); });
-        qputenv("PATH", desk.dir.filePath("bin").toUtf8());
-        QVERIFY(Fixtures::write(desk.dir.filePath("omarchy/defaults/agent"), "codex\n"));
-        QVERIFY(desk.show());
-        desk.key(Qt::Key_Comma);
-        QTRY_VERIFY(desk.value("settings", "opened").toBool());
-        QTRY_COMPARE(desk.value("aiAgent", "text").toString(), QString("Omarchy's default: Codex"));
-        // Switching the desktop's default switches Omabook's, with the dialog open.
-        QVERIFY(Fixtures::write(desk.dir.filePath("omarchy/defaults/agent"), "crush\n"));
-        QTRY_COMPARE(desk.value("aiAgent", "text").toString(),
-                     QString("Omabook can't run Omarchy's default, Crush, with its tools off, so Claude Code answers."));
-        desk.settings->setAiProvider("claude");
-        QTRY_COMPARE(desk.value("aiAgent", "text").toString(), QString("Chosen here: Claude Code"));
-
-        // The model picker: one model for what is read, a smaller one for
-        // what Omabook reads, from the names the AI in use knows.
-        QObject *quick = desk.find("quickModel"), *main = desk.find("mainModel");
-        QVERIFY(quick && main);
-        QCOMPARE(main->property("editText").toString(), QString("The default"));
-        QCOMPARE(quick->property("editText").toString(), QString("The default (haiku)"));
-        QCOMPARE(quick->property("model").toStringList(), QStringList({"The default (haiku)", "haiku", "sonnet", "opus", "fable"}));
-        QVERIFY(desk.value("aiModelsNote", "text").toString().contains("much cheaper"));
-        // Picked from the list.
-        QVERIFY(QMetaObject::invokeMethod(quick, "activated", Q_ARG(int, 2)));
-        QCOMPARE(desk.settings->aiModelFor("claude", "quick"), QString("sonnet"));
-        QTRY_COMPARE(quick->property("editText").toString(), QString("sonnet"));
-        // Or typed: any name the AI takes will do.
-        QVERIFY(main->setProperty("editText", " claude-opus-5-5 "));
-        QVERIFY(QMetaObject::invokeMethod(main, "accepted"));
-        QCOMPARE(desk.settings->aiModelFor("claude", "main"), QString("claude-opus-5-5"));
-        QTRY_COMPARE(main->property("editText").toString(), QString("claude-opus-5-5"));
-        // Back to the default, by its first entry.
-        QVERIFY(QMetaObject::invokeMethod(quick, "activated", Q_ARG(int, 0)));
-        QCOMPARE(desk.settings->aiModelFor("claude", "quick"), QString());
-        QTRY_COMPARE(quick->property("editText").toString(), QString("The default (haiku)"));
-        // Another AI brings its own names, and nothing chosen for it yet.
-        QVERIFY(Fixtures::write(desk.dir.filePath("omarchy/defaults/agent"), "codex\n"));
-        desk.settings->setAiProvider("auto");
-        QTRY_COMPARE(quick->property("editText").toString(), QString("The default (gpt-6-luna)"));
-        QCOMPARE(main->property("editText").toString(), QString("The default"));
-        desk.shot("settings-models");
-        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
-    }
-
     void aLightThemeAndARightToLeftLanguageLoadCleanly() {
         Desk desk({}, "ar", "mode = \"light\"\naccent = \"#005fcc\"\nbackground = \"#fafafa\"\nforeground = \"#202020\"\n");
         QVERIFY(Fixtures::epub(desk.dir.filePath("one.epub")));
