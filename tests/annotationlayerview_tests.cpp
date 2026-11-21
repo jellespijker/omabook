@@ -9,6 +9,7 @@
 // drawn over the pages of a PDF in their colour, as far as the reader has
 // read and no more strokes than an annotation may have.
 
+#include <QDateTime>
 #include <QtTest>
 #include <algorithm>
 
@@ -18,6 +19,7 @@
 #include "desk.h"
 #include "graph.h"
 #include "inksurface.h"
+#include "pageformat.h"
 #include "person.h"
 #include "plugindata.h"
 #include "publishedspace.h"
@@ -138,6 +140,27 @@ void scrollToMark(Desk &desk) {
 
 [[nodiscard]] QList<QQuickItem *> shownCards(Desk &desk) { return shownItems(desk, "othersNote"); }
 
+// Empty once `wanted` cards stand; else what the page was like, and a picture of it (#132).
+[[nodiscard]] QString cardsStand(Desk &desk, int wanted) {
+    if (QTest::qWaitFor([&] { return shownCards(desk).size() == wanted; }, 5000))
+        return {};
+    const QObject *notes = desk.find("readingNotes");
+    const auto *layer = notes != nullptr ? notes->property("others").value<AnnotationLayerView *>() : nullptr;
+    // Not in the desk's own folder, which goes with the desk.
+    const QString folder = qEnvironmentVariable("OMABOOK_SHOTS", QDir::tempPath());
+    const QString picture = folder + QString("/cards-%1.png").arg(QDateTime::currentMSecsSinceEpoch());
+    desk.window->grabWindow().save(picture);
+    return QString("%1 cards, not %2; beside %3, note width %4, the layer's count %5, window %6x%7; the page is in %8")
+        .arg(shownCards(desk).size())
+        .arg(wanted)
+        .arg(notes != nullptr && notes->property("beside").toBool())
+        .arg(desk.reader->format()->noteWidth())
+        .arg(layer != nullptr ? layer->count() : -1)
+        .arg(desk.window->width())
+        .arg(desk.window->height())
+        .arg(picture);
+}
+
 [[nodiscard]] QQuickItem *within(QQuickItem *item, const QString &name) {
     QList<QQuickItem *> items{item};
     while (!items.isEmpty()) {
@@ -225,7 +248,7 @@ private slots:
         desk.quicken();
         QVERIFY(desk.resize(QSize(1440, 900)));
         QVERIFY(open(desk, ids.first(), ada.section));
-        QTRY_COMPARE(shownCards(desk).size(), 2);
+        if (const QString why = cardsStand(desk, 2); !why.isEmpty()) QFAIL(qPrintable(why));
         QVERIFY(shownItems(desk, "othersNoteMark").isEmpty()); // they stand in the column
         QVERIFY(desk.resize(QSize(560, 800)));
         QTRY_VERIFY(!desk.find("readingNotes")->property("beside").toBool());
@@ -346,7 +369,7 @@ private slots:
         QVERIFY(desk.resize(QSize(1440, 900)));
         QVERIFY(open(desk, ids.first(), ada.section));
         AnnotationLayerView *layer = layerOf(desk);
-        QTRY_COMPARE(shownCards(desk).size(), 2);
+        if (const QString why = cardsStand(desk, 2); !why.isEmpty()) QFAIL(qPrintable(why));
         QVERIFY(layer);
         QCOMPARE(layer->count(), 3); // two notes and the highlight; the note far on is past the reader
         QCOMPARE(layer->people().size(), 1);
@@ -365,14 +388,14 @@ private slots:
 
         // Ada's off, then everyone's: nothing of hers is left on the page.
         layer->setPersonShown(ada.id, false);
-        QTRY_COMPARE(shownCards(desk).size(), 0);
+        if (const QString why = cardsStand(desk, 0); !why.isEmpty()) QFAIL(qPrintable(why));
         layer->setPersonShown(ada.id, true);
-        QTRY_COMPARE(shownCards(desk).size(), 2);
+        if (const QString why = cardsStand(desk, 2); !why.isEmpty()) QFAIL(qPrintable(why));
         layer->setShown(false);
-        QTRY_COMPARE(shownCards(desk).size(), 0);
+        if (const QString why = cardsStand(desk, 0); !why.isEmpty()) QFAIL(qPrintable(why));
         QTRY_VERIFY(shownItems(desk, "othersHighlightRect").isEmpty());
         layer->setShown(true);
-        QTRY_COMPARE(shownCards(desk).size(), 2);
+        if (const QString why = cardsStand(desk, 2); !why.isEmpty()) QFAIL(qPrintable(why));
 
         // Her note kept as a fact of the lantern keeper, in the book's graph.
         const QVariantList notes = layer->notesIn(desk.item("flowText")->property("textDocument").value<QQuickTextDocument *>());
