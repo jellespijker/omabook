@@ -46,6 +46,7 @@ modules = [
   "booksearch", "annotationwords", "meaningindex",
   "readinglog", "readingstats", "readinggoal",
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
+  "privatebooks",
 ]
 
 [layers.services]
@@ -60,7 +61,7 @@ modules = [
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
-  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles",
+  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy",
 ]
 
 [layers.operations]

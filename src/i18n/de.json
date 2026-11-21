@@ -2044,5 +2044,14 @@
   "Choose Files": "Dateien auswählen",
   "Choose a File": "Eine Datei auswählen",
   "The files it takes": "Die Dateien, die es nimmt",
-  "the clipboard, right after you use it": "die Zwischenablage, gleich nachdem du es benutzt"
+  "the clipboard, right after you use it": "die Zwischenablage, gleich nachdem du es benutzt",
+  "%1 goes in, as you chose, though %2 keeps its books private.": "%1 kommt hinein, wie du es gewählt hast, obwohl %2 seine Bücher privat hält.",
+  "%1 is in the collection, but %2 keeps its books private, so it stays out.": "%1 ist in der Sammlung, aber %2 hält seine Bücher privat, also bleibt es draußen.",
+  "%1 is not a book a plugin keeps private, so it goes into the spaces it is in already.": "%1 ist kein Buch, das ein Plugin privat hält; es kommt also schon in die Räume, in denen es ist.",
+  "%1 matches the collection's rule, but %2 keeps its books private, so it stays out.": "%1 passt zur Regel der Sammlung, aber %2 hält seine Bücher privat, also bleibt es draußen.",
+  "Keep it private": "Privat halten",
+  "Kept private": "Privat gehalten",
+  "Share %1 in the spaces it is in? Its details go to everyone they reach, and as their parts say, its file and what you know and wrote of it. You can keep it private again; what others have of it by then stays theirs.": "%1 in den Räumen teilen, in denen es ist? Seine Angaben gehen an alle, die sie erreichen, und je nach ihren Teilen auch seine Datei und was du darüber weißt und geschrieben hast. Du kannst es wieder privat halten; was andere bis dahin davon haben, bleibt ihres.",
+  "Share it": "Teilen",
+  "Share it…": "Teilen…"
 }

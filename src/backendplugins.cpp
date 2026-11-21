@@ -3,6 +3,7 @@
 // shelf. Kept apart from the rest of Backend, which starts them once.
 
 #include "backend.h"
+#include "pluginprivacy.h"
 
 void Backend::startScripts(const QString &pluginFolder) {
     // The script plugins start once there is a library for them to read.
@@ -33,6 +34,13 @@ void Backend::startScripts(const QString &pluginFolder) {
     connect(m_pluginManager.get(), &PluginManager::touched, this, &Backend::pluginsChanged);
     // A plugin that updated itself, or went back a version, says so once.
     connect(m_pluginManager.get(), &PluginManager::said, this, &Backend::say);
+    // What the plugins keep private is said in the library, where it stays once said (#127).
+    const auto keepPrivate = [this] {
+        if (m_library)
+            PluginPrivacy::record(*m_library, m_scripts->folder());
+    };
+    keepPrivate();
+    connect(m_scripts.get(), &ScriptPlugins::changed, this, keepPrivate);
     if (m_library)
         m_scripts->libraryChanged(m_library->books(), libraryPath());
     // A plugin hears of its data that came from elsewhere: after the window's

@@ -2044,5 +2044,14 @@
   "Choose Files": "Bestanden kiezen",
   "Choose a File": "Een bestand kiezen",
   "The files it takes": "De bestanden die het aanneemt",
-  "the clipboard, right after you use it": "het klembord, net nadat je het gebruikt"
+  "the clipboard, right after you use it": "het klembord, net nadat je het gebruikt",
+  "%1 goes in, as you chose, though %2 keeps its books private.": "%1 gaat erin, zoals je koos, al houdt %2 zijn boeken privé.",
+  "%1 is in the collection, but %2 keeps its books private, so it stays out.": "%1 zit in de collectie, maar %2 houdt zijn boeken privé, dus het blijft erbuiten.",
+  "%1 is not a book a plugin keeps private, so it goes into the spaces it is in already.": "%1 is geen boek dat een plug-in privé houdt, dus het gaat al mee in de ruimtes waarin het zit.",
+  "%1 matches the collection's rule, but %2 keeps its books private, so it stays out.": "%1 past bij de regel van de collectie, maar %2 houdt zijn boeken privé, dus het blijft erbuiten.",
+  "Keep it private": "Privé houden",
+  "Kept private": "Privé gehouden",
+  "Share %1 in the spaces it is in? Its details go to everyone they reach, and as their parts say, its file and what you know and wrote of it. You can keep it private again; what others have of it by then stays theirs.": "%1 delen in de ruimtes waarin het zit? De gegevens gaan naar iedereen die ze bereiken, en naargelang hun onderdelen ook het bestand en wat je erover weet en schreef. Je kunt het weer privé houden; wat anderen er dan al van hebben, blijft van hen.",
+  "Share it": "Delen",
+  "Share it…": "Delen…"
 }

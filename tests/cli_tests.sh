@@ -154,7 +154,10 @@ expect "spaces is in the help" 0 "spaces [create|invite" "$omabook" help
 # Its help is its usage, once, as collections --help is (#52).
 [ "$("$omabook" spaces --help | grep -c "Usage:")" = 1 ] || fail "spaces --help does not print exactly one usage line"
 "$omabook" spaces --help | grep -q "â" && fail "spaces --help is garbled: its UTF-8 was read as Latin-1"
-expect "spaces --help ends its usage line with an ellipsis" 0 "fetch] …" "$omabook" spaces --help
+expect "spaces --help ends its usage line with an ellipsis" 0 "private] …" "$omabook" spaces --help
+# The books plugins keep private (#127): none here, and a book that isn't one is not chosen for.
+expect "no plugin keeps its books private" 0 "No plugin keeps its books private." "$omabook" spaces private --library "$work/Ada"
+expect "only a private book is chosen for" 1 "There is no book 9999" "$omabook" spaces private 9999 share --library "$work/Ada"
 
 expect "the plugins are listed" 0 "builtin:Open Library" "$omabook" plugins
 expect "the plugins say what they bring" 0 '"fields"' "$omabook" plugins --json

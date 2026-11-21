@@ -76,6 +76,10 @@ _Avoid_: Shared highlights, overlay
 What a space holds beyond its collection and its books, switched on by name: its graph, questions, ratings, reading, files and annotations. What is one's own is off until one switches it on (`SpaceParts`).
 _Avoid_: Section, feature, scope (for this meaning)
 
+**Private book**:
+A book of a kind its plugin keeps the person's own (a notebook, `"private"` in its plugin.json): in their own collections and on their own computers, and in no shared or published space unless they let that one book go (`PrivateBooks`).
+_Avoid_: Hidden book, secret book, personal book
+
 **Place**:
 A point in a book in the book's own terms: its section (a chapter, or a page of a PDF or comic) and how far into it, so it is the same text in any window. Where a book was read to, where the graph met a thing, and where a bookmark is are all places (`BookPlace`).
 _Avoid_: Position (alone), location, offset

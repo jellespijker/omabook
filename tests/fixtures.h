@@ -9,6 +9,9 @@
 #include <QPair>
 #include <QString>
 #include <QStringList>
+#include <QtTypes>
+
+class Library;
 
 namespace Fixtures {
 
@@ -60,6 +63,12 @@ bool calibreChange(const QString &folder, const QStringList &statements);
 // current one), and holds three installed plugins (a metadata source, a file
 // type plugin that is switched off in Calibre, and a device driver).
 bool calibreConfig(const QString &folder, const QStringList &libraries);
+
+// A notebook as the notebooks plugin keeps one (#127): a book in a format of
+// its own (.omanotebook), written in `folder` and added to `library` as the
+// plugin's format takes it in, and that kind of book kept private, as the
+// plugin's plugin.json says. Its number; 0 when it couldn't be added.
+qint64 privateNotebook(Library &library, const QString &folder, const QString &title);
 
 // A program for the tests to run: a shell script at `path`.
 QString script(const QString &path, const QByteArray &body);

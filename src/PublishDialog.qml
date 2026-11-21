@@ -23,6 +23,9 @@ AppPopup {
     readonly property bool counted: seen.collection === collectionId && seen.path !== undefined
     readonly property string problem: seen.collection === collectionId ? (seen.error || "") : ""
     readonly property bool firstTime: counted && (seen.name || "") === ""
+    // The books a plugin keeps private, and the one being asked about.
+    readonly property var kept: seen.kept || []
+    property var asking: null
     readonly property bool canPublish: counted && problem === "" && !backend.spaces.working && (file.text.trim() !== "" || asLink.checked)
                                        && (!firstTime || name.text.trim() !== "")
     readonly property var parts: ({ graph: graph.checked, questions: questions.checked, ratings: ratings.checked, reading: reading.checked,
@@ -35,6 +38,7 @@ AppPopup {
             part.checked = false
         name.text = ""
         file.text = ""
+        asking = null
         backend.spaces.look(collectionId)
         open()
     }
@@ -126,6 +130,82 @@ AppPopup {
             text: qsTr("%Ln collections, with their names, rules and how their shelves show", "", dialog.seen.collections || 0) + "\n"
                   + qsTr("%Ln books: title, authors, series, ISBN and their names on other sites", "", dialog.seen.books || 0)
         }
+        // A book a plugin keeps private (a notebook) stays out, all of it,
+        // unless let go one by one, asked first, and kept out again as
+        // easily (#127). Each says why it is out: its rule took it in, or
+        // it was put in by hand.
+        Label {
+            Layout.fillWidth: true
+            visible: dialog.counted && dialog.kept.length > 0
+            text: qsTr("Kept private")
+            font.bold: true
+        }
+        Repeater {
+            model: dialog.counted ? dialog.kept : []
+            delegate: RowLayout {
+                id: keptRow
+                required property var modelData
+                required property int index
+                Layout.fillWidth: true
+                spacing: 8
+                Label {
+                    objectName: "publishKeptBook" + keptRow.index
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: keptRow.modelData.shared ? Material.foreground : theme.colors.muted
+                    text: keptRow.modelData.shared
+                          ? qsTr("%1 goes in, as you chose, though %2 keeps its books private.")
+                                .arg(keptRow.modelData.title).arg(keptRow.modelData.plugin_title)
+                          : keptRow.modelData.by_rule
+                            ? qsTr("%1 matches the collection's rule, but %2 keeps its books private, so it stays out.")
+                                  .arg(keptRow.modelData.title).arg(keptRow.modelData.plugin_title)
+                            : qsTr("%1 is in the collection, but %2 keeps its books private, so it stays out.")
+                                  .arg(keptRow.modelData.title).arg(keptRow.modelData.plugin_title)
+                }
+                AppButton {
+                    objectName: "publishKeptShare" + keptRow.index
+                    enabled: !backend.spaces.working
+                    text: keptRow.modelData.shared ? qsTr("Keep it private") : qsTr("Share it…")
+                    onClicked: {
+                        if (keptRow.modelData.shared)
+                            backend.spaces.shareKept(dialog.collectionId, keptRow.modelData.book, false)
+                        else
+                            dialog.asking = keptRow.modelData
+                    }
+                }
+            }
+        }
+        // Letting one go is asked once more, saying what goes and to whom.
+        Label {
+            objectName: "publishKeptAsk"
+            Layout.fillWidth: true
+            visible: dialog.counted && dialog.asking !== null
+            wrapMode: Text.Wrap
+            color: theme.colors.orange
+            text: dialog.asking === null ? ""
+                  : qsTr("Share %1 in the spaces it is in? Its details go to everyone they reach, and as their parts say, its file and what you know and wrote of it. You can keep it private again; what others have of it by then stays theirs.")
+                        .arg(dialog.asking.title)
+        }
+        RowLayout {
+            Layout.fillWidth: true
+            visible: dialog.counted && dialog.asking !== null
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            AppButton {
+                objectName: "publishKeptCancel"
+                text: qsTr("Keep it private")
+                onClicked: dialog.asking = null
+            }
+            AppButton {
+                objectName: "publishKeptConfirm"
+                text: qsTr("Share it")
+                onClicked: {
+                    backend.spaces.shareKept(dialog.collectionId, dialog.asking.book, true)
+                    dialog.asking = null
+                }
+            }
+        }
+
         // What is the user's own goes only when switched on.
         Label {
             Layout.fillWidth: true

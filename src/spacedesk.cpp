@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QPointer>
 #include <QStandardPaths>
@@ -18,6 +19,7 @@
 #include "githublink.h"
 #include "library.h"
 #include "person.h"
+#include "privatebooks.h"
 #include "scriptsharing.h"
 #include "spacefiles.h"
 #include "spacesnapshot.h"
@@ -73,6 +75,7 @@ using namespace Qt::StringLiterals;
             {"places", in.value("reading_places").toInt()},
             {"days", in.value("reading_days").toInt()},
             {"files", files},
+            {"kept", shown->value("kept_private").toArray().toVariantList()},
             {"name", CollectionShare::nameGoneBy(library, *collection)},
             {"file", suggestedFile(*collection)},
             {"error", QString()}};
@@ -201,6 +204,22 @@ void SpaceDesk::look(qint64 collection) {
                if (m_publishing.value("collection").toLongLong() == collection)
                    m_publishing = looked;
            });
+}
+
+void SpaceDesk::shareKept(qint64 collection, qint64 book, bool shared) {
+    beside(
+        [collection, book, shared](Library &library) {
+            const auto chosen = PrivateBooks::share(library, book, shared);
+            return chosen ? lookAt(library, collection) : failed(chosen.error().text());
+        },
+        [this, collection](const QVariantMap &looked) {
+            if (m_publishing.value("collection").toLongLong() != collection)
+                return;
+            if (looked.contains("path"))
+                m_publishing = looked;
+            else
+                m_publishing.insert("error", looked.value("error"));
+        });
 }
 
 void SpaceDesk::publish(qint64 collection, const QVariantMap &parts, const QString &as, const QString &file, bool link, bool open) {

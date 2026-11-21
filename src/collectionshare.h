@@ -1,7 +1,9 @@
 #pragma once
 
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
 #include <expected>
 
 #include "library.h"
@@ -21,8 +23,9 @@ namespace CollectionShare {
 // kind, and what it leaves out: {"collection", "parts", "in": {"collections",
 // "books", "things", "facts", "relations", "questions", "ratings",
 // "reading_places", "reading_days"}, "left_out": [{"part", counts…,
-// "switch"}]}, "files" (how many the books have). Each part not switched
-// on says what it would add. Writes nothing.
+// "switch"}]}, "files" (how many the books have), "kept_private" (the books
+// a plugin keeps private, PrivateBooks::toJson). Each part not switched on
+// says what it would add. Writes nothing.
 [[nodiscard]] std::expected<QJsonObject, QString> preview(const Library &library, const Collection &collection,
                                                           const PublishedSpace::Parts &parts);
 
@@ -32,6 +35,12 @@ namespace CollectionShare {
 // `open` asks for a place anyone may find. {"address", "transport",
 // "created", "public", "note", "operations"}.
 [[nodiscard]] std::expected<QJsonObject, QString> send(const Library &library, const QString &space, SpaceTransport &transport, bool open);
+
+// What publishing or sharing says of the books a plugin keeps private
+// (PrivateBooks::toJson), a line each, in English: why each stays out (the
+// collection's rule takes it in, or it was put in by hand), and how to let it
+// go; or that it goes as the user chose, and how to take that back (#127).
+[[nodiscard]] QStringList keptPrivate(const QJsonArray &kept);
 
 // The name the user went by when they published the collection before;
 // empty the first time.

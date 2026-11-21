@@ -92,3 +92,18 @@ the library's own personal parts.
   after the last of a burst (`PluginNews::Feed`), and to its open view as `logChanged(entities)`. Whatever stored
   it (a sync, a pairing, a space, operations kept until known) is told the same; this computer's own writes never
   are, and the first look at a library only marks where it is.
+
+## As built (#127)
+
+- **A plugin's books kept private.** A plugin says in its plugin.json which of its formats are the person's alone
+  (`"private": ["omanotebook"]`, `PluginPrivacy`). That is said once in the personal space's log (entity `private`,
+  `kind:<format>`, field `plugin`), so it goes to one's other computers and stays when the plugin is removed or was
+  never installed there; a format of Omabook's own is no plugin's to keep. No migration: the log already holds it.
+- **Out of every space, all of it.** What a published space holds of a collection (`PublishedSpace::operations`, which
+  a shared space's writer contributes from too) leaves such a book out before anything else is chosen: its details, its
+  files, its graph, its annotations, and the collection's word that it holds it, by hand or by its rule. It stays in the
+  person's own collections and rows. Publishing and sharing say which books stay out and why (`PrivateBooks::among`).
+- **Let go one book at a time.** The person lets one go, or keeps it out again, as a field of the book's global id in
+  the personal space (`shared`, the latest winning), asked once more in the window. A space published here then follows
+  as for a part switched off: what it held of the book is taken back. A shared space keeps what it had, as it does of a
+  book taken out of its collection; only what is new of the book stays out.

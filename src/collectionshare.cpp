@@ -3,6 +3,7 @@
 #include <QCommandLineParser>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSet>
 #include <QSqlQuery>
 #include <QStringList>
 #include <QVariant>
@@ -16,6 +17,8 @@
 #include "failure.h"
 #include "githublink.h"
 #include "person.h"
+#include "pluginprivacy.h"
+#include "privatebooks.h"
 #include "scriptplugins.h"
 #include "scriptsharing.h"
 #include "settings.h"
@@ -164,6 +167,8 @@ void printPreview(const QJsonObject &shown) {
                     "whoever they pass it to"_s.arg(counted(shown.value("files").toInteger(), u"file", u"files")));
     if (parts.contains("annotations"_L1))
         say(stdout, u"  your highlights, margin notes and ink in its books, seen by each as far as they have read"_s);
+    for (const QString &line : CollectionShare::keptPrivate(shown.value("kept_private").toArray()))
+        say(stdout, u"  "_s + line);
     say(stdout, u"Left out:"_s);
     for (const QJsonValue value : shown.value("left_out").toArray()) {
         const QJsonObject part = value.toObject();
@@ -257,14 +262,36 @@ std::expected<QJsonObject, QString> CollectionShare::preview(const Library &libr
         PublishedSpace::operations(library, collection.id, {.graph = true, .questions = true, .ratings = true, .reading = true}, space);
     if (!every)
         return std::unexpected(every.error());
+    const QList<Book> books = collection.of(library.books());
+    const QSet<qint64> withheld = PrivateBooks::withheld(library, books);
     int files = 0;
-    for (const Book &book : collection.of(library.books()))
-        files += static_cast<int>(book.formats.size());
+    for (const Book &book : books)
+        files += withheld.contains(book.id) ? 0 : static_cast<int>(book.formats.size());
     return QJsonObject{{"collection", collection.path},
                        {"parts", QJsonArray::fromStringList(parts.names())},
                        {"in", countsJson(countsOf(*chosen))},
                        {"files", files},
-                       {"left_out", leftOut(parts, countsOf(*every), files)}};
+                       {"left_out", leftOut(parts, countsOf(*every), files)},
+                       {"kept_private", PrivateBooks::toJson(PrivateBooks::among(library, books, collection))}};
+}
+
+QStringList CollectionShare::keptPrivate(const QJsonArray &kept) {
+    QStringList lines;
+    for (const QJsonValue value : kept) {
+        const QJsonObject book = value.toObject();
+        const QString title = book.value("title").toString();
+        const QString plugin = book.value("plugin_title").toString();
+        const QString id = QString::number(book.value("book").toInteger());
+        if (book.value("shared").toBool())
+            lines << u"%1, which %2 keeps private, goes in as you chose; omabook spaces private %3 keep takes it back."_s.arg(title, plugin,
+                                                                                                                              id);
+        else
+            lines << (book.value("by_rule").toBool() ? u"Kept out: %1 matches the collection's rule, but %2 keeps its books private."_s
+                                                     : u"Kept out: %1 is in the collection, but %2 keeps its books private."_s)
+                             .arg(title, plugin)
+                         + u" To let it go into the spaces it is in: omabook spaces private %1 share"_s.arg(id);
+    }
+    return lines;
 }
 
 QString CollectionShare::nameGoneBy(const Library &library, const Collection &collection) {
@@ -277,9 +304,12 @@ QString CollectionShare::nameGoneBy(const Library &library, const Collection &co
 }
 
 SpaceWorlds::Asked CollectionShare::asked(const Library &library, const Collection &collection, const Parts &parts, const QString &person) {
+    const QList<Book> held = collection.of(library.books());
+    const QSet<qint64> withheld = PrivateBooks::withheld(library, held);
     QList<qint64> books;
-    for (const Book &book : collection.of(library.books()))
-        books << book.id;
+    for (const Book &book : held)
+        if (!withheld.contains(book.id))
+            books << book.id;
     return {.space = PublishedSpace::spaceFor(library, person, Spaces::collectionId(library, collection.id)),
             .kind = QString::fromLatin1(PublishedSpace::kind),
             .books = books,
@@ -342,6 +372,8 @@ int CollectionShare::run(const Library &library, const QCommandLineParser &parse
         return fail(parts.error());
     if (parser.isSet(u"public"_s) && !parser.isSet(u"gist"_s))
         return fail(u"--public says what kind of gist to share to, so it goes with --gist."_s);
+    // What the plugins keep private is said before anything goes into the space (#127).
+    PluginPrivacy::record(library, ScriptPlugins::defaultFolder());
     auto shown = preview(library, *collection, *parts);
     if (!shown)
         return fail(shown.error());

@@ -28,6 +28,7 @@
 #include "librarian.h"
 #include "manual.h"
 #include "person.h"
+#include "privatebooks.h"
 #include "publishedspace.h"
 #include "reader.h"
 #include "settings.h"
@@ -289,6 +290,48 @@ private slots:
         QTRY_VERIFY(desk.value("publishDialog", "counted").toBool());
         QVERIFY(!desk.value("publishName", "visible").toBool());
         QCOMPARE(desk.backend->spaces()->publishing().value("name").toString(), QString("Ada"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A book a plugin keeps private (#127) is said to stay out, and why; it
+    // goes in only once asked and confirmed, and is kept out again by one press.
+    void aBookAPluginKeepsPrivateGoesInOnlyOnceAskedAndConfirmed() {
+        Desk desk;
+        Library &library = *desk.backend->library();
+        const qint64 notebook = Fixtures::privateNotebook(library, desk.dir.path(), "Ideas");
+        const qint64 wish = library.addEntry(meta("Only Hers", "Ann Other"), false).id;
+        const auto shelf = library.addCollection("Desk");
+        QVERIFY(notebook > 0 && shelf && library.putInCollection(*shelf, notebook, true) && library.putInCollection(*shelf, wish, true));
+        desk.backend->reload();
+        desk.backend->setCollection(*shelf);
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+
+        QVERIFY(desk.run("library.publish"));
+        QTRY_VERIFY(desk.value("publishDialog", "counted").toBool());
+        QCOMPARE(desk.backend->spaces()->publishing().value("books").toInt(), 1);
+        QTRY_VERIFY(desk.value("publishKeptBook0", "visible").toBool());
+        QCOMPARE(desk.value("publishKeptBook0", "text").toString(),
+                 QString("Ideas is in the collection, but Notebooks keeps its books private, so it stays out."));
+        // Asked first, saying what goes; not now leaves it out.
+        QVERIFY(!desk.value("publishKeptAsk", "visible").toBool());
+        QVERIFY(desk.click("publishKeptShare0"));
+        QVERIFY(desk.value("publishKeptAsk", "visible").toBool());
+        QVERIFY(desk.value("publishKeptAsk", "text").toString().startsWith("Share Ideas in the spaces it is in?"));
+        desk.shot("publish-kept-private");
+        QVERIFY(desk.click("publishKeptCancel"));
+        QVERIFY(!desk.value("publishKeptAsk", "visible").toBool());
+        QVERIFY(!PrivateBooks::shared(library, notebook));
+        // Confirmed, it goes in.
+        QVERIFY(desk.click("publishKeptShare0"));
+        QVERIFY(desk.click("publishKeptConfirm"));
+        QTRY_COMPARE(desk.backend->spaces()->publishing().value("books").toInt(), 2);
+        QVERIFY(PrivateBooks::shared(library, notebook));
+        QTRY_VERIFY(desk.value("publishKeptBook0", "text").toString().startsWith("Ideas goes in, as you chose"));
+        // And kept private again, at one press.
+        QCOMPARE(desk.value("publishKeptShare0", "text").toString(), QString("Keep it private"));
+        QVERIFY(desk.click("publishKeptShare0"));
+        QTRY_COMPARE(desk.backend->spaces()->publishing().value("books").toInt(), 1);
+        QVERIFY(!PrivateBooks::shared(library, notebook));
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

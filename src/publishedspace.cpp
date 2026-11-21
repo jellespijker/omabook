@@ -19,6 +19,7 @@
 #include "compaction.h"
 #include "graphcontext.h"
 #include "library.h"
+#include "privatebooks.h"
 #include "publishedlog.h"
 #include "spaceannotations.h"
 #include "spacereducer.h"
@@ -63,6 +64,7 @@ struct Members {
     QHash<QString, QSet<QString>> worlds; // a plugin's scope given to the space, and the books it goes with (#65)
     QSet<QString> files;                  // the books whose plugin gave the space their file with their world (#107)
     SpaceAnnotations::Chosen annotations; // of its books, when its annotations part is on (#85)
+    QSet<QString> withheld;               // books of a kind a plugin keeps private, not let go (#127)
 
     [[nodiscard]] bool holds(const Canon &canon, const QString &bookGid) const {
         return !bookGid.isEmpty() && books.contains(canon.book(bookGid));
@@ -103,8 +105,15 @@ void collectTree(const Library &library, const Collection &root, const Canon &ca
     members.root = Spaces::collectionId(library, root.id);
     for (const qint64 id : std::as_const(tree))
         members.collections.insert(Spaces::collectionId(library, id));
-    for (const Book &book : root.of(library.books())) {
+    const QList<Book> books = root.of(library.books());
+    // A book its plugin keeps private stays out, all of it, unless the person let it go (#127).
+    const QSet<qint64> withheld = PrivateBooks::withheld(library, books);
+    for (const Book &book : books) {
         const QString gid = canon.book(Spaces::bookId(library, book.id));
+        if (withheld.contains(book.id)) {
+            members.withheld.insert(gid);
+            continue;
+        }
         members.books.insert(gid);
         members.reach.insert(gid, GraphContext::reachOf(library, book.id));
     }
@@ -282,7 +291,9 @@ struct Place {
     if (op.entity == "book"_L1)
         return members.books.contains(canon.book(op.id)) && bookFieldIn(op, parts, members.files.contains(canon.book(op.id)));
     if (op.entity == "collection"_L1)
-        return members.collections.contains(op.id) && (among(collectionFields, op.field) || op.field.startsWith("book:"_L1));
+        return members.collections.contains(op.id)
+               && (among(collectionFields, op.field)
+                   || (op.field.startsWith("book:"_L1) && !members.withheld.contains(canon.book(op.field.mid(5)))));
     if (op.entity == "reading_log"_L1)
         return parts.reading && members.days.contains(op.id) && op.field == "range"_L1;
     if (op.entity == "annotation"_L1)

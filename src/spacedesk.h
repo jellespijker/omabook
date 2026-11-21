@@ -26,7 +26,9 @@ class SpaceDesk : public QObject {
     // space, counted as the command line's summary counts it, with every
     // part of the user's own: {"collection" (its number), "path",
     // "collections", "books", "things", "facts", "relations", "questions",
-    // "ratings", "places", "days", "files" (the books', a part of its own), "name" (gone by
+    // "ratings", "places", "days", "files" (the books', a part of its own), "kept" (the
+    // books a plugin keeps private, which stay out unless let go: [{"book", "title",
+    // "plugin_title", "by_rule", "shared"}], #127), "name" (gone by
     // before; empty the first time), "file" (where to write it, suggested),
     // "error", and once published by link "link", its address}; empty until asked.
     Q_PROPERTY(QVariantMap publishing READ publishing NOTIFY changed)
@@ -62,6 +64,9 @@ public:
 
     // Works out `publishing` for a collection.
     Q_INVOKABLE void look(qint64 collection);
+    // Lets a book a plugin keeps private go into the spaces it is in, or keeps
+    // it out again (PrivateBooks::share), and works `publishing` out anew.
+    Q_INVOKABLE void shareKept(qint64 collection, qint64 book, bool shared);
     // Publishes it with the parts switched on ({"graph", "questions",
     // "ratings", "reading", "files"}), as `as`, writes its snapshot to `file` unless
     // that is empty, and with `link` sends it as a link too (a gist, secret

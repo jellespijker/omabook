@@ -23,9 +23,9 @@ constexpr std::array ownBookFields{"path"_L1, "formats"_L1};
 // What else an operation is of, every field of it: the collections, the
 // general graph and a story's world, the bookmarks and highlights, the
 // spaces followed, what a published or shared space says of itself, and
-// the year's reading goal (#68).
-constexpr std::array entities{"collection"_L1, "node"_L1,  "fact"_L1,  "edge"_L1,   "reading_log"_L1, "subscription"_L1,
-                              "annotation"_L1, "world"_L1, "space"_L1, "member"_L1, "owner"_L1,       "goal"_L1};
+// the year's reading goal (#68), and the books plugins keep private (#127).
+constexpr std::array entities{"collection"_L1, "node"_L1,  "fact"_L1,   "edge"_L1,  "reading_log"_L1, "subscription"_L1, "annotation"_L1,
+                              "world"_L1,      "space"_L1, "member"_L1, "owner"_L1, "goal"_L1,        "private"_L1};
 
 struct Forgotten {
     QString entity;

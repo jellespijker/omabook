@@ -23,6 +23,11 @@
 #include <archive.h>
 #include <archive_entry.h>
 
+#include "formatprovider.h"
+#include "formats.h"
+#include "library.h"
+#include "privatebooks.h"
+
 namespace Fixtures {
 
 namespace {
@@ -523,6 +528,21 @@ QString standInSsh(const QString &folder, const QString &binary) {
                                        + "/.cache' QT_QPA_PLATFORM=offscreen\n"
                                    "export PATH=\"" + path + ":$PATH\"\n"
                                    "exec sh -c \"$1\"\n");
+}
+
+qint64 privateNotebook(Library &library, const QString &folder, const QString &title) {
+    const QString file = QDir(folder).filePath(title + ".omanotebook");
+    // Its title in it, so that two notebooks are two files, not one found twice by its content.
+    if (!write(file, R"({"title": ")" + title.toUtf8() + R"(", "pages": [{"blocks": [{"text": "A thought of my own."}]}]})"))
+        return 0;
+    const FormatProvider notebooks{
+        .id = "plugin:notebooks/Notebook", .name = "Notebook", .extensions = {"omanotebook"}, .claims = {}, .describe = {}};
+    Formats::addProvider(notebooks);
+    const Library::Added added = library.add(file);
+    Formats::removeProvider(notebooks.id);
+    if (!added.error.isEmpty() || !PrivateBooks::declare(library, {.format = "omanotebook", .plugin = "notebooks", .title = "Notebooks"}))
+        return 0;
+    return added.id;
 }
 
 } // namespace Fixtures

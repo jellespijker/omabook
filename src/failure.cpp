@@ -156,6 +156,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NoSuchThing, tr("There is no thing %1 in the book's graph; give a kind to make it.")},
     {Failure::Code::FactNotKept, tr("The words could not be kept as a fact.")},
     {Failure::Code::NotAName, tr("A name to go by in a space is one line of at most %1 characters.")},
+    {Failure::Code::NotKeptPrivate, tr("%1 is not a book a plugin keeps private, so it goes into the spaces it is in already.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

@@ -8,10 +8,13 @@
 #include <print>
 #include <tuple>
 
+#include "collectionshare.h"
 #include "failure.h"
 #include "library.h"
 #include "librarymigrations.h"
 #include "person.h"
+#include "pluginprivacy.h"
+#include "privatebooks.h"
 #include "scriptplugins.h"
 #include "scriptsharing.h"
 #include "settings.h"
@@ -19,13 +22,14 @@
 #include "spacefiles.h"
 #include "spaceparts.h"
 #include "spaceswitch.h"
+#include "subscribedspace.h"
 
 namespace {
 
 using namespace Qt::StringLiterals;
 using SharedSpaces::Summary;
 
-constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|name|sync|files|annotations|fetch] …\n\n"
+constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|name|sync|files|annotations|fetch|private] …\n\n"
                        "Every piece of your library belongs to a space: your personal one (your own computers), a collection\n"
                        "you published or subscribed to, or a shared space several people write, as a household library or a\n"
                        "book club. A shared space holds a collection (its tree and its books' details; their files only when\n"
@@ -50,7 +54,9 @@ constexpr auto usage = "Usage: omabook spaces [list|create|invite|remove|join|na
                        "                                            each seen by the others as far as they have read; off unless\n"
                        "                                            switched\n"
                        "  fetch <book>                              Fetch a book's file from the space that carries it, checked\n"
-                       "                                            against its hash; a book with a file of its own keeps it\n\n"
+                       "                                            against its hash; a book with a file of its own keeps it\n"
+                       "  private [<book> share|keep]               The books plugins keep private (a notebook), which stay out of\n"
+                       "                                            every space; share lets one go into those it is in, keep undoes it\n\n"
                        "A person's id is what omabook identity --export prints. Invite someone, then sync, so the operation that\n"
                        "makes them a member reaches the folder before they write. Every subcommand takes --json and\n"
                        "--library <folder>.";
@@ -124,6 +130,12 @@ struct Command {
     return 0;
 }
 
+// The books a plugin keeps private in the collection linked to a space, and the lines saying why each is out (#127).
+[[nodiscard]] QJsonArray keptIn(const Library &library, const QString &space) {
+    const auto shelf = library.collection(SubscribedSpace::linkedCollection(library, space));
+    return shelf ? PrivateBooks::toJson(PrivateBooks::among(library, shelf->of(library.books()), *shelf)) : QJsonArray{};
+}
+
 [[nodiscard]] int create(Library &library, const Command &command) {
     if (command.words.size() != 2)
         return fail(u"Name the space: omabook spaces create <name>"_s);
@@ -142,12 +154,13 @@ struct Command {
         QJsonObject result = toJson(created->space);
         result.insert("new_collection", created->newCollection);
         result.insert("operations", created->operations);
+        result.insert("kept_private", keptIn(library, created->space.space));
         printJson(result);
         return 0;
     }
     printLine(stdout, (QStringList{u"Founded the shared space %1, of the collection %2%3, with its key kept for you alone."_s.arg(
                            created->space.name, created->space.collection, created->newCollection ? u" (new)"_s : QString())}
-                       + describe(created->space)
+                       + describe(created->space) + CollectionShare::keptPrivate(keptIn(library, created->space.space))
                        + QStringList{u"Invite people with omabook spaces invite, and sync it with omabook spaces sync --folder."_s})
                           .join(u'\n'));
     return 0;
@@ -227,7 +240,8 @@ struct Command {
                               {"files", synced->files},
                               {"fetched", synced->fetched},
                               {"refused", QJsonArray::fromStringList(synced->refused)},
-                              {"filed", Subscriptions::toJson(synced->filed)}});
+                              {"filed", Subscriptions::toJson(synced->filed)},
+                              {"kept_private", keptIn(library, synced->space.space)}});
         return 0;
     }
     QStringList lines{u"%1: %2 operations taken from %3 batches (%4 had already), %5 of your edits written into the space, %6 "
@@ -246,6 +260,7 @@ struct Command {
     for (const QString &why : synced->refused)
         lines << u"  "_s + why;
     lines << u"Its books are in the collection %1."_s.arg(synced->filed.collection);
+    lines << CollectionShare::keptPrivate(keptIn(library, synced->space.space));
     printLine(stdout, lines.join(u'\n'));
     return 0;
 }
@@ -332,13 +347,55 @@ struct Command {
     return 0;
 }
 
+[[nodiscard]] int keepPrivate(const Library &library, const Command &command) {
+    if (command.words.size() == 1) {
+        const QList<PrivateBooks::Kind> kinds = PrivateBooks::kinds(library);
+        const QJsonArray books = PrivateBooks::toJson(PrivateBooks::among(library, library.books(), Collection{}));
+        if (command.json) {
+            QJsonArray said;
+            for (const PrivateBooks::Kind &kind : kinds)
+                said << QJsonObject{{"format", kind.format}, {"plugin", kind.plugin}, {"plugin_title", kind.title}};
+            printJson(QJsonObject{{"kinds", said}, {"books", books}});
+            return 0;
+        }
+        QStringList lines;
+        for (const PrivateBooks::Kind &kind : kinds)
+            lines << u"%1 keeps its books (.%2) private: they stay out of every space unless you let one go."_s.arg(kind.title,
+                                                                                                                    kind.format);
+        for (const QJsonValue book : books)
+            lines << u"  %1  %2  %3"_s.arg(QString::number(book["book"].toInteger()), book["title"].toString(),
+                                           book["shared"].toBool() ? u"goes in, as you chose"_s : u"kept out"_s);
+        printLine(stdout, lines.isEmpty() ? u"No plugin keeps its books private."_s : lines.join(u'\n'));
+        return 0;
+    }
+    const QString to = command.words.value(2);
+    bool number = false;
+    const qint64 book = command.words.value(1).toLongLong(&number);
+    if (command.words.size() != 3 || !number || (to != "share"_L1 && to != "keep"_L1))
+        return fail(u"Name the book by its number, and share or keep: omabook spaces private <book> share|keep"_s);
+    if (const auto chosen = PrivateBooks::share(library, book, to == "share"_L1); !chosen)
+        return fail(chosen.error().text());
+    const QString title = library.book(book).transform([](const Book &found) { return found.meta.title; }).value_or(QString());
+    const QString said =
+        to == "share"_L1
+            ? u"%1 goes into the shared and published spaces it is in now: its details, and as each space's parts say, its file "
+              "and what is known or written of it. omabook spaces private %2 keep takes that back."_s.arg(title, QString::number(book))
+            : u"%1 stays out of every space again. A space you publish takes back what it held of it when it is next published or "
+              "sent; what a shared space has of it stays, as its members have it."_s.arg(title);
+    if (command.json)
+        printJson(QJsonObject{{"book", book}, {"shared", to == "share"_L1}, {"said", said}});
+    else
+        printLine(stdout, said);
+    return 0;
+}
+
 } // namespace
 
 int runSpacesCli(const QStringList &arguments) {
     Command command;
     QCommandLineParser &parser = command.parser;
     parser.addOption({{"h", "help"}, "Show this help."});
-    parser.addPositionalArgument("command", "list, create, invite, remove, join, name, sync, files, annotations or fetch.", "[command]");
+    parser.addPositionalArgument("command", "list, create, invite, remove, join, name, sync, files, annotations, fetch or private.", "[command]");
     parser.addOption({"json", "Print the result as JSON."});
     parser.addOption({"library",
                       "Use the library in this folder instead of the current one, for this run only "
@@ -367,6 +424,8 @@ int runSpacesCli(const QStringList &arguments) {
     QString error;
     if (!library.open(&error))
         return fail(error);
+    // What the plugins keep private is said before anything goes into a space (#127).
+    PluginPrivacy::record(library, ScriptPlugins::defaultFolder());
     if (sub == "list"_L1)
         return list(library, command);
     if (sub == "create"_L1)
@@ -387,5 +446,7 @@ int runSpacesCli(const QStringList &arguments) {
         return fetch(library, command);
     if (sub == "annotations"_L1)
         return part(library, command, sub);
+    if (sub == "private"_L1)
+        return keepPrivate(library, command);
     return fail(QString::fromUtf8(usage));
 }

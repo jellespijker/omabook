@@ -115,6 +115,7 @@ public:
         NoSuchThing,            // {the thing asked for}
         FactNotKept,            // {}
         NotAName,               // {the longest a name may be, in characters} (#124)
+        NotKeptPrivate,         // {book's title}: no plugin keeps its kind private (#127)
         // A book's text found by what it means (services, operations; #72).
         MeaningHosted,     // {where}: someone else's computer, and hosted servers aren't allowed for it
         MeaningNoVectors,  // {where, model}: it answered without the embeddings asked for
