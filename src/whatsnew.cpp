@@ -153,6 +153,16 @@ QList<Manual::Step> inkRelease() {
     };
 }
 
+// The 0.1.11 release's entries: e-readers and phones (#71).
+QList<Manual::Step> devicesRelease() {
+    return {
+        {"devices", "0.1.11", Manual::tr("E-readers and phones"),
+         Manual::tr("Under {global.settings}, Omabook can serve your books to KOReader and other e-reader and phone apps on your "
+                    "tailnet, keep KOReader's reading place in step with yours, and send a book to a Kobo, a Kindle or a PocketBook."),
+         "", "global.settings", "", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -231,5 +241,5 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    } + collectionsRelease() + annotationsRelease() + inkRelease();
+    } + collectionsRelease() + annotationsRelease() + inkRelease() + devicesRelease();
 }

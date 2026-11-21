@@ -370,6 +370,8 @@ AppPopup {
             }
         }
 
+        DeviceSettings { Layout.fillWidth: true }
+
         DialogActions {
             AppButton {
                 objectName: "openPlugins"

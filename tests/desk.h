@@ -25,6 +25,8 @@
 #include "assistant.h"
 #include "backend.h"
 #include "customization.h"
+#include "devicedesk.h"
+#include "secretstore.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "interface.h"
@@ -107,6 +109,8 @@ struct Desk {
     std::optional<Look> look;
     std::optional<Librarian> librarian;
     std::optional<Manual> manual;
+    SessionSecrets deviceSecrets;
+    std::optional<DeviceDesk> devices;
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -144,6 +148,7 @@ struct Desk {
         settings->setPluginDiscovery(false);
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
+        devices.emplace(&*settings, deviceSecrets, [this] { return backend->libraryPath(); });
         const auto followPlugins = [this] { custom->setPlugins(backend->scripts()->commands(), backend->scripts()->panels()); };
         QObject::connect(backend->scripts(), &ScriptPlugins::changed, &*custom, followPlugins);
         followPlugins();
@@ -167,6 +172,7 @@ struct Desk {
         engine->rootContext()->setContextProperty("custom", &*custom);
         engine->rootContext()->setContextProperty("librarian", &*librarian);
         engine->rootContext()->setContextProperty("manual", &*manual);
+        engine->rootContext()->setContextProperty("devices", &*devices);
         engine->rootContext()->setContextProperty("settings", &*settings);
         engine->rootContext()->setContextProperty("backend", &*backend);
         engine->rootContext()->setContextProperty("reader", &*reader);

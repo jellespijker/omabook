@@ -218,6 +218,24 @@ Item {
                     focusPolicy: Qt.NoFocus
                     onClicked: win.showGraph(pane.book.bookId)
                 }
+                // To the e-reader mounted over USB, or by mail to a Kindle,
+                // once one is set up under E-readers and phones (#71).
+                AppButton {
+                    objectName: "sendToDevice"
+                    visible: !pane.launcher && devices.deviceThere && (pane.book.held === "digital" || pane.book.held === "both")
+                    enabled: !devices.busy
+                    text: devices.deviceKind !== "" ? qsTr("Send to %1").arg(devices.deviceKind) : qsTr("Send to E-reader")
+                    focusPolicy: Qt.NoFocus
+                    onClicked: devices.sendBook(pane.book.bookId, "device")
+                }
+                AppButton {
+                    objectName: "sendToKindle"
+                    visible: !pane.launcher && devices.canMail && (pane.book.held === "digital" || pane.book.held === "both")
+                    enabled: !devices.busy
+                    text: qsTr("Mail to Kindle")
+                    focusPolicy: Qt.NoFocus
+                    onClicked: devices.sendBook(pane.book.bookId, "kindle")
+                }
                 AppButton {
                     objectName: "removeButton"
                     runs: "library.remove"
@@ -234,6 +252,14 @@ Item {
                     focusPolicy: Qt.NoFocus
                     onClicked: win.showMenu("book")
                 }
+            }
+            Label {
+                objectName: "sendStatus"
+                Layout.fillWidth: true
+                visible: text !== ""
+                wrapMode: Text.Wrap
+                color: theme.colors.muted
+                text: devices.busy ? qsTr("Sending…") : devices.status
             }
             // The collections there are, those the book is in filled in: a
             // tap puts it in or takes it out, by hand, whatever the rule.

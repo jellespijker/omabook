@@ -24,6 +24,7 @@
 #include "cli.h"
 #include "converter.h"
 #include "customization.h"
+#include "devicedesk.h"
 #include "folio.h"
 #include "importer.h"
 #include "interface.h"
@@ -35,6 +36,7 @@
 #include "portalfilepicker.h"
 #include "reader.h"
 #include "readingpassages.h"
+#include "secretstore.h"
 #include "settings.h"
 #include "theme.h"
 #include "themechoice.h"
@@ -108,6 +110,12 @@ int runCommand(QStringList words) {
         QCoreApplication::installTranslator(&*translator);
     }
     return runCli(words);
+}
+
+// What the window reads, by the names it reads them by.
+void expose(const QQmlEngine &engine, std::initializer_list<std::pair<const char *, QObject *>> objects) {
+    for (const auto &[name, object] : objects)
+        engine.rootContext()->setContextProperty(name, object);
 }
 
 } // namespace
@@ -234,6 +242,11 @@ int main(int argc, char *argv[]) {
     AiAgent aiAgent(&settings);
     QObject::connect(&aiAgent, &AiAgent::changed, &assistant, &Assistant::refresh);
     Librarian librarian(&backend, &settings, &custom, [&theme] { return theme.colors(); });
+    // E-readers and phones (#71): the server they talk to, KOReader's sync and sending them books.
+    DeviceDesk deviceDesk(&settings, Secrets::shared(), [&backend] { return backend.libraryPath(); });
+    QObject::connect(&backend, &Backend::libraryChanged, &deviceDesk, &DeviceDesk::follow);
+    QObject::connect(&deviceDesk, &DeviceDesk::booksChanged, &backend, &Backend::reload);
+    deviceDesk.follow();
     // What script plugins add to the keyboard and the window joins the
     // interface's own, and follows the plugins as they are edited.
     const auto followPlugins = [&custom, &backend] { custom.setPlugins(backend.scripts()->commands(), backend.scripts()->panels()); };
@@ -258,16 +271,9 @@ int main(int argc, char *argv[]) {
     QObject::connect(&engine, &QQmlEngine::quit, &app, &QCoreApplication::quit);
     QObject::connect(&translator, &Translator::changed, &engine, &QQmlEngine::retranslate);
     engine.addImageProvider("book", reader.imageProvider());
-    engine.rootContext()->setContextProperty("translator", &translator);
-    engine.rootContext()->setContextProperty("theme", &theme);
-    engine.rootContext()->setContextProperty("settings", &settings);
-    engine.rootContext()->setContextProperty("backend", &backend);
-    engine.rootContext()->setContextProperty("reader", &reader);
-    engine.rootContext()->setContextProperty("assistant", &assistant);
-    engine.rootContext()->setContextProperty("aiAgent", &aiAgent);
-    engine.rootContext()->setContextProperty("custom", &custom);
-    engine.rootContext()->setContextProperty("librarian", &librarian);
-    engine.rootContext()->setContextProperty("manual", &manual);
+    expose(engine, {{"translator", &translator}, {"theme", &theme},         {"settings", &settings}, {"backend", &backend},
+                    {"reader", &reader},         {"assistant", &assistant}, {"aiAgent", &aiAgent},   {"custom", &custom},
+                    {"librarian", &librarian},   {"manual", &manual},       {"devices", &deviceDesk}});
     // Where there is a touchscreen, what the keys do is also on screen.
     const auto devices = QInputDevice::devices();
     const bool touchscreen = std::ranges::contains(devices, QInputDevice::DeviceType::TouchScreen, &QInputDevice::type);

@@ -25,6 +25,7 @@ moves those lines under its version.
 ### Fixed
 
 - With the AI set to *Off*, nothing is asked of any server (#133): handwriting and speech are no longer sent to the AI server's address (by default Ollama on this computer) nor to whisper.cpp, a book's text is no longer embedded for search by meaning, and `omabook.recognize.available` says false.
+- E-readers and phones (#71): Omabook serves the library, or one collection, as an OPDS catalog that e-reader and phone apps (KOReader, Moon+ Reader, Librera, Thorium) browse and download from, read-only and only with its password, never a book a plugin keeps private; and it serves KOReader's progress sync, so KOReader keeps its reading place in step with the library's, matched by the hash KOReader names a file by. Both are off until chosen in the settings under *E-readers and phones*, where it also says where it listens: on this computer, on the tailnet, or (with a warning) on every network. Omabook also syncs reading places with a KOReader sync server elsewhere (`omabook koreader login`, `koreader sync`, or *Sync Reading Places Now*), sends a book to the e-reader mounted over USB in a format it reads (Kobo, Kindle, PocketBook; converted with Calibre when needed) or by mail to a Kindle (*Send to …*, *Mail to Kindle*, `omabook send`), browses other OPDS catalogs (`omabook opds`), and serves from the command line (`omabook serve --reach tailnet`).
 
 ## [0.1.10.1] - 2026-11-21
 

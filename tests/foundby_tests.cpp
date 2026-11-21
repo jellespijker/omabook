@@ -23,6 +23,7 @@
 #include "backend.h"
 #include "booklistmodel.h"
 #include "customization.h"
+#include "devicedesk.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "interface.h"
@@ -31,6 +32,7 @@
 #include "person.h"
 #include "publishedspace.h"
 #include "reader.h"
+#include "secretstore.h"
 #include "settings.h"
 #include "subscriptions.h"
 #include "theme.h"
@@ -59,6 +61,8 @@ struct Desk {
     std::optional<AiAgent> aiAgent;
     std::optional<Librarian> librarian;
     std::optional<Manual> manual;
+    SessionSecrets deviceSecrets;
+    std::optional<DeviceDesk> devices;
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -88,6 +92,7 @@ struct Desk {
         settings->setPluginDiscovery(false);
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
+        devices.emplace(&*settings, deviceSecrets, [this] { return backend->libraryPath(); });
     }
     ~Desk() {
         interface.reset();
@@ -107,8 +112,9 @@ struct Desk {
         });
         engine->addImageProvider("book", reader->imageProvider());
         const QList<std::pair<const char *, QObject *>> objects{
-            {"translator", &*translator}, {"theme", &*look},      {"custom", &*custom}, {"librarian", &*librarian}, {"manual", &*manual},
-            {"settings", &*settings},     {"backend", &*backend}, {"reader", &*reader}, {"assistant", &*assistant}, {"aiAgent", &*aiAgent}};
+            {"translator", &*translator}, {"theme", &*look},        {"custom", &*custom},   {"librarian", &*librarian},
+            {"manual", &*manual},         {"settings", &*settings}, {"backend", &*backend}, {"reader", &*reader},
+            {"assistant", &*assistant},   {"aiAgent", &*aiAgent},   {"devices", &*devices}};
         for (const auto &[name, object] : objects)
             engine->rootContext()->setContextProperty(name, object);
         engine->rootContext()->setContextProperty("touchscreen", false);
