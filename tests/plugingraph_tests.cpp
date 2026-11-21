@@ -25,6 +25,7 @@
 #include "remote.h"
 #include "scriptplugin.h"
 #include "scriptplugins.h"
+#include "scriptreading.h"
 #include "spacereducer.h"
 #include "spacereplay.h"
 #include "spaces.h"
@@ -296,7 +297,7 @@ private slots:
         const qint64 id = jotter.call("jot", {"Wednesday", "Fog."}).toInteger();
         QVERIFY2(id > 0, qPrintable(jotter.last));
         const Book made = *library.book(id);
-        for (const QJsonObject &book : {made.toJson(), ScriptPlugins::told(made), jotter.call("book", {id}).toObject()}) {
+        for (const QJsonObject &book : {made.toJson(), ScriptBook::of(&library, made), jotter.call("book", {id}).toObject()}) {
             QCOMPARE(book.value("generated").toString(), QString("jotter"));
             QCOMPARE(book.value("identifiers").toObject().value("generated").toString(), QString("jotter"));
         }
