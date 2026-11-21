@@ -29,6 +29,33 @@ InkSurface {
     }
 
     HighlightWords { id: words }
+    // Set once made: as the root of its file the surface's type is seen at
+    // its own revision, which has no containmentMask to bind.
+    Component.onCompleted: pen.containmentMask = mask
+    QtObject {
+        id: mask
+        function contains(point: point): bool {
+            const handles = pen.host ? pen.host.selectionHandles : null
+            const at = handles ? pen.mapToItem(handles, point.x, point.y) : point
+            return point.x >= 0 && point.y >= 0 && point.x <= pen.width && point.y <= pen.height && !(handles && handles.hit(at.x, at.y))
+        }
+    }
+
+    // When the pen last came down and went up, for how long it was held.
+    property real downAt: 0
+    property real upAt: 0
+    onWritingChanged: {
+        if (writing) downAt = Date.now()
+        else upAt = Date.now()
+    }
+    // How long the pen stayed where it came down, in milliseconds, and the
+    // point it left from there by (-1 for none): a stroke's points come only
+    // as it moves, so one that never left is as long as the pen was down.
+    function stillFor(points) {
+        for (let i = 1; i < points.length; ++i)
+            if (Math.hypot(points[i].x - points[0].x, points[i].y - points[0].y) > 8) return { ms: points[i].ms, left: i }
+        return { ms: upAt - downAt, left: -1 }
+    }
 
     function length(points) {
         let along = 0
@@ -42,6 +69,13 @@ InkSurface {
     function act(points) {
         const content = host.content
         if (!content || points.length === 0) return true
+        const still = stillFor(points)
+        if (still.ms >= Application.styleHints.mousePressAndHoldInterval) {
+            const handles = host.selectionHandles
+            const at = pen.mapToItem(handles, points[0].x, points[0].y), last = points[points.length - 1]
+            handles.penHeld(at, still.left >= 0 ? pen.mapToItem(handles, last.x, last.y) : null)
+            return true
+        }
         if (points.length < 3 || length(points) < 6) {
             host.highlighting.tapped(points[0].x, points[0].y)
             return true

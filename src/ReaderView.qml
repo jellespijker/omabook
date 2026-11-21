@@ -63,6 +63,8 @@ Item {
     property real slide: 0
     readonly property int forwardSign: win.rightToLeft ? 1 : -1
     readonly property bool turningPage: turning.running || settleBack.running
+    readonly property bool turningNow: turning.running
+    function slideBack() { settleBack.restart() }
     function turn(forward) {
         if (!content || turning.running) return
         turning.forward = forward
@@ -115,6 +117,9 @@ Item {
     function openFinder() { finder.open() }
     // Words highlighted, and a highlight tapped (#81).
     readonly property QtObject highlighting: ReaderHighlighting { view: view; menu: menu; touchArea: touchArea }
+    // The menu of what is selected, and the handles of words a finger or the pen selected (#140).
+    readonly property Item readingMenu: menu
+    readonly property Item selectionHandles: handles
     // The graph beside the page, on what a plugin asked for.
     // A plugin's view beside the page (PluginSide), on what the plugin asked for.
     function showPluginView(entry, args, toggle) { pluginSide.show(entry, args, toggle) }
@@ -211,7 +216,8 @@ Item {
         const chosen = content && content.selection ? content.selection() : null
         if (chosen && (chosen.text.trim() !== "" || !!chosen.region)) {
             showSoon.stop()
-            chosen.rect = fromContent(chosen.rect)
+            // Clear of the handles of words a finger selected (#140).
+            chosen.rect = handles.clearOf(fromContent(chosen.rect))
             chosen.highlight = typeof content.selectionHighlight === "function" ? content.selectionHighlight() : ({})
             menu.openMenu(chosen)
         } else if (pointedThing) {
@@ -223,22 +229,6 @@ Item {
         }
     }
 
-    // A finger: a tap on a marked thing shows its card; a long press selects
-    // the word under it and shows the menu.
-    function tappedAt(x, y) {
-        if (highlighting.tapped(x, y)) return true
-        if (!content || typeof content.thingAt !== "function") return false
-        const at = touchArea.mapToItem(content, x, y)
-        const found = content.thingAt(at.x, at.y)
-        if (!found) return false
-        menu.openCard(found, fromContent(found.rect), false, false)
-        return true
-    }
-    function pressedLongAt(x, y) {
-        if (!content || typeof content.selectAt !== "function") return
-        const at = touchArea.mapToItem(content, x, y)
-        if (content.selectAt(at.x, at.y)) released()
-    }
     // V: the first word on the screen is selected, and the keys move it on
     // or widen it (see SelectKeys); Enter shows the menu, or for a margin note writes it.
     function startSelecting(purpose) {
@@ -248,6 +238,7 @@ Item {
             return
         }
         selecting = true
+        handles.shown = false
         selectKeys.purpose = purpose === "note" ? "note" : "menu"
         selectKeys.take()
     }
@@ -303,7 +294,10 @@ Item {
         target: view.content
         ignoreUnknownSignals: true
         function onPointed(thing) { view.pointed(thing) }
-        function onSelected() { view.released() }
+        function onSelected() {
+            handles.shown = false
+            view.released()
+        }
         function onSelectedTextChanged() { reader.selection.changed(view.content.selectedText); if (menu.shown && menu.mode === "menu" && view.content.selectedText === "") menu.close() }
     }
     // A card or a menu is about what is on the page; the page moved on.
@@ -391,125 +385,8 @@ Item {
                 }
             }
 
-            // Fingers: a tap on the page's right or left edge turns it, a tap
-            // in the middle shows the bar, a sideways swipe changes chapter,
-            // and a pinch makes the text or the page larger or smaller. The
-            // page itself scrolls under a finger as it always does.
-            Item {
-                id: touchArea
-                objectName: "touchArea"
-                anchors.fill: contentLoader
-                z: 1
-                // The page itself is how a pointer moves through it: a finger
-                // taps its edges or swipes, a mouse wheel scrolls it or, on
-                // pages side by side, turns them.
-                readonly property string runs: "reader.page_down reader.page_up reader.line_down reader.line_up"
-
-                TapHandler {
-                    acceptedDevices: PointerDevice.TouchScreen
-                    onLongPressed: if (!reader.ink.touched()) view.pressedLongAt(point.position.x, point.position.y)
-                    onTapped: (point) => {
-                        win.touchSeen = true
-                        if (!view.content || reader.ink.touched(point.timestamp)) return
-                        if (menu.shown) {
-                            menu.close()
-                            return
-                        }
-                        if (view.tappedAt(point.position.x, point.position.y)) return
-                        // What the page has to tap on itself: the line at a chapter's end.
-                        const on = touchArea.mapToItem(view.content, point.position.x, point.position.y)
-                        if (typeof view.content.activateAt === "function" && view.content.activateAt(on.x, on.y)) return
-                        const x = win.rightToLeft ? touchArea.width - point.position.x : point.position.x
-                        if (x < touchArea.width * 0.25) view.turn(false)
-                        else if (x > touchArea.width * 0.75) view.turn(true)
-                        else view.showBar = !view.showBar
-                    }
-                }
-                DragHandler {
-                    id: swipe
-                    objectName: "pageSwipe"
-                    acceptedDevices: PointerDevice.TouchScreen
-                    target: null
-                    yAxis.enabled: false
-                    // A zoomed page pans sideways instead.
-                    enabled: !!view.content && view.content.contentWidth <= view.content.width + 1
-                    property real travelled: 0
-                    // How far the finger is from where it came down. Measured
-                    // from the finger itself, so a fast flick that arrives as
-                    // one jump counts as much as a slow drag.
-                    function track() {
-                        if (turning.running) return
-                        const moved = centroid.position.x - centroid.pressPosition.x
-                        if (moved === 0) return
-                        travelled = moved
-                        view.slide = moved
-                    }
-                    onCentroidChanged: if (active) track()
-                    onActiveChanged: {
-                        if (active) {
-                            win.touchSeen = true
-                            track()
-                            return
-                        }
-                        // A third of the way across, or a decent flick, turns the page.
-                        const far = Math.abs(travelled) > Math.min(120, touchArea.width / 3)
-                        if (far && view.content) view.turn(travelled * view.forwardSign > 0)
-                        else settleBack.restart()
-                        travelled = 0
-                    }
-                }
-                // A finger on the page: while it is down, the text doesn't
-                // select under it, so it scrolls the page instead (a press
-                // and hold still selects a word, see pressedLongAt).
-                PointHandler {
-                    id: finger
-                    acceptedDevices: PointerDevice.TouchScreen
-                }
-                PinchHandler {
-                    acceptedDevices: PointerDevice.TouchScreen
-                    target: null
-                    onScaleChanged: (delta) => { if (view.content) view.content.pinch(delta) }
-                }
-                // Pages that turn don't scroll, so the wheel turns them: a
-                // notch of a mouse wheel, or as much from a touchpad.
-                WheelHandler {
-                    objectName: "pageWheel"
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    enabled: !!view.content && (view.content.objectName === "spreadReader" || view.content.turnsPages === true)
-                    property real gathered: 0
-                    onWheel: (event) => {
-                        gathered += event.angleDelta.y
-                        if (Math.abs(gathered) < 120) return
-                        view.turn(gathered < 0)
-                        gathered = 0
-                    }
-                }
-                // A column that runs on: the wheel scrolls it as always, and
-                // turned on two notches past a chapter's end (or back past
-                // its start), it goes on into the next chapter (or back to
-                // the end of the one before); one notch is only resistance. The column below
-                // still takes every turn of the wheel.
-                WheelHandler {
-                    objectName: "runOnWheel"
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    enabled: !!view.content && view.content.objectName === "flowReader" && view.content.runsOn
-                    blocking: false
-                    property real gathered: 0
-                    onWheel: (event) => {
-                        const down = event.angleDelta.y < 0
-                        const there = down ? view.content.atEnd() : view.content.atStart()
-                        if (!there || (gathered !== 0 && (gathered < 0) !== down)) {
-                            gathered = 0
-                            if (!there) return
-                        }
-                        gathered += event.angleDelta.y
-                        if (Math.abs(gathered) < 240) return
-                        gathered = 0
-                        if (down) view.content.next()
-                        else view.content.backToEnd()
-                    }
-                }
-            }
+            // Fingers on the page, and the handles of the words they select (#140).
+            ReaderTouch { id: touchArea; host: view; handles: handles; anchors.fill: contentLoader; z: 1 }
 
             // The pen over the page: gestures that highlight words, or book ink on a PDF's or a comic's pages.
             ReaderPen { id: pen; host: view; anchors.fill: contentLoader; z: 1 }
@@ -533,12 +410,13 @@ Item {
                 readonly property string layout: reader.format.effective.layout || "auto"
                 readonly property bool paged: layout === "pages" || (layout === "auto" && reader.format.columns > 1)
                 sourceComponent: reader.kind === "flow" ? (paged ? spreadPages : flow) : reader.kind === "pages" ? pages : null
-                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: finger.active; notes: notesLayer } }
-                Component { id: spreadPages; SpreadReader { marking: view.marksOn; notes: notesLayer } }
-                Component { id: pages; PageReader { layout: contentLoader.layout; covering: pen.covering; notes: notesLayer } }
+                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: touchArea.fingerDown; holding: handles.holding; notes: notesLayer } }
+                Component { id: spreadPages; SpreadReader { marking: view.marksOn; fingerDown: touchArea.fingerDown; notes: notesLayer } }
+                Component { id: pages; PageReader { layout: contentLoader.layout; covering: pen.covering; holding: handles.holding; notes: notesLayer } }
             }
 
             ReadingNotes { id: notesLayer; anchors.fill: contentLoader; z: 2; host: view }
+            SelectHandles { id: handles; host: view; anchors.fill: contentLoader; z: 3 }
             // Opening, or the reason it can't be opened.
             ColumnLayout {
                 objectName: "readerState"

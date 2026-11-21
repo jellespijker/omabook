@@ -161,6 +161,36 @@ Item {
         activeAt = at
         if (!extend) anchorAt = at
     }
+    // A finger's selection (#140): the word at one end held ("start" holds
+    // the last, "end" the first, "word" the one a long press chose) while the
+    // other end goes to the word nearest a point, its line first; and the
+    // edges of the words at the two ends, the start's and the end's.
+    function hold(which) {
+        if (!hasWords) return false
+        const first = firstWord, last = lastWord
+        if (which === "start") { anchorAt = last; activeAt = first }
+        else if (which === "end") { anchorAt = first; activeAt = last }
+        return true
+    }
+    function extendTo(x, y) {
+        const all = wordsNow()
+        if (!hasWords || all.length === 0) return false
+        let best = -1, off = Infinity
+        for (let i = 0; i < all.length; ++i) {
+            const w = all[i]
+            const across = Math.max(0, w.x - x, x - w.x - w.width), down = Math.max(0, w.y - y, y - w.y - w.height)
+            if (down * 4 + across < off) { off = down * 4 + across; best = i }
+        }
+        activeAt = best
+        return true
+    }
+    function ends() {
+        if (!hasWords) return null
+        const all = wordsNow()
+        const a = all[firstWord], b = all[lastWord], next = all[firstWord + 1]
+        const rtl = next && Math.abs(next.y - a.y) < a.height / 2 && next.x !== a.x ? next.x < a.x : win.rightToLeft
+        return { start: Qt.rect(rtl ? a.x + a.width : a.x, a.y, 0, a.height), end: Qt.rect(rtl ? b.x : b.x + b.width, b.y, 0, b.height), rtl: rtl }
+    }
     function activeRect() {
         if (hasPart) return part
         const all = wordsNow()

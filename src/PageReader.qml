@@ -36,8 +36,10 @@ ListView {
     property Item chosen: null
     // The selection is a part of a page of pictures (#115), not words.
     readonly property bool choosingPart: !!chosen && chosen.hasPart
-    // While a mouse drag selects words, the pages hold still under it.
+    // While a mouse drag selects words, or a finger moves an end of what it
+    // selected (#140), the pages hold still under it.
     property bool mouseSelecting: false
+    property bool holding: false
     signal selected()
     // What lies over the pages (the ink's bar), where the pen doesn't write on them.
     property Item covering: null
@@ -78,7 +80,7 @@ ListView {
     boundsBehavior: Flickable.StopAtBounds
     // As pages they turn, by the keys, the wheel, a swipe and the page's
     // edges; only a page zoomed larger than the window is moved by hand.
-    interactive: (!turnsPages || zoomFactor > 1.01) && !mouseSelecting
+    interactive: (!turnsPages || zoomFactor > 1.01) && !mouseSelecting && !holding
     cacheBuffer: Math.max(0, height)
     contentWidth: Math.max(width, widthOf(1.414) * across + (across - 1) * gap + 32)
     flickableDirection: Flickable.AutoFlickIfNeeded
@@ -214,6 +216,25 @@ ListView {
         else if (r.y + r.height > height) scrollBy(r.y + r.height - height + 24)
     }
     function endSelecting() {}
+    // A finger's selection (SelectHandles, #140), on the page it was made on:
+    // its ends, one held while the other goes to the word nearest a point, and
+    // at the window's foot or head the pages scroll on, where they scroll.
+    function selectionEnds() {
+        const ends = chosen ? chosen.ends() : null
+        return ends ? { start: fromLayer(chosen, ends.start), end: fromLayer(chosen, ends.end), rtl: ends.rtl } : null
+    }
+    function holdSelection(which) { return !!chosen && chosen.hold(which) }
+    function extendSelection(x, y) {
+        if (!chosen) return false
+        const at = chosen.mapFromItem(view, x, y)
+        return chosen.extendTo(at.x, at.y)
+    }
+    function edgeStep(direction) {
+        if (turnsPages && zoomFactor <= 1.01) return false
+        const was = contentY
+        scrollBy(direction * 16)
+        return contentY !== was
+    }
     function clearSelection() { if (chosen) chosen.clear() }
     function copySelection() { if (selectedText !== "") plainCopy.copyText(selectedText) }
     // The words selected on a page ({page, start, end, rect}), or the part of

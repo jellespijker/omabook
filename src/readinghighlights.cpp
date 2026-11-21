@@ -346,8 +346,10 @@ QVariantList ReadingHighlights::takeStrokes(QQuickItem *surface) {
     QVariantList strokes;
     for (const Ink::Stroke &stroke : ink->sheet().strokes()) {
         QVariantList points;
-        for (const Ink::Point &point : stroke.points)
-            points << point.at * ink->inkScale();
+        for (const Ink::Point &point : stroke.points) {
+            const QPointF at = point.at * ink->inkScale();
+            points << QVariantMap{{"x", at.x()}, {"y", at.y()}, {"ms", point.ms}};
+        }
         strokes << QVariant(points);
     }
     ink->replace({});

@@ -87,7 +87,9 @@ public:
     Q_INVOKABLE qint64 highlightPart(int page, const QRectF &area, double aspect, const QString &color);
 
     // The strokes an ink surface over the page holds, each its points in the
-    // surface's coordinates, taken off it: the pen's gestures are acted on, not kept.
+    // surface's coordinates ({x, y, ms}, ms since the stroke began, which
+    // tells the pen held still from a tap, #140), taken off it: the pen's
+    // gestures are acted on, not kept.
     Q_INVOKABLE QVariantList takeStrokes(QQuickItem *surface);
 
     Q_INVOKABLE bool recolor(qint64 id, const QString &color);
