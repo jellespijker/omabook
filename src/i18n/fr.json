@@ -2132,5 +2132,9 @@
   "Past where I am": "Au-delà de là où j’en suis",
   "The book has no words to index.": "Le livre n’a pas de mots à indexer.",
   "The book isn't indexed by its meaning yet.": "Le livre n’est pas encore indexé selon son sens.",
-  "The indexing was cancelled.": "L’indexation a été annulée."
+  "The indexing was cancelled.": "L’indexation a été annulée.",
+  "Choose Files": "Choisir des fichiers",
+  "Choose a File": "Choisir un fichier",
+  "The files it takes": "Les fichiers qu'il accepte",
+  "the clipboard, right after you use it": "le presse-papiers, juste après que vous l'utilisez"
 }

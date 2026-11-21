@@ -99,7 +99,7 @@ const QList<Entry> &entries() {
          "Moves a book this plugin made to the trash. Any other book throws: those are the reader's to remove."},
     };
     // After the library's, what a plugin puts in the window, the graph's and what goes into spaces, then the rest.
-    static const QList<Entry> entries = library + uiEntries() + graphEntries() + spaceEntries() + laterEntries() + assistEntries();
+    static const QList<Entry> entries = library + uiEntries() + deskEntries() + graphEntries() + spaceEntries() + laterEntries() + assistEntries();
     return entries;
 }
 
@@ -427,49 +427,10 @@ files through `source`.
 No permission is needed. `open` and `claims` are stopped after five
 seconds like any call, and a mistake in them is the reason the book can't
 be opened, with its file and line, never a crash. %5
-### A plugin that makes books
-
-A plugin can write books of its own and go on writing them while they are
-read: a story told chapter by chapter, a digest that grows every morning.
-It needs the `files` permission, since a book it makes starts as a file it
-wrote under its `data/` folder.
-
-1. Write the book's file: `omabook.files.write("data/story.txt", text)`, in
-   a format Omabook reads (plain text, Markdown, HTML) or one the plugin
-   registers with `omabook.format.register`.
-2. `const book = omabook.library.create({title, authors, tags, ...}, "data/story.txt")`
-   copies it into the library and marks the book as the plugin's:
-   `book.generated === omabook.plugin.id`. Keep `book.id`
-   (`omabook.settings.set`), or find the plugin's books again with
-   `omabook.library.list().filter((book) => book.generated === omabook.plugin.id)`.
-3. To add to it, write the whole file again and call
-   `omabook.library.replaceFile(book.id, "data/story.txt")`. If the reader
-   has the book open it is read anew and they stay where they were, with
-   the new chapters in the contents. Only a book the plugin made can be
-   replaced or removed (`omabook.library.remove`); a book a person added,
-   or another plugin's, throws.
-4. Know where the reader is: `page.turned`, `book.opened` and `book.closed`
-   all carry `{id, generated, section, sections, fraction, percent}`, and
-   `omabook.reader.current()` answers the same, so
-   `event.generated === omabook.plugin.id && event.section >= event.sections - 2`
-   is "they are near the end of one of mine: write the next chapter".
-5. Write with `omabook.ai.ask(prompt, {system, onText})`. The promise waits
-   for the whole answer however long it takes; nothing times it out. Only
-   the script's own code is timed (five seconds a call), so do the work in
-   `.then`, not in a loop that waits.
-6. Ask the reader where the story should go with
-   `omabook.ui.ask({title: "What happens next?"})`, from a command with a
-   key: a promise of their words, or `null` when they would rather not say.
-   For more than one answer, `omabook.ui.form({title, fields: [...]})`
-   puts a whole form: choices, numbers, switches, and fields shown only
-   when another field says so.
-7. Let a book be started from the shelf:
-   `omabook.ui.launcher({id: "new", title: "Write a new story", open: start})`
-   puts an entry among the books that calls `start` when it is opened,
-   and is gone again when the plugin is switched off.
 )guide")
         .arg(templates().join(", "), markdown(), example("metadata", "main.js", "js"), example("hook", "main.js", "js"),
-             example("format", "main.js", "js"), hostVersion());
+             example("format", "main.js", "js"), hostVersion())
+           + booksGuide() + filesGuide();
 }
 
 } // namespace ScriptApi

@@ -18,6 +18,7 @@
 #include "library.h"
 #include "metadatasource.h"
 #include "graphjobs.h"
+#include "plugindesk.h"
 #include "pluginmanager.h"
 #include "plugins.h"
 #include "scriptplugins.h"
@@ -316,6 +317,8 @@ private:
     Plugins m_plugins;
     // Before the plugins, which use it until they go.
     AudioDevices m_audio;
+    // Files the person picks for a plugin, and the clipboard (#131).
+    PluginDesk m_pluginDesk{m_picker};
     std::unique_ptr<ScriptPlugins> m_scripts;
     std::unique_ptr<PluginManager> m_pluginManager;
     GraphJobs *m_graphJobs = nullptr; // a child of this, so it goes with it

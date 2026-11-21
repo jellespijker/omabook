@@ -27,6 +27,7 @@
 class AiProvider;
 class AudioDevices;
 class QNetworkAccessManager;
+class ScriptDesk;
 class Settings;
 
 // What a script plugin is given to work with. Each is optional: a plugin
@@ -43,6 +44,8 @@ struct ScriptServices {
     // The microphone and speakers, and who records now (#79); without them
     // the desktop's own, with no window to show a recording in.
     AudioDevices *audio = nullptr;
+    // Files the person picks, and the clipboard (#131); none where there is no window.
+    ScriptDesk *desk = nullptr;
 };
 
 // plugin.json of a script plugin (read in scriptmanifest.cpp):
@@ -67,6 +70,7 @@ struct ScriptManifest {
 };
 
 class ScriptAi;
+class ScriptFiles;
 class ScriptHost;
 class ScriptPlugin;
 class ScriptSharing;
@@ -217,6 +221,11 @@ public:
     bool answered() const { return m_waiting.isEmpty() && m_holds == 0; }
     // The lines the script logged since the last time this was asked.
     QStringList takeLog();
+    // Whether the person just did something of the plugin's: ran one of its
+    // commands, opened its launcher, or used its view or panel, which called
+    // it, with a key, a button or a touch a moment ago (#131). Its files and
+    // the clipboard are reached only then.
+    [[nodiscard]] bool acting() const;
 
     // The `omabook` object as the script sees it, for the test that holds
     // it against the table in scriptapi.cpp: every function and value by
@@ -256,6 +265,7 @@ private:
     friend class ScriptHost;
     friend class ScriptSharing;
     friend class ScriptAudio;
+    friend class ScriptFiles;
     friend class ScriptWindow;
 
     QJSValue fromJson(const QJsonValue &value);
@@ -282,6 +292,9 @@ private:
     std::unique_ptr<ScriptSharing> m_sharing;
     std::unique_ptr<ScriptAi> m_ai;
     std::unique_ptr<ScriptWindow> m_window;
+    std::unique_ptr<ScriptFiles> m_files;
+    // When the person last called into the script: a command, a launcher, a view.
+    std::chrono::steady_clock::time_point m_acted;
     QJSValue m_settle, m_parse;
     int m_depth = 0;
     // The library write the code running now makes, as one transaction.

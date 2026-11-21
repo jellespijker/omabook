@@ -1,8 +1,8 @@
 // What a plugin's script sees: the `omabook` object, built here from the
 // host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp,
 // and ScriptSharing in scriptsharing.cpp, which it hands over, for what goes
-// into spaces, what scriptassist.js builds from ScriptAi, and `omabook.ui`
-// from scriptui.js). The hosts are
+// into spaces, what scriptassist.js builds from ScriptAi, `omabook.ui`
+// from scriptui.js, and `omabook.files` from scriptfiles.js). The hosts are
 // only ever reachable through these functions: the host is an argument of
 // this one, never a global, so a script can call what is listed in
 // scriptapi.cpp and nothing else. A test holds this object and that table to
@@ -13,6 +13,8 @@
     var shared = host.sharing();
     var assisted = host.assistant();
     var windowed = host.window();
+    // `omabook.files`, and what of `omabook.ui` reaches the person's files and clipboard (scriptfiles.js).
+    var filed = host.files();
 
     function may(permission) { return info.permissions.indexOf(permission) >= 0; }
 
@@ -255,7 +257,7 @@
             toHtml: function (words) { return host.markdownToHtml(String(words)); }
         },
         // What a plugin puts in the window, from scriptui.js.
-        ui: windowed(host, info, need, oneOf, parse),
+        ui: Object.assign(windowed(host, info, need, oneOf, parse), filed.ui),
 
         library: {
             list: function () { return parse(host.libraryBooks("")); },
@@ -379,13 +381,7 @@
             need(file, "string", "The file");
             return parse(host.libraryReplaceFile(Number(id) || 0, file));
         };
-        omabook.files = {
-            read: function (path) { return host.fileRead(String(path)); },
-            write: function (path, words) { return host.fileWrite(String(path), String(words)); },
-            list: function (folder) { return parse(host.fileList(String(folder || "."))); },
-            exists: function (path) { return host.fileExists(String(path)); },
-            remove: function (path) { return host.fileRemove(String(path)); }
-        };
+        omabook.files = filed.files;
     }
 
     if (may("run"))

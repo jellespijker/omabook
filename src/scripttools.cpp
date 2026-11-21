@@ -19,6 +19,7 @@
 #include "formatprovider.h"
 #include "library.h"
 #include "mcp.h"
+#include "pluginargument.h"
 #include "pluginfinder.h"
 #include "pluginsources.h"
 #include "plugintools.h"
@@ -374,9 +375,9 @@ int runPluginCli(const QStringList &arguments) {
         "formats, commands, panels and hooks.\n\n"
         "  plugin new <name> [--template t]   Start a plugin from a template: " + ScriptApi::templates().join(", ") + "\n"
         "  plugin check <name>                Load it with no window; errors come with file and line\n"
-        "  plugin run <name> <what> [json]    Run a top-level function, or metadata:<source>, command:<id>,\n"
+        "  plugin run <name> <what> [json|-]  Run a top-level function, or metadata:<source>, command:<id>,\n"
         "                                     catalog:<format>, importer:<name>, launcher:<id>, event:<name>, and\n"
-        "                                     print the answer\n"
+        "                                     print the answer; - reads the JSON from standard input\n"
         "  plugin list                        Every script plugin, what it registered and what is wrong with it\n"
         "  plugin enable|disable <name>       Switch one on or off\n"
         "  plugin install <folder|zip>        Install a plugin someone else wrote, checked first; it stays off until\n"
@@ -520,20 +521,14 @@ int runPluginCli(const QStringList &arguments) {
         return finish(answer, lines.join('\n'));
     }
     if (action == "run") {
-        if (!wants(2, "run <name> <function | metadata:<source> | command:<id> | catalog:<format> | importer:<name> | event:<name>> [json]"))
+        if (!wants(2, "run <name> <function | metadata:<source> | command:<id> | catalog:<format> | importer:<name> | event:<name>> [json | -]"))
             return 1;
-        QJsonValue given;
-        if (words.size() > 3) {
-            QJsonParseError error;
-            // A document is an object or a list, so a bare value rides in a list.
-            const QJsonDocument document = QJsonDocument::fromJson(("[" + words.mid(3).join(' ') + "]").toUtf8(), &error);
-            if (error.error != QJsonParseError::NoError) {
-                print(stderr, "The arguments aren't valid JSON: " + error.errorString());
-                return 1;
-            }
-            given = document.array().at(0);
+        const auto given = PluginArgument::parse(words.mid(3));
+        if (!given) {
+            print(stderr, "The arguments aren't valid JSON: " + given.error());
+            return 1;
         }
-        const QJsonObject answer = ScriptTools::run(context, words.at(1), words.at(2), given);
+        const QJsonObject answer = ScriptTools::run(context, words.at(1), words.at(2), *given);
         if (!json) {
             for (const QJsonValue &line : answer.value("log").toArray())
                 print(stderr, line.toString());

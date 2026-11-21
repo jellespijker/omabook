@@ -13,6 +13,7 @@ void Backend::startScripts(const QString &pluginFolder) {
     services.ai = [this](QString *why) { return m_aiFactory(why); };
     services.network = &m_network;
     services.audio = &m_audio;
+    services.desk = &m_pluginDesk;
     m_scripts = std::make_unique<ScriptPlugins>(services, pluginFolder);
     // The book formats scripts add are read like Omabook's own.
     m_scripts->provideFormats();

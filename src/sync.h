@@ -48,6 +48,8 @@ struct SyncOptions {
     Details details = Details::Undecided;
     // Changes nothing on either side, and says what a sync would do.
     bool dryRun = false;
+    // The plugins whose data/ files travel (PluginFileSync); the person's when empty.
+    QString plugins;
 };
 
 struct SyncSummary {
@@ -69,6 +71,9 @@ struct SyncSummary {
     int annotationsTaken = 0;   // bookmarks and highlights made, changed or removed here, as they were there
     int annotationsSent = 0;    // the same there, as they were here
     int refused = 0;            // operations from there refused here (Replication::admit)
+    int pluginFilesTaken = 0;   // files of plugins' data/ folders that came from there
+    int pluginFilesSent = 0;    // the same, that went there
+    int pluginFilesHeld = 0;    // the same, kept where they are, over what a plugin may keep (PluginFiles)
     bool dryRun = false;        // nothing was changed; the counts are what would be
     // The titles each count is of, for showing on a terminal (never logged).
     struct Titles {

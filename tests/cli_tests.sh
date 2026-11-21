@@ -249,6 +249,14 @@ printf 'title: The Long Way\nauthor: Ann Author\n\n01-start.txt   Setting Out\n0
 printf 'We left at dawn.\n\nNobody waved.\n' > "$work/The Long Way/01-start.txt"
 printf 'The road went on.\n' > "$work/The Long Way/02-road.txt"
 expect "a script's open is run on a folder" 0 '"title": "The Long Way"' "$omabook" plugin run textbook "format:Text book" "\"$work/The Long Way\""
+# JSON longer than one argument may be (128 KiB) goes in on standard input, given as - (#131).
+mkdir -p "$XDG_CONFIG_HOME/omabook/plugins/measurer"
+echo '{"name": "Measurer", "script": "main.js"}' > "$XDG_CONFIG_HOME/omabook/plugins/measurer/plugin.json"
+echo 'function measure(pages) { return pages.length + ":" + pages[0].length; }' > "$XDG_CONFIG_HOME/omabook/plugins/measurer/main.js"
+{ printf '[["'; head -c 200000 /dev/zero | tr '\0' x; printf '", "y"]]'; } > "$work/pages.json"
+expect "a plugin's JSON comes on standard input" 0 "2:200000" bash -c '"$0" plugin run measurer measure - < "$1"' "$omabook" "$work/pages.json"
+expect "and is held to being JSON there too" 1 "valid JSON" bash -c 'echo "[nope" | "$0" plugin run measurer measure -' "$omabook"
+rm -rf "$XDG_CONFIG_HOME/omabook/plugins/measurer"
 expect "a folder a script claims is added as one book" 0 "The Long Way" "$omabook" add "$work/The Long Way" --library "$library"
 expect "a script's format is listed" 0 "txtbook" "$omabook" list --library "$library" title:Long
 longway="$("$omabook" list --library "$library" title:Long | cut -f1)"

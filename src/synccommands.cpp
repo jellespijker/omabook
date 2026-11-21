@@ -12,6 +12,8 @@
 
 #include "library.h"
 #include "librarymigrations.h"
+#include "pluginfiles.h"
+#include "pluginfilesync.h"
 #include "remote.h"
 #include "settings.h"
 #include "sync.h"
@@ -118,6 +120,13 @@ void printPlainSummary(const SyncSummary &summary, const QString &host) {
                           .arg(summary.graphTaken)
                           .arg(summary.graphSent)
                           .arg(summary.annotationsTaken + summary.annotationsSent));
+    if (summary.pluginFilesTaken + summary.pluginFilesSent > 0)
+        printLine(stdout, QString("%1 files of plugins received, %2 sent").arg(summary.pluginFilesTaken).arg(summary.pluginFilesSent));
+    if (summary.pluginFilesHeld > 0)
+        printLine(stdout, QString("%1 files of plugins stay where they are: over the %2 MB a file, or the %3 MB a plugin, that travel")
+                              .arg(summary.pluginFilesHeld)
+                              .arg(PluginFiles::maxFileBytes / (qint64{1024} * 1024))
+                              .arg(PluginFiles::maxPluginBytes / (qint64{1024} * 1024)));
 }
 
 int printSyncStatus(const QCommandLineParser &parser, const Library &library, const QString &computer) {
@@ -166,6 +175,23 @@ int answerReplication(const QCommandLineParser &parser) {
     return 0;
 }
 
+// What omabook sync asks of this computer for the files of plugins' data/
+// folders (PluginFileSync): what they hold, or to take those in a request.
+int answerPluginFiles(const QCommandLineParser &parser) {
+    const auto library = openCliLibrary(parser);
+    if (!library)
+        return failLine(library.error());
+    if (!parser.isSet("take-plugin-files")) {
+        printJsonObject(PluginFileSync::survey(**library));
+        return 0;
+    }
+    QFile file(parser.value("take-plugin-files"));
+    if (!file.open(QIODevice::ReadOnly))
+        return failLine(parser.value("take-plugin-files") + " can't be read.");
+    printJsonObject(PluginFileSync::take(**library, QJsonDocument::fromJson(file.readAll()).object()));
+    return 0;
+}
+
 } // namespace
 
 int runManifestCli(const QStringList &arguments) {
@@ -202,10 +228,15 @@ int runSyncCli(const QStringList &arguments) {
                       "What omabook sync asks of this computer from the other one: take in the change log's operations in "
                       "this file, and print the ones the other computer lacks.",
                       "file"});
+    parser.addOption({"plugin-files", "What omabook sync asks of this computer: record what plugins' data/ folders hold, and print it."});
+    parser.addOption({"take-plugin-files",
+                      "What omabook sync asks of this computer: take in the files of plugins' data/ folders this file names.", "file"});
     if (!parseArguments(parser, "sync", arguments, 1))
         return 1;
     if (parser.isSet("replicate"))
         return answerReplication(parser);
+    if (parser.isSet("plugin-files") || parser.isSet("take-plugin-files"))
+        return answerPluginFiles(parser);
     const auto options = parseSyncOptions(parser);
     if (!options)
         return failLine(options.error());

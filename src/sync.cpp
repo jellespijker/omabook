@@ -20,6 +20,7 @@
 #include "graphsync.h"
 #include "hlc.h"
 #include "olderpeer.h"
+#include "pluginfilesync.h"
 #include "replication.h"
 #include "synclog.h"
 #include "syncmanifest.h"
@@ -85,17 +86,11 @@ void logSyncSummary(const SyncSummary &summary, const QString &host) {
                              << summary.graphSent << "graph sent," << summary.problems.size() << "problems";
 }
 
-} // namespace
-
-SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
-                        const SyncOptions &options) {
-    SyncSummary summary;
-    summary.dryRun = options.dryRun;
-    const bool dryRun = options.dryRun;
-    // An Omabook that speaks the log answers `manifest --log` with a manifest
-    // that says so and leaves out what the log carries; one from before
-    // refuses the option it doesn't know (exit code 1), and is asked for the
-    // manifest it has always given.
+// What the other side holds, or none, with why in `summary`. An Omabook that
+// speaks the log answers `manifest --log` with a manifest that says so and
+// leaves out what the log carries; one from before refuses the option it
+// doesn't know (exit code 1), and is asked for the manifest it has always given.
+std::optional<QJsonObject> theirManifest(const Remote &remote, SyncSummary &summary) {
     Remote::Result listed = remote.omabook({"manifest", "--log"});
     if (listed.code == 1)
         listed = remote.omabook({"manifest"});
@@ -105,7 +100,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                             ? "Omabook isn't installed on " + remote.host() + ", or isn't on its PATH."
                             : listed.error.isEmpty() ? remote.host() + " can't be reached over ssh."
                                                      : remote.host() + ": " + listed.error.section('\n', -1);
-        return summary;
+        return std::nullopt;
     }
     // A manifest in a newer shape than this Omabook knows could be misread,
     // and a sync acts on what it reads; better to say which side to update.
@@ -113,8 +108,22 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         summary.error = QString("%1 runs a newer Omabook (%2) than this computer (%3), and the two can't sync until this one "
                                 "is updated.")
                             .arg(remote.host(), manifest.value("omabook").toString("unknown"), QStringLiteral(OMABOOK_VERSION));
-        return summary;
+        return std::nullopt;
     }
+    return manifest;
+}
+
+} // namespace
+
+SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
+                        const SyncOptions &options) {
+    SyncSummary summary;
+    summary.dryRun = options.dryRun;
+    const bool dryRun = options.dryRun;
+    std::optional<QJsonObject> listed = theirManifest(remote, summary);
+    if (!listed)
+        return summary;
+    QJsonObject manifest = std::move(*listed);
     // An Omabook there that keeps when details changed and when books were
     // removed, which can take details and be asked to remove a book. With
     // an older one the books and reading travel as they always did.
@@ -125,6 +134,9 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // Between two that speak the log, it goes first: each side takes what is
     // newer on the other, and the books this one lacks arrive with what it says.
     QSet<qint64> gone; // the books here they removed, which the log took care of
+    // What plugins' folders hold, recorded on each side before the log goes, and carried once it went.
+    const std::optional<PluginFileSync::Sides> pluginFiles =
+        peerHasLog && !dryRun ? PluginFileSync::begin(library, remote, options.plugins) : std::nullopt;
     if (peerHasLog) {
         SyncLog::Replicated replicated = SyncLog::replicate(library, remote, manifest, summary, options);
         // Their books as the log says them, the vector both now hold, and who they are now.
@@ -366,6 +378,8 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     // arrival wrote, and their reading places, and the spaces one is in.
     if (peerHasLog && !dryRun)
         SyncLog::finish(library, remote, manifest, summary, options);
+    if (pluginFiles)
+        PluginFileSync::finish(library, remote, options.plugins, *pluginFiles, summary);
     logSyncSummary(summary, remote.host());
     return summary;
 }

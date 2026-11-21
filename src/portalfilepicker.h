@@ -14,6 +14,7 @@ public:
     explicit PortalFilePicker(QObject *parent = nullptr);
 
     void pick(Purpose purpose, const QString &suggested = {}) override;
+    void pickForPlugin(const QStringList &kinds, bool multiple) override;
 
 private slots:
     void handleResponse(uint response, const QVariantMap &results);

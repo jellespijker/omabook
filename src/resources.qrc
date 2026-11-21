@@ -78,6 +78,7 @@
         <file alias="plugins.json">../share/omabook/plugins.json</file>
         <file alias="PluginsDialog.qml">PluginsDialog.qml</file>
         <file alias="PluginDetail.qml">PluginDetail.qml</file>
+        <file alias="PluginWords.qml">PluginWords.qml</file>
         <file alias="PluginMark.qml">PluginMark.qml</file>
         <file alias="RecordingMark.qml">RecordingMark.qml</file>
         <file alias="PluginNewSheet.qml">PluginNewSheet.qml</file>
@@ -126,6 +127,7 @@
         <file alias="scriptprelude.js">scriptprelude.js</file>
         <file alias="scriptassist.js">scriptassist.js</file>
         <file alias="scriptaudio.js">scriptaudio.js</file>
+        <file alias="scriptfiles.js">scriptfiles.js</file>
         <file alias="scriptui.js">scriptui.js</file>
         <file>plugin-templates/metadata/plugin.json</file>
         <file>plugin-templates/metadata/main.js</file>

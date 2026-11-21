@@ -39,11 +39,20 @@ QList<Entry> laterEntries() {
 
         {"files.read", "files.read(path)", "files",
          "The text of a file in the plugin's folder, or `null`. Paths are relative to that folder."},
+        {"files.readBytes", "files.readBytes(path)", "files", "The bytes of a file in the plugin's folder, as an ArrayBuffer, or `null`."},
+        {"files.readBase64", "files.readBase64(path)", "files", "The same as base64 text, for a picture's `data:` address."},
         {"files.write", "files.write(path, text)", "files",
-         "Writes a file under the plugin's `data/` folder (`data/notes.txt`), and nowhere else."},
+         "Writes a file under the plugin's `data/` folder (`data/notes.txt`), and nowhere else: text, or bytes (an "
+         "ArrayBuffer or a typed array) as they are."},
+        {"files.writeBytes", "files.writeBytes(path, bytes)", "files",
+         "Writes bytes under the plugin's `data/` folder: an ArrayBuffer, a typed array (`Uint8Array`), or base64 "
+         "text. A file holds at most 64 MB and the folder 1 GB; a write over either throws, as does one anywhere else."},
         {"files.list", "files.list(folder)", "files", "The names in a folder of the plugin's (its own when none is given)."},
         {"files.exists", "files.exists(path)", "files", "Whether there is such a file in the plugin's folder."},
-        {"files.remove", "files.remove(path)", "files", "Removes a file under the plugin's `data/` folder."},
+        {"files.remove", "files.remove(path)", "files",
+         "Removes a file under the plugin's `data/` folder, and on the person's other computers at their next sync."},
+        {"files.usage", "files.usage()", "files",
+         "`{used, file, plugin}`: the bytes the `data/` folder holds now, and the most a file and the folder may hold."},
 
         {"run", "run(program, args, {input, timeout})", "run",
          "Starts a program in the plugin's folder; a promise of `{code, stdout, stderr}`. `timeout` is in seconds (30 "
@@ -77,6 +86,7 @@ const QList<Permission> &permissions() {
         {"files", "Read files in its own folder and write under its `data/` folder: `omabook.files`."},
         {"run", "Start programs on this computer: `omabook.run`."},
         {"microphone", "Record from the microphone, once the person said yes in the window: `omabook.audio.record`."},
+        {"clipboard", "Read and write the clipboard, right after the person did something of the plugin's: `omabook.ui.clipboard`."},
     };
     return permissions;
 }

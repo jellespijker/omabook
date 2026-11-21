@@ -27,6 +27,8 @@
 #include "scriptai.h"
 #include "scriptapi.h"
 #include "scriptform.h"
+#include "scriptdesk.h"
+#include "scriptfiles.h"
 #include "scriptsharing.h"
 #include "scriptwindow.h"
 #include "settings.h"
@@ -110,6 +112,7 @@ public:
 
     Q_INVOKABLE QObject *sharing() { return p->m_sharing.get(); }
     Q_INVOKABLE QJSValue window() { return p->m_window->build(p->m_engine); }
+    Q_INVOKABLE QJSValue files() { return p->m_files->build(p->m_engine); }
     Q_INVOKABLE void say(const QString &text) { emit p->said(text); }
     Q_INVOKABLE void log(const QString &level, const QString &text) {
         p->m_log << (level == "log" ? text : level + ": " + text);
@@ -667,43 +670,6 @@ public:
         });
     }
 
-    Q_INVOKABLE QJSValue fileRead(const QString &name) {
-        if (!allowed("files"))
-            return QJSValue(QJSValue::NullValue);
-        const QString path = p->inside(name, false);
-        QFile file(path);
-        if (path.isEmpty()) {
-            p->m_engine.throwError("\"" + name + "\" is outside the plugin's folder.");
-            return {};
-        }
-        return file.open(QIODevice::ReadOnly) ? QJSValue(QString::fromUtf8(file.readAll())) : QJSValue(QJSValue::NullValue);
-    }
-    Q_INVOKABLE bool fileWrite(const QString &name, const QString &text) {
-        const QString path = allowed("files") ? p->inside(name, true) : QString();
-        if (path.isEmpty()) {
-            p->m_engine.throwError("\"" + name + "\" can't be written: a plugin writes under its data/ folder, as in \"data/notes.txt\".");
-            return false;
-        }
-        QSaveFile file(path);
-        file.setDirectWriteFallback(false);
-        const QByteArray contents = text.toUtf8();
-        return QDir().mkpath(QFileInfo(path).absolutePath()) && file.open(QIODevice::WriteOnly)
-               && file.write(contents) == contents.size() && file.commit();
-    }
-    Q_INVOKABLE QString fileList(const QString &name) {
-        const QString path = allowed("files") ? p->inside(name, false) : QString();
-        return compact(path.isEmpty() ? QJsonArray()
-                                      : QJsonArray::fromStringList(QDir(path).entryList(QDir::AllEntries | QDir::NoDotAndDotDot, QDir::Name)));
-    }
-    Q_INVOKABLE bool fileExists(const QString &name) {
-        const QString path = allowed("files") ? p->inside(name, false) : QString();
-        return !path.isEmpty() && QFileInfo::exists(path);
-    }
-    Q_INVOKABLE bool fileRemove(const QString &name) {
-        const QString path = allowed("files") ? p->inside(name, true) : QString();
-        return !path.isEmpty() && QFileInfo(path).isFile() && QFile::remove(path);
-    }
-
     Q_INVOKABLE void run(const QString &program, const QString &arguments, const QString &options, const QJSValue &resolve,
                          const QJSValue &reject) {
         if (!allowed("run")) {
@@ -890,7 +856,7 @@ bool ScriptGate::run(const std::function<void(ScriptPlugin &)> &work, std::chron
 ScriptPlugin::ScriptPlugin(const ScriptManifest &manifest, const ScriptServices &services, QObject *parent)
     : QObject(parent), m_manifest(manifest), m_services(services), m_host(std::make_unique<ScriptHost>(this)),
       m_sharing(std::make_unique<ScriptSharing>(this)), m_ai(std::make_unique<ScriptAi>(this)),
-      m_window(std::make_unique<ScriptWindow>(this)), m_gate(std::make_shared<ScriptGate>(this)), m_watchdog(&m_engine, [this] {
+      m_window(std::make_unique<ScriptWindow>(this)), m_files(std::make_unique<ScriptFiles>(this)), m_gate(std::make_shared<ScriptGate>(this)), m_watchdog(&m_engine, [this] {
           // On the watchdog's thread: the plugin hears of it on its own.
           QMetaObject::invokeMethod(this, [this] { interrupted(); }, Qt::QueuedConnection);
       }) {
@@ -1111,6 +1077,7 @@ void ScriptPlugin::imported(const QString &importer, const QJsonObject &book, co
 }
 
 void ScriptPlugin::runCommand(const QString &id, const QJsonObject &context, const Done &done) {
+    m_acted = std::chrono::steady_clock::now();
     for (const Command &known : std::as_const(m_commands)) {
         // By its whole id, or by the part the script gave it.
         if (known.id == id || known.id.section(':', -1) == id) {
@@ -1123,6 +1090,7 @@ void ScriptPlugin::runCommand(const QString &id, const QJsonObject &context, con
 }
 
 void ScriptPlugin::callFunction(const QString &name, const QJsonArray &arguments, const Done &done) {
+    m_acted = std::chrono::steady_clock::now();
     QString problem;
     QJSValueList list;
     for (const QJsonValue &argument : arguments)
@@ -1144,6 +1112,7 @@ void ScriptPlugin::callFunction(const QString &name, const QJsonArray &arguments
 }
 
 QJsonValue ScriptPlugin::callNow(const QString &name, const QJsonArray &arguments, QString *problem) {
+    m_acted = std::chrono::steady_clock::now();
     QJSValueList list;
     for (const QJsonValue &argument : arguments)
         list << fromJson(argument);
@@ -1282,6 +1251,7 @@ void ScriptPlugin::answerForm(int token, const QJsonValue &values) {
 }
 
 void ScriptPlugin::launch(const QString &id, const Done &done) {
+    m_acted = std::chrono::steady_clock::now();
     for (const Launcher &known : std::as_const(m_launchers)) {
         if (known.id == id) {
             invoke(known.open, QJsonObject{{"launcher", id}}, done);
@@ -1307,6 +1277,13 @@ QStringList ScriptPlugin::takeLog() {
     const QStringList log = m_log;
     m_log.clear();
     return log;
+}
+
+bool ScriptPlugin::acting() const {
+    // As a browser lets a page open a dialog only from a click: with a moment
+    // for a promise or two in between.
+    constexpr auto moment = std::chrono::seconds(3);
+    return m_services.desk && m_services.desk->justActed() && std::chrono::steady_clock::now() - m_acted < moment;
 }
 
 QStringList ScriptPlugin::surface() {

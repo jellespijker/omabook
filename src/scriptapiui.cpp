@@ -72,4 +72,27 @@ QList<Entry> uiEntries() {
     };
 }
 
+QList<Entry> deskEntries() {
+    return {
+        {"ui.pickFile", "ui.pickFile({kinds, multiple, title})", "files",
+         "Asks the person for a file with the desktop's own dialog (#131): `kinds` narrows it, `\"image\"`, `\"audio\"`, "
+         "`\"video\"`, `\"text\"`, `\"pdf\"` or an extension such as `\".png\"` (any file when not given). A promise of "
+         "the file, or of a list with `multiple: true`, or of `null` (an empty list) when they chose none or there is no "
+         "window (a command). A file is `{name, size, type, width, height, bytes(), base64(), text(), copyTo(path)}`: "
+         "`type` its MIME type, `width` and `height` a picture's; it is read only through these, never by its path, "
+         "and `copyTo` writes it under the plugin's `data/` folder (answering its size). Only right after the person "
+         "did something of the plugin's (ran one of its commands, used its view or panel): otherwise it throws."},
+        {"ui.clipboard.readText", "ui.clipboard.readText()", "clipboard",
+         "The text on the clipboard, `\"\"` when there is none or no window. Like everything of `ui.clipboard`, only "
+         "right after the person did something of the plugin's, as for `ui.pickFile`; otherwise it throws."},
+        {"ui.clipboard.writeText", "ui.clipboard.writeText(text)", "clipboard", "Puts text on the clipboard; false where there is no window."},
+        {"ui.clipboard.readImage", "ui.clipboard.readImage()", "clipboard",
+         "The picture on the clipboard, as a PNG held as a picked file is (`{name, size, type, width, height, bytes(), "
+         "base64(), copyTo(path)}`), or `null` when there is none."},
+        {"ui.clipboard.writeImage", "ui.clipboard.writeImage(picture)", "clipboard",
+         "Puts a picture on the clipboard: the bytes of a PNG or JPEG (an ArrayBuffer or a typed array), or a picture "
+         "of the plugin's folder by its path. False where there is no window."},
+    };
+}
+
 } // namespace ScriptApi

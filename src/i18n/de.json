@@ -2040,5 +2040,9 @@
   "Past where I am": "Über meine Stelle hinaus",
   "The book has no words to index.": "Das Buch hat keine Wörter zum Indizieren.",
   "The book isn't indexed by its meaning yet.": "Das Buch ist noch nicht nach seiner Bedeutung indiziert.",
-  "The indexing was cancelled.": "Das Indizieren wurde abgebrochen."
+  "The indexing was cancelled.": "Das Indizieren wurde abgebrochen.",
+  "Choose Files": "Dateien auswählen",
+  "Choose a File": "Eine Datei auswählen",
+  "The files it takes": "Die Dateien, die es nimmt",
+  "the clipboard, right after you use it": "die Zwischenablage, gleich nachdem du es benutzt"
 }

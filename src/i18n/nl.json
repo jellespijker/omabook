@@ -2040,5 +2040,9 @@
   "Past where I am": "Voorbij waar ik ben",
   "The book has no words to index.": "Het boek heeft geen woorden om te indexeren.",
   "The book isn't indexed by its meaning yet.": "Het boek is nog niet op betekenis geïndexeerd.",
-  "The indexing was cancelled.": "Het indexeren is geannuleerd."
+  "The indexing was cancelled.": "Het indexeren is geannuleerd.",
+  "Choose Files": "Bestanden kiezen",
+  "Choose a File": "Een bestand kiezen",
+  "The files it takes": "De bestanden die het aanneemt",
+  "the clipboard, right after you use it": "het klembord, net nadat je het gebruikt"
 }

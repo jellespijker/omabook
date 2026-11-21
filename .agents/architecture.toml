@@ -18,7 +18,7 @@ modules = [
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptapiui", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist",
-  "oggpages", "opuswriter", "opusreader", "scriptapireach", "untrustedtext",
+  "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext",
 ]
 
 [layers.formats]
@@ -41,7 +41,7 @@ modules = [
   "sharedspace", "signedops", "spacediff", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
-  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginnews", "highlights", "bookink",
+  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginfiles", "pluginnews", "highlights", "bookink",
   "annotationink", "opkinds", "keptops",
   "booksearch", "annotationwords", "meaningindex",
   "readinglog", "readingstats", "readinggoal",
@@ -59,15 +59,15 @@ modules = [
   "scriptpluginviews", "scriptpluginlog", "scriptsharing", "scriptwatchdog", "scriptwindow", "sitedesk",
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "recognitionroute", "recognitionstore", "recognitionqueue",
-  "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio", "annotationcontext",
-  "aifailures", "embeddings",
+  "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
+  "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles",
 ]
 
 [layers.operations]
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginpackage", "plugintools",
+  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synctake", "synctakeannotations", "synctakegraph",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
 ]
@@ -87,7 +87,7 @@ modules = [
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
-  "readingstatsview", "annotationlayerview", "meaningfinder",
+  "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk",
 ]
 
 [layers.app]

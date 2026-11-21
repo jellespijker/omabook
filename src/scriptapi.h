@@ -38,6 +38,8 @@ const QList<Entry> &entries();
 // (scriptapiui.cpp), the knowledge graph's and what goes into spaces
 // (scriptapigraph.cpp), and the rest.
 QList<Entry> uiEntries();
+// What of the window reaches the person's files and clipboard (scriptapiui.cpp, #131).
+QList<Entry> deskEntries();
 QList<Entry> graphEntries();
 QList<Entry> spaceEntries();
 QList<Entry> laterEntries();
@@ -57,6 +59,11 @@ QJsonObject json();
 // "Writing a plugin": the layout, the loop, the reference and two worked
 // examples (the templates themselves), for AGENTS.md and the skill.
 QString guide();
+// Its parts on what a plugin makes and keeps (scriptapiguide.cpp): books of
+// its own, and files, the person's and the clipboard among them, and what
+// travels to their other computers (#131).
+QString booksGuide();
+QString filesGuide();
 
 // The version of this Omabook, which a plugin's plugin.json may ask for at
 // least: {"omabook": "0.1.0"}. A plugin that asks for a newer one is not

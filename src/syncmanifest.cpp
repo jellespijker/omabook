@@ -207,6 +207,9 @@ QJsonObject SyncSummary::toJson() const {
                        {"annotations_taken", annotationsTaken},
                        {"annotations_sent", annotationsSent},
                        {"refused", refused},
+                       {"plugin_files_taken", pluginFilesTaken},
+                       {"plugin_files_sent", pluginFilesSent},
+                       {"plugin_files_held", pluginFilesHeld},
                        {"dry_run", dryRun},
                        {"problems", list(problems)}};
     QJsonObject named{{"details_undecided", list(titles.detailsUndecided)}};

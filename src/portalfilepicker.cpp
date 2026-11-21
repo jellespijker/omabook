@@ -12,6 +12,7 @@
 #include <QDBusPendingReply>
 #include <QDir>
 #include <QFileInfo>
+#include <QHash>
 #include <QRandomGenerator>
 #include <QStandardPaths>
 
@@ -90,6 +91,24 @@ PortalFileFilter pluginFilter() {
 }
 
 PortalFileFilter spaceFilter() { return {PortalFilePicker::tr("Shared collections"), {{0, QStringLiteral("*.omabook-space")}}}; }
+
+// What a plugin named (FilePicker::pickForPlugin): kinds by their MIME
+// types, extensions by their names; none when it named nothing.
+PortalFileFilter kindsFilter(const QStringList &kinds) {
+    static const QHash<QString, QString> types{{QStringLiteral("image"), QStringLiteral("image/*")},
+                                               {QStringLiteral("audio"), QStringLiteral("audio/*")},
+                                               {QStringLiteral("video"), QStringLiteral("video/*")},
+                                               {QStringLiteral("text"), QStringLiteral("text/*")},
+                                               {QStringLiteral("pdf"), QStringLiteral("application/pdf")}};
+    PortalFilterRules rules;
+    for (const QString &kind : kinds) {
+        if (kind.startsWith(u'.') && kind.size() > 1)
+            rules.append({0, u'*' + kind});
+        else if (types.contains(kind) || kind.contains(u'/'))
+            rules.append({1, types.value(kind, kind)});
+    }
+    return {PortalFilePicker::tr("The files it takes"), rules};
+}
 
 PortalFileFilter allFilter() {
     return {PortalFilePicker::tr("All files"), {{0, QStringLiteral("*")}}};
@@ -189,7 +208,23 @@ void PortalFilePicker::pick(Purpose purpose, const QString &suggested) {
         options.insert(QStringLiteral("current_filter"), QVariant::fromValue(spaceFilter()));
         requestFile(QStringLiteral("OpenFile"), tr("Subscribe to a Shared Collection"), options, purpose);
         break;
+    case PluginFiles:
+        pickForPlugin({}, false);
+        break;
     }
+}
+
+void PortalFilePicker::pickForPlugin(const QStringList &kinds, bool multiple) {
+    QVariantMap options;
+    options.insert(QStringLiteral("modal"), true);
+    options.insert(QStringLiteral("accept_label"), tr("Choose"));
+    options.insert(QStringLiteral("multiple"), multiple);
+    options.insert(QStringLiteral("current_folder"), portalPathBytes(QDir::homePath()));
+    if (const PortalFileFilter wanted = kindsFilter(kinds); !wanted.rules.isEmpty()) {
+        options.insert(QStringLiteral("filters"), QVariant::fromValue(PortalFileFilters{wanted, allFilter()}));
+        options.insert(QStringLiteral("current_filter"), QVariant::fromValue(wanted));
+    }
+    requestFile(QStringLiteral("OpenFile"), multiple ? tr("Choose Files") : tr("Choose a File"), options, PluginFiles);
 }
 
 bool PortalFilePicker::connectToRequestPath(const QString &path) {
