@@ -728,7 +728,7 @@ private slots:
         QCOMPARE(desk.picker.asked, QList<FilePicker::Purpose>{FilePicker::AddBooks});
         QTRY_COMPARE(desk.value("grid", "count").toInt(), 2);
         QCOMPARE(desk.value("bookCount", "text").toString(), QString("2 books"));
-        QCOMPARE(desk.value("toastText", "text").toString(), QString("2 books added"));
+        QTRY_COMPARE(desk.value("toastText", "text").toString(), QString("2 books added")); // may come after the watch's reload
         QVERIFY(!desk.value("emptyState", "visible").toBool());
 
         // The newest is first and selected; H and L walk the shelf.
