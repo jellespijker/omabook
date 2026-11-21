@@ -15,6 +15,8 @@ moves those lines under its version.
 ### Changed
 
 - The Notebooks plugin is in Omabook's list of plugins (#155): find it by its name in the plugins, or `omabook plugin add notebooks`, as Storyteller is.
+### Added
+- Read aloud on a computer with no voice offers to install one (#156), on Omarchy the way its own apps do, in a terminal that asks for the password: speech-dispatcher with espeak-ng from Arch's packages, or Piper's natural voice for the book's language from the AUR. Once the terminal is closed the book is read from where it was asked. The Aa panel offers the same.
 
 ### Fixed
 

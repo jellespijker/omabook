@@ -478,5 +478,6 @@ ApplicationWindow {
     }
 
     RemovalDialog { id: removal }
+    VoiceInstallDialog {}
     RecordingMark { devices: backend.audio }
 }

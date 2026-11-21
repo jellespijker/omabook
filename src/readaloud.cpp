@@ -5,12 +5,14 @@
 #include <QTextDocument>
 #include <algorithm>
 #include <cmath>
+#include <utility>
 
 #include "backend.h"
 #include "pagetext.h"
 #include "reader.h"
 #include "settings.h"
 #include "textgeometry.h"
+#include "voiceinstall.h"
 #include "voices.h"
 
 using namespace Qt::StringLiterals;
@@ -54,6 +56,8 @@ ReadAloud::ReadAloud(Reader *reader) : QObject(reader), m_reader(reader) {
         if (!m_narration->from(m_reader->section(), 0))
             stop();
     });
+    connect(&m_terminal, &InstallTerminal::openChanged, this, &ReadAloud::offerChanged);
+    connect(&m_terminal, &InstallTerminal::closed, this, &ReadAloud::installed);
 }
 
 ReadAloud::~ReadAloud() = default;
@@ -95,6 +99,7 @@ void ReadAloud::choose(const QString &key, const QJsonValue &value) {
 
 void ReadAloud::refresh() {
     const Settings &settings = *m_reader->backend()->settings();
+    m_none = false;
     if (m_maker) {
         m_engine = m_makerName;
         m_why.clear();
@@ -106,9 +111,61 @@ void ReadAloud::refresh() {
     } else {
         m_engine.clear();
         m_why = engine.error().text();
+        m_none = engine.error().code() == Failure::Code::NoVoice;
         m_voices.clear();
     }
     emit choicesChanged();
+}
+
+bool ReadAloud::installable() const { return m_none && VoiceInstall::offered(); }
+
+bool ReadAloud::piperInstallable() const { return installable() && VoiceInstall::offered(VoiceInstall::Kind::Piper); }
+
+QStringList ReadAloud::voicePackages() const { return VoiceInstall::packages(VoiceInstall::Kind::Voice, language()); }
+
+QStringList ReadAloud::piperPackages() const { return VoiceInstall::packages(VoiceInstall::Kind::Piper, language()); }
+
+QString ReadAloud::language() const {
+    const std::shared_ptr<const Document> document = m_reader->document();
+    return document ? document->meta().language : QString();
+}
+
+void ReadAloud::offerInstall() { offer(0, {}); }
+
+void ReadAloud::offer(qint64 book, const QString &atTop) {
+    // Its terminal is open already: that install is what is waited for.
+    if (m_terminal.open())
+        return;
+    refresh();
+    m_askedBook = book;
+    m_askedAt = atTop;
+    m_offering = true;
+    emit offerChanged();
+}
+
+void ReadAloud::install(const QString &kind) {
+    if (!m_offering)
+        return;
+    m_offering = false;
+    m_terminal.run(VoiceInstall::command(kind == "piper"_L1 ? VoiceInstall::Kind::Piper : VoiceInstall::Kind::Voice, language()));
+    emit offerChanged();
+}
+
+void ReadAloud::declineInstall() {
+    if (!m_offering)
+        return;
+    m_offering = false;
+    m_askedBook = 0;
+    emit offerChanged();
+}
+
+void ReadAloud::installed() {
+    refresh();
+    const qint64 book = std::exchange(m_askedBook, 0);
+    if (m_engine.isEmpty())
+        m_reader->backend()->say(m_why);
+    else if (book != 0 && book == m_reader->bookId())
+        start(std::exchange(m_askedAt, {}));
 }
 
 qsizetype ReadAloud::offsetOf(int section, const QString &atTop) const {
@@ -136,7 +193,10 @@ void ReadAloud::start(const QString &atTop) {
         return;
     auto voice = m_maker ? m_maker() : Voices::choose(*m_reader->backend()->settings());
     if (!voice) {
-        failed(voice.error());
+        if (voice.error().code() == Failure::Code::NoVoice && VoiceInstall::offered())
+            offer(m_reader->bookId(), atTop);
+        else
+            failed(voice.error());
         return;
     }
     const int section = m_reader->section();

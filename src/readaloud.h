@@ -12,6 +12,7 @@
 #include <optional>
 
 #include "failure.h"
+#include "installterminal.h"
 #include "narration.h"
 #include "voice.h"
 
@@ -40,6 +41,15 @@ class ReadAloud : public QObject {
     Q_PROPERTY(QStringList voices READ voices NOTIFY choicesChanged)
     Q_PROPERTY(QString voice READ voice WRITE setVoice NOTIFY choicesChanged)
     Q_PROPERTY(double rate READ rate WRITE setRate NOTIFY choicesChanged)
+    // Nothing reads aloud, and Omarchy can install a voice (#156): from
+    // Arch's packages, and Piper's from the AUR, as they are named.
+    Q_PROPERTY(bool installable READ installable NOTIFY choicesChanged)
+    Q_PROPERTY(bool piperInstallable READ piperInstallable NOTIFY choicesChanged)
+    Q_PROPERTY(QStringList voicePackages READ voicePackages NOTIFY offerChanged)
+    Q_PROPERTY(QStringList piperPackages READ piperPackages NOTIFY offerChanged)
+    // Whether installing one is being offered, and whether its terminal is open.
+    Q_PROPERTY(bool offering READ offering NOTIFY offerChanged)
+    Q_PROPERTY(bool installing READ installing NOTIFY offerChanged)
 
 public:
     using VoiceMaker = std::function<std::expected<std::unique_ptr<Voice>, Failure>()>;
@@ -67,6 +77,12 @@ public:
     void setVoice(const QString &voice);
     [[nodiscard]] double rate() const;
     void setRate(double rate);
+    [[nodiscard]] bool installable() const;
+    [[nodiscard]] bool piperInstallable() const;
+    [[nodiscard]] QStringList voicePackages() const;
+    [[nodiscard]] QStringList piperPackages() const;
+    [[nodiscard]] bool offering() const noexcept { return m_offering; }
+    [[nodiscard]] bool installing() const noexcept { return m_terminal.open(); }
     // The sentence being read, by its section and characters there; none while nothing is.
     [[nodiscard]] std::optional<Narration::Spoken> current() const;
 
@@ -81,6 +97,13 @@ public:
     Q_INVOKABLE void back();
     // Looks again at what can read aloud: what is installed, and the settings.
     Q_INVOKABLE void refresh();
+    // Offers to install a voice, as the Aa panel does when there is none.
+    Q_INVOKABLE void offerInstall();
+    // Installs what was chosen, "voice" or "piper", in a terminal; once it
+    // is closed, reads aloud if that was what was asked and a voice is there
+    // now, and says if none is. Or, declined, nothing.
+    Q_INVOKABLE void install(const QString &kind);
+    Q_INVOKABLE void declineInstall();
     // Where the sentence being read stands on the chapter a TextEdit shows,
     // and on a page of a PDF as it is drawn: a rectangle a line; none
     // when it isn't there.
@@ -91,6 +114,7 @@ signals:
     void stateChanged();
     void sentenceChanged();
     void choicesChanged();
+    void offerChanged();
 
 private:
     void moved();
@@ -98,6 +122,10 @@ private:
     // Where in a section the words at the top of the page start; -1 when they aren't found.
     [[nodiscard]] qsizetype offsetOf(int section, const QString &atTop) const;
     void choose(const QString &key, const QJsonValue &value);
+    // Asks whether to install a voice, to read from `atTop` of `book` once there is one (0: only to have one).
+    void offer(qint64 book, const QString &atTop);
+    void installed();
+    [[nodiscard]] QString language() const;
 
     Reader *m_reader;
     VoiceMaker m_maker;
@@ -110,4 +138,11 @@ private:
     QString m_engine;
     QString m_why;
     QStringList m_voices;
+    // Nothing reads aloud on this computer (Failure::Code::NoVoice).
+    bool m_none = false;
+    bool m_offering = false;
+    // What to read once a voice is installed: the book, and the words at the top of its page.
+    qint64 m_askedBook = 0;
+    QString m_askedAt;
+    InstallTerminal m_terminal;
 };

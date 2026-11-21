@@ -66,7 +66,7 @@ modules = [
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
-  "narration", "aireach",
+  "narration", "aireach", "voiceinstall",
 ]
 
 [layers.operations]
@@ -95,7 +95,7 @@ modules = [
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
-  "readaloud", "linkinbox",
+  "readaloud", "linkinbox", "installterminal",
 ]
 
 [layers.app]

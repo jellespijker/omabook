@@ -17,6 +17,7 @@
         <file alias="ReadAloudBar.qml">ReadAloudBar.qml</file>
         <file alias="SentenceMark.qml">SentenceMark.qml</file>
         <file alias="ReadAloudControls.qml">ReadAloudControls.qml</file>
+        <file alias="VoiceInstallDialog.qml">VoiceInstallDialog.qml</file>
         <file alias="FormatControls.qml">FormatControls.qml</file>
         <file alias="FormatPane.qml">FormatPane.qml</file>
         <file alias="AiSearchDialog.qml">AiSearchDialog.qml</file>

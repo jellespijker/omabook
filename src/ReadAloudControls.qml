@@ -3,7 +3,7 @@ import QtQuick.Controls
 import QtQuick.Layouts
 
 // Reading aloud in the Aa panel (#73): what reads (or why nothing can, and
-// what to install), how fast, and in which voice, for every book; and the
+// what to install, which Omarchy can do: #156), how fast, and in which voice, for every book; and the
 // button that starts it, as its key does.
 ColumnLayout {
     id: controls
@@ -28,7 +28,16 @@ ColumnLayout {
         color: theme.colors.muted
         font.pixelSize: 12
         text: controls.aloud.engine !== "" ? qsTr("Read by %1. Nothing is sent anywhere unless you chose a server for it.").arg(controls.aloud.engine)
+                                           : controls.aloud.installing ? qsTr("Installing a voice in the terminal that opened. Once it is closed, Omabook looks for it again.")
                                            : controls.aloud.why
+    }
+    // Where nothing reads aloud and Omarchy can install a voice (#156).
+    AppButton {
+        objectName: "readAloudInstall"
+        Layout.fillWidth: true
+        visible: controls.aloud.installable && !controls.aloud.installing
+        text: qsTr("Install a voice…")
+        onClicked: controls.aloud.offerInstall()
     }
     RowLayout {
         Layout.fillWidth: true
