@@ -28,4 +28,7 @@ private:
     static void configure(const Library &library);
     [[nodiscard]] static std::expected<void, QString> migrate(const Library &library);
     static void sayBringingUpToDate(const Library &library, int schema);
+    // The repair of format 43 (#158): the links that are not of one book,
+    // each recorded as such once (BookLinks::record), and said.
+    static void judgeLinks(const Library &library);
 };

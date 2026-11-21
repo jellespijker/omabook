@@ -21,6 +21,7 @@
 #include "fixtures.h"
 #include "hlc.h"
 #include "library.h"
+#include "librarymigrations.h"
 #include "remote.h"
 #include "replication.h"
 #include "spaces.h"
@@ -218,6 +219,34 @@ private slots:
         QCOMPARE(BookLinks::record(library, Replication::operations(library)), QStringList());
         QCOMPARE(countApart(library), qsizetype{1});
         QCOMPARE(followed(), 2);
+    }
+
+    // A library of 0.2.1 with such a link in its log: brought up to date, it
+    // keeps the two apart, once, and says so.
+    void anUpgradeDropsAWrongLinkOnce() {
+        QTemporaryDir dir;
+        const QString root = dir.filePath("A");
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            const qint64 crows = toRead(library, "The Lady of Crows", "1");
+            const qint64 tales = toRead(library, "The Canterbury Tales", "3", "9780140424386");
+            linkAsBefore(library, Spaces::bookId(library, crows), Spaces::bookId(library, tales));
+            QVERIFY(ChangeLog::exec(library, "PRAGMA user_version = 42"));
+            QVERIFY(ChangeLog::exec(library, "DELETE FROM library_state WHERE key = 'judge_links'"));
+        }
+        QStringList said;
+        {
+            Library library(root);
+            library.onBringingUpToDate([&said](const QString &line) { said << line; });
+            QVERIFY(library.open());
+            QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
+            QCOMPARE(countApart(library), qsizetype{1});
+        }
+        QVERIFY2(said.join('\n').contains("The Canterbury Tales / The Lady of Crows"), qPrintable(said.join('\n')));
+        Library again(root);
+        QVERIFY(again.open());
+        QCOMPARE(countApart(again), qsizetype{1});
     }
 
     // The two libraries, synced both ways, several times: no title, authors
