@@ -298,8 +298,12 @@ private slots:
         QTRY_VERIFY(bench.desk.item("marginNoteDraft")->findChild<QQuickItem *>("noteField")->hasActiveFocus());
         for (const char letter : std::string_view("Bright tonight"))
             QTest::keyClick(bench.desk.window, letter);
+        // Done closes the card under the finger: the tap is still the card's, wherever on the page it is.
+        const Bench::Spot writing = bench.spot();
         bench.tap("marginNoteDraft", "noteDone");
         QTRY_COMPARE(bench.notes()->count(), 1);
+        const QString movedByDone = bench.movedSince(writing);
+        QVERIFY2(movedByDone.isEmpty(), qPrintable(movedByDone));
         const qint64 id = bench.notes()->notes().first().toMap().value("id").toLongLong();
         QCOMPARE(bench.notes()->notes().first().toMap().value("note").toString(), QString("Bright tonight"));
         const QString card = QString("marginNote_%1").arg(id);

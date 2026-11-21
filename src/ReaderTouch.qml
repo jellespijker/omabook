@@ -47,8 +47,20 @@ Item {
         return handles.hit(at.x, at.y)
     }
 
+    // The finger came down on something of the page's own. Its tap is that
+    // thing's even where, by the time the finger lifts, the thing is gone
+    // from under it: a note's Done closes the note it is on.
+    property bool pressedOwn: false
+
     TapHandler {
         acceptedDevices: PointerDevice.TouchScreen
+        // Each press says it afresh; the release that taps is read against it.
+        onPressedChanged: {
+            if (!pressed) return
+            const content = area.host.content
+            const on = content ? area.mapToItem(content, point.position.x, point.position.y) : null
+            area.pressedOwn = !!content && area.ownTap(content, on.x, on.y)
+        }
         onLongPressed: {
             if (reader.ink.touched() || area.onHandle(point.position)) return
             const at = area.mapToItem(area.handles, point.position.x, point.position.y)
@@ -68,7 +80,7 @@ Item {
                 return
             }
             const on = area.mapToItem(content, point.position.x, point.position.y)
-            if (area.ownTap(content, on.x, on.y) || area.tappedAt(point.position.x, point.position.y)) return
+            if (area.pressedOwn || area.ownTap(content, on.x, on.y) || area.tappedAt(point.position.x, point.position.y)) return
             // What the page has to tap on itself: the line at a chapter's end.
             if (typeof content.activateAt === "function" && content.activateAt(on.x, on.y)) return
             const x = win.rightToLeft ? area.width - point.position.x : point.position.x
