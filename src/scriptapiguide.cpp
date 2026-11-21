@@ -93,6 +93,14 @@ installed too, and a file removed with `files.remove` is removed there.
 `settings.json` stays on its computer, and so does a file over the limits.
 None of it goes into a space shared with others.
 
+To hand `omabook plugin run` more than a command line holds, give `-` for
+the JSON and pipe it in: `omabook plugin run notes import - < pages.json`.
+)guide");
+}
+
+// What a plugin exports for the person, and asking the AI of private things (#138).
+QString exportsGuide() {
+    return QStringLiteral(R"guide(
 ### Exports: saving, PDFs and links
 
 What a plugin exports for the person goes where they choose, not into
@@ -122,9 +130,6 @@ Before asking the AI about something private, `omabook.ai.status({hosted:
 false})` says whether the model the person chose is their own (this
 computer, their tailnet, an address they marked as theirs); `ai.ask(prompt,
 {hosted: false})` then never sends it to anyone else's.
-
-To hand `omabook plugin run` more than a command line holds, give `-` for
-the JSON and pipe it in: `omabook plugin run notes import - < pages.json`.
 )guide");
 }
 

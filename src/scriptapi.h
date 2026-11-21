@@ -68,6 +68,7 @@ QString guide();
 // travels to their other computers (#131).
 QString booksGuide();
 QString filesGuide();
+QString exportsGuide();
 // And on writing beside a book being read, and recording beside it (#137, #135).
 QString besideGuide();
 

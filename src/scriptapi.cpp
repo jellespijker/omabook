@@ -433,7 +433,7 @@ be opened, with its file and line, never a crash. %5
 )guide")
         .arg(templates().join(", "), markdown(), example("metadata", "main.js", "js"), example("hook", "main.js", "js"),
              example("format", "main.js", "js"), hostVersion())
-           + booksGuide() + filesGuide() + besideGuide();
+           + booksGuide() + filesGuide() + exportsGuide() + besideGuide();
 }
 
 } // namespace ScriptApi
