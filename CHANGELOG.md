@@ -36,6 +36,7 @@ moves those lines under its version.
 ### Changed
 
 - The first opening after updating to 0.1.10 brings a library from format 36 up to 39, one step at a time (formats 37 to 39), keeping a copy of it first in `.backups` in the library's folder, as for every format change. An Omabook from before 0.1.10 no longer opens the library, but it does open that copy (#118, #115, #68).
+- Find a book's text by what it means, not only its words (#72): "where do they cross the river?" finds where they waded over the ford. Find (/) offers to index the book, saying first where its text goes, and then lists what the words mean after what holds them, up to where you are unless you tick *Past where I am*; *Cancel* stops the indexing. The text is cut in short stretches, each embedded by the embedding model of your own server (Ollama's `nomic-embed-text` on this computer unless config.json's `meaning` names another server or model) and kept in the library, and made again when the book's file changes; nothing goes to a hosted server unless *Index books by their meaning on hosted servers too* is on in *Settings*, and then you are told. Only the books you ask for are indexed, or every one by a setting. `omabook meaning index|update|search <book|all> [--collection c] [--whole]|forget|use` and the MCP tools `meaning_search`, `meaning_index` and `meaning_status` do the same, the whole library within one top-level collection. The library's format goes up by one for it (a copy is kept first).
 
 ### Fixed
 

@@ -84,6 +84,14 @@ _Avoid_: Position (alone), location, offset
 A stretch of a book's text that an annotation is attached to: two places and the words between, with a few before and after, found again by its words when the book's layout changes (`Passage`).
 _Avoid_: Selection, range, quote, excerpt (the text the graph is built from)
 
+**Stretch**:
+A run of about a hundred and sixty words of a book's text, sharing its first and last forty with the stretches beside it, within one section: what the meaning index keeps and a search by meaning finds (`TextStretches`).
+_Avoid_: Chunk, passage (an annotation's), excerpt (the graph's)
+
+**Meaning index**:
+A book's stretches, each with the embedding a model on the person's own server gave it, kept in the library beside the book and never in the change log; made only for the books asked for (or every book, by a setting) and made again when the book's file changes (`MeaningIndex`).
+_Avoid_: Vector store, semantic index, embeddings (for the whole)
+
 ## Collections and the graph
 
 **Tenant**:

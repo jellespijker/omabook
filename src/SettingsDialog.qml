@@ -211,6 +211,31 @@ AppPopup {
                   ? qsTr("Careful: what you write by hand and record then goes to someone else's computer wherever you choose it, such as for one notebook, and they can read it.")
                   : qsTr("What you write by hand and record is recognised only on this computer and your tailnet.")
         }
+        // A book's text is indexed by its meaning on one's own servers only,
+        // unless this is on (#72); and only the books asked for, unless every one.
+        CheckBox {
+            objectName: "meaningAll"
+            Layout.fillWidth: true
+            text: qsTr("Index every book by its meaning, not only those I ask for")
+            checked: settings.meaningAll
+            onToggled: settings.meaningAll = checked
+        }
+        CheckBox {
+            objectName: "meaningHosted"
+            Layout.fillWidth: true
+            text: qsTr("Index books by their meaning on hosted servers too")
+            checked: settings.meaningHosted
+            onToggled: settings.meaningHosted = checked
+        }
+        Label {
+            objectName: "meaningHostedNote"
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: settings.meaningHosted ? theme.colors.orange : theme.colors.muted
+            text: settings.meaningHosted
+                  ? qsTr("Careful: a book's text then goes to someone else's computer to be indexed, if that is where the embeddings are made, and you are told so first.")
+                  : qsTr("A book's text is indexed by its meaning only on this computer and your tailnet (Ollama's nomic-embed-text unless config.json says another).")
+        }
         // The model picker: one model for what you read, a smaller one for
         // what Omabook reads. The lists are those of the AI in use.
         ModelPicker {

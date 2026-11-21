@@ -38,6 +38,8 @@ class Settings : public QObject {
     Q_PROPERTY(QString aiModel READ aiModel WRITE setAiModel NOTIFY changed)
     Q_PROPERTY(QString graph READ graph WRITE setGraph NOTIFY changed)
     Q_PROPERTY(bool recognitionHosted READ recognitionHosted WRITE setRecognitionHosted NOTIFY changed)
+    Q_PROPERTY(bool meaningHosted READ meaningHosted WRITE setMeaningHosted NOTIFY changed)
+    Q_PROPERTY(bool meaningAll READ meaningAll WRITE setMeaningAll NOTIFY changed)
     Q_PROPERTY(bool graphOneTenant READ graphOneTenant WRITE setGraphOneTenant NOTIFY changed)
     Q_PROPERTY(QString marks READ marks WRITE setMarks NOTIFY changed)
     Q_PROPERTY(QString pluginUpdates READ pluginUpdates WRITE setPluginUpdates NOTIFY changed)
@@ -211,6 +213,25 @@ public:
         QJsonObject chosen = recognition();
         chosen.insert("hosted", on);
         setRecognition(chosen);
+    }
+    // How a book's text is found by what it means (#72): "url", the server
+    // of the OpenAI-compatible API that makes the embeddings (else the AI
+    // server), "model" (else nomic-embed-text), "hosted", whether a hosted
+    // server may be sent a book's text at all, and "all", whether every book
+    // is indexed rather than only those asked for; see Embeddings.
+    QJsonObject meaning() const { return m_values.value("meaning").toObject(); }
+    void setMeaning(const QJsonObject &chosen) { set("meaning", chosen); }
+    bool meaningHosted() const { return meaning().value("hosted").toBool(false); }
+    void setMeaningHosted(bool on) { setMeaningChoice("hosted", on); }
+    bool meaningAll() const { return meaning().value("all").toBool(false); }
+    void setMeaningAll(bool on) { setMeaningChoice("all", on); }
+    void setMeaningChoice(const QString &key, const QJsonValue &value) {
+        QJsonObject chosen = meaning();
+        if (value.isNull() || (value.isString() && value.toString().trimmed().isEmpty()))
+            chosen.remove(key);
+        else
+            chosen.insert(key, value);
+        setMeaning(chosen);
     }
 
     // How the knowledge graph of a book grows: "auto" (by itself, as chapters

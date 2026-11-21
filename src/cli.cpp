@@ -33,6 +33,7 @@
 #include "converter.h"
 #include "curation.h"
 #include "customization.h"
+#include "findcommands.h"
 #include "folio.h"
 #include "libraries.h"
 #include "logcommands.h"
@@ -802,25 +803,6 @@ int text(const QStringList &arguments) {
     if (command.json())
         printJson(sections);
     return 0;
-}
-
-int find(const QStringList &arguments) {
-    Command command("find", "Find words in a book's text.");
-    command.parser.addPositionalArgument("book", "A book's number in the library, or a book file.");
-    command.parser.addPositionalArgument("words", "The words to find, as they appear.", "<words...>");
-    if (!command.parse(arguments, 2))
-        return 1;
-    QString error;
-    const auto document = openTarget(command, command.argument(0), &error);
-    if (!document)
-        return fail(error);
-    const QJsonArray matches = BookOps::find(*document, command.parser.positionalArguments().mid(1).join(' '));
-    if (command.json())
-        printJson(matches);
-    else
-        for (const QJsonValue &match : matches)
-            print(stdout, QString("%1\t%2").arg(match["section"].toInt()).arg(match["snippet"].toString()));
-    return matches.isEmpty() ? 1 : 0;
 }
 
 int exportBook(const QStringList &arguments) {
@@ -2020,7 +2002,8 @@ constexpr std::array cliCommands{
     CliCommand{"info"_L1, info},
     CliCommand{"toc"_L1, toc},
     CliCommand{"text"_L1, text},
-    CliCommand{"find"_L1, find},
+    CliCommand{"find"_L1, runFindCli},
+    CliCommand{"meaning"_L1, runMeaningCli},
     CliCommand{"lookup"_L1, lookup},
     CliCommand{"convert"_L1, convert},
     CliCommand{"export"_L1, exportBook},

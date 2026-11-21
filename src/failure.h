@@ -115,6 +115,12 @@ public:
         NoSuchThing,            // {the thing asked for}
         FactNotKept,            // {}
         NotAName,               // {the longest a name may be, in characters} (#124)
+        // A book's text found by what it means (services, operations; #72).
+        MeaningHosted,     // {where}: someone else's computer, and hosted servers aren't allowed for it
+        MeaningNoVectors,  // {where, model}: it answered without the embeddings asked for
+        MeaningNotIndexed, // {}: no book asked about is indexed by meaning
+        MeaningNoText,     // {}: the book has no words to index
+        MeaningCancelled,  // {}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiUnreachable,       // {where, the network's reason}

@@ -11,6 +11,7 @@
 #include <QString>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <functional>
 #include <memory>
 
 // A server of the OpenAI-compatible API on this computer: it answers each
@@ -28,6 +29,8 @@ public:
     };
     QList<Reply> replies;
     QList<Request> received;
+    // Answers each request by what it asks, in place of the queue, when set.
+    std::function<Reply(const Request &)> answering;
 
     explicit FakeServer(quint16 port = 0) {
         listen(QHostAddress::LocalHost, port);
@@ -45,7 +48,9 @@ public:
                 if (buffer->size() < headerEnd + 4 + length)
                     return;
                 received.append({.line = buffer->left(buffer->indexOf("\r\n")), .body = buffer->mid(headerEnd + 4, length)});
-                const Reply reply = replies.isEmpty() ? Reply{.status = "500 Internal Server Error", .body = "{}"} : replies.takeFirst();
+                const Reply reply = answering           ? answering(received.last())
+                                    : replies.isEmpty() ? Reply{.status = "500 Internal Server Error", .body = "{}"}
+                                                        : replies.takeFirst();
                 socket->write("HTTP/1.1 " + reply.status + "\r\nContent-Type: application/json\r\nContent-Length: "
                               + QByteArray::number(reply.body.size()) + "\r\nConnection: close\r\n\r\n" + reply.body);
                 socket->disconnectFromHost();

@@ -667,6 +667,7 @@ omabook info [file]                     Show what a file says about itself, or w
 omabook toc <book>                      List a book's contents
 omabook text <book> [--section N]       Print a book as plain text
 omabook find <book> <words>             Find words in a book
+omabook meaning [index|search|use]      Find a book's text by what it means, with the embeddings of your own server
 omabook lookup <id> [--ai] [--apply N|ID]  Look a book's details up with every metadata plugin
 omabook plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one
 omabook plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help

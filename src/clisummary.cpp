@@ -14,6 +14,7 @@ QString cliSummary() {
            "  toc <book>                      List a book's contents\n"
            "  text <book> [--section N]       Print a book as plain text\n"
            "  find <book> <words>             Find words in a book\n"
+           "  meaning [index|search|use]      Find a book's text by what it means, with the embeddings of your own server\n"
            "  lookup <id> [--ai] [--apply N|ID]  Look a book's details up with every metadata plugin\n"
            "  plugins [enable|disable <id>]   List plugins (built in, Calibre's, your own) or switch one\n"
            "  plugin new|check|run|list|api   Write plugins of your own in JavaScript; see omabook plugin --help\n"

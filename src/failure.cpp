@@ -87,6 +87,13 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::RecordingUnreadable, tr("The recording %1 can't be read.")},
     {Failure::Code::RecordingEmpty, tr("The recording %1 is empty.")},
     {Failure::Code::RecognitionCancelled, tr("The recognition was cancelled.")},
+    {Failure::Code::MeaningHosted,
+     tr("%1 is someone else's computer, and a book's text goes only to your own servers to be indexed by its meaning, unless you allow "
+        "hosted servers for it in the settings.")},
+    {Failure::Code::MeaningNoVectors, tr("%1 made no embeddings with %2; is it an embedding model, such as nomic-embed-text?")},
+    {Failure::Code::MeaningNotIndexed, tr("The book isn't indexed by its meaning yet.")},
+    {Failure::Code::MeaningNoText, tr("The book has no words to index.")},
+    {Failure::Code::MeaningCancelled, tr("The indexing was cancelled.")},
     {Failure::Code::NoVisionServer, tr("Handwriting is read by a vision model on your AI server: %1")},
     {Failure::Code::StrokeUnreadable, tr("Stroke %1 can't be read: %2")},
     {Failure::Code::RecognizerUnreachable, tr("%1 can't be reached now (%2).")},
