@@ -12,6 +12,13 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.2.2] - 2026-11-21
+
+### Fixed
+
+- A sync pairs a book across computers by its global id once paired, and never by a shared identifier alone (#158): a book without a file is paired the first time only by a valid ISBN, a Goodreads id or a Calibre uuid that no other book has, and only when the titles agree. A sync never changes a book's title, authors or ISBN by itself: the dry run lists it as a rename, and `--accept-renames` or `--details` does it. In 0.2.1 and before, books that shared an identifier that wasn't theirs alone (a Calibre column kept as an identifier, the same ISBN on two different books, one picked up from an earlier mix-up) could be given each other's details.
+- Links an older Omabook recorded between different books are dropped once at upgrade, and listed (#158). Details already given to the wrong book aren't put back: correct them by hand on one computer, then sync.
+
 ## [0.2.1] - 2026-11-21
 
 ### Added
@@ -369,7 +376,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/jellespijker/omabook/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jellespijker/omabook/compare/v0.2.0.2...v0.2.1
 [0.2.0.2]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...v0.2.0.2
 [0.2.0.1]: https://github.com/jellespijker/omabook/compare/v0.2.0...v0.2.0.1
