@@ -1,0 +1,17 @@
+id: ai-only-through-the-registry
+valid:
+  - "auto made = AiRegistry::answers(settings);"
+  - "services.ai = AiRegistry::answerer(settings);"
+  - "auto voice = AiRegistry::voice(settings, true);"
+  - "auto route = AiRegistry::embeddings(settings);"
+  - "auto plugin = std::make_unique<ScriptPlugin>(manifest, services);"
+  - "auto formats = std::make_unique<FormatProvider>(x);"
+invalid:
+  - "auto provider = makeAiProvider(settings, &why);"
+  - "auto route = Embeddings::route(settings);"
+  - "auto ways = RecognitionRoute::ways(settings, kind, true);"
+  - "auto voice = Voices::choose(settings);"
+  - "auto agent = CommandProvider::agent(id, program);"
+  - "auto provider = std::make_unique<OpenAiProvider>(server);"
+  - "auto voice = std::make_unique<PiperVoice>(program, models);"
+  - "auto vision = std::make_unique<Recognizers::Vision>(server, model);"

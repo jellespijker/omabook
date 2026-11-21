@@ -1,0 +1,32 @@
+id: ai-only-through-the-registry
+language: cpp
+severity: error
+message: A model is asked outside the registry; go through AiRegistry (answers, answerer, recognizers, embeddings, voice), so the person's provider, their hosted choice per capability and AI Off apply (ADR 0008).
+note: |
+  Every use of a model goes through one registry (#143): the companion, the
+  graph, recognition, the meaning index, reading aloud, the command line, the
+  MCP server and plugins. A provider made anywhere else skips the privacy rule
+  (AiPrivacy) and the status that says why a capability isn't there. The
+  registry makes them; the modules below it define how, and are ignored here.
+ignores:
+  # The registry itself.
+  - "src/airegistry.cpp"
+  # makeAiProvider, and the providers it makes for answers and quick (the registry calls it).
+  - "src/aichoice.cpp"
+  - "src/ai.cpp"
+  # The ways each capability goes, which the registry asks.
+  - "src/recognitionroute.cpp"
+  - "src/embeddings.cpp"
+  - "src/voices.cpp"
+  # Tests stand a fake in for a provider, or try one against a fake server.
+  - "tests/**"
+rule:
+  any:
+    - kind: call_expression
+      has:
+        field: function
+        regex: '^(makeAiProvider|Embeddings::route|RecognitionRoute::ways|Voices::choose|CommandProvider::agent)$'
+    - pattern: std::make_unique<$KIND>($$$ARGS)
+constraints:
+  KIND:
+    regex: '^(Recognizers::\w+|AnthropicProvider|CommandProvider|AntigravityProvider|OpenAiProvider|PiperVoice|SpeechDispatcherVoice|ServerVoice|WhisperLocal)$'
