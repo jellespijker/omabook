@@ -17,6 +17,18 @@
         return options.hosted === true;
     }
 
+    // What `ai.status` and `ai.ask` are asked with: the model, and `hosted`
+    // only when it is said, true or false (left out, the person's choice stands).
+    function asking(options) {
+        if (options === undefined || options === null)
+            return {model: ""};
+        need(options, "object", "The options");
+        var chosen = {model: String(options.model || "")};
+        if (options.hosted !== undefined && options.hosted !== null)
+            chosen.hosted = options.hosted === true;
+        return chosen;
+    }
+
     // A promise of what was recognised, which cancel() stops. The options are
     // {language, hosted, again, onWaiting}.
     function recognition(start, options) {
@@ -37,15 +49,17 @@
     return {
         ai: {
             available: function () { return assist.available(); },
+            status: function (options) { return assist.status(JSON.stringify(asking(options))); },
             ask: function (prompt, options) {
                 need(prompt, "string", "The prompt");
                 // The system prompt alone, as a string, is still understood.
                 options = typeof options === "string" ? {system: options} : (options || {});
                 if (options.onText !== undefined && options.onText !== null)
                     need(options.onText, "function", "onText");
+                var chosen = asking(options);
+                chosen.system = String(options.system || "");
                 return new Promise(function (resolve, reject) {
-                    assist.ask(prompt, String(options.system || ""), String(options.model || ""), options.onText || null,
-                               resolve, reject);
+                    assist.ask(prompt, JSON.stringify(chosen), options.onText || null, resolve, reject);
                 });
             }
         },

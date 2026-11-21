@@ -11,9 +11,9 @@
 class QJSEngine;
 class ScriptPlugin;
 
-// The C++ side of `omabook.files` and of what of `omabook.ui` reaches the
-// person's files and clipboard (#131), built in scriptfiles.js, which the
-// script sees and this never is.
+// The C++ side of `omabook.files`, of what of `omabook.ui` reaches the
+// person's files and clipboard (#131), and of `omabook.pdf` (#138), built in
+// scriptfiles.js, which the script sees and this never is.
 //
 // A plugin reads its own folder and writes under its data/ folder, text or
 // bytes (an ArrayBuffer, a typed array, base64), a file at most
@@ -26,7 +26,9 @@ class ScriptPlugin;
 // and read through a handle, never by their path; asking for either, and the
 // clipboard's text, only works right after the person did something of the
 // plugin's (ScriptPlugin::acting), and where there is no window (a command)
-// nothing is picked and the clipboard is empty.
+// nothing is picked and the clipboard is empty. Saving a file the plugin made
+// where the person chooses (`ui.saveFile`) is held to the same, and keeps
+// nothing of it in the plugin's folder.
 class ScriptFiles : public QObject {
     Q_OBJECT
 
@@ -56,6 +58,14 @@ public:
     // `kinds` is JSON; `answered` is given JSON: a list of what hold() describes.
     // Throws at once when the plugin may not ask the person for a file now.
     Q_INVOKABLE void pick(const QString &kinds, bool multiple, const QJSValue &answered);
+    // `what` is text or bytes; `answered` is given JSON, {name, size} or null
+    // when nothing was saved, and `refused` why it couldn't be written there.
+    // Throws at once when the plugin may not ask the person where now.
+    Q_INVOKABLE void save(const QString &name, const QString &kinds, const QJSValue &what, const QJSValue &answered,
+                          const QJSValue &refused);
+    // The PDF of `sketch` (JSON, as PdfSketch takes it) with `pictures` (a
+    // list of bytes), as bytes; null with the script told why not.
+    Q_INVOKABLE QJSValue pdf(const QString &sketch, const QJSValue &pictures);
     Q_INVOKABLE QString clipboardText();
     Q_INVOKABLE bool setClipboardText(const QString &text);
     // JSON: what hold() describes, or null.

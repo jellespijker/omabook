@@ -38,7 +38,8 @@ const QList<Entry> &entries();
 // (scriptapiui.cpp), the knowledge graph's and what goes into spaces
 // (scriptapigraph.cpp), and the rest.
 QList<Entry> uiEntries();
-// What of the window reaches the person's files and clipboard (scriptapiui.cpp, #131).
+// What of the window reaches the person's files and clipboard (scriptapiui.cpp,
+// #131), and what a plugin exports for them: a file saved, a PDF (#138).
 QList<Entry> deskEntries();
 QList<Entry> graphEntries();
 QList<Entry> spaceEntries();

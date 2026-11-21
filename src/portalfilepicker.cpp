@@ -211,6 +211,9 @@ void PortalFilePicker::pick(Purpose purpose, const QString &suggested) {
     case PluginFiles:
         pickForPlugin({}, false);
         break;
+    case PluginSave:
+        saveForPlugin(suggested, {});
+        break;
     }
 }
 
@@ -225,6 +228,18 @@ void PortalFilePicker::pickForPlugin(const QStringList &kinds, bool multiple) {
         options.insert(QStringLiteral("current_filter"), QVariant::fromValue(wanted));
     }
     requestFile(QStringLiteral("OpenFile"), multiple ? tr("Choose Files") : tr("Choose a File"), options, PluginFiles);
+}
+
+void PortalFilePicker::saveForPlugin(const QString &name, const QStringList &kinds) {
+    QVariantMap options;
+    options.insert(QStringLiteral("modal"), true);
+    // Only the name is the plugin's to say; the folder is the person's Documents to start with.
+    saveAs(options, QDir(startFolder(QStandardPaths::DocumentsLocation)).filePath(QFileInfo(name).fileName()));
+    if (const PortalFileFilter wanted = kindsFilter(kinds); !wanted.rules.isEmpty()) {
+        options.insert(QStringLiteral("filters"), QVariant::fromValue(PortalFileFilters{wanted, allFilter()}));
+        options.insert(QStringLiteral("current_filter"), QVariant::fromValue(wanted));
+    }
+    requestFile(QStringLiteral("SaveFile"), tr("Save a File"), options, PluginSave);
 }
 
 bool PortalFilePicker::connectToRequestPath(const QString &path) {
@@ -316,13 +331,13 @@ void PortalFilePicker::requestFile(const QString &method, const QString &title, 
 void PortalFilePicker::handleResponse(uint response, const QVariantMap &results) {
     const Purpose purpose = m_pendingPurpose;
     clearPending();
-    if (response != 0)
-        return;
     QList<QUrl> urls;
     for (const QString &uri : results.value(QStringLiteral("uris")).toStringList())
         urls << QUrl(uri);
-    if (!urls.isEmpty())
+    if (response == 0 && !urls.isEmpty())
         emit picked(purpose, urls);
+    else
+        emit dismissed(purpose);
 }
 
 void PortalFilePicker::clearPending() {

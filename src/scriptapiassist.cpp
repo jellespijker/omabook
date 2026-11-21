@@ -9,11 +9,23 @@ namespace ScriptApi {
 QList<Entry> assistEntries() {
     return {
         {"ai.available", "ai.available()", "", "Whether a model is set up to ask."},
-        {"ai.ask", "ai.ask(prompt, {system, onText, model})", "",
+        {"ai.status", "ai.status({model, hosted})", "",
+         "Whether the model the person chose may be asked, and where it is (#138): `{available, hosted, why, message}`. "
+         "`hosted` is true when it is someone else's computer: Claude's API, an agent (Claude Code, Codex, ...), a "
+         "command of the person's own (where it goes can't be known), a server that is neither this computer, the "
+         "tailnet nor an address in config.json's `recognition.own`, or a model that runs elsewhere (`...:cloud`); "
+         "false for their own server with a model of its own. `hosted: false` asks for their own computers alone; "
+         "true, or left out, takes the one they chose. `why` is a code: `\"ai-off\"` (the AI is set to Off: nothing "
+         "is asked of any model), `\"no-server\"` (none is set up), `\"hosted-not-chosen\"` (the chosen model is "
+         "someone else's and `hosted: false` was asked); empty when available. `message` says it in the desktop's "
+         "language. `model` is as for `ask`."},
+        {"ai.ask", "ai.ask(prompt, {system, onText, model, hosted})", "",
          "Asks the model the user chose in the settings; a promise of its whole answer as text, however long it takes "
          "to write. `onText(piece)` is called with each piece as it arrives. `model` is `\"main\"` (the default: the "
          "model for what a person reads), `\"quick\"` (the small, fast one, for reading text into structure) or a "
-         "model's own name. (A string in place of the options is the system prompt.)"},
+         "model's own name. `hosted: false` keeps it to the person's own computers: when the model they chose is someone "
+         "else's, the promise is refused with `status`'s message and nothing is sent (`ai.status` says so first). "
+         "(A string in place of the options is the system prompt.)"},
 
         {"recognize.available", "recognize.available(kind, {hosted})", "",
          "Whether `\"ink\"` or `\"audio\"` can be recognised here, true or false: a server that may be asked is set "

@@ -1783,7 +1783,7 @@ omabook.format.register({name: "Spins", extensions: ["spins"], claims: function 
         heard.sort();
         QCOMPARE(heard, QStringList({"main/big", "main/opus", "quick/small"}));
         // The one table of the API says so.
-        QVERIFY(ScriptApi::markdown().contains("ai.ask(prompt, {system, onText, model})"));
+        QVERIFY(ScriptApi::markdown().contains("ai.ask(prompt, {system, onText, model, hosted})"));
     }
 
     void aLongAnswerFromTheModelArrivesWhole() {

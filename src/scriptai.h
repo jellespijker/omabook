@@ -10,6 +10,7 @@
 
 #include "recognition.h"
 
+class AiProvider;
 class RecognitionQueue;
 class ScriptPlugin;
 
@@ -36,8 +37,16 @@ public:
     [[nodiscard]] QJSValue build(QJSEngine &engine);
 
     Q_INVOKABLE bool available();
-    Q_INVOKABLE void ask(const QString &prompt, const QString &system, const QString &model, const QJSValue &onText,
-                         const QJSValue &resolve, const QJSValue &reject);
+    // Whether the model a request would go to may be asked (#138): {available,
+    // hosted, why, message}, `hosted` whether it is someone else's computer,
+    // `why` a code ("ai-off", "no-server", "hosted-not-chosen"; empty when it
+    // may), `message` its plain words; `ai.status`. `options` is JSON:
+    // {model, hosted}, `hosted` false to keep to the person's own computers,
+    // true or left out for whichever the person chose.
+    Q_INVOKABLE QVariantMap status(const QString &options);
+    // `options` is JSON: {system, model, hosted}, `hosted` as for status().
+    Q_INVOKABLE void ask(const QString &prompt, const QString &options, const QJSValue &onText, const QJSValue &resolve,
+                         const QJSValue &reject);
 
     // Whether there is a way to recognise "ink" or "audio" that may be used,
     // for one who asked for a hosted server or not: `recognize.available`.
@@ -55,6 +64,15 @@ public:
     Q_INVOKABLE bool cancel(int job);
 
 private:
+    struct Reach {
+        bool available = false;
+        bool hosted = true;
+        QString why;
+        QString message;
+    };
+    // `provider`, when given, is handed the model to ask when it may be.
+    [[nodiscard]] Reach reach(const QJsonObject &options, std::unique_ptr<AiProvider> *provider = nullptr);
+
     int submit(Recognition::Input input, const QJsonObject &options, const QJSValue &onWaiting, const QJSValue &resolve,
                const QJSValue &reject);
     [[nodiscard]] RecognitionQueue *queue();

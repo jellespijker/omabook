@@ -10,6 +10,8 @@
 #include <algorithm>
 #include <memory>
 #include <optional>
+#include <print>
+#include <utility>
 #include <QQmlComponent>
 #include <QQmlEngine>
 #include <QQmlContext>
@@ -21,6 +23,7 @@
 
 #include "assistant.h"
 #include "backend.h"
+#include "booklink.h"
 #include "cli.h"
 #include "converter.h"
 #include "customization.h"
@@ -30,6 +33,7 @@
 #include "interface.h"
 #include "librarian.h"
 #include "libraryupgrade.h"
+#include "linkinbox.h"
 #include "log.h"
 #include "manual.h"
 #include "pluginformats.h"
@@ -112,6 +116,59 @@ int runCommand(QStringList words) {
     return runCli(words);
 }
 
+// A link to a place in a book (#138) opens it there, and brings the window forward.
+void openLink(const QString &link, Backend &backend, Reader &reader, QWindow *window) {
+    const auto target = BookLink::parse(link);
+    if (!target)
+        return;
+    const qint64 id = backend.library() ? BookLink::find(*backend.library(), target->book) : 0;
+    if (id <= 0)
+        backend.say(QObject::tr("The book that link opens isn't in this library."));
+    else if (target->section >= 0)
+        reader.openBookAt(id, target->section, 0);
+    else
+        reader.openBook(id);
+    if (window) {
+        window->show();
+        window->raise();
+        window->requestActivate();
+    }
+}
+
+// Links clicked elsewhere come to this window, unless another listens already;
+// `first` is the one it was opened with, if any.
+void followLinks(LinkInbox &links, const QString &first, Backend &backend, Reader &reader, const Interface &interface) {
+    links.listen();
+    QObject::connect(&links, &LinkInbox::linked, &reader,
+                     [&backend, &reader, &interface](const QString &given) { openLink(given, backend, reader, interface.window()); });
+    if (!first.isEmpty())
+        openLink(first, backend, reader, interface.window());
+}
+
+// The desktop entry hands over a file as a file:// address, and a link to a
+// book as itself: the file is left as its path, a link taken out.
+QString takeLink(QString &book) {
+    if (QUrl(book).isLocalFile())
+        book = QUrl(book).toLocalFile();
+    return BookLink::parse(book) ? std::exchange(book, QString()) : QString();
+}
+
+// What isn't a command is the window's, whose one word is a book: the word
+// that is none (no file, no book's number, no link to one), if there is one.
+std::optional<QString> unknownWord(const QStringList &given) {
+    static const QStringList valued{"--library", "--screenshot", "--look-up", "--model"};
+    qsizetype at = given.value(1) == "open" ? 2 : 1;
+    while (at < given.size() && given.at(at).startsWith('-'))
+        at += valued.contains(given.at(at)) ? 2 : 1;
+    QString word = given.value(at);
+    bool number = false;
+    word.toLongLong(&number);
+    const bool link = BookLink::parse(word) || QUrl(word).isLocalFile();
+    if (word.isEmpty() || number || link || QFileInfo::exists(word))
+        return std::nullopt;
+    return word;
+}
+
 // What the window reads, by the names it reads them by.
 void expose(const QQmlEngine &engine, std::initializer_list<std::pair<const char *, QObject *>> objects) {
     for (const auto &[name, object] : objects)
@@ -141,19 +198,12 @@ int main(int argc, char *argv[]) {
     // What isn't a command is the window's, whose one word is a book. A word
     // that is neither is said to be that, before any window, rather than
     // leaving the window to complain about an option a command would take.
-    if (!command) {
-        static const QStringList valued{"--library", "--screenshot", "--look-up", "--model"};
-        qsizetype at = given.value(1) == "open" ? 2 : 1;
-        while (at < given.size() && given.at(at).startsWith('-'))
-            at += valued.contains(given.at(at)) ? 2 : 1;
-        const QString word = given.value(at);
-        bool number = false;
-        word.toLongLong(&number);
-        if (!word.isEmpty() && !number && !QFileInfo::exists(word)) {
-            fprintf(stderr, "omabook: \"%s\" is not a command, a book file or a book's number. Run omabook for the commands.\n",
-                    qPrintable(word));
-            return 1;
-        }
+    if (const auto word = command ? std::nullopt : unknownWord(given)) {
+        std::println(stderr,
+                     "omabook: \"{}\" is not a command, a book file, a book's number or a link to one. "
+                     "Run omabook for the commands.",
+                     word->toStdString());
+        return 1;
     }
     if (windowless)
         drawNoWindow();
@@ -199,6 +249,11 @@ int main(int argc, char *argv[]) {
         arguments.showHelp();
     if (arguments.isSet("version"))
         arguments.showVersion();
+    QString book = arguments.positionalArguments().value(0);
+    const QString link = takeLink(book);
+    // A window already open takes a link, and then this one is done.
+    if (!link.isEmpty() && LinkInbox::handOver(link))
+        return 0;
 
     // Matches the window to omabook.desktop, so the compositor (Wayland app_id)
     // and the launcher pick up the installed icon. The compiled-in copy covers
@@ -222,7 +277,6 @@ int main(int argc, char *argv[]) {
     Look theme(&desktopTheme, &themeChoice, &custom);
     Settings settings;
     PortalFilePicker picker;
-    const QString book = arguments.positionalArguments().value(0);
     const auto known = chooseLibrary(settings, arguments, book);
     bringUpToDate(settings.libraryPath(), theme);
     Backend backend(&settings, &picker);
@@ -286,6 +340,8 @@ int main(int argc, char *argv[]) {
         return 1;
     if (opening > 0)
         reader.openBook(opening);
+    LinkInbox links;
+    followLinks(links, link, backend, reader, interface);
     if (const qint64 id = arguments.value(lookUp).toLongLong(); id > 0 && interface.window())
         QMetaObject::invokeMethod(interface.window(), "lookUpBook", Q_ARG(QVariant, id));
     // For the README's picture and for looking at a change without a desktop.

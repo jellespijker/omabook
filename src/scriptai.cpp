@@ -7,11 +7,13 @@
 #include <vector>
 
 #include "aicall.h"
+#include "aireach.h"
 #include "failure.h"
 #include "inkcodec.h"
 #include "recognitionqueue.h"
 #include "recognitionroute.h"
 #include "scriptplugin.h"
+#include "settings.h"
 
 using namespace Qt::StringLiterals;
 
@@ -88,14 +90,41 @@ QJSValue ScriptAi::build(QJSEngine &engine) {
 
 bool ScriptAi::available() { return m_plugin->m_services.ai && m_plugin->m_services.ai(nullptr) != nullptr; }
 
-void ScriptAi::ask(const QString &prompt, const QString &system, const QString &model, const QJSValue &onText, const QJSValue &resolve,
-                   const QJSValue &reject) {
+ScriptAi::Reach ScriptAi::reach(const QJsonObject &options, std::unique_ptr<AiProvider> *provider) {
+    // The model to ask is the one the settings choose, which is none with the AI set to Off.
+    const Settings *settings = m_plugin->m_services.settings;
     QString why = u"No AI is set up."_s;
-    std::unique_ptr<AiProvider> provider = m_plugin->m_services.ai ? m_plugin->m_services.ai(&why) : nullptr;
-    if (!provider) {
-        reject.call({why});
+    std::unique_ptr<AiProvider> made = m_plugin->m_services.ai ? m_plugin->m_services.ai(&why) : nullptr;
+    if (!made && settings && settings->aiOff())
+        return {.available = false, .hosted = false, .why = u"ai-off"_s, .message = ::Failure(::Failure::Code::AiOff).text()};
+    if (!made)
+        return {.available = false, .hosted = false, .why = u"no-server"_s, .message = why};
+    // Where it can't be told, it is taken for someone else's.
+    const bool hosted = settings == nullptr || AiReach::hosted(*settings, options.value("model"_L1).toString());
+    if (hosted && options.contains("hosted"_L1) && !options.value("hosted"_L1).toBool())
+        return {.available = false,
+                .hosted = true,
+                .why = u"hosted-not-chosen"_s,
+                .message = tr("The AI you chose, %1, is someone else's computer, and this plugin asks only your own.").arg(made->name())};
+    if (provider)
+        *provider = std::move(made);
+    return {.available = true, .hosted = hosted, .why = {}, .message = {}};
+}
+
+QVariantMap ScriptAi::status(const QString &options) {
+    const Reach found = reach(QJsonDocument::fromJson(options.toUtf8()).object());
+    return {{u"available"_s, found.available}, {u"hosted"_s, found.hosted}, {u"why"_s, found.why}, {u"message"_s, found.message}};
+}
+
+void ScriptAi::ask(const QString &prompt, const QString &options, const QJSValue &onText, const QJSValue &resolve, const QJSValue &reject) {
+    const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    std::unique_ptr<AiProvider> provider;
+    if (const Reach found = reach(chosen, &provider); !found.available) {
+        reject.call({found.message});
         return;
     }
+    const QString system = chosen.value("system"_L1).toString();
+    const QString model = chosen.value("model"_L1).toString();
     auto *asking = new AiCall(std::move(provider), m_plugin);
     m_plugin->busy(1);
     const auto finish = [this, asking](const QJSValue &callback, const QString &text) {

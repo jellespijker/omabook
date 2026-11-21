@@ -23,6 +23,31 @@
 
     function may(permission) { return info.permissions.indexOf(permission) >= 0; }
 
+    // `omabook.http`, for a plugin with the permission.
+    function web() {
+        var request = function (method, url, body, options) {
+            need(url, "string", "The address");
+            var headers = (options && options.headers) || {};
+            if (body !== null && typeof body === "object") {
+                body = JSON.stringify(body);
+                if (!headers["Content-Type"])
+                    headers = Object.assign({"Content-Type": "application/json"}, headers);
+            }
+            return new Promise(function (resolve, reject) {
+                host.http(method, url, body === null || body === undefined ? "" : String(body), JSON.stringify(headers),
+                          function (answer) {
+                              var response = parse(answer);
+                              response.json = function () { return JSON.parse(response.text); };
+                              resolve(response);
+                          }, reject);
+            });
+        };
+        return {
+            get: function (url, options) { return request("GET", url, null, options); },
+            post: function (url, body, options) { return request("POST", url, body, options); }
+        };
+    }
+
     // What newer JavaScript has that this engine lacks and that costs a
     // few lines to give it: each only where it is missing, and none of them
     // showing up in a `for ... in`. (What can't be given this way, syntax
@@ -350,34 +375,15 @@
             setOption: function (key, value) { return host.setOption(String(key), JSON.stringify(value)); }
         },
 
+        // Writing a PDF (scriptfiles.js).
+        pdf: filed.pdf,
         // Asking the model, and recognising ink and speech (scriptassist.js).
         ai: assisted.ai,
         recognize: assisted.recognize
     };
 
-    if (may("http")) {
-        var request = function (method, url, body, options) {
-            need(url, "string", "The address");
-            var headers = (options && options.headers) || {};
-            if (body !== null && typeof body === "object") {
-                body = JSON.stringify(body);
-                if (!headers["Content-Type"])
-                    headers = Object.assign({"Content-Type": "application/json"}, headers);
-            }
-            return new Promise(function (resolve, reject) {
-                host.http(method, url, body === null || body === undefined ? "" : String(body), JSON.stringify(headers),
-                          function (answer) {
-                              var response = parse(answer);
-                              response.json = function () { return JSON.parse(response.text); };
-                              resolve(response);
-                          }, reject);
-            });
-        };
-        omabook.http = {
-            get: function (url, options) { return request("GET", url, null, options); },
-            post: function (url, body, options) { return request("POST", url, body, options); }
-        };
-    }
+    if (may("http"))
+        omabook.http = web();
 
     if (may("files")) {
         // Books the plugin makes come from files it wrote, so these go

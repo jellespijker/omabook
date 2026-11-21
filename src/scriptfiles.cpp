@@ -4,6 +4,8 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QFontDatabase>
+#include <QGuiApplication>
 #include <QImage>
 #include <QImageReader>
 #include <QJSEngine>
@@ -17,11 +19,14 @@
 #include <optional>
 #include <tuple>
 #include <utility>
+#include <vector>
 
 #include "library.h"
+#include "pdfsketch.h"
 #include "pluginfiles.h"
 #include "scriptdesk.h"
 #include "scriptplugin.h"
+#include "settings.h"
 
 using namespace Qt::StringLiterals;
 
@@ -36,6 +41,41 @@ constexpr std::size_t heldAtMost = 32;
 }
 
 [[nodiscard]] QString megabytes(qint64 bytes) { return QString::number(bytes / (qint64{1024} * 1024)) + u" MB"_s; }
+
+// The kinds of file a script named, as JSON.
+[[nodiscard]] QStringList kindsOf(const QString &json) {
+    QStringList kinds;
+    for (const auto &kind : QJsonDocument::fromJson(json.toUtf8()).array())
+        kinds << kind.toString();
+    return kinds;
+}
+
+// Why a PDF wasn't drawn, as a script is told.
+[[nodiscard]] QString whyNot(const PdfSketch::Problem &problem) {
+    using enum PdfSketch::Problem::Kind;
+    switch (problem.kind) {
+    case NoPages:
+        return u"A PDF needs a page: add one with page()."_s;
+    case TooManyPages:
+        return u"A plugin's PDF has at most %1 pages."_s.arg(PdfSketch::maxPages);
+    case TooManyItems:
+        return u"A plugin's PDF holds at most %1 paths, texts and pictures."_s.arg(PdfSketch::maxItems);
+    case PageSize:
+        return u"Page %1 is no size a PDF has: each side is 1 to %2 points."_s.arg(problem.page + 1).arg(PdfSketch::maxSide);
+    case Picture:
+        return u"Picture %1 on page %2 is none Omabook reads: give the bytes of a PNG, JPEG or WebP."_s.arg(problem.index + 1)
+            .arg(problem.page + 1);
+    case Unwritable:
+        break;
+    }
+    return u"The PDF couldn't be written."_s;
+}
+
+// Writes a file the person chose, whole or not at all.
+[[nodiscard]] bool writeOut(const QString &path, const QByteArray &bytes) {
+    QSaveFile file(path);
+    return file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit();
+}
 
 // How large a picture is, when what is held is one; invalid when it isn't.
 template <typename Held> [[nodiscard]] QSize pictureSize(const Held &held) {
@@ -274,10 +314,62 @@ void ScriptFiles::pick(const QString &kinds, bool multiple, const QJSValue &answ
         told({});
         return;
     }
-    QStringList wanted;
-    for (const auto &kind : QJsonDocument::fromJson(kinds.toUtf8()).array())
-        wanted << kind.toString();
-    desk->pickFiles(wanted, multiple, told);
+    desk->pickFiles(kindsOf(kinds), multiple, told);
+}
+
+void ScriptFiles::save(const QString &name, const QString &kinds, const QJSValue &what, const QJSValue &answered, const QJSValue &refused) {
+    if (!allowed(u"files"_s)) {
+        fail(u"A plugin saves a file only with the files permission."_s);
+        return;
+    }
+    ScriptDesk *desk = m_plugin->m_services.desk;
+    if (desk && !acting(u"A plugin asks where to save a file"_s))
+        return;
+    QByteArray bytes = what.isString() ? what.toString().toUtf8() : m_plugin->m_engine.fromScriptValue<QByteArray>(what);
+    if (bytes.size() > PluginFiles::maxFileBytes) {
+        fail(u"A plugin saves at most %1 at once."_s.arg(megabytes(PluginFiles::maxFileBytes)));
+        return;
+    }
+    m_plugin->busy(1);
+    const auto told = [self = QPointer(this), answered, refused, bytes = std::move(bytes)](const QString &path) {
+        if (!self)
+            return;
+        const QString name = QFileInfo(path).fileName();
+        QString problem;
+        if (path.isEmpty())
+            self->m_plugin->call(answered, {QJSValue(u"null"_s)}, &problem);
+        else if (writeOut(path, bytes))
+            self->m_plugin->call(answered, {QJSValue(compact(QJsonObject{{"name", name}, {"size", bytes.size()}}))}, &problem);
+        else
+            self->m_plugin->call(refused, {QJSValue(u"\"%1\" can't be written there."_s.arg(name))}, &problem);
+        if (!problem.isEmpty())
+            self->m_plugin->report(problem);
+        self->m_plugin->busy(-1);
+    };
+    // Nobody to ask (a command): nothing saved.
+    if (!desk) {
+        told({});
+        return;
+    }
+    desk->saveFile(QFileInfo(name).fileName(), kindsOf(kinds), told);
+}
+
+QJSValue ScriptFiles::pdf(const QString &sketch, const QJSValue &pictures) {
+    std::vector<QByteArray> given;
+    const int count = pictures.property(u"length"_s).toInt();
+    given.reserve(static_cast<std::size_t>(std::max(count, 0)));
+    for (int index = 0; index < count; ++index)
+        given.push_back(m_plugin->m_engine.fromScriptValue<QByteArray>(pictures.property(static_cast<quint32>(index))));
+    const Settings *settings = m_plugin->m_services.settings;
+    const PdfSketch::Fonts fonts{.app = QGuiApplication::font().family(),
+                                 .reader = settings ? settings->fontFamily() : QString(),
+                                 .mono = QFontDatabase::systemFont(QFontDatabase::FixedFont).family()};
+    const auto drawn = PdfSketch::render(QJsonDocument::fromJson(sketch.toUtf8()).object(), given, fonts);
+    if (!drawn) {
+        fail(whyNot(drawn.error()));
+        return {QJSValue::NullValue};
+    }
+    return m_plugin->m_engine.toScriptValue(*drawn);
 }
 
 QString ScriptFiles::clipboardText() {

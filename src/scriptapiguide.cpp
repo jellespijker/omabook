@@ -93,6 +93,36 @@ installed too, and a file removed with `files.remove` is removed there.
 `settings.json` stays on its computer, and so does a file over the limits.
 None of it goes into a space shared with others.
 
+### Exports: saving, PDFs and links
+
+What a plugin exports for the person goes where they choose, not into
+`data/` (which goes to their other computers): `omabook.ui.saveFile` asks
+with the desktop's own save dialog, on their action as `pickFile` does, and
+writes the bytes or text there. `omabook.pdf` draws a PDF to save, in the
+app's fonts:
+
+```js
+omabook.commands.register({id: "export", title: "Export as PDF", place: "view", run: function () {
+    const pdf = omabook.pdf.create({width: 595, height: 842, title: "Notebook"});
+    const page = pdf.page();
+    page.text("Monday", {x: 48, y: 40, size: 20, bold: true});
+    page.path([48, 80, 200, 96, 320, 80], {width: 2, color: "#3366cc", alpha: 0.8});
+    page.image(omabook.files.readBytes("data/pictures/one.png"), {x: 48, y: 120, width: 240});
+    return omabook.ui.saveFile({name: "Notebook.pdf", kinds: [".pdf"], bytes: pdf.bytes()});
+}});
+```
+
+A link to a place in a book opens Omabook there, from Markdown, a note or
+a browser: `"omabook://book/" + book.gid + "/section/" + section` (a book's
+`gid` from `library.get`, the same on each of the person's computers;
+`section` from 0, or left out for where they left it). A window already
+open takes it.
+
+Before asking the AI about something private, `omabook.ai.status({hosted:
+false})` says whether the model the person chose is their own (this
+computer, their tailnet, an address they marked as theirs); `ai.ask(prompt,
+{hosted: false})` then never sends it to anyone else's.
+
 To hand `omabook plugin run` more than a command line holds, give `-` for
 the JSON and pipe it in: `omabook plugin run notes import - < pages.json`.
 )guide");

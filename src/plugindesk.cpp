@@ -34,18 +34,20 @@ PluginDesk::PluginDesk(FilePicker *picker, QObject *parent) : QObject(parent), m
     if (QCoreApplication *application = QCoreApplication::instance())
         application->installEventFilter(this);
     connect(m_picker, &FilePicker::picked, this, [this](FilePicker::Purpose purpose, const QList<QUrl> &urls) {
-        if (purpose != FilePicker::PluginFiles || !m_picked)
-            return;
         QStringList paths;
         for (const QUrl &url : urls)
             if (url.isLocalFile())
                 paths << url.toLocalFile();
-        std::exchange(m_picked, nullptr)(paths);
+        if (purpose == FilePicker::PluginFiles && m_picked)
+            std::exchange(m_picked, nullptr)(paths);
+        else if (purpose == FilePicker::PluginSave && m_saved)
+            std::exchange(m_saved, nullptr)(paths.value(0));
     });
     // A dialog that never came, or was dismissed, is no file.
-    connect(m_picker, &FilePicker::failed, this, [this] {
-        if (m_picked)
-            std::exchange(m_picked, nullptr)({});
+    connect(m_picker, &FilePicker::failed, this, [this] { answerNone(); });
+    connect(m_picker, &FilePicker::dismissed, this, [this](FilePicker::Purpose purpose) {
+        if (purpose == FilePicker::PluginFiles || purpose == FilePicker::PluginSave)
+            answerNone();
     });
 }
 
@@ -65,6 +67,22 @@ void PluginDesk::pickFiles(const QStringList &kinds, bool multiple, const std::f
     }
     m_picked = picked;
     m_picker->pickForPlugin(kinds, multiple);
+}
+
+void PluginDesk::saveFile(const QString &name, const QStringList &kinds, const std::function<void(const QString &)> &chosen) {
+    if (m_saved) {
+        chosen({});
+        return;
+    }
+    m_saved = chosen;
+    m_picker->saveForPlugin(name, kinds);
+}
+
+void PluginDesk::answerNone() {
+    if (m_picked)
+        std::exchange(m_picked, nullptr)({});
+    if (m_saved)
+        std::exchange(m_saved, nullptr)({});
 }
 
 QString PluginDesk::clipboardText() const {

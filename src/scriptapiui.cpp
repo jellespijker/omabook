@@ -81,6 +81,7 @@ QList<Entry> uiEntries() {
     };
 }
 
+// The person's files and clipboard (#131), and what a plugin exports for them (#138).
 QList<Entry> deskEntries() {
     return {
         {"ui.pickFile", "ui.pickFile({kinds, multiple, title})", "files",
@@ -91,6 +92,28 @@ QList<Entry> deskEntries() {
          "`type` its MIME type, `width` and `height` a picture's; it is read only through these, never by its path, "
          "and `copyTo` writes it under the plugin's `data/` folder (answering its size). Only right after the person "
          "did something of the plugin's (ran one of its commands, used its view or panel): otherwise it throws."},
+        {"ui.saveFile", "ui.saveFile({name, kinds, bytes, text})", "files",
+         "Saves what the plugin made where the person chooses, with the desktop's own save dialog (#138): `name` is "
+         "the file's name to start with (`\"Notebook.pdf\"`), in their Documents folder; `kinds` narrows the dialog as "
+         "for `ui.pickFile`; `bytes` (an ArrayBuffer or a typed array, at most 64 MB) or `text` is what is written. "
+         "Nothing of it is kept in the plugin's `data/` folder, so nothing of it goes to their other computers. A "
+         "promise of `{name, size}` (the name they gave it, never the folder), of `null` when they chose none or "
+         "there is no window (a command), or refused when it can't be written there. Only right after the person "
+         "did something of the plugin's, as for `ui.pickFile`; otherwise it throws."},
+        {"pdf.create", "pdf.create({width, height, title})", "",
+         "A PDF to draw (#138), written by Omabook (Qt's own PDF writer): paths stay vectors, text is real text in an "
+         "embedded font, pictures are decoded here. Sizes are in points (1/72 inch), from the top left of the page; "
+         "`width` and `height` (595 by 842, A4, when not given) are each page's unless it says otherwise. It answers "
+         "`{page({width, height}), pages(), bytes()}`: `page` adds a page and answers `{path(points, {width, color, "
+         "alpha, fill, closed}), text(words, {x, y, size, font, color, alpha, bold, italic, width}), image(picture, "
+         "{x, y, width, height})}`. A path's `points` are `[x, y, x, y, ...]`, `[[x, y], ...]` or `[{x, y}, ...]`, "
+         "stroked `width` wide (1; 0 for none) with round ends and filled with `fill` when given; a colour is "
+         "`\"#3366cc\"` or a name, `alpha` 0 to 1. Text has its top at `y`, is wrapped at `width` when given, and is in "
+         "`font`: `\"\"` the app's, `\"reader\"` the reader's, `\"mono\"`, or a family by name. A picture is the bytes of "
+         "a PNG, JPEG or WebP (or a picked file), drawn at its size in points unless `width` or `height` says (one "
+         "keeps its shape). `bytes()` is the PDF as an ArrayBuffer, for `ui.saveFile` or `files.write`; it throws "
+         "when a page has no size (1 to 14400 points a side) or a picture isn't one, over 2000 pages or 200000 "
+         "items. No permission is needed: nothing is written until the plugin writes the bytes."},
         {"ui.clipboard.readText", "ui.clipboard.readText()", "clipboard",
          "The text on the clipboard, `\"\"` when there is none or no window. Like everything of `ui.clipboard`, only "
          "right after the person did something of the plugin's, as for `ui.pickFile`; otherwise it throws."},

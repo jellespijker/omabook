@@ -15,6 +15,7 @@ public:
 
     void pick(Purpose purpose, const QString &suggested = {}) override;
     void pickForPlugin(const QStringList &kinds, bool multiple) override;
+    void saveForPlugin(const QString &name, const QStringList &kinds) override;
 
 private slots:
     void handleResponse(uint response, const QVariantMap &results);

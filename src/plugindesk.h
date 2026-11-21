@@ -10,8 +10,8 @@
 class FilePicker;
 
 // The window's side of what plugins ask of the desktop (ScriptDesk, #131):
-// the desktop's file dialog through the window's FilePicker, one request at a
-// time, and the clipboard. It watches the window's input, so a plugin is
+// the desktop's file dialogs through the window's FilePicker, to open and to
+// save (#138), one request of each at a time, and the clipboard. It watches the window's input, so a plugin is
 // held to the person having just pressed a key, a button or the screen.
 class PluginDesk : public QObject, public ScriptDesk {
     Q_OBJECT
@@ -22,6 +22,7 @@ public:
 
     [[nodiscard]] bool justActed() const override;
     void pickFiles(const QStringList &kinds, bool multiple, const std::function<void(const QStringList &)> &picked) override;
+    void saveFile(const QString &name, const QStringList &kinds, const std::function<void(const QString &)> &chosen) override;
     [[nodiscard]] QString clipboardText() const override;
     void setClipboardText(const QString &text) override;
     [[nodiscard]] QImage clipboardImage() const override;
@@ -31,7 +32,11 @@ protected:
     bool eventFilter(QObject *watched, QEvent *event) override;
 
 private:
+    // A dialog that failed or was closed: nothing for whoever waits on one.
+    void answerNone();
+
     FilePicker *m_picker;
     QElapsedTimer m_input; // since the person last pressed something
     std::function<void(const QStringList &)> m_picked;
+    std::function<void(const QString &)> m_saved;
 };

@@ -76,6 +76,7 @@ void Backend::picked(FilePicker::Purpose purpose, const QList<QUrl> &urls) {
     case FilePicker::SaveSpace:
     case FilePicker::OpenSpace:
     case FilePicker::PluginFiles:
+    case FilePicker::PluginSave:
         // The plugin manager's, the space desk's and the plugins' desk's, which listen to the picker themselves.
         break;
     }
