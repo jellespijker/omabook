@@ -26,6 +26,12 @@ moves those lines under its version.
 - `omabook set --meta` leaves the details its file doesn't name as they are (#154); before, a file without an ISBN cleared the book's. `"isbn": ""` still clears it.
 - A book one computer holds twice (a Goodreads entry without a file and the book's file, with the same ISBN) and the other once settles in one sync (#154): its details are decided once and given to both copies, the copies' covers no longer go back and forth, and a dry run lists the book once, the same from either side.
 
+## [0.2.0.2] - 2026-11-21
+
+### Fixed
+
+- A margin note opens on its card again where the window has no room for the margin column beside the pages (large type, a laptop's screen): asked for from the selection's menu or with Shift+N, it closed at once, unwritten (#157).
+
 ## [0.2.0.1] - 2026-11-21
 
 0.2.0 was tagged but its package never built; this is the first release of 0.2.0, with this fix.
@@ -359,6 +365,7 @@ scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
 [Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.0...HEAD
+[0.2.0.2]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...v0.2.0.2
 [0.2.0.1]: https://github.com/jellespijker/omabook/compare/v0.2.0...v0.2.0.1
 [0.2.0]: https://github.com/jellespijker/omabook/compare/v0.1.10.3...v0.2.0
 [0.1.10.3]: https://github.com/jellespijker/omabook/compare/v0.1.10.1...v0.1.10.3

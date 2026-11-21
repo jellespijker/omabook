@@ -43,7 +43,10 @@ Item {
             const top = place(span.start)
             if (!isNaN(top)) all.push({ id: "o:" + span.id, other: span, top: top })
         }
-        if (reading && reading.draft && reading.draftHere) {
+        // Only where the notes stand in the column: without one the note is
+        // written on its card (ReadingNotes), and a second, hidden field for
+        // it here would take the keyboard and close it unwritten (#157).
+        if (reading && reading.beside && reading.draft && reading.draftHere) {
             const top = place(reading.draft.start)
             if (!isNaN(top)) all.push({ id: 0, start: reading.draft.start, end: reading.draft.end, note: "", ink: false, top: top })
         }
