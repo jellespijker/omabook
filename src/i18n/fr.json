@@ -2155,7 +2155,6 @@
   "Finger: automatic": "Doigt : automatique",
   "Finger: on": "Doigt : oui",
   "Finger: off": "Doigt : non",
-  "On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen or the mouse: the bar above the page picks the pen, the eraser and the ink, and the pen's other end erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; {reader.show_ink} puts it away to read the pages as they were.": "Sur les pages d'un PDF ou d'une bande dessinée, {reader.ink} vous permet d'écrire et de dessiner sur la page même, au stylet ou à la souris : la barre au-dessus de la page choisit le stylet, la gomme et l'encre, et l'autre bout du stylet efface. L'encre reste où vous l'avez mise à tous les zooms, suit le livre sur vos autres ordinateurs et figure sous Surlignages ({reader.annotations}). Ctrl+Z et Ctrl+Maj+Z l'annulent et la rétablissent une pause du stylet à la fois ; {reader.show_ink} la masque pour lire les pages telles qu'elles étaient.",
   "%1 can't be written. %2": "Impossible d'écrire %1. %2",
   "Details are written into a book's EPUB, and this book has none.": "Les détails s'écrivent dans l'EPUB d'un livre, et ce livre n'en a pas.",
   "Put the File Back": "Remettre le fichier",
