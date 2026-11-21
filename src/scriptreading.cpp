@@ -38,7 +38,7 @@ namespace {
 [[nodiscard]] Passage passageOf(const BookText &text, const QJsonObject &given) {
     const QJsonObject passage = given.contains("passage"_L1) ? given.value("passage"_L1).toObject() : given;
     if (passage.contains("from"_L1)) {
-        const Passage said = Passage::fromJson(passage);
+        Passage said = Passage::fromJson(passage);
         // Its words placed in the book's text, where they are now.
         if (const std::optional<FoundPassage> found = said.findAgain(text))
             return found->passage;

@@ -261,7 +261,7 @@ public:
             return "null";
         }
         emit p->touchedLibrary();
-        return compact(ScriptBook::of(library, *library->book(book->id), true));
+        return library->book(book->id).transform([library](const Book &now) { return compact(ScriptBook::of(library, now, true)); }).value_or("null");
     }
     Q_INVOKABLE void librarySetReading(double id, const QString &reading) {
         Library *library = this->library(true);
@@ -341,7 +341,7 @@ public:
         indexWordsLater();
         // The reader follows a book that grew under it, asked or not.
         emit p->reloadBookRequested(book->id);
-        return compact(ScriptBook::of(library, *library->book(book->id), true));
+        return library->book(static_cast<qint64>(id)).transform([library](const Book &now) { return compact(ScriptBook::of(library, now, true)); }).value_or("null");
     }
     Q_INVOKABLE bool libraryRemove(double id) {
         Library *library = this->library(true);
