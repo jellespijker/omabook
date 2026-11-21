@@ -12,6 +12,8 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.1.10.1] - 2026-11-21
+
 ### Fixed
 
 - A finger writes on the pages of a PDF or a comic (#134): with D on, a finger moved the page and drew nothing. Now one finger writes and draws until a pen has been used, two fingers scroll and zoom, and once a pen is used a finger scrolls, so a palm doesn't scribble. *Write with a finger* in the writing bar makes it automatic, on or off, and the choice is kept; a handwritten margin note being edited does the same.
@@ -293,7 +295,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.10...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.1.10.1...HEAD
+[0.1.10.1]: https://github.com/jellespijker/omabook/compare/v0.1.10...v0.1.10.1
 [0.1.10]: https://github.com/jellespijker/omabook/compare/v0.1.9.1...v0.1.10
 [0.1.9.1]: https://github.com/jellespijker/omabook/compare/v0.1.9...v0.1.9.1
 [0.1.9]: https://github.com/jellespijker/omabook/compare/v0.1.8.1...v0.1.9
