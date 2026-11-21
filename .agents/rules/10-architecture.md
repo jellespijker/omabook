@@ -78,3 +78,4 @@ before you start; write one when your change decides something the next person w
 
 - [0001: Owned spaces, replicated as change logs, in place of state sync](../../docs/adr/0001-owned-spaces-and-replicated-logs.md)
 - [0005: Failures below the front ends are codes, worded where they are shown](../../docs/adr/0005-failures-are-codes-worded-where-shown.md)
+- [0008: Each AI capability has its own provider, local unless the person allows a hosted one](../../docs/adr/0008-a-provider-per-ai-capability.md)

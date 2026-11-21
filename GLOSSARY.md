@@ -113,3 +113,13 @@ _Avoid_: Copy, partition, side
 **Unfiled**:
 The tenant of the books that are in no top-level collection.
 _Avoid_: None, default, uncategorised
+
+## AI
+
+**Capability**:
+One kind of thing Omabook asks a model to do, chosen on its own: answers, the quick model, handwriting, speech to text, text to speech or embeddings. Each has its own provider and model, and its own say over whether a hosted one may be used (ADR 0008).
+_Avoid_: Feature, tier (for all six), task, skill
+
+**Provider**:
+What does a capability's work: a service (Claude's API, Gemini's, OpenAI's), a subscription through its agent (Claude Code, Antigravity), a server (Ollama, Omarchy's local models, another of the OpenAI-compatible API), a program on this computer (voxtype, whisper.cpp, Piper, speech-dispatcher) or a command; the person's own or hosted, as an own server is (`AiProvider`, ADR 0008).
+_Avoid_: Backend, engine (alone), vendor, model (what a provider runs)
