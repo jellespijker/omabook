@@ -12,11 +12,15 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-11-21
+
+### Added
+
+- Read aloud on a computer with no voice offers to install one (#156), on Omarchy the way its own apps do, in a terminal that asks for the password: speech-dispatcher with espeak-ng from Arch's packages, or Piper's natural voice for the book's language from the AUR. Once the terminal is closed the book is read from where it was asked. The Aa panel offers the same.
+
 ### Changed
 
 - The Notebooks plugin is in Omabook's list of plugins (#155): find it by its name in the plugins, or `omabook plugin add notebooks`, as Storyteller is.
-### Added
-- Read aloud on a computer with no voice offers to install one (#156), on Omarchy the way its own apps do, in a terminal that asks for the password: speech-dispatcher with espeak-ng from Arch's packages, or Piper's natural voice for the book's language from the AUR. Once the terminal is closed the book is read from where it was asked. The Aa panel offers the same.
 
 ### Fixed
 
@@ -25,6 +29,7 @@ moves those lines under its version.
 - A sync never gives one book's details to another (#154): books to read from Goodreads were paired by what the last Goodreads sync brought (the same "to-read" for every one of them), so a sync could rename a book after another and take its ISBN away. Such bookkeeping names no book now, and the pairings it made before are no longer followed.
 - `omabook set --meta` leaves the details its file doesn't name as they are (#154); before, a file without an ISBN cleared the book's. `"isbn": ""` still clears it.
 - A book one computer holds twice (a Goodreads entry without a file and the book's file, with the same ISBN) and the other once settles in one sync (#154): its details are decided once and given to both copies, the copies' covers no longer go back and forth, and a dry run lists the book once, the same from either side.
+- A finger's tap on a margin note's Done closes the note and nothing else (#141): the page heard the tap too, and turned or showed its bar.
 
 ## [0.2.0.2] - 2026-11-21
 
@@ -364,7 +369,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/jellespijker/omabook/compare/v0.2.0.2...v0.2.1
 [0.2.0.2]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...v0.2.0.2
 [0.2.0.1]: https://github.com/jellespijker/omabook/compare/v0.2.0...v0.2.0.1
 [0.2.0]: https://github.com/jellespijker/omabook/compare/v0.1.10.3...v0.2.0
