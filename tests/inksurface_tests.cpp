@@ -514,8 +514,7 @@ private slots:
             bench.touches({bench.finger(State::Updated, QPointF(210, 210 - (step * 10)), 9),
                            bench.finger(State::Updated, QPointF(400, 210 - (step * 10)), 9, 2)});
         // The window delivers the moves of a touch at its next frame, together.
-        QTRY_VERIFY2(std::abs(under->property("contentY").toDouble() - 600) < 0.5,
-                     qPrintable(under->property("contentY").toString()));
+        QTRY_VERIFY2(std::abs(under->property("contentY").toDouble() - 600) < 0.5, qPrintable(under->property("contentY").toString()));
         QVERIFY(pinched.isEmpty());
         for (int step = 1; step <= 5; ++step)
             bench.touches({bench.finger(State::Updated, QPointF(210 - (step * 10), 110), 9),
@@ -535,8 +534,7 @@ private slots:
         QVERIFY(bench.pause().isEmpty());
         bench.swipe(QPointF(100, 300), QPointF(300, 320), 9);
         QCOMPARE(bench.surface->count(), 1);
-        QVERIFY2(std::abs(under->property("contentY").toDouble() - 600) < 0.5,
-                 qPrintable(under->property("contentY").toString()));
+        QVERIFY2(std::abs(under->property("contentY").toDouble() - 600) < 0.5, qPrintable(under->property("contentY").toString()));
     }
 
     // A mouse draws, unless the surface says it doesn't.
