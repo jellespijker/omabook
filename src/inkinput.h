@@ -1,6 +1,9 @@
 #pragma once
 
+#include <QInputDevice>
 #include <QtTypes>
+
+class QPointingDevice;
 
 // Which touches of an ink surface are a palm (#78). A pen always writes. A
 // touch is a palm, ignored, when it is wider than a fingertip or comes while
@@ -55,5 +58,11 @@ private:
     bool m_inProximity = false;
     quint64 m_leftMs = 0;
 };
+
+// What Qt says of the devices: a pointing device's id (-1 for none),
+// whether it knows a pen on this computer, and what a device can tell.
+[[nodiscard]] qint64 deviceId(const QPointingDevice *device);
+[[nodiscard]] bool knowsAPen();
+[[nodiscard]] bool can(const QPointingDevice *device, QInputDevice::Capability capability);
 
 } // namespace Ink

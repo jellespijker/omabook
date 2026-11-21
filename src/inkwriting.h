@@ -9,6 +9,7 @@
 #include <utility>
 #include <vector>
 
+#include "inklasso.h"
 #include "inksheet.h"
 #include "inkstroke.h"
 
@@ -42,15 +43,19 @@ struct Rubber {
 };
 
 // The pointers that are down on a sheet (#78), and what each does: writes a
-// stroke, which goes on the sheet when the pointer lifts, or erases along
-// its way, one step of undo for the sweep. Each answers the change it made
-// to the sheet, none while a stroke is still being written.
+// stroke, which goes on the sheet when the pointer lifts, erases along its
+// way, one step of undo for the sweep, or draws the lasso's path or drags
+// its selection (#129). Each answers the change it made to the sheet, none
+// while a stroke is still being written.
 class Writing {
 public:
-    explicit Writing(Sheet &sheet) : m_sheet(&sheet) {}
+    explicit Writing(Sheet &sheet, Lasso *lasso = nullptr) : m_sheet(&sheet), m_lasso(lasso) {}
 
     void write(Pointer pointer, const Input &input, const Nib &nib, bool touch);
     Change erase(Pointer pointer, const Input &input, Rubber rubber, bool touch);
+    // The lasso, `grab` its reach beyond the selection: one pointer at a
+    // time, false (and nothing done) while another has it or there is none.
+    bool lasso(Pointer pointer, const Input &input, double grab, bool touch);
     Change move(Pointer pointer, const Input &input);
     // The last event of a pointer: its stroke goes on the sheet, its sweep ends.
     Change lift(Pointer pointer, const Input &input);
@@ -74,12 +79,14 @@ private:
         quint64 startMs = 0;
         QPointF last;
         Rubber rubber;
+        bool lassoing = false;
     };
 
     Change extend(Live &live, const Input &input);
     Change sweep(Live &live, QPointF to);
 
     Sheet *m_sheet; // never null: the sheet the surface has
+    Lasso *m_lasso; // the sheet's lasso, if it has one
     std::map<Pointer, Live> m_live;
 };
 

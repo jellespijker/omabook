@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "inkinput.h"
+#include "inklasso.h"
+#include "inkselection.h"
 #include "inksheet.h"
 #include "inkwriting.h"
 
@@ -23,8 +25,10 @@ class QTabletEvent;
 // line wider, its other end (or the eraser tool) erases parts of strokes or
 // whole ones, and a palm on the screen is ignored while the pen is near
 // (Ink::InputRules). A finger draws until a pen has been seen, then scrolls
-// what is under the surface; a mouse draws too. Undo and redo go a step
-// at a time: a stroke, or an eraser's sweep.
+// what is under the surface; a mouse draws too. The lasso (#129) selects
+// the strokes a path goes around, to drag, recolour, take away or copy
+// (`selection`, InkSelection). Undo and redo go a step at a time: a stroke,
+// an eraser's sweep, or what was done to a selection.
 //
 // The strokes are data (Ink::Stroke), not a picture: the surface draws them
 // with the scene graph, and says what changed once the pen pauses, as an
@@ -53,9 +57,10 @@ class InkSurface : public QQuickItem {
     Q_PROPERTY(bool penSeen READ penSeen NOTIFY penChanged)
     Q_PROPERTY(bool penNear READ penNear NOTIFY penChanged)
     Q_PROPERTY(bool writing READ writing NOTIFY writingChanged)
+    Q_PROPERTY(InkSelection *selection READ selection CONSTANT)
 
 public:
-    enum class Tool { Pen, Eraser };
+    enum class Tool { Pen, Eraser, Lasso };
     Q_ENUM(Tool)
     enum class EraserKind { Parts, Strokes };
     Q_ENUM(EraserKind)
@@ -95,6 +100,7 @@ public:
     [[nodiscard]] bool penSeen() const { return m_rules.penSeen(); }
     [[nodiscard]] bool penNear() const { return m_rules.penNear(); }
     [[nodiscard]] bool writing() const { return !m_writing.empty(); }
+    [[nodiscard]] InkSelection *selection() { return &m_selection; }
 
     Q_INVOKABLE void undo();
     Q_INVOKABLE void redo();
@@ -160,7 +166,9 @@ private:
     [[nodiscard]] double millimetresPerPixel() const;
 
     Ink::Sheet m_sheet;
-    Ink::Writing m_writing{m_sheet};
+    Ink::Lasso m_lasso{m_sheet};
+    Ink::Writing m_writing{m_sheet, &m_lasso};
+    InkSelection m_selection;
     Ink::InputRules m_rules;
     QSet<Ink::Pointer> m_palms;
     Ink::Change m_pending;

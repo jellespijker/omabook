@@ -74,6 +74,49 @@ Change Sheet::clear() {
     return change;
 }
 
+Change Sheet::addAll(std::vector<Stroke> strokes) {
+    if (strokes.empty()) {
+        return {};
+    }
+    std::ignore = perform({}, strokes);
+    Step step{.added = std::move(strokes), .removed = {}};
+    Change change = changeOf(step);
+    record(std::move(step));
+    return change;
+}
+
+Change Sheet::remove(const QStringList &ids) {
+    std::vector<Stroke> gone = perform(ids, {});
+    if (gone.empty()) {
+        return {};
+    }
+    Step step{.added = {}, .removed = std::move(gone)};
+    Change change = changeOf(step);
+    record(std::move(step));
+    return change;
+}
+
+Change Sheet::rework(const QStringList &ids, const std::function<void(Stroke &)> &how) {
+    std::vector<Stroke> made;
+    QStringList found;
+    for (const QString &id : ids) {
+        if (const Stroke *stroke = find(id)) {
+            Stroke copy = *stroke;
+            copy.id = newId();
+            how(copy);
+            made.push_back(std::move(copy));
+            found.append(id);
+        }
+    }
+    if (made.empty()) {
+        return {};
+    }
+    Step step{.added = made, .removed = perform(found, made)};
+    Change change = changeOf(step);
+    record(std::move(step));
+    return change;
+}
+
 void Sheet::beginStep() {
     if (!m_open) {
         m_open = Step{};

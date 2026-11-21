@@ -3,6 +3,7 @@
 #include <QPointF>
 #include <QStringView>
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -29,6 +30,15 @@ public:
     Change add(Stroke stroke);
     Change erase(QPointF centre, double radius, Erasing how);
     Change clear();
+    // Several strokes at once (pasted), as one step.
+    Change addAll(std::vector<Stroke> strokes);
+    Change remove(const QStringList &ids);
+    // These strokes as `how` changes them (moved, recoloured), as one step.
+    // Each comes back as a new stroke with a new id, beginning when it did:
+    // the change removes and adds, as erasing in part does, so that every
+    // computer merges it the same way, and a stroke changed on two at once
+    // is two strokes, never one of them lost.
+    Change rework(const QStringList &ids, const std::function<void(Stroke &)> &how);
     // The edits until endStep() as one step of undo: an eraser's sweep.
     void beginStep();
     void endStep();

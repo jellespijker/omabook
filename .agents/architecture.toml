@@ -16,7 +16,7 @@ uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "collation", "htmlclean", "log", "markupfilter", "pagelayout",
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptapiui", "scriptform", "secretfile", "secretstore", "settings", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
-  "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "highlightcolors", "textgeometry",
+  "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "untrustedtext",
 ]
@@ -85,7 +85,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes", "readinghighlights", "readingink", "backendplugins", "annotationfinder", "readingstatsview", "annotationlayerview",
+  "inksurface", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder", "readingstatsview", "annotationlayerview",
 ]
 
 [layers.app]

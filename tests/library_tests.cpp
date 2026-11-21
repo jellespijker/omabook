@@ -2092,7 +2092,7 @@ private slots:
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp", "graphtenants.h", "graphtenants.cpp", "graphtypes.cpp",
                                        "readingmarks.h", "readingmarks.cpp", "readingpassages.cpp", "marginnotes.h", "marginnotes.cpp", "annotationlayerview.h", "annotationlayerview.cpp", "readinghighlights.h", "readinghighlights.cpp", "readingink.h", "readingink.cpp", "annotationfinder.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",
                                        "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianfind.cpp",
-                                       "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h", "inksurface.h", "inksurface.cpp",
+                                       "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h", "inksurface.h", "inksurface.cpp", "inkselection.cpp",
                                        "portalfilepicker.cpp", "chronologycanvas.h", "chronologycanvas.cpp", "chronologymodel.h", "chronologymodel.cpp", "readingstatsview.h", "readingstatsview.cpp"};
         const QString sources = QFileInfo(QFINDTESTDATA("../src/main.cpp")).absolutePath();
         static const QRegularExpression window("#include\\s+[<\"](QQml|QQuick|QtQuick|QtQml|QAbstractListModel|backend\\.h|reader\\.h|assistant\\.h|booklistmodel\\.h)");

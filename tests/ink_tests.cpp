@@ -12,6 +12,7 @@
 #include "fixtures.h"
 #include "inkcodec.h"
 #include "inkinput.h"
+#include "inklasso.h"
 #include "inkmesh.h"
 #include "inksheet.h"
 #include "inkstroke.h"
@@ -397,6 +398,114 @@ private slots:
         const Ink::Stroke *going = writing.strokes().front();
         QCOMPARE(going->points.front().at, split.added.front().points.back().at);
         QVERIFY(going->began > split.added.front().began);
+    }
+
+    // The lasso (#129): a path selects the strokes most of whose points it
+    // goes around, and what is done to them is one step, a removal of the
+    // strokes and the addition of new ones, which undo puts back.
+    void theLassoSelectsAndEditsAsOneStep() {
+        Ink::Sheet sheet;
+        Ink::Lasso lasso(sheet);
+        int told = 0;
+        lasso.onChange([&told] { ++told; });
+        const Ink::Stroke top = line(0, 100, 10);
+        const Ink::Stroke middle = line(0, 100, 50);
+        const Ink::Stroke across = line(0, 300, 30); // a third of its points within
+        for (const Ink::Stroke &stroke : {top, middle, across})
+            sheet.add(stroke);
+        QVERIFY(Ink::lassoed(top, QPolygonF({{-5, 0}, {120, 0}, {120, 60}, {-5, 60}})));
+        QVERIFY(!Ink::lassoed(across, QPolygonF({{-5, 0}, {120, 0}, {120, 60}, {-5, 60}})));
+        QVERIFY(!Ink::lassoed(top, QPolygonF({{-5, 0}, {120, 0}})));
+
+        const auto around = [&](QList<QPointF> corners) {
+            lasso.press(corners.front(), 4);
+            for (const QPointF &corner : corners)
+                lasso.drag(corner);
+            return lasso.release(corners.front());
+        };
+        QVERIFY(around({{-5, 0}, {120, 0}, {120, 60}, {-5, 60}}).empty());
+        QCOMPARE(QSet<QString>(lasso.selection().begin(), lasso.selection().end()), (QSet<QString>{top.id, middle.id}));
+        QVERIFY(told > 0);
+        QVERIFY(lasso.box().contains(QRectF(0, 10, 100, 40)));
+        QVERIFY(!sheet.canRedo());
+
+        // Dragged from within its box: drawn where it goes, then moved, one step.
+        lasso.press(QPointF(50, 30), 4);
+        QVERIFY(lasso.busy());
+        lasso.drag(QPointF(60, 130));
+        QCOMPARE(lasso.moving(top.id)->points.front().at, QPointF(10, 110));
+        QCOMPARE(sheet.find(top.id)->points.front().at, QPointF(0, 10));
+        const Ink::Change moved = lasso.release(QPointF(60, 130));
+        QCOMPARE(QSet<QString>(moved.removed.begin(), moved.removed.end()), (QSet<QString>{top.id, middle.id}));
+        QCOMPARE(moved.added.size(), std::size_t{2});
+        QVERIFY(lasso.moving(moved.added.front().id) == nullptr);
+        QVERIFY(lasso.takeStale().contains(top.id));
+        QCOMPARE(sheet.strokes().size(), std::size_t{3});
+        QVERIFY(sheet.find(top.id) == nullptr);
+        for (const Ink::Stroke &stroke : moved.added) {
+            QVERIFY(lasso.selection().contains(stroke.id));
+            QCOMPARE(stroke.began, top.began); // it lies where it lay among the others
+            QVERIFY(stroke.points.front().at == QPointF(10, 110) || stroke.points.front().at == QPointF(10, 150));
+        }
+        // Let go where it was taken, it is not moved; a tap elsewhere selects nothing.
+        lasso.press(QPointF(50, 130), 4);
+        QVERIFY(lasso.release(QPointF(50, 130)).empty());
+        QCOMPARE(lasso.selection().size(), 2);
+
+        const Ink::Change recoloured = lasso.recolor(Qt::red);
+        QCOMPARE(recoloured.removed.size(), 2);
+        QCOMPARE(recoloured.added.front().color, QColor(Qt::red));
+        QVERIFY(lasso.recolor(Qt::red).empty());
+        const Ink::Change removed = lasso.remove();
+        QCOMPARE(removed.removed.size(), 2);
+        QVERIFY(removed.added.empty());
+        QVERIFY(lasso.selection().isEmpty());
+        QCOMPARE(sheet.strokes().size(), std::size_t{1});
+
+        // Undone a step at a time; the selection follows what comes back.
+        lasso.follow(sheet.undo());
+        QCOMPARE(sheet.strokes().size(), std::size_t{3});
+        QCOMPARE(sheet.undo().removed.size(), 2);
+        std::ignore = sheet.undo();
+        lasso.select({top.id});
+        QVERIFY(sheet.find(top.id) != nullptr && sheet.find(middle.id) != nullptr);
+        QCOMPARE(sheet.find(top.id)->color, top.color);
+        QVERIFY(sheet.canRedo());
+
+        // Pasted: copies with new ids, on top, moved, selected; one step.
+        const Ink::Change pasted = lasso.paste(lasso.selected(), QPointF(5, 5));
+        QCOMPARE(pasted.added.size(), std::size_t{1});
+        QVERIFY(pasted.removed.isEmpty());
+        QCOMPARE(sheet.strokes().back().id, pasted.added.front().id);
+        QCOMPARE(pasted.added.front().points.front().at, QPointF(5, 15));
+        QCOMPARE(lasso.selection(), QStringList{pasted.added.front().id});
+        std::ignore = sheet.undo();
+        lasso.prune();
+        QVERIFY(lasso.selection().isEmpty());
+        // A palm while dragging leaves the selection where it was.
+        lasso.selectAll();
+        lasso.press(QPointF(50, 30), 4);
+        lasso.drag(QPointF(80, 30));
+        lasso.cancel();
+        QVERIFY(!lasso.busy());
+        QCOMPARE(sheet.find(top.id)->points.front().at, QPointF(0, 10));
+        QCOMPARE(lasso.selection().size(), 3);
+    }
+
+    // What the lasso shows: its box, faintly filled, and its path, in the
+    // coordinates it is shown in.
+    void theLassoShowsItsPathAndBox() {
+        Ink::Mesh mesh;
+        Ink::marks(QPolygonF({{0, 0}, {10, 0}, {10, 10}}), QRectF(20, 20, 10, 10), Qt::blue, 2.0, 1.0, mesh);
+        // The box's fill and four sides, the path's two pieces: four corners each.
+        QCOMPARE(mesh.vertices.size(), std::size_t{7 * 4});
+        QCOMPARE(mesh.indices.size(), std::size_t{7 * 6});
+        const auto [left, right] = std::ranges::minmax(mesh.vertices, {}, &Ink::Vertex::x);
+        // The box stands three lines off its strokes: 60 + 3 + half a line.
+        QVERIFY(left.x < 0.0F && right.x > 63.0F && right.x < 64.0F);
+        QVERIFY(mesh.vertices.front().a < 64); // the fill, faint
+        Ink::marks({}, {}, Qt::blue, 1.0, 1.0, mesh);
+        QVERIFY(mesh.vertices.empty());
     }
 
     // Which touches are a palm, as each thing a device may not say is missing.

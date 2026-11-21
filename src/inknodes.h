@@ -5,8 +5,12 @@
 #include <QString>
 
 #include <span>
+#include <vector>
 
+#include "inklasso.h"
 #include "inkmesh.h"
+#include "inksheet.h"
+#include "inkwriting.h"
 
 class QSGGeometryNode;
 class QSGNode;
@@ -17,6 +21,12 @@ class QSGNode;
 // the same material, so the renderer draws them in few batches.
 class InkNodes {
 public:
+    // The strokes as they are shown, the lowest first: the sheet's, a
+    // selection being dragged where it goes (#129), and those being written;
+    // what changes from frame to frame, or was dragged and is let go, is dirty.
+    static std::vector<const Ink::Stroke *> shown(const Ink::Sheet &sheet, const Ink::Writing &writing, Ink::Lasso &lasso,
+                                                  QSet<QString> &dirty);
+
     // The root of the strokes' nodes: `old`, or a new one when the scene graph has none.
     QSGNode *root(QSGNode *old);
 
@@ -29,14 +39,19 @@ public:
     // those of strokes gone and orders them when `restructured`, makes those
     // of new strokes, and redraws the dirty ones (every one with `all`).
     void sync(std::span<const Ink::Stroke *const> strokes, const QSet<QString> &dirty, bool restructured, bool all, Look look);
+    // What is drawn over the strokes (the lasso's marks, #129), in item pixels.
+    void marks(const Ink::Mesh &mesh);
 
 private:
     void reorder(std::span<const Ink::Stroke *const> strokes, QSet<QString> &drawn, Look look);
     QSGGeometryNode *nodeOf(const QString &id, bool &made);
     void redraw(QSGGeometryNode &node, const Ink::Stroke &stroke, Look look);
+    static void fill(QSGGeometryNode &node, const Ink::Mesh &mesh);
 
-    // Both owned by the scene graph.
+    // All owned by the scene graph: the root holds the strokes' node, then the marks over them.
+    QSGNode *m_top = nullptr;
     QSGNode *m_root = nullptr;
+    QSGGeometryNode *m_marks = nullptr;
     QHash<QString, QSGGeometryNode *> m_nodes;
     Ink::Mesh m_mesh;
 };

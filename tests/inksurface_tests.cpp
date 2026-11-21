@@ -154,6 +154,39 @@ public:
             touch(QEventPoint::State::Updated, from + (to - from) * (i / 10.0), grownTo > 0 && i > 3 ? grownTo : diameter);
         touch(QEventPoint::State::Released, to, diameter);
     }
+    // A closed path around `corners`, with the pen, the mouse or a finger.
+    static QList<QPointF> around(const QList<QPointF> &corners) {
+        QList<QPointF> path;
+        for (qsizetype i = 0; i < corners.size(); ++i)
+            for (int step = 0; step < 8; ++step)
+                path.append(corners.at(i) + (corners.at((i + 1) % corners.size()) - corners.at(i)) * (step / 8.0));
+        path.append(corners.front());
+        return path;
+    }
+    void penLoop(const QList<QPointF> &corners) {
+        for (const QPointF &at : around(corners))
+            pen(devices().pen, at, 0.5, true);
+        pen(devices().pen, corners.front(), 0.0, false);
+    }
+    void mouseLoop(const QList<QPointF> &corners) {
+        const QList<QPointF> path = around(corners);
+        QTest::mousePress(&m_view, Qt::LeftButton, {}, path.front().toPoint());
+        for (const QPointF &at : path)
+            QTest::mouseMove(&m_view, at.toPoint());
+        QTest::mouseRelease(&m_view, Qt::LeftButton, {}, path.back().toPoint());
+    }
+    // Qt Quick holds a touch's moves until the next frame, and delivers the last: a frame for each.
+    void touchLoop(const QList<QPointF> &corners) {
+        const QList<QPointF> path = around(corners);
+        touch(QEventPoint::State::Pressed, path.front(), 9);
+        for (const QPointF &at : path) {
+            touch(QEventPoint::State::Updated, at, 9);
+            QSignalSpy drawn(&m_view, &QQuickWindow::frameSwapped);
+            m_view.update();
+            std::ignore = drawn.wait(200);
+        }
+        touch(QEventPoint::State::Released, path.back(), 9);
+    }
     [[nodiscard]] int presses() const { return under->property("presses").toInt(); }
     // Waits for the pen's pause and answers the batches sent.
     QList<QVariantMap> pause() {
@@ -185,6 +218,17 @@ private:
     QQuickView m_view;
 };
 
+[[nodiscard]] QSet<QString> setOf(const QStringList &ids) { return {ids.begin(), ids.end()}; }
+
+// The strokes on the surface whose line begins at `at`, in ink units.
+[[nodiscard]] QStringList beginningAt(const InkSurface &surface, QPointF at) {
+    QStringList ids;
+    for (const Ink::Stroke &stroke : surface.sheet().strokes())
+        if (QLineF(stroke.points.front().at, at).length() < 0.01)
+            ids.append(stroke.id);
+    return ids;
+}
+
 [[nodiscard]] QStringList keys(const QVariantMap &batch, const char *part) {
     if (QString::fromLatin1(part) == u"add"_s)
         return batch.value(u"add"_s).toMap().keys();
@@ -209,30 +253,45 @@ Ink::Stroke handwriting(QPointF from, int count, int seed) {
     return stroke;
 }
 
-// The surface's strokes as their triangles say, painted: what the scene
+// Triangles of a mesh, painted as the scene graph would draw them.
+void paint(QPainter &painter, const Ink::Mesh &mesh) {
+    for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
+        const std::array corners{mesh.vertices.at(mesh.indices.at(i)), mesh.vertices.at(mesh.indices.at(i + 1)),
+                                 mesh.vertices.at(mesh.indices.at(i + 2))};
+        const int alpha = (corners[0].a + corners[1].a + corners[2].a) / 3;
+        if (alpha == 0)
+            continue;
+        const auto unmultiplied = [&](quint8 value) { return std::min(255, value * 255 / std::max<int>(1, corners[0].a)); };
+        painter.setBrush(QColor(unmultiplied(corners[0].r), unmultiplied(corners[0].g), unmultiplied(corners[0].b), alpha));
+        const std::array<QPointF, 3> points{QPointF(corners[0].x, corners[0].y), QPointF(corners[1].x, corners[1].y),
+                                            QPointF(corners[2].x, corners[2].y)};
+        painter.drawPolygon(points.data(), 3);
+    }
+}
+
+// The surface's strokes as their triangles say, painted, a selection being
+// dragged where it goes, and the lasso's marks over them: what the scene
 // graph would draw, where it draws no geometry (the software renderer).
-QImage painted(const InkSurface &surface, QSize size) {
+QImage painted(InkSurface &surface, QSize size) {
     QImage image(size, QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::white);
     QPainter painter(&image);
     painter.setPen(Qt::NoPen);
     Ink::Mesh mesh;
     for (const Ink::Stroke &stroke : surface.sheet().strokes()) {
-        Ink::tessellate(stroke, surface.inkScale(), 1.0, mesh);
-        for (std::size_t i = 0; i + 2 < mesh.indices.size(); i += 3) {
-            const std::array corners{mesh.vertices.at(mesh.indices.at(i)), mesh.vertices.at(mesh.indices.at(i + 1)),
-                                     mesh.vertices.at(mesh.indices.at(i + 2))};
-            const int alpha = (corners[0].a + corners[1].a + corners[2].a) / 3;
-            if (alpha == 0)
-                continue;
-            const auto unmultiplied = [&](quint8 value) { return std::min(255, value * 255 / std::max<int>(1, corners[0].a)); };
-            painter.setBrush(QColor(unmultiplied(corners[0].r), unmultiplied(corners[0].g), unmultiplied(corners[0].b), alpha));
-            const std::array<QPointF, 3> points{QPointF(corners[0].x, corners[0].y), QPointF(corners[1].x, corners[1].y),
-                                                QPointF(corners[2].x, corners[2].y)};
-            painter.drawPolygon(points.data(), 3);
-        }
+        const Ink::Stroke *moving = surface.selection()->lasso().moving(stroke.id);
+        Ink::tessellate(moving != nullptr ? *moving : stroke, surface.inkScale(), 1.0, mesh);
+        paint(painter, mesh);
     }
+    surface.selection()->marks(mesh);
+    paint(painter, mesh);
     return image;
+}
+
+// What the surface shows, saved to look at by eye.
+void look(InkSurface &surface, const QString &name) {
+    if (const QString folder = qEnvironmentVariable("OMABOOK_SHOTS"); !folder.isEmpty())
+        painted(surface, QSize(640, 480)).save(folder + "/" + name + ".png");
 }
 
 } // namespace
@@ -589,6 +648,147 @@ InkSurface {
         QVERIFY2(writing < 4, qPrintable(QString::number(writing)));
         QVERIFY2(opened < 250, qPrintable(QString::number(opened)));
         bench.shot(u"ink-2000-strokes"_s);
+    }
+
+    // The lasso (#129): a path drawn with the pen, the mouse or a finger
+    // selects the strokes most of whose points it goes around, which is no
+    // edit; dragged, they move, one step of undo and one batch, which
+    // removes them and adds them again where they went, with new ids.
+    void theLassoSelectsAndMovesStrokes() {
+        Bench bench;
+        bench.surface->setFingers(InkSurface::FingerUse::Draw);
+        bench.stroke(devices().pen, QPointF(100, 100), QPointF(300, 100));
+        bench.stroke(devices().pen, QPointF(100, 160), QPointF(300, 160));
+        bench.stroke(devices().pen, QPointF(100, 400), QPointF(300, 400));
+        std::ignore = bench.pause();
+        const QStringList top = beginningAt(*bench.surface, QPointF(100, 100)) + beginningAt(*bench.surface, QPointF(100, 160));
+        QCOMPARE(top.size(), 2);
+        bench.surface->setTool(InkSurface::Tool::Lasso);
+        InkSelection *selection = bench.surface->selection();
+        QSignalSpy told(selection, &InkSelection::changed);
+        bench.penLoop({{80, 80}, {320, 80}, {320, 180}, {80, 180}});
+        QCOMPARE(selection->count(), 2);
+        QVERIFY(!told.isEmpty());
+        QVERIFY(selection->box().contains(QRectF(100, 100, 200, 60)));
+        QCOMPARE(bench.surface->count(), 3);
+        QVERIFY(bench.pause().isEmpty());
+        QVERIFY(bench.frame());
+        look(*bench.surface, u"ink-lasso-selected"_s);
+        // The mouse and a finger select too: around nothing is nothing.
+        bench.mouseLoop({{50, 300}, {350, 300}, {350, 450}, {50, 450}});
+        QCOMPARE(selection->count(), 1);
+        // Long enough after the pen that a finger is no palm.
+        bench.clock += 2000;
+        bench.touchLoop({{400, 20}, {600, 20}, {600, 60}, {400, 60}});
+        QCOMPARE(selection->count(), 0);
+        bench.touchLoop({{80, 80}, {320, 80}, {320, 180}, {80, 180}});
+        QCOMPARE(selection->count(), 2);
+
+        // Dragged with the pen from within its box, half way: drawn where it goes, nothing moved yet.
+        for (int i = 0; i <= 10; ++i)
+            bench.pen(devices().pen, QPointF(200, 130) + QPointF(5, 10) * i, 0.5, true);
+        QVERIFY(bench.frame());
+        look(*bench.surface, u"ink-lasso-dragged"_s);
+        QCOMPARE(beginningAt(*bench.surface, QPointF(100, 100)).size(), 1);
+        bench.pen(devices().pen, QPointF(250, 230), 0.0, false);
+        QVERIFY(beginningAt(*bench.surface, QPointF(100, 100)).isEmpty());
+        const QStringList moved = beginningAt(*bench.surface, QPointF(150, 200)) + beginningAt(*bench.surface, QPointF(150, 260));
+        QCOMPARE(moved.size(), 2);
+        QCOMPARE(bench.surface->count(), 3);
+        QCOMPARE(setOf(selection->lasso().selection()), setOf(moved));
+        auto batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        QCOMPARE(setOf(keys(batches.front(), "remove")), setOf(top));
+        QCOMPARE(keys(batches.front(), "add").size(), 2);
+        QVERIFY(!top.contains(keys(batches.front(), "add").front()));
+
+        // Undone, as one step: the strokes back where they were, and selected.
+        bench.surface->undo();
+        QCOMPARE(beginningAt(*bench.surface, QPointF(100, 100)).size(), 1);
+        QCOMPARE(selection->count(), 2);
+        batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        QCOMPARE(keys(batches.front(), "remove").size(), 2);
+        QCOMPARE(setOf(keys(batches.front(), "add")), setOf(top));
+        bench.surface->redo();
+        QCOMPARE(beginningAt(*bench.surface, QPointF(150, 200)).size(), 1);
+        // A batch of it, taken elsewhere, draws the same.
+        Bench there;
+        QVERIFY(there.surface->load(bench.surface->strokes()) == 3);
+    }
+
+    // The selection answers to keys while the surface has them, which it
+    // takes when the lasso selects, and to its own functions; at any
+    // scale, in item pixels. Each is a step of undo.
+    void theSelectionAnswersToKeysAtAnyScale() {
+        Bench bench;
+        bench.view().requestActivate();
+        QVERIFY(QTest::qWaitForWindowActive(&bench.view()));
+        bench.surface->setInkScale(2.0);
+        bench.stroke(devices().pen, QPointF(100, 100), QPointF(300, 100));
+        bench.stroke(devices().pen, QPointF(100, 300), QPointF(300, 300));
+        std::ignore = bench.pause();
+        const QString first = beginningAt(*bench.surface, QPointF(50, 50)).front();
+        bench.surface->setTool(InkSurface::Tool::Lasso);
+        InkSelection *selection = bench.surface->selection();
+        bench.mouseLoop({{80, 80}, {320, 80}, {320, 140}, {80, 140}});
+        QCOMPARE(selection->count(), 1);
+        QVERIFY(bench.surface->hasActiveFocus());
+        QVERIFY(selection->box().contains(QRectF(100, 99, 200, 2)));
+
+        // Shift and an arrow, ten pixels: five ink units; then one pixel down.
+        QTest::keyClick(&bench.view(), Qt::Key_Right, Qt::ShiftModifier);
+        QTest::keyClick(&bench.view(), Qt::Key_Down);
+        const QStringList moved = beginningAt(*bench.surface, QPointF(55, 50.5));
+        QCOMPARE(moved.size(), 1);
+        auto batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        QCOMPARE(keys(batches.front(), "remove"), QStringList{first});
+        QCOMPARE(keys(batches.front(), "add"), moved);
+        bench.surface->undo();
+        bench.surface->undo();
+        QCOMPARE(beginningAt(*bench.surface, QPointF(50, 50)), QStringList{first});
+        QCOMPARE(selection->lasso().selection(), QStringList{first});
+        std::ignore = bench.pause();
+
+        selection->recolor(Qt::red);
+        const QString red = beginningAt(*bench.surface, QPointF(50, 50)).front();
+        QCOMPARE(bench.surface->sheet().find(red)->color, QColor(Qt::red));
+        batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        QCOMPARE(keys(batches.front(), "remove"), QStringList{first});
+        QCOMPARE(keys(batches.front(), "add"), QStringList{red});
+
+        // Copied and pasted beside itself, twelve pixels: six ink units; the copy selected.
+        QTest::keyClick(&bench.view(), Qt::Key_C, Qt::ControlModifier);
+        QTest::keyClick(&bench.view(), Qt::Key_V, Qt::ControlModifier);
+        QCOMPARE(bench.surface->count(), 3);
+        const QStringList copy = beginningAt(*bench.surface, QPointF(56, 56));
+        QCOMPARE(copy.size(), 1);
+        QCOMPARE(selection->lasso().selection(), copy);
+        batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        QCOMPARE(keys(batches.front(), "add"), copy);
+        QVERIFY(keys(batches.front(), "remove").isEmpty());
+        look(*bench.surface, u"ink-lasso-pasted"_s);
+
+        QTest::keyClick(&bench.view(), Qt::Key_Delete);
+        QCOMPARE(bench.surface->count(), 2);
+        QCOMPARE(selection->count(), 0);
+        batches = bench.pause();
+        QCOMPARE(batches.size(), 1);
+        QCOMPARE(keys(batches.front(), "remove"), copy);
+        QTest::keyClick(&bench.view(), Qt::Key_A, Qt::ControlModifier);
+        QCOMPARE(selection->count(), 2);
+        QTest::keyClick(&bench.view(), Qt::Key_Escape);
+        QCOMPARE(selection->count(), 0);
+        bench.surface->undo();
+        QCOMPARE(bench.surface->count(), 3);
+        // Read only: what is selected stays as it is.
+        selection->selectAll();
+        bench.surface->setReadOnly(true);
+        selection->remove();
+        QCOMPARE(bench.surface->count(), 3);
     }
 
     // What is drawn is where the strokes are: dark along a line, light

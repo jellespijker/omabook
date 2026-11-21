@@ -35,7 +35,8 @@ void Writing::write(Pointer pointer, const Input &input, const Nib &nib, bool to
               .touch = touch,
               .startMs = input.ms,
               .last = input.at,
-              .rubber = {}};
+              .rubber = {},
+              .lassoing = false};
     m_live.insert_or_assign(pointer, std::move(live));
 }
 
@@ -45,14 +46,28 @@ Change Writing::erase(Pointer pointer, const Input &input, Rubber rubber, bool t
         change = lift(pointer, input);
     }
     m_sheet->beginStep();
-    Live live{.stroke = {}, .erasing = true, .touch = touch, .startMs = input.ms, .last = input.at, .rubber = rubber};
+    Live live{.stroke = {}, .erasing = true, .touch = touch, .startMs = input.ms, .last = input.at, .rubber = rubber, .lassoing = false};
     change.merge(m_sheet->erase(input.at, rubber.radius, rubber.how));
     m_live.insert_or_assign(pointer, std::move(live));
     return change;
 }
 
+bool Writing::lasso(Pointer pointer, const Input &input, double grab, bool touch) {
+    if (m_lasso == nullptr || m_lasso->busy()) {
+        return false;
+    }
+    m_lasso->press(input.at, grab);
+    Live live{.stroke = {}, .erasing = false, .touch = touch, .startMs = input.ms, .last = input.at, .rubber = {}, .lassoing = true};
+    m_live.insert_or_assign(pointer, std::move(live));
+    return true;
+}
+
 Change Writing::move(Pointer pointer, const Input &input) {
     const auto live = m_live.find(pointer);
+    if (live != m_live.end() && live->second.lassoing) {
+        m_lasso->drag(input.at);
+        return {};
+    }
     return live != m_live.end() ? extend(live->second, input) : Change{};
 }
 
@@ -63,7 +78,9 @@ Change Writing::lift(Pointer pointer, const Input &input) {
     }
     Live &live = found->second;
     Change change;
-    if (live.erasing) {
+    if (live.lassoing) {
+        change = m_lasso->release(input.at);
+    } else if (live.erasing) {
         change = sweep(live, input.at);
         m_sheet->endStep();
     } else {
@@ -85,6 +102,8 @@ void Writing::drop(Pointer pointer) {
     }
     if (found->second.erasing) {
         m_sheet->endStep();
+    } else if (found->second.lassoing) {
+        m_lasso->cancel();
     }
     m_live.erase(found);
 }
@@ -109,7 +128,7 @@ bool Writing::toolDown() const {
 std::vector<const Stroke *> Writing::strokes() const {
     std::vector<const Stroke *> out;
     for (const auto &[pointer, live] : m_live) {
-        if (!live.erasing) {
+        if (!live.erasing && !live.lassoing) {
             out.push_back(&live.stroke);
         }
     }

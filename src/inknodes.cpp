@@ -24,14 +24,45 @@ std::unique_ptr<QSGGeometryNode> newNode() {
 
 } // namespace
 
+std::vector<const Ink::Stroke *> InkNodes::shown(const Ink::Sheet &sheet, const Ink::Writing &writing, Ink::Lasso &lasso,
+                                                 QSet<QString> &dirty) {
+    std::vector<const Ink::Stroke *> order;
+    order.reserve(sheet.strokes().size() + 2);
+    for (const Ink::Stroke &stroke : sheet.strokes()) {
+        const Ink::Stroke *moving = lasso.moving(stroke.id);
+        order.push_back(moving != nullptr ? moving : &stroke);
+        if (moving != nullptr) {
+            dirty.insert(stroke.id);
+        }
+    }
+    for (const QString &id : lasso.takeStale()) {
+        dirty.insert(id);
+    }
+    for (const Ink::Stroke *stroke : writing.strokes()) {
+        order.push_back(stroke);
+        dirty.insert(stroke->id);
+    }
+    return order;
+}
+
 QSGNode *InkNodes::root(QSGNode *old) {
-    if (old == nullptr || old != m_root) {
+    if (old == nullptr || old != m_top) {
         // The scene graph is new (the window's first frame, or after it lost
         // its own): every node of before went with the old one.
         m_nodes.clear();
+        m_top = std::make_unique<QSGNode>().release();
         m_root = std::make_unique<QSGNode>().release();
+        m_marks = newNode().release();
+        m_top->appendChildNode(m_root);
+        m_top->appendChildNode(m_marks);
     }
-    return m_root;
+    return m_top;
+}
+
+void InkNodes::marks(const Ink::Mesh &mesh) {
+    if (m_marks != nullptr && (!mesh.indices.empty() || m_marks->geometry()->indexCount() > 0)) {
+        fill(*m_marks, mesh);
+    }
 }
 
 void InkNodes::sync(std::span<const Ink::Stroke *const> strokes, const QSet<QString> &dirty, bool restructured, bool all, Look look) {
@@ -105,13 +136,17 @@ QSGGeometryNode *InkNodes::nodeOf(const QString &id, bool &made) {
 
 void InkNodes::redraw(QSGGeometryNode &node, const Ink::Stroke &stroke, Look look) {
     Ink::tessellate(stroke, look.scale, look.feather, m_mesh);
+    fill(node, m_mesh);
+}
+
+void InkNodes::fill(QSGGeometryNode &node, const Ink::Mesh &mesh) {
     QSGGeometry *geometry = node.geometry();
-    geometry->allocate(static_cast<int>(m_mesh.vertices.size()), static_cast<int>(m_mesh.indices.size()));
-    const std::span vertices{geometry->vertexDataAsColoredPoint2D(), m_mesh.vertices.size()};
-    for (std::size_t i = 0; i < m_mesh.vertices.size(); ++i) {
-        const Ink::Vertex &v = m_mesh.vertices[i];
+    geometry->allocate(static_cast<int>(mesh.vertices.size()), static_cast<int>(mesh.indices.size()));
+    const std::span vertices{geometry->vertexDataAsColoredPoint2D(), mesh.vertices.size()};
+    for (std::size_t i = 0; i < mesh.vertices.size(); ++i) {
+        const Ink::Vertex &v = mesh.vertices[i];
         vertices[i].set(v.x, v.y, v.r, v.g, v.b, v.a);
     }
-    std::ranges::copy(m_mesh.indices, geometry->indexDataAsUShort());
+    std::ranges::copy(mesh.indices, geometry->indexDataAsUShort());
     node.markDirty(QSGNode::DirtyGeometry);
 }

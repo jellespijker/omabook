@@ -1,5 +1,9 @@
 #include "inkinput.h"
 
+#include <QPointingDevice>
+
+#include <algorithm>
+
 namespace Ink {
 
 namespace {
@@ -43,6 +47,17 @@ Act InputRules::finger(double contactMm, quint64 ms, Fingers fingers) const {
         break;
     }
     return m_penSeen ? Act::Pass : Act::Draw;
+}
+
+qint64 deviceId(const QPointingDevice *device) { return device != nullptr ? device->systemId() : -1; }
+
+bool knowsAPen() {
+    return std::ranges::any_of(QInputDevice::devices(),
+                               [](const QInputDevice *device) { return device->type() == QInputDevice::DeviceType::Stylus; });
+}
+
+bool can(const QPointingDevice *device, QInputDevice::Capability capability) {
+    return device != nullptr && device->capabilities().testFlag(capability);
 }
 
 } // namespace Ink

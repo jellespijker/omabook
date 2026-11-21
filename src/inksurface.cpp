@@ -13,9 +13,14 @@
 #include <QTouchEvent>
 
 #include <algorithm>
+#include <tuple>
 
 #include "inkcodec.h"
 #include "inknodes.h"
+
+using Ink::can;
+using Ink::deviceId;
+using Ink::knowsAPen;
 
 namespace {
 
@@ -23,17 +28,8 @@ namespace {
 constexpr int toolPoint = -1;
 constexpr int mousePoint = -2;
 constexpr int defaultBatchPause = 1000;
-
-qint64 deviceId(const QPointingDevice *device) { return device != nullptr ? device->systemId() : -1; }
-
-bool knowsAPen() {
-    return std::ranges::any_of(QInputDevice::devices(),
-                               [](const QInputDevice *device) { return device->type() == QInputDevice::DeviceType::Stylus; });
-}
-
-bool can(const QPointingDevice *device, QInputDevice::Capability capability) {
-    return device != nullptr && device->capabilities().testFlag(capability);
-}
+// How far outside the selection's box, in item pixels, the lasso still takes it to drag.
+constexpr double lassoGrab = 8.0;
 
 Ink::Fingers fingersOf(InkSurface::FingerUse use) {
     switch (use) {
@@ -49,7 +45,9 @@ Ink::Fingers fingersOf(InkSurface::FingerUse use) {
 
 } // namespace
 
-InkSurface::InkSurface(QQuickItem *parent) : QQuickItem(parent), m_rules(knowsAPen()), m_nodes(std::make_unique<InkNodes>()) {
+InkSurface::InkSurface(QQuickItem *parent)
+    : QQuickItem(parent), m_selection(m_lasso, *this, [this](Ink::Change change) { edited(std::move(change)); }), m_rules(knowsAPen()),
+      m_nodes(std::make_unique<InkNodes>()) {
     setFlag(ItemHasContents);
     setAcceptTouchEvents(true);
     setAcceptedMouseButtons(Qt::LeftButton);
@@ -94,6 +92,7 @@ void InkSurface::setEraserWidth(double width) {
 void InkSurface::setInkScale(double scale) {
     if (scale > 0.0 && m_inkScale != scale) {
         m_inkScale = scale;
+        m_selection.setScale(scale);
         m_allDirty = true;
         update();
         emit lookChanged();
@@ -103,6 +102,7 @@ void InkSurface::setInkScale(double scale) {
 void InkSurface::setTool(Tool tool) {
     if (m_tool != tool) {
         m_tool = tool;
+        setActiveFocusOnTab(tool == Tool::Lasso);
         emit toolChanged();
     }
 }
@@ -131,6 +131,7 @@ void InkSurface::setMouseDraws(bool draws) {
 void InkSurface::setReadOnly(bool readOnly) {
     if (m_readOnly != readOnly) {
         m_readOnly = readOnly;
+        m_selection.setReadOnly(readOnly);
         dropTouches();
         emit toolChanged();
     }
@@ -199,6 +200,7 @@ void InkSurface::replace(std::vector<Ink::Stroke> strokes) {
     // What was done here and not yet sent goes first, so it isn't lost.
     flush();
     m_sheet.replace(std::move(strokes));
+    m_lasso.prune();
     m_restructured = true;
     m_allDirty = true;
     emit strokesChanged();
@@ -207,6 +209,7 @@ void InkSurface::replace(std::vector<Ink::Stroke> strokes) {
 
 void InkSurface::applyChange(const Ink::Change &change) {
     m_sheet.apply(change);
+    m_lasso.prune();
     for (const Ink::Stroke &stroke : change.added) {
         m_dirty.insert(stroke.id);
     }
@@ -220,19 +223,13 @@ QSGNode *InkSurface::updatePaintNode(QSGNode *old, [[maybe_unused]] UpdatePaintN
     clock.start();
     const bool fresh = old == nullptr;
     QSGNode *root = m_nodes->root(old);
-    std::vector<const Ink::Stroke *> order;
-    order.reserve(m_sheet.strokes().size() + 2);
-    for (const Ink::Stroke &stroke : m_sheet.strokes()) {
-        order.push_back(&stroke);
-    }
-    // What is being written changes from frame to frame.
-    for (const Ink::Stroke *stroke : m_writing.strokes()) {
-        order.push_back(stroke);
-        m_dirty.insert(stroke->id);
-    }
+    const std::vector<const Ink::Stroke *> order = InkNodes::shown(m_sheet, m_writing, m_lasso, m_dirty);
     const double pixelRatio = window() != nullptr ? window()->effectiveDevicePixelRatio() : 1.0;
     m_nodes->sync(order, m_dirty, m_restructured || fresh, m_allDirty || fresh,
                   InkNodes::Look{.scale = m_inkScale, .feather = 1.0 / pixelRatio});
+    Ink::Mesh marks;
+    m_selection.marks(marks);
+    m_nodes->marks(marks);
     m_dirty.clear();
     m_restructured = false;
     m_allDirty = false;
@@ -413,6 +410,8 @@ void InkSurface::begin(Ink::Pointer pointer, const Ink::Input &input, bool erasi
     if (erasing) {
         const auto how = m_eraser == EraserKind::Strokes ? Ink::Erasing::Strokes : Ink::Erasing::Parts;
         edited(m_writing.erase(pointer, input, Ink::Rubber{.radius = m_eraserWidth / 2.0 / m_inkScale, .how = how}, touch));
+    } else if (m_tool == Tool::Lasso) {
+        std::ignore = m_writing.lasso(pointer, input, lassoGrab / m_inkScale, touch);
     } else {
         m_writing.write(pointer, input,
                         Ink::Nib{.color = m_color,
@@ -471,6 +470,7 @@ void InkSurface::edited(Ink::Change change) {
     const bool appended = change.removed.isEmpty() && change.added.size() == 1 && !m_sheet.strokes().empty()
                           && m_sheet.strokes().back().id == change.added.front().id;
     m_restructured = m_restructured || !appended || !m_writing.empty();
+    m_lasso.follow(change);
     for (const Ink::Stroke &stroke : change.added) {
         m_dirty.insert(stroke.id);
     }
@@ -494,6 +494,7 @@ void registerInkTypes() {
     // Once, however many times it is asked.
     [[maybe_unused]] static const bool registered = [] {
         qmlRegisterType<InkSurface>("Omabook", 1, 0, "InkSurface");
+        qmlRegisterUncreatableType<InkSelection>("Omabook", 1, 0, "InkSelection", QString::fromLatin1("an ink surface's own"));
         return true;
     }();
 }
