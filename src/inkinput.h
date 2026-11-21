@@ -34,7 +34,7 @@ struct PalmLimits {
 
 class InputRules {
 public:
-    // `penKnown`: Qt already knows a pen on this computer, before any of its events.
+    // `penKnown`: a pen was already used, before any of its events here.
     explicit InputRules(bool penKnown = false) : m_penSeen(penKnown) {}
 
     // Times are the events' own, in milliseconds.
@@ -59,10 +59,13 @@ private:
     quint64 m_leftMs = 0;
 };
 
-// What Qt says of the devices: a pointing device's id (-1 for none),
-// whether it knows a pen on this computer, and what a device can tell.
+// What Qt says of the devices: a pointing device's id (-1 for none), and
+// what a device can tell. And whether a pen was used in this run (#134): an
+// event of it, its hover or its coming near, heard by any rules; a pen Qt
+// only lists (a laptop's own digitizer, known at the start) is not one, or
+// a finger would never write there.
 [[nodiscard]] qint64 deviceId(const QPointingDevice *device);
-[[nodiscard]] bool knowsAPen();
+[[nodiscard]] bool penUsed();
 [[nodiscard]] bool can(const QPointingDevice *device, QInputDevice::Capability capability);
 
 } // namespace Ink

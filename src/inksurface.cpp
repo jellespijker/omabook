@@ -19,7 +19,7 @@
 
 using Ink::can;
 using Ink::deviceId;
-using Ink::knowsAPen;
+using Ink::penUsed;
 
 namespace {
 
@@ -33,7 +33,7 @@ constexpr double lassoGrab = 8.0;
 } // namespace
 
 InkSurface::InkSurface(QQuickItem *parent)
-    : QQuickItem(parent), m_selection(m_lasso, *this, [this](Ink::Change change) { edited(std::move(change)); }), m_rules(knowsAPen()),
+    : QQuickItem(parent), m_selection(m_lasso, *this, [this](Ink::Change change) { edited(std::move(change)); }), m_rules(penUsed()),
       m_nodes(std::make_unique<InkNodes>()) {
     setFlag(ItemHasContents);
     setAcceptTouchEvents(true);

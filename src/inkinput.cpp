@@ -2,23 +2,28 @@
 
 #include <QPointingDevice>
 
-#include <algorithm>
-
 namespace Ink {
 
 namespace {
 
 bool within(quint64 since, quint64 now, quint64 grace) { return now >= since ? now - since < grace : true; }
 
+bool &used() {
+    static bool pen = false;
+    return pen;
+}
+
 } // namespace
 
 void InputRules::penEvent(quint64 ms) {
+    used() = true;
     m_penSeen = true;
     m_penHeard = true;
     m_lastPenMs = ms;
 }
 
 void InputRules::proximity(bool near, quint64 ms) {
+    used() = true;
     m_penSeen = true;
     m_proximitySeen = true;
     m_inProximity = near;
@@ -51,10 +56,7 @@ Act InputRules::finger(double contactMm, quint64 ms, Fingers fingers) const {
 
 qint64 deviceId(const QPointingDevice *device) { return device != nullptr ? device->systemId() : -1; }
 
-bool knowsAPen() {
-    return std::ranges::any_of(QInputDevice::devices(),
-                               [](const QInputDevice *device) { return device->type() == QInputDevice::DeviceType::Stylus; });
-}
+bool penUsed() { return used(); }
 
 bool can(const QPointingDevice *device, QInputDevice::Capability capability) {
     return device != nullptr && device->capabilities().testFlag(capability);

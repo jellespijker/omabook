@@ -13,6 +13,8 @@
 #include <QtTest>
 #include <qpa/qwindowsysteminterface.h>
 
+#include <algorithm>
+
 #include "bookink.h"
 #include "desk.h"
 #include "hyphenation.h"
@@ -119,7 +121,8 @@ struct Hands {
 struct Pages : Hands {
     qint64 book = 0;
 
-    explicit Pages(const QString &format) {
+    // `afresh`: each surface as if no pen had been seen, whatever the run did before.
+    explicit Pages(const QString &format, bool afresh = true) {
         const QString file = bookFile(desk.dir.path(), format);
         QVERIFY(!file.isEmpty());
         book = desk.backend->library()->add(file).id;
@@ -136,7 +139,7 @@ struct Pages : Hands {
         QTRY_VERIFY(desk.reader->ink()->inking());
         desk.settle();
         // As if no pen had ever been seen on this computer.
-        for (int number = 0; number < 2; ++number)
+        for (int number = 0; number < 2 && afresh; ++number)
             if (InkSurface *one = surface(number))
                 one->rules() = Ink::InputRules{};
     }
@@ -187,6 +190,21 @@ class FingerInkTests : public QObject {
 
 private slots:
     void initTestCase() { QQuickStyle::setStyle("Material"); }
+
+    // A pen Qt lists, as a laptop's own digitizer is from the start, but
+    // never used: a finger still writes (#134). First, before any test
+    // here uses the pen, which is remembered for the run.
+    void aPenListedButNeverUsedLeavesFingersWriting() {
+        QVERIFY(std::ranges::any_of(QInputDevice::devices(), [](const QInputDevice *device) {
+            return device == &pen() && device->type() == QInputDevice::DeviceType::Stylus;
+        }));
+        Pages pages("pdf", false);
+        QVERIFY(!pages.surface()->penSeen());
+        pages.swipe(pages.on(0.2, 0.3), pages.on(0.6, 0.35));
+        pages.pause();
+        QTRY_COMPARE(pages.kept(), std::size_t{1});
+        QVERIFY2(pages.desk.warnings.isEmpty(), qPrintable(pages.desk.warnings.join('\n')));
+    }
 
     // No pen seen: a finger writes on the page, which holds still under it,
     // and a tap of it at the page's edge is a dot, not a turn of the page.
