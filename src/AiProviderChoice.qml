@@ -5,8 +5,7 @@ import QtQuick.Layouts
 
 // The provider of one capability on the AI page: chosen from those that can
 // serve it, by their ids (AiCapabilityRows::offered), worded here; named
-// where there is only one, for now (Gemini and more voices come: #145,
-// #147, each an id more).
+// where there is only one (a voice #147 adds is an id more).
 GridLayout {
     id: choice
     property var info: ({})
@@ -21,6 +20,7 @@ GridLayout {
         case "anthropic": return qsTr("Claude, with an API key")
         case "openai": return qsTr("A server (OpenAI-compatible)")
         case "command": return qsTr("A command")
+        case "gemini": return qsTr("Gemini, with an API key")
         case "answers": return qsTr("The same as for answers")
         case "ai-server": return qsTr("The AI server, with a model that reads pictures")
         case "whisper.cpp": return qsTr("whisper.cpp, on this computer only")

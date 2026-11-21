@@ -13,7 +13,8 @@ class Settings;
 
 // Which voice reads a book aloud (#73), from config.json's "read_aloud":
 //   "engine"         "auto" (Piper with a voice, else speech-dispatcher),
-//                    "piper", "speech-dispatcher", or "server"
+//                    "piper", "speech-dispatcher", "server", or "gemini"
+//                    (Gemini's voices, with the key in the keyring; #145)
 //   "rate", "voice"  how fast, and which of the engine's voices
 //   "piper_program"  Piper's command, when it isn't piper-tts or piper on the path
 //   "url", "model"   the server of the OpenAI-compatible API that reads
@@ -25,8 +26,8 @@ class Settings;
 // ones are allowed, and none is asked while the AI is off.
 namespace Voices {
 
-// The engine that reads with these settings: "piper", "speech-dispatcher" or
-// "server"; or why there is none that may (a server by AiPrivacy's rule, for
+// The engine that reads with these settings: "piper", "speech-dispatcher",
+// "server" or "gemini"; or why there is none that may (a server by AiPrivacy's rule, for
 // text to speech, with `asked` what the one asking said of hosted ones).
 [[nodiscard]] std::expected<QString, Failure> engine(const Settings &settings, AiPrivacy::HostedAsked asked = std::nullopt);
 // That engine's voice, made; or why there is none. Asked through

@@ -28,9 +28,9 @@ using Recognition::Failure;
 using Why = Recognition::Failure::Why;
 
 // What the vision model is told: the writing as it stands, nothing about it.
-constexpr auto inkPrompt = "The picture is handwriting. Write out exactly what it says, keeping its lines, in the language it "
-                           "is written in. Answer with the text alone: no comments, no quotation marks, no description of the "
-                           "picture. When nothing in it can be read, answer with nothing."_L1;
+constexpr auto inkInstructions = "The picture is handwriting. Write out exactly what it says, keeping its lines, in the language it "
+                                 "is written in. Answer with the text alone: no comments, no quotation marks, no description of the "
+                                 "picture. When nothing in it can be read, answer with nothing."_L1;
 
 [[nodiscard]] QNetworkRequest httpRequest(const AiServer &server, const QString &path, std::chrono::milliseconds timeout) {
     QNetworkRequest http(QUrl(server.baseUrl + path));
@@ -117,6 +117,20 @@ void addField(QHttpMultiPart &form, const QByteArray &name, const QString &value
 
 namespace Recognizers {
 
+QString inkPrompt(const QString &language) {
+    QString prompt = inkInstructions;
+    if (!language.isEmpty())
+        prompt += u" It is most likely written in the language whose code is \"%1\"."_s.arg(language);
+    return prompt;
+}
+
+QString mimeTypeOf(const QString &file) { return audioType(file); }
+
+Recognition::Failure failure(const QNetworkReply &reply, const QByteArray &body, const QString &where, const QString &model,
+                             bool transcribing) {
+    return failureOf(reply, body, where, model, transcribing);
+}
+
 Vision::Vision(AiServer server, QString model, QObject *parent)
     : Recognizer(parent), m_server(std::move(server)), m_model(std::move(model)) {}
 
@@ -164,11 +178,8 @@ void Vision::recognize(const Recognition::Input &input) {
         return;
     }
     m_language = input.language;
-    QString prompt = inkPrompt;
-    if (!input.language.isEmpty())
-        prompt += u" It is most likely written in the language whose code is \"%1\"."_s.arg(input.language);
     const QJsonArray content{
-        QJsonObject{{"type", "text"}, {"text", prompt}},
+        QJsonObject{{"type", "text"}, {"text", inkPrompt(input.language)}},
         QJsonObject{{"type", "image_url"},
                     {"image_url", QJsonObject{{"url", u"data:image/png;base64,"_s + QString::fromLatin1(png.toBase64())}}}},
     };

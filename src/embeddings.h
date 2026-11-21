@@ -29,6 +29,9 @@ struct Route {
     AiServer server;
     QString model;
     bool hosted = false;
+    // Gemini's own API (#145) rather than the OpenAI-compatible one; `server`
+    // then has its address and key.
+    bool gemini = false;
 };
 // The route the settings choose ("meaning" in config.json; Settings::meaning).
 // Fails when the AI is off, when there is no server, or the one there is may

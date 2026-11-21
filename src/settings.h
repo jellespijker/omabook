@@ -265,6 +265,10 @@ public:
             chosen.insert(key, value);
         setMeaning(chosen);
     }
+    // The Gemini API's set-up (#145): its "url" and a model per capability;
+    // see gemini.h. Never its key, which is kept in the keyring.
+    QJsonObject gemini() const { return m_values.value("gemini").toObject(); }
+    void setGemini(const QJsonObject &chosen) { set("gemini", chosen); }
 
     // Each capability's provider and whether it may be hosted (ADR 0008; see
     // aicapability.h), kept under "capabilities". A config.json from before

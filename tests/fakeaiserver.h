@@ -25,6 +25,7 @@ public:
     struct Request {
         QByteArray line; // "POST /v1/chat/completions HTTP/1.1"
         QByteArray body;
+        QByteArray head; // the request line and the headers
         [[nodiscard]] QJsonObject json() const { return QJsonDocument::fromJson(body).object(); }
     };
     QList<Reply> replies;
@@ -47,7 +48,9 @@ public:
                 const qsizetype length = at < 0 ? 0 : lower.mid(at + 15, lower.indexOf("\r\n", at) - at - 15).trimmed().toLongLong();
                 if (buffer->size() < headerEnd + 4 + length)
                     return;
-                received.append({.line = buffer->left(buffer->indexOf("\r\n")), .body = buffer->mid(headerEnd + 4, length)});
+                received.append({.line = buffer->left(buffer->indexOf("\r\n")),
+                                 .body = buffer->mid(headerEnd + 4, length),
+                                 .head = buffer->left(headerEnd)});
                 const Reply reply = answering           ? answering(received.last())
                                     : replies.isEmpty() ? Reply{.status = "500 Internal Server Error", .body = "{}"}
                                                         : replies.takeFirst();

@@ -230,6 +230,12 @@ ColumnLayout {
             Layout.fillWidth: true
             info: row.info
         }
+        // Gemini's key, wherever Gemini is chosen (#145).
+        GeminiKey {
+            Layout.fillWidth: true
+            visible: row.info.chosen === "gemini"
+            info: row.info
+        }
 
         // Its set-up: the AI's own for answers and quick work, else a server's.
         Loader {

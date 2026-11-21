@@ -315,6 +315,62 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // Gemini with an API key (#145) in every row: its key given once, in any
+    // of them, and each capability allowed hosted on its own.
+    void geminiIsOfferedInEveryRow() {
+        FakeServer server;
+        server.answering = answers;
+        Desk desk("en", {}, false);
+        QVERIFY(fakeProviders(desk, server));
+        const QList<std::pair<QString, int>> rows{
+            {"answers", 6}, {"handwriting", 1}, {"speech-to-text", 4}, {"text-to-speech", 4}, {"embeddings", 1}};
+        for (const auto &[row, index] : rows) {
+            desk.find("aiSettings")->setProperty("current", row);
+            pick(desk, row + "Provider", index);
+        }
+        QCOMPARE(desk.settings->aiProvider(), QString("gemini"));
+        for (const char *row : {"handwriting", "speech-to-text", "embeddings"})
+            QCOMPARE(capability(desk, row).value("provider").toString(), QString("gemini"));
+        QCOMPARE(desk.settings->readAloud().value("engine").toString(), QString("gemini"));
+        // Choosing it allows nothing, and it needs its key.
+        QTRY_COMPARE(text(desk, "answersSummary"), QString("A key is needed"));
+        QTRY_COMPARE(text(desk, "handwritingSummary"), QString("Only a hosted service is set up, and hosted isn't allowed for it"));
+        desk.find("aiSettings")->setProperty("current", QString("answers"));
+        QTRY_VERIFY(desk.shows("answersGeminiKey"));
+        desk.find("answersGeminiKey")->setProperty("text", "gemini-secret");
+        QVERIFY(QMetaObject::invokeMethod(desk.find("answersGeminiKey"), "accepted"));
+        QCOMPARE(m_secrets.get("gemini"), QString("gemini-secret"));
+        QVERIFY(!contents(desk.dir.filePath("config.json")).contains("gemini-secret"));
+        QTRY_COMPARE(text(desk, "answersSummary"), QString("Only a hosted service is set up, and hosted isn't allowed for it"));
+        // Each allowed on its own.
+        for (const char *row : {"answers", "quick", "handwriting", "speech-to-text", "text-to-speech", "embeddings"}) {
+            desk.find("aiSettings")->setProperty("current", QString(row));
+            tick(desk, QString(row) + "Hosted", true);
+            QTRY_VERIFY2(text(desk, QString(row) + "Summary").startsWith("Gemini · gemini-"),
+                         qPrintable(text(desk, QString(row) + "Summary")));
+            QVERIFY(text(desk, QString(row) + "Summary").endsWith("someone else's computer"));
+            // The check mark is drawn as it is ticked: the picture waits for it.
+            QTest::qWait(300);
+            desk.shot(QString("ai-page-gemini-") + row);
+        }
+        QVERIFY(text(desk, "quickSummary").contains("gemini-3.5-flash-lite"));
+        QVERIFY(text(desk, "speech-to-textSummary").contains("gemini-3.5-transcribe"));
+        QVERIFY(!text(desk, "speech-to-textSummary").contains("no word timestamps"));
+        // Its key is shown as kept in every row Gemini is chosen in, and a model typed in is Gemini's own.
+        QTRY_VERIFY(value(desk, "embeddingsForgetGeminiKey", "visible").toBool());
+        QVERIFY(!desk.shows("embeddingsAddress"));
+        type(desk, "embeddingsModel", "gemini-embedding-2");
+        QCOMPARE(desk.settings->gemini().value("models").toObject().value("embeddings").toString(), QString("gemini-embedding-2"));
+        QVERIFY(!desk.settings->meaning().contains("model"));
+        QTRY_VERIFY(text(desk, "embeddingsSummary").contains("gemini-embedding-2"));
+        // Forgotten, and every row needs it again.
+        QVERIFY(QMetaObject::invokeMethod(desk.find("embeddingsForgetGeminiKey"), "clicked"));
+        QTRY_COMPARE(text(desk, "handwritingSummary"), QString("A key is needed"));
+        QVERIFY(m_secrets.get("gemini").isEmpty());
+
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     void offStopsEveryModelButALocalVoice() {
         FakeServer server;
         server.answering = answers;

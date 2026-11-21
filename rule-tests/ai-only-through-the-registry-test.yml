@@ -15,3 +15,4 @@ invalid:
   - "auto provider = std::make_unique<OpenAiProvider>(server);"
   - "auto voice = std::make_unique<PiperVoice>(program, models);"
   - "auto vision = std::make_unique<Recognizers::Vision>(server, model);"
+  - "auto voice = std::make_unique<GeminiVoice>(api, model);"

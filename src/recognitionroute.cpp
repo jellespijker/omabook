@@ -7,6 +7,8 @@
 #include "ai.h"
 #include "aiprivacy.h"
 #include "failure.h"
+#include "gemini.h"
+#include "geminirecognizers.h"
 #include "recognizers.h"
 #include "secretstore.h"
 #include "settings.h"
@@ -47,12 +49,12 @@ using RecognitionRoute::Ways;
     return ways;
 }
 
-[[nodiscard]] std::optional<Refusal> hostedRefusal(const Settings &settings, Capability capability, const QString &baseUrl,
-                                                   const QString &model, bool hostedAsked) {
-    const CapabilityLack refused = AiPrivacy::refusal(settings, capability, AiPrivacy::hosted(settings, baseUrl, model), hostedAsked);
+// Why `whose` may not be sent the input, when it is someone else's computer.
+[[nodiscard]] std::optional<Refusal> refusalOf(const Settings &settings, Capability capability, bool hosted, const QString &whose,
+                                               bool hostedAsked) {
+    const CapabilityLack refused = AiPrivacy::refusal(settings, capability, hosted, hostedAsked);
     if (refused == CapabilityLack::None)
         return std::nullopt;
-    const QString whose = AiEndpoints::runsElsewhere(model) ? QObject::tr("The model %1").arg(model) : QUrl(baseUrl).host();
     if (refused == CapabilityLack::HostedNotAllowed)
         return Refusal{.lack = Lack::HostedNotAllowed,
                        .message = QObject::tr("%1 is someone else's computer, and your handwriting and speech go only to your own "
@@ -65,7 +67,43 @@ using RecognitionRoute::Ways;
                 QObject::tr("%1 is someone else's computer: your handwriting and speech go there only where you chose it.").arg(whose)};
 }
 
+[[nodiscard]] std::optional<Refusal> hostedRefusal(const Settings &settings, Capability capability, const QString &baseUrl,
+                                                   const QString &model, bool hostedAsked) {
+    const QString whose = AiEndpoints::runsElsewhere(model) ? QObject::tr("The model %1").arg(model) : QUrl(baseUrl).host();
+    return refusalOf(settings, capability, AiPrivacy::hosted(settings, baseUrl, model), whose, hostedAsked);
+}
+
+// Gemini, where it is chosen for the capability (#145): always someone
+// else's computer, and only with a key.
+[[nodiscard]] bool geminiChosen(const Settings &settings, Capability capability) {
+    return AiPrivacy::chosen(settings, capability).value("provider"_L1).toString() == "gemini"_L1;
+}
+
+[[nodiscard]] std::expected<Gemini::Api, Refusal> geminiApi(const Settings &settings, Capability capability, bool hostedAsked) {
+    if (auto refused = refusalOf(settings, capability, true, u"Gemini"_s, hostedAsked))
+        return std::unexpected(std::move(*refused));
+    auto api = Gemini::api(settings);
+    if (!api)
+        return std::unexpected(Refusal{.lack = Lack::NoKey, .message = api.error().text()});
+    return *std::move(api);
+}
+
+[[nodiscard]] std::expected<Ways, Refusal> geminiWays(const Settings &settings, Capability capability, bool hostedAsked) {
+    auto api = geminiApi(settings, capability, hostedAsked);
+    if (!api)
+        return std::unexpected(std::move(api.error()));
+    Ways ways;
+    const QString model = Gemini::modelFor(settings, capability);
+    if (capability == Capability::Handwriting)
+        ways.push_back(std::make_unique<GeminiVision>(*std::move(api), model));
+    else
+        ways.push_back(std::make_unique<GeminiTranscription>(*std::move(api), model));
+    return ways;
+}
+
 [[nodiscard]] std::expected<Ways, Refusal> inkPlan(const Settings &settings, bool hostedAsked) {
+    if (geminiChosen(settings, Capability::Handwriting))
+        return geminiWays(settings, Capability::Handwriting, hostedAsked);
     QString model = chosen(settings, "ink_model"_L1);
     if (model.isEmpty())
         model = Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
@@ -134,6 +172,9 @@ void addVoxtype(const Settings &settings, Speech &speech) {
 [[nodiscard]] std::expected<Ways, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
     Speech speech;
     const QString provider = AiPrivacy::chosen(settings, Capability::SpeechToText).value("provider"_L1).toString();
+    // Gemini alone: a recording that may not go there goes nowhere else instead.
+    if (provider == "gemini"_L1)
+        return geminiWays(settings, Capability::SpeechToText, hostedAsked);
     if (provider == "voxtype"_L1) {
         addVoxtype(settings, speech);
     } else if (provider == "whisper.cpp"_L1) {

@@ -218,3 +218,32 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   and more voices come (#145, #147): each is an id more in the row's `offered`.
 - **AI Off** is a switch at the top of the page; on again, answers come back to the provider
   `capabilities` kept for them.
+
+## As built in #145
+
+- **Gemini is one provider with a class per capability**, all on its own REST API (v1beta, checked against
+  Google's documentation on 2026-11-21; `gemini.h` has the shapes): `GeminiProvider` streams answers and
+  quick work (`streamGenerateContent?alt=sse`), `GeminiVision` shows ink as an inline PNG and
+  `GeminiTranscription` sends a recording inline (`generateContent`), `GeminiVoice` asks for audio with
+  a prebuilt voice, and `Gemini::embed` uses `batchEmbedContents`. The key is sent in `x-goog-api-key`,
+  never in the address.
+- **One key, in the keyring** (`gemini`), else `GEMINI_API_KEY`; given in any row Gemini is chosen in.
+  config.json's `gemini` keeps only an address (for a proxy or a test) and a model per capability
+  (`gemini.models`), as Gemini's model names mean nothing to another provider; answers' and quick's
+  models are under `ai_models.gemini`, as every answering provider's are.
+- **Chosen per capability** where #144 keeps the choice: answers and quick by `ai_provider: "gemini"`;
+  handwriting, speech to text and embeddings by `capabilities.<name>.provider: "gemini"` (speech to text
+  then goes to Gemini alone, never on to this computer's ways); text to speech by `read_aloud.engine:
+  "gemini"`, which #147's further voices sit beside in the row's `offered`.
+- **Always hosted**: each capability uses it only where hosted is allowed for that one; without a key its
+  status is `no-key`, and with the AI Off Gemini's voice stops too.
+- **Models by default**: `gemini-4-hydrogen` for answers, `gemini-3.5-flash-lite` for quick work,
+  `gemini-3.8-flash` for handwriting, `gemini-3.5-transcribe` for speech (each word's moment, by
+  `audioTranscriptionConfig.wordTimestamp`; another model is asked for a transcript in words, without
+  them), `gemini-3.8-flash-tts` with the voice Kore for reading aloud, and `gemini-embedding-001`
+  (768 dimensions, with a retrieval task type) for embeddings.
+- **A recording is sent whole, inline**: one over 14 MB (20 MB a request, in base64) is refused with
+  `RecordingTooLarge` rather than cut; the Files API is left for when it is needed.
+- **Its errors are codes**: a refused key (`API_KEY_INVALID`, 401, 403) is `GeminiRefusedKey`, no key
+  `GeminiNoKey`, a blocked prompt `AiDeclined`, a sentence without sound `GeminiNoSound`, and the rest
+  the codes every server's errors are (`AiFailures::ofServer`).

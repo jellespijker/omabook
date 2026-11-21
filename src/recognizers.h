@@ -77,6 +77,16 @@ private:
     QPointer<QNetworkReply> m_reply;
 };
 
+// What a model that reads pictures is told of handwriting, with the
+// language it is most likely in (empty for the model to tell).
+[[nodiscard]] QString inkPrompt(const QString &language);
+// The type a recording is sent as, by its file's name ("audio/ogg").
+[[nodiscard]] QString mimeTypeOf(const QString &file);
+// Why a request to a server failed, in plain words, and what is done about
+// it: waited for and tried again, the next way tried, or said as it is.
+[[nodiscard]] Recognition::Failure failure(const QNetworkReply &reply, const QByteArray &body, const QString &where, const QString &model,
+                                           bool transcribing);
+
 // A transcription's answer, `verbose_json` as OpenAI writes it (seconds,
 // each word apart from the segments) or a plain `{text}`, as a result:
 // moments in milliseconds, each word in the segment it was said in.

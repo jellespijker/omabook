@@ -9,6 +9,8 @@
 
 #include "aiendpoint.h"
 #include "aiprivacy.h"
+#include "gemini.h"
+#include "geminivoice.h"
 #include "localvoices.h"
 #include "secretstore.h"
 #include "servervoice.h"
@@ -65,6 +67,21 @@ namespace {
     }
 }
 
+// Gemini's voices (#145), if they may be asked: never with the AI off, and,
+// as they are always someone else's computer, only where hosted is allowed.
+[[nodiscard]] std::expected<Gemini::Api, Failure> gemini(const Settings &settings, AiPrivacy::HostedAsked asked) {
+    if (settings.aiOff())
+        return std::unexpected(Failure(Failure::Code::VoiceAiOff));
+    switch (AiPrivacy::refusal(settings, Capability::TextToSpeech, true, asked)) {
+    case CapabilityLack::None:
+        return Gemini::api(settings);
+    case CapabilityLack::HostedNotChosen:
+        return std::unexpected(Failure(Failure::Code::HostedNotChosen, {u"Gemini"_s}));
+    default:
+        return std::unexpected(Failure(Failure::Code::VoiceServerHosted, {u"Gemini"_s}));
+    }
+}
+
 [[nodiscard]] bool piperReady(const Settings &settings) { return !piperProgram(settings).isEmpty() && !PiperVoice::findModels().isEmpty(); }
 [[nodiscard]] bool dispatcherReady() {
     return !QStandardPaths::findExecutable(QString::fromLatin1(SpeechDispatcherVoice::program)).isEmpty();
@@ -78,6 +95,11 @@ std::expected<QString, Failure> Voices::engine(const Settings &settings, AiPriva
         if (auto reachable = server(settings, asked); !reachable)
             return std::unexpected(reachable.error());
         return u"server"_s;
+    }
+    if (wanted == "gemini"_L1) {
+        if (auto reachable = gemini(settings, asked); !reachable)
+            return std::unexpected(reachable.error());
+        return u"gemini"_s;
     }
     if (wanted == "piper"_L1) {
         if (piperProgram(settings).isEmpty())
@@ -101,6 +123,12 @@ std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &se
         return std::unexpected(which.error());
     if (*which == "piper"_L1)
         return std::make_unique<PiperVoice>(piperProgram(settings), PiperVoice::findModels());
+    if (*which == "gemini"_L1) {
+        auto reachable = gemini(settings, asked);
+        if (!reachable)
+            return std::unexpected(reachable.error());
+        return std::make_unique<GeminiVoice>(*std::move(reachable), Gemini::modelFor(settings, Capability::TextToSpeech));
+    }
     if (*which == "server"_L1) {
         auto reachable = server(settings, asked);
         if (!reachable)
@@ -120,6 +148,8 @@ QStringList Voices::offered(const Settings &settings) {
                                [](const QString &file) { return QFileInfo(file).completeBaseName(); });
         return names;
     }
+    if (*which == "gemini"_L1)
+        return Gemini::voices();
     return *which == "server"_L1 ? ServerVoice::voices() : SpeechDispatcherVoice::voices();
 }
 

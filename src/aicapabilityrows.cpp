@@ -9,6 +9,7 @@
 #include "aiprivacy.h"
 #include "airegistry.h"
 #include "embeddings.h"
+#include "gemini.h"
 #include "recognizers.h"
 #include "secretstore.h"
 #include "servervoice.h"
@@ -62,7 +63,7 @@ struct SetUp {
 // The agents the page offers for answers, as the settings dialog did; one
 // chosen another way (codex, grok, pi) is offered too while it is chosen.
 constexpr auto answering =
-    std::to_array<QLatin1StringView>({"omarchy-default"_L1, "claude"_L1, "agy"_L1, "anthropic"_L1, "openai"_L1, "command"_L1});
+    std::to_array<QLatin1StringView>({"omarchy-default"_L1, "claude"_L1, "agy"_L1, "anthropic"_L1, "openai"_L1, "command"_L1, "gemini"_L1});
 
 // The providers a capability may choose from, by id; the window words them.
 [[nodiscard]] QStringList offered(Capability capability, const QString &chosen) {
@@ -78,14 +79,15 @@ constexpr auto answering =
     case Capability::Quick:
         return {u"answers"_s}; // the same provider as answers, for now (ADR 0008, as built in #143)
     case Capability::Handwriting:
-        return {u"ai-server"_s};
+        return {u"ai-server"_s, u"gemini"_s};
     case Capability::SpeechToText:
         // The first there is (voxtype, whisper.cpp, a server: #146), or one alone.
-        return {u"auto"_s, u"voxtype"_s, u"whisper.cpp"_s, u"server"_s};
+        return {u"auto"_s, u"voxtype"_s, u"whisper.cpp"_s, u"server"_s, u"gemini"_s};
     case Capability::TextToSpeech:
-        return {u"auto"_s, u"piper"_s, u"speech-dispatcher"_s, u"server"_s};
+        // The voices #147 adds come here, each an id more.
+        return {u"auto"_s, u"piper"_s, u"speech-dispatcher"_s, u"server"_s, u"gemini"_s};
     case Capability::Embeddings:
-        return {u"server"_s};
+        return {u"server"_s, u"gemini"_s};
     }
     return {};
 }
@@ -102,7 +104,7 @@ constexpr auto answering =
     case Capability::Quick:
         return u"answers"_s;
     case Capability::Handwriting:
-        return u"ai-server"_s;
+        return AiPrivacy::chosen(settings, capability).value("provider"_L1).toString() == "gemini"_L1 ? u"gemini"_s : u"ai-server"_s;
     case Capability::SpeechToText: {
         const QString provider = AiPrivacy::chosen(settings, capability).value("provider"_L1).toString();
         return provider.isEmpty() ? u"auto"_s : provider;
@@ -112,12 +114,14 @@ constexpr auto answering =
         return engine.isEmpty() ? u"auto"_s : engine;
     }
     case Capability::Embeddings:
-        return u"server"_s;
+        return AiPrivacy::chosen(settings, capability).value("provider"_L1).toString() == "gemini"_L1 ? u"gemini"_s : u"server"_s;
     }
     return {};
 }
 
-[[nodiscard]] QString modelDefaultOf(const Settings &settings, Capability capability) {
+[[nodiscard]] QString modelDefaultOf(const Settings &settings, Capability capability, const QString &chosen) {
+    if (chosen == "gemini"_L1 && !setUpOf(capability).model.isEmpty())
+        return Gemini::modelDefault(capability);
     switch (capability) {
     case Capability::Handwriting:
         return Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
@@ -167,10 +171,15 @@ QVariantMap AiCapabilityRows::row(Capability capability) const {
     row.insert(u"addressDefault"_s, m_settings->aiProvider() == "openai"_L1 ? AiEndpoints::name(*m_settings) : QString());
     // Asked of the keyring only for an address given here: the AI server's
     // key is the AI's, set up with it.
-    row.insert(u"hasKey"_s, !address.isEmpty() && !AiEndpoints::keptKey(address, Secrets::shared()).isEmpty());
+    row.insert(u"hasKey"_s, chosen == "gemini"_L1 ? Gemini::hasKey()
+                                                  : !address.isEmpty() && !AiEndpoints::keptKey(address, Secrets::shared()).isEmpty());
     row.insert(u"inTheClear"_s, !address.isEmpty() && AiEndpoints::inTheClear(address));
-    row.insert(u"modelChoice"_s, setUp.model.isEmpty() ? QString() : older.value(setUp.model).toString().trimmed());
-    row.insert(u"modelDefault"_s, modelDefaultOf(*m_settings, capability));
+    QString modelChoice = setUp.model.isEmpty() ? QString() : older.value(setUp.model).toString().trimmed();
+    // Gemini's models are its own, kept with it.
+    if (chosen == "gemini"_L1 && !setUp.model.isEmpty())
+        modelChoice = Gemini::modelChosen(*m_settings, capability);
+    row.insert(u"modelChoice"_s, modelChoice);
+    row.insert(u"modelDefault"_s, modelDefaultOf(*m_settings, capability, chosen));
     // Whether what writes out speech gives each word its moment (#146): voxtype doesn't.
     if (capability == Capability::SpeechToText && status.available) {
         const auto ways = AiRegistry::recognizers(*m_settings, Recognition::Kind::Audio, true);
@@ -231,10 +240,13 @@ void AiCapabilityRows::choose(const QString &capability, const QString &provider
         if (!m_settings->aiOff())
             m_settings->chooseAiProvider(Capabilities::aiProviderFor(provider));
         break;
+    case Capability::Handwriting:
+    case Capability::Embeddings:
     case Capability::SpeechToText: {
         QJsonObject all = m_settings->capabilities();
         QJsonObject one = all.value(capability).toObject();
-        if (provider == "auto"_L1)
+        // The way it always went is no provider of its own.
+        if (provider == "auto"_L1 || provider == "ai-server"_L1 || (provider == "server"_L1 && *which == Capability::Embeddings))
             one.remove(u"provider"_s);
         else
             one.insert(u"provider"_s, provider);
@@ -252,9 +264,7 @@ void AiCapabilityRows::choose(const QString &capability, const QString &provider
         break;
     }
     case Capability::Quick:
-    case Capability::Handwriting:
-    case Capability::Embeddings:
-        break; // one provider to choose, for now
+        break; // answers' provider, for now
     }
     refresh();
 }
@@ -276,8 +286,14 @@ void AiCapabilityRows::setUp(Capability capability, const QString &field, const 
 
 void AiCapabilityRows::setModel(const QString &capability, const QString &model) {
     const auto which = Capabilities::named(capability);
-    if (which && !setUpOf(*which).model.isEmpty())
+    if (!which || setUpOf(*which).model.isEmpty())
+        return;
+    if (chosenOf(*m_settings, *which) != "gemini"_L1) {
         setUp(*which, setUpOf(*which).model, model);
+        return;
+    }
+    Gemini::chooseModel(*m_settings, *which, model);
+    refresh();
 }
 
 void AiCapabilityRows::setAddress(const QString &capability, const QString &address) {
@@ -288,6 +304,13 @@ void AiCapabilityRows::setAddress(const QString &capability, const QString &addr
 
 QString AiCapabilityRows::setKey(const QString &capability, const QString &key) {
     const auto which = Capabilities::named(capability);
+    // Gemini has one key, whichever capability it is given in.
+    if (which && chosenOf(*m_settings, *which) == "gemini"_L1) {
+        const auto kept = Gemini::keepKey(key, Secrets::shared());
+        refresh();
+        emit keyKept();
+        return kept ? QString() : kept.error().text();
+    }
     if (!which || setUpOf(*which).address.isEmpty())
         return {};
     const QString address = olderOf(*m_settings, *which).value(setUpOf(*which).address).toString().trimmed();

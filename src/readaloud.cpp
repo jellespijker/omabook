@@ -106,7 +106,9 @@ void ReadAloud::refresh() {
         m_why.clear();
         m_voices.clear();
     } else if (const auto engine = Voices::engine(settings)) {
-        m_engine = *engine == "piper"_L1 ? u"Piper"_s : *engine;
+        m_engine = *engine;
+        if (*engine == "piper"_L1 || *engine == "gemini"_L1)
+            m_engine[0] = m_engine.at(0).toUpper(); // Piper, Gemini: names
         m_why.clear();
         m_voices = Voices::offered(settings);
     } else {

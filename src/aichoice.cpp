@@ -11,6 +11,8 @@
 
 #include "aiendpoint.h"
 #include "airegistry.h"
+#include "gemini.h"
+#include "geminiprovider.h"
 #include "omarchylocal.h"
 #include "openaiprovider.h"
 #include "secretstore.h"
@@ -135,6 +137,14 @@ AiChoice named(AiChoice choice, const Settings &settings, const QString &wanted)
     if (wanted == "anthropic")
         return qEnvironmentVariable("ANTHROPIC_API_KEY").isEmpty() ? none(choice, "Set ANTHROPIC_API_KEY to use the Anthropic API.", CapabilityLack::NoKey)
                                                                    : api(choice, AiChoice::Setting);
+    if (wanted == "gemini") {
+        if (!Gemini::hasKey())
+            return none(choice, Failure(Failure::Code::GeminiNoKey).english(), CapabilityLack::NoKey);
+        choice.source = AiChoice::Setting;
+        choice.id = "gemini";
+        choice.name = "Gemini";
+        return choice;
+    }
     if (wanted == "openai") {
         // A server is used only when it is chosen, and then nothing else is.
         if (const QString missing = AiEndpoints::missing(settings); !missing.isEmpty())
@@ -234,6 +244,14 @@ std::unique_ptr<AiProvider> makeAiProvider(const Settings &settings, QString *wh
             return nullptr;
         }
         provider = std::make_unique<OpenAiProvider>(*server);
+    } else if (choice.id == "gemini") {
+        auto api = Gemini::api(settings);
+        if (!api) {
+            if (why)
+                *why = api.error().text();
+            return nullptr;
+        }
+        provider = std::make_unique<GeminiProvider>(*std::move(api));
     } else if (choice.id == "anthropic") {
         provider = std::make_unique<AnthropicProvider>(qEnvironmentVariable("ANTHROPIC_API_KEY"));
     } else if (choice.id == "command") {
@@ -257,6 +275,11 @@ AiCatalog Ai::catalog(const QString &provider) {
         return {{"claude-haiku-5-5", "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-2"},
                 AnthropicProvider::defaultModel,
                 "claude-haiku-5-5"};
+    // From Google's list of models for its API (gemini.h), the smallest first.
+    if (provider == "gemini")
+        return {{Gemini::quickModel, "gemini-3.8-flash", "gemini-3.1-pro-preview", Gemini::answersModel},
+                Gemini::answersModel,
+                Gemini::quickModel};
     // From Codex's own list of models.
     if (provider == "codex")
         return {{"gpt-6-luna", "gpt-6.1-terra", "gpt-6.1-sol", "gpt-6-astra"}, {}, "gpt-6-luna"};
@@ -314,6 +337,8 @@ AiAgent::AiAgent(Settings *settings, const QString &defaultsFile, QObject *paren
       m_rows(settings, m_file) {
     // Omarchy's default agent changing changes who answers.
     connect(this, &AiAgent::changed, &m_rows, &AiCapabilityRows::refresh);
+    // Gemini's key, kept on the page, decides whether it can answer.
+    connect(&m_rows, &AiCapabilityRows::keyKept, this, &AiAgent::reload);
     m_debounce.setSingleShot(true);
     m_debounce.setInterval(80);
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_debounce.start(); });

@@ -17,7 +17,7 @@ class Settings;
 // be hosted, which of the providers that serve it, the model, a server's
 // address and whether a key is kept for it), and the providers it may choose
 // from, by their ids. The window words those too; a provider that comes
-// (#145 to #147) is an id more in `offered`.
+// (Gemini, #145; more voices, #147) is an id more in `offered`.
 //
 // Each provider stays set up where it always was (`ai_provider`,
 // `ai_endpoint`, `recognition`, `meaning`, `read_aloud`), which an older
@@ -60,6 +60,8 @@ public:
 
 signals:
     void changed();
+    // A key was kept or forgotten in the keyring, which the settings don't say.
+    void keyKept();
 
 private:
     // Writes `capabilities` from the older keys where it isn't there yet.

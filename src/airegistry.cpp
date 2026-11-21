@@ -5,6 +5,7 @@
 
 #include "ai.h"
 #include "aiendpoint.h"
+#include "gemini.h"
 #include "settings.h"
 #include "voice.h"
 #include "voices.h"
@@ -73,7 +74,11 @@ private:
         // Where it would go all the same: anything but a server is someone else's computer.
         status.hosted = settings.aiProvider() != "openai"_L1 && !settings.aiOff();
         status.why = choice.lack;
-        status.failure = choice.lack == CapabilityLack::AiOff ? Failure(Failure::Code::AiOff) : Failure::said(choice.problem);
+        status.failure = Failure::said(choice.problem);
+        if (choice.lack == CapabilityLack::AiOff)
+            status.failure = Failure(Failure::Code::AiOff);
+        else if (choice.lack == CapabilityLack::NoKey && settings.aiProvider() == "gemini"_L1)
+            status.failure = Failure(Failure::Code::GeminiNoKey);
         return status;
     }
     status.model = modelOf(Ai::models(settings, choice.modelsKey()), capability, ask.model.trimmed());
@@ -99,6 +104,8 @@ private:
         return CapabilityLack::HostedNotAllowed;
     case Failure::Code::HostedNotChosen:
         return CapabilityLack::HostedNotChosen;
+    case Failure::Code::GeminiNoKey:
+        return CapabilityLack::NoKey;
     case Failure::Code::NoVoice:
     case Failure::Code::PiperMissing:
     case Failure::Code::PiperNoVoice:
@@ -157,12 +164,16 @@ private:
     if (!made)
         return refused(settings, Capability::TextToSpeech, made.error());
     const bool server = *engine == "server"_L1;
+    const bool gemini = *engine == "gemini"_L1;
+    QString model = server ? settings.readAloud().value("model"_L1).toString() : QString();
+    if (gemini)
+        model = Gemini::modelFor(settings, Capability::TextToSpeech);
     return {.capability = Capability::TextToSpeech,
             .available = true,
             // A server that keeping to one's own would refuse is someone else's.
-            .hosted = server && !Voices::engine(settings, false),
+            .hosted = (server || gemini) && !Voices::engine(settings, false),
             .provider = (*made)->name(),
-            .model = server ? settings.readAloud().value("model"_L1).toString() : QString(),
+            .model = model,
             .why = CapabilityLack::None,
             .failure = {}};
 }

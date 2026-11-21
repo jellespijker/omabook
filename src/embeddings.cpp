@@ -13,6 +13,7 @@
 
 #include "aifailures.h"
 #include "aiprivacy.h"
+#include "gemini.h"
 #include "meaningindex.h"
 #include "secretstore.h"
 #include "settings.h"
@@ -66,6 +67,43 @@ namespace {
     return vectors;
 }
 
+// Gemini, where it is chosen for embeddings (#145): always someone else's computer.
+[[nodiscard]] std::expected<Embeddings::Route, Failure> geminiRoute(const Settings &settings, AiPrivacy::HostedAsked asked) {
+    switch (AiPrivacy::refusal(settings, Capability::Embeddings, true, asked)) {
+    case CapabilityLack::None:
+        break;
+    case CapabilityLack::HostedNotChosen:
+        return std::unexpected(Failure(Failure::Code::HostedNotChosen, {u"Gemini"_s}));
+    default:
+        return std::unexpected(Failure(Failure::Code::MeaningHosted, {u"Gemini"_s}));
+    }
+    const auto api = Gemini::api(settings);
+    if (!api)
+        return std::unexpected(api.error());
+    return Embeddings::Route{
+        .server = {.preset = u"gemini"_s, .name = u"Gemini"_s, .baseUrl = api->baseUrl, .key = api->key, .keyFile = {}, .model = {}},
+        .model = Gemini::modelFor(settings, Capability::Embeddings),
+        .hosted = true,
+        .gemini = true};
+}
+
+[[nodiscard]] std::expected<Embeddings::Vectors, Failure> geminiVectors(const Embeddings::Route &route, const QStringList &texts,
+                                                                        Embeddings::Use use, std::chrono::milliseconds timeout) {
+    const Gemini::Api api{.baseUrl = route.server.baseUrl, .key = route.server.key};
+    auto made =
+        Gemini::embed(api, route.model, texts, use == Embeddings::Use::Question ? Gemini::Use::Question : Gemini::Use::Document, timeout);
+    if (!made)
+        return std::unexpected(made.error());
+    const bool whole = !made->empty() && !made->front().empty()
+                       && std::ranges::all_of(*made, [&made](const auto &one) { return one.size() == made->front().size(); });
+    if (!whole)
+        return std::unexpected(Failure(Failure::Code::MeaningNoVectors, {route.server.name, route.model}));
+    // Gemini's are of length 1 only at their full size: each is made so here.
+    for (auto &vector : *made)
+        MeaningIndex::normalize(vector);
+    return *std::move(made);
+}
+
 } // namespace
 
 std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &settings, AiPrivacy::HostedAsked asked,
@@ -73,6 +111,8 @@ std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &sett
     // A server of the person's own is a model too: Off asks nothing of it.
     if (settings.aiOff())
         return std::unexpected(Failure(Failure::Code::AiOff));
+    if (AiPrivacy::chosen(settings, Capability::Embeddings).value("provider"_L1).toString() == "gemini"_L1)
+        return geminiRoute(settings, asked);
     const auto server = serverOf(settings, omarchyProgram);
     if (!server)
         return std::unexpected(Failure::said(server.error()));
@@ -102,6 +142,8 @@ std::expected<Embeddings::Vectors, Failure> Embeddings::embed(const Route &route
                                                               std::chrono::milliseconds timeout) {
     if (texts.isEmpty())
         return Vectors{};
+    if (route.gemini)
+        return geminiVectors(route, texts, use, timeout);
     QJsonArray input;
     for (const QString &text : texts)
         input.append(asked(route.model, text, use));

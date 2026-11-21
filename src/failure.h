@@ -168,6 +168,12 @@ public:
         AiWantsKey,          // {where}
         AiRefusedKey,        // {where}
         AnthropicRefusedKey, // {}
+        GeminiNoKey,         // {}: no key for the Gemini API in the keyring (#145)
+        GeminiRefusedKey,    // {}
+        GeminiNoSound,       // {}: it answered a sentence to read aloud without its sound
+        RecordingTooLarge,   // {recording, the most it takes in MB}: too long to be sent at once
+        KeyNotKept,          // {the keyring's reason}
+        KeyNotForgotten,     // {}
         AiLimited,           // {where, what it said}: busy, or over a rate or a quota
         AiNoModel,           // {where, model}
         AiNoModelSaid,       // {where, model, what it said}

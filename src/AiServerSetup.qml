@@ -5,16 +5,18 @@ import QtQuick.Layouts
 
 // A server one capability is sent to, on the AI page: its address (none for
 // the AI server), its key, kept in the keyring and never shown again, and the
-// model. Handwriting has the AI server's vision model only; speech and voices
-// have a server only where one is chosen for them.
+// model. Handwriting has the AI server's vision model, or Gemini's; speech
+// and voices have a server only where one is chosen for them.
 ColumnLayout {
     id: setup
     property var info: ({})
     readonly property string capability: info.capability || ""
     readonly property var desk: aiAgent.capabilities
-    readonly property bool server: capability === "embeddings" || (info.chosen === "server" && capability !== "handwriting")
+    // Gemini has its key in a row of its own (GeminiKey) and no address.
+    readonly property bool gemini: info.chosen === "gemini"
+    readonly property bool server: (capability === "embeddings" && !gemini) || (info.chosen === "server" && capability !== "handwriting")
     spacing: 8
-    visible: server || capability === "handwriting"
+    visible: server || gemini || capability === "handwriting"
 
     TextField {
         id: address

@@ -114,6 +114,8 @@ QList<PluginInfo> Plugins::builtIn() const {
         part("ai", "Claude Code", "Claude through the claude command and its subscription, with every tool off."),
         part("ai", "Antigravity", "Gemini through the agy command and its subscription, in plan mode and a sandbox."),
         part("ai", "Anthropic API", "Claude through the API, with the key in ANTHROPIC_API_KEY."),
+        part("ai", "Gemini API", "Gemini through its own API, with a key kept in the keyring: answers, handwriting, "
+                                 "speech, voices and meaning."),
         part("ai", "Command", "Any program that reads a prompt and writes an answer: Ollama, llm, a script."),
         make("Open Library", "The Internet Archive's open catalog of every book ever published.", OpenLibrarySource(none).fields()),
         make("Google Books", "Google's index of books, with descriptions and cover pictures.", GoogleBooksSource(none).fields()),
