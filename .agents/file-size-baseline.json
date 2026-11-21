@@ -17,7 +17,7 @@
     "src/backend.cpp": 530,
     "src/booklistmodel.cpp": 798,
     "src/calibreplugin.cpp": 567,
-    "src/cli.cpp": 2096,
+    "src/cli.cpp": 2083,
     "src/curation.cpp": 719,
     "src/customization.cpp": 578,
     "src/folio.cpp": 1444,
