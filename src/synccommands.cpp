@@ -68,6 +68,7 @@ bool parseArguments(QCommandLineParser &parser, const QString &name, const QStri
 [[nodiscard]] std::expected<SyncOptions, QString> parseSyncOptions(const QCommandLineParser &parser) {
     SyncOptions options;
     options.dryRun = parser.isSet("dry-run");
+    options.acceptRenames = parser.isSet("accept-renames");
     const QString details = parser.value("details").toLower();
     if (details == "mine")
         options.details = SyncOptions::Details::Mine;
@@ -100,9 +101,11 @@ void printDryRun(const SyncSummary &summary, const QString &host) {
     printSection("Removed here, to the trash", titles.removedHere);
     printSection("Removed on " + host + ", to the trash", titles.removedThere);
     printSection("Details that differ, with no time to say which are newer", titles.detailsUndecided);
+    printSection("Renamed here", titles.renamedHere);
+    printSection("Renamed on " + host, titles.renamedThere);
     const int total = summary.received + summary.sent + summary.detailsTaken + summary.detailsSent + summary.placesTaken
                       + summary.placesSent + summary.readingTaken + summary.readingSent + summary.removedHere + summary.removedThere
-                      + summary.detailsUndecided;
+                      + summary.detailsUndecided + summary.renamedHere + summary.renamedThere;
     if (total == 0)
         printLine(stdout, "Nothing: both libraries are in step.");
 }
@@ -143,6 +146,21 @@ int printSyncStatus(const QCommandLineParser &parser, const Library &library, co
     return 0;
 }
 
+// The renames a sync left for want of consent, and the books it keeps apart (#158).
+void printKeptApart(const SyncSummary &summary, const QString &host, const QString &computer) {
+    if (!summary.dryRun) {
+        printSection("Renamed here", summary.titles.renamedHere);
+        printSection("Renamed on " + host, summary.titles.renamedThere);
+    }
+    if (summary.renamesHeld > 0)
+        printLine(stdout, QString("%1 paired by an identifier, not by its id, and a sync never renames such a book by itself, so "
+                                  "it was left as it is. To rename: omabook sync %2 --accept-renames (the newer name wins), or "
+                                  "--details mine or --details theirs; add --dry-run to see first.")
+                              .arg(summary.renamesHeld == 1 ? QString("1 book is") : QString("%1 books are").arg(summary.renamesHeld))
+                              .arg(computer));
+    printSection("Kept apart: they share an identifier, or were linked by an older Omabook, but are not one book", summary.titles.apart);
+}
+
 int printSyncResult(const SyncSummary &summary, const QString &computer, bool json) {
     const QString host = Remote(computer).host();
     if (json)
@@ -158,6 +176,8 @@ int printSyncResult(const SyncSummary &summary, const QString &computer, bool js
                           "--details theirs (take %2's); add --dry-run to see first.")
                       .arg(summary.detailsUndecided == 1 ? QString("1 book has") : QString("%1 books have").arg(summary.detailsUndecided))
                       .arg(host, computer));
+    if (!json)
+        printKeptApart(summary, host, computer);
     for (const QString &problem : summary.problems)
         printLine(stderr, problem);
     return summary.problems.isEmpty() ? 0 : 1;
@@ -211,11 +231,12 @@ int runManifestCli(const QStringList &arguments) {
 
 int runSyncCli(const QStringList &arguments) {
     QCommandLineParser parser;
-    addCommonOptions(parser, "Bring this library and another computer's in step over ssh: each gets the books it lacks, "
-                             "the newer details and the newer reading place win, and a book removed on one side is removed "
-                             "on the other too (to the trash), unless it changed there since. A book held twice on one side (an entry "
-                             "without a file and its file, of one ISBN) and once on the other is one book: both copies get its "
-                             "details. Omabook must be installed on both.");
+    addCommonOptions(parser,
+                     "Bring this library and another computer's in step over ssh: each gets the books it lacks, "
+                     "the newer details and the newer reading place win, and a book removed on one side is removed "
+                     "on the other too (to the trash), unless it changed there since. A book is the same book on both by its id; one "
+                     "never synced before, by a file with the same content, or without a file by its ISBN, Goodreads or Calibre "
+                     "id when that names one book on each side and the titles agree. Omabook must be installed on both.");
     parser.addPositionalArgument("computer",
                                  "The other computer as ssh knows it (a Tailscale name works), optionally "
                                  "with its library folder: laptop or laptop:Books.",
@@ -225,7 +246,12 @@ int runSyncCli(const QStringList &arguments) {
                       "For books whose details differ and no time says which are newer (books from before "
                       "Omabook kept that time): take this computer's (mine) or the other's (theirs).",
                       "mine|theirs"});
-    parser.addOption({"dry-run", "Change nothing on either side; list what would be received, sent, updated and removed on each."});
+    parser.addOption(
+        {"accept-renames",
+         "Let a book paired by an identifier (not by its id) take the title, authors or ISBN the other "
+         "side gives it, the newer winning; without it, or --details, a sync lists such a rename and leaves the book as it is."});
+    parser.addOption(
+        {"dry-run", "Change nothing on either side; list what would be received, sent, updated, renamed and removed on each."});
     parser.addOption({"replicate",
                       "What omabook sync asks of this computer from the other one: take in the change log's operations in "
                       "this file, and print the ones the other computer lacks.",

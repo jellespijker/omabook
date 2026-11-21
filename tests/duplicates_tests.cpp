@@ -264,7 +264,17 @@ private slots:
         const QString spaceA = Spaces::personalSpace(a);
         Spaces::pair(b, spaceA, Spaces::deviceId(a), "A");
         Spaces::pair(a, Spaces::personalSpace(b), Spaces::deviceId(b), "B");
-        QCOMPARE(Replication::link(a, Replication::unlinked(b, bookIds(a))), 1);
+        // Linked by Calibre's number for the book, as 0.1.6 did; 0.2.2 pairs by no such number (#158),
+        // and follows the link it made, of two books of one title.
+        const QString kept = Spaces::bookId(a, 11);
+        const QString lost = Spaces::bookId(b, 10);
+        ChangeLog::append(a, {.space = spaceA,
+                              .entity = "book",
+                              .id = std::max(kept, lost),
+                              .field = "same_as",
+                              .value = std::min(kept, lost),
+                              .hlc = std::nullopt});
+        QCOMPARE(Replication::link(a, Replication::unlinked(b, bookIds(a))), 0);
         SpaceReplay::takePlaces(b, Replication::since(a, Replication::vector(b)));
         SpaceReplay::takePlaces(a, Replication::since(b, Replication::vector(a)));
         QVERIFY(b.remove(10, removedAt));
@@ -291,11 +301,12 @@ private slots:
 
     // A has the book twice: an entry without a file, as an import from
     // Goodreads makes one (with a picture of its own), and the book's file,
-    // with the same ISBN; B has the file. Once the three are one book, each
-    // side changes its details: they are decided once for it, a dry run from
-    // either side lists it once and says the same of it, and one sync gives
-    // both of A's copies the details and settles it. The covers compared are
-    // the files' copies' (#154).
+    // with the same ISBN; B has the file. Each side changes its details: the
+    // file is one book on both by its id, decided once, and a dry run from
+    // either side lists it once and says the same of it; one sync settles
+    // it. The entry is a book of its own, paired with none there: its ISBN
+    // names two books on A, and nothing there has its Goodreads id (#158; in
+    // 0.2.1 the three were one book, #154). The covers compared are the files'.
     void twoCopiesOfAnIsbnPairWithTheOneThere_data() {
         QTest::addColumn<bool>("fromA");
         QTest::newRow("synced from A, the side with two copies") << true;
@@ -343,8 +354,9 @@ private slots:
         QCOMPARE(synced.detailsTaken + synced.detailsSent, 1);
         const BookMeta settledMeta = b.book(theirs)->meta;
         QCOMPARE(settledMeta.publisher, QString("There Press"));
-        for (const qint64 id : {wished, filed})
-            QVERIFY2(a.book(id)->meta.toJson() == settledMeta.toJson(), qPrintable(a.book(id)->meta.description));
+        QVERIFY2(a.book(filed)->meta.toJson() == settledMeta.toJson(), qPrintable(a.book(filed)->meta.description));
+        QCOMPARE(a.book(wished)->meta.description, QString("As Goodreads says it."));
+        QCOMPARE(a.book(wished)->meta.publisher, QString());
         QCOMPARE(Library::hashFile(b.coverPath(theirs)), Library::hashFile(a.coverPath(filed)));
         expectSettled(a, b, dir, fromA);
         QCOMPARE(a.books("Twice Told").size(), 2);

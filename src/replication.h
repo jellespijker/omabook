@@ -10,6 +10,7 @@
 #include <QtTypes>
 #include <span>
 
+#include "bookpairing.h"
 #include "library.h"
 #include "spacereducer.h"
 #include "spacereplay.h"
@@ -35,12 +36,9 @@ public:
     using Vector = QMap<QString, QMap<QString, qint64>>;
 
     // A book as the other side needs it to find its own copy of it with
-    // today's rules (the hashes of its files, else its entry keys).
-    struct BookNames {
-        QString gid;
-        QStringList hashes;
-        QStringList keys;
-    };
+    // today's rules (BookPairing): the hashes of its files, else its strong
+    // keys no other book here has, and its title.
+    using BookNames = BookPairing::Names;
 
     // A book whose reading place the log says otherwise than its row.
     struct PlaceChange {
@@ -98,11 +96,14 @@ public:
     // The books here whose id the other side, which knows `theirGids`, may
     // know by another one: those it doesn't know by theirs, nor by a same-as.
     [[nodiscard]] static QList<BookNames> unlinked(const Library &library, const QSet<QString> &theirGids);
-    // Finds each book here with today's rules (a file with the same content,
-    // or for a book without a file the same entry key) and, where it is
-    // known by another id here, records a same-as operation once, folding
-    // the larger id into the smaller. Answers how many it linked.
-    static int link(const Library &library, const QList<BookNames> &theirs);
+    // What finding each of `theirs` here with today's rules (BookPairing)
+    // would link; `theirGids` are the ids of all the books they hold.
+    [[nodiscard]] static BookPairing::Pairs pairs(const Library &library, const QList<BookNames> &theirs,
+                                                  const QSet<QString> &theirGids = {});
+    // The same, each found that is known by another id here recorded as a
+    // same-as operation once, folding the larger id into the smaller.
+    // Answers how many it linked.
+    static int link(const Library &library, const QList<BookNames> &theirs, const QSet<QString> &theirGids = {});
 
     // What taking `incoming` (with the log already here) would make of the
     // reading places of the books here: the books whose place would change.

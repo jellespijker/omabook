@@ -29,6 +29,7 @@ namespace SyncTake {
 struct Peer {
     QString device;                                                 // the other computer's device id in the log
     SyncOptions::Details details = SyncOptions::Details::Undecided; // whose undecided details win
+    bool acceptRenames = false;                                     // a rename is done by its time (SyncRenames)
     bool dryRun = false;
     // On the computer that runs the sync, the other one and its manifest's
     // books: covers are pictures, which travel as files, so only the side
@@ -69,9 +70,10 @@ struct Taken {
 
 // Takes in what the other side says of a book's reading where this side says
 // nothing: an empty shelf, no stars, no finished day; a paper copy either side
-// has is had; the names elsewhere this one lacks. Whether that changes
-// anything; with `dryRun` only that.
-bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun);
+// has is had; with `names`, the names elsewhere this one lacks (never of a
+// book paired on less than its global id, which may be another's, #158).
+// Whether that changes anything; with `dryRun` only that.
+bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, bool names = true);
 
 // `omabook set` arguments that give the other side a book's reading and its
 // names elsewhere, with `detailsAt` (for an Omabook there that keeps it) the

@@ -12,10 +12,12 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-constexpr std::array bookFields{"progress"_L1,    "same_as"_L1,   "title"_L1,      "authors"_L1,    "series"_L1,      "series_index"_L1,
-                                "publisher"_L1,   "language"_L1,  "isbn"_L1,       "published"_L1,  "description"_L1, "tags"_L1,
-                                "identifiers"_L1, "has_cover"_L1, "cover_hash"_L1, "details_at"_L1, "shelf"_L1,       "rating"_L1,
-                                "finished"_L1,    "paper"_L1,     "reading_at"_L1, "removed"_L1,    "removed_at"_L1};
+constexpr std::array bookFields{"progress"_L1, "same_as"_L1, "title"_L1, "authors"_L1, "series"_L1, "series_index"_L1, "publisher"_L1,
+                                "language"_L1, "isbn"_L1, "published"_L1, "description"_L1, "tags"_L1, "identifiers"_L1, "has_cover"_L1,
+                                "cover_hash"_L1, "details_at"_L1, "shelf"_L1, "rating"_L1, "finished"_L1, "paper"_L1, "reading_at"_L1,
+                                "removed"_L1, "removed_at"_L1,
+                                // Two ids the log says are not one book, whatever a link says (#158).
+                                "not_same_as"_L1};
 
 // A book's fields this computer keeps to itself, never sent.
 constexpr std::array ownBookFields{"path"_L1, "formats"_L1};

@@ -104,28 +104,6 @@ constexpr auto namesJoined =
 
 [[nodiscard]] QString standsFor(const QHash<QString, QString> &canonical, const QString &gid) { return canonical.value(gid, gid); }
 
-// Of a book's linked group, every id now stands for the smaller of the two
-// roots, as SpaceReducer::sameAs would answer with the new link among the rest.
-void join(QHash<QString, QString> &canonical, const QString &one, const QString &other) {
-    const QString first = standsFor(canonical, one);
-    const QString second = standsFor(canonical, other);
-    const QString root = std::min(first, second);
-    const QString joined = std::max(first, second);
-    for (QString &stands : canonical)
-        if (stands == joined)
-            stands = root;
-    for (const QString &id : {one, other, first, second})
-        canonical.insert(id, root);
-}
-
-[[nodiscard]] QHash<QString, qint64> booksByEntryKey(const Library &library) {
-    QHash<QString, qint64> books;
-    for (const Book &book : library.books())
-        for (const QString &key : Library::entryKeys(book))
-            books.insert(key, book.id);
-    return books;
-}
-
 [[nodiscard]] QString text(const ReducedBook &book, QLatin1StringView field) { return book.fields.value(QString(field)).value; }
 
 // When each of a book's details changed, as a manifest says it (field_hlc):
@@ -354,11 +332,16 @@ Replication::Admitted Replication::admit(const Library &library, const QList<Spa
     return admitted;
 }
 
+// An Omabook before 0.2.2 reads "keys" as entry keys of any scheme, and pairs
+// by any of them: it is given none, and its own are not read (#158).
 QJsonArray Replication::toJson(const QList<BookNames> &books) {
     QJsonArray array;
     for (const BookNames &book : books)
-        array << QJsonObject{
-            {"gid", book.gid}, {"hashes", QJsonArray::fromStringList(book.hashes)}, {"keys", QJsonArray::fromStringList(book.keys)}};
+        array << QJsonObject{{"gid", book.gid},
+                             {"hashes", QJsonArray::fromStringList(book.hashes)},
+                             {"keys", QJsonArray()},
+                             {"pair_keys", QJsonArray::fromStringList(book.keys)},
+                             {"title", book.title}};
     return array;
 }
 
@@ -373,7 +356,8 @@ QList<Replication::BookNames> Replication::booksFrom(const QJsonArray &array) {
             return list;
         };
         if (const QString gid = book.value("gid").toString(); !gid.isEmpty())
-            books << BookNames{.gid = gid, .hashes = strings("hashes"), .keys = strings("keys")};
+            books << BookNames{
+                .gid = gid, .hashes = strings("hashes"), .keys = strings("pair_keys"), .title = book.value("title").toString()};
     }
     return books;
 }
@@ -383,6 +367,7 @@ QList<Replication::BookNames> Replication::unlinked(const Library &library, cons
     QSet<QString> known;
     for (const QString &gid : theirGids)
         known.insert(standsFor(canonical, gid));
+    const QHash<qint64, QStringList> keys = BookPairing::keysAlone(library);
     QList<BookNames> books;
     for (const Book &book : library.books()) {
         const QString gid = Spaces::bookId(library, book.id);
@@ -392,44 +377,18 @@ QList<Replication::BookNames> Replication::unlinked(const Library &library, cons
         for (const FormatFile &file : library.formatFiles(book.id))
             hashes << file.hash << file.original; // and the hash it came in with (#74)
         hashes.removeAll(QString());
-        books << BookNames{.gid = gid, .hashes = hashes, .keys = hashes.isEmpty() ? Library::entryKeys(book) : QStringList()};
+        books << BookNames{
+            .gid = gid, .hashes = hashes, .keys = hashes.isEmpty() ? keys.value(book.id) : QStringList(), .title = book.meta.title};
     }
     return books;
 }
 
-int Replication::link(const Library &library, const QList<BookNames> &theirs) {
-    const Library::Batch batch(library);
-    QHash<QString, QString> canonical = SpaceReducer::sameAs(BookLinks::trusted(operations(library)));
-    QHash<QString, qint64> byKey;
-    int linked = 0;
-    for (const BookNames &their : theirs) {
-        // Today's rules, as the manifest sync matches a book: a file with
-        // the same content, and for a book without a file its entry keys.
-        qint64 mine = 0;
-        for (const QString &hash : their.hashes) {
-            mine = library.bookWithHash(hash);
-            if (mine > 0)
-                break;
-        }
-        if (mine == 0 && their.hashes.isEmpty()) {
-            if (byKey.isEmpty())
-                byKey = booksByEntryKey(library);
-            const auto found = std::ranges::find_if(their.keys, [&byKey](const QString &key) { return byKey.contains(key); });
-            mine = found != their.keys.cend() ? byKey.value(*found) : 0;
-        }
-        const QString myGid = mine > 0 ? Spaces::bookId(library, mine) : QString();
-        if (myGid.isEmpty() || standsFor(canonical, myGid) == standsFor(canonical, their.gid))
-            continue;
-        ChangeLog::append(library, {.space = Spaces::personalSpace(library),
-                                    .entity = u"book"_s,
-                                    .id = std::max(myGid, their.gid),
-                                    .field = u"same_as"_s,
-                                    .value = std::min(myGid, their.gid),
-                                    .hlc = std::nullopt});
-        join(canonical, myGid, their.gid);
-        ++linked;
-    }
-    return linked;
+BookPairing::Pairs Replication::pairs(const Library &library, const QList<BookNames> &theirs, const QSet<QString> &theirGids) {
+    return BookPairing::pairs(library, operations(library), theirs, theirGids);
+}
+
+int Replication::link(const Library &library, const QList<BookNames> &theirs, const QSet<QString> &theirGids) {
+    return BookPairing::record(library, pairs(library, theirs, theirGids));
 }
 
 QList<Replication::PlaceChange> Replication::placeChanges(const Library &library, std::span<const SpaceOperation> incoming) {

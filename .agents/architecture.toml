@@ -39,7 +39,7 @@ modules = [
   "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers",
   "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries", "library",
   "libraryannotations", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
-  "sharedspace", "signedops", "spacediff", "booklinks", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
+  "sharedspace", "signedops", "spacediff", "booklinks", "bookidentity", "bookpairing", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginfiles", "pluginnews", "highlights", "bookink",
@@ -74,7 +74,7 @@ summary = "What the command line, the MCP server and the window all do, each wri
 uses = ["services", "library", "formats", "foundation"]
 modules = [
   "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "scriptsession", "pluginpackage", "plugintools",
-  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synccopies", "synctake", "synctakeannotations", "synctakegraph",
+  "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synccopies", "syncrenames", "synctake", "synctakeannotations", "synctakegraph",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
   "kosyncroutes", "opdsroutes", "deviceserver", "koreadersync", "sendbook",
 ]

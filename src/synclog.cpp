@@ -8,6 +8,8 @@
 #include <tuple>
 #include <utility>
 
+#include "booklinks.h"
+#include "bookpairing.h"
 #include "compaction.h"
 #include "keptops.h"
 #include "log.h"
@@ -51,6 +53,9 @@ namespace {
 // to its own (Replication::link): the side asked links the books the one
 // that asks sends it, so a book without a file there (an entry from
 // Goodreads) is found here by its keys whichever side starts the sync (#154).
+// Only its strong keys no other book there has ("pair_keys"): an Omabook
+// before 0.2.2 names none, and its books without a file are paired by their
+// id alone (#158).
 [[nodiscard]] QList<Replication::BookNames> namesIn(const QJsonArray &books) {
     QList<Replication::BookNames> names;
     for (const auto &value : books) {
@@ -62,12 +67,69 @@ namespace {
                 if (const QString hash = file.toObject().value(QLatin1StringView(name)).toString(); !hash.isEmpty())
                     hashes << hash;
         if (hashes.isEmpty())
-            for (const auto &key : book.value("keys").toArray())
+            for (const auto &key : book.value("pair_keys").toArray())
                 keys << key.toString();
         if (const QString gid = book.value("gid").toString(); !gid.isEmpty())
-            names << Replication::BookNames{.gid = gid, .hashes = hashes, .keys = keys};
+            names << Replication::BookNames{.gid = gid, .hashes = hashes, .keys = keys, .title = book.value("pair_title").toString()};
     }
     return names;
+}
+
+// The links a dry run would make, each as [the id here, theirs], for the other
+// side to take as made: a dry run writes none of them, and both sides then
+// take as if both were made (#158).
+[[nodiscard]] QJsonArray linksJson(const BookPairing::Pairs &pairs) {
+    QJsonArray links;
+    for (const auto &[mine, theirs] : pairs.links)
+        links << QJsonArray{mine, theirs};
+    return links;
+}
+
+// After every operation here and of `incoming`, as a link a sync makes is
+// once its clock has seen theirs (SyncManifest::observeManifest).
+[[nodiscard]] qint64 afterAll(const Library &library, const QList<SpaceOperation> &incoming) {
+    qint64 last = Spaces::lastHlc(library);
+    for (const SpaceOperation &op : incoming)
+        last = std::max(last, op.hlc);
+    return last + 1;
+}
+
+// The links a dry run would make, here's and those `links` of theirs, as operations made now.
+[[nodiscard]] QList<SpaceOperation> wouldLink(const Library &library, const BookPairing::Pairs &mine, const QJsonArray &links,
+                                              const QList<SpaceOperation> &incoming) {
+    BookPairing::Pairs pairs = mine;
+    for (const auto &link : links)
+        pairs.links << std::pair{link.toArray().at(1).toString(), link.toArray().at(0).toString()};
+    return BookPairing::asOperations(library, pairs, afterAll(library, incoming));
+}
+
+[[nodiscard]] QJsonArray gidsOf(const Library &library) {
+    QJsonArray gids;
+    for (const Book &book : library.books())
+        gids << Spaces::bookId(library, book.id);
+    return gids;
+}
+
+// Here, at the start of a sync: what pairing the books of their `manifest`
+// with this side's would link, the books kept apart named in `summary`; and,
+// but in a dry run, paired with them and linked.
+[[nodiscard]] BookPairing::Pairs pairWith(const Library &library, const QJsonObject &manifest, const QSet<QString> &theirGids,
+                                          SyncSummary &summary) {
+    const BookPairing::Pairs paired = Replication::pairs(library, namesIn(manifest.value("books").toArray()), theirGids);
+    summary.titles.apart << paired.apart;
+    summary.titles.apart.removeDuplicates();
+    if (!summary.dryRun) {
+        Spaces::pair(library, manifest.value("space").toString(), manifest.value("device").toString(), manifest.value("name").toString());
+        BookPairing::record(library, paired);
+    }
+    return paired;
+}
+
+// Before what came in is compacted: the links it brought that are not of one
+// book stay dropped (BookLinks::record), and are named among the books kept apart.
+void keepApart(const Library &library, SyncSummary &summary) {
+    summary.titles.apart << BookLinks::record(library, Replication::operations(library));
+    summary.titles.apart.removeDuplicates();
 }
 
 [[nodiscard]] QSet<QString> heldIn(const QJsonArray &names) {
@@ -173,6 +235,11 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     add(summary.detailsSent, summary.titles.detailsSent, "details_taken");
     add(summary.readingSent, summary.titles.readingSent, "reading_taken");
     add(summary.removedThere, summary.titles.removedThere, "removed_here");
+    add(summary.renamedThere, summary.titles.renamedThere, "renamed_here");
+    summary.renamesHeld += there.value("renames_held").toInt();
+    for (const auto &title : titles.value("apart").toArray())
+        summary.titles.apart << title.toString();
+    summary.titles.apart.removeDuplicates();
     summary.collectionsSent += there.value("collections_taken").toInt();
     summary.graphSent += there.value("graph_taken").toInt();
     summary.annotationsSent += there.value("annotations_taken").toInt();
@@ -193,10 +260,15 @@ void takeKept(Library &library, std::span<const SpaceOperation> ops) {
     for (const SpaceOperation &op : ops)
         devices.insert(op.device);
     for (const QString &device : std::as_const(devices))
-        std::ignore = SyncTake::take(
-            library, ops,
-            {.device = device, .details = SyncOptions::Details::Undecided, .dryRun = false, .remote = nullptr, .books = {}, .held = held},
-            summary);
+        std::ignore = SyncTake::take(library, ops,
+                                     {.device = device,
+                                      .details = SyncOptions::Details::Undecided,
+                                      .acceptRenames = false,
+                                      .dryRun = false,
+                                      .remote = nullptr,
+                                      .books = {},
+                                      .held = held},
+                                     summary);
 }
 
 // Given as the program starts: the library layer sets a library up, and
@@ -219,24 +291,24 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     const bool dryRun = options.dryRun;
     const QJsonArray books = manifest.value("books").toArray();
     const QString theirDevice = manifest.value("device").toString();
-    if (!dryRun) {
-        Spaces::pair(library, manifest.value("space").toString(), theirDevice, manifest.value("name").toString());
-        Replication::link(library, namesIn(books));
-    }
     QSet<QString> theirGids;
     for (const auto &book : books)
         theirGids.insert(book.toObject().value("gid").toString());
+    const BookPairing::Pairs paired = pairWith(library, manifest, theirGids, summary);
     const QList<SpaceOperation> lacking = lackingThere(library, manifest);
-    // A dry run links nothing: what is unlinked stays so until a sync. Nor
-    // does it pair: the person's key goes with it only in a sync, when theirs
-    // is to become this one's (pairing.h).
+    // A dry run links nothing: it says the links it would make, and takes
+    // them as made, as the other side does. Nor does it pair: the person's key
+    // goes with it only in a sync, when theirs is to become this one's (pairing.h).
     const QJsonObject request = with({{"space", Spaces::personalSpace(library)},
                                       {"device", Spaces::deviceId(library)},
                                       {"vector", Replication::toJson(Replication::vector(library))},
                                       {"annotations", Replication::toJson(Replication::annotationVector(library))},
                                       {"plugin_data", 1},
                                       {"ops", Replication::toJson(lacking, manifest.value("signs").toInt() >= 1)},
-                                      {"books", dryRun ? QJsonArray() : Replication::toJson(Replication::unlinked(library, theirGids))},
+                                      {"books", Replication::toJson(Replication::unlinked(library, theirGids))},
+                                      {"gids", gidsOf(library)},
+                                      {"would_link", dryRun ? linksJson(paired) : QJsonArray()},
+                                      {"accept_renames", options.acceptRenames},
                                       {"details", SyncTake::otherSide(options.details)},
                                       {"held", QJsonArray::fromStringList(SyncTake::heldBy(library).values())},
                                       {"dry_run", dryRun}},
@@ -248,7 +320,7 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
         summary.problems << "The change log could not be carried between here and " + remote.host() + ": " + answer.error();
         return {.manifest = holding(library, manifest), .gone = {}};
     }
-    const QList<SpaceOperation> incoming =
+    QList<SpaceOperation> incoming =
         KeptOps::keep(library,
                       admitted(library, Replication::operationsFrom(answer->value("ops").toArray()), manifest,
                                "%1 operations from " + remote.host() + " were refused and not taken in: %2.", summary),
@@ -269,9 +341,14 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     // are not counted twice (#59).
     summary.detailsUndecided = 0;
     summary.titles.detailsUndecided.clear();
+    if (dryRun)
+        incoming << wouldLink(library, paired, answer->value("would_link").toArray(), incoming);
+    else
+        keepApart(library, summary);
     SyncTake::Taken described = SyncTake::take(library, incoming,
                                                {.device = theirDevice,
                                                 .details = options.details,
+                                                .acceptRenames = options.acceptRenames,
                                                 .dryRun = dryRun,
                                                 .remote = &remote,
                                                 .books = books,
@@ -307,25 +384,39 @@ void SyncLog::finish(Library &library, const Remote &remote, const QJsonObject &
 QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     const bool dryRun = request.value("dry_run").toBool();
     const QString theirDevice = request.value("device").toString();
-    if (!dryRun) {
+    QSet<QString> theirGids;
+    for (const auto &gid : request.value("gids").toArray())
+        theirGids.insert(gid.toString());
+    const BookPairing::Pairs paired = Replication::pairs(library, Replication::booksFrom(request.value("books").toArray()), theirGids);
+    if (!dryRun)
         Spaces::pair(library, request.value("space").toString(), theirDevice, request.value("name").toString());
-        Replication::link(library, Replication::booksFrom(request.value("books").toArray()));
-    }
     SyncSummary taken;
     taken.dryRun = dryRun;
-    const QList<SpaceOperation> incoming =
-        KeptOps::keep(library,
-                      admitted(library, Replication::operationsFrom(request.value("ops").toArray()), request,
-                               "%1 operations sent from here were refused there and not taken in: %2.", taken),
-                      dryRun);
+    taken.titles.apart << paired.apart;
+    QList<SpaceOperation> incoming = KeptOps::keep(library,
+                                                   admitted(library, Replication::operationsFrom(request.value("ops").toArray()), request,
+                                                            "%1 operations sent from here were refused there and not taken in: %2.", taken),
+                                                   dryRun);
     // What they held when they asked: whether the answer reaches them, this side can't know.
     if (!dryRun)
         Compaction::rememberSeen(library, theirDevice, Replication::vectorFrom(request.value("vector").toObject()));
+    // Linked once their operations are here, and before their places are taken: the links come
+    // after those operations in time, as the other side's do once it saw this side's manifest, for
+    // a link is judged by the titles before it (BookLinks).
+    if (!dryRun) {
+        Spaces::observeHlc(library, afterAll(library, incoming));
+        BookPairing::record(library, paired);
+    }
     const QList<qint64> changed = takePlaces(library, incoming, dryRun);
+    if (dryRun)
+        incoming << wouldLink(library, paired, request.value("would_link").toArray(), incoming);
+    else
+        keepApart(library, taken);
     // The side asked has no books of the other's to describe: it never fetches any.
     std::ignore = SyncTake::take(library, incoming,
                                  {.device = theirDevice,
                                   .details = SyncTake::detailsFrom(request.value("details").toString()),
+                                  .acceptRenames = request.value("accept_renames").toBool(),
                                   .dryRun = dryRun,
                                   .remote = nullptr,
                                   .books = {},
@@ -345,9 +436,12 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
          {"changed", static_cast<int>(changed.size())},
          {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
          {"taken", taken.toJson()},
+         {"would_link", dryRun ? linksJson(paired) : QJsonArray()},
          {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
                                {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
-                               {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)}}}},
+                               {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)},
+                               {"renamed_here", QJsonArray::fromStringList(taken.titles.renamedHere)},
+                               {"apart", QJsonArray::fromStringList(taken.titles.apart)}}}},
         // Once this side is who it is to be: the person a pairing just made it may be theirs (#51).
         with(pairing, with(SpaceCarry::introduction(library), carried(library, request, request.value("carrying").toBool() && !dryRun))));
 }

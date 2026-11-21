@@ -9,6 +9,7 @@
 #include <initializer_list>
 #include <optional>
 
+#include "bookidentity.h"
 #include "hlc.h"
 #include "library.h"
 #include "statements.h"
@@ -255,7 +256,16 @@ void Spaces::ensureBookId(const Library &library, qint64 localId) {
     const std::optional<Book> book = library.book(localId);
     if (!book)
         return;
-    setGlobalId(library, u"book"_s, localId, bookGlobalId({}, Library::entryKeys(*book)));
+    // Of a strong identifier, else of the title and authors (#158), and never
+    // one another book here is known by: the two would be one book to the log.
+    for (const QString &key : BookIdentity::idKeys(*book)) {
+        const QString gid = bookGlobalId({}, {key});
+        if (const qint64 holder = Spaces::localId(library, u"book"_s, gid); holder == 0 || holder == localId || !library.book(holder)) {
+            setGlobalId(library, u"book"_s, localId, gid);
+            return;
+        }
+    }
+    setGlobalId(library, u"book"_s, localId, bookGlobalId({}, {}));
 }
 
 QString Spaces::bookId(const Library &library, qint64 localId) {

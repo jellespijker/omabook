@@ -174,6 +174,9 @@ bool SpaceReducer::isRemoved(const SpaceStamp &alive, const SpaceStamp &removed)
 }
 
 void SpaceReducer::foldBook(ReducedBook &book, const SpaceOperation &op) {
+    // What says two ids are not one book is of no book's fields (BookLinks, #158).
+    if (op.field == "not_same_as"_L1)
+        return;
     if (op.field == "removed"_L1) {
         if (op.value != "0"_L1 && !op.value.isEmpty())
             takeMax(book.removed, {op.hlc, op.device, 0, op.value});
@@ -292,7 +295,7 @@ QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops
 
 bool SpaceReducer::grows(const QString &field) {
     return field.startsWith("seen:"_L1) || field.startsWith("set:"_L1) || field == "revealed"_L1 || field == "link"_L1
-           || field == "range"_L1 || field == "same_as"_L1;
+           || field == "range"_L1 || field == "same_as"_L1 || field == "not_same_as"_L1;
 }
 
 namespace {
