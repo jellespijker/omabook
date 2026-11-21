@@ -87,7 +87,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
+  "inksurface", "inksurfacetouch", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk",
 ]
 
