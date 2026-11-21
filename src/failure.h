@@ -129,6 +129,20 @@ public:
         DetailsNeedEpub,       // {}
         BookFileUnwritable,    // {path, the system's reason}
         NoOriginalKept,        // {}
+        // E-readers and phones (foundation, services, operations; #71).
+        ServerUnstarted,       // {address, the system's reason}
+        NoTailnet,             // {}
+        SyncNotSetUp,          // {}
+        SyncServerUnreachable, // {where, the network's reason}
+        SyncServerRefused,     // {where}
+        SyncServerAnswered,    // {where, what it said}
+        NotAnOpdsFeed,         // {address}
+        NoDeviceFolder,        // {folder}
+        NothingToSend,         // {book's title}
+        NotCopied,             // {where to, the system's reason}
+        MailNotSetUp,          // {}
+        MailUnreachable,       // {server, the network's reason}
+        MailRefused,           // {server, what it said}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)

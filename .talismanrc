@@ -16,4 +16,13 @@ fileignoreconfig:
   # change log the tests write, to compare with. No secret.
   - filename: tests/firstopen_tests.cpp
     checksum: 3e3b853abc073e84d52710b47dc5f2706ac6994febbb5227035a0d3d0a41a0a2
+  # KOReader's sync (#71): the hex strings are the MD5 document hashes of
+  # files the test writes, and "secret" the stand-in KOReader's made-up
+  # password. No secret.
+  - filename: tests/devices_tests.cpp
+    checksum: e07cc789b5f4ef95f8b570aa913bfa4bd05274ed6da66e3e57bfef459ad35568
+  # The devices' options (#71): the names the keyring keeps their secrets
+  # under, and the letters a new catalog password is drawn from. No secret.
+  - filename: src/deviceoptions.cpp
+    checksum: 24702d742630faca6de7b7812f61905d25024c8ee37c78d1369f81cae5a2b47e
 version: "1.0"

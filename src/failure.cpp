@@ -168,6 +168,23 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::BookFileUnwritable, tr("%1 can't be written. %2")},
     {Failure::Code::NoOriginalKept,
      tr("There is no original of this book's file to put back: its details were never written into it here.")},
+    {Failure::Code::ServerUnstarted, tr("Omabook can't listen for e-readers and phones on %1: %2")},
+    {Failure::Code::NoTailnet,
+     tr("This computer isn't on a tailnet, so there is no address there to listen on. Start Tailscale, or choose another place to listen.")},
+    {Failure::Code::SyncNotSetUp,
+     tr("Set up the KOReader sync server first: its address, your name and your password, in the settings under E-readers and phones.")},
+    {Failure::Code::SyncServerUnreachable, tr("The KOReader sync server %1 can't be reached: %2")},
+    {Failure::Code::SyncServerRefused, tr("The KOReader sync server %1 doesn't know that name and password.")},
+    {Failure::Code::SyncServerAnswered, tr("The KOReader sync server %1 said: %2")},
+    {Failure::Code::NotAnOpdsFeed, tr("%1 is not an OPDS catalog.")},
+    {Failure::Code::NoDeviceFolder,
+     tr("There is no e-reader at \"%1\": connect it, and choose the folder it is mounted at in the settings under E-readers and phones.")},
+    {Failure::Code::NothingToSend, tr("%1 has no file to send.")},
+    {Failure::Code::NotCopied, tr("The book couldn't be copied to %1: %2")},
+    {Failure::Code::MailNotSetUp,
+     tr("Set up sending by mail first: the Kindle's address, your mail server and the address you send from, in the settings under E-readers and phones.")},
+    {Failure::Code::MailUnreachable, tr("The mail server %1 can't be reached: %2")},
+    {Failure::Code::MailRefused, tr("The mail server %1 turned the book away: %2")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an
