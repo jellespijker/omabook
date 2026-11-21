@@ -111,11 +111,13 @@ Graph WorldLayers::linking(const Library &library, qint64 one, qint64 other, qin
 
 bool WorldLayers::merge(const Library &library, qint64 keep, qint64 other) { return linking(library, keep, other, 0).merge(keep, other); }
 
-QJsonArray WorldLayers::find(const Library &library, const QString &words, const QString &kind, const QString &scope, bool everywhere,
-                             int limit) {
-    const Graph graph = everywhere ? Graph::ofLibrary(library) : Graph::ofScope(library, scope);
+QJsonArray WorldLayers::find(const Library &library, const Search &search) {
+    const bool general = search.everywhere || search.scope.isEmpty();
+    const auto inItsTenant = [&] { return search.tenant ? Graph::forTenant(library, *search.tenant) : Graph::ofLibrary(library); };
+    const Graph graph = general ? inItsTenant() : Graph(library);
     QJsonArray nodes;
-    for (const GraphNode &node : graph.find(words, kind, everywhere ? std::nullopt : std::optional(scope), std::max(1, limit)))
+    for (const GraphNode &node : graph.find(search.words, search.kind, search.everywhere ? std::nullopt : std::optional(search.scope),
+                                            std::max(1, search.limit)))
         nodes << node.toJson();
     return nodes;
 }

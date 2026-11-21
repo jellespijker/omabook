@@ -9,6 +9,7 @@
 #include <optional>
 
 #include "graph.h"
+#include "tenancy.h"
 
 class Library;
 
@@ -63,10 +64,20 @@ struct Layer {
 [[nodiscard]] Graph linking(const Library &library, qint64 one, qint64 other, qint64 bookId);
 // Two things merged as a plugin merges them, in the graph linking() gives.
 bool merge(const Library &library, qint64 keep, qint64 other);
-// The things a plugin finds (GraphOps::find): in a world whole, or in every
-// scope (`everywhere`) and the general graph in Tenancy::preferred's tenant.
-[[nodiscard]] QJsonArray find(const Library &library, const QString &words, const QString &kind, const QString &scope, bool everywhere,
-                              int limit);
+// What a plugin looks for (GraphOps::find): the words, of a kind, in a scope
+// or (`everywhere`) in every scope and the general graph.
+struct Search {
+    QString words;
+    QString kind;
+    QString scope;
+    bool everywhere = false;
+    int limit = 50;
+    // The general graph's tenant, as the plugin named it or that of the book
+    // it named (#136); none for Tenancy::preferred's.
+    std::optional<Tenant> tenant;
+};
+// The things it finds: in a world whole, the general graph in its tenant.
+[[nodiscard]] QJsonArray find(const Library &library, const Search &search);
 // A scope whole as the graph's tenant sees it (Graph::whole), a layer's as known.
 [[nodiscard]] GraphView whole(const Graph &graph, const QString &scope, int limit);
 // Copies a scope whole under a new name (Graph::copyScope), a layer's as

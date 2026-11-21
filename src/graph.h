@@ -259,6 +259,10 @@ public:
     qint64 learn(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed = std::nullopt);
     bool remove(qint64 node);
     bool unlink(qint64 edge);
+    // Takes away where a thing was met in a book (a sighting, as upsert's
+    // `seen` made it), of a book the tenant sees; false when there was none.
+    // It goes to one's other computers as a sighting does (#136).
+    bool unsee(qint64 node, qint64 bookId);
     // Folds one node into another: its edges, places and aliases move over.
     bool merge(qint64 keep, qint64 other);
 

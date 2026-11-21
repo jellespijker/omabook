@@ -5,7 +5,6 @@
 #include "spaces.h"
 
 #include <QCryptographicHash>
-#include <QDate>
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -305,6 +304,12 @@ bool Graph::unlink(qint64 edge) {
     return m_library->exec("DELETE FROM graph_edges WHERE id = ?" + andWithin(&TenantFilter::hasEdge, u"graph_edges.id"), {edge});
 }
 
+bool Graph::unsee(qint64 node, qint64 bookId) {
+    // Only a book the tenant sees is the tenant's to take a thing out of.
+    return sees(bookId) && firstMet(node, bookId)
+           && m_library->exec("DELETE FROM graph_seen WHERE node_id = ? AND book_id = ?", {node, bookId});
+}
+
 bool Graph::merge(qint64 keep, qint64 other) {
     const Library::Batch batch(*m_library);
     const auto kept = node(keep), folded = node(other);
@@ -556,30 +561,4 @@ bool Graph::copyScope(const QString &from, const QString &to) {
 bool Graph::removeScope(const QString &scope) {
     // The general graph is not a scope to throw away.
     return !scope.isEmpty() && m_library->exec("DELETE FROM graph_nodes WHERE scope = ?", {scope});
-}
-
-void Graph::logReading(qint64 bookId, double from, double to, const QString &day, qint64 seconds) {
-    // One row a day: from where the day began to the furthest it got; of
-    // its time, the most either side said (the same reading told twice).
-    m_library->exec("INSERT INTO reading_log (book_id, day, from_percent, to_percent, seconds) VALUES (?, ?, ?, ?, ?) ON CONFLICT "
-                    "(book_id, day) DO UPDATE SET from_percent = MIN(from_percent, excluded.from_percent), to_percent = "
-                    "MAX(to_percent, excluded.to_percent), seconds = MAX(seconds, excluded.seconds)",
-                    {bookId, day.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : day, from, to, seconds});
-}
-
-QList<ReadingDay> Graph::readingLog(qint64 bookId) const {
-    QList<ReadingDay> days;
-    for (QSqlQuery query = bookId > 0 ? m_library->query("SELECT book_id, day, from_percent, to_percent, seconds FROM "
-                                                         "reading_log WHERE book_id = ? ORDER BY day",
-                                                         {bookId})
-                                      : m_library->query("SELECT book_id, day, from_percent, to_percent, seconds FROM reading_log ORDER BY day");
-         query.next();)
-        days.append({.bookId = query.value(0).toLongLong(),
-                     .day = query.value(1).toString(),
-                     .from = query.value(2).toDouble(),
-                     .to = query.value(3).toDouble(),
-                     .seconds = query.value(4).toLongLong()});
-    // Of the tenant's books.
-    days.removeIf([this](const ReadingDay &day) { return !sees(day.bookId); });
-    return days;
 }

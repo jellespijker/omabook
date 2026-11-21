@@ -64,11 +64,13 @@ void foldNode(ReducedNode &node, const SpaceOperation &op) {
     }
     takeMax(node.alive, {op.hlc, op.device, 1, op.value});
     if (op.field.startsWith("seen:"_L1)) {
-        const QString bookGid = op.field.mid(5);
         const QJsonObject obj = parseObject(op.value);
-        const SpaceMoment candidate{BookPlace::fromJson(obj), obj.value("anchor").toString()};
-        if (!node.seen.contains(bookGid) || candidate.earlierThan(node.seen.value(bookGid)))
-            node.seen.insert(bookGid, candidate);
+        node.sightings[op.field.mid(5)].append({op.hlc, SpaceMoment{BookPlace::fromJson(obj), obj.value("anchor").toString()}});
+        return;
+    }
+    if (op.field.startsWith("unseen:"_L1)) {
+        qint64 &latest = node.unseen[op.field.mid(7)];
+        latest = std::max(latest, op.hlc);
         return;
     }
     if (op.field.startsWith("alias:"_L1)) {
@@ -79,6 +81,18 @@ void foldNode(ReducedNode &node, const SpaceOperation &op) {
         return;
     }
     takeMax(node.fields[op.field], {op.hlc, op.device, 1, op.value});
+}
+
+// Where a thing was met in each book: the earliest place said there since
+// it was last taken away (#136), once every operation is folded, whatever
+// their order.
+void settleSightings(ReducedNode &node) {
+    for (auto book = node.sightings.cbegin(); book != node.sightings.cend(); ++book) {
+        const qint64 cut = node.unseen.value(book.key(), -1);
+        for (const auto &[hlc, moment] : *book)
+            if (hlc > cut && (!node.seen.contains(book.key()) || moment.earlierThan(node.seen.value(book.key()))))
+                node.seen.insert(book.key(), moment);
+    }
 }
 
 void foldFact(ReducedFact &fact, const SpaceOperation &op) {
@@ -305,6 +319,8 @@ ReducedState reduceOf(std::span<const SpaceOperation> ops, std::span<const Space
         else if (op.entity == "annotation"_L1)
             foldAnnotation(state.annotations[op.id], op);
     }
+    for (ReducedNode &node : state.nodes)
+        settleSightings(node);
     return state;
 }
 

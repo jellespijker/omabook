@@ -19,14 +19,14 @@
 #include <QUrl>
 #include <algorithm>
 
-#include "aicall.h"
+#include "bookwords.h"
 #include "formats.h"
-#include "graphlinks.h"
 #include "graphtools.h"
 #include "library.h"
 #include "scriptai.h"
 #include "scriptapi.h"
 #include "scriptform.h"
+#include "scriptgraph.h"
 #include "scriptdesk.h"
 #include "scriptfiles.h"
 #include "scriptsharing.h"
@@ -108,6 +108,7 @@ public:
     }
 
     Q_INVOKABLE QObject *sharing() { return p->m_sharing.get(); }
+    Q_INVOKABLE QObject *graph() { return p->m_graph.get(); }
     Q_INVOKABLE QJSValue window() { return p->m_window->build(p->m_engine); }
     Q_INVOKABLE QJSValue files() { return p->m_files->build(p->m_engine); }
     Q_INVOKABLE void say(const QString &text) { emit p->said(text); }
@@ -234,9 +235,13 @@ public:
 
     Q_INVOKABLE QString libraryBooks(const QString &query) {
         QJsonArray books;
-        if (const Library *library = this->library(false))
-            for (const Book &book : library->books(query))
-                books << bookJson(*library, book, false);
+        if (const Library *library = this->library(false)) {
+            // As the shelf's search finds them: a plugin's own book by its words too (#136).
+            const Book::Lookups lookups{.knows = {}, .noted = {}, .written = BookWords::written(*library)};
+            for (const Book &book : library->books())
+                if (book.matches(query, lookups))
+                    books << bookJson(*library, book, false);
+        }
         return compact(books);
     }
     Q_INVOKABLE QString libraryBook(double id) {
@@ -323,6 +328,7 @@ public:
         }
         library->setIdentifier(added.id, "generated", p->m_manifest.id);
         emit p->touchedLibrary();
+        indexWordsLater();
         return compact(bookJson(*library, *library->book(added.id), true));
     }
     Q_INVOKABLE QString libraryReplaceFile(double id, const QString &name) {
@@ -343,6 +349,7 @@ public:
             return "null";
         }
         emit p->touchedLibrary();
+        indexWordsLater();
         // The reader follows a book that grew under it, asked or not.
         emit p->reloadBookRequested(book->id);
         return compact(bookJson(*library, *library->book(book->id), true));
@@ -443,82 +450,12 @@ public:
         return text;
     }
 
-    // The knowledge graph, which any plugin may read and write: a world whole, the general graph in one
-    // tenant, the book's or Tenancy::preferred's (WorldLayers). What went wrong is thrown, as GraphOps words it.
+    // What a plugin adds to the knowledge graph, through GraphOps as the MCP tools add it; the rest of
+    // `omabook.graph` is ScriptGraph's. What went wrong is thrown, as GraphOps words it.
     QJsonObject graphAnswer(const QJsonObject &answer) {
         if (GraphOps::failed(answer))
             p->m_engine.throwError(answer.value("error").toString());
         return answer;
-    }
-    static std::optional<GraphPlace> graphPlace(qint64 bookId, const QJsonObject &at) {
-        if (bookId <= 0 || !at.contains("section"))
-            return std::nullopt;
-        return GraphPlace{bookId, BookPlace::fromJson(at, {.section = 0, .fraction = 1.0})};
-    }
-    Q_INVOKABLE QString graphFind(const QString &words, const QString &kind, const QString &scope, bool everywhere, double limit) {
-        const Library *library = this->library(false);
-        return compact(library ? WorldLayers::find(*library, words, kind, scope, everywhere, static_cast<int>(limit)) : QJsonArray());
-    }
-    Q_INVOKABLE QString graphNode(double id) {
-        const Library *library = this->library(false);
-        const auto node = library ? Graph::ofThing(*library, static_cast<qint64>(id)).node(static_cast<qint64>(id)) : std::nullopt;
-        return node ? compact(node->toJson()) : QString("null");
-    }
-    Q_INVOKABLE QString graphAround(double id, double depth) {
-        const Library *library = this->library(false);
-        return compact(library ? Graph::ofThing(*library, static_cast<qint64>(id)).around(static_cast<qint64>(id), static_cast<int>(depth)).toJson() : GraphView().toJson());
-    }
-    Q_INVOKABLE QString graphOfBook(double id, const QString &upTo) {
-        const Library *library = this->library(false);
-        return compact(library ? Graph::ofReader(*library, static_cast<qint64>(id)).ofBook(static_cast<qint64>(id), graphPlace(static_cast<qint64>(id), parsed(upTo).toObject())).toJson()
-                               : GraphView().toJson());
-    }
-    Q_INVOKABLE QString graphBeyond(double id, const QString &upTo) {
-        const Library *library = this->library(false);
-        return compact(library ? Graph::ofReader(*library, static_cast<qint64>(id)).beyond(static_cast<qint64>(id), graphPlace(static_cast<qint64>(id), parsed(upTo).toObject())).toJson()
-                               : GraphView().toJson());
-    }
-    // One request to the model the user chose: what a book connects to in
-    // the other books read. Answers how many connections it added.
-    Q_INVOKABLE void graphConnect(double id, const QJSValue &resolve, const QJSValue &reject) {
-        Library *library = this->library(true);
-        const qint64 bookId = qint64(id);
-        const auto at = library ? GraphBuild::builtTo(*library, bookId) : std::nullopt;
-        const GraphLinks::Offer offer = at ? GraphLinks::offer(*library, bookId, *at) : GraphLinks::Offer();
-        // Nothing to compare, or the same comparison as before: nothing is sent.
-        if (!library || !at || !GraphLinks::due(*library, bookId)) {
-            resolve.call({0});
-            return;
-        }
-        QString why = "No AI is set up.";
-        std::unique_ptr<AiProvider> provider = p->m_services.ai ? p->m_services.ai(&why) : nullptr;
-        if (!provider) {
-            reject.call({why});
-            return;
-        }
-        auto *asking = new AiCall(std::move(provider), p);
-        p->busy(1);
-        connect(asking, &AiCall::done, p, [this, asking, resolve, bookId, at, offer](const QString &answer) {
-            int added = 0;
-            if (Library *now = this->library(false)) {
-                const GraphLinks::Applied applied = GraphLinks::apply(*now, bookId, *at, offer, answer);
-                GraphLinks::setConnected(*now, bookId, *at, offer);
-                added = applied.links + applied.topics;
-            }
-            resolve.call({added});
-            asking->deleteLater();
-            p->busy(-1);
-        });
-        connect(asking, &AiCall::failed, p, [this, asking, reject](const Failure &problem) {
-            reject.call({problem.text()});
-            asking->deleteLater();
-            p->busy(-1);
-        });
-        asking->ask(GraphLinks::request(*library, bookId, offer));
-    }
-    Q_INVOKABLE QString graphWhole(const QString &scope, double limit) {
-        const Library *library = this->library(false);
-        return compact(library ? WorldLayers::whole(Graph::ofScope(*library, scope), scope, qMax(1, static_cast<int>(limit))).toJson() : GraphView().toJson());
     }
     Q_INVOKABLE double graphUpsert(const QString &thing) {
         Library *library = this->library(true);
@@ -535,31 +472,7 @@ public:
         const auto [from, to, book] = std::tuple{static_cast<qint64>(source), static_cast<qint64>(target), given.value("book").toInteger()};
         const Graph graph = WorldLayers::linking(*library, from, to, book);
         return static_cast<double>(
-            graphAnswer(GraphOps::link(graph, from, to, relation, given.value("note").toString(), graphPlace(book, given))).value("edge").toInteger());
-    }
-    Q_INVOKABLE bool graphUnlink(double edge) {
-        Library *library = this->library(true);
-        return library && Graph::forTenant(*library, Tenancy::ofEdge(*library, static_cast<qint64>(edge)).value(0, Tenancy::preferred(*library))).unlink(static_cast<qint64>(edge));
-    }
-    Q_INVOKABLE bool graphMerge(double keep, double other) {
-        Library *library = this->library(true);
-        return library && WorldLayers::merge(*library, static_cast<qint64>(keep), static_cast<qint64>(other));
-    }
-    Q_INVOKABLE bool graphRemove(double id) {
-        Library *library = this->library(true);
-        return library && Graph::ofThing(*library, static_cast<qint64>(id)).remove(static_cast<qint64>(id));
-    }
-    Q_INVOKABLE QString graphScopes() {
-        const Library *library = this->library(false);
-        return compact(QJsonArray::fromStringList(library ? WorldLayers::scopes(*library) : QStringList()));
-    }
-    Q_INVOKABLE bool graphCopyScope(const QString &from, const QString &to) {
-        Library *library = this->library(true);
-        return library && p->m_sharing->copyScope(*library, from, to);
-    }
-    Q_INVOKABLE bool graphRemoveScope(const QString &scope) {
-        Library *library = this->library(true);
-        return library && Graph(*library).removeScope(scope);
+            graphAnswer(GraphOps::link(graph, from, to, relation, given.value("note").toString(), ScriptGraph::place(book, given))).value("edge").toInteger());
     }
     Q_INVOKABLE QString graphExported(const QString &format, const QString &what) {
         Library *library = this->library(true);
@@ -568,7 +481,7 @@ public:
         const QJsonObject of = parsed(what).toObject();
         const qint64 bookId = of.value("book").toInteger();
         return graphAnswer(GraphOps::exported(bookId > 0 ? Graph::ofReader(*library, bookId) : Graph::ofScope(*library, of.value("scope").toString()), bookId, of.value("scope").toString(),
-                                              graphPlace(bookId, of.value("upTo").toObject()), format))
+                                              ScriptGraph::place(bookId, of.value("upTo").toObject()), format))
             .value("content").toString();
     }
 
@@ -746,6 +659,11 @@ private:
 
     // The open library. Reading from none answers nothing; changing none is
     // an error the script hears of.
+    // The words of the book the script just made or wrote anew, for the
+    // search: read once the script is done, from its own format (#136).
+    void indexWordsLater() {
+        QTimer::singleShot(0, p, [plugin = p] { plugin->indexWords(); });
+    }
     Library *library(bool changing) {
         Library *library = p->m_services.library ? p->m_services.library() : nullptr;
         if (!library && changing)
@@ -852,13 +770,14 @@ bool ScriptGate::run(const std::function<void(ScriptPlugin &)> &work, std::chron
 
 ScriptPlugin::ScriptPlugin(const ScriptManifest &manifest, const ScriptServices &services, QObject *parent)
     : QObject(parent), m_manifest(manifest), m_services(services), m_host(std::make_unique<ScriptHost>(this)),
-      m_sharing(std::make_unique<ScriptSharing>(this)), m_ai(std::make_unique<ScriptAi>(this)),
+      m_sharing(std::make_unique<ScriptSharing>(this)), m_graph(std::make_unique<ScriptGraph>(this)), m_ai(std::make_unique<ScriptAi>(this)),
       m_window(std::make_unique<ScriptWindow>(this)), m_files(std::make_unique<ScriptFiles>(this)), m_gate(std::make_shared<ScriptGate>(this)), m_watchdog(&m_engine, [this] {
           // On the watchdog's thread: the plugin hears of it on its own.
           QMetaObject::invokeMethod(this, [this] { interrupted(); }, Qt::QueuedConnection);
       }) {
     QJSEngine::setObjectOwnership(m_host.get(), QJSEngine::CppOwnership);
     QJSEngine::setObjectOwnership(m_sharing.get(), QJSEngine::CppOwnership);
+    QJSEngine::setObjectOwnership(m_graph.get(), QJSEngine::CppOwnership);
     for (const PluginFormat &format : m_manifest.formats)
         m_formats.append({format.name, {format.extension}, {}, {}, format.view});
 }
@@ -1185,6 +1104,19 @@ std::optional<BookDescription> ScriptPlugin::described(const QJsonObject &book, 
         return std::nullopt;
     }
     return description;
+}
+
+void ScriptPlugin::indexWords() {
+    const Library *library = m_services.library ? m_services.library() : nullptr;
+    QStringList read;
+    for (const Format &format : std::as_const(m_formats))
+        if (format.open.isCallable())
+            read << format.extensions;
+    if (!library || read.isEmpty())
+        return;
+    for (const qint64 book : BookWords::stale(*library, read))
+        if (const auto indexed = BookWords::index(*library, book, read); !indexed)
+            m_log << "warn: the words of book " + QString::number(book) + " weren't read for the search: " + indexed.error().english();
 }
 
 FormatProvider ScriptPlugin::provider(const Format &format) const {

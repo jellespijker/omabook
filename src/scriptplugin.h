@@ -71,6 +71,7 @@ struct ScriptManifest {
 
 class ScriptAi;
 class ScriptFiles;
+class ScriptGraph;
 class ScriptHost;
 class ScriptPlugin;
 class ScriptSharing;
@@ -188,6 +189,10 @@ public:
     static std::optional<BookDescription> described(const QJsonObject &book, QString *problem);
     // Stops answering for the script's formats from other threads.
     void closeGate() { m_gate->close(); }
+    // Reads the words of the books in the script's formats it reads (with
+    // `open`) whose file changed since, or were never read, for the search
+    // (BookWords, #136). What can't be read is said in its log.
+    void indexWords();
     // What of the plugin's goes into spaces (omabook.sharing).
     ScriptSharing &sharing() { return *m_sharing; }
     // The events the script listens to.
@@ -264,6 +269,7 @@ private:
     friend class ScriptAi;
     friend class ScriptHost;
     friend class ScriptSharing;
+    friend class ScriptGraph;
     friend class ScriptAudio;
     friend class ScriptFiles;
     friend class ScriptWindow;
@@ -290,6 +296,7 @@ private:
     QJSEngine m_engine;
     std::unique_ptr<ScriptHost> m_host;
     std::unique_ptr<ScriptSharing> m_sharing;
+    std::unique_ptr<ScriptGraph> m_graph; // omabook.graph
     std::unique_ptr<ScriptAi> m_ai;
     std::unique_ptr<ScriptWindow> m_window;
     std::unique_ptr<ScriptFiles> m_files;

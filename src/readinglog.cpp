@@ -1,11 +1,13 @@
 #include "readinglog.h"
 
 #include <QDate>
+#include <QSqlQuery>
 #include <QtGlobal>
 #include <algorithm>
 #include <utility>
 
 #include "changelog.h"
+#include "graph.h"
 #include "library.h"
 
 using namespace Qt::StringLiterals;
@@ -66,4 +68,32 @@ void ReadingSession::save(const Library &library, qint64 book, double percent) {
         return;
     ReadingLog::add(library, book, m_logged, percent, ReadingLog::counted(gap), now.date().toString(Qt::ISODate));
     m_logged = percent;
+}
+
+// The reading log as the graph keeps it (graph.h), moved here beside the time
+// it took (#136), out of graph.cpp, which was at its size ceiling.
+void Graph::logReading(qint64 bookId, double from, double to, const QString &day, qint64 seconds) {
+    // One row a day: from where the day began to the furthest it got; of
+    // its time, the most either side said (the same reading told twice).
+    m_library->exec("INSERT INTO reading_log (book_id, day, from_percent, to_percent, seconds) VALUES (?, ?, ?, ?, ?) ON CONFLICT "
+                    "(book_id, day) DO UPDATE SET from_percent = MIN(from_percent, excluded.from_percent), to_percent = "
+                    "MAX(to_percent, excluded.to_percent), seconds = MAX(seconds, excluded.seconds)",
+                    {bookId, day.isEmpty() ? QDate::currentDate().toString(Qt::ISODate) : day, from, to, seconds});
+}
+
+QList<ReadingDay> Graph::readingLog(qint64 bookId) const {
+    QList<ReadingDay> days;
+    for (QSqlQuery query = bookId > 0 ? m_library->query("SELECT book_id, day, from_percent, to_percent, seconds FROM "
+                                                         "reading_log WHERE book_id = ? ORDER BY day",
+                                                         {bookId})
+                                      : m_library->query("SELECT book_id, day, from_percent, to_percent, seconds FROM reading_log ORDER BY day");
+         query.next();)
+        days.append({.bookId = query.value(0).toLongLong(),
+                     .day = query.value(1).toString(),
+                     .from = query.value(2).toDouble(),
+                     .to = query.value(3).toDouble(),
+                     .seconds = query.value(4).toLongLong()});
+    // Of the tenant's books.
+    days.removeIf([this](const ReadingDay &day) { return !sees(day.bookId); });
+    return days;
 }

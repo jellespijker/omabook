@@ -8,11 +8,14 @@
 namespace ScriptApi {
 
 QList<Entry> graphEntries() {
-    return {{"graph.find", "graph.find(words, {kind, scope, everywhere, limit})", "",
+    return {{"graph.find", "graph.find(words, {kind, scope, everywhere, limit, tenant, book})", "",
              "Searches the knowledge graph: the nodes whose name, other names or summary hold every word, as `[{id, kind, "
              "name, summary, data, scope, book}]`. Kinds are `character`, `place`, `group`, `concept`, `item`, `event`, "
              "`thread`, `theme`, `topic`, `question`, `book`, `author`, `series`, `tag`, or a plugin's own. `scope` is a "
-             "graph of its own (`\"world:42\"`); the general graph of what was read when not given."},
+             "graph of its own (`\"world:42\"`); the general graph of what was read when not given. The general graph is "
+             "kept apart by the library's top-level collections (its tenants), and is searched in one: `tenant` names it "
+             "(a top-level collection's name, `\"unfiled\"`, or a tenant's id), else it is the tenant of `book` (a book's "
+             "number), else the one with the most books. A `tenant` the library hasn't throws, naming those there are."},
             {"graph.node", "graph.node(id)", "", "One node, or `null`."},
             {"graph.around", "graph.around(id, depth)", "",
              "A node and what is within `depth` relations of it (1 when not given): `{nodes, edges: [{id, source, target, "
@@ -38,6 +41,14 @@ QList<Entry> graphEntries() {
              "Relates two nodes with a short verb phrase read from the first to the second (`\"mentor of\"`); answers the "
              "relation's number. Saying the same again only updates the note."},
             {"graph.unlink", "graph.unlink(edge)", "", "Removes one relation, by its number."},
+            {"graph.bookNode", "graph.bookNode(id)", "",
+             "The node that stands for a book in the general graph (kind `book`, with its authors, series and tags related "
+             "to it), made when it isn't there yet and brought up to date when it is: its number, to `link` things to the "
+             "book. Throws for a book the library hasn't."},
+            {"graph.unsee", "graph.unsee(id, book)", "",
+             "Takes away that a node was met in a book (what `upsert` with `book` marked), so a reader of the book no longer "
+             "meets it there; the node and its relations stay. It goes to the person's other computers as the mark did, and "
+             "marking it met there again brings it back. False when it wasn't met there."},
             {"graph.merge", "graph.merge(keep, other)", "", "Folds one node into another: its relations, places and names move over."},
             {"graph.remove", "graph.remove(id)", "", "Removes a node and its relations."},
             {"graph.scopes", "graph.scopes()", "", "The graphs there are: `\"\"` for the general one, every scope, and every layer."},

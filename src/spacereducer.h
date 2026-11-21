@@ -1,11 +1,13 @@
 #pragma once
 
 #include <QHash>
+#include <QList>
 #include <QMap>
 #include <QString>
 #include <QtTypes>
 #include <span>
 #include <tuple>
+#include <utility>
 
 #include "bookplace.h"
 #include "spacereplay.h"
@@ -53,7 +55,12 @@ struct ReducedCollection {
 struct ReducedNode {
     QHash<QString, SpaceStamp> fields;
     QMap<QString, SpaceStamp> aliases;
+    // Where it was met, by book: the earliest place since it was last taken away there.
     QMap<QString, SpaceMoment> seen;
+    // What that is made of (#136): each place said of a book with its stamp,
+    // and the stamp of the latest word that it was taken away from there.
+    QMap<QString, QList<std::pair<qint64, SpaceMoment>>> sightings;
+    QMap<QString, qint64> unseen;
     SpaceStamp alive;
     SpaceStamp removed;
 };

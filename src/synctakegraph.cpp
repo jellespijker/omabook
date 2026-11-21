@@ -122,6 +122,12 @@ void takeSeen(Taking &taking, qint64 id, const ReducedNode &node) {
             taking.graph.upsert(here->scope, here->kind, here->name, {}, {}, at, seen->anchor);
         }
     }
+    // Where it was taken away since it was last met there (#136).
+    for (auto gone = node.unseen.cbegin(); gone != node.unseen.cend(); ++gone) {
+        const std::optional<GraphPlace> at = node.seen.contains(gone.key()) ? std::nullopt : taking.place(gone.key(), {});
+        if (id > 0 && at && at->bookId > 0 && Graph(taking.library).unsee(id, at->bookId))
+            ++taking.changed;
+    }
 }
 
 // The things of the general graph that aren't made of books, where they were met.

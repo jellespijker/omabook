@@ -9,6 +9,7 @@
 #include <tuple>
 
 #include "annotationwords.h"
+#include "bookwords.h"
 #include "changelog.h"
 #include "graphcontext.h"
 #include "graphindex.h"
@@ -324,13 +325,13 @@ Book::Knows KnownWords::asker() {
 }
 
 Book::Lookups KnownWords::lookups(const QString &root) {
-    return {.knows = hasIndex() ? asker() : Book::Knows(), .noted = AnnotationWords::noted(root)};
+    return {.knows = hasIndex() ? asker() : Book::Knows(), .noted = AnnotationWords::noted(root), .written = BookWords::written(root)};
 }
 
 QList<KnowledgeSearch::Found> KnowledgeSearch::search(const Library &library, const QList<Book> &books, const QString &query,
                                                       const std::shared_ptr<const KnowledgeIndex> &index) {
     KnownWords words(index ? index : std::make_shared<const KnowledgeIndex>(KnowledgeIndex::forSearch(library, query)));
-    const Book::Lookups lookups{.knows = words.asker(), .noted = AnnotationWords::noted(library)};
+    const Book::Lookups lookups{.knows = words.asker(), .noted = AnnotationWords::noted(library), .written = BookWords::written(library)};
     QList<Found> found;
     for (const Book &book : books)
         if (book.matches(query, lookups))

@@ -1,7 +1,7 @@
 // What of the plugins is about books (ScriptPlugins, scriptplugins.h): the
 // formats they read, which go into Formats, the books that are a plugin's
-// own (PluginClaims), and a plugin's own kind of book opening in its view,
-// in place of the reader (#125).
+// own (PluginClaims) and their words, for the search (BookWords, #136), and
+// a plugin's own kind of book opening in its view, in place of the reader (#125).
 
 #include <algorithm>
 
@@ -47,6 +47,12 @@ void ScriptPlugins::syncFormats() {
 // again, once it is running: when it loads, and when they arrive.
 bool ScriptPlugins::claimBooks(const QList<Book> &books) {
     Library *library = m_follow && m_services.library ? m_services.library() : nullptr;
+    // And what the books of their formats say is read for the search, of
+    // those that came or changed since it was last read (#136).
+    if (library) {
+        for (const auto &entry : m_plugins)
+            entry.second->indexWords();
+    }
     PluginClaims::Registered registered;
     for (const auto &[id, plugin] : m_plugins)
         for (const ScriptPlugin::Format &format : plugin->formats())

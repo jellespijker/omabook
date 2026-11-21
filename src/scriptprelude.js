@@ -1,7 +1,7 @@
 // What a plugin's script sees: the `omabook` object, built here from the
 // host, which is the C++ side of one plugin (ScriptHost in scriptplugin.cpp,
 // and ScriptSharing in scriptsharing.cpp, which it hands over, for what goes
-// into spaces, what scriptassist.js builds from ScriptAi, `omabook.ui`
+// into spaces, ScriptGraph for the graph, what scriptassist.js builds from ScriptAi, `omabook.ui`
 // from scriptui.js, and `omabook.files` from scriptfiles.js). The hosts are
 // only ever reachable through these functions: the host is an argument of
 // this one, never a global, so a script can call what is listed in
@@ -11,6 +11,8 @@
     "use strict";
 
     var shared = host.sharing();
+    // `omabook.graph` but for what it adds, which goes through the host (ScriptGraph, scriptgraph.cpp).
+    var graphed = host.graph();
     var assisted = host.assistant();
     var windowed = host.window();
     // `omabook.files`, and what of `omabook.ui` reaches the person's files and clipboard (scriptfiles.js).
@@ -152,6 +154,43 @@
 
     function parse(json) { return JSON.parse(json); }
 
+    // `omabook.graph`: ScriptGraph, but for what it adds, which goes through the host.
+    function graphApi() {
+        return {
+            find: function (words, options) {
+                options = options || {};
+                return parse(graphed.find(String(words || ""), JSON.stringify({
+                    kind: String(options.kind || ""), scope: String(options.scope || ""), everywhere: !!options.everywhere,
+                    limit: Number(options.limit) || 50, tenant: String(options.tenant || ""), book: Number(options.book) || 0})));
+            },
+            node: function (id) { return parse(graphed.node(Number(id) || 0)); },
+            around: function (id, depth) { return parse(graphed.around(Number(id) || 0, depth === undefined ? 1 : Number(depth))); },
+            ofBook: function (id, upTo) { return parse(graphed.ofBook(Number(id) || 0, JSON.stringify(upTo || {}))); },
+            beyond: function (id, upTo) { return parse(graphed.beyond(Number(id) || 0, JSON.stringify(upTo || {}))); },
+            connect: function (id) {
+                return new Promise(function (resolve, reject) { graphed.connectBook(Number(id) || 0, resolve, reject); });
+            },
+            whole: function (scope, limit) { return parse(graphed.whole(String(scope || ""), Number(limit) || 2000)); },
+            bookNode: function (id) { return graphed.bookNode(Number(id) || 0); },
+            upsert: function (thing) {
+                need(thing, "object", "The node");
+                return host.graphUpsert(JSON.stringify(thing));
+            },
+            link: function (source, target, relation, details) {
+                return host.graphLink(Number(source) || 0, Number(target) || 0, String(relation || ""), JSON.stringify(details || {}));
+            },
+            unlink: function (edge) { return graphed.unlink(Number(edge) || 0); },
+            unsee: function (id, book) { return graphed.unsee(Number(id) || 0, Number(book) || 0); },
+            merge: function (keep, other) { return graphed.merge(Number(keep) || 0, Number(other) || 0); },
+            remove: function (id) { return graphed.remove(Number(id) || 0); },
+            scopes: function () { return parse(graphed.scopes()); },
+            layers: function () { return parse(shared.layers()); },
+            copyScope: function (from, to) { return graphed.copyScope(String(from || ""), String(to || "")); },
+            removeScope: function (scope) { return graphed.removeScope(String(scope || "")); },
+            exported: function (format, what) { return host.graphExported(String(format || "json"), JSON.stringify(what || {})); }
+        };
+    }
+
     var omabook = {
         plugin: Object.freeze(info.plugin),
 
@@ -289,36 +328,7 @@
             }
         },
 
-        graph: {
-            find: function (words, options) {
-                options = options || {};
-                return parse(host.graphFind(String(words || ""), String(options.kind || ""), String(options.scope || ""),
-                                            !!options.everywhere, Number(options.limit) || 50));
-            },
-            node: function (id) { return parse(host.graphNode(Number(id) || 0)); },
-            around: function (id, depth) { return parse(host.graphAround(Number(id) || 0, depth === undefined ? 1 : Number(depth))); },
-            ofBook: function (id, upTo) { return parse(host.graphOfBook(Number(id) || 0, JSON.stringify(upTo || {}))); },
-            beyond: function (id, upTo) { return parse(host.graphBeyond(Number(id) || 0, JSON.stringify(upTo || {}))); },
-            connect: function (id) {
-                return new Promise(function (resolve, reject) { host.graphConnect(Number(id) || 0, resolve, reject); });
-            },
-            whole: function (scope, limit) { return parse(host.graphWhole(String(scope || ""), Number(limit) || 2000)); },
-            upsert: function (thing) {
-                need(thing, "object", "The node");
-                return host.graphUpsert(JSON.stringify(thing));
-            },
-            link: function (source, target, relation, details) {
-                return host.graphLink(Number(source) || 0, Number(target) || 0, String(relation || ""), JSON.stringify(details || {}));
-            },
-            unlink: function (edge) { return host.graphUnlink(Number(edge) || 0); },
-            merge: function (keep, other) { return host.graphMerge(Number(keep) || 0, Number(other) || 0); },
-            remove: function (id) { return host.graphRemove(Number(id) || 0); },
-            scopes: function () { return parse(host.graphScopes()); },
-            layers: function () { return parse(shared.layers()); },
-            copyScope: function (from, to) { return host.graphCopyScope(String(from || ""), String(to || "")); },
-            removeScope: function (scope) { return host.graphRemoveScope(String(scope || "")); },
-            exported: function (format, what) { return host.graphExported(String(format || "json"), JSON.stringify(what || {})); }
-        },
+        graph: graphApi(),
 
         reader: {
             current: function () { return parse(host.reading()); },

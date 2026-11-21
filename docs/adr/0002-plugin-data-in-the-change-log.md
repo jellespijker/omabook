@@ -107,3 +107,21 @@ the library's own personal parts.
   the personal space (`shared`, the latest winning), asked once more in the window. A space published here then follows
   as for a part switched off: what it held of the book is taken back. A shared space keeps what it had, as it does of a
   book taken out of its collection; only what is new of the book stays out.
+- **No plugin asks to let one go (#136).** Only the person lets a private book go: in the publish dialog or with
+  `omabook spaces private <book> share`. A plugin has no call for it, not even one that asks the person first in
+  the window. A format said to be private is the plugin's promise to the person, and a plugin that could ask to undo
+  it, for any book of its, at any moment, would turn the person's one decision into a question asked again until the
+  answer is yes; a dialog a plugin opens is also one the person learns to wave through. The publish dialog already
+  asks at the one moment it matters, with the space and the people it goes to in view. A plugin that wants a book to
+  go says so in its own words and points to that dialog.
+
+## As built (#136)
+
+- **A plugin's own books found by their words.** The text a plugin's format describes its books with (a notebook's
+  recognised ink and transcripts) is kept for the shelf's search, `library.search` and `omabook list`/`search`
+  (`BookWords`, format 42): read on this computer from its file through the plugin, once the plugin made or wrote it
+  and whenever the plugin loads and finds a file whose words weren't read, and never in the log. So it goes nowhere
+  the book doesn't, and a private book's text goes into no space.
+- **Sightings taken away.** `graph.unsee(id, book)` takes away that a thing was met in a book. The log says so as a
+  field `unseen:<book>` of the thing, stamped after the sighting: a sighting stands where a later one was said since
+  (`SpaceReducer`), so marking it met again brings it back, and an Omabook from before keeps the sighting.

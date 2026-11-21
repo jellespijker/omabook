@@ -12,7 +12,8 @@
 // fields it looks in, the genres it knows, and what is wrong with one as a
 // collection's rule. What a search finds past a book's own details is asked
 // of the lookups it is given: what is known of the book (knows:, the
-// knowledge graph) and what the reader wrote in it (notes:, #115).
+// knowledge graph), what the reader wrote in it (notes:, #115), and the
+// words of a plugin's own book (#136).
 
 using namespace Qt::StringLiterals;
 
@@ -134,14 +135,15 @@ constexpr std::array fields{
 
 bool Book::matches(const QString &query) const { return matches(query, Lookups{}); }
 
-bool Book::matches(const QString &query, const Knows &knows) const { return matches(query, Lookups{.knows = knows, .noted = {}}); }
+bool Book::matches(const QString &query, const Knows &knows) const { return matches(query, Lookups{.knows = knows, .noted = {}, .written = {}}); }
 
 bool Book::matches(const QString &query, const Lookups &lookups) const {
     const QString everything = meta.title + "\n" + meta.authorText() + "\n" + meta.series + "\n" + meta.tags.join("\n");
     const auto found = [this, &everything, &lookups](const QString &word) {
         if (const Field *field = word.contains(':') ? fieldNamed(word.section(':', 0, 0)) : nullptr)
             return field->holds(*this, word.section(':', 1), lookups);
-        return everything.contains(word, Qt::CaseInsensitive) || (lookups.knows && lookups.knows(*this, word, false));
+        return everything.contains(word, Qt::CaseInsensitive) || (lookups.knows && lookups.knows(*this, word, false))
+               || (lookups.written && lookups.written(*this, word));
     };
     // A word with a minus in front is one the book must not match.
     const auto holds = [&found](const QString &word) {

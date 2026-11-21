@@ -60,7 +60,7 @@ enable_testing()
 set(omabook_test_home "${CMAKE_BINARY_DIR}/test-home")
 file(MAKE_DIRECTORY "${omabook_test_home}/.config" "${omabook_test_home}/.local/share" "${omabook_test_home}/.cache")
 set(omabook_test_environment "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state;HOME=${omabook_test_home};XDG_CONFIG_HOME=${omabook_test_home}/.config;XDG_DATA_HOME=${omabook_test_home}/.local/share;XDG_CACHE_HOME=${omabook_test_home}/.cache")
-foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross plugindata hyphenation ink inksurface worldcli passages marginnotes highlights highlightview recognition bookink bookinkview audio pluginview failures handwrittennotes keptops annotations contentspane pagenotes collation readingstats statsview annotationlayers annotationlayerview pluginnews pluginbooks meaning pluginfiles privatebooks privatebooksview fingerink embedding devices opds sendbook readaloud)
+foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross plugindata hyphenation ink inksurface worldcli passages marginnotes highlights highlightview recognition bookink bookinkview audio pluginview failures handwrittennotes keptops annotations contentspane pagenotes collation readingstats statsview annotationlayers annotationlayerview pluginnews pluginbooks meaning pluginfiles privatebooks privatebooksview fingerink embedding devices opds sendbook readaloud plugingraph)
   add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
   target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
   add_test(NAME ${test}_tests COMMAND ${test}_tests)
@@ -146,6 +146,9 @@ target_compile_definitions(plugindata_tests PRIVATE OMABOOK_BINARY="$<TARGET_FIL
 # A plugin told of its data a sync brought, over the stand-in ssh (#126).
 add_dependencies(pluginnews_tests omabook)
 target_compile_definitions(pluginnews_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
+# A sighting a plugin took away, synced over the stand-in ssh (#136).
+add_dependencies(plugingraph_tests omabook)
+target_compile_definitions(plugingraph_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
 # A book in the format of a plugin that isn't installed, synced over the stand-in ssh.
 add_dependencies(pluginformats_tests omabook)
 target_compile_definitions(pluginformats_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")

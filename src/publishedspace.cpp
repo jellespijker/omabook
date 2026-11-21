@@ -270,6 +270,9 @@ struct Place {
         return false;
     if (op.field.startsWith("seen:"_L1))
         return members.holds(canon, op.field.mid(5)) && metAt(members, canon, placeIn(op.value, op.field.mid(5)));
+    // That it was taken away from a book (#136): of the space's books alone.
+    if (op.field.startsWith("unseen:"_L1))
+        return members.holds(canon, op.field.mid(7));
     return op.field != "book"_L1 || op.value.isEmpty() || members.holds(canon, op.value);
 }
 

@@ -28,6 +28,49 @@ using GraphContext = ChangeLogFields::Context;
     return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
 }
 
+// Whether the log's latest word of where a thing was met in a book (by the
+// book's global id) is that it was taken away (#136): an "unseen:" later
+// than every "seen:" of it.
+[[nodiscard]] bool unseenLast(const FieldMap &existing, const QString &bookGid) {
+    const auto unseen = existing.constFind(u"unseen:"_s + bookGid);
+    const auto seen = existing.constFind(u"seen:"_s + bookGid);
+    return unseen != existing.cend() && (seen == existing.cend() || seen->hlc < unseen->hlc);
+}
+
+// A sighting taken away and then made again is written anew, after the
+// removal, though the log had its value before: as if the log had none.
+void forgetUnseen(GraphContext &ctx) {
+    QStringList books;
+    for (auto field = ctx.existing.cbegin(); field != ctx.existing.cend(); ++field)
+        if (field.key().startsWith("unseen:"_L1) && unseenLast(ctx.existing, field.key().mid(7)))
+            books << field.key().mid(7);
+    for (const QString &book : std::as_const(books)) {
+        const ChangeLogFields::Logged unseen = ctx.existing.value(u"unseen:"_s + book);
+        ctx.existing.insert(u"seen:"_s + book, {unseen.hlc, unseen.device, QString(), QString()});
+    }
+}
+
+// Of each book here the log says a thing was met in, but the thing's rows
+// no longer do, that it isn't (#136), unless the log says so already. A
+// book that is gone from here says nothing: its own removal does.
+void writeUnseen(GraphContext &ctx, const QSet<qint64> &seenNow) {
+    QStringList gone;
+    for (auto field = ctx.existing.cbegin(); field != ctx.existing.cend(); ++field) {
+        const QString book = field.key().startsWith("seen:"_L1) ? field.key().mid(5) : QString();
+        if (book.isEmpty() || field->value.isEmpty() || unseenLast(ctx.existing, book))
+            continue;
+        const qint64 here = Spaces::localId(*ctx.library, u"book"_s, book);
+        if (here > 0 && !seenNow.contains(here)
+            && ChangeLog::statements(*ctx.library).first("SELECT 1 FROM books WHERE id = ?", {here}).has_value())
+            gone << book;
+    }
+    for (const QString &book : std::as_const(gone)) {
+        const qint64 hlc = Spaces::tickHlc(*ctx.library);
+        ChangeLog::append(*ctx.library, {ctx.space, ctx.entity, ctx.gid, u"unseen:"_s + book, u"1"_s, hlc});
+        ctx.existing.insert(u"unseen:"_s + book, {hlc, Spaces::deviceId(*ctx.library), u"1"_s, u"1"_s});
+    }
+}
+
 void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool baseline, std::optional<qint64> explicitHlc = std::nullopt) {
     const qint64 id = query.value(0).toLongLong();
     const QString scope = query.value(1).toString();
@@ -41,8 +84,11 @@ void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool basel
     ChangeLogFields::write(ctx, u"book"_s, bookId > 0 ? Spaces::bookId(library, bookId) : QString(), hlc);
     if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value == "1"_L1)
         ChangeLog::append(library, {ctx.space, u"node"_s, gid, u"removed"_s, u"0"_s, Spaces::tickHlc(library)});
+    forgetUnseen(ctx);
+    QSet<qint64> seenNow;
     ChangeLog::statements(library).each("SELECT book_id, section, fraction, anchor FROM graph_seen WHERE node_id = ? ORDER BY book_id",
                                         {id}, [&](const QSqlQuery &seen) {
+                                            seenNow.insert(seen.value(0).toLongLong());
                                             const QString bookGid = Spaces::bookId(library, seen.value(0).toLongLong());
                                             if (!bookGid.isEmpty())
                                                 ChangeLogFields::write(ctx, u"seen:"_s + bookGid,
@@ -51,6 +97,7 @@ void syncNodeRowToLog(const Library &library, const QSqlQuery &query, bool basel
                                                                                     {"anchor", seen.value(3).toString()}}),
                                                                        hlc);
                                         });
+    writeUnseen(ctx, seenNow);
     if (explicitHlc && SpaceReplay::entityHlc(library, u"node"_s, gid) < hlc)
         ChangeLog::append(library, {ctx.space, u"node"_s, gid, u"name"_s, query.value(3).toString(), hlc});
 }

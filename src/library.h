@@ -80,6 +80,7 @@ struct Book {
     struct Lookups {
         Knows knows;
         Noted noted;
+        Noted written; // and a bare word, in a plugin's own book's words (#136, BookWords)
     };
     bool matches(const QString &query, const Lookups &lookups) const;
     // What is wrong with a search as a collection's rule, in English: a
