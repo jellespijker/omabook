@@ -389,7 +389,8 @@ QList<Replication::BookNames> Replication::unlinked(const Library &library, cons
             continue;
         QStringList hashes;
         for (const FormatFile &file : library.formatFiles(book.id))
-            hashes << file.hash;
+            hashes << file.hash << file.original; // and the hash it came in with (#74)
+        hashes.removeAll(QString());
         books << BookNames{.gid = gid, .hashes = hashes, .keys = hashes.isEmpty() ? Library::entryKeys(book) : QStringList()};
     }
     return books;

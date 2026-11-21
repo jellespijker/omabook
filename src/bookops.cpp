@@ -390,3 +390,10 @@ Proposal BookOps::proposalFromJson(const QJsonObject &object) {
     proposal.meta.seriesIndex = object.value("series_index").toDouble();
     return proposal;
 }
+
+std::expected<void, Failure> BookOps::writeDetailsWhenAsked(Library &library, qint64 id, bool asked) {
+    const std::optional<Book> book = asked ? library.book(id) : std::nullopt;
+    if (!book || !book->formats.contains(QStringLiteral("epub")))
+        return {};
+    return library.writeDetails(id).transform([](const Library::DetailsWritten &) {});
+}

@@ -341,6 +341,15 @@ AppPopup {
             checked: settings.folio
             onToggled: settings.folio = checked
         }
+        // What is edited here goes into the book's own EPUB too (#74): the
+        // library's copy, never the file it was added from.
+        CheckBox {
+            objectName: "writeDetails"
+            Layout.fillWidth: true
+            text: qsTr("Write a book's details into its EPUB whenever they are edited")
+            checked: settings.writeDetails
+            onToggled: settings.writeDetails = checked
+        }
         // Which app opens an ebook is the person's to choose; Omabook only
         // becomes it when asked to here.
         RowLayout {

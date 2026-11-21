@@ -184,7 +184,15 @@ public:
     // Files and folders dropped on the window or named on the command line.
     Q_INVOKABLE void addUrls(const QList<QUrl> &urls);
     Q_INVOKABLE void remove(qint64 id);
+    // With "writeToFile" (or else the setting) the details go into its EPUB too.
     Q_INVOKABLE void saveDetails(qint64 id, const QVariantMap &details);
+    // A book's EPUB and the details in it (#74): {epub: whether it has one,
+    // original: whether the file as it came in is kept, to put back}.
+    Q_INVOKABLE QVariantMap fileDetails(qint64 id) const;
+    // Its details written into its EPUB, or that file put back as it came in,
+    // beside the window; the shelf is read again once it is done.
+    Q_INVOKABLE void writeDetails(qint64 id);
+    Q_INVOKABLE void restoreFile(qint64 id);
     // What is said of a book's reading and how it is held: {shelf, rating,
     // finished, paper, hasFile}.
     Q_INVOKABLE QVariantMap reading(qint64 id) const;
@@ -261,6 +269,8 @@ private:
     void useCover(const QString &file);
     void saveCopy(const QString &target);
     void importFinished(const ImportSummary &summary, bool calibreLeftOut);
+    void writeDetailsWhenAsked(qint64 id, bool asked);
+    void changeFile(qint64 id, bool restore);
     void loadPlugins(bool refresh);
     void lookForCalibre(bool asked);
     void setStatus(const QString &status);

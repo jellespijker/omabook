@@ -95,7 +95,7 @@ private slots:
             {"omabook_info", "info"}, {"library_list", "libraries"}, {"library_switch", "libraries"},
             {"library_forget", "libraries"}, {"logs_read", "logs"}, {"books_search", "list"}, {"book_get", "show"}, {"book_add", "add"},
             {"book_add_format", "add"}, {"book_add_entry", "add"}, {"book_set_details", "set"},
-            {"book_set_reading", "set"}, {"book_remove", "remove"}, {"book_export", "export"},
+            {"book_set_reading", "set"}, {"book_remove", "remove"}, {"book_export", "export"}, {"book_embed_details", "embed"},
             {"book_convert", "convert"}, {"book_contents", "toc"}, {"book_text", "text"}, {"book_find", "find"},
             {"meaning_search", "meaning"}, {"meaning_index", "meaning"}, {"meaning_status", "meaning"},
             {"progress_get", "progress"}, {"progress_set", "progress"}, {"reading_stats", "stats"}, {"reading_goal_set", "stats"}, {"bookmarks_list", "bookmarks"},

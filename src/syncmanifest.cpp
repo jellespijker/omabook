@@ -165,8 +165,13 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
     QJsonArray books;
     for (const Book &book : library.books()) {
         QJsonArray files;
-        for (const FormatFile &file : library.formatFiles(book.id))
-            files << QJsonObject{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
+        for (const FormatFile &file : library.formatFiles(book.id)) {
+            QJsonObject listed{{"format", file.format}, {"path", file.path}, {"hash", file.hash}, {"size", file.size}};
+            // The hash it came in with, which the other side may still know it by (#74).
+            if (!file.original.isEmpty())
+                listed.insert("original", file.original);
+            files << listed;
+        }
         books << (log ? logPeerBook(library, book, files) : olderPeerBook(library, book, files));
     }
     QJsonObject manifest{

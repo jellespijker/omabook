@@ -28,6 +28,7 @@ modules = [
   "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
   "formatprovider", "formatreaders", "formats", "documenttext", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
   "textstretches",
+  "zipedit", "opfdetails", "epubdetails",
 ]
 
 [layers.library]
@@ -48,6 +49,7 @@ modules = [
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
   "privatebooks",
   "fileschema",
+  "libraryfiles",
 ]
 
 [layers.services]
@@ -79,7 +81,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
@@ -90,6 +92,7 @@ modules = [
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk",
+  "backenddetails",
 ]
 
 [layers.app]

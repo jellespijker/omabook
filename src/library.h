@@ -14,6 +14,7 @@
 
 #include "bookmeta.h"
 #include "bookplace.h"
+#include "failure.h"
 #include "person.h"
 
 class QSqlQuery;
@@ -101,6 +102,10 @@ struct FormatFile {
     QString path;
     QString hash;           // SHA-256 of the file, which is how two libraries know a book is the same
     qint64 size = 0;
+    // The hash it had when it came in, once the book's details were written
+    // into it (#74): what the other libraries may still know it by. Empty
+    // for a file as it came.
+    QString original;
 };
 
 // The AI's running notes on a book up to a place: what the next catch-up
@@ -285,12 +290,34 @@ public:
     // The book a site calls this, or 0.
     qint64 bookWithIdentifier(const QString &scheme, const QString &value) const;
     QString coverPath(qint64 id) const;
+    // The cover as the library keeps it (cover.jpg): no taller than 900 pixels, a JPEG.
+    [[nodiscard]] static QByteArray coverJpeg(const QImage &cover);
     // The file of one format, or of the one the reader prefers when empty.
     QString formatPath(qint64 id, const QString &format = {}) const;
 
     QList<FormatFile> formatFiles(qint64 id) const;
-    // The book that holds a file with this hash, or 0.
+    // The book that holds a file with this hash, or held it before its
+    // details were written into it; or 0.
     qint64 bookWithHash(const QString &hash) const;
+
+    // Writes the book's details (title, authors, series, identifiers, tags,
+    // description, cover...) into its EPUB, the library's own copy, so other
+    // apps and e-readers see them (#74; libraryfiles.cpp). The new file is
+    // made beside the old, checked, and put in its place in one step. The
+    // file as it was before the first write is kept beside it, to put back
+    // with restoreFile, and stays what other libraries know it by.
+    struct DetailsWritten {
+        bool changed = false; // false when the file said all of it already
+        QString hash;         // the file's hash now
+    };
+    [[nodiscard]] std::expected<DetailsWritten, Failure> writeDetails(qint64 id);
+    // Puts the book's EPUB back as it was before details were written into it.
+    [[nodiscard]] std::expected<void, Failure> restoreFile(qint64 id);
+    // Where that is kept, once details were written into it; empty when they weren't.
+    [[nodiscard]] QString originalFile(qint64 id) const;
+    // That the book's file of this format came in with that hash, as another
+    // library which wrote details into it says (a sync), when it doesn't know already.
+    void knowOriginal(qint64 id, const QString &format, const QString &original);
     // What names a book that has no file across two libraries, where a
     // file's hash can't: "entry:<scheme>=<value>" for each of its
     // identifiers and its ISBN, and "entry:title=<title>|<authors>" with
@@ -437,6 +464,9 @@ private:
     friend class SpaceReplay;
     mutable int m_batches = 0;
     QString bookFolder(qint64 id) const;
+    // The book's EPUB as the library holds it, its hash put right first
+    // where a write was cut short (libraryfiles.cpp).
+    [[nodiscard]] std::expected<FormatFile, Failure> epubFile(qint64 id);
     // Keeps a copy of the database as it is, or says why it couldn't.
     [[nodiscard]] std::expected<void, QString> backUp(int schema) const;
     // Runs a statement that changes something; false when it couldn't.

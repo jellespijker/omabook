@@ -93,6 +93,12 @@ bool applyCandidate(Library &library, qint64 id, const MetaCandidate &candidate,
 [[nodiscard]] std::expected<void, QString> setIdentifiers(Library &library, qint64 id, const QList<QPair<QString, QString>> &identifiers,
                                                           std::optional<qint64> at = std::nullopt);
 
+// Writes the book's details into its EPUB (Library::writeDetails) when the
+// person asked for that (#74): `asked` is the setting for the command line
+// and the tools (Settings::writeDetails), the edit's own say in the window.
+// Nothing for a book without an EPUB.
+[[nodiscard]] std::expected<void, Failure> writeDetailsWhenAsked(Library &library, qint64 id, bool asked);
+
 // Converts a book with Calibre's ebook-convert and adds the result to it.
 // Empty `from` is the format the reader prefers. Returns the new file, or an
 // empty string and `error`.

@@ -24,6 +24,7 @@
 #include "aicommands.h"
 #include "aisearch.h"
 #include "annotationcommands.h"
+#include "bookfilecommands.h"
 #include "bookmarkcommands.h"
 #include "bookops.h"
 #include "calibreplugin.h"
@@ -607,6 +608,17 @@ int remove(const QStringList &arguments) {
     return 0;
 }
 
+// The book's details kept, and written into its EPUB too where the setting
+// says so (#74), which is said and no failure when it can't be.
+[[nodiscard]] std::expected<void, QString> savedDetails(Library &library, qint64 id, const BookMeta &meta, std::optional<qint64> at) {
+    QString error;
+    if (!library.setMeta(id, meta, &error, at))
+        return std::unexpected(error);
+    if (const auto written = BookOps::writeDetailsWhenAsked(library, id, Settings().writeDetails()); !written)
+        print(stderr, written.error().text());
+    return {};
+}
+
 int set(const QStringList &arguments) {
     Command command("set", "Change a book's details. Only the options given are changed.");
     command.parser.addPositionalArgument("id", "The book's number.");
@@ -685,8 +697,8 @@ int set(const QStringList &arguments) {
     // First, since they are all or nothing: a scheme refused changes nothing.
     if (const auto res = BookOps::setIdentifiers(*library, id, identifiers, detailsAt); !res)
         return fail(res.error());
-    if (!library->setMeta(id, meta, &error, detailsAt))
-        return fail(error);
+    if (const auto saved = savedDetails(*library, id, meta, detailsAt); !saved)
+        return fail(saved.error());
     if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {
         const QString status = options.isSet("status") ? options.value("status").toLower() : book->shelf;
         if (!library->setReading(id, status == "none" ? QString() : status,
@@ -802,32 +814,6 @@ int text(const QStringList &arguments) {
     }
     if (command.json())
         printJson(sections);
-    return 0;
-}
-
-int exportBook(const QStringList &arguments) {
-    Command command("export", "Copy a book's file out of the library into a folder.");
-    command.parser.addPositionalArgument("id", "The book's number.");
-    command.parser.addPositionalArgument("folder", "Where to put the copy.");
-    command.parser.addOption({"format", "Which of the book's formats; the one the reader prefers when not given.", "format"});
-    if (!command.parse(arguments, 2, 2))
-        return 1;
-    QString error;
-    const auto library = command.library(&error);
-    if (!library)
-        return fail(error);
-    const QString source = library->formatPath(command.argument(0).toLongLong(), command.parser.value("format"));
-    if (source.isEmpty())
-        return fail("There is no such book or format in the library.");
-    const QString target = QDir(command.argument(1)).absoluteFilePath(QFileInfo(source).fileName());
-    if (QFileInfo::exists(target))
-        return fail("There is already a file at " + target);
-    if (!QDir().mkpath(command.argument(1)) || !QFile::copy(source, target))
-        return fail("The copy can't be written to " + target);
-    if (command.json())
-        printJson(QJsonObject{{"file", target}});
-    else
-        print(stdout, target);
     return 0;
 }
 
@@ -2006,7 +1992,8 @@ constexpr std::array cliCommands{
     CliCommand{"meaning"_L1, runMeaningCli},
     CliCommand{"lookup"_L1, lookup},
     CliCommand{"convert"_L1, convert},
-    CliCommand{"export"_L1, exportBook},
+    CliCommand{"export"_L1, runExportCli},
+    CliCommand{"embed"_L1, runEmbedCli},
     CliCommand{"ask"_L1, ask},
     CliCommand{"ai"_L1, runAiCli},
     CliCommand{"graph"_L1, runGraphCliWithChronology},

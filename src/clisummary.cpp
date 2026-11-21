@@ -27,6 +27,7 @@ QString cliSummary() {
            "  theme [list|use <name>|show]    Which theme the colors come from: Omarchy's, Aether's, or a built-in one\n"
            "  convert <id> [--to format]      Convert a book and add the result to it\n"
            "  export <id> <folder>            Copy a book's file out of the library\n"
+           "  embed <id>...|--all [--restore]  Write books' details into their EPUBs, or put the files back as they came\n"
            "  ask <book|all> <question>       Ask the AI about a book, or about the whole library\n"
            "  ai use|models|key               A server as the AI (Omarchy's local models, Ollama, OpenAI, ...)\n"
            "  graph show|find|node|build|...  The knowledge graph of what is read; see omabook graph --help\n"

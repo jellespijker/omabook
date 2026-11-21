@@ -1,7 +1,6 @@
 #include "library.h"
 
 #include <QCoreApplication>
-#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -171,14 +170,6 @@ QJsonObject Book::toJson() const {
     object.insert("details_at", detailsAt);
     object.insert("reading_at", readingAt);
     return object;
-}
-
-QString Library::hashFile(const QString &path) {
-    QFile file(path);
-    if (!file.open(QIODevice::ReadOnly))
-        return {};
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    return hash.addData(&file) ? QString::fromLatin1(hash.result().toHex()) : QString();
 }
 
 Library::Library(const QString &root)
@@ -471,9 +462,11 @@ std::expected<void, QString> Library::remove(qint64 id, std::optional<qint64> at
     const QList<FormatFile> formats = formatFiles(id);
     // A file another book holds too (the one a merge kept took it over)
     // is still in the library, so a sync mustn't take it for removed.
+    // So is the file one came in as, before details were written into it (#74).
     for (const FormatFile &format : formats)
-        if (!query("SELECT 1 FROM formats WHERE hash = ? AND book_id <> ?", {format.hash, id}).next())
-            exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {format.hash, at.value_or(Spaces::wallSeconds(*this))});
+        for (const QString &hash : {format.hash, format.original})
+            if (!hash.isEmpty() && !query("SELECT 1 FROM formats WHERE (hash = ? OR original = ?) AND book_id <> ?", {hash, hash, id}).next())
+                exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {hash, at.value_or(Spaces::wallSeconds(*this))});
     // A book with no file is remembered by what names it instead.
     if (const std::optional<Book> gone = formats.isEmpty() ? book(id) : std::nullopt)
         for (const QString &key : entryKeys(*gone))
@@ -547,37 +540,6 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
     return true;
 }
 
-bool Library::setCover(qint64 id, const QImage &cover, std::optional<qint64> at) {
-    const QString folder = bookFolder(id);
-    if (folder.isEmpty() || cover.isNull() || !QDir().mkpath(folder))
-        return false;
-    // Large enough for a sharp tile on a 4K screen, small enough to load a
-    // shelf of them at once.
-    const QImage scaled = cover.height() > 900 ? cover.scaledToHeight(900, Qt::SmoothTransformation) : cover;
-    const QString file = folder + "/cover.jpg";
-    const QString before = hashFile(file);
-    if (!scaled.convertToFormat(QImage::Format_RGB32).save(file, "JPG", 88))
-        return false;
-    // The same picture again is no change to the details.
-    if (at || hashFile(file) != before)
-        return exec("UPDATE books SET has_cover = 1, details_at = ? WHERE id = ?",
-                    {at ? Hlc::seconds(*at) : Spaces::wallSeconds(*this), id});
-    return exec("UPDATE books SET has_cover = 1 WHERE id = ?", {id});
-}
-
-QString Library::coverPath(qint64 id) const {
-    const QString path = bookFolder(id) + "/cover.jpg";
-    return QFileInfo::exists(path) ? path : QString();
-}
-
-QString Library::formatPath(qint64 id, const QString &format) const {
-    QHash<QString, QString> files;
-    for (QSqlQuery found = query("SELECT format, file FROM formats WHERE book_id = ?", {id}); found.next();)
-        files.insert(found.value(0).toString(), found.value(1).toString());
-    const QString chosen = format.isEmpty() ? Formats::byPreference(files.keys()).value(0) : format.toLower();
-    return files.contains(chosen) ? bookFolder(id) + "/" + files.value(chosen) : QString();
-}
-
 std::optional<qint64> Library::removedAt(const QString &hash) const {
     QSqlQuery found = query("SELECT removed_at FROM removed WHERE hash = ?", {hash});
     return found.next() ? std::optional<qint64>(found.value(0).toLongLong()) : std::nullopt;
@@ -607,22 +569,6 @@ Progress Library::progress(qint64 id) const {
 }
 
 void Library::setProgress(qint64 id, const Progress &progress) { ChangeLog::setProgress(*this, id, progress); }
-
-QList<FormatFile> Library::formatFiles(qint64 id) const {
-    const QString folder = bookFolder(id);
-    QList<FormatFile> files;
-    for (QSqlQuery found = query("SELECT format, file, hash, size FROM formats WHERE book_id = ?", {id}); found.next();)
-        files.append({.format = found.value(0).toString(),
-                      .path = folder + "/" + found.value(1).toString(),
-                      .hash = found.value(2).toString(),
-                      .size = found.value(3).toLongLong()});
-    return files;
-}
-
-qint64 Library::bookWithHash(const QString &hash) const {
-    QSqlQuery found = query("SELECT book_id FROM formats WHERE hash = ?", {hash});
-    return found.next() ? found.value(0).toLongLong() : 0;
-}
 
 bool Library::wasRemoved(const QString &hash) const { return query("SELECT 1 FROM removed WHERE hash = ?", {hash}).next(); }
 

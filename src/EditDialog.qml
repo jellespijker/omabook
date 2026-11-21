@@ -13,6 +13,9 @@ AppPopup {
     // 0 while a book that has no file is being added.
     property var bookId: 0
     readonly property var shelves: ["", "to-read", "reading", "read"]
+    // Whether it has an EPUB to write the details into, and whether that file
+    // as it came in is kept to put back (#74).
+    property var file: ({})
 
     function show(id) {
         const book = backend.book(id)
@@ -32,12 +35,15 @@ AppPopup {
         language.text = book.language || ""
         isbn.text = book.isbn || ""
         description.text = book.description || ""
+        file = backend.fileDetails(id)
+        intoFile.checked = settings.writeDetails
         open()
         title.forceActiveFocus()
     }
     // A new book with no file: one on a real shelf, or one to read some day.
     function showNew() {
         bookId = 0
+        file = ({})
         for (const field of [title, authors, series, number, tags, publisher, published, language, isbn, description, finished])
             field.text = ""
         shelf.currentIndex = 0
@@ -52,7 +58,8 @@ AppPopup {
             seriesIndex: Number(number.text.replace(",", ".")) || 0, tags: tags.text,
             publisher: publisher.text, published: published.text, language: language.text,
             isbn: isbn.text, description: description.text,
-            shelf: shelves[shelf.currentIndex], rating: stars.value, finished: finished.text, paper: paper.checked
+            shelf: shelves[shelf.currentIndex], rating: stars.value, finished: finished.text, paper: paper.checked,
+            writeToFile: intoFile.visible && intoFile.checked
         }
         if (bookId > 0) {
             backend.saveDetails(bookId, details)
@@ -152,6 +159,27 @@ AppPopup {
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
                 Material.roundedScale: theme.radius
+            }
+        }
+        // The library's copy of the book, never the file it was added from;
+        // the settings say whether this is ticked to begin with.
+        RowLayout {
+            Layout.fillWidth: true
+            visible: dialog.file.epub === true
+            CheckBox {
+                id: intoFile
+                objectName: "editIntoFile"
+                Layout.fillWidth: true
+                text: qsTr("Write the details into the book's EPUB too, for other apps and e-readers")
+            }
+            AppButton {
+                objectName: "editRestoreFile"
+                visible: dialog.file.original === true
+                text: qsTr("Put the File Back")
+                onClicked: {
+                    backend.restoreFile(dialog.bookId)
+                    dialog.close()
+                }
             }
         }
         actions: [

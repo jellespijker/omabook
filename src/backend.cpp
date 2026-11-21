@@ -464,35 +464,6 @@ void Backend::remove(qint64 id) {
     reload();
 }
 
-void Backend::saveDetails(qint64 id, const QVariantMap &details) {
-    const auto before = m_library ? m_library->book(id) : std::nullopt;
-    if (!before)
-        return;
-    BookMeta meta = before->meta;
-    meta.title = details.value("title", meta.title).toString().simplified();
-    meta.authors = BookMeta::splitAuthors(details.value("authors", meta.authorText()).toString());
-    meta.series = details.value("series", meta.series).toString().simplified();
-    meta.seriesIndex = details.value("seriesIndex", meta.seriesIndex).toDouble();
-    meta.publisher = details.value("publisher", meta.publisher).toString().simplified();
-    meta.language = details.value("language", meta.language).toString().simplified();
-    meta.isbn = details.value("isbn", meta.isbn).toString().simplified();
-    meta.published = details.value("published", meta.published).toString().simplified();
-    meta.description = details.value("description", meta.description).toString().trimmed();
-    meta.tags = BookMeta::splitTags(details.value("tags", meta.tags.join(", ")).toString());
-    QString error;
-    if (!m_library->setMeta(id, meta, &error))
-        say(error);
-    if (details.contains("shelf"))
-        m_library->setReading(id, details.value("shelf").toString(), details.value("rating", before->rating).toInt(),
-                              details.value("finished", before->finished).toString().simplified());
-    if (details.contains("paper"))
-        m_library->setPaper(id, details.value("paper").toBool());
-    // The book's node in the knowledge graph says the same: its status,
-    // stars, author, series and tags.
-    Graph(*m_library).bookNode(id);
-    reload();
-}
-
 QVariantMap Backend::reading(qint64 id) const {
     const auto book = m_library ? m_library->book(id) : std::nullopt;
     if (!book)

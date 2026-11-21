@@ -2087,7 +2087,7 @@ private slots:
         // The architecture's one rule, kept by a test: formats and the library
         // know nothing of the window, so the command line, the tests and any
         // future front end can use them alone. Only these files may see QML.
-        const QStringList presentation{"backend.h", "backend.cpp", "backendcollections.cpp", "backendlookup.cpp", "backendpicker.cpp", "backendsync.cpp", "backendplugins.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
+        const QStringList presentation{"backend.h", "backend.cpp", "backendcollections.cpp", "backendlookup.cpp", "backenddetails.cpp", "backendpicker.cpp", "backendsync.cpp", "backendplugins.cpp", "reader.h", "reader.cpp", "assistant.h", "assistant.cpp",
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp", "graphtenants.h", "graphtenants.cpp", "graphtypes.cpp",
                                        "readingmarks.h", "readingmarks.cpp", "readingpassages.cpp", "marginnotes.h", "marginnotes.cpp", "annotationlayerview.h", "annotationlayerview.cpp", "readinghighlights.h", "readinghighlights.cpp", "readingink.h", "readingink.cpp", "annotationfinder.cpp", "meaningfinder.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",

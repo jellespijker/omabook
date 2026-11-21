@@ -684,6 +684,7 @@ omabook customize [view]                Show where the interface's files live; c
 omabook theme [list|use <name>|show]    Which theme the colors come from: Omarchy's, Aether's, or a built-in one
 omabook convert <id> [--to format]      Convert a book and add the result to it
 omabook export <id> <folder>            Copy a book's file out of the library
+omabook embed <id>...|--all [--restore] Write books' details into their EPUBs, or put the files back as they came
 omabook ask <book|all> <question>       Ask the AI about a book, or about the whole library
 omabook ai use|models|key               A server as the AI (Omarchy's local models, Ollama, OpenAI, ...); its models; its key
 omabook graph show|find|node|build|...  The knowledge graph of what is read; see omabook graph --help
@@ -739,7 +740,7 @@ omabook mcp --library ~/Other  # serve one library, whatever the window has open
 | `lookup_candidates`, `lookup_apply` | Details from every metadata plugin, each saying what it adds and changes; take one |
 | `tidy_propose`, `tidy_apply` | Duplicates, author spellings and series as proposals; apply the chosen ones |
 | `ask_book`, `ask_library`, `suggest_reading` | Omabook's own AI, for a question that needs a whole book or the whole library |
-| `catalog_export`, `book_export`, `book_convert` | The library as csv or bibtex; a copy of a book's file; a conversion with Calibre |
+| `catalog_export`, `book_export`, `book_convert`, `book_embed_details` | The library as csv or bibtex; a copy of a book's file; a conversion with Calibre; the book's details written into its EPUB, or the file put back |
 | `sync_status`, `sync_run` | Syncing with another computer |
 | `plugins_list`, `plugin_set_enabled` | Plugins, and switching one |
 | `plugin_install`, `plugin_remove` | Install a plugin from a folder or a `.zip`, checked first and left off; move one of your own to the trash |
@@ -859,7 +860,7 @@ For whoever changes the format: add a step to the list in `Library::open` (never
 ## Known limits
 
 - Books with DRM can't be opened; Omabook says so rather than failing blankly.
-- Sending books to an e-reader and writing details back into a book's own file are not there yet.
+- Sending books to an e-reader is not there yet. Details are written back into EPUBs only (`omabook embed`), not into PDFs, comics or other formats.
 - A sync carries books, reading places, collections, the graph and bookmarks, not the AI's notes or a book's own reading format.
 - A line's length in characters is counted from the widths of the font's lowercase letters, weighted as often as each is met in English; in a script whose letters run wider or narrower (Chinese, Japanese, Korean) a line holds fewer or more characters than the measure says.
 - Pages are cut by Omabook, from the lines Qt's text layout gives, so a paragraph's first or last line is never left alone on a page and a heading goes over with what follows it; a page can come out a line or two short for that. A picture taller than a page is cut across pages.

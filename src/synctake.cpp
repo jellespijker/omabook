@@ -367,6 +367,10 @@ QSet<QString> SyncTake::heldBy(const Library &library) {
     for (const Book &book : library.books()) {
         for (const FormatFile &file : library.formatFiles(book.id))
             held.insert(file.hash);
+        // And the file one came in as, before details were written into it (#74).
+        for (const FormatFile &file : library.formatFiles(book.id))
+            if (!file.original.isEmpty())
+                held.insert(file.original);
         for (const QString &key : Library::entryKeys(book))
             held.insert(key);
     }

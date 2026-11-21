@@ -122,6 +122,13 @@ public:
         MeaningNotIndexed, // {}: no book asked about is indexed by meaning
         MeaningNoText,     // {}: the book has no words to index
         MeaningCancelled,  // {}
+        // A book's details written into its EPUB (formats, library; #74).
+        ZipUnchangeable,       // {}
+        EpubPackageUnwritable, // {}
+        WrittenEpubUnlike,     // {}
+        DetailsNeedEpub,       // {}
+        BookFileUnwritable,    // {path, the system's reason}
+        NoOriginalKept,        // {}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiUnreachable,       // {where, the network's reason}

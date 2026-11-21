@@ -157,6 +157,16 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::FactNotKept, tr("The words could not be kept as a fact.")},
     {Failure::Code::NotAName, tr("A name to go by in a space is one line of at most %1 characters.")},
     {Failure::Code::NotKeptPrivate, tr("%1 is not a book a plugin keeps private, so it goes into the spaces it is in already.")},
+    {Failure::Code::ZipUnchangeable,
+     tr("The book's file is a zip Omabook can't change in place: one in parts, a zip64, or a damaged one.")},
+    {Failure::Code::EpubPackageUnwritable,
+     tr("The details can't be written into this EPUB: its package document is not one Omabook can change.")},
+    {Failure::Code::WrittenEpubUnlike,
+     tr("The EPUB with the details written into it didn't read back as it should, so the book's file was left as it was.")},
+    {Failure::Code::DetailsNeedEpub, tr("Details are written into a book's EPUB, and this book has none.")},
+    {Failure::Code::BookFileUnwritable, tr("%1 can't be written. %2")},
+    {Failure::Code::NoOriginalKept,
+     tr("There is no original of this book's file to put back: its details were never written into it here.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

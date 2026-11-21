@@ -141,14 +141,19 @@ void Backend::applyCandidate(int index) {
         say(error);
     Graph(*m_library).bookNode(id);
     reload();
+    // Into its file as well where the setting says so, once its cover is here.
     if (candidate.coverUrl.isValid())
         fetchCoverFor(id, candidate.coverUrl);
+    else
+        writeDetailsWhenAsked(id, m_settings->writeDetails());
 }
 
 void Backend::fetchCoverFor(qint64 id, const QUrl &url) {
     fetchCover(&m_network, url, this, [this, id](const QImage &cover) {
         // Catalogs answer a missing cover with a one-pixel picture.
-        if (m_library && cover.width() > 50 && m_library->setCover(id, cover))
+        if (m_library && cover.width() > 50 && m_library->setCover(id, cover)) {
             reload();
+            writeDetailsWhenAsked(id, m_settings->writeDetails());
+        }
     });
 }

@@ -29,6 +29,8 @@ class Settings : public QObject {
     // Whether Omabook shows its libraries, what is being read and "Add to
     // Library" in Folio, the file manager.
     Q_PROPERTY(bool folio READ folio WRITE setFolio NOTIFY changed)
+    // Whether a book's details go into its EPUB whenever they are edited (#74).
+    Q_PROPERTY(bool writeDetails READ writeDetails WRITE setWriteDetails NOTIFY changed)
     Q_PROPERTY(int pages READ pages WRITE setPages NOTIFY changed)
     Q_PROPERTY(QVariantMap paneWidths READ paneWidths NOTIFY changed)
     Q_PROPERTY(QVariantMap highlightNames READ highlightNames NOTIFY changed)
@@ -94,6 +96,11 @@ public:
     int coverSize() const { return std::clamp(m_values.value("cover_size").toInt(176), 96, 480); }
     bool folio() const { return m_values.value("folio").toBool(true); }
     void setFolio(bool on) { set("folio", on); }
+    // Whether a book's details are written into its EPUB, the library's own
+    // copy, whenever they are edited here (#74): in the window, with `omabook
+    // set` and by the tools. Off unless the person switches it on.
+    bool writeDetails() const { return m_values.value("write_details").toBool(false); }
+    void setWriteDetails(bool on) { set("write_details", on); }
     // How many pages of a flowing book stand side by side: 0 for as many as
     // the window has room for (see PageLayout::columns), else 1, 2 or 3.
     // In config.json, "pages": "auto", 1, 2 or 3.

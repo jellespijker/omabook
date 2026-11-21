@@ -113,6 +113,38 @@ std::optional<QJsonObject> theirManifest(const Remote &remote, SyncSummary &summ
     return manifest;
 }
 
+// What their files of a book name here: the book that has one of them,
+// whether one of them was removed here, and their hashes, each also added to
+// `theirHashes`. A file they wrote details into (#74) is still known by the
+// hash it came in with.
+struct Named {
+    qint64 mine = 0;
+    bool removedHere = false;
+    QStringList hashes;
+};
+
+[[nodiscard]] Named namedHere(const Library &library, const QJsonArray &files, QSet<QString> &theirHashes) {
+    Named named;
+    for (const QJsonValue &value : files) {
+        const QJsonObject file = value.toObject();
+        const QString hash = file.value("hash").toString();
+        named.hashes << hash;
+        named.removedHere = named.removedHere || library.wasRemoved(hash);
+        for (const QString &known : {hash, file.value("original").toString()}) {
+            if (known.isEmpty())
+                continue;
+            theirHashes << known;
+            named.mine = named.mine ? named.mine : library.bookWithHash(known);
+        }
+    }
+    return named;
+}
+
+// Whether the other side has this file: by its hash, or by the one it came in with (#74).
+[[nodiscard]] bool knownThere(const FormatFile &file, const QSet<QString> &theirHashes) {
+    return theirHashes.contains(file.hash) || (!file.original.isEmpty() && theirHashes.contains(file.original));
+}
+
 } // namespace
 
 SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
@@ -173,17 +205,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         const QJsonObject theirs = value.toObject();
         const QString title = theirs.value("title").toString();
         const QJsonArray files = theirs.value("files").toArray();
-        qint64 mine = 0;
-        bool removedHere = false;
-        QStringList hashes;
-        for (const QJsonValue &file : files) {
-            const QString hash = file.toObject().value("hash").toString();
-            hashes << hash;
-            theirHashes << hash;
-            if (!mine)
-                mine = library.bookWithHash(hash);
-            removedHere = removedHere || library.wasRemoved(hash);
-        }
+        auto [mine, removedHere, hashes] = namedHere(library, files, theirHashes);
         const QStringList keys = entryKeysOf(theirs);
         for (const QString &key : keys)
             theirKeys << key;
@@ -257,6 +279,8 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 continue;
             }
             mine = added.id;
+            library.knowOriginal(mine, files.first().toObject().value("format").toString(),
+                                 files.first().toObject().value("original").toString());
             if (current)
                 library.setDetailsAt(mine, theirDetailsAt);
             note(summary.received, summary.titles.received, title);
@@ -292,7 +316,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         QStringList hashes, keys;
         for (const FormatFile &file : files) {
             hashes << file.hash;
-            known = known || theirHashes.contains(file.hash);
+            known = known || knownThere(file, theirHashes);
             removed = removed || removedThere.contains(file.hash);
         }
         if (files.isEmpty())

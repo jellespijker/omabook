@@ -532,6 +532,8 @@ QList<Tool> coreTools() {
                       QString error;
                       if (!at.library->setMeta(at.id, meta, &error))
                           return Result::fail(error);
+                      if (const auto written = BookOps::writeDetailsWhenAsked(*at.library, at.id, Settings().writeDetails()); !written)
+                          return Result::fail(written.error().text());
                       Graph(*at.library).bookNode(at.id); // so are its author, series and tags
                       return Result::ok(full(*at.library, *at.library->book(at.id)));
                   }};
@@ -579,28 +581,6 @@ QList<Tool> coreTools() {
                       if (const auto removed = at.library->remove(at.id); !removed)
                           return Result::fail(removed.error());
                       return Result::ok({{"removed", at.id}, {"title", title}});
-                  }};
-
-    tools << Tool{"book_export", "Copy a book out",
-                  "Copies one of a book's files out of the library into a folder. It never overwrites a file there.",
-                  schema({{"id", integer("The book's number.", 1)},
-                          {"folder", string("Where to put the copy, as an absolute path.")},
-                          {"format", string("Which of the book's formats; the one the reader prefers when not given.")}},
-                         {"id", "folder"}),
-                  Changes, [](const QJsonObject &arguments) {
-                      const Shelf at = shelf(arguments);
-                      if (!at)
-                          return Result::fail(at.error);
-                      const QString source = at.library->formatPath(at.id, arguments.value("format").toString());
-                      if (source.isEmpty())
-                          return Result::fail("The book has no such format; book_get lists the ones it has.");
-                      const QString folder = arguments.value("folder").toString();
-                      const QString target = QDir(folder).absoluteFilePath(QFileInfo(source).fileName());
-                      if (QFileInfo::exists(target))
-                          return Result::fail("There is already a file at " + target);
-                      if (!QDir().mkpath(folder) || !QFile::copy(source, target))
-                          return Result::fail("The copy can't be written to " + target);
-                      return Result::ok({{"file", target}});
                   }};
 
     tools << Tool{"book_convert", "Convert a book",

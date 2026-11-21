@@ -55,6 +55,7 @@ omabook add extra.pdf --to 12                          # another format of a boo
 omabook set 12 --title "Dune" --authors "Frank Herbert" --series "Dune" --series-index 1 --tags "science fiction, classic"
 omabook set 12 --cover ~/Pictures/dune.jpg
 omabook export 12 ~/Desktop        # copy the book's file out
+omabook embed 12                   # write its details into its EPUB, the library's copy (--restore puts it back)
 omabook remove 12                  # to the trash; ask the user before removing
 ```
 
