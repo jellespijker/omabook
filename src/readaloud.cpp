@@ -146,7 +146,10 @@ void ReadAloud::start(const QString &atTop) {
         if (offset < 0)
             offset = static_cast<qsizetype>(m_reader->fraction() * static_cast<double>(document->text(section).size()));
     }
-    auto narration = std::make_unique<Narration>(document->count(), [document](int at) { return document->text(at); }, *std::move(voice));
+    // A PDF's page breaks its lines where they were full, inside its sentences.
+    const auto lines = document->kind() == Document::Pages ? Sentences::Lines::Wrap : Sentences::Lines::End;
+    auto narration =
+        std::make_unique<Narration>(document->count(), [document](int at) { return document->text(at); }, *std::move(voice), lines);
     narration->setSpeech(Voices::speech(*m_reader->backend()->settings(), document->meta().language));
     if (!narration->from(section, offset)) {
         failed(Failure(Failure::Code::NothingToReadAloud));

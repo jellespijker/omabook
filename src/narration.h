@@ -29,8 +29,11 @@ public:
         Sentences::Sentence sentence;
     };
 
-    // A book of `sections` sections, each read by `read` when it is needed, and the voice that reads it.
-    Narration(int sections, std::function<QString(int section)> read, std::unique_ptr<Voice> voice, QObject *parent = nullptr);
+    // A book of `sections` sections, each read by `read` when it is needed,
+    // the voice that reads it, and what a line break in its text is (a
+    // PDF's pages wrap their lines).
+    Narration(int sections, std::function<QString(int section)> read, std::unique_ptr<Voice> voice,
+              Sentences::Lines lines = Sentences::Lines::End, QObject *parent = nullptr);
     ~Narration() override;
     Narration(const Narration &) = delete;
     Narration &operator=(const Narration &) = delete;
@@ -77,6 +80,7 @@ private:
 
     BookText m_text;
     std::unique_ptr<Voice> m_voice;
+    Sentences::Lines m_lines = Sentences::Lines::End;
     Speech m_how;
     std::optional<Spoken> m_current;
     bool m_playing = false;

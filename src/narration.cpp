@@ -2,8 +2,9 @@
 
 #include <algorithm>
 
-Narration::Narration(int sections, std::function<QString(int section)> read, std::unique_ptr<Voice> voice, QObject *parent)
-    : QObject(parent), m_text(sections, std::move(read)), m_voice(std::move(voice)) {
+Narration::Narration(int sections, std::function<QString(int section)> read, std::unique_ptr<Voice> voice, Sentences::Lines lines,
+                     QObject *parent)
+    : QObject(parent), m_text(sections, std::move(read)), m_voice(std::move(voice)), m_lines(lines) {
     connect(m_voice.get(), &Voice::spoken, this, &Narration::spoken);
     connect(m_voice.get(), &Voice::failed, this, &Narration::stopped);
 }
@@ -13,14 +14,11 @@ Narration::~Narration() { m_voice->stop(); }
 const QList<Sentences::Sentence> &Narration::sentencesOf(int section) const {
     auto found = m_sentences.find(section);
     if (found == m_sentences.end())
-        found = m_sentences.insert(section, Sentences::of(m_text.text(section)));
+        found = m_sentences.insert(section, Sentences::of(m_text.text(section), m_lines));
     return *found;
 }
 
-QString Narration::wordsOf(const Spoken &spoken) const {
-    const Sentences::Sentence &sentence = spoken.sentence;
-    return m_text.text(spoken.section).sliced(sentence.start, sentence.end - sentence.start);
-}
+QString Narration::wordsOf(const Spoken &spoken) const { return Sentences::words(m_text.text(spoken.section), spoken.sentence, m_lines); }
 
 std::optional<Narration::Spoken> Narration::firstFrom(int section, qsizetype offset) const {
     for (int at = std::max(0, section); at < m_text.sections(); ++at) {

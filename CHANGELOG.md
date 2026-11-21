@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- Reading a PDF aloud, a sentence broken over the lines of its page is read as one, a word hyphenated at a line's end whole, instead of a stop at every line's end (#73).
+
 ## [0.2.0] - 2026-11-21
 
 ### Added
