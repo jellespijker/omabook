@@ -92,3 +92,21 @@ BookMeta BookMeta::fromJson(const QJsonObject &object) {
                                                 : stringList(object.value("tags"));
     return meta;
 }
+
+void BookMeta::applyJson(const QJsonObject &object) {
+    const BookMeta given = fromJson(object);
+    const auto take = [&object](const char *key, auto &field, const auto &value) {
+        if (object.contains(QLatin1StringView(key)))
+            field = value;
+    };
+    take("title", title, given.title);
+    take("authors", authors, given.authors);
+    take("series", series, given.series);
+    take("series_index", seriesIndex, given.seriesIndex);
+    take("publisher", publisher, given.publisher);
+    take("language", language, given.language);
+    take("isbn", isbn, given.isbn);
+    take("published", published, given.published);
+    take("description", description, given.description);
+    take("tags", tags, given.tags);
+}

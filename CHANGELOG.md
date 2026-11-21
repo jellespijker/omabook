@@ -16,6 +16,9 @@ moves those lines under its version.
 
 - A finger's tap on a margin note, its mark in the text or a note's mark on a PDF's page opens the note and nothing else (#141): it no longer turns the page as well, where the note is at the page's edge, nor shows or hides the bar.
 - The pen presses what lies over the page (#141): the selection's menu, the ☰ button, a pane or a popup over it take the pen as they take a finger, where before the pen wrote or drew a gesture on the page under them.
+- A sync never gives one book's details to another (#154): books to read from Goodreads were paired by what the last Goodreads sync brought (the same "to-read" for every one of them), so a sync could rename a book after another and take its ISBN away. Such bookkeeping names no book now, and the pairings it made before are no longer followed.
+- `omabook set --meta` leaves the details its file doesn't name as they are (#154); before, a file without an ISBN cleared the book's. `"isbn": ""` still clears it.
+- A book one computer holds twice (a Goodreads entry without a file and the book's file, with the same ISBN) and the other once settles in one sync (#154): its details are decided once and given to both copies, the copies' covers no longer go back and forth, and a dry run lists the book once, the same from either side.
 
 ## [0.2.0.1] - 2026-11-21
 

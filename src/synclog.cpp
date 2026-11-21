@@ -47,6 +47,29 @@ namespace {
     return one;
 }
 
+// The other side's books as its manifest names them, for this side to link
+// to its own (Replication::link): the side asked links the books the one
+// that asks sends it, so a book without a file there (an entry from
+// Goodreads) is found here by its keys whichever side starts the sync (#154).
+[[nodiscard]] QList<Replication::BookNames> namesIn(const QJsonArray &books) {
+    QList<Replication::BookNames> names;
+    for (const auto &value : books) {
+        const QJsonObject book = value.toObject();
+        QStringList hashes;
+        QStringList keys;
+        for (const auto &file : book.value("files").toArray())
+            for (const char *name : {"hash", "original"})
+                if (const QString hash = file.toObject().value(QLatin1StringView(name)).toString(); !hash.isEmpty())
+                    hashes << hash;
+        if (hashes.isEmpty())
+            for (const auto &key : book.value("keys").toArray())
+                keys << key.toString();
+        if (const QString gid = book.value("gid").toString(); !gid.isEmpty())
+            names << Replication::BookNames{.gid = gid, .hashes = hashes, .keys = keys};
+    }
+    return names;
+}
+
 [[nodiscard]] QSet<QString> heldIn(const QJsonArray &names) {
     QSet<QString> held;
     for (const auto &name : names)
@@ -196,8 +219,10 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     const bool dryRun = options.dryRun;
     const QJsonArray books = manifest.value("books").toArray();
     const QString theirDevice = manifest.value("device").toString();
-    if (!dryRun)
+    if (!dryRun) {
         Spaces::pair(library, manifest.value("space").toString(), theirDevice, manifest.value("name").toString());
+        Replication::link(library, namesIn(books));
+    }
     QSet<QString> theirGids;
     for (const auto &book : books)
         theirGids.insert(book.toObject().value("gid").toString());

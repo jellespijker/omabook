@@ -213,7 +213,9 @@ int runSyncCli(const QStringList &arguments) {
     QCommandLineParser parser;
     addCommonOptions(parser, "Bring this library and another computer's in step over ssh: each gets the books it lacks, "
                              "the newer details and the newer reading place win, and a book removed on one side is removed "
-                             "on the other too (to the trash), unless it changed there since. Omabook must be installed on both.");
+                             "on the other too (to the trash), unless it changed there since. A book held twice on one side (an entry "
+                             "without a file and its file, of one ISBN) and once on the other is one book: both copies get its "
+                             "details. Omabook must be installed on both.");
     parser.addPositionalArgument("computer",
                                  "The other computer as ssh knows it (a Tailscale name works), optionally "
                                  "with its library folder: laptop or laptop:Books.",

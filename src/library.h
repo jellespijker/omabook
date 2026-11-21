@@ -325,7 +325,9 @@ public:
     // file's hash can't: "entry:<scheme>=<value>" for each of its
     // identifiers and its ISBN, and "entry:title=<title>|<authors>" with
     // both folded to lower case and letters and digits only. Two books are
-    // the same when any key is the same.
+    // the same when any key is the same. An empty value names nothing, nor
+    // does bookkeeping: a scheme with a colon in it ("goodreads:synced",
+    // what a site's last sync brought) or "generated" (#154).
     static QStringList entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title,
                                  const QStringList &authors);
     static QStringList entryKeys(const Book &book);

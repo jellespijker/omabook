@@ -13,6 +13,7 @@
 #include <tuple>
 #include <utility>
 
+#include "booklinks.h"
 #include "changelog.h"
 #include "hlc.h"
 #include "opkinds.h"
@@ -378,7 +379,7 @@ QList<Replication::BookNames> Replication::booksFrom(const QJsonArray &array) {
 }
 
 QList<Replication::BookNames> Replication::unlinked(const Library &library, const QSet<QString> &theirGids) {
-    const QHash<QString, QString> canonical = SpaceReducer::sameAs(operations(library));
+    const QHash<QString, QString> canonical = SpaceReducer::sameAs(BookLinks::trusted(operations(library)));
     QSet<QString> known;
     for (const QString &gid : theirGids)
         known.insert(standsFor(canonical, gid));
@@ -398,7 +399,7 @@ QList<Replication::BookNames> Replication::unlinked(const Library &library, cons
 
 int Replication::link(const Library &library, const QList<BookNames> &theirs) {
     const Library::Batch batch(library);
-    QHash<QString, QString> canonical = SpaceReducer::sameAs(operations(library));
+    QHash<QString, QString> canonical = SpaceReducer::sameAs(BookLinks::trusted(operations(library)));
     QHash<QString, qint64> byKey;
     int linked = 0;
     for (const BookNames &their : theirs) {
@@ -434,6 +435,7 @@ int Replication::link(const Library &library, const QList<BookNames> &theirs) {
 QList<Replication::PlaceChange> Replication::placeChanges(const Library &library, std::span<const SpaceOperation> incoming) {
     QList<SpaceOperation> ops = operations(library);
     ops.append(QList<SpaceOperation>(incoming.begin(), incoming.end()));
+    ops = BookLinks::trusted(ops);
     const ReducedState state = SpaceReducer::reduce(ops);
     const QHash<QString, QString> canonical = SpaceReducer::sameAs(ops);
     QList<PlaceChange> changes;

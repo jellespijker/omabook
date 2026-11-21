@@ -1,8 +1,13 @@
 // Two copies of a book on one computer, one of them removed, and a copy on the
 // other, as the manifest sync of 0.1.5.2 left them; both brought up to date
-// and synced through the change log for the first time (#58).
+// and synced through the change log for the first time (#58). And two copies
+// of one ISBN on one computer, one without a file, against the file alone on
+// the other (#154).
 
+#include <QDateTime>
 #include <QDir>
+#include <QImage>
+#include <QProcess>
 #include <QSet>
 #include <QSqlDatabase>
 #include <QSqlError>
@@ -11,7 +16,9 @@
 #include <QUuid>
 #include <QtTest>
 
+#include "changelog.h"
 #include "fixtures.h"
+#include "hlc.h"
 #include "library.h"
 #include "remote.h"
 #include "replication.h"
@@ -109,10 +116,11 @@ void expectWhole(const Library &library, const QString &where) {
     }
 }
 
-[[nodiscard]] SyncSummary syncFrom(bool fromA, Library &a, Library &b, const QTemporaryDir &dir) {
+[[nodiscard]] SyncSummary syncFrom(bool fromA, Library &a, Library &b, const QTemporaryDir &dir, bool dryRun = false) {
     const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
-    return fromA ? syncLibrary(a, Remote("laptop:" + dir.filePath("B"), {ssh}))
-                 : syncLibrary(b, Remote("laptop:" + dir.filePath("A"), {ssh}));
+    const SyncOptions options{.dryRun = dryRun};
+    return fromA ? syncLibrary(a, Remote("laptop:" + dir.filePath("B"), {ssh}), {}, options)
+                 : syncLibrary(b, Remote("laptop:" + dir.filePath("A"), {ssh}), {}, options);
 }
 
 [[nodiscard]] int moved(const SyncSummary &summary) {
@@ -124,6 +132,44 @@ void expectWhole(const Library &library, const QString &where) {
     for (const Book &book : library.books())
         ids.insert(Spaces::bookId(library, book.id));
     return ids;
+}
+
+// A book without a file, as an import from a reading site makes one: by
+// "Ann Author", with `isbn` and the names elsewhere it is given.
+[[nodiscard]] qint64 entry(Library &library, const QString &title, const QString &isbn, const QList<QPair<QString, QString>> &names) {
+    BookMeta meta;
+    meta.title = title;
+    meta.authors = {"Ann Author"};
+    meta.isbn = isbn;
+    const qint64 id = library.addEntry(meta, false).id;
+    if (id <= 0 || !library.setReading(id, "to-read", 0, {}))
+        return 0;
+    for (const auto &[scheme, value] : names)
+        if (!library.setIdentifier(id, scheme, value))
+            return 0;
+    return id;
+}
+
+// The three books to read, each once and by its own name, on both sides.
+void expectTitles(const Library &a, const Library &b) {
+    for (const Library *library : {&a, &b}) {
+        QStringList titles;
+        for (const Book &book : library->books())
+            titles << book.meta.title;
+        titles.sort();
+        QCOMPARE(titles, (QStringList{"Malkavian", "The Canterbury Tales", "The Lady of Crows"}));
+    }
+}
+
+// Once synced, nothing more goes either way, from either side: details, reading or books.
+void expectSettled(Library &a, Library &b, const QTemporaryDir &dir, bool fromA) {
+    for (const bool side : {fromA, !fromA}) {
+        const SyncSummary settled = syncFrom(side, a, b, dir, false);
+        QVERIFY2(settled.problems.isEmpty(), qPrintable(settled.problems.join('\n')));
+        QCOMPARE(settled.titles.detailsTaken + settled.titles.detailsSent, QStringList());
+        QCOMPARE(settled.received + settled.sent + settled.removedHere + settled.removedThere, 0);
+        QCOMPARE(settled.readingTaken + settled.readingSent + settled.detailsUndecided, 0);
+    }
 }
 
 } // namespace
@@ -241,6 +287,177 @@ private slots:
         }
         QVERIFY(a.book(11));
         QCOMPARE(b.books("Twice Told").size(), 1);
+    }
+
+    // A has the book twice: an entry without a file, as an import from
+    // Goodreads makes one (with a picture of its own), and the book's file,
+    // with the same ISBN; B has the file. Once the three are one book, each
+    // side changes its details: they are decided once for it, a dry run from
+    // either side lists it once and says the same of it, and one sync gives
+    // both of A's copies the details and settles it. The covers compared are
+    // the files' copies' (#154).
+    void twoCopiesOfAnIsbnPairWithTheOneThere_data() {
+        QTest::addColumn<bool>("fromA");
+        QTest::newRow("synced from A, the side with two copies") << true;
+        QTest::newRow("synced from B, the side with one") << false;
+    }
+
+    void twoCopiesOfAnIsbnPairWithTheOneThere() {
+        QFETCH(const bool, fromA);
+        QTemporaryDir dir;
+        QVERIFY(Fixtures::epub(dir.filePath("book.epub"), "Twice Told"));
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const qint64 wished = entry(a, "Twice Told", "9780000000002", {{"goodreads", "11"}});
+        const qint64 filed = a.add(dir.filePath("book.epub")).id;
+        const qint64 theirs = b.add(dir.filePath("book.epub")).id;
+        QVERIFY(wished > 0 && filed > 0 && theirs > 0);
+        const SyncSummary paired = syncFrom(fromA, a, b, dir);
+        QVERIFY2(paired.error.isEmpty() && paired.problems.isEmpty(), qPrintable(paired.error + paired.problems.join('\n')));
+        QCOMPARE(paired.received + paired.sent, 0);
+
+        // Then the entry is given a description and a picture of its own there, and B's copy, later, a publisher.
+        const qint64 later = QDateTime::currentSecsSinceEpoch() + 60;
+        BookMeta described = a.book(wished)->meta;
+        described.description = "As Goodreads says it.";
+        described.cover = QImage::fromData(Fixtures::picture(40, 60, Qt::darkRed));
+        QVERIFY(a.setMeta(wished, described, nullptr, Hlc::pack(later, 0)));
+        BookMeta published = b.book(theirs)->meta;
+        published.publisher = "There Press";
+        QVERIFY(b.setMeta(theirs, published, nullptr, Hlc::pack(later + 10, 0)));
+
+        const SyncSummary dryA = syncFrom(true, a, b, dir, true);
+        const SyncSummary dryB = syncFrom(false, a, b, dir, true);
+        for (const SyncSummary *dry : {&dryA, &dryB})
+            QVERIFY2(dry->error.isEmpty() && dry->problems.isEmpty(), qPrintable(dry->error + dry->problems.join('\n')));
+        // B's are the newer details: A takes them, for the book once, as either side says it.
+        const QStringList once{"Twice Told"};
+        QCOMPARE(dryA.titles.detailsTaken, once);
+        QCOMPARE(dryB.titles.detailsSent, once);
+        QCOMPARE(dryA.titles.detailsSent, dryB.titles.detailsTaken);
+        QCOMPARE(dryA.detailsUndecided + dryB.detailsUndecided, 0);
+
+        const SyncSummary synced = syncFrom(fromA, a, b, dir);
+        QVERIFY2(synced.problems.isEmpty(), qPrintable(synced.problems.join('\n')));
+        QCOMPARE(synced.detailsTaken + synced.detailsSent, 1);
+        const BookMeta settledMeta = b.book(theirs)->meta;
+        QCOMPARE(settledMeta.publisher, QString("There Press"));
+        for (const qint64 id : {wished, filed})
+            QVERIFY2(a.book(id)->meta.toJson() == settledMeta.toJson(), qPrintable(a.book(id)->meta.description));
+        QCOMPARE(Library::hashFile(b.coverPath(theirs)), Library::hashFile(a.coverPath(filed)));
+        expectSettled(a, b, dir, fromA);
+        QCOMPARE(a.books("Twice Told").size(), 2);
+        QCOMPARE(b.books("Twice Told").size(), 1);
+    }
+
+    // Books to read from Goodreads, no ISBN on two of them, and what the
+    // last sync with Goodreads brought the same on all ("to-read|0|"): that
+    // bookkeeping pairs none of them, so no book's details ever go to
+    // another, from either side, and identical details settle (#154).
+    void booksToReadFromGoodreadsNeverPairByTheirBookkeeping_data() {
+        QTest::addColumn<bool>("fromA");
+        QTest::addColumn<bool>("linkedBefore");
+        for (const bool linkedBefore : {false, true})
+            for (const bool fromA : {true, false})
+                QTest::addRow("%s, synced from %s", linkedBefore ? "linked by an Omabook from before" : "never linked", fromA ? "A" : "B")
+                    << fromA << linkedBefore;
+    }
+
+    void booksToReadFromGoodreadsNeverPairByTheirBookkeeping() {
+        QFETCH(const bool, fromA);
+        QFETCH(const bool, linkedBefore);
+        QTemporaryDir dir;
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const QList<QPair<QString, QString>> toRead{{"goodreads:synced", "to-read|0|"}};
+        const qint64 crows = entry(a, "The Lady of Crows", {}, QList<QPair<QString, QString>>{{"goodreads", "1"}} + toRead);
+        const qint64 malkavian = entry(a, "Malkavian", {}, QList<QPair<QString, QString>>{{"goodreads", "2"}} + toRead);
+        const qint64 tales = entry(b, "The Canterbury Tales", "9780140424386", QList<QPair<QString, QString>>{{"goodreads", "3"}} + toRead);
+        QVERIFY(crows > 0 && malkavian > 0 && tales > 0);
+        const SyncSummary first = syncFrom(fromA, a, b, dir);
+        QVERIFY2(first.error.isEmpty() && first.problems.isEmpty(), qPrintable(first.error + first.problems.join('\n')));
+        // Each side gets the books it lacks: three books, each by its own name, on both.
+        QCOMPARE(first.received + first.sent, 3);
+        expectTitles(a, b);
+        if (linkedBefore) {
+            // As an Omabook from before linked them, by that bookkeeping: the links stay in the log.
+            const QString one = Spaces::bookId(a, crows);
+            const QString other = Spaces::bookId(a, malkavian);
+            const QString third = Spaces::bookId(b, tales);
+            for (const auto &[id, value] : {std::pair{one, third}, std::pair{other, third}})
+                ChangeLog::append(a, {.space = Spaces::personalSpace(a),
+                                      .entity = "book",
+                                      .id = std::max(id, value),
+                                      .field = "same_as",
+                                      .value = std::min(id, value),
+                                      .hlc = std::nullopt});
+        }
+
+        // Then the books to read get descriptions, on one side and the other.
+        const qint64 later = QDateTime::currentSecsSinceEpoch() + 60;
+        BookMeta described = a.book(crows)->meta;
+        described.description = "Crows.";
+        QVERIFY(a.setMeta(crows, described, nullptr, Hlc::pack(later, 0)));
+        BookMeta told = b.book(tales)->meta;
+        told.description = "Pilgrims.";
+        QVERIFY(b.setMeta(tales, told, nullptr, Hlc::pack(later + 10, 0)));
+
+        const SyncSummary dryA = syncFrom(true, a, b, dir, true);
+        const SyncSummary dryB = syncFrom(false, a, b, dir, true);
+        QCOMPARE(dryA.titles.detailsTaken, QStringList{"The Canterbury Tales"});
+        QCOMPARE(dryA.titles.detailsSent, QStringList{"The Lady of Crows"});
+        QCOMPARE(dryB.titles.detailsTaken, dryA.titles.detailsSent);
+        QCOMPARE(dryB.titles.detailsSent, dryA.titles.detailsTaken);
+
+        const SyncSummary synced = syncFrom(fromA, a, b, dir);
+        QVERIFY2(synced.problems.isEmpty(), qPrintable(synced.problems.join('\n')));
+        expectTitles(a, b);
+        for (Library *library : {&a, &b}) {
+            QCOMPARE(library->books("The Lady of Crows").first().meta.description, QString("Crows."));
+            QCOMPARE(library->books("The Canterbury Tales").first().meta.description, QString("Pilgrims."));
+            QCOMPARE(library->books("The Canterbury Tales").first().meta.isbn, QString("9780140424386"));
+            QCOMPARE(library->books("Malkavian").first().meta.description, QString());
+        }
+        expectSettled(a, b, dir, fromA);
+        expectTitles(a, b);
+    }
+
+    // `omabook set --meta` takes the details its file names and leaves the
+    // rest: a file without "isbn" keeps the book's ISBN, which names it to a
+    // sync; one that says "isbn": "" forgets it (#154).
+    void setMetaLeavesWhatItsFileDoesNotName() {
+        QTemporaryDir dir;
+        const QString root = dir.filePath("A");
+        qint64 id = 0;
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            id = entry(library, "Twice Told", "9780000000002", {});
+            QVERIFY(id > 0);
+        }
+        const auto set = [&](const QByteArray &json) {
+            const QString file = dir.filePath("meta.json");
+            if (!Fixtures::write(file, json))
+                return false;
+            QProcess process;
+            process.start(QStringLiteral(OMABOOK_BINARY), {"set", QString::number(id), "--meta", file, "--library", root});
+            return process.waitForFinished(60000) && process.exitCode() == 0;
+        };
+        QVERIFY(set(R"({"title": "Twice Told", "description": "Told again."})"));
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            QCOMPARE(library.book(id)->meta.isbn, QString("9780000000002"));
+            QCOMPARE(library.book(id)->meta.description, QString("Told again."));
+            QCOMPARE(library.book(id)->meta.authors, QStringList{"Ann Author"});
+        }
+        QVERIFY(set(R"({"isbn": ""})"));
+        Library library(root);
+        QVERIFY(library.open());
+        QCOMPARE(library.book(id)->meta.isbn, QString());
+        QCOMPARE(library.book(id)->meta.title, QString("Twice Told"));
     }
 };
 

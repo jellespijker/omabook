@@ -7,8 +7,10 @@
 #include <QTemporaryDir>
 #include <algorithm>
 #include <compare>
+#include <functional>
 #include <tuple>
 
+#include "booklinks.h"
 #include "changelog.h"
 #include "graph.h"
 #include "hlc.h"
@@ -16,6 +18,7 @@
 #include "replication.h"
 #include "spacereducer.h"
 #include "spaces.h"
+#include "synccopies.h"
 #include "syncmanifest.h"
 #include "synctakeannotations.h"
 #include "synctakegraph.h"
@@ -103,36 +106,60 @@ void giveCover(const Taking &taking, const Book &mine, const QJsonObject &listed
     taking.peer.remote->run("rm -rf " + Remote::quote(folder));
 }
 
-// Of a book both sides hold: the details field by field by each field's time,
-// as both sides decide alike, then what is said of its reading.
-bool takeDetails(Taking &taking, const Book &here, const QJsonObject &theirs, const QJsonObject &listed) {
-    const QString gid = taking.standsFor(Spaces::bookId(taking.library, here.id));
-    const QJsonObject mine = Replication::bookView(taking.mine.books.value(gid));
-    const bool covers = !listed.isEmpty() && coverHash(taking.library, here.id) != theirs.value("cover_hash").toString();
-    const SyncManifest::MergedBookDetails merged = SyncManifest::decideDetails(here, mine, theirs, true, taking.peer.details, covers);
-    // The details keep the time they had: the later of the two books' own
-    // details times, to the clock's counter as each side's log says it. In
-    // seconds alone, a field taken from a second the clock ticked in more than
-    // once would be older here than there, and taken again at every sync (#106).
-    const qint64 settled =
-        std::max({Hlc::normalize(here.detailsAt), SyncManifest::theirDetailsHlc(mine), SyncManifest::theirDetailsHlc(theirs)});
-    const QString &title = here.meta.title;
-    if (merged.undecided && !merged.takeFields && !merged.sendFields)
-        note(taking.summary.detailsUndecided, taking.summary.titles.detailsUndecided, title);
-    if (merged.sendCover && !taking.peer.dryRun)
-        giveCover(taking, here, listed, settled);
-    if (!merged.takeFields)
+// The time a book's details keep: the later of the two books' own details
+// times, to the clock's counter as each side's log says it. In seconds alone,
+// a field taken from a second the clock ticked in more than once would be
+// older here than there, and taken again at every sync (#106).
+[[nodiscard]] qint64 settledAt(const QList<Book> &copies, const QJsonObject &mine, const QJsonObject &theirs) {
+    qint64 settled = std::max(SyncManifest::theirDetailsHlc(mine), SyncManifest::theirDetailsHlc(theirs));
+    for (const Book &copy : copies)
+        settled = std::max(settled, Hlc::normalize(copy.detailsAt));
+    return settled;
+}
+
+// Gives the copies here the details decided, as `behind` says which: every
+// copy what comes from there; and, of two, the one whose words the log says
+// otherwise (the other copy's are newer) the book's as the log says them,
+// once that is decided (#154). Whether any was given them.
+bool giveCopies(Taking &taking, const QList<Book> &copies, const SyncManifest::MergedBookDetails &merged, const QJsonObject &listed,
+                qint64 settled, const std::function<bool(const Book &)> &behind) {
+    if (std::ranges::none_of(copies, behind))
         return false;
+    const QString &title = copies.first().meta.title;
     BookMeta meta = merged.meta;
     if (merged.takeCover && !taking.peer.dryRun)
         meta.cover = fetchCover(taking, listed);
-    QString error;
-    if (!taking.peer.dryRun && !taking.library.setMeta(here.id, meta, &error, settled)) {
-        taking.summary.problems << title + ": " + error;
-        return false;
+    for (const Book &copy : copies) {
+        QString error;
+        if (behind(copy) && !taking.peer.dryRun && !taking.library.setMeta(copy.id, meta, &error, settled)) {
+            taking.summary.problems << title + ": " + error;
+            return false;
+        }
     }
     note(taking.summary.detailsTaken, taking.summary.titles.detailsTaken, title);
     return true;
+}
+
+// Of a book both sides hold: the details field by field by each field's time,
+// as both sides decide alike, then what is said of its reading. `copies` are
+// the books here that are this one book to the log, the one that speaks for
+// it first (SyncCopies::of); `listed` is the copy their manifest speaks for it by.
+bool takeDetails(Taking &taking, const QList<Book> &copies, const QJsonObject &theirs, const QJsonObject &listed) {
+    const Book &here = copies.first();
+    const QString gid = taking.standsFor(Spaces::bookId(taking.library, here.id));
+    const QJsonObject mine = Replication::bookView(taking.mine.books.value(gid));
+    // The covers compared are the pictures of the copies that speak for the
+    // book on each side, so both sides compare the same two (#154).
+    const bool covers = !listed.isEmpty() && coverHash(taking.library, here.id) != listed.value("cover_hash").toString();
+    const SyncManifest::MergedBookDetails merged = SyncManifest::decideDetails(here, mine, theirs, true, taking.peer.details, covers);
+    const qint64 settled = settledAt(copies, mine, theirs);
+    if (merged.undecided && !merged.takeFields && !merged.sendFields)
+        note(taking.summary.detailsUndecided, taking.summary.titles.detailsUndecided, here.meta.title);
+    if (merged.sendCover && !taking.peer.dryRun)
+        giveCover(taking, here, listed, settled);
+    const bool asLogged = copies.size() > 1 && settled > 0 && !merged.undecided && !mine.value("title").toString().isEmpty();
+    return giveCopies(taking, copies, merged, listed, settled,
+                      [&](const Book &copy) { return merged.takeFields || (asLogged && !SyncCopies::sameWords(copy.meta, merged.meta)); });
 }
 
 // When the other side removed what names this book here (`name`: a file's
@@ -173,20 +200,23 @@ void takeRemovals(Taking &taking, const QList<Book> &books) {
     }
 }
 
-void takeBook(Taking &taking, const Book &here) {
-    if (taking.gone.contains(here.id))
-        return;
+// One book both sides hold, decided once for all its copies here, and counted once.
+void takeBook(Taking &taking, const QList<Book> &copies) {
+    const Book &here = copies.first();
     const QString gid = taking.standsFor(Spaces::bookId(taking.library, here.id));
     const std::optional<QJsonObject> theirs = theirView(taking, gid);
     if (!theirs)
         return;
-    const bool details = takeDetails(taking, here, *theirs, taking.listed.value(gid));
-    const bool reading = SyncTake::fillReading(taking.library, here.id, *theirs, taking.peer.dryRun);
+    const bool details = takeDetails(taking, copies, *theirs, taking.listed.value(gid));
+    bool reading = false;
+    for (const Book &copy : copies)
+        reading = SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun) || reading;
     if (reading)
         note(taking.summary.readingTaken, taking.summary.titles.readingTaken, here.meta.title);
     // The book's node in the knowledge graph says the same as the library.
     if ((details || reading) && !taking.peer.dryRun)
-        Graph(taking.library).bookNode(here.id);
+        for (const Book &copy : copies)
+            Graph(taking.library).bookNode(copy.id);
 }
 
 [[nodiscard]] QString fieldOf(const ReducedCollection &collection, const QString &field) { return collection.fields.value(field).value; }
@@ -322,6 +352,8 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
         ops.append(QList<SpaceOperation>(incoming.begin(), incoming.end()));
     else if (keepHeld(library, ops))
         ops = Replication::operations(library);
+    // No link folds different books into one, as a wrong one made before did (#154).
+    ops = BookLinks::trusted(ops);
     Taking taking{.library = library,
                   .peer = peer,
                   .summary = summary,
@@ -333,12 +365,19 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
                   .listed = {},
                   .scratch = {},
                   .gone = {}};
-    for (const auto &value : peer.books)
-        taking.listed.insert(taking.standsFor(value.toObject().value("gid").toString()), value.toObject());
+    for (const auto &value : peer.books) {
+        const QJsonObject book = value.toObject();
+        const QString gid = taking.standsFor(book.value("gid").toString());
+        if (const auto listed = taking.listed.constFind(gid); listed == taking.listed.cend() || SyncCopies::speaksBefore(book, *listed))
+            taking.listed.insert(gid, book);
+    }
     const QList<Book> books = library.books();
     takeRemovals(taking, books);
-    for (const Book &here : books)
-        takeBook(taking, here);
+    for (QList<Book> copies : SyncCopies::of(library, books, taking.canonical)) {
+        copies.removeIf([&taking](const Book &book) { return taking.gone.contains(book.id); });
+        if (!copies.isEmpty())
+            takeBook(taking, copies);
+    }
     takeCollections(taking);
     summary.annotationsTaken +=
         SyncTakeAnnotations::take(library, taking.merged.annotations, booksHere(taking), taking.canonical, peer.dryRun);

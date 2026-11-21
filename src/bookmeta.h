@@ -31,4 +31,7 @@ struct BookMeta {
 
     QJsonObject toJson() const;
     static BookMeta fromJson(const QJsonObject &object);
+    // Takes each field `object` names (as toJson() names them), even an empty
+    // one, leaving the fields it doesn't name as they are (#154).
+    void applyJson(const QJsonObject &object);
 };

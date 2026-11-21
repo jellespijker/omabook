@@ -20,7 +20,17 @@
 // dropped connection leaves both libraries whole.
 //
 // A book is the same book on two computers when they hold a file with the
-// same content. Of a book both have, the newer details win (Book::detailsAt).
+// same content, or, for a book without a file, when it has an entry key
+// (identifiers, ISBN, else title and authors) of a book there; never by an
+// empty value, nor by bookkeeping such as "goodreads:synced", which every
+// book to read shares, and a link a rule like that made before is not
+// followed (BookLinks). So one copy
+// there can be two here: an entry without a file (from Goodreads) and the
+// book's file, of one ISBN. The change log then knows the three as one book,
+// and a sync decides its details once, from what both copies here say, and
+// gives both of them what it settles on; the copy with a file speaks for the
+// book, by its cover and its title, on both sides alike (SyncCopies, #154).
+// Of a book both have, the newer details win (Book::detailsAt).
 // A book removed on one computer is not fetched back to it, and is removed
 // on the other too, to the trash, unless it changed there since. The
 // collections and the knowledge graph (graphsync.h) travel too.

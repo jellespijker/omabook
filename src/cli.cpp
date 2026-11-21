@@ -635,8 +635,8 @@ int set(const QStringList &arguments) {
     command.parser.addOption({"paper", "Whether there is a copy on a real shelf: yes or no.", "yes|no"});
     command.parser.addOption({"identifier", "What the book is called elsewhere, as scheme=value (goodreads=4671); scheme= "
                                             "with nothing after it forgets it. Give it once per scheme.", "scheme=value"});
-    command.parser.addOption({"meta", "Take every detail from this JSON file (as omabook show --json prints them); the "
-                                      "options above still win over it.", "file"});
+    command.parser.addOption({"meta", "Take the details this JSON file names (as omabook show --json prints them), leaving "
+                                      "the rest as they are; the options above still win over it.", "file"});
     command.parser.addOption({"details-at", "Stamp the details with this time, in seconds since 1970, instead of now: what "
                                             "omabook sync gives a book, so the details keep the time they had where they "
                                             "came from.", "seconds"});
@@ -672,7 +672,7 @@ int set(const QStringList &arguments) {
         const QJsonDocument read = QJsonDocument::fromJson(details.readAll());
         if (!read.isObject())
             return fail("The details aren't a JSON object: " + options.value("meta"));
-        meta = BookMeta::fromJson(read.object());
+        meta.applyJson(read.object());
     }
     if (options.isSet("title")) meta.title = options.value("title").simplified();
     if (options.isSet("authors")) meta.authors = BookMeta::splitAuthors(options.value("authors"));

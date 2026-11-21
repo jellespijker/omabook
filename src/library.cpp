@@ -421,13 +421,13 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
     return true;
 }
 
-QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title,
-                               const QStringList &authors) {
+QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title, const QStringList &authors) {
     static const QRegularExpression other(R"([^\p{L}\p{N}]+)");
     const auto fold = [](QString text) { return text.toCaseFolded().remove(other); };
-    QStringList keys;
+    QStringList keys; // bookkeeping ("goodreads:synced", the same of every book to read; "generated") names no book (#154)
     for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (const QString value = it.value().toVariant().toString().trimmed(); !value.isEmpty())
+        if (const QString value = it.value().toVariant().toString().trimmed();
+            !value.isEmpty() && !it.key().contains(u':') && it.key().compare("generated"_L1, Qt::CaseInsensitive) != 0)
             keys << "entry:" + it.key().toLower() + "=" + value.toLower();
     if (const QString number = QString(isbn).remove(other).toLower(); !number.isEmpty())
         keys << "entry:isbn=" + number;
