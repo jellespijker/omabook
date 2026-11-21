@@ -12,6 +12,7 @@ namespace {
 constexpr auto installApp = "omarchy-install-app";
 constexpr auto floatingTerminal = "omarchy-launch-floating-terminal-with-presentation";
 constexpr auto aurAdd = "omarchy-pkg-aur-add";
+constexpr auto pkgAdd = "omarchy-pkg-add";
 
 // The AUR's voices for Piper, by language and region. A language's first is
 // the one taken where a book names no region the AUR has.
@@ -30,9 +31,15 @@ constexpr std::array piperVoices{
 } // namespace
 
 bool VoiceInstall::offered(Kind kind) {
-    if (kind == Kind::Voice)
+    switch (kind) {
+    case Kind::Voice:
         return onPath(installApp);
-    return onPath(installApp) && onPath(floatingTerminal) && onPath(aurAdd);
+    case Kind::Piper:
+        return onPath(installApp) && onPath(floatingTerminal) && onPath(aurAdd);
+    case Kind::Voxtype:
+        return onPath(floatingTerminal) && onPath(pkgAdd);
+    }
+    return false;
 }
 
 QString VoiceInstall::piperVoice(QStringView language) {
@@ -52,15 +59,27 @@ QString VoiceInstall::piperVoice(QStringView language) {
 }
 
 QStringList VoiceInstall::packages(Kind kind, QStringView language) {
-    if (kind == Kind::Voice)
+    switch (kind) {
+    case Kind::Voice:
         return {u"speech-dispatcher"_s, u"espeak-ng"_s};
-    return {u"piper-tts-bin"_s, piperVoice(language)};
+    case Kind::Piper:
+        return {u"piper-tts-bin"_s, piperVoice(language)};
+    case Kind::Voxtype:
+        return {u"voxtype-bin"_s};
+    }
+    return {};
 }
 
 VoiceInstall::Command VoiceInstall::command(Kind kind, QStringView language) {
     const QStringList installed = packages(kind, language);
     if (kind == Kind::Voice)
         return {.program = QString::fromLatin1(installApp), .arguments = {u"speech-dispatcher"_s, installed.join(u' ')}};
+    // What omarchy-install-app does, and then voxtype's model, which it
+    // can't hear without; the package's name is this file's.
+    if (kind == Kind::Voxtype)
+        return {.program = QString::fromLatin1(floatingTerminal),
+                .arguments = {u"echo 'Installing voxtype...'; "_s + QString::fromLatin1(pkgAdd) + u' ' + installed.join(u' ')
+                              + u" && voxtype setup --download --no-post-install"_s}};
     // What omarchy-install-app does for Arch's packages, with the AUR's
     // command; the packages' names are this file's, so need no quoting.
     return {.program = QString::fromLatin1(floatingTerminal),

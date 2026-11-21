@@ -3,7 +3,8 @@
 // of the book's language; the choice runs in Omarchy's floating terminal, and
 // once that is closed (this window has the keyboard back) the book is read
 // aloud from where it was asked, or it is said that no voice came. Elsewhere,
-// what to install is only said, as before. The Aa panel offers the same.
+// what to install is only said, as before. The Aa panel offers the same. And
+// voxtype, which hears speech (#146), offered in the settings the same way.
 //
 // Omarchy's commands are fakes on the path that write down how they were
 // called and "install" a fake voice where Voices looks for one; nothing is
@@ -16,6 +17,7 @@
 
 #include "desk.h"
 #include "readaloud.h"
+#include "speechinstall.h"
 #include "voiceinstall.h"
 
 namespace {
@@ -50,6 +52,7 @@ struct Omarchy {
                               "    speech-dispatcher) cp \"%1/spd-say.fake\" \"%1/spd-say\" ;;\n"
                               "    piper-tts-bin) cp \"%1/piper.fake\" \"%1/piper\" ;;\n"
                               "    piper-voices-*) mkdir -p \"%2/piper-voices\" && : > \"%2/piper-voices/en_US-fake-medium.onnx\" ;;\n"
+                              "    voxtype-bin) cp \"%1/voxtype.fake\" \"%1/voxtype\" ;;\n"
                               "  esac\n"
                               "done\necho installed >> \"$LOG\"\n")
                           .arg(bin, share);
@@ -58,6 +61,7 @@ struct Omarchy {
         // The voices, installed: each says what it was asked, and takes its time.
         script("spd-say.fake", head + "printf 'spd-say|%s\\n' \"$*\" >> \"$LOG\"\n[ \"$1\" = -S ] || exec sleep 30\n");
         script("piper.fake", head + "printf 'piper|%s\\n' \"$*\" >> \"$LOG\"\nexec sleep 30\n");
+        script("voxtype.fake", head + "printf 'voxtype|%s\\n' \"$*\" >> \"$LOG\"\n");
     }
     ~Omarchy() {
         qputenv("PATH", path);
@@ -148,11 +152,58 @@ private slots:
         QCOMPARE(VoiceInstall::command(VoiceInstall::Kind::Piper, u"de"),
                  (VoiceInstall::Command{"omarchy-launch-floating-terminal-with-presentation",
                                         {"echo 'Installing Piper...'; omarchy-pkg-aur-add piper-tts-bin piper-voices-de-de"}}));
+        QCOMPARE(VoiceInstall::command(VoiceInstall::Kind::Voxtype, u""),
+                 (VoiceInstall::Command{"omarchy-launch-floating-terminal-with-presentation",
+                                        {"echo 'Installing voxtype...'; omarchy-pkg-add voxtype-bin && voxtype setup --download "
+                                         "--no-post-install"}}));
         const Omarchy elsewhere(false);
         QVERIFY(!VoiceInstall::offered());
+        QVERIFY(!VoiceInstall::offered(VoiceInstall::Kind::Voxtype));
         const Omarchy omarchy;
         QVERIFY(VoiceInstall::offered());
         QVERIFY(VoiceInstall::offered(VoiceInstall::Kind::Piper));
+        QVERIFY(VoiceInstall::offered(VoiceInstall::Kind::Voxtype));
+    }
+
+    // On Omarchy without voxtype, the settings offer it; installed with its
+    // model in the terminal, once that is closed it is what hears recordings,
+    // said with what it doesn't give.
+    void voxtypeIsOfferedInTheSettings() {
+        const Omarchy omarchy;
+        Desk desk("en", {}, false);
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        SpeechInstall *speech = desk.backend->speech();
+        QVERIFY(speech->installable());
+        desk.call("showSettings");
+        QVERIFY(desk.waitForPopup());
+        QTRY_VERIFY(desk.shows("speechInstall"));
+        desk.shot("speech-install");
+        QVERIFY(omarchy.calls().isEmpty());
+        QMetaObject::invokeMethod(desk.find("speechInstall"), "clicked");
+        QTRY_VERIFY(omarchy.called("installed"));
+        QVERIFY(speech->installing());
+        QVERIFY(!desk.shows("speechInstall"));
+        QCOMPARE(
+            omarchy.calls().first(),
+            QString("floating|echo 'Installing voxtype...'; omarchy-pkg-add voxtype-bin && voxtype setup --download --no-post-install"));
+        QTRY_VERIFY(omarchy.called("voxtype|setup --download --no-post-install"));
+        QWindowSystemInterface::handleApplicationStateChanged<QWindowSystemInterface::SynchronousDelivery>(Qt::ApplicationInactive);
+        QWindowSystemInterface::handleApplicationStateChanged<QWindowSystemInterface::SynchronousDelivery>(Qt::ApplicationActive);
+        QTRY_VERIFY(!speech->installing());
+        QVERIFY(!speech->installable());
+        QCOMPARE(speech->heardBy(), QString("voxtype on this computer"));
+        QVERIFY(!speech->timed());
+        QTRY_VERIFY(desk.find("speechHeardBy")->property("text").toString().contains("doesn't give each word its moment"));
+        QVERIFY(!desk.shows("speechInstall"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+    // Not on Omarchy, nothing is offered.
+    void voxtypeIsNotOfferedElsewhere() {
+        const Omarchy elsewhere(false);
+        Desk desk("en", {}, false);
+        QVERIFY(!desk.backend->speech()->installable());
+        desk.backend->speech()->install();
+        QVERIFY(!desk.backend->speech()->installing());
     }
 
     // R with no voice offers one; chosen, it is installed in the terminal, and once that is closed the book is read.

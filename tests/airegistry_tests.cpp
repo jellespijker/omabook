@@ -251,7 +251,9 @@ private slots:
         Bench bench;
         Settings &settings = bench.settings;
         settings.setAiEndpoint({{"preset", "custom"}, {"base_url", ""}});
-        settings.setRecognition({{"whisper_program", bench.dir.filePath("none/whisper-cli")}});
+        // Neither whisper.cpp nor voxtype, whatever the machine running the tests has.
+        settings.setRecognition(
+            {{"whisper_program", bench.dir.filePath("none/whisper-cli")}, {"voxtype_program", bench.dir.filePath("none/voxtype")}});
         settings.setReadAloud({{"engine", "server"}});
         QCOMPARE(why(settings, Capability::Answers), QString("no-server"));
         QCOMPARE(why(settings, Capability::Handwriting), QString("no-server"));
@@ -292,6 +294,7 @@ private slots:
         settings.setReadAloud({{"engine", "server"}, {"url", "https://voice.example.com/v1"}, {"hosted", true}});
         settings.setRecognition({{"transcription_url", "https://speech.example.com/v1"},
                                  {"whisper_program", bench.dir.filePath("none/whisper-cli")},
+                                 {"voxtype_program", bench.dir.filePath("none/voxtype")},
                                  {"hosted", true}});
         const auto plugin = bench.plugin();
         QString problem;

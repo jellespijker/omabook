@@ -10,6 +10,7 @@
 #include "recognizers.h"
 #include "secretstore.h"
 #include "settings.h"
+#include "voxtypelocal.h"
 #include "whisperlocal.h"
 
 using namespace Qt::StringLiterals;
@@ -79,26 +80,71 @@ using RecognitionRoute::Ways;
     return inkWays(*server, model);
 }
 
-[[nodiscard]] std::expected<Ways, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
+// The ways speech may go, as they are found, and why the others can't.
+struct Speech {
     Ways ways;
+    QStringList missing;
     std::optional<Refusal> refused;
-    if (const auto server = transcriber(settings)) {
-        const QString model = chosen(settings, "transcription_model"_L1);
-        refused = hostedRefusal(settings, Capability::SpeechToText, server->baseUrl, model, hostedAsked);
-        if (!refused)
-            ways.push_back(std::make_unique<Recognizers::Transcription>(*server, model));
-    }
-    // On this computer: nothing to ask of anyone.
+};
+
+void addServer(const Settings &settings, bool hostedAsked, Speech &speech) {
+    const auto server = transcriber(settings);
+    if (!server)
+        return;
+    const QString model = chosen(settings, "transcription_model"_L1);
+    speech.refused = hostedRefusal(settings, Capability::SpeechToText, server->baseUrl, model, hostedAsked);
+    if (!speech.refused)
+        speech.ways.push_back(std::make_unique<Recognizers::Transcription>(*server, model));
+}
+
+// On this computer: nothing to ask of anyone. One that isn't installed is
+// still tried after another way, so that its failure says what to install.
+void addWhisper(const Settings &settings, Speech &speech) {
     const QString program = chosen(settings, "whisper_program"_L1).isEmpty() ? QString::fromLatin1(WhisperLocal::defaultProgram)
                                                                              : chosen(settings, "whisper_program"_L1);
     const QString modelFile =
         chosen(settings, "whisper_model"_L1).isEmpty() ? WhisperLocal::findModel() : chosen(settings, "whisper_model"_L1);
     const QString missing = WhisperLocal::missing(program, modelFile);
-    if (ways.empty() && !missing.isEmpty())
-        return std::unexpected(refused ? Refusal{.lack = refused->lack, .message = refused->message + u' ' + missing}
-                                       : Refusal{.lack = Lack::NoServer, .message = missing});
-    ways.push_back(std::make_unique<WhisperLocal>(program, modelFile));
-    return ways;
+    if (!missing.isEmpty())
+        speech.missing << missing;
+    if (missing.isEmpty() || !speech.ways.empty())
+        speech.ways.push_back(std::make_unique<WhisperLocal>(program, modelFile));
+}
+
+void addVoxtype(const Settings &settings, Speech &speech) {
+    const QString program = RecognitionRoute::voxtypeProgram(settings);
+    if (const QString missing = VoxtypeLocal::missing(program); !missing.isEmpty()) {
+        speech.missing << missing;
+        return;
+    }
+    speech.ways.push_back(std::make_unique<VoxtypeLocal>(program, chosen(settings, "voxtype_model"_L1)));
+}
+
+// Whether the person chose how speech is written out, before there was
+// voxtype: a server for it, or whisper.cpp. Their choice keeps going first.
+[[nodiscard]] bool chosenBefore(const Settings &settings) {
+    return !chosen(settings, "transcription_url"_L1).isEmpty() || !chosen(settings, "whisper_program"_L1).isEmpty()
+           || !chosen(settings, "whisper_model"_L1).isEmpty();
+}
+
+// voxtype, whisper.cpp, then the server (ADR 0008); where the person chose
+// one of the others, as they always went, and voxtype after them.
+[[nodiscard]] std::expected<Ways, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
+    Speech speech;
+    if (chosenBefore(settings)) {
+        addServer(settings, hostedAsked, speech);
+        addWhisper(settings, speech);
+        addVoxtype(settings, speech);
+    } else {
+        addVoxtype(settings, speech);
+        addWhisper(settings, speech);
+        addServer(settings, hostedAsked, speech);
+    }
+    if (!speech.ways.empty())
+        return std::move(speech.ways);
+    const QString missing = speech.missing.join(u' ');
+    return std::unexpected(speech.refused ? Refusal{.lack = speech.refused->lack, .message = speech.refused->message + u' ' + missing}
+                                          : Refusal{.lack = Lack::NoServer, .message = missing});
 }
 
 [[nodiscard]] std::expected<Ways, Refusal> plan(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
@@ -121,6 +167,11 @@ std::optional<RecognitionRoute::Refusal> RecognitionRoute::refusal(const Setting
 
 std::expected<RecognitionRoute::Ways, QString> RecognitionRoute::ways(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
     return plan(settings, kind, hostedAsked).transform_error([](const Refusal &refused) { return refused.message; });
+}
+
+QString RecognitionRoute::voxtypeProgram(const Settings &settings) {
+    const QString program = chosen(settings, "voxtype_program"_L1);
+    return program.isEmpty() ? QString::fromLatin1(VoxtypeLocal::defaultProgram) : program;
 }
 
 QString RecognitionRoute::signature(const Ways &ways) {

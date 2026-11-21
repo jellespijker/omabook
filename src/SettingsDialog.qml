@@ -211,6 +211,23 @@ AppPopup {
                   ? qsTr("Careful: what you write by hand and record then goes to someone else's computer wherever you choose it, such as for one notebook, and they can read it.")
                   : qsTr("What you write by hand and record is recognised only on this computer and your tailnet.")
         }
+        // What writes out recordings here, and voxtype to install on Omarchy (#146).
+        Label {
+            objectName: "speechHeardBy"
+            Layout.fillWidth: true
+            wrapMode: Text.Wrap
+            color: theme.colors.muted
+            text: backend.speech.installing ? qsTr("Installing voxtype in the terminal that opened. Once it is closed, Omabook looks for it again.")
+                  : backend.speech.heardBy === "" ? backend.speech.why
+                  : backend.speech.timed ? qsTr("Recordings are written out by %1, each word with its moment.").arg(backend.speech.heardBy)
+                  : qsTr("Recordings are written out by %1, which doesn't give each word its moment; whisper.cpp or a transcription server does.").arg(backend.speech.heardBy)
+        }
+        AppButton {
+            objectName: "speechInstall"
+            visible: backend.speech.installable && !backend.speech.installing
+            text: qsTr("Install voxtype…")
+            onClicked: backend.speech.install()
+        }
         // A book's text is indexed by its meaning on one's own servers only,
         // unless this is on (#72); and only the books asked for, unless every one.
         CheckBox {

@@ -104,6 +104,9 @@ public:
         FfmpegFailed,          // {what it said}
         WhisperFailed,         // {what it said}
         WhisperNoTranscript,   // {}
+        VoxtypeMissing,        // {program}
+        VoxtypeNeedsWav,       // {file name}
+        VoxtypeFailed,         // {what it said}
         // Reading a book aloud (services; #73); "name" is the engine's, "where" a server's address.
         NoVoice,            // {}: neither Piper with a voice nor speech-dispatcher is installed
         PiperMissing,       // {}

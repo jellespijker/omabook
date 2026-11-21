@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "failure.h"
+#include "localspeech.h"
 
 using namespace Qt::StringLiterals;
 
@@ -18,13 +19,7 @@ namespace {
 using Recognition::Failure;
 using Why = Recognition::Failure::Why;
 
-constexpr auto converter = "ffmpeg"_L1;
-
-[[nodiscard]] QString found(const QString &program) {
-    if (QFileInfo(program).isAbsolute())
-        return QFileInfo(program).isExecutable() ? program : QString();
-    return QStandardPaths::findExecutable(program);
-}
+using LocalSpeech::found;
 
 // Where a sentence ends, the segment does.
 [[nodiscard]] bool endsSentence(const QString &word) { return word.endsWith(u'.') || word.endsWith(u'?') || word.endsWith(u'!'); }
@@ -36,7 +31,8 @@ WhisperLocal::WhisperLocal(QString program, QString modelFile, QObject *parent)
     connect(&m_process, &QProcess::finished, this, &WhisperLocal::read);
     connect(&m_process, &QProcess::errorOccurred, this, [this](QProcess::ProcessError error) {
         if (error == QProcess::FailedToStart)
-            emit failed({.why = Why::Unsupported, .message = missing(m_converting ? QString(converter) : m_program, m_modelFile)});
+            emit failed({.why = Why::Unsupported,
+                         .message = missing(m_converting ? QString::fromLatin1(LocalSpeech::converter) : m_program, m_modelFile)});
     });
 }
 
@@ -74,19 +70,19 @@ void WhisperLocal::recognize(const Recognition::Input &input) {
     }
     m_folder = std::make_unique<QTemporaryDir>();
     m_language = input.language;
-    if (input.file.endsWith(".wav"_L1, Qt::CaseInsensitive)) {
+    if (LocalSpeech::isWav(input.file)) {
         transcribe(input.file);
         return;
     }
     // whisper.cpp reads 16 kHz WAV; anything else is made one first.
-    if (found(converter).isEmpty()) {
+    if (found(QString::fromLatin1(LocalSpeech::converter)).isEmpty()) {
         emit failed(
             {.why = Why::Unsupported, .message = ::Failure(::Failure::Code::WhisperNeedsWav, {QFileInfo(input.file).fileName()}).text()});
         return;
     }
     m_converting = true;
-    m_process.start(converter, {u"-nostdin"_s, u"-loglevel"_s, u"error"_s, u"-y"_s, u"-i"_s, input.file, u"-ar"_s, u"16000"_s, u"-ac"_s,
-                                u"1"_s, u"-c:a"_s, u"pcm_s16le"_s, m_folder->filePath(u"recording.wav"_s)});
+    m_process.start(QString::fromLatin1(LocalSpeech::converter),
+                    LocalSpeech::conversion(input.file, m_folder->filePath(u"recording.wav"_s)));
 }
 
 void WhisperLocal::transcribe(const QString &wav) {
@@ -138,7 +134,8 @@ Recognition::Result Whisper::transcript(const QJsonObject &output) {
                                .model = {},
                                .server = {},
                                .at = QDateTime::currentMSecsSinceEpoch(),
-                               .kept = false};
+                               .kept = false,
+                               .timed = true};
     Recognition::Segment open;
     const auto close = [&result, &open] {
         if (open.words.isEmpty())

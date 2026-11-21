@@ -26,13 +26,19 @@ class Settings;
 //   "transcription_url"    a server of the OpenAI-compatible API that
 //                          transcribes; else the AI server itself
 //   "transcription_model"  the model it transcribes with ("whisper-1" unless said)
-//   "whisper_program", "whisper_model"   whisper.cpp on this computer, the way
-//                          speech goes when no server transcribes it
+//   "voxtype_program", "voxtype_model"   voxtype on this computer ("voxtype"
+//                          on the path, with the model it was set up with)
+//   "whisper_program", "whisper_model"   whisper.cpp on this computer
 //   "own"                  addresses of servers the person calls their own
 //   "hosted"               whether a hosted server may be asked at all
 //
+// Speech goes to voxtype, then whisper.cpp, then the server (#146, ADR 0008),
+// each where it is there; where the person chose a server for it or
+// whisper.cpp (before there was voxtype), to the server, then whisper.cpp,
+// then voxtype, as it always went.
+//
 // With the AI set to Off (#133) there is no way at all: nothing is asked of
-// any server, nor of whisper.cpp.
+// any server, nor of whisper.cpp or voxtype.
 namespace RecognitionRoute {
 
 using Ways = std::vector<std::unique_ptr<Recognition::Recognizer>>;
@@ -61,8 +67,11 @@ struct Refusal {
 // before any is asked: two that are alike go the same way.
 [[nodiscard]] QString signature(const Ways &ways);
 
+// The command voxtype is run as: the settings', else "voxtype" on the path.
+[[nodiscard]] QString voxtypeProgram(const Settings &settings);
+
 // The ways to try, in order, none of them started: for ink the vision model,
-// for speech the transcription server and then whisper.cpp. Fails, in plain
+// for speech those above. Fails, in plain
 // words, when there is none that may be used (the privacy rule says why).
 [[nodiscard]] std::expected<Ways, QString> ways(const Settings &settings, Recognition::Kind kind, bool hostedAsked);
 

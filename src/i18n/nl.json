@@ -2204,5 +2204,13 @@
   "Nothing can be embedded here: Omabook's settings aren't open.": "Hier kan niets worden ingebed: de instellingen van Omabook zijn niet geopend.",
   "Nothing can be read aloud here: Omabook's settings aren't open.": "Hier kan niets worden voorgelezen: de instellingen van Omabook zijn niet geopend.",
   "Omabook has no capability called %1.": "Omabook heeft geen vermogen dat %1 heet.",
-  "ai.ask asks for answers or quick work; %1 is asked otherwise.": "ai.ask vraagt om antwoorden of snel werk; %1 wordt anders gevraagd."
+  "ai.ask asks for answers or quick work; %1 is asked otherwise.": "ai.ask vraagt om antwoorden of snel werk; %1 wordt anders gevraagd.",
+  "Install voxtype…": "voxtype installeren…",
+  "Installing voxtype in the terminal that opened. Once it is closed, Omabook looks for it again.": "voxtype wordt geïnstalleerd in de terminal die openging. Zodra die dicht is, zoekt Omabook er opnieuw naar.",
+  "Recordings are written out by %1, each word with its moment.": "Opnamen worden uitgeschreven door %1, elk woord met zijn moment.",
+  "Recordings are written out by %1, which doesn't give each word its moment; whisper.cpp or a transcription server does.": "Opnamen worden uitgeschreven door %1, dat niet bij elk woord zijn moment geeft; whisper.cpp of een transcriptieserver doet dat wel.",
+  "voxtype couldn't transcribe the recording: %1": "voxtype kon de opname niet uitschrijven: %1",
+  "voxtype isn't installed on this computer (there is no %1 command).": "voxtype is niet geïnstalleerd op deze computer (er is geen opdracht %1).",
+  "voxtype on this computer": "voxtype op deze computer",
+  "voxtype reads only WAV recordings, and ffmpeg isn't installed to make one of %1.": "voxtype leest alleen WAV-opnamen, en ffmpeg is niet geïnstalleerd om er een van %1 te maken."
 }

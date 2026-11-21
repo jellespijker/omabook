@@ -12,10 +12,14 @@
 // (piper-tts-bin, whose command is `piper`) and a voice of the book's
 // language (piper-voices-<language>-<region>, put in /usr/share/piper-voices),
 // which only the AUR has, through omarchy-pkg-aur-add. Both are where Voices
-// looks for them. Offered only on Omarchy, where those commands are.
+// looks for them. And what hears speech (#146): voxtype, from Omarchy's own
+// packages (voxtype-bin) through omarchy-pkg-add, with the model it
+// transcribes with, which `voxtype setup --download` fetches (as Omarchy's
+// own dictation install does, without making it the dictation). Offered only
+// on Omarchy, where those commands are.
 namespace VoiceInstall {
 
-enum class Kind : std::uint8_t { Voice, Piper };
+enum class Kind : std::uint8_t { Voice, Piper, Voxtype };
 
 // A command line: the program, and its arguments as they are passed.
 struct Command {

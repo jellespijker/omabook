@@ -181,3 +181,18 @@ Where the code asked for it, #143 differs from the decision above, as follows:
 - The registry is `AiRegistry` (`airegistry.h`), the privacy rule `AiPrivacy` (`aiprivacy.h`), and the
   names and codes `Capability` and `CapabilityLack` (`aicapability.h`). The harness rule is
   `rules/cpp/ai-only-through-the-registry.yml`.
+
+## As built in #146
+
+- **voxtype gives no word's moment.** `voxtype transcribe <file>` prints what it is doing, then the text
+  after an empty line; it reads any WAV (resampling to 16 kHz mono itself), and a recording in another
+  format is made one with ffmpeg first. A result says whether its words have their moments (`timed`), and
+  the settings say it of the way in use.
+- **Chosen before stays first.** Where config.json names a transcription server (`transcription_url`)
+  or whisper.cpp (`whisper_program`, `whisper_model`), speech goes there first, as it did, and to
+  voxtype last; otherwise voxtype, whisper.cpp, then the AI server. `voxtype_program` and
+  `voxtype_model` sit beside them in `recognition`.
+- **A voxtype that fails** (no model yet, say) hands the recording on to the next way, as a server
+  without transcription does.
+- **Installing it on Omarchy** is `omarchy-pkg-add voxtype-bin` and `voxtype setup --download` in a
+  floating terminal (#156's), not Omarchy's dictation install, which would also make it the dictation.

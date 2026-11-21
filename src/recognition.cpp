@@ -57,8 +57,8 @@ QJsonObject Recognition::Result::toJson() const {
     for (const Segment &segment : segments)
         parts.append(
             QJsonObject{{"text", segment.text}, {"start", segment.start}, {"end", segment.end}, {"words", wordsJson(segment.words)}});
-    return {{"kind", kindName(kind)}, {"text", text}, {"language", language}, {"model", model},
-            {"server", server},       {"at", at},     {"kept", kept},         {"segments", parts}};
+    return {{"kind", kindName(kind)}, {"text", text},   {"language", language}, {"model", model}, {"server", server}, {"at", at},
+            {"kept", kept},           {"timed", timed}, {"segments", parts}};
 }
 
 std::optional<Recognition::Result> Recognition::Result::fromJson(const QJsonObject &json) {
@@ -80,6 +80,10 @@ std::optional<Recognition::Result> Recognition::Result::fromJson(const QJsonObje
                                 .end = segment.value("end"_L1).toInteger(),
                                 .words = wordsOf(segment.value("words"_L1).toArray())});
     }
+    // Kept before it was said: timed where any word has its moment.
+    result.timed = json.contains("timed"_L1)
+                       ? json.value("timed"_L1).toBool()
+                       : std::ranges::any_of(result.segments, [](const Segment &one) { return !one.words.isEmpty(); });
     return result;
 }
 

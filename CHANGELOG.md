@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Added
+
+- Recordings are written out by voxtype on this computer where it is installed (#146), the speech to text Omarchy ships for dictation, then by whisper.cpp, then by your transcription server; nothing leaves the computer unless you allowed a hosted server for speech and the plugin asked for it. voxtype gives the text without each word's moment, and the transcript says so (`timed`). A transcription server or whisper.cpp you chose before stays first. On Omarchy without voxtype, the settings offer to install it, with its model, in a terminal.
+
 ## [0.2.1] - 2026-11-21
 
 ### Added

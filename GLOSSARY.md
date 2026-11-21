@@ -61,7 +61,7 @@ The words of handwriting as a vision model read them, kept with the strokes they
 _Avoid_: OCR (alone), transcription (for ink)
 
 **Transcript**:
-The words of a recording, each with its moment, written out by a transcription server or by whisper.cpp on this computer (`Recognition::Result`).
+The words of a recording, written out by voxtype or whisper.cpp on this computer or by a transcription server (`Recognition::Result`); each word with its moment where the way gives them (whisper.cpp and most servers do, voxtype doesn't: `timed`).
 _Avoid_: Captions, subtitles
 
 **Own server**:

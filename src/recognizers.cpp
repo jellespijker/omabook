@@ -206,7 +206,8 @@ void Vision::read(QNetworkReply *reply) {
                      .model = answer.value("model"_L1).toString(m_model),
                      .server = where(),
                      .at = QDateTime::currentMSecsSinceEpoch(),
-                     .kept = false});
+                     .kept = false,
+                     .timed = false});
 }
 
 void Vision::cancel() {
@@ -290,7 +291,8 @@ Recognition::Result transcript(const QJsonObject &answer) {
                                .model = {},
                                .server = {},
                                .at = QDateTime::currentMSecsSinceEpoch(),
-                               .kept = false};
+                               .kept = false,
+                               .timed = false};
     for (const auto &value : answer.value("segments"_L1).toArray()) {
         const QJsonObject segment = value.toObject();
         result.segments.append({.text = segment.value("text"_L1).toString().trimmed(),
@@ -314,6 +316,7 @@ Recognition::Result transcript(const QJsonObject &answer) {
             ++at;
         result.segments[at].words.append(said);
     }
+    result.timed = !words.isEmpty();
     return result;
 }
 

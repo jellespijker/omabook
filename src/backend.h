@@ -24,6 +24,7 @@
 #include "scriptplugins.h"
 #include "settings.h"
 #include "spacedesk.h"
+#include "speechinstall.h"
 
 // The library as the window uses it: the shelf, adding and removing books,
 // editing their details, and looking details up online or with AI. It holds
@@ -55,6 +56,8 @@ class Backend : public QObject {
     // The plugins' microphone and speakers, and who records now, which the
     // window shows (RecordingMark.qml).
     Q_PROPERTY(AudioDevices *audio READ audio CONSTANT)
+    // What writes out speech here, and installing voxtype where Omarchy can (#146).
+    Q_PROPERTY(SpeechInstall *speech READ speech CONSTANT)
     // The plugin manager: every plugin sorted by what it does, what needs
     // attention, and installing, removing, ordering and trying them.
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
@@ -166,6 +169,7 @@ public:
     // the reader tells them what happens to the open book.
     ScriptPlugins *scripts() noexcept { return m_scripts.get(); }
     AudioDevices *audio() noexcept { return &m_audio; }
+    SpeechInstall *speech() noexcept { return &m_speech; }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
     SpaceDesk *spaces() noexcept { return &m_spaces; }
@@ -339,6 +343,7 @@ private:
     Plugins m_plugins;
     // Before the plugins, which use it until they go.
     AudioDevices m_audio;
+    SpeechInstall m_speech{m_settings};
     // Files the person picks for a plugin, and the clipboard (#131).
     PluginDesk m_pluginDesk{m_picker};
     std::unique_ptr<ScriptPlugins> m_scripts;

@@ -63,6 +63,8 @@ public:
 
     [[nodiscard]] QString where() const override;
     [[nodiscard]] QString model() const override { return m_model; }
+    // Asked for them; a server that answers only the text says so in its result.
+    [[nodiscard]] bool timesWords() const override { return true; }
     void recognize(const Recognition::Input &input) override;
     void cancel() override;
 

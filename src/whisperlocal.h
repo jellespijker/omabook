@@ -36,6 +36,7 @@ public:
 
     [[nodiscard]] QString where() const override;
     [[nodiscard]] QString model() const override;
+    [[nodiscard]] bool timesWords() const override { return true; }
     void recognize(const Recognition::Input &input) override;
     void cancel() override;
 

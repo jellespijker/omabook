@@ -1,6 +1,6 @@
 // The recognition service (#84): handwriting read by a vision model, speech
-// transcribed with each word's moment (by a transcription server, else
-// whisper.cpp), in the background, cancellable, waiting for a server that is
+// transcribed (by voxtype, whisper.cpp or a transcription server, #146), with
+// each word's moment where the way gives them, in the background, cancellable, waiting for a server that is
 // away, kept in the change log by the hash of the input and the model, only
 // ever sent to one's own servers unless a hosted one was chosen twice over,
 // and called by a plugin. Every server here is a stand-in on this computer.
@@ -20,6 +20,7 @@
 #include <optional>
 
 #include "ai.h"
+#include "airegistry.h"
 #include "embeddings.h"
 #include "fakeaiserver.h"
 #include "fixtures.h"
@@ -35,6 +36,7 @@
 #include "scriptplugin.h"
 #include "secretstore.h"
 #include "settings.h"
+#include "voxtypelocal.h"
 #include "whisperlocal.h"
 
 using namespace Qt::StringLiterals;
@@ -92,20 +94,28 @@ using Outcome = std::expected<Recognition::Result, QString>;
 }
 
 // A computer with its settings, its library and the queue, the AI server
-// being a stand-in here (this computer: always one's own).
+// being a stand-in here (this computer: always one's own). A voxtype the
+// machine running the tests has is never found, unless `voxtype` is emptied
+// for the one on the path to be.
 struct Desk {
     QTemporaryDir dir;
     Settings settings{dir.filePath("config.json")};
     Library library{dir.filePath("Library")};
     std::unique_ptr<RecognitionQueue> queue;
+    QString voxtype = dir.filePath("none/voxtype");
 
     Desk() {
         library.open();
         settings.setAiProvider("openai");
+        choose({});
         queue = std::make_unique<RecognitionQueue>(RecognitionQueue::routeFor(settings), [this] { return &library; });
     }
     void serve(const QString &url) { settings.setAiEndpoint({{"preset", "custom"}, {"base_url", url}}); }
-    void choose(const QJsonObject &recognition) { settings.setRecognition(recognition); }
+    void choose(QJsonObject recognition) {
+        if (!voxtype.isEmpty() && !recognition.contains("voxtype_program"))
+            recognition.insert("voxtype_program", voxtype);
+        settings.setRecognition(recognition);
+    }
 
     // Recognises, and waits for what comes of it.
     Outcome recognise(Recognition::Input input, bool again = false, bool hosted = false) {
@@ -130,6 +140,48 @@ cat > "$out.json" <<'JSON'
  {"offsets": {"from": 1200, "to": 1600}, "text": " Again"}]}
 JSON
 )");
+}
+
+// voxtype's command, standing in: it says what it does as `voxtype
+// transcribe` does, then the text after an empty line, and writes down what
+// it was given. With `fails`, it has no model and says so.
+[[nodiscard]] QString standInVoxtype(const QString &folder, bool fails = false) {
+    return Fixtures::script(folder + "/voxtype", fails ? QByteArray(R"(
+echo "$@" > "$(dirname "$0")/voxtype-args"
+echo "Loading audio file"
+echo "Error: Model not found: run voxtype setup --download" >&2
+exit 1
+)")
+                                                       : QByteArray(R"(
+echo "$@" > "$(dirname "$0")/voxtype-args"
+for last; do :; done
+echo "Loading audio file: $last"
+echo "Audio format: 16000 Hz, 1 channel(s), Int"
+echo "Processing 16000 samples (1.00s)..."
+echo
+echo "Good morning, from voxtype."
+)"));
+}
+
+// A result kept before results said whether they are timed: with words or without.
+[[nodiscard]] QJsonObject verboseKept(bool words) {
+    const QJsonArray said = words ? QJsonArray{QJsonObject{{"text", "Hello"}, {"start", 0}, {"end", 400}}} : QJsonArray{};
+    return {{"kind", "audio"}, {"text", "Hello"}, {"segments", QJsonArray{QJsonObject{{"text", "Hello"}, {"words", said}}}}};
+}
+
+// Programs on the path for one test: a folder of them first, the system's after.
+struct OnPath {
+    QTemporaryDir dir;
+    QByteArray before = qgetenv("PATH");
+    OnPath() { qputenv("PATH", dir.path().toUtf8() + ':' + before); }
+    ~OnPath() { qputenv("PATH", before); }
+    OnPath(const OnPath &) = delete;
+    OnPath &operator=(const OnPath &) = delete;
+    [[nodiscard]] QString path() const { return dir.path(); }
+};
+
+[[nodiscard]] Recognition::Input recording(const QString &file, const QString &language = {}) {
+    return {.kind = Recognition::Kind::Audio, .strokes = {}, .file = file, .language = language};
 }
 
 // A server that fails the test the moment anything is asked of it.
@@ -169,9 +221,15 @@ class RecognitionTests : public QObject {
     Q_OBJECT
 
     SessionSecrets m_secrets;
+    QTemporaryDir m_data;
 
 private slots:
-    void initTestCase() { Secrets::useInstead(&m_secrets); }
+    void initTestCase() {
+        Secrets::useInstead(&m_secrets);
+        // Where whisper.cpp's models are looked for: here, not the machine's.
+        qputenv("XDG_DATA_HOME", m_data.filePath("home").toUtf8());
+        qputenv("XDG_DATA_DIRS", m_data.filePath("system").toUtf8());
+    }
     void cleanupTestCase() { Secrets::useInstead(nullptr); }
 
     void inkIsDrawnAsAPicture() {
@@ -416,6 +474,147 @@ private slots:
         const Outcome local =
             desk.recognise({.kind = Recognition::Kind::Audio, .strokes = {}, .file = desk.dir.filePath("talk.wav"), .language = {}}, true);
         QVERIFY2(local && local->server == u"whisper.cpp on this computer"_s, qPrintable(whyNot(local)));
+    }
+
+    // voxtype on this computer (#146) writes out a recording first, through
+    // the capability, where the person chose no other way: nothing is sent
+    // anywhere, and the transcript says it has no word's moment.
+    void voxtypeTranscribesARecordingThroughTheCapability() {
+        const OnPath bin;
+        standInVoxtype(bin.path());
+        Desk desk;
+        desk.voxtype.clear();
+        desk.choose({});
+        Untouchable server;
+        desk.serve(server.url());
+        const CapabilityStatus status = AiRegistry::status(desk.settings, Capability::SpeechToText);
+        QVERIFY2(status.available, qPrintable(status.failure.text()));
+        QCOMPARE(status.provider, u"voxtype on this computer"_s);
+        QVERIFY(!status.hosted);
+
+        Fixtures::write(desk.dir.filePath("talk.wav"), "RIFF talk");
+        const Outcome heard = desk.recognise(recording(desk.dir.filePath("talk.wav"), u"nl"_s));
+        QVERIFY2(heard, qPrintable(whyNot(heard)));
+        QCOMPARE(heard->text, u"Good morning, from voxtype."_s);
+        QCOMPARE(heard->server, u"voxtype on this computer"_s);
+        QCOMPARE(heard->model, u"voxtype"_s);
+        QCOMPARE(heard->segments.size(), 1);
+        QVERIFY(heard->segments.first().words.isEmpty());
+        QVERIFY(!heard->timed);
+        QCOMPARE(heard->toJson().value("timed"), QJsonValue(false));
+        // Its language and the command, then the recording as it is: a WAV.
+        QFile args(bin.path() + "/voxtype-args");
+        QVERIFY(args.open(QIODevice::ReadOnly));
+        QCOMPARE(args.readAll().trimmed(), "--language nl transcribe " + desk.dir.filePath("talk.wav").toUtf8());
+        // A model of the person's choosing goes with it.
+        desk.choose({{"voxtype_model", "large-v3-turbo"}});
+        Fixtures::write(desk.dir.filePath("more.wav"), "RIFF more");
+        const Outcome more = desk.recognise(recording(desk.dir.filePath("more.wav")));
+        QVERIFY2(more && more->model == u"large-v3-turbo"_s, qPrintable(whyNot(more)));
+        args.close();
+        QVERIFY(args.open(QIODevice::ReadOnly));
+        QCOMPARE(args.readAll().trimmed(), "--model large-v3-turbo transcribe " + desk.dir.filePath("more.wav").toUtf8());
+
+        // What it printed, read: the text after the empty line, or none where it heard no speech.
+        QCOMPARE(
+            Voxtype::transcript(u"Loading audio file: \"a.wav\"\nVAD: 0.00s speech\nNo speech detected, skipping transcription.\n"_s).text,
+            QString());
+        QCOMPARE(Voxtype::transcript(u"Loading\r\n\r\nTwo\nlines.\n"_s).text, u"Two\nlines."_s);
+        // Kept before there was `timed`: timed where its words have their moments.
+        QVERIFY(Recognition::Result::fromJson(verboseKept(true)).value_or(Recognition::Result{}).timed);
+        QVERIFY(!Recognition::Result::fromJson(verboseKept(false)).value_or(Recognition::Result{.timed = true}).timed);
+        QVERIFY(server.received.isEmpty());
+    }
+
+    // voxtype, then whisper.cpp, then the server (#146, ADR 0008); a hosted
+    // server only where hosted is allowed for speech and the one asking chose it.
+    void theFallbacksAreTriedInOrder() {
+        const OnPath bin;
+        standInVoxtype(bin.path(), true);
+        standInWhisper(bin.path());
+        Desk desk;
+        desk.voxtype.clear();
+        desk.choose({});
+        FakeServer server;
+        desk.serve(server.url());
+        Fixtures::write(desk.dir.filePath("talk.wav"), "RIFF talk");
+        // whisper.cpp with a model where it looks for one.
+        const QString models = m_data.filePath("home/whisper.cpp/models");
+        QVERIFY(QDir().mkpath(models));
+        Fixtures::write(models + "/ggml-base.bin", "a model");
+        const auto cleanUp = qScopeGuard([&models] { QDir(models).removeRecursively(); });
+        auto ways = RecognitionRoute::ways(desk.settings, Recognition::Kind::Audio, false);
+        QVERIFY2(ways && ways->size() == 3, qPrintable(ways ? RecognitionRoute::signature(*ways) : whyNot(ways)));
+        QCOMPARE(ways->at(0)->where(), u"voxtype on this computer"_s);
+        QCOMPARE(ways->at(1)->where(), u"whisper.cpp on this computer"_s);
+        QVERIFY(ways->at(2)->where().contains("transcription server"));
+
+        // voxtype without its model: whisper.cpp writes it out, each word with its moment.
+        const Outcome byWhisper = desk.recognise(recording(desk.dir.filePath("talk.wav")));
+        QVERIFY2(byWhisper, qPrintable(whyNot(byWhisper)));
+        QVERIFY(QFile::exists(bin.path() + "/voxtype-args"));
+        QCOMPARE(byWhisper->server, u"whisper.cpp on this computer"_s);
+        QVERIFY(byWhisper->timed);
+        QVERIFY(server.received.isEmpty());
+
+        // Without whisper.cpp's model either: the server.
+        QDir(models).removeRecursively();
+        server.answer(verbose());
+        Fixtures::write(desk.dir.filePath("other.wav"), "RIFF other");
+        const Outcome byServer = desk.recognise(recording(desk.dir.filePath("other.wav")));
+        QVERIFY2(byServer, qPrintable(whyNot(byServer)));
+        QVERIFY(byServer->server.contains("transcription server"));
+        QVERIFY(byServer->timed);
+        QCOMPARE(server.received.size(), 1);
+
+        // A server that is someone else's computer (its model runs elsewhere) isn't sent it,
+        // and what each of the others lacked is said.
+        Untouchable hosted;
+        desk.serve(hosted.url());
+        desk.choose({{"transcription_model", "whisper:cloud"}});
+        Fixtures::write(desk.dir.filePath("third.wav"), "RIFF third");
+        const Outcome refused = desk.recognise(recording(desk.dir.filePath("third.wav")), false, true);
+        QVERIFY(!refused);
+        QVERIFY2(refused.error().contains("voxtype couldn't transcribe") && refused.error().contains("whisper.cpp has no model"),
+                 qPrintable(whyNot(refused)));
+        // Allowed for speech, and asked for: it is.
+        desk.settings.setRecognitionHosted(true);
+        hosted.answering = [](const FakeServer::Request &) {
+            return FakeServer::Reply{.status = "200 OK", .body = QJsonDocument(verbose()).toJson()};
+        };
+        const Outcome sent = desk.recognise(recording(desk.dir.filePath("third.wav")), true, true);
+        QVERIFY2(sent && sent->model == u"whisper:cloud"_s, qPrintable(whyNot(sent)));
+        // Not asked for (the person's own use keeps to their own): not sent.
+        const Outcome kept = desk.recognise(recording(desk.dir.filePath("third.wav")), true, false);
+        QVERIFY(!kept);
+        QCOMPARE(hosted.received.size(), 1);
+    }
+
+    // Chosen before there was voxtype (a server for speech, or whisper.cpp): that goes first, and voxtype after it.
+    void aWayChosenBeforeStaysFirst() {
+        const OnPath bin;
+        standInVoxtype(bin.path());
+        Desk desk;
+        desk.voxtype.clear();
+        FakeServer server;
+        desk.serve(server.url());
+        desk.choose({{"transcription_url", server.url()}});
+        auto ways = RecognitionRoute::ways(desk.settings, Recognition::Kind::Audio, false);
+        QVERIFY2(ways && ways->size() == 3, qPrintable(ways ? RecognitionRoute::signature(*ways) : whyNot(ways)));
+        QVERIFY(ways->front()->where().contains("transcription server"));
+        QCOMPARE(ways->back()->where(), u"voxtype on this computer"_s);
+        // A server that doesn't transcribe, and no whisper.cpp: voxtype.
+        server.answer({}, "404 Not Found");
+        Fixtures::write(desk.dir.filePath("talk.wav"), "RIFF talk");
+        const Outcome heard = desk.recognise(recording(desk.dir.filePath("talk.wav")));
+        QVERIFY2(heard && heard->server == u"voxtype on this computer"_s, qPrintable(whyNot(heard)));
+        // With the AI off, voxtype isn't run either.
+        QFile::remove(bin.path() + "/voxtype-args");
+        desk.settings.setAiProvider(u"off"_s);
+        Fixtures::write(desk.dir.filePath("off.wav"), "RIFF off");
+        const Outcome off = desk.recognise(recording(desk.dir.filePath("off.wav")));
+        QVERIFY(!off && off.error().contains("turned off"));
+        QVERIFY(!QFile::exists(bin.path() + "/voxtype-args"));
     }
 
     void theQueueWaitsForAServerThatIsAway() {
