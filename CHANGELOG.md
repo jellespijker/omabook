@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Changed
+
+- The Notebooks plugin is in Omabook's list of plugins (#155): find it by its name in the plugins, or `omabook plugin add notebooks`, as Storyteller is.
+
 ### Fixed
 
 - A finger's tap on a margin note, its mark in the text or a note's mark on a PDF's page opens the note and nothing else (#141): it no longer turns the page as well, where the note is at the page's edge, nor shows or hides the bar.

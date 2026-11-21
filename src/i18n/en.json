@@ -1687,7 +1687,7 @@
   "The KOReader sync server %1 doesn't know that name and password.": "The KOReader sync server %1 doesn't know that name and password.",
   "The KOReader sync server %1 said: %2": "The KOReader sync server %1 said: %2",
   "The MCP server": "The MCP server",
-  "The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with recordings of what was said as you wrote. Add it in the plugins ({library.plugins}) by its address, jellespijker/omabook-notebooks.": "The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with recordings of what was said as you wrote. Add it in the plugins ({library.plugins}) by its address, jellespijker/omabook-notebooks.",
+  "The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with recordings of what was said as you wrote. Find it in the plugins ({library.plugins}) by its name, Notebooks, and install it.": "The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with recordings of what was said as you wrote. Find it in the plugins ({library.plugins}) by its name, Notebooks, and install it.",
   "The Opus decoder did not start: %1": "The Opus decoder did not start: %1",
   "The Opus encoder did not start: %1": "The Opus encoder did not start: %1",
   "The address you send from, as Amazon knows it": "The address you send from, as Amazon knows it",

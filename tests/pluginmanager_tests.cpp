@@ -1523,17 +1523,17 @@ private slots:
         QStringList names;
         for (const QJsonValue &one : results)
             names << one.toObject().value("name").toString();
-        QCOMPARE(names, (QStringList{"storyteller", "reading-log", "tools"}));
-        // The listed one first, with what GitHub says of it, and shown once.
+        QCOMPARE(names, (QStringList{"storyteller", "notebooks", "reading-log", "tools"}));
+        // The listed ones first, with what GitHub says of them, and each shown once.
         const QJsonObject storyteller = results.at(0).toObject();
         QVERIFY(storyteller.value("listed").toBool() && storyteller.value("reviewed").toBool());
         QCOMPARE(storyteller.value("stars").toInt(), 7);
-        QVERIFY(!results.at(1).toObject().value("listed").toBool() && !results.at(1).toObject().value("reviewed").toBool());
-        QCOMPARE(results.at(1).toObject().value("permissions").toArray(), QJsonArray{"files"});
-        QCOMPARE(results.at(1).toObject().value("license").toString(), QString("MIT"));
-        QCOMPARE(results.at(1).toObject().value("updated").toString(), QString("2026-10-01"));
-        QCOMPARE(results.at(2).toObject().value("subfolder").toString(), QString("tools"));
-        QCOMPARE(results.at(2).toObject().value("address").toString(), QString("https://github.com/someone/omabook-tools/tree/main/tools"));
+        QVERIFY(!results.at(2).toObject().value("listed").toBool() && !results.at(2).toObject().value("reviewed").toBool());
+        QCOMPARE(results.at(2).toObject().value("permissions").toArray(), QJsonArray{"files"});
+        QCOMPARE(results.at(2).toObject().value("license").toString(), QString("MIT"));
+        QCOMPARE(results.at(2).toObject().value("updated").toString(), QString("2026-10-01"));
+        QCOMPARE(results.at(3).toObject().value("subfolder").toString(), QString("tools"));
+        QCOMPARE(results.at(3).toObject().value("address").toString(), QString("https://github.com/someone/omabook-tools/tree/main/tools"));
         // What wasn't offered, and why.
         QStringList why;
         for (const QJsonValue &one : found.value("skipped").toArray())
@@ -1547,7 +1547,7 @@ private slots:
 
         // The same search again is kept for a while; other words ask again.
         const qsizetype asked = hub.github.asked.size();
-        QCOMPARE(search().value("results").toArray().size(), 3);
+        QCOMPARE(search().value("results").toArray().size(), 4);
         QCOMPARE(hub.github.asked.size(), asked);
         QCOMPARE(search("reading").value("results").toArray().last().toObject().value("name").toString(), QString("reading-log"));
         QVERIFY(hub.github.asked.size() > asked);

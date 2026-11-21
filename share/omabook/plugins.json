@@ -13,6 +13,19 @@
             "kinds": ["format", "launcher", "command", "panel", "hook"],
             "formats": [{"extension": "story", "name": "Storyteller story"}],
             "reviewed": true
+        },
+        {
+            "name": "notebooks",
+            "title": "Notebooks",
+            "description": "Notebooks of pages on paper (lined, squared, dotted, blank, music staves or Cornell), beside the books you read. Private unless you share them.",
+            "repository": "jellespijker/omabook-notebooks",
+            "author": "Jelle Spijker",
+            "license": "MIT",
+            "permissions": ["files", "microphone", "clipboard"],
+            "omabook": "0.2.0",
+            "kinds": ["format", "launcher", "hook"],
+            "formats": [{"extension": "omanotebook", "name": "Notebook"}],
+            "reviewed": true
         }
     ]
 }

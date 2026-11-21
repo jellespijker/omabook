@@ -172,8 +172,8 @@ QList<Manual::Step> listeningRelease() {
          "", "global.settings", "", ""},
         {"notebooks", "0.2.0", Manual::tr("Notebooks, by hand"),
          Manual::tr("The Notebooks plugin keeps notebooks on the shelf to write in with a pen, on lined or squared paper, with "
-                    "recordings of what was said as you wrote. Add it in the plugins ({library.plugins}) by its address, "
-                    "jellespijker/omabook-notebooks."),
+                    "recordings of what was said as you wrote. Find it in the plugins ({library.plugins}) by its name, Notebooks, "
+                    "and install it."),
          "", "library.plugins", "library", ""},
     };
 }
