@@ -9,6 +9,7 @@
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <algorithm>
+#include <chrono>
 #include <ranges>
 #include <set>
 #include <tuple>
@@ -77,6 +78,16 @@ using namespace Qt::StringLiterals;
             .latestId = json.value("latest_id"_L1).toString(),
             .latest = QDateTime::fromString(json.value("latest"_L1).toString(), Qt::ISODateWithMs),
             .size = json.value("size"_L1).toInteger(-1)};
+}
+
+// How long a place away from home has to answer before a copy or a test, rather than restic's minutes of trying.
+constexpr std::chrono::seconds answerWithin{30};
+
+// A place away reached first; a disk is there or not.
+[[nodiscard]] std::expected<void, Failure> reached(const SnapshotDestination &destination, const ResticRepository &repository) {
+    if (destination.kind() == SnapshotDestination::Kind::Disk)
+        return {};
+    return Restic::answers(repository, answerWithin);
 }
 
 [[nodiscard]] Failure unkept(const Failure &why) { return {Failure::Code::SnapshotPasswordUnkept, {why.text()}}; }
@@ -241,6 +252,8 @@ std::expected<SnapshotDestinations::Tested, Failure> SnapshotDestinations::test(
     const auto repository = repositoryOf(*destination);
     if (!repository)
         return std::unexpected(repository.error());
+    if (const auto answered = reached(*destination, *repository); !answered)
+        return std::unexpected(answered.error());
     const auto held = Restic::snapshots(*repository, {u"omabook"_s});
     if (!held)
         return std::unexpected(held.error());
@@ -284,6 +297,8 @@ std::expected<DestinationState, Failure> SnapshotDestinations::copy(const QStrin
     const auto repository = repositoryOf(*destination);
     if (!repository)
         return failed(repository.error());
+    if (const auto answered = reached(*destination, *repository); !answered)
+        return failed(answered.error());
     if (const auto copied = Restic::copy(*repository, m_place.repository, {u"omabook"_s}); !copied)
         return failed(copied.error());
     if (const auto thinned = thin(*repository, now); !thinned)

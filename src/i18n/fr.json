@@ -2727,5 +2727,6 @@
   "%1 holds a password, which would be kept in the clear: leave it out, and give it with --credential RESTIC_REST_PASSWORD (or the place's own) instead.": "%1 contient un mot de passe, qui serait gardé en clair : retirez-le, et donnez-le plutôt avec --credential RESTIC_REST_PASSWORD (ou celui propre au lieu).",
   "The snapshots are kept in %1 already; a destination is another place.": "Les instantanés sont déjà gardés dans %1 ; une destination est un autre lieu.",
   "No value was given for %1.": "Aucune valeur n'a été donnée pour %1.",
-  "The snapshots couldn't be copied to %1.": "Les instantanés n'ont pas pu être copiés vers %1."
+  "The snapshots couldn't be copied to %1.": "Les instantanés n'ont pas pu être copiés vers %1.",
+  "%1 didn't answer within %2 seconds: is it on, and reached from here?": "%1 n'a pas répondu en %2 secondes : est-il allumé, et joignable d'ici ?"
 }

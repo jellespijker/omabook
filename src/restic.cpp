@@ -9,6 +9,8 @@
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <algorithm>
+#include <chrono>
+#include <optional>
 #include <ranges>
 
 #include "log.h"
@@ -45,10 +47,17 @@ struct From {
     return given;
 }
 
-// Runs restic on the repository to its end; `allowed` is an exit code that
-// still did what was asked (a backup that couldn't read a file, 3).
-[[nodiscard]] std::expected<Ran, Failure> run(const ResticRepository &repository, QStringList arguments, int allowed = 0,
-                                              const From &from = {}) {
+// How a call runs: `allowed` is an exit code that still did what was asked
+// (a backup that couldn't read a file, 3), `from` a repository it copies
+// from, and `within` how long it may take, as long as it takes when none.
+struct Call {
+    int allowed = 0;
+    From from;
+    std::optional<std::chrono::seconds> within;
+};
+
+// Runs restic on the repository to its end.
+[[nodiscard]] std::expected<Ran, Failure> run(const ResticRepository &repository, QStringList arguments, const Call &call = {}) {
     const QString program =
         QFileInfo(repository.program).isAbsolute() ? repository.program : QStandardPaths::findExecutable(repository.program);
     if (program.isEmpty() || !QFileInfo(program).isExecutable())
@@ -62,21 +71,26 @@ struct From {
         options << u"--password-file"_s << repository.passwordFile;
     else
         environment.insert(u"RESTIC_PASSWORD"_s, QString::fromUtf8(repository.password));
-    for (const auto &[name, value] : repository.environment + from.environment)
+    for (const auto &[name, value] : repository.environment + call.from.environment)
         environment.insert(name, QString::fromUtf8(value));
-    for (qsizetype i = 0; i < from.options.size(); ++i)
-        arguments.insert(1 + i, from.options.at(i));
+    for (qsizetype i = 0; i < call.from.options.size(); ++i)
+        arguments.insert(1 + i, call.from.options.at(i));
     QProcess process;
     process.setProcessEnvironment(environment);
     process.start(program, options + arguments);
     if (!process.waitForStarted())
         return std::unexpected(Failure(Failure::Code::ResticMissing, {repository.program}));
     process.closeWriteChannel();
-    // As long as it takes: a first snapshot of a large library reads all of it.
-    process.waitForFinished(-1);
+    // As long as it takes, unless told otherwise: a first snapshot of a large library reads all of it.
+    if (!process.waitForFinished(call.within ? static_cast<int>(std::chrono::milliseconds(*call.within).count()) : -1)) {
+        process.kill();
+        process.waitForFinished();
+        return std::unexpected(Failure(Failure::Code::ResticNoAnswer,
+                                       {repository.location, QString::number(call.within.value_or(std::chrono::seconds(0)).count())}));
+    }
     const QByteArray errors = process.readAllStandardError();
     const int code = process.exitStatus() == QProcess::NormalExit ? process.exitCode() : -1;
-    if (code != 0 && code != allowed) {
+    if (code != 0 && code != call.allowed) {
         qCWarning(lcLibrary).noquote() << "restic" << arguments.value(0) << "failed:" << QString::fromUtf8(errors).trimmed();
         return std::unexpected(Failure(Failure::Code::ResticFailed, {lastSaid(errors)}));
     }
@@ -109,14 +123,19 @@ std::expected<void, Failure> Restic::init(const ResticRepository &repository) {
 }
 
 std::expected<void, Failure> Restic::init(const ResticRepository &repository, const ResticRepository &like) {
-    return run(repository, {u"init"_s, u"--copy-chunker-params"_s}, 0, fromOf(like)).transform([](const Ran &) {});
+    return run(repository, {u"init"_s, u"--copy-chunker-params"_s}, {.allowed = 0, .from = fromOf(like), .within = {}})
+        .transform([](const Ran &) {});
 }
 
 std::expected<void, Failure> Restic::copy(const ResticRepository &to, const ResticRepository &from, const QStringList &tags) {
     QStringList arguments{u"copy"_s};
     if (!tags.isEmpty())
         arguments << u"--tag"_s << tags.join(u',');
-    return run(to, arguments, 0, fromOf(from)).transform([](const Ran &) {});
+    return run(to, arguments, {.allowed = 0, .from = fromOf(from), .within = {}}).transform([](const Ran &) {});
+}
+
+std::expected<void, Failure> Restic::answers(const ResticRepository &repository, std::chrono::seconds within) {
+    return run(repository, {u"cat"_s, u"config"_s}, {.allowed = 0, .from = {}, .within = within}).transform([](const Ran &) {});
 }
 
 std::expected<qint64, Failure> Restic::size(const ResticRepository &repository) {
@@ -131,7 +150,7 @@ std::expected<QString, Failure> Restic::backup(const ResticRepository &repositor
         arguments << u"--tag"_s << tag;
     for (const QString &pattern : backup.excluding)
         arguments << u"--exclude"_s << pattern;
-    const auto ran = run(repository, arguments + backup.paths, 3);
+    const auto ran = run(repository, arguments + backup.paths, {.allowed = 3, .from = {}, .within = {}});
     if (!ran)
         return std::unexpected(ran.error());
     // A line of JSON per message; the summary names the snapshot.

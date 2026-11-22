@@ -222,6 +222,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::SnapshotNotCopied, tr("The library couldn't be copied for its snapshot: %1")},
     {Failure::Code::ResticMissing, tr("restic (%1) isn't installed here, and snapshots are made with it.")},
     {Failure::Code::ResticFailed, tr("restic couldn't make or read the snapshots: %1")},
+    {Failure::Code::ResticNoAnswer, tr("%1 didn't answer within %2 seconds: is it on, and reached from here?")},
     {Failure::Code::SnapshotNotFound, tr("This library has no snapshot %1 (omabook snapshot list lists them).")},
     {Failure::Code::SnapshotIdAmbiguous, tr("More than one snapshot begins with %1: give more of its id.")},
     {Failure::Code::SnapshotNotRestored, tr("The snapshot couldn't be restored: %1")},

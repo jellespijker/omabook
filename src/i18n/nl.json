@@ -2626,5 +2626,6 @@
   "%1 holds a password, which would be kept in the clear: leave it out, and give it with --credential RESTIC_REST_PASSWORD (or the place's own) instead.": "%1 bevat een wachtwoord, dat leesbaar bewaard zou worden: laat het weg, en geef het in plaats daarvan met --credential RESTIC_REST_PASSWORD (of dat van de plek zelf).",
   "The snapshots are kept in %1 already; a destination is another place.": "De snapshots worden al bewaard in %1; een bestemming is een andere plek.",
   "No value was given for %1.": "Er is geen waarde gegeven voor %1.",
-  "The snapshots couldn't be copied to %1.": "De snapshots konden niet naar %1 gekopieerd worden."
+  "The snapshots couldn't be copied to %1.": "De snapshots konden niet naar %1 gekopieerd worden.",
+  "%1 didn't answer within %2 seconds: is it on, and reached from here?": "%1 antwoordde niet binnen %2 seconden: staat het aan, en is het van hieruit bereikbaar?"
 }

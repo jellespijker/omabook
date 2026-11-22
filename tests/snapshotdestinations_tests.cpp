@@ -160,7 +160,9 @@ private slots:
         // A second copy takes only the new one; the state says what it holds.
         const QString second = computer.snapshotWith(u"Second"_s);
         QVERIFY(destinations.copy(u"usb"_s, QDateTime::currentDateTime()));
-        QCOMPARE(idsOf(there.snapshots(), "original"), (QStringList{first, second}));
+        QStringList both{first, second};
+        both.sort();
+        QCOMPARE(idsOf(there.snapshots(), "original"), both);
         const auto state = destinations.stateOf(u"usb"_s);
         QVERIFY(state && state->done && state->copied.isValid());
         QVERIFY(idsOf(there.snapshots()).contains(state->latestId) && state->latest.isValid());

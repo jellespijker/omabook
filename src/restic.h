@@ -5,6 +5,7 @@
 #include <QList>
 #include <QString>
 #include <QStringList>
+#include <chrono>
 #include <expected>
 #include <utility>
 
@@ -71,6 +72,11 @@ struct Backup {
 
 // Copies to `to` the snapshots of `from` with every one of `tags` that it doesn't hold yet.
 [[nodiscard]] std::expected<void, Failure> copy(const ResticRepository &to, const ResticRepository &from, const QStringList &tags);
+
+// Whether the repository is reached and opened with its password `within`
+// that long (ResticNoAnswer when not): restic itself tries an unreachable
+// place again for many minutes.
+[[nodiscard]] std::expected<void, Failure> answers(const ResticRepository &repository, std::chrono::seconds within);
 
 // The bytes the repository takes where it is kept.
 [[nodiscard]] std::expected<qint64, Failure> size(const ResticRepository &repository);

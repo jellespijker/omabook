@@ -266,6 +266,7 @@ public:
         SnapshotNotCopied,      // {the database's reason}
         ResticMissing,          // {program}
         ResticFailed,           // {what restic said}
+        ResticNoAnswer,         // {repository, seconds}
         // Going back to a snapshot (#183).
         SnapshotNotFound,      // {id}
         SnapshotIdAmbiguous,   // {id}

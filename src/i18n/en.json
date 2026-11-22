@@ -34,6 +34,7 @@
   "%1 didn't accept the API key for reading aloud; give another on the AI page.": "%1 didn't accept the API key for reading aloud; give another on the AI page.",
   "%1 didn't accept the key; put one in the settings.": "%1 didn't accept the key; put one in the settings.",
   "%1 didn't answer the search for models (%2).": "%1 didn't answer the search for models (%2).",
+  "%1 didn't answer within %2 seconds: is it on, and reached from here?": "%1 didn't answer within %2 seconds: is it on, and reached from here?",
   "%1 didn't answer within %n seconds.": {
     "one": "%1 didn't answer within %n second.",
     "other": "%1 didn't answer within %n seconds."
