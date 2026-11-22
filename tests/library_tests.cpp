@@ -2093,7 +2093,7 @@ private slots:
                                        "readingmarks.h", "readingmarks.cpp", "readingpassages.cpp", "marginnotes.h", "marginnotes.cpp", "annotationlayerview.h", "annotationlayerview.cpp", "readinghighlights.h", "readinghighlights.cpp", "readingink.h", "readingink.cpp", "readinglineink.h", "readinglineink.cpp", "annotationfinder.cpp", "meaningfinder.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",
                                        "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianfind.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h", "inksurface.h", "inksurface.cpp", "inksurfacecover.cpp", "inkselection.cpp",
-                                       "portalfilepicker.cpp", "chronologycanvas.h", "chronologycanvas.cpp", "chronologymodel.h", "chronologymodel.cpp", "readingstatsview.h", "readingstatsview.cpp", "readaloud.h", "readaloud.cpp", "readingselection.h", "readingselection.cpp", "dictationkeys.h", "dictationkeys.cpp"};
+                                       "portalfilepicker.cpp", "chronologycanvas.h", "chronologycanvas.cpp", "chronologymodel.h", "chronologymodel.cpp", "readingstatsview.h", "readingstatsview.cpp", "readaloud.h", "readaloud.cpp", "readingselection.h", "readingselection.cpp", "dictationkeys.h", "dictationkeys.cpp", "qrview.h", "qrview.cpp"};
         const QString sources = QFileInfo(QFINDTESTDATA("../src/main.cpp")).absolutePath();
         static const QRegularExpression window("#include\\s+[<\"](QQml|QQuick|QtQuick|QtQml|QAbstractListModel|backend\\.h|reader\\.h|assistant\\.h|booklistmodel\\.h)");
         QStringList problems;
