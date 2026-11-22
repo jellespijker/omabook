@@ -130,6 +130,8 @@ struct Bench {
 
     // A margin note being written on words of the page, its field with the keyboard.
     bool writeNote() {
+        // One column that runs on, whatever fonts make of the room: the words are selected in its text.
+        desk.reader->format()->set("layout", "scroll", false);
         desk.reader->openBook(book);
         if (!QTest::qWaitFor([&] { return desk.reader->isOpen() && desk.shows("flowText"); }, 5000))
             return false;
@@ -358,8 +360,6 @@ private slots:
             Bench bench(way.language, way.language == "ar" ? lightTheme : QByteArray(), way.touch);
             if (bench.desk.window->minimumWidth() > 420 || bench.desk.window->minimumHeight() > 360)
                 bench.desk.window->setMinimumSize(QSize(420, 360));
-            // As one column that runs on: the room for the margin column, and the card where there is none.
-            bench.desk.reader->format()->set("layout", "scroll", false);
             QVERIFY(bench.writeNote());
             QVERIFY(Fixtures::write(bench.desk.dir.filePath("slow"), "1"));
             for (const QSize &size : sizes()) {
