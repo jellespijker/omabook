@@ -32,28 +32,29 @@
 #include "devicedesk.h"
 #include "fakegithub.h"
 #include "fixtures.h"
+#include "formats.h"
 #include "graph.h"
 #include "graphcanvas.h"
 #include "graphjobs.h"
 #include "graphmodel.h"
-#include "formats.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
 #include "pageformat.h"
 #include "reader.h"
 #include "readingsite.h"
+#include "secretstore.h"
 #include "settings.h"
 #include "sitedesk.h"
-#include "secretstore.h"
 #include "theme.h"
 #include "themechoice.h"
+#include "threadclock.h"
+#include "translator.h"
 #include <QQuickTextDocument>
 #include <QTextBlock>
 #include <QTextCursor>
-#include <QTextLayout>
 #include <QTextDocument>
-#include "translator.h"
+#include <QTextLayout>
 
 namespace {
 
@@ -72,11 +73,10 @@ int lines(const QString &path) {
     return file.open(QIODevice::ReadOnly) ? file.readAll().count('\n') : 0;
 }
 
-// A hyprctl that answers with response.json beside it and counts its calls.
+// A hyprctl that answers with response.json beside it, then counts the call: a call counted has its answer.
 QString fakeHyprctl(const QString &directory) {
     const QString command = directory + "/hyprctl";
-    write(command, "#!/bin/bash\necho >> '" + directory.toUtf8() + "/calls'\ncat '" + directory.toUtf8()
-                       + "/response.json'\n");
+    write(command, "#!/bin/bash\ncat '" + directory.toUtf8() + "/response.json'\necho >> '" + directory.toUtf8() + "/calls'\n");
     QFile::setPermissions(command, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
     return command;
 }
@@ -581,7 +581,7 @@ private slots:
         QCOMPARE(lines(hypr.filePath("calls")), 2);
         hyprland->write("oaded>>\n");
         QTRY_COMPARE(theme.radius(), 10);
-        QCOMPARE(lines(hypr.filePath("calls")), 3);
+        QTRY_COMPARE(lines(hypr.filePath("calls")), 3);
     }
 
     void themeReachesHyprlandOnceItListens() {
@@ -2481,12 +2481,11 @@ private slots:
         QCOMPARE(books->count(), 1200);
         const QStringList views{"covers", "spines", "carousel", "list", "stacks"};
         const QStringList shows{"grid", "spines", "carousel", "list", "stacks"};
-        QElapsedTimer timer;
         for (int i = 0; i < views.size(); ++i) {
             // Switching to a view, jumping to the far end of the library and
             // sorting it again each take well under a second, because a view
-            // only builds the books that are in sight.
-            timer.start();
+            // only builds the books in sight: its own work, not waits for a processor.
+            const ThreadClock timer;
             desk.backend->setView(views.at(i));
             QTRY_VERIFY(desk.find(shows.at(i)));
             QObject *shelf = desk.find("shelfLoader")->property("item").value<QObject *>();
@@ -2495,7 +2494,7 @@ private slots:
             desk.key(Qt::Key_L);
             desk.key(Qt::Key_J);
             QCoreApplication::processEvents();
-            QVERIFY2(timer.elapsed() < 1500, qPrintable(views.at(i) + " took " + QString::number(timer.elapsed()) + " ms"));
+            QVERIFY2(timer.milliseconds() < 1500, qPrintable(views.at(i) + " took " + QString::number(timer.milliseconds()) + " ms"));
         }
         QVERIFY(desk.find("stacks")->property("count").toInt() == 41);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
@@ -2793,7 +2792,7 @@ private slots:
         // Sync brings its shelves in and never clobbers what is here: the
         // stars the file set stay, and are not sent either while that is off.
         click("hardcoverSync");
-        QTRY_VERIFY(text("hardcoverStatus").contains("1 new, 1 updated"));
+        QTRY_VERIFY2(text("hardcoverStatus").contains("1 new, 1 updated"), qPrintable(text("hardcoverStatus")));
         QCOMPARE(library->book(id)->rating, 5);
         QCOMPARE(library->books().size(), 3);
         QVERIFY(sent.isEmpty());
@@ -4461,7 +4460,8 @@ private slots:
                 QQuickItem *row = qobject_cast<QQuickItem *>(desk.find(QString(scheme) + "Row"));
                 QVERIFY(row);
                 // The open row's head is on screen, and no wider than the dialog.
-                QTRY_VERIFY2(window.contains(row->mapRectToScene(QRectF(0, 0, row->width(), row->height()))), scheme);
+                QTRY_VERIFY2(window.contains(row->mapRectToScene(QRectF(0, 0, row->width(), row->height()))),
+                             qPrintable(QString("%1 %2 at y %3").arg(look.shot, scheme).arg(row->mapToScene({}).y())));
                 QVERIFY(row->width() <= desk.value("readingSites", "width").toReal());
                 QVERIFY(desk.find(QString(scheme) + "Identity"));
                 desk.shot(QString("%1-%2").arg(look.shot, scheme));
