@@ -1,7 +1,7 @@
 #include "manual.h"
 
-// The help's pages. This is the one place their text lives: the window (?)
-// and `omabook help <topic>` both show it from here.
+// The help's pages, but for the AI's (aitopic.cpp). Their text lives only
+// here and there: the window (?) and `omabook help <topic>` both show it.
 //
 // A command is named in braces, {library.add}, and shown as whichever key
 // it has now; never write a key itself. What is in `backticks` is something
@@ -37,6 +37,11 @@ Manual::Topic computersTopic() {
                 {Manual::tr("What it needs"),
                  Manual::tr("Omabook on both computers, and ssh that logs in without asking for a password. Tailscale makes "
                             "that work from anywhere.")},
+                {Manual::tr("Phones and e-readers"),
+                 Manual::tr("{library.devices} serves the library to KOReader, Librera, Moon+ Reader and other apps that read "
+                            "a catalog, on this computer, the home network or the tailnet. Scan its QR code with the phone, or "
+                            "copy the address, the user name and the password. Its switch serves on with the window closed, as "
+                            "a service of your own that starts when you log in.")},
                 {Manual::tr("Why not a shared folder"),
                  Manual::tr("A library is a live database, and two computers writing it through a network folder can "
                             "corrupt it. So each computer keeps a whole library of its own, readable offline, and a sync "
@@ -301,44 +306,6 @@ QList<Manual::Section> readAloudSections() {
                     "says that it listens, and Escape lets go of what was said. What the words don't say plainly is asked of "
                     "the AI for quick work, sent nothing but those words; nothing listens with the AI off.")},
     };
-}
-
-// The companion, asking and dictating by voice (#148, #149), and the AI page's rows (#170, #172).
-Manual::Topic aiTopic() {
-    return {"ai",
-            Manual::tr("The AI companion"),
-            Manual::tr("It reads along with you, and looks after the library when asked."),
-            {
-                {Manual::tr("While you read"),
-                 Manual::tr("{reader.ask} opens the companion beside the page. Ask about the chapter in front of you, or select a "
-                            "passage first and ask about that. It is sent the book only as far as you have read, so it can't spoil "
-                            "the ending.")},
-                {Manual::tr("Coming back to a book"),
-                 Manual::tr("{reader.catch_up} tells you where things stand, in a few lines. {reader.cast} lists the people and "
-                            "places that matter so far. Both keep notes with the book, so a later book in a series builds on the "
-                            "earlier ones.")},
-                {Manual::tr("For the whole library"),
-                 Manual::tr("{library.ask} asks about your library: “which of these are about the sea?”. {library.suggest} suggests "
-                            "what to read next. {library.tidy} looks for duplicates, authors spelled several ways and missing "
-                            "series, and changes nothing until you say so. {library.lookup} looks a book's details up and has the "
-                            "AI weigh what the catalogs found.")},
-                {Manual::tr("Saying it instead of typing"),
-                 Manual::tr("A note's or a question's microphone, or Ctrl+M in its field, listens while you hold it, or from one press "
-                            "to the next, and writes out what you say at the cursor; Escape stops it. A question said is asked when "
-                            "you let go, and its answer is read aloud. It goes through speech to text as chosen on the AI page.")},
-                {Manual::tr("Each row of the AI page"),
-                 Manual::tr("Under each row of the AI page ({global.settings}) a line says what Omabook uses it for. Its Test, or T on "
-                            "the row, sends one small real request through that row and shows what came back, or why not; where the "
-                            "model isn't there, it offers one the server has, or downloads one onto Ollama. Handwriting can have a "
-                            "server of its own.")},
-                {Manual::tr("Changing Omabook itself"),
-                 Manual::tr("{global.change} takes a wish in words, such as “make it warmer” or “bigger covers”, and rewrites the "
-                            "interface's files for you. One click puts back what the last change replaced.")},
-                {Manual::tr("Which model, and what is sent"),
-                 Manual::tr("The settings ({global.settings}) pick the model: Omarchy's default agent, Claude with a key, a server such "
-                            "as Ollama or Omarchy's local models, any command, or none. Nothing is sent until you ask; then it is your "
-                            "question, the book's title and authors, and the part of the text you asked about, to that model only.")},
-            }};
 }
 
 Manual::Topic readingTopic() {

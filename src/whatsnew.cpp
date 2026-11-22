@@ -257,13 +257,27 @@ QList<Manual::Step> speechRelease() {
     };
 }
 
-// A phone connected by its camera (#177).
-QList<Manual::Step> phonesRelease() {
+// The 0.4.1 release's entries: timelines that branch (#171), a phone connected by its camera (#177), a fallback for
+// each use of AI (#174) and a model found on Ollama's library or Hugging Face (#175).
+QList<Manual::Step> branchesRelease() {
     return {
+        {"branches", "0.4.1", Manual::tr("Timelines that branch"),
+         Manual::tr("{library.chronology_book} draws an alternate history, an alternative universe or a reboot as a branch "
+                    "beside the timeline it splits off: the same up to the split, its own after it. Where the AI reads one, it "
+                    "proposes it, for you to take or not."),
+         "", "library.chronology_book", "library", ""},
         {"phones", "0.4.1", Manual::tr("Your library on your phone"),
          Manual::tr("{library.devices} shows a QR code of your library's catalog for KOReader, Librera or Moon+ Reader to scan, "
                     "serves it on your tailnet or your home network, and on with the window closed if you like."),
          "", "library.devices", "library", ""},
+        {"ai-fallback", "0.4.1", Manual::tr("A second server for each use of AI"),
+         Manual::tr("When a row's server on the AI page ({global.settings}) can't be reached at all, it can fall back to this "
+                    "computer or another server, and says so while it does. Omabook goes back to the first once it answers."),
+         "", "global.settings", "", ""},
+        {"find-model", "0.4.1", Manual::tr("Find a model for the work"),
+         Manual::tr("Find a Model… in a row of the AI page ({global.settings}) searches Ollama's library and Hugging Face for "
+                    "models that can do that work, says whether each fits this computer, and installs the one you choose."),
+         "", "global.settings", "", ""},
     };
 }
 
@@ -346,5 +360,5 @@ QList<Manual::Step> Manual::features() {
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
     } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
-           + speechRelease() + phonesRelease();
+           + speechRelease() + branchesRelease();
 }
