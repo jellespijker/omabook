@@ -14,6 +14,8 @@
 #include <array>
 
 #include "desk.h"
+#include "dictation.h"
+#include "testaudio.h"
 #include "transcriptdesk.h"
 
 using namespace Qt::StringLiterals;
@@ -179,6 +181,23 @@ private slots:
                 QVERIFY(desk.resize(size));
                 look(desk, "writing");
             }
+            // Dictation listening (#148) at the same time: its mark and this one, one under the other.
+            desk.backend->audio()->setInputs(*TestAudio::microphone("tone"));
+            QVERIFY(desk.backend->dictation()->listen({}, false) > 0);
+            QTRY_VERIFY(desk.backend->dictation()->listening());
+            for (const QSize &size : dialogSizes()) {
+                QVERIFY(desk.resize(size));
+                QVERIFY(desk.shows("recordingMark") && desk.shows("transcribingMark"));
+                const auto rect = [&desk](const char *name) {
+                    QQuickItem *item = desk.item(name);
+                    return item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+                };
+                QVERIFY2(!rect("recordingMark").intersects(rect("transcribingMark")),
+                         qPrintable(QString("%1x%2").arg(size.width()).arg(size.height())));
+                look(desk, "listening");
+            }
+            desk.backend->dictation()->cancel();
+            QTRY_VERIFY(!desk.shows("recordingMark"));
             desk.backend->transcripts()->stop();
             QTRY_VERIFY(!desk.backend->transcripts()->busy());
             for (const QSize &size : dialogSizes()) {

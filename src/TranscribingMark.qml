@@ -16,7 +16,7 @@ Item {
     // The book selected on the shelf, which the key writes out.
     property real selected: 0
     // How far down the window it is: below a recording's or dictation's mark when there is one.
-    property real top: 8
+    property real offset: 8
     readonly property bool shown: !!desk && desk.busy
     // The selected book is a recording, which the key writes out.
     readonly property bool recording: {
@@ -46,7 +46,7 @@ Item {
         parent: Overlay.overlay
         z: 999
         anchors.top: parent ? parent.top : undefined
-        anchors.topMargin: holder.top
+        anchors.topMargin: holder.offset
         anchors.horizontalCenter: parent ? parent.horizontalCenter : undefined
         width: Math.min(row.implicitWidth + 28, (parent ? parent.width : 400) - 16)
         height: row.implicitHeight + 12

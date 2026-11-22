@@ -492,5 +492,5 @@ ApplicationWindow {
     RemovalDialog { id: removal }
     VoiceInstallDialog {}
     RecordingMark { id: recordingMark; devices: backend.audio; dictation: backend.dictation }
-    TranscribingMark { desk: backend.transcripts; selected: library.selectedId; top: recordingMark.shown ? recordingMark.height + 16 : 8 }
+    TranscribingMark { desk: backend.transcripts; selected: library.selectedId; offset: recordingMark.shown ? recordingMark.height + 16 : 8 }
 }
