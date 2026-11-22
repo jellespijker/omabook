@@ -19,6 +19,9 @@ repos:
       - id: check-added-large-files
         args: ["--maxkb=1500"]
       - id: detect-private-key
+        # sshkey.cpp writes OpenSSH's private key files (#180), so it holds
+        # their header line as text; it holds no key. Talisman still scans it.
+        exclude: ^src/sshkey\.cpp$
 
   - repo: https://github.com/thoughtworks/talisman
     rev: v1.37.0
