@@ -23,6 +23,10 @@ moves those lines under its version.
 ### Fixed
 - A sync never gives one book's title, authors or ISBN to another (#158). A book is one book on two computers by its id once they are paired; the first time, a book without a file is paired only by an ISBN, Goodreads id or Calibre id that names one book on each side, and only when the titles agree, so Calibre's custom columns and two books with one ISBN pair nothing. A book paired by an identifier is renamed only when asked: a dry run lists the rename, and `omabook sync --accept-renames` (or `--details`) does it. Links an older Omabook recorded between books that are not one are dropped, once, as the library is brought up to date.
 
+### Fixed
+
+- A page of a PDF turned just as the pages are laid out anew stays turned (#159): with End, an arrow or a tap while a busy computer counts the pages and sets two side by side, or as the layout changes, the reader went back to the page it was on before.
+
 ## [0.2.1] - 2026-11-21
 
 ### Added

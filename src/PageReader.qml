@@ -296,13 +296,14 @@ ListView {
         settled = true
     }
     // Turning the window on its side, another layout, the first page alone
-    // or not: the same page, in its new row.
+    // or not: the same page, in its new row. Scrolling doesn't move the
+    // place until then, so the page is the one being read when the rows
+    // stand, not when they began to change: a page turned in between (End
+    // pressed on a busy machine as the pages are counted) stays turned.
     function keepPlace() {
-        const page = reader.section
         settled = false
         Qt.callLater(() => {
-            positionViewAtIndex(rowOf(page), ListView.Beginning)
-            reader.section = page
+            positionViewAtIndex(rowOf(reader.section), ListView.Beginning)
             settled = true
         })
     }
