@@ -26,6 +26,7 @@
 #include "log.h"
 #include "replication.h"
 #include "statements.h"
+#include "strayidentifiers.h"
 #include "tenancy.h"
 
 int LibraryMigrations::currentFormat() noexcept { return static_cast<int>(LibrarySchema::steps().size()); }
@@ -202,6 +203,7 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
         // transaction as the upgrade.
         KeptOps::takeKnown(library);
         judgeLinks(library);
+        unstrayIdentifiers(library);
         // The books' tenants as the collections and the user's choice say
         // now: the first time after the step that adds tenants, the whole
         // graph's (#94); after that, what changed while it was closed.
@@ -251,3 +253,20 @@ void LibraryMigrations::judgeLinks(const Library &library) {
 }
 
 void LibraryMigrations::sayOnStandardError(const QString &said) { std::println(stderr, "{}", said.toStdString()); }
+
+void LibraryMigrations::unstrayIdentifiers(Library &library) {
+    QSqlQuery due = library.query("SELECT 1 FROM library_state WHERE key = 'unstray_identifiers'");
+    const bool repair = due.next();
+    due.finish();
+    if (!repair)
+        return;
+    const QStringList removed = StrayIdentifiers::remove(library, Replication::operations(library), false);
+    library.exec("DELETE FROM library_state WHERE key = 'unstray_identifiers'");
+    if (removed.isEmpty())
+        return;
+    qCInfo(lcLibrary).noquote() << removed.size() << "identifiers books had of a book kept apart from them were removed";
+    if (library.m_bringingUpToDate)
+        library.m_bringingUpToDate(
+            QString("Removed %1 that a book had of another an older Omabook took it for: %2.")
+                .arg(removed.size() == 1 ? QString("1 identifier") : QString("%1 identifiers").arg(removed.size()), removed.join("; ")));
+}

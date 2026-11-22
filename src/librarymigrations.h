@@ -31,4 +31,7 @@ private:
     // The repair of format 43 (#158): the links that are not of one book,
     // each recorded as such once (BookLinks::record), and said.
     static void judgeLinks(const Library &library);
+    // The repair of format 44 (#164): the identifiers books have of a book
+    // kept apart from them, removed once (StrayIdentifiers::remove), and said.
+    static void unstrayIdentifiers(Library &library);
 };

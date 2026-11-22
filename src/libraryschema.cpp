@@ -490,6 +490,8 @@ const QList<QStringList> migrations{
     // book (#158, format 43): judged once, as the library is brought up to
     // date, and kept apart from then on (LibraryMigrations::judgeLinks).
     {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('judge_links', '1')"},
+    // A book's identifiers of one kept apart (#164, format 44): removed once (LibraryMigrations::unstrayIdentifiers).
+    {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('unstray_identifiers', '1')"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
