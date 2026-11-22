@@ -27,6 +27,7 @@ moves those lines under its version.
 ### Changed
 - OpenAI's voices read on after OpenAI shuts down its speech API on 2027-01-06 (#169): once OpenAI says its model there is gone, the same sentence is read by its successor, gpt-realtime-2.1-mini, over OpenAI's Realtime API, and so is every one after it; a model of the Realtime API (`gpt-realtime-…`) chosen on the AI page reads there at once. Its voices are those the Realtime API has, at up to one and a half times their pace; as before, only where hosted is allowed for text to speech, never with the AI turned off, and "Hear It" and Stop work as they did. Omabook now needs `qt6-websockets`.
 - Two people whose annotations are shown beside yours are never in one colour (#161): their colours, made from who they are, could fall on the same one or two alike, and now stand well apart, the same on every computer.
+- Syncing a reading site while the window writes to the library no longer leaves a book out with "database is locked" (#161): each write now waits its turn.
 
 ## [0.3.2] - 2026-11-22
 

@@ -443,11 +443,12 @@ public:
     // inside another joins it.
     class Batch {
     public:
-        // When the database becomes the batch's alone: at its first write, or
-        // at once, so what it reads before it writes can't change under it
-        // (another program that wants it waits until the batch is done).
+        // When the database becomes the batch's alone: at once, so what it
+        // reads before it writes (the clock, at least) can't change under it
+        // and another writer is waited for (#161), or at its first write, which
+        // SQLite refuses at once ("database is locked") when another wrote since.
         enum class Lock : std::uint8_t { AtFirstWrite, AtOnce };
-        explicit Batch(const Library &library, Lock lock = Lock::AtFirstWrite);
+        explicit Batch(const Library &library, Lock lock = Lock::AtOnce);
         ~Batch();
         Batch(const Batch &) = delete;
         Batch &operator=(const Batch &) = delete;
