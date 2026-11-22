@@ -144,6 +144,24 @@ _Avoid_: Voice mode, voice assistant, reading aloud (that is a book's)
 A command said while reading ("next chapter", "go to chapter 5"), heard by dictation and understood by a grammar of the command table in the window's five languages, or by the model for quick work where the grammar doesn't know it (`VoiceGrammar`, `VoiceCommands`, #150). It runs what the command's key runs, or one of the three only said: a chapter by its number, highlighting the selection, and what a word means.
 _Avoid_: Voice control, wake word, speech command
 
+## Phones and e-readers
+
+**Serving**:
+Offering the library to phones and e-readers over the network: the OPDS catalog that their apps browse and download from, and KOReader's progress sync, each when switched on, only where the person allowed. Off until chosen.
+_Avoid_: Sharing (that is publishing a collection), hosting, exposing
+
+**Reach**:
+Where Omabook serves: this computer only, the home network (every network the computer is on, unencrypted), or the tailnet. Set in Phones and e-readers or with `omabook serve --reach` (`DeviceReach`).
+_Avoid_: Scope, interface, bind address
+
+**Catalog token**:
+The password an app gives the catalog, made once and kept in the keyring, also put in the catalog's address (`/t/<token>/opds`) for an app that takes no password. A new one locks out every app with the old one.
+_Avoid_: API key, PIN
+
+**Background service**:
+The person's own systemd user service, `omabook-serve.service`, that serves with the window closed, from login on; while it is chosen the window leaves serving to it. Which Omabook serves (the window, the background service, or `omabook serve` in a terminal) each says when asked from this computer (`DeviceServing`).
+_Avoid_: Daemon (the hub's), server, system service
+
 ## Hub and backups
 
 **Hub**:

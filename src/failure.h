@@ -170,6 +170,16 @@ public:
         MailNotSetUp,          // {}
         MailUnreachable,       // {server, the network's reason}
         MailRefused,           // {server, what it said}
+        // The port taken when Omabook would serve on it (#177): by another program, or by an Omabook serving already.
+        PortTaken,           // {address, port}
+        PortTakenBy,         // {address, port, program}
+        ServedByWindow,      // {address}
+        ServedByService,     // {address}
+        ServedByCommand,     // {address}
+        ServiceUnwritable,   // {path, the system's reason}
+        ServiceRefused,      // {what systemctl said}
+        NoSystemd,           // {}
+        ServiceNotAnswering, // {address}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)

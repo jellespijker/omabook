@@ -16,12 +16,14 @@
 #include <cstdio>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <print>
 #include <tuple>
 
 #include "bookops.h"
 #include "deviceoptions.h"
 #include "deviceserver.h"
+#include "deviceserving.h"
 #include "formats.h"
 #include "importer.h"
 #include "koreaderdocument.h"
@@ -204,6 +206,34 @@ int addFromFeed(QNetworkAccessManager &network, const OpdsCatalog::Feed &feed, c
     return 0;
 }
 
+// Where a device finds what is served, and how it logs in.
+void printServed(const DeviceServer::Setup &setup, const QString &address, const DeviceServing::Status &served) {
+    if (served.opds)
+        printLine(stdout,
+                  u"OPDS catalog: %1/opds (any name, and the token %2 as the password), or %1/t/%2/opds"_s.arg(address, setup.opdsToken));
+    if (served.koreader)
+        printLine(stdout, u"KOReader sync: %1, logging in as %2"_s.arg(address, setup.options.koreaderServeUser));
+}
+
+// When an Omabook serves where this one would already: what it serves, and
+// the exit code (1 when it doesn't serve all that was asked for).
+[[nodiscard]] std::optional<int> servedAlready(const DeviceServer::Setup &setup) {
+    const DeviceOptions &options = setup.options;
+    const auto listening = DeviceReach::address(options.reach);
+    if (!listening)
+        return std::nullopt;
+    const auto served = DeviceServing::ask(*listening, options.port);
+    if (!served)
+        return std::nullopt;
+    const QString address = DeviceReach::shown(options.reach, *listening, options.port);
+    printLine(stdout, DeviceServing::taken(*listening, options.port, address).text());
+    printServed(setup, address, *served);
+    if ((options.opds && !served->opds) || (options.koreaderServe && !served->koreader))
+        return failLine(u"It doesn't serve all that was asked for: switch it on in the window, in Phones and e-readers, or stop "
+                        "that Omabook serving first."_s);
+    return 0;
+}
+
 } // namespace
 
 int runServeCli(const QStringList &arguments) {
@@ -213,6 +243,7 @@ int runServeCli(const QStringList &arguments) {
     parser.addOption({"collection", "Serve only this collection (by its path) in the catalog.", "collection"});
     parser.addOption({"no-opds", "Don't serve the OPDS catalog."});
     parser.addOption({"koreader", "Serve KOReader's progress sync too (log in with omabook koreader serve-as first)."});
+    parser.addOption({"service", "Serve as the background service the window sets up (Phones and e-readers), and say so to it."});
     if (!parsed(parser, arguments,
                 u"Serve the library to e-readers and phones: an OPDS catalog, and KOReader's progress sync, until stopped."_s, 0, 0))
         return 1;
@@ -235,18 +266,20 @@ int runServeCli(const QStringList &arguments) {
     SecretStore &secrets = Secrets::shared();
     const DeviceServer::Setup setup{.options = options,
                                     .opdsToken = DeviceSecrets::token(secrets),
-                                    .koreaderKey = secrets.get(QString::fromLatin1(DeviceSecrets::koreaderServeKey))};
+                                    .koreaderKey = secrets.get(QString::fromLatin1(DeviceSecrets::koreaderServeKey)),
+                                    .by = parser.isSet("service") ? DeviceServing::By::Service : DeviceServing::By::Command};
+    // An Omabook serving there already (the window, most often) is used, not fought over the port.
+    if (!parser.isSet("service")) {
+        if (const auto served = servedAlready(setup))
+            return *served;
+    }
     DeviceServer server(libraryPath(parser));
     const auto address = server.start(setup);
     if (!address)
         return failLine(address.error().text());
     if (address->isEmpty())
         return failLine(u"Nothing to serve: the catalog is off and so is KOReader's sync."_s);
-    if (options.opds)
-        printLine(stdout,
-                  u"OPDS catalog: %1/opds (any name, and the token %2 as the password), or %1/t/%2/opds"_s.arg(*address, setup.opdsToken));
-    if (options.koreaderServe)
-        printLine(stdout, u"KOReader sync: %1, logging in as %2"_s.arg(*address, options.koreaderServeUser));
+    printServed(setup, *address, {.opds = options.opds, .koreader = options.koreaderServe});
     return QCoreApplication::exec();
 }
 

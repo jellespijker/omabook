@@ -257,6 +257,16 @@ QList<Manual::Step> speechRelease() {
     };
 }
 
+// A phone connected by its camera (#177).
+QList<Manual::Step> phonesRelease() {
+    return {
+        {"phones", "0.4.1", Manual::tr("Your library on your phone"),
+         Manual::tr("{library.devices} shows a QR code of your library's catalog for KOReader, Librera or Moon+ Reader to scan, "
+                    "serves it on your tailnet or your home network, and on with the window closed if you like."),
+         "", "library.devices", "library", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -336,5 +346,5 @@ QList<Manual::Step> Manual::features() {
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
     } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
-           + speechRelease();
+           + speechRelease() + phonesRelease();
 }

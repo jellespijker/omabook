@@ -73,7 +73,7 @@ ApplicationWindow {
     readonly property bool touch: touchscreen || touchSeen
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened || aiSettings.opened
-                                       || tidyUp.opened || readingStats.opened || readingSites.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
+                                       || tidyUp.opened || readingStats.opened || readingSites.opened || phones.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
                                        || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
@@ -222,6 +222,7 @@ ApplicationWindow {
     function showPublish(id) { publishing.show(id || backend.collection) }
     function showSubscribe() { subscribing.show() }
     function showReadingSites() { readingSites.open() }
+    function showPhones() { phones.open() }
     function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
     function showAskLibrary() { askLibrary.open() }
@@ -453,6 +454,8 @@ ApplicationWindow {
     PublishDialog { id: publishing }
     SubscribeDialog { id: subscribing }
     ReadingSitesDialog { id: readingSites }
+    PhonesDialog { id: phones }
+    Key { command: "library.devices"; when: library.visible; onActivated: phones.open() }
     AiSettingsDialog { id: aiSettings }
     ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }

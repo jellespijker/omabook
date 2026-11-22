@@ -199,7 +199,21 @@ AppPopup {
             }
         }
 
-        DeviceSettings { Layout.fillWidth: true }
+        // Phones and e-readers have a panel of their own (#177): here, whether they are served.
+        Label { text: qsTr("Phones and e-readers"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            PhonesStatus { objectName: "phonesSummary" }
+            AppButton {
+                objectName: "openPhones"
+                text: qsTr("Phones and E-readers")
+                onClicked: {
+                    dialog.close()
+                    win.showPhones()
+                }
+            }
+        }
 
         DialogActions {
             AppButton {

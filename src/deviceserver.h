@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QDateTime>
+#include <QHash>
 #include <QList>
 #include <QNetworkInterface>
 #include <QObject>
@@ -8,6 +10,7 @@
 #include <memory>
 
 #include "deviceoptions.h"
+#include "deviceserving.h"
 #include "failure.h"
 #include "httpserver.h"
 
@@ -20,7 +23,9 @@ class OpdsRoutes;
 // KOReader's progress sync on one port, each when it is switched on, on the
 // address the person allowed and nowhere else (DeviceReach). It opens the
 // library itself, so it can live on a thread of its own: the window starts
-// it on one (DeviceDesk), `omabook serve` on its main thread.
+// it on one (DeviceDesk), `omabook serve` on its main thread. It says who it
+// is to this computer (DeviceServing), so another Omabook finding its port
+// taken can tell.
 class DeviceServer : public QObject {
     Q_OBJECT
 
@@ -30,6 +35,7 @@ public:
         DeviceOptions options;
         QString opdsToken;
         QString koreaderKey; // the MD5 of the password KOReader logs in with
+        DeviceServing::By by = DeviceServing::By::Window;
     };
 
     explicit DeviceServer(QString libraryRoot, QObject *parent = nullptr);
@@ -46,6 +52,8 @@ public:
                                                         const QList<QNetworkInterface> &interfaces = QNetworkInterface::allInterfaces());
     void stop();
     [[nodiscard]] bool running() const { return m_http.listening(); }
+    // What it says of itself while it runs.
+    [[nodiscard]] DeviceServing::Status status() const;
 
 signals:
     // A device moved the reading place of a book.
@@ -59,5 +67,7 @@ private:
     std::unique_ptr<KoreaderBooks> m_books;
     std::unique_ptr<OpdsRoutes> m_opds;
     std::unique_ptr<KosyncRoutes> m_kosync;
+    DeviceServing::By m_by = DeviceServing::By::Window;
+    QHash<QString, QDateTime> m_seen; // when each device last asked for something
     HttpServer m_http;
 };

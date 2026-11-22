@@ -1,6 +1,7 @@
 #include "deviceoptions.h"
 
 #include <QAbstractSocket>
+#include <QJsonDocument>
 #include <QRandomGenerator>
 #include <algorithm>
 #include <array>
@@ -43,6 +44,7 @@ DeviceOptions DeviceOptions::fromJson(const QJsonObject &object) {
     DeviceOptions options;
     options.reach = reachNamed(object.value("serve").toString()).value_or(Reach::Off);
     options.port = portOf(object.value("port"), options.port);
+    options.background = object.value("serve_background").toBool(false);
     options.opds = object.value("opds").toBool(true);
     options.collection = object.value("opds_collection").toString();
     options.koreaderServe = object.value("koreader_serve").toBool(false);
@@ -62,6 +64,7 @@ DeviceOptions DeviceOptions::fromJson(const QJsonObject &object) {
 QJsonObject DeviceOptions::toJson() const {
     return {{"serve", reachName(reach)},
             {"port", port},
+            {"serve_background", background},
             {"opds", opds},
             {"opds_collection", collection},
             {"koreader_serve", koreaderServe},
@@ -115,6 +118,14 @@ QString DeviceReach::shown(DeviceOptions::Reach reach, const QHostAddress &liste
         host = own == all.end() ? u"localhost"_s : own->toString();
     }
     return u"http://%1:%2"_s.arg(host).arg(port);
+}
+
+QString DeviceReach::tailnetName(const QByteArray &status) {
+    const QJsonObject self = QJsonDocument::fromJson(status).object().value("Self").toObject();
+    QString name = self.value("DNSName").toString();
+    if (name.endsWith('.'))
+        name.chop(1);
+    return name;
 }
 
 QString DeviceSecrets::newToken(SecretStore &secrets) {

@@ -136,6 +136,10 @@
         <file alias="IntoView.qml">IntoView.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>
         <file alias="DeviceSettings.qml">DeviceSettings.qml</file>
+        <file alias="DevicePassword.qml">DevicePassword.qml</file>
+        <file alias="PhonesDialog.qml">PhonesDialog.qml</file>
+        <file alias="PhonesConnect.qml">PhonesConnect.qml</file>
+        <file alias="PhonesStatus.qml">PhonesStatus.qml</file>
         <file alias="ThemePicker.qml">ThemePicker.qml</file>
         <file alias="ModelPicker.qml">ModelPicker.qml</file>
         <file alias="SpreadReader.qml">SpreadReader.qml</file>

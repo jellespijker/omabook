@@ -1,5 +1,8 @@
 #include "deviceserver.h"
 
+#include <QJsonDocument>
+#include <algorithm>
+
 #include "koreaderbooks.h"
 #include "kosyncroutes.h"
 #include "library.h"
@@ -31,9 +34,12 @@ std::expected<QString, Failure> DeviceServer::start(const Setup &setup, const QL
     if (options.koreaderServe)
         m_kosync = std::make_unique<KosyncRoutes>(*m_library, *m_books, options.koreaderServeUser, setup.koreaderKey,
                                                   [this](qint64 book) { emit readTo(book); });
+    m_by = setup.by;
     const auto port = m_http.listen(*address, options.port);
     if (!port) {
         stop();
+        if (port.error().code() == Failure::Code::PortTaken)
+            return std::unexpected(DeviceServing::taken(*address, options.port, DeviceReach::shown(options.reach, *address, options.port)));
         return std::unexpected(port.error());
     }
     return DeviceReach::shown(options.reach, *address, *port);
@@ -47,7 +53,19 @@ void DeviceServer::stop() {
     m_library.reset();
 }
 
+DeviceServing::Status DeviceServer::status() const {
+    const QDateTime since = QDateTime::currentDateTimeUtc().addDays(-1);
+    const auto devices = std::ranges::count_if(m_seen, [&since](const QDateTime &when) { return when >= since; });
+    return {.by = m_by, .opds = m_opds != nullptr, .koreader = m_kosync != nullptr, .devices = static_cast<int>(devices)};
+}
+
 HttpResponse DeviceServer::handle(const HttpRequest &request) {
+    if (request.path == QLatin1StringView(DeviceServing::path)) {
+        if (DeviceServing::fromHere(request.peer))
+            return HttpResponse::json(200, QJsonDocument(status().toJson()).toJson(QJsonDocument::Compact));
+        return {404, "text/plain; charset=utf-8", "Not found", {}, {}};
+    }
+    m_seen.insert(request.peer.toString(), QDateTime::currentDateTimeUtc());
     if (m_opds) {
         if (auto answer = m_opds->answer(request))
             return *std::move(answer);

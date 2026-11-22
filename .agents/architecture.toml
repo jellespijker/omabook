@@ -19,7 +19,7 @@ modules = [
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
-  "deviceoptions", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",
+  "deviceoptions", "qrcode", "portholder", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",
 ]
 
 [layers.formats]
@@ -78,7 +78,7 @@ modules = [
   "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "scriptsession", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synccopies", "syncrenames", "synctake", "synctakeannotations", "synctakecollections", "synctakegraph",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
-  "kosyncroutes", "opdsroutes", "deviceserver", "koreadersync", "sendbook",
+  "kosyncroutes", "opdsroutes", "deviceserver", "deviceserving", "serveservice", "koreadersync", "sendbook",
 ]
 
 # The two front ends are peers: neither includes the other. What both need
@@ -96,7 +96,7 @@ modules = [
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
-  "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
+  "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "qrview", "backenddetails",
   "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys", "transcriptdesk", "heldkeys",
 ]
 

@@ -87,8 +87,12 @@ HttpServer::HttpServer(Handler handler, QObject *parent) : QObject(parent), m_ha
 
 std::expected<quint16, Failure> HttpServer::listen(const QHostAddress &address, quint16 port) {
     close();
-    if (!m_server.listen(address, port))
+    if (!m_server.listen(address, port)) {
+        // Who has it is for the one who asked to find out (DeviceServing::holder).
+        if (m_server.serverError() == QAbstractSocket::AddressInUseError)
+            return std::unexpected(Failure(Failure::Code::PortTaken, {address.toString(), QString::number(port)}));
         return std::unexpected(Failure(Failure::Code::ServerUnstarted, {address.toString(), m_server.errorString()}));
+    }
     return m_server.serverPort();
 }
 

@@ -21,6 +21,9 @@ struct DeviceOptions {
 
     Reach reach = Reach::Off;
     quint16 port = 6622;
+    // Served by a systemd user service of its own (ServeService), the window
+    // closed or not, rather than by the window while it is open (#177).
+    bool background = false;
     // What it serves: the OPDS catalog (of one collection, by its path, or of
     // the whole library when empty) and KOReader's progress sync, for one
     // person by the name they log in with.
@@ -60,6 +63,9 @@ namespace DeviceReach {
 // The address to tell a device, for the window to show: this computer's own
 // on its network for a reach of every network.
 [[nodiscard]] QString shown(DeviceOptions::Reach reach, const QHostAddress &listening, quint16 port);
+// This computer's name on its tailnet ("laptop.example.ts.net"), from what
+// `tailscale status --json` says; empty when it has none (no MagicDNS).
+[[nodiscard]] QString tailnetName(const QByteArray &status);
 
 } // namespace DeviceReach
 

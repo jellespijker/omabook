@@ -14,6 +14,7 @@
 #include "marginnotes.h"
 #include "meaningfinder.h"
 #include "modelhelp.h"
+#include "qrview.h"
 #include "readingstatsview.h"
 
 void registerGraphTypes() {
@@ -45,6 +46,8 @@ void registerGraphTypes() {
         qmlRegisterType(QUrl(QStringLiteral("qrc:/DictationButton.qml")), "Omabook", 1, 0, "DictationButton");
         // A key held while a command is said (#150).
         qmlRegisterType<HeldKeys>("Omabook", 1, 0, "HeldKeys");
+        // An address as a QR code, for a phone's camera (#177).
+        qmlRegisterType<QrView>("Omabook", 1, 0, "QrView");
         return true;
     }();
 }

@@ -3,10 +3,14 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QNetworkAccessManager>
+#include <QProcess>
+#include <QTimer>
 #include <QtConcurrentRun>
+#include <chrono>
 #include <expected>
 
 #include "deviceserver.h"
+#include "deviceserving.h"
 #include "koreadersync.h"
 #include "kosyncclient.h"
 #include "library.h"
@@ -38,9 +42,16 @@ namespace {
 } // namespace
 
 DeviceDesk::DeviceDesk(Settings *settings, SecretStore &secrets, Root root, QObject *parent)
-    : QObject(parent), m_settings(settings), m_secrets(secrets), m_root(std::move(root)) {
+    : DeviceDesk(settings, secrets, std::move(root), Programs{}, parent) {}
+
+DeviceDesk::DeviceDesk(Settings *settings, SecretStore &secrets, Root root, Programs programs, QObject *parent)
+    : QObject(parent), m_settings(settings), m_secrets(secrets), m_root(std::move(root)), m_programs(std::move(programs)) {
     m_thread.setObjectName(u"devices"_s);
     m_thread.start();
+    auto *jobs = new QObject; // owned by its thread from here: deleted when it finishes
+    jobs->moveToThread(&m_thread);
+    connect(&m_thread, &QThread::finished, jobs, &QObject::deleteLater);
+    m_jobs = jobs;
     // config.json edited by hand, or another library chosen, is followed too.
     connect(m_settings, &Settings::changed, this, &DeviceDesk::follow);
 }
@@ -111,16 +122,25 @@ void DeviceDesk::restart(bool secretsChanged) {
         return;
     m_following = following;
     m_token = options.opds ? DeviceSecrets::token(m_secrets) : QString();
-    const DeviceServer::Setup setup{.options = options, .opdsToken = m_token, .koreaderKey = m_secrets.get(secretName(u"serve"_s))};
     if (m_server) {
         QMetaObject::invokeMethod(m_server.get(), &DeviceServer::stop);
         m_server->deleteLater();
     }
     m_address.clear();
     m_problem.clear();
+    m_servedBy.clear();
+    m_devicesLately = 0;
     emit changed();
-    if (options.reach == DeviceOptions::Reach::Off || root.isEmpty())
+    const bool serving = options.reach != DeviceOptions::Reach::Off && !root.isEmpty() && (options.opds || options.koreaderServe);
+    lookUpName();
+    // On the thread before the server below, so that a service stopped has let go of the port first.
+    followService(options, serving && options.background);
+    if (!serving || options.background)
         return;
+    serve({.options = options, .opdsToken = m_token, .koreaderKey = m_secrets.get(secretName(u"serve"_s))}, root);
+}
+
+void DeviceDesk::serve(const DeviceServer::Setup &setup, const QString &root) {
     auto *server = new DeviceServer(root); // owned by its thread from here: deleted when it finishes, or replaced
     server->moveToThread(&m_thread);
     connect(&m_thread, &QThread::finished, server, &QObject::deleteLater);
@@ -133,9 +153,115 @@ void DeviceDesk::restart(bool secretsChanged) {
                 return;
             m_address = address ? *address : QString();
             m_problem = address ? QString() : address.error().text();
+            m_servedBy = address && !address->isEmpty() ? u"window"_s : QString();
+            emit changed();
+            if (address)
+                return;
+            // Not serving, so it goes; an Omabook serving there already is shown as the one serving.
+            server->deleteLater();
+            m_server = nullptr;
+            refresh();
+        });
+    });
+}
+
+void DeviceDesk::followService(const DeviceOptions &options, bool wanted) {
+    const ServeService service(m_programs.service);
+    // Nothing of it here, and nothing wanted of it: systemd isn't asked.
+    if (!wanted && !m_serviceFollowed && !service.installed())
+        return;
+    const bool first = !m_serviceFollowed;
+    m_serviceFollowed = wanted;
+    m_serviceUp = false;
+    QString shown;
+    if (wanted) {
+        if (const auto address = DeviceReach::address(options.reach))
+            shown = DeviceReach::shown(options.reach, *address, options.port);
+        else
+            m_problem = Failure(Failure::Code::NoTailnet).text();
+    }
+    QMetaObject::invokeMethod(m_jobs.get(), [this, service, wanted, first, shown] {
+        // The first time this session it is written again, as this program may have moved since.
+        const auto installOrRestart = [&service, first] { return first || !service.installed() ? service.install() : service.restart(); };
+        const auto done = wanted ? installOrRestart() : service.remove();
+        QMetaObject::invokeMethod(this, [this, done, wanted, shown] {
+            if (!done) {
+                m_problem = done.error().text();
+                emit changed();
+                return;
+            }
+            if (!wanted)
+                return;
+            m_serviceUp = true;
+            m_address = shown;
+            emit changed();
+            // It takes a moment to start; the panel asks again while it is open.
+            QTimer::singleShot(std::chrono::milliseconds(1500), this, &DeviceDesk::refresh);
+        });
+    });
+}
+
+void DeviceDesk::refresh() {
+    if (m_server) {
+        QMetaObject::invokeMethod(m_server.get(), [this, server = m_server.get()] {
+            const bool running = server->running();
+            const int devices = server->status().devices;
+            QMetaObject::invokeMethod(this, [this, running, devices] { told(running ? u"window"_s : QString(), devices, running); });
+        });
+        return;
+    }
+    const DeviceOptions options = current();
+    const auto address = DeviceReach::address(options.reach);
+    if (!address) {
+        told({}, 0, false);
+        return;
+    }
+    // On the thread, which has no server of the window's own to wait for here.
+    QMetaObject::invokeMethod(m_jobs.get(), [this, where = *address, port = options.port] {
+        const auto status = DeviceServing::ask(where, port);
+        QMetaObject::invokeMethod(this, [this, status] {
+            told(status ? DeviceServing::byName(status->by) : QString(), status ? status->devices : 0, status.has_value());
+        });
+    });
+}
+
+void DeviceDesk::told(const QString &servedBy, int devices, bool answered) {
+    m_servedBy = servedBy;
+    m_devicesLately = devices;
+    const DeviceOptions options = current();
+    if (answered && servedBy != u"window") {
+        // Another Omabook serves: that is no problem, and it is where devices go.
+        m_problem.clear();
+        if (const auto address = DeviceReach::address(options.reach); address && m_address.isEmpty())
+            m_address = DeviceReach::shown(options.reach, *address, options.port);
+    }
+    if (!answered && options.background && m_serviceUp && !m_address.isEmpty())
+        m_problem = Failure(Failure::Code::ServiceNotAnswering, {m_address}).text();
+    emit changed();
+}
+
+void DeviceDesk::lookUpName() {
+    const DeviceOptions::Reach reach = current().reach;
+    if (reach != DeviceOptions::Reach::Tailnet && reach != DeviceOptions::Reach::Network)
+        return;
+    QMetaObject::invokeMethod(m_jobs.get(), [this, program = m_programs.tailscale] {
+        QProcess tailscale;
+        tailscale.start(program, {u"status"_s, u"--json"_s});
+        const QString name = tailscale.waitForFinished(3000) && tailscale.exitCode() == 0
+                                 ? DeviceReach::tailnetName(tailscale.readAllStandardOutput())
+                                 : QString();
+        QMetaObject::invokeMethod(this, [this, name] {
+            m_name = name;
             emit changed();
         });
     });
+}
+
+QString DeviceDesk::namedAddress() const {
+    const DeviceOptions options = current();
+    if (m_name.isEmpty() || m_address.isEmpty() || options.reach == DeviceOptions::Reach::ThisComputer)
+        return {};
+    return u"http://%1:%2"_s.arg(m_name).arg(options.port);
 }
 
 void DeviceDesk::work(const std::function<QString()> &job) {
