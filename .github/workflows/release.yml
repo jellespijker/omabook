@@ -63,7 +63,8 @@ jobs:
                       'hyphen-de: hyphenate German books'
                       'hyphen-nl: hyphenate Dutch books'
                       'speech-dispatcher: read books aloud, with espeak-ng or another synthesiser'
-                      'piper-tts: read books aloud in a natural voice, with a piper-voices-* voice (both from the AUR)')
+                      'piper-tts: read books aloud in a natural voice, with a piper-voices-* voice (both from the AUR)'
+                      'voxtype-bin: write out recordings on this computer, with the speech to text Omarchy ships (from the omarchy repository)')
 
           prepare() {
             cp -r "$GITHUB_WORKSPACE" "\$srcdir/omabook"

@@ -12,22 +12,35 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-11-22
+
 ### Added
 
 - Recordings are written out by voxtype on this computer where it is installed (#146), the speech to text Omarchy ships for dictation, then by whisper.cpp, then by your transcription server; nothing leaves the computer unless you allowed a hosted server for speech and the plugin asked for it. voxtype gives the text without each word's moment, and the transcript says so (`timed`). A transcription server or whisper.cpp you chose before stays first. On Omarchy without voxtype, the settings offer to install it, with its model, in a terminal.
 - Gemini through its own API, with a key of your own (#145): it can answer and do the quick work (streamed), read your handwriting, write out recordings (each word with its moment, by Gemini's transcription model), read aloud with Gemini's voices, and index books by their meaning. Choose it in any row of the AI page and give its key there once; the key is kept in the keyring. Gemini is someone else's computer, so each capability uses it only once you allow a hosted service for that one.
 - Reading aloud has more voices to choose from (#147): besides Piper and speech-dispatcher on this computer and a server of your own, OpenAI's voices with its API key, and Gemini's. Choose one in the AI page's Text to speech row, with its voice and speed, which each keeps for itself, and hear a sentence with Hear It. Choosing another while a book is read goes on from the same sentence. OpenAI's and Gemini's are someone else's computers, so they read only once you allow a hosted service for text to speech, and never with the AI off; a voice on this computer still reads then.
 - A plugin reading aloud is shown as a book read aloud is (#147): the bar over the page, or over the shelf, names the plugin, and Shift+R or the bar's stop stops it.
+- Plugins may use all six AI capabilities through `omabook.ai` (#143): `ai.speak` reads aloud with the voice you chose, `ai.embed` makes embeddings, and `ai.status({capability})` says of each whether it may be used and why not. A plugin sends your ink, recordings, notes or what it reads aloud to someone else's computer only when it asks for that and you allowed it for that capability; with the AI Off nothing is asked of any model, and only a voice on this computer reads.
+
 ### Changed
 
+- Each use of AI is a capability of its own (#143, ADR 0008): answers, the quick model, handwriting, speech to text, reading aloud and embeddings, each with its provider and its own say over whether a hosted one may be used. Allowing Claude to answer allows nothing for handwriting or recordings. Your current choices carry over unchanged; only a new install starts local, answering from Omarchy's local models or Ollama until you choose a hosted one. `omabook info --json` says per capability whether it is available and why not.
 - AI has a page of its own in Settings (#144): a row per capability (answers, quick work, handwriting, speech to text, text to speech, meaning), each with its provider and model, whether it may use a hosted service, and, when it can't be used, why and what to do. Choosing a hosted AI no longer allows hosted by itself: you allow it in that row, for that capability alone. Speech can be kept to voxtype or whisper.cpp alone, and its row says when what writes out recordings gives no word timestamps, and offers to install voxtype on Omarchy. The old AI part of the Settings dialog is gone; Settings says who answers and leads to the page.
+- The library's format stays at 43 (#158): updating from 0.2.2 changes nothing in it, and from 0.2.1 or before the first opening brings it up to 43, as 0.2.2 does, keeping a copy of it first in `.backups` in the library's folder.
 
 ### Fixed
-- A sync never gives one book's title, authors or ISBN to another (#158). A book is one book on two computers by its id once they are paired; the first time, a book without a file is paired only by an ISBN, Goodreads id or Calibre id that names one book on each side, and only when the titles agree, so Calibre's custom columns and two books with one ISBN pair nothing. A book paired by an identifier is renamed only when asked: a dry run lists the rename, and `omabook sync --accept-renames` (or `--details`) does it. Links an older Omabook recorded between books that are not one are dropped, once, as the library is brought up to date.
+
 - Two different books an older Omabook took for one, when it had already given one the other's title, can be kept apart (#160): `omabook sync <computer> --unlink "<title>"`, with either book's title, and a dry run's renames say how. A book you renamed on purpose stays paired.
 - A book whose details are the same on both computers is no longer listed as given or taken at every sync (#160), and nothing of it is written.
 - A page of a PDF turned just as the pages are laid out anew stays turned (#159): with End, an arrow or a tap while a busy computer counts the pages and sets two side by side, or as the layout changes, the reader went back to the page it was on before.
 - What lies ahead in a book stays hidden in its graph after going back to its very start (#159): with the reading place at none of the way, the graph took the book for one not begun and showed everything, even past where it was ever read.
+
+## [0.2.2] - 2026-11-21
+
+### Fixed
+
+- A sync pairs a book across computers by its global id once paired, and never by a shared identifier alone (#158): a book without a file is paired the first time only by a valid ISBN, a Goodreads id or a Calibre uuid that no other book has, and only when the titles agree. A sync never changes a book's title, authors or ISBN by itself: the dry run lists it as a rename, and `--accept-renames` or `--details` does it. In 0.2.1 and before, books that shared an identifier that wasn't theirs alone (a Calibre column kept as an identifier, the same ISBN on two different books, one picked up from an earlier mix-up) could be given each other's details.
+- Links an older Omabook recorded between different books are dropped once at upgrade, and listed (#158). Details already given to the wrong book aren't put back: correct them by hand on one computer, then sync.
 
 ## [0.2.1] - 2026-11-21
 
@@ -38,10 +51,6 @@ moves those lines under its version.
 ### Changed
 
 - The Notebooks plugin is in Omabook's list of plugins (#155): find it by its name in the plugins, or `omabook plugin add notebooks`, as Storyteller is.
-- Each use of AI is a capability of its own (#143, ADR 0008): answers, the quick model, handwriting, speech to text, reading aloud and embeddings, each with its provider and its own say over whether a hosted one may be used. Allowing Claude to answer allows nothing for handwriting or recordings. Your current choices carry over unchanged; only a new install starts local, answering from Omarchy's local models or Ollama until you choose a hosted one. `omabook info --json` says per capability whether it is available and why not.
-### Added
-- Plugins may use all six AI capabilities through `omabook.ai` (#143): `ai.speak` reads aloud with the voice you chose, `ai.embed` makes embeddings, and `ai.status({capability})` says of each whether it may be used and why not. A plugin sends your ink, recordings, notes or what it reads aloud to someone else's computer only when it asks for that and you allowed it for that capability; with the AI Off nothing is asked of any model, and only a voice on this computer reads.
-- Read aloud on a computer with no voice offers to install one (#156), on Omarchy the way its own apps do, in a terminal that asks for the password: speech-dispatcher with espeak-ng from Arch's packages, or Piper's natural voice for the book's language from the AUR. Once the terminal is closed the book is read from where it was asked. The Aa panel offers the same.
 
 ### Fixed
 
@@ -390,7 +399,9 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/jellespijker/omabook/compare/v0.2.2...v0.3.0
+[0.2.2]: https://github.com/jellespijker/omabook/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jellespijker/omabook/compare/v0.2.0.2...v0.2.1
 [0.2.0.2]: https://github.com/jellespijker/omabook/compare/v0.2.0.1...v0.2.0.2
 [0.2.0.1]: https://github.com/jellespijker/omabook/compare/v0.2.0...v0.2.0.1
