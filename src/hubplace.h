@@ -47,6 +47,8 @@ public:
     // Kept in that file, for this user alone; a credential is set by systemd's
     // tools (systemd-creds), not here.
     [[nodiscard]] std::expected<void, Failure> keepSecret(const QString &name, QByteArrayView bytes) const;
+    // That file removed, when it is there; a credential is systemd's to remove.
+    void forgetSecret(const QString &name) const;
 
 private:
     [[nodiscard]] QString choicesFile() const;

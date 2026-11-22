@@ -2618,5 +2618,13 @@
   "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Mehr als ein Buch heißt %1: nenne es bei seiner globalen ID (omabook snapshot diff --json zeigt sie).",
   "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 ist nicht mehr in dieser Bibliothek, also kann nichts davon zurückgelegt werden: stelle die ganze Bibliothek in einem neuen Ordner wieder her, um es zurückzubekommen.",
   "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Eine Bibliothek wird nur in einen neuen oder leeren Ordner wiederhergestellt, nie über die Bibliothek oder in sie hinein: %1 ist keiner.",
-  "Say what to put back of the book: its details, its annotations, or both.": "Sag, was vom Buch zurückgelegt werden soll: seine Angaben, seine Anmerkungen oder beides."
+  "Say what to put back of the book: its details, its annotations, or both.": "Sag, was vom Buch zurückgelegt werden soll: seine Angaben, seine Anmerkungen oder beides.",
+  "The destination %1 isn't there: nothing is kept at %2. Is its disk plugged in and mounted?": "Das Ziel %1 ist nicht da: unter %2 liegt nichts. Ist sein Laufwerk angeschlossen und eingehängt?",
+  "No destination is called %1 (omabook snapshot destination list lists them).": "Kein Ziel heißt %1 (omabook snapshot destination list listet sie auf).",
+  "A destination is called %1 already.": "Ein Ziel heißt bereits %1.",
+  "A destination's name is lower-case letters, digits and dashes, not %1.": "Der Name eines Ziels besteht aus Kleinbuchstaben, Ziffern und Bindestrichen, nicht %1.",
+  "%1 holds a password, which would be kept in the clear: leave it out, and give it with --credential RESTIC_REST_PASSWORD (or the place's own) instead.": "%1 enthält ein Passwort, das im Klartext aufbewahrt würde: lass es weg und gib es stattdessen mit --credential RESTIC_REST_PASSWORD (oder dem des Ortes) an.",
+  "The snapshots are kept in %1 already; a destination is another place.": "Die Snapshots werden bereits in %1 aufbewahrt; ein Ziel ist ein anderer Ort.",
+  "No value was given for %1.": "Für %1 wurde kein Wert angegeben.",
+  "The snapshots couldn't be copied to %1.": "Die Snapshots konnten nicht nach %1 kopiert werden."
 }

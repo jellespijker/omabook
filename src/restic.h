@@ -6,6 +6,7 @@
 #include <QString>
 #include <QStringList>
 #include <expected>
+#include <utility>
 
 #include "failure.h"
 
@@ -21,6 +22,10 @@ struct ResticRepository {
     // handed to restic alone, in its environment, never on its command line.
     QByteArray password;
     QString program = QStringLiteral("restic");
+    // What else restic is handed in its environment for this repository: a
+    // place's credentials (AWS_SECRET_ACCESS_KEY, RESTIC_REST_PASSWORD...),
+    // read from secrets, never on its command line.
+    QList<std::pair<QString, QByteArray>> environment;
 };
 
 namespace Restic {
@@ -39,6 +44,9 @@ struct Snapshot {
 
 // Makes a new repository at `repository.location`.
 [[nodiscard]] std::expected<void, Failure> init(const ResticRepository &repository);
+// The same, cutting files into chunks as `like` does, so what is copied from
+// that one is kept deduplicated in this one too.
+[[nodiscard]] std::expected<void, Failure> init(const ResticRepository &repository, const ResticRepository &like);
 
 // What to keep in one snapshot: paths whole, but for what `excluding` names
 // (restic's patterns), labelled with `tags`.
@@ -60,6 +68,12 @@ struct Backup {
 // (target + the path), only what `including` names (whole folders) when given.
 [[nodiscard]] std::expected<void, Failure> restore(const ResticRepository &repository, const QString &id, const QString &target,
                                                    const QStringList &including = {});
+
+// Copies to `to` the snapshots of `from` with every one of `tags` that it doesn't hold yet.
+[[nodiscard]] std::expected<void, Failure> copy(const ResticRepository &to, const ResticRepository &from, const QStringList &tags);
+
+// The bytes the repository takes where it is kept.
+[[nodiscard]] std::expected<qint64, Failure> size(const ResticRepository &repository);
 
 // `path` as a restic pattern that matches only that path: its *, ?, [ and \ escaped.
 [[nodiscard]] QString literal(const QString &path);

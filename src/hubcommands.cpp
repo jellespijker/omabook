@@ -26,6 +26,7 @@
 #include "hubsession.h"
 #include "hubsnapshots.h"
 #include "log.h"
+#include "snapshotdestinations.h"
 #include "snapshotretention.h"
 
 using namespace Qt::StringLiterals;
@@ -85,6 +86,7 @@ int run(const QCommandLineParser &parser) {
     if (HubDaemon::answersAt(place.socket()))
         return failLine(Failure(Failure::Code::HubRunning, {place.socket()}).text());
     const Snapshots snapshots(SnapshotPlace::ofHub(place)); // before the keeper, which runs its moment snapshots
+    const SnapshotDestinations destinations(SnapshotPlace::ofHub(place));
     HubKeeper keeper(folder);
     HubRequests requests = HubRequests::usual();
     HubSchedule schedule(keeper, place.state());
@@ -93,6 +95,8 @@ int run(const QCommandLineParser &parser) {
     keeper.before(HubSnapshots::before(snapshots));
     HubSnapshots::answer(requests, snapshots); // their diff and restore (#183)
     schedule.daily(u"snapshot"_s, QTime(SnapshotRetention::nightHour, 0), HubSnapshots::nightly(snapshots));
+    // Then copied to the second disk and away from home, an hour on (#182).
+    schedule.daily(u"destinations"_s, QTime(SnapshotRetention::nightHour + 1, 0), HubSnapshots::destinations(destinations));
     if (const auto opened = keeper.open(); !opened)
         return failLine(opened.error().text());
     HubDaemon daemon(keeper, requests);

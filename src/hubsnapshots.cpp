@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QJsonArray>
+#include <QStringList>
 #include <span>
 #include <vector>
 
@@ -132,5 +133,17 @@ HubSchedule::Job HubSnapshots::nightly(const Snapshots &snapshots) {
                 return std::unexpected(thinned.error());
         }
         return {};
+    };
+}
+
+HubSchedule::Job HubSnapshots::destinations(const SnapshotDestinations &destinations) {
+    return [&destinations](HubKeeper & /*keeper*/) -> std::expected<void, Failure> {
+        const SnapshotDestinations::Round round = destinations.copyAll(QDateTime::currentDateTime());
+        if (round.failed.isEmpty())
+            return {};
+        QStringList names;
+        for (const auto &[name, failure] : round.failed)
+            names << name;
+        return std::unexpected(Failure(Failure::Code::DestinationsNotCopied, {names.join(u", ")}));
     };
 }

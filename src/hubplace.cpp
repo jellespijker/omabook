@@ -128,6 +128,11 @@ std::expected<QByteArray, Failure> HubPlace::secret(const QString &name) const {
     return readOwnersOnly(QDir(m_folders.state).filePath(u"secrets/"_s + name));
 }
 
+void HubPlace::forgetSecret(const QString &name) const {
+    if (secretName().match(name).hasMatch())
+        QFile::remove(QDir(m_folders.state).filePath(u"secrets/"_s + name));
+}
+
 std::expected<void, Failure> HubPlace::keepSecret(const QString &name, QByteArrayView bytes) const {
     const QString file = QDir(m_folders.state).filePath(u"secrets/"_s + name);
     if (!secretName().match(name).hasMatch())

@@ -12,10 +12,12 @@
 #include <print>
 #include <tuple>
 
+#include "destinationcommands.h"
 #include "hubplace.h"
 #include "library.h"
 #include "librarymigrations.h"
 #include "settings.h"
+#include "snapshotdestinations.h"
 #include "snapshotrestore.h"
 #include "snapshotrestorecommands.h"
 
@@ -141,19 +143,37 @@ int said(const QCommandLineParser &parser, const std::optional<Snapshots::Taken>
     return 0;
 }
 
+// After the nightly one, the snapshots copied to each destination (#182); one
+// that can't be is said, and the others are copied all the same.
+int copiedToDestinations(const SnapshotPlace &place) {
+    const SnapshotDestinations::Round round = SnapshotDestinations(place).copyAll(QDateTime::currentDateTime());
+    for (const auto &[name, failure] : round.failed)
+        printLine(stderr, u"Not copied to %1: %2"_s.arg(name, failure.text()));
+    return round.failed.isEmpty() ? 0 : 1;
+}
+
+// The nightly one when it is due, then the copies to the destinations.
+int nightly(const QCommandLineParser &parser, const Snapshots &snapshots, const Library &library) {
+    const auto taken = snapshots.nightly(library, QDateTime::currentDateTime());
+    if (!taken)
+        return fail(taken.error());
+    const int code = said(parser, *taken);
+    return code == 0 ? copiedToDestinations(snapshots.place()) : code;
+}
+
 // setup, now, list and nightly.
 int takeOrList(const QStringList &arguments) {
     QCommandLineParser parser;
     parser.setApplicationDescription(
         u"Snapshots of the library, made with restic: encrypted, each keeping only what changed, kept to go back to. "
         "setup makes the place for them and the recovery key, shown once; now takes one (when something changed); "
-        "list lists them; nightly takes the night's, when it is due, and thins the older ones: every one of 14 days, "
-        "then one a day for 7 days, a week for 4 weeks, a month for 12 months, and one of every year. A sync, an "
-        "import or a tidy that changes something takes a moment snapshot first, once snapshots are set up. "
-        "diff and restore go back to one: omabook snapshot diff --help."_s);
+        "list lists them; nightly takes the night's, when it is due, thins the older ones (every one of 14 days, "
+        "then one a day for 7 days, a week for 4 weeks, a month for 12 months, and one of every year) and copies them "
+        "to each destination (omabook snapshot destination --help). A sync, an import or a tidy that changes something "
+        "takes a moment snapshot first, once snapshots are set up. diff and restore go back to one: omabook snapshot diff --help."_s);
     parser.addHelpOption();
-    parser.addPositionalArgument(u"what"_s, u"setup, now, list or nightly; or diff or restore."_s,
-                                 u"<setup|now|list|nightly|diff|restore>"_s);
+    parser.addPositionalArgument(u"what"_s, u"setup, now, list or nightly; or diff, restore or destination."_s,
+                                 u"<setup|now|list|nightly|diff|restore|destination>"_s);
     parser.addOption({u"json"_s, u"Print the result as JSON."_s});
     parser.addOption({u"library"_s,
                       u"Use the library in this folder instead of the current one, for this run only "
@@ -195,8 +215,7 @@ int takeOrList(const QStringList &arguments) {
         const auto taken = snapshots.take(library, SnapshotReason::Asked);
         return taken ? said(parser, *taken) : fail(taken.error());
     }
-    const auto taken = snapshots.nightly(library, QDateTime::currentDateTime());
-    return taken ? said(parser, *taken) : fail(taken.error());
+    return nightly(parser, snapshots, library);
 }
 
 } // namespace
@@ -205,6 +224,9 @@ int runSnapshotCli(const QStringList &arguments) {
     // Going back to one is a command of its own (#183).
     if (const QString word = firstWord(arguments); word == "diff"_L1 || word == "restore"_L1)
         return runSnapshotRestoreCli(arguments);
+    // And where else they are kept (#182).
+    if (arguments.value(2) == "destination"_L1)
+        return runSnapshotDestinationCli(arguments);
     return takeOrList(arguments);
 }
 

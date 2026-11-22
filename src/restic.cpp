@@ -28,9 +28,27 @@ struct Ran {
     return lines.isEmpty() ? QString() : lines.last().trimmed();
 }
 
+// The repository restic copies from (--from-repo), for a copy or an init
+// like it: its options, after the command's name, and its password, handed
+// over as the repository's own is.
+struct From {
+    QStringList options;
+    QList<std::pair<QString, QByteArray>> environment;
+};
+
+[[nodiscard]] From fromOf(const ResticRepository &from) {
+    From given{.options = {u"--from-repo"_s, from.location}, .environment = from.environment};
+    if (from.password.isEmpty())
+        given.options << u"--from-password-file"_s << from.passwordFile;
+    else
+        given.environment.append({u"RESTIC_FROM_PASSWORD"_s, from.password});
+    return given;
+}
+
 // Runs restic on the repository to its end; `allowed` is an exit code that
 // still did what was asked (a backup that couldn't read a file, 3).
-[[nodiscard]] std::expected<Ran, Failure> run(const ResticRepository &repository, const QStringList &arguments, int allowed = 0) {
+[[nodiscard]] std::expected<Ran, Failure> run(const ResticRepository &repository, QStringList arguments, int allowed = 0,
+                                              const From &from = {}) {
     const QString program =
         QFileInfo(repository.program).isAbsolute() ? repository.program : QStandardPaths::findExecutable(repository.program);
     if (program.isEmpty() || !QFileInfo(program).isExecutable())
@@ -44,6 +62,10 @@ struct Ran {
         options << u"--password-file"_s << repository.passwordFile;
     else
         environment.insert(u"RESTIC_PASSWORD"_s, QString::fromUtf8(repository.password));
+    for (const auto &[name, value] : repository.environment + from.environment)
+        environment.insert(name, QString::fromUtf8(value));
+    for (qsizetype i = 0; i < from.options.size(); ++i)
+        arguments.insert(1 + i, from.options.at(i));
     QProcess process;
     process.setProcessEnvironment(environment);
     process.start(program, options + arguments);
@@ -84,6 +106,23 @@ QString Restic::Snapshot::tagged(const QString &prefix) const {
 
 std::expected<void, Failure> Restic::init(const ResticRepository &repository) {
     return run(repository, {u"init"_s}).transform([](const Ran &) {});
+}
+
+std::expected<void, Failure> Restic::init(const ResticRepository &repository, const ResticRepository &like) {
+    return run(repository, {u"init"_s, u"--copy-chunker-params"_s}, 0, fromOf(like)).transform([](const Ran &) {});
+}
+
+std::expected<void, Failure> Restic::copy(const ResticRepository &to, const ResticRepository &from, const QStringList &tags) {
+    QStringList arguments{u"copy"_s};
+    if (!tags.isEmpty())
+        arguments << u"--tag"_s << tags.join(u',');
+    return run(to, arguments, 0, fromOf(from)).transform([](const Ran &) {});
+}
+
+std::expected<qint64, Failure> Restic::size(const ResticRepository &repository) {
+    return run(repository, {u"stats"_s, u"--json"_s, u"--mode"_s, u"raw-data"_s}).transform([](const Ran &ran) {
+        return QJsonDocument::fromJson(ran.output).object().value("total_size"_L1).toInteger(-1);
+    });
 }
 
 std::expected<QString, Failure> Restic::backup(const ResticRepository &repository, const Backup &backup) {

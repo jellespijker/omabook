@@ -275,6 +275,15 @@ public:
         RestoreBookGone,       // {title}
         RestoreFolderTaken,    // {folder}
         RestoreNothingAsked,   // {}
+        // Where else the snapshots are kept (services, #182).
+        DestinationAbsent,            // {name, folder}: a second disk not plugged in, or not mounted
+        DestinationUnknown,           // {name}
+        DestinationNameTaken,         // {name}
+        DestinationNameInvalid,       // {name}
+        DestinationPasswordInPlace,   // {location}: a password in it, which the choices would hold in the clear
+        DestinationIsTheRepository,   // {location}
+        DestinationCredentialMissing, // {the credential's name}
+        DestinationsNotCopied,        // {the destinations' names}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

@@ -355,4 +355,6 @@ QString Snapshots::reasonName(SnapshotReason reason) {
     return QString::fromLatin1(names.at(static_cast<std::size_t>(reason)));
 }
 
+QString Snapshots::newRecoveryKey() { return recoveryKey(); }
+
 QString Snapshots::libraryTag(const Library &library) { return u"library:"_s + hashOf(library.root().toUtf8()); }

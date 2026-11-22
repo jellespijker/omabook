@@ -2719,5 +2719,13 @@
   "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Más de un libro se llama %1: nómbralo por su id global (omabook snapshot diff --json los muestra).",
   "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 ya no está en esta biblioteca, así que no se puede devolver nada de él: restaura la biblioteca entera en una carpeta nueva para recuperarlo.",
   "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Una biblioteca se restaura solo en una carpeta nueva o vacía, nunca encima de la biblioteca ni dentro de ella: %1 no lo es.",
-  "Say what to put back of the book: its details, its annotations, or both.": "Di qué devolver del libro: sus datos, sus anotaciones o ambos."
+  "Say what to put back of the book: its details, its annotations, or both.": "Di qué devolver del libro: sus datos, sus anotaciones o ambos.",
+  "The destination %1 isn't there: nothing is kept at %2. Is its disk plugged in and mounted?": "El destino %1 no está: no hay nada guardado en %2. ¿Está su disco conectado y montado?",
+  "No destination is called %1 (omabook snapshot destination list lists them).": "Ningún destino se llama %1 (omabook snapshot destination list los enumera).",
+  "A destination is called %1 already.": "Ya hay un destino llamado %1.",
+  "A destination's name is lower-case letters, digits and dashes, not %1.": "El nombre de un destino lleva minúsculas, dígitos y guiones, no %1.",
+  "%1 holds a password, which would be kept in the clear: leave it out, and give it with --credential RESTIC_REST_PASSWORD (or the place's own) instead.": "%1 contiene una contraseña, que se guardaría a la vista: quítala y dala en su lugar con --credential RESTIC_REST_PASSWORD (o la propia del lugar).",
+  "The snapshots are kept in %1 already; a destination is another place.": "Las instantáneas ya se guardan en %1; un destino es otro lugar.",
+  "No value was given for %1.": "No se dio ningún valor para %1.",
+  "The snapshots couldn't be copied to %1.": "No se pudieron copiar las instantáneas a %1."
 }

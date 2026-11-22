@@ -76,7 +76,7 @@ modules = [
   "modeldiscovery", "modelsearch",
   "ollamaprovider",
   "aitopic",
-  "restic", "snapshotretention", "snapshots", "snapshotrestore",
+  "restic", "snapshotretention", "snapshots", "snapshotrestore", "snapshotdestinations",
 ]
 
 [layers.operations]
@@ -97,7 +97,7 @@ modules = [
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "snapshotrestorecommands"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "snapshotrestorecommands", "destinationcommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

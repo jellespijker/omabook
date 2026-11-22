@@ -2618,5 +2618,13 @@
   "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Meer dan één boek heet %1: noem het bij zijn globale id (omabook snapshot diff --json toont ze).",
   "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 staat niet meer in deze bibliotheek, dus er kan niets van worden teruggezet: zet de hele bibliotheek terug in een nieuwe map om het terug te krijgen.",
   "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Een bibliotheek wordt alleen teruggezet in een nieuwe of lege map, nooit over de bibliotheek heen of erin: %1 is dat niet.",
-  "Say what to put back of the book: its details, its annotations, or both.": "Zeg wat er van het boek moet worden teruggezet: zijn gegevens, zijn aantekeningen of allebei."
+  "Say what to put back of the book: its details, its annotations, or both.": "Zeg wat er van het boek moet worden teruggezet: zijn gegevens, zijn aantekeningen of allebei.",
+  "The destination %1 isn't there: nothing is kept at %2. Is its disk plugged in and mounted?": "De bestemming %1 is er niet: op %2 staat niets. Is haar schijf aangesloten en gekoppeld?",
+  "No destination is called %1 (omabook snapshot destination list lists them).": "Geen bestemming heet %1 (omabook snapshot destination list somt ze op).",
+  "A destination is called %1 already.": "Er heet al een bestemming %1.",
+  "A destination's name is lower-case letters, digits and dashes, not %1.": "De naam van een bestemming bestaat uit kleine letters, cijfers en streepjes, niet %1.",
+  "%1 holds a password, which would be kept in the clear: leave it out, and give it with --credential RESTIC_REST_PASSWORD (or the place's own) instead.": "%1 bevat een wachtwoord, dat leesbaar bewaard zou worden: laat het weg, en geef het in plaats daarvan met --credential RESTIC_REST_PASSWORD (of dat van de plek zelf).",
+  "The snapshots are kept in %1 already; a destination is another place.": "De snapshots worden al bewaard in %1; een bestemming is een andere plek.",
+  "No value was given for %1.": "Er is geen waarde gegeven voor %1.",
+  "The snapshots couldn't be copied to %1.": "De snapshots konden niet naar %1 gekopieerd worden."
 }

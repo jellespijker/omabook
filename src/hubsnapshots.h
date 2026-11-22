@@ -3,6 +3,7 @@
 #include "hubkeeper.h"
 #include "hubrequests.h"
 #include "hubschedule.h"
+#include "snapshotdestinations.h"
 #include "snapshots.h"
 
 // The hub's snapshots (#181, ADR 0013 and 0014), through the seams the hub's
@@ -29,6 +30,12 @@ namespace HubSnapshots {
 //     one book put back, in the keeper's lock after its moment snapshot ({"restored", "undo"}).
 // A whole library is restored into a new folder on a computer, not through the hub.
 void answer(HubRequests &requests, const Snapshots &snapshots);
+
+// The job that copies the snapshots to each destination (#182), after the
+// nightly one: one that can't be reached or isn't there (a second disk
+// unplugged) fails the job, so it is tried again an hour on, and the others
+// are copied all the same. It reads the repositories alone, not the libraries.
+[[nodiscard]] HubSchedule::Job destinations(const SnapshotDestinations &destinations);
 
 [[nodiscard]] SnapshotReason reasonOf(HubKeeper::Moment moment);
 

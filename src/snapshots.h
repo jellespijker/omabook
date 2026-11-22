@@ -21,7 +21,7 @@ enum class SnapshotReason : std::uint8_t { Nightly, Asked, Sync, Import, Tidy, M
 // restic opens it with. Chosen once, at setup, and kept in `state`
 // (snapshots.json); the password is a 0600 file there, or on a hub one of
 // systemd's credentials (omabook-snapshots in $CREDENTIALS_DIRECTORY), which
-// is then read first. A destination elsewhere (#182) is another repository.
+// is then read first. A destination elsewhere is another repository (SnapshotDestinations).
 struct SnapshotPlace {
     QString state;
     ResticRepository repository;
@@ -109,6 +109,8 @@ public:
     // "moment", "reason:<why>" and "state:<what it held>".
     [[nodiscard]] static QString reasonName(SnapshotReason reason);
     [[nodiscard]] static QString libraryTag(const Library &library);
+    // A new password, as a recovery key: 160 random bits as 32 letters and digits in groups of four.
+    [[nodiscard]] static QString newRecoveryKey();
 
 private:
     [[nodiscard]] std::expected<QList<Restic::Snapshot>, Failure> listOf(const QString &tag) const;
