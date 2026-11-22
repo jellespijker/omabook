@@ -48,21 +48,18 @@ AppPopup {
     onClosed: desk.watchDownloads(false)
     // The Downloads folder is only watched while the guide that asks for a
     // file from it is in front of somebody.
-    onCurrentChanged: desk.watchDownloads(opened && current === "goodreads")
+    // However a row opened, it is brought into view.
+    onCurrentChanged: {
+        desk.watchDownloads(opened && current === "goodreads")
+        settle.restart()
+    }
 
-    // Brings the open row into view once it has its size. A timer of the
-    // dialog's own: the rows it would otherwise call back into can be gone.
-    Timer {
+    // The open row's head, brought into view once it has its size.
+    IntoView {
         id: settle
-        interval: 0
-        onTriggered: {
-            const index = dialog.desk.rows.findIndex(candidate => candidate.scheme === dialog.current)
-            const header = index >= 0 ? heads.itemAt(index) : null
-            if (!header) return
-            const top = header.mapToItem(content, 0, 0).y
-            if (top < flick.contentY || top + header.height > flick.contentY + flick.height)
-                flick.contentY = Math.max(0, Math.min(top, flick.contentHeight - flick.height))
-        }
+        flick: flick
+        layout: content
+        target: () => heads.itemAt(dialog.desk.rows.findIndex(candidate => candidate.scheme === dialog.current))
     }
 
     Flickable {

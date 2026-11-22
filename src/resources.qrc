@@ -131,6 +131,7 @@
         <file alias="AiAnswersSetup.qml">AiAnswersSetup.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>
+        <file alias="IntoView.qml">IntoView.qml</file>
         <file alias="SettingsDialog.qml">SettingsDialog.qml</file>
         <file alias="DeviceSettings.qml">DeviceSettings.qml</file>
         <file alias="ThemePicker.qml">ThemePicker.qml</file>
