@@ -89,11 +89,20 @@ Item {
         card.close()
         going = false
         draftSection = reader.section
-        draft = { start: chosen.start, end: chosen.end, text: chosen.text }
+        // Written on the page's `chapter`, a text that stays laid out: a page of a
+        // spread can stop showing, its text emptied, as the margin column comes (#165).
+        draft = { start: chosen.start, end: chosen.end, text: chosen.text, chapter: chosen.chapter || chosen.text }
         model.drafting = true
         current = 0
         // Where there is no margin column, the card beside the words.
         if (!beside) Qt.callLater(() => layer.openDraft(chosen))
+    }
+    // Where in a chapter's text (`chapter`, a QQuickTextDocument) the note
+    // being written is, or the one the keyboard or the pen is on; -1 for none.
+    function held(chapter) {
+        if (draftHere) return draft.start
+        const span = current ? model.spans(chapter).find(one => one.id === current) : null
+        return span ? span.start : -1
     }
     function openDraft(chosen) { card.openOn(0, "", chosen.text, chosen.start, chosen.end) }
     // Of a TextEdit's characters from `start` to `end`, the rectangle in this layer they take.
@@ -155,7 +164,7 @@ Item {
         if (draft.region)
             return model.writeOnPart(draft.page, Qt.rect(draft.region.x, draft.region.y, draft.region.width, draft.region.height), draft.aspect, words)
         if (draft.page !== undefined) return model.writeOnPage(draft.page, draft.start, draft.end, words)
-        return model.write(draft.text.textDocument, draft.start, draft.end, words)
+        return model.write(draft.chapter.textDocument, draft.start, draft.end, words)
     }
     // Done writing or editing a note: the words kept, or none (removed, never written).
     function finish(id, words) {

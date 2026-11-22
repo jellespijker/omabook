@@ -17,9 +17,12 @@ moves those lines under its version.
 - Free ink on flowing books (#152): with D, write and draw anywhere in the side margins and between the lines of an EPUB, a FictionBook, Markdown or a text, with a pen, the mouse or (as chosen in the bar) a finger, as on a PDF's pages. Each stroke stays with the line beside it when the type, the window or the layout changes, drawn at that line's height; ink in a margin stays in the margin, and where the margin is too narrow for it (large type) it is drawn smaller until there is room. It is undone a pause of the pen at a time, listed by chapter under Highlights, synced and carried into spaces. The writing bar now has a highlighter and a lasso too, on a PDF's and a comic's pages as well. The first ink is drawn in the text's own colour, so it reads on a dark theme.
 - Dictate notes (#148): a margin note's microphone, held while you speak or pressed once to start and again to stop, by mouse, finger or pen, writes out what you say where the cursor is (in place of what is selected); Ctrl+M held in the field does the same, and Escape stops it. It goes through speech to text as you chose it on the AI page, voxtype first, to a hosted service only where you allowed one for speech to text, and not at all with the AI turned off. It listens only once you press it, and the top of the window says that it listens, with Stop. What you said is kept in memory, never in the library, and gone once it is written out. Where voxtype is installed, the AI page's Speech to text row can choose voxtype's own dictation instead (`voxtype record start`/`stop`), which types what you say into the note. A plugin's view gets the same microphone for its own text fields (`DictationButton` under `import Omabook`), and every text field takes voxtype's system-wide typing as it is typed.
 
+## [0.3.1] - 2026-11-22
+
 ### Fixed
 
 - Two books an older Omabook took for one gain nothing of each other any more (#164): a sync that unlinks them (`--unlink`) no longer gives one the other's identifiers, such as its ISBN, and a book paired by an identifier never takes the other side's identifiers, nor is a second copy of it given the other's title. An identifier a book already got of a book kept apart from it is removed, once as the library is brought up to date and at each sync, and named.
+- A margin note written on the right-hand page of two side by side is kept (#165). The first note in a book makes room for the margin column, which can leave one page where there were two; the note was then written on a page no longer shown and lost, or had no field to type in. The page with its words now stays in sight while it is written, and the note is kept on its passage.
 
 ## [0.3.0] - 2026-11-22
 
@@ -409,6 +412,7 @@ scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
 [Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.0...HEAD
+[0.3.1]: https://github.com/jellespijker/omabook/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jellespijker/omabook/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/jellespijker/omabook/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jellespijker/omabook/compare/v0.2.0.2...v0.2.1
