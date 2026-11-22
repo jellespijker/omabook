@@ -45,4 +45,14 @@ namespace BookLinks {
 // pair it wrote, as "<one title> / <the other>".
 QStringList record(const Library &library, std::span<const SpaceOperation> ops);
 
+// The way out the person takes of a link that holds by the rules above and is
+// still wrong (#160): one an older Omabook made after it had already given one
+// book the other's title, so their titles agreed then. The links between a
+// book titled `title` (case set aside, on either computer) and one whose
+// title disagrees with it, each as the log says its title now; never one
+// between two files' ids. Each is recorded as not one book (a "not_same_as",
+// as record() writes them) unless `dryRun`. Answers each pair, as
+// "<one title> / <the other>"; none when no such link is there.
+QStringList unlink(const Library &library, std::span<const SpaceOperation> ops, const QString &title, bool dryRun);
+
 } // namespace BookLinks

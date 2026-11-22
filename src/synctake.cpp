@@ -168,8 +168,14 @@ bool takeDetails(Taking &taking, const QList<Book> &copies, const QJsonObject &t
     if (merged.sendCover && !taking.peer.dryRun)
         giveCover(taking, here, listed, settled);
     const bool asLogged = copies.size() > 1 && settled > 0 && !merged.undecided && !mine.value("title").toString().isEmpty();
-    return giveCopies(taking, copies, merged, listed, settled,
-                      [&](const Book &copy) { return merged.takeFields || (asLogged && !SyncCopies::sameWords(copy.meta, merged.meta)); });
+    // A copy that has the details decided already, and no cover to take, is
+    // given nothing and counted for nothing: the logs may say them otherwise
+    // (an older copy's id the log folds into this book), but a write of what
+    // it holds changes nothing, and the next sync would decide the same (#160).
+    return giveCopies(taking, copies, merged, listed, settled, [&](const Book &copy) {
+        const bool behind = !SyncCopies::sameWords(copy.meta, merged.meta);
+        return (merged.takeFields && (merged.takeCover || behind)) || (asLogged && behind);
+    });
 }
 
 // When the other side removed what names this book here (`name`: a file's

@@ -52,6 +52,12 @@ rewrites what a book is.
   agree. One that fails is recorded as such once (`not_same_as`, which travels and grows like `same_as`,
   and outlives compaction's dropping of the old titles), by the one-off repair of format 43 at upgrade
   (said as the library is brought up to date) and by each sync for what came in.
+- **And by the person, on request.** A link an older Omabook made after it had already given one book the
+  other's title holds by the rule above (the titles agreed then), and once the title is put right it shows as
+  a rename no sync does. `omabook sync <computer> --unlink "<title>"` records each link between a book of
+  that title and one whose title, as the log says it now, disagrees as `not_same_as` (#160); a dry run's
+  renames say how. Nothing drops such a link by itself: "the titles disagree now" is also what a book renamed
+  on purpose on one computer looks like, and that one stays paired.
 - **A new book without a file is given an id of a strong key, else its title and authors**, never one
   another book here has; one received from another computer keeps the id it has there.
 

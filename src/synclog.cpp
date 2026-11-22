@@ -125,6 +125,15 @@ namespace {
     return paired;
 }
 
+// The links the person asked to drop (SyncOptions::unlink, #160), each
+// recorded here as not one book before the log goes, so it goes with it; a
+// dry run only names them.
+void unlink(const Library &library, const SyncOptions &options, SyncSummary &summary) {
+    for (const QString &title : options.unlink)
+        summary.titles.unlinked << BookLinks::unlink(library, Replication::operations(library), title, options.dryRun);
+    summary.titles.unlinked.removeDuplicates();
+}
+
 // Before what came in is compacted: the links it brought that are not of one
 // book stay dropped (BookLinks::record), and are named among the books kept apart.
 void keepApart(const Library &library, SyncSummary &summary) {
@@ -289,6 +298,7 @@ QJsonObject SyncLog::introduction(const Library &library) {
 SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary,
                                        const SyncOptions &options, bool carry) {
     const bool dryRun = options.dryRun;
+    unlink(library, options, summary);
     const QJsonArray books = manifest.value("books").toArray();
     const QString theirDevice = manifest.value("device").toString();
     QSet<QString> theirGids;

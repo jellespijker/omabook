@@ -12,6 +12,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <algorithm>
+#include <optional>
 #include <tuple>
 #include <utility>
 
@@ -382,6 +383,158 @@ private slots:
         QCOMPARE(a.book(mine)->meta.title, QString("The Lady of Crows: A Novel"));
         QCOMPARE(a.book(mine)->meta.description, QString("As Goodreads says it."));
         expectSettled(a, b, dir);
+    }
+
+    // A link an older Omabook made after it had given one book the other's
+    // title: the titles agreed then, so the repair keeps it, and once the
+    // person put the title right a sync lists a rename it never does (#160).
+    // `--unlink` with either title keeps the two apart from then on, on both
+    // computers, and each keeps its own title.
+    void aWrongLinkWhoseTitlesAgreedThenIsUnlinkedOnRequest_data() {
+        QTest::addColumn<QString>("title");
+        QTest::newRow("by the title here") << "the lady of crows";
+        QTest::newRow("by the title there") << "Silent Striders & Black Furies";
+    }
+
+    void aWrongLinkWhoseTitlesAgreedThenIsUnlinkedOnRequest() {
+        QFETCH(const QString, title);
+        QTemporaryDir dir;
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const qint64 crows = toRead(a, "The Lady of Crows", "1");
+        const qint64 striders = toRead(b, "Silent Striders & Black Furies", "2");
+        QVERIFY(crows > 0 && striders > 0);
+        // The identifier 0.2.0 gave it of the other, by which an older Omabook paired them.
+        QVERIFY(a.setIdentifier(crows, "calibre", silentUuid) && b.setIdentifier(striders, "calibre", silentUuid));
+        BookMeta corrupted = a.book(crows)->meta;
+        corrupted.title = "Silent Striders & Black Furies";
+        QVERIFY(a.setMeta(crows, corrupted));
+        linkAsBefore(a, Spaces::bookId(a, crows), Spaces::bookId(b, striders));
+        BookMeta putRight = a.book(crows)->meta;
+        putRight.title = "The Lady of Crows";
+        QVERIFY(a.setMeta(crows, putRight));
+        QCOMPARE(BookLinks::record(a, Replication::operations(a)), QStringList());
+
+        SyncOptions dry;
+        dry.dryRun = true;
+        const SyncSummary before = syncFrom(true, a, b, dir, dry);
+        const auto renames = [](const SyncSummary &summary) { return summary.titles.renamedHere + summary.titles.renamedThere; };
+        QVERIFY2(renames(before).size() == 1, qPrintable(renames(before).join('\n')));
+        const SyncSummary held = syncFrom(true, a, b, dir);
+        QCOMPARE(renames(held), renames(before));
+        QCOMPARE(held.renamesHeld, 1);
+        QCOMPARE(a.book(crows)->meta.title, QString("The Lady of Crows"));
+
+        SyncOptions unlink;
+        unlink.unlink = QStringList{title};
+        const SyncSummary unlinked = syncFrom(true, a, b, dir, unlink);
+        QVERIFY2(unlinked.problems.isEmpty(), qPrintable(unlinked.problems.join('\n')));
+        const QStringList pair{"Silent Striders & Black Furies / The Lady of Crows"};
+        QCOMPARE(unlinked.titles.unlinked, pair);
+        QCOMPARE(renames(unlinked), QStringList());
+        QCOMPARE(countApart(a), qsizetype{1});
+        QCOMPARE(countApart(b), qsizetype{1});
+        QCOMPARE(a.book(crows)->meta.title, QString("The Lady of Crows"));
+        QCOMPARE(b.book(striders)->meta.title, QString("Silent Striders & Black Furies"));
+        for (const bool side : {true, false}) {
+            const SyncSummary later = syncFrom(side, a, b, dir, dry);
+            QVERIFY2(later.problems.isEmpty(), qPrintable(later.problems.join('\n')));
+            QCOMPARE(renames(later), QStringList());
+        }
+        QVERIFY(syncFrom(true, a, b, dir).problems.isEmpty());
+        expectSettled(a, b, dir);
+        QCOMPARE(a.book(crows)->meta.title, QString("The Lady of Crows"));
+        QCOMPARE(b.book(striders)->meta.title, QString("Silent Striders & Black Furies"));
+    }
+
+    // A book paired by its Goodreads id, that the person renamed on purpose on
+    // one computer: neither the repair nor a sync drops its link, nor does an
+    // unlink of another title; the rename waits for consent, as before (#160).
+    void aBookRenamedOnPurposeStaysLinked() {
+        QTemporaryDir dir;
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const qint64 mine = toRead(a, "The Lady of Crows", "1");
+        const qint64 theirs = toRead(b, "Lady of Crows", "1");
+        QVERIFY(mine > 0 && theirs > 0);
+        BookMeta same = b.book(theirs)->meta;
+        same.title = "The Lady of Crows";
+        QVERIFY(b.setMeta(theirs, same));
+        const SyncSummary paired = syncFrom(true, a, b, dir);
+        QVERIFY2(paired.problems.isEmpty(), qPrintable(paired.problems.join('\n')));
+        QCOMPARE(paired.titles.renamedHere + paired.titles.renamedThere + paired.titles.apart, QStringList());
+        BookMeta renamed = b.book(theirs)->meta;
+        renamed.title = "Crows of the Lady";
+        QVERIFY(b.setMeta(theirs, renamed, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0)));
+
+        QCOMPARE(BookLinks::record(a, Replication::operations(a)), QStringList());
+        QCOMPARE(BookLinks::record(b, Replication::operations(b)), QStringList());
+        SyncOptions other;
+        other.unlink = QStringList{"Malkavian"};
+        const SyncSummary synced = syncFrom(true, a, b, dir, other);
+        QCOMPARE(synced.titles.unlinked, QStringList());
+        QVERIFY2(synced.problems.isEmpty(), qPrintable(synced.problems.join('\n')));
+        QVERIFY2(synced.titles.renamedHere == QStringList{"The Lady of Crows: title → Crows of the Lady"},
+                 qPrintable((synced.titles.renamedHere + synced.titles.renamedThere + synced.titles.apart + synced.titles.detailsTaken).join('\n')));
+        QCOMPARE(synced.received + synced.sent, 0);
+        QCOMPARE(countApart(a) + countApart(b), qsizetype{0});
+        QCOMPARE(a.books().size(), 1);
+        QCOMPARE(b.books().size(), 1);
+
+        SyncOptions accept;
+        accept.acceptRenames = true;
+        const SyncSummary done = syncFrom(false, a, b, dir, accept);
+        QVERIFY2(done.problems.isEmpty(), qPrintable(done.problems.join('\n')));
+        QCOMPARE(a.book(mine)->meta.title, QString("Crows of the Lady"));
+        expectSettled(a, b, dir);
+    }
+
+    // A book whose details are the same on both computers, while the log of
+    // one says otherwise of it: a copy's older id it folds into the book (a
+    // file's hash before its details were written into it, #74) has a newer
+    // description, theirs newer still. A sync lists nothing of its details
+    // and writes none, from either side, and the next sync neither (#160).
+    void equalDetailsAreNeitherListedNorWritten() {
+        QTemporaryDir dir;
+        const QString file = dir.filePath("crows.epub");
+        QVERIFY(Fixtures::epub(file, "The Lady of Crows"));
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const qint64 mine = a.add(file, {}).id;
+        const qint64 theirs = b.add(file, {}).id;
+        QVERIFY(mine > 0 && theirs > 0);
+        const QString gid = Spaces::bookId(a, mine);
+        QCOMPARE(Spaces::bookId(b, theirs), gid);
+        const qint64 at = QDateTime::currentSecsSinceEpoch() + 100;
+        BookMeta described = a.book(mine)->meta;
+        described.description = "Crows.";
+        QVERIFY(a.setMeta(mine, described, nullptr, Hlc::pack(at, 0)));
+        QVERIFY(b.setMeta(theirs, described, nullptr, Hlc::pack(at + 20, 0)));
+        const QString older = "b:" + QString(64, u'0');
+        ChangeLog::append(a, {.space = Spaces::personalSpace(a),
+                              .entity = "book",
+                              .id = older,
+                              .field = "description",
+                              .value = "Older.",
+                              .hlc = Hlc::pack(at + 10, 0)});
+        linkAsBefore(a, gid, older);
+        // After the first sync, which brings each side the other's operations, none is written.
+        std::optional<std::pair<qsizetype, qsizetype>> logged;
+        for (const bool side : {true, false, true}) {
+            const SyncSummary synced = syncFrom(side, a, b, dir);
+            QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty(), qPrintable(synced.error + synced.problems.join('\n')));
+            QCOMPARE(synced.titles.detailsTaken + synced.titles.detailsSent, QStringList());
+            QCOMPARE(synced.received + synced.sent, 0);
+            QCOMPARE(a.book(mine)->meta.description, QString("Crows."));
+            QCOMPARE(b.book(theirs)->meta.description, QString("Crows."));
+            const std::pair now{Replication::operations(a).size(), Replication::operations(b).size()};
+            if (logged)
+                QCOMPARE(now, *logged);
+            logged = now;
+        }
     }
 
     // Two books to read, one on each side, with the same Goodreads id and

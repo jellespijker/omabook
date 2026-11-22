@@ -234,7 +234,8 @@ QJsonObject SyncSummary::toJson() const {
     QJsonObject named{{"details_undecided", list(titles.detailsUndecided)},
                       {"renamed_here", list(titles.renamedHere)},
                       {"renamed_there", list(titles.renamedThere)},
-                      {"apart", list(titles.apart)}};
+                      {"apart", list(titles.apart)},
+                      {"unlinked", list(titles.unlinked)}};
     if (dryRun)
         named = QJsonObject{{"received", list(titles.received)},
                             {"sent", list(titles.sent)},
@@ -249,7 +250,8 @@ QJsonObject SyncSummary::toJson() const {
                             {"details_undecided", list(titles.detailsUndecided)},
                             {"renamed_here", list(titles.renamedHere)},
                             {"renamed_there", list(titles.renamedThere)},
-                            {"apart", list(titles.apart)}};
+                            {"apart", list(titles.apart)},
+                            {"unlinked", list(titles.unlinked)}};
     result.insert("titles", named);
     return result;
 }

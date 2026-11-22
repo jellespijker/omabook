@@ -64,6 +64,10 @@ struct SyncOptions {
     // the rest of its details. Without it, or `details`, a sync leaves those
     // as they are and lists the rename (#158).
     bool acceptRenames = false;
+    // The titles of books a link an older Omabook made folds together with a
+    // book of another title, to keep apart from now on (BookLinks::unlink,
+    // #160): the way out of a wrong link the titles of its time can't show.
+    QStringList unlink;
     // Changes nothing on either side, and says what a sync would do.
     bool dryRun = false;
     // The plugins whose data/ files travel (PluginFileSync); the person's when empty.
@@ -104,6 +108,8 @@ struct SyncSummary {
         // Books kept apart: they share an identifier but not a title, or an
         // older Omabook linked them as one when they are not (#158).
         QStringList apart;
+        // The links `unlink` asked to drop, as "<one title> / <the other>" (#160).
+        QStringList unlinked;
     } titles;
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all

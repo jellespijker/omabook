@@ -61,6 +61,27 @@ using Titles = QHash<QString, QList<std::pair<qint64, QString>>>;
     return !one || !other || BookIdentity::titlesAgree(*one, *other);
 }
 
+// The title each id has now, as the log says it: the latest one written.
+[[nodiscard]] QHash<QString, QString> titlesNow(const Titles &titles) {
+    QHash<QString, QString> now;
+    for (auto it = titles.cbegin(); it != titles.cend(); ++it)
+        now.insert(it.key(), std::ranges::max(*it, {}, &std::pair<qint64, QString>::first).second);
+    return now;
+}
+
+void writeApart(const Library &library, const SpaceOperation &link) {
+    ChangeLog::append(library, {.space = Spaces::personalSpace(library),
+                                .entity = u"book"_s,
+                                .id = std::max(link.id, link.value),
+                                .field = u"not_same_as"_s,
+                                .value = std::min(link.id, link.value),
+                                .hlc = std::nullopt});
+}
+
+[[nodiscard]] QString pairTitles(const QString &one, const QString &other) {
+    return std::min(one, other) + u" / "_s + std::max(one, other);
+}
+
 } // namespace
 
 QString BookLinks::pairOf(const QString &one, const QString &other) { return std::min(one, other) + u'|' + std::max(one, other); }
@@ -101,15 +122,27 @@ QStringList BookLinks::record(const Library &library, std::span<const SpaceOpera
         if (!isBookLink(link) || pairs.contains(pairOf(link.id, link.value)) || holds(titles, pairs, link))
             continue;
         pairs.insert(pairOf(link.id, link.value));
-        ChangeLog::append(library, {.space = Spaces::personalSpace(library),
-                                    .entity = u"book"_s,
-                                    .id = std::max(link.id, link.value),
-                                    .field = u"not_same_as"_s,
-                                    .value = std::min(link.id, link.value),
-                                    .hlc = std::nullopt});
-        const QString one = titleAt(titles, link.id, link.hlc).value_or(link.id);
-        const QString other = titleAt(titles, link.value, link.hlc).value_or(link.value);
-        written << std::min(one, other) + u" / "_s + std::max(one, other);
+        writeApart(library, link);
+        written << pairTitles(titleAt(titles, link.id, link.hlc).value_or(link.id), titleAt(titles, link.value, link.hlc).value_or(link.value));
     }
     return written;
+}
+
+QStringList BookLinks::unlink(const Library &library, std::span<const SpaceOperation> ops, const QString &title, bool dryRun) {
+    const QHash<QString, QString> now = titlesNow(titlesOf(ops));
+    const auto named = [&](const QString &id) { return now.value(id).trimmed().compare(title.trimmed(), Qt::CaseInsensitive) == 0; };
+    QStringList unlinked;
+    const Library::Batch batch(library);
+    for (const SpaceOperation &link : trusted(ops)) {
+        const QString one = now.value(link.id);
+        const QString other = now.value(link.value);
+        if (!isBookLink(link) || ofFiles(link) || !(named(link.id) || named(link.value)) || one.isEmpty() || other.isEmpty()
+            || BookIdentity::titlesAgree(one, other))
+            continue;
+        if (!dryRun)
+            writeApart(library, link);
+        unlinked << pairTitles(one, other);
+    }
+    unlinked.removeDuplicates();
+    return unlinked;
 }

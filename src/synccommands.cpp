@@ -5,6 +5,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
+#include <algorithm>
 #include <cstdio>
 #include <expected>
 #include <memory>
@@ -69,6 +70,7 @@ bool parseArguments(QCommandLineParser &parser, const QString &name, const QStri
     SyncOptions options;
     options.dryRun = parser.isSet("dry-run");
     options.acceptRenames = parser.isSet("accept-renames");
+    options.unlink = parser.values("unlink");
     const QString details = parser.value("details").toLower();
     if (details == "mine")
         options.details = SyncOptions::Details::Mine;
@@ -158,7 +160,22 @@ void printKeptApart(const SyncSummary &summary, const QString &host, const QStri
                                   "--details mine or --details theirs; add --dry-run to see first.")
                               .arg(summary.renamesHeld == 1 ? QString("1 book is") : QString("%1 books are").arg(summary.renamesHeld))
                               .arg(computer));
+    // A rename may be of a wrong link an older Omabook made that its titles then can't show (#160).
+    if (!summary.titles.renamedHere.isEmpty() || !summary.titles.renamedThere.isEmpty())
+        printLine(stdout, QString("If a rename is of two different books an older Omabook took for one: omabook sync %1 --unlink "
+                                  "\"<title>\" keeps them apart from now on.")
+                              .arg(computer));
     printSection("Kept apart: they share an identifier, or were linked by an older Omabook, but are not one book", summary.titles.apart);
+    printSection(summary.dryRun ? "Would be unlinked" : "Unlinked, and kept apart from now on", summary.titles.unlinked);
+}
+
+// The titles `--unlink` was given that named no link to unlink (#160).
+[[nodiscard]] QStringList unlinkedNothing(const SyncOptions &options, const SyncSummary &summary) {
+    QStringList none;
+    for (const QString &title : options.unlink)
+        if (std::ranges::none_of(summary.titles.unlinked, [&](const QString &pair) { return pair.contains(title.trimmed(), Qt::CaseInsensitive); }))
+            none << title;
+    return none;
 }
 
 int printSyncResult(const SyncSummary &summary, const QString &computer, bool json) {
@@ -250,6 +267,10 @@ int runSyncCli(const QStringList &arguments) {
         {"accept-renames",
          "Let a book paired by an identifier (not by its id) take the title, authors or ISBN the other "
          "side gives it, the newer winning; without it, or --details, a sync lists such a rename and leaves the book as it is."});
+    parser.addOption({"unlink",
+                      "Keep apart from now on a book of this title and the book of another title it is paired with, on "
+                      "either computer: for two different books an older Omabook took for one. May be given more than once.",
+                      "title"});
     parser.addOption(
         {"dry-run", "Change nothing on either side; list what would be received, sent, updated, renamed and removed on each."});
     parser.addOption({"replicate",
@@ -287,5 +308,8 @@ int runSyncCli(const QStringList &arguments) {
         *options);
     if (!summary.error.isEmpty())
         return failLine(summary.error);
-    return printSyncResult(summary, computer, json);
+    const QStringList nothing = unlinkedNothing(*options, summary);
+    for (const QString &title : nothing)
+        printLine(stderr, QString("No book titled \"%1\" is linked to a book of another title, so nothing was unlinked.").arg(title));
+    return std::max(printSyncResult(summary, computer, json), nothing.isEmpty() ? 0 : 1);
 }
