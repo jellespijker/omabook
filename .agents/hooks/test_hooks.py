@@ -19,7 +19,7 @@ from pathlib import Path
 from unittest import mock
 
 REPO = Path(__file__).resolve().parents[2]
-HARNESS = [".agents", "rules", "rule-tests", "sgconfig.yml", ".clang-format", "ruff.toml", "bin/jobs"]
+HARNESS = [".agents", "rules", "rule-tests", "sgconfig.yml", ".clang-format", "ruff.toml", "bin/jobs", "bin/release-notes"]
 
 
 def isolated() -> dict[str, str]:
@@ -239,6 +239,57 @@ class Complexity(HarnessTest):
         self.repo.commit()
         self.repo.write("src/pick.cpp", self.BRANCHY + "int other() { return 1; }\n")
         self.assertQuiet(self.repo.run("check_complexity.py", "--changed", "src/pick.cpp"))
+
+
+class Changelog(HarnessTest):
+    FRAGMENT = "---\nsection: Fixed\n---\n\n- The shelf sorts again (#7).\n"
+
+    def setUp(self) -> None:
+        super().setUp()
+        self.repo.write("CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n## [0.3.0] - 2026-11-22\n")
+        self.repo.write("CMakeLists.txt", "project(omabook VERSION 0.3.0 LANGUAGES CXX)\n")
+        self.repo.write("src/shelf.cpp", "int a = 1;\n")
+        self.repo.commit()
+
+    def check(self, *args: str) -> subprocess.CompletedProcess:
+        return self.repo.run("check_changelog.py", *(args or ("--changed",)))
+
+    def test_the_changelog_is_edited_only_by_a_release(self) -> None:
+        self.repo.write("CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n- A line (#7).\n\n## [0.3.0] - 2026-11-22\n")
+        self.assertFires(self.check(), "lines added under [Unreleased]")
+        self.repo.write("CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n## [0.3.0] - 2026-11-21\n")
+        self.assertFires(self.check(), "a released section changed outside a release")
+        self.repo.write("CMakeLists.txt", "project(omabook VERSION 0.4.0 LANGUAGES CXX)\n")
+        self.assertQuiet(self.check())
+
+    def test_lines_may_leave_unreleased_for_fragments(self) -> None:
+        self.repo.write("CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n### Fixed\n\n- Old (#6).\n\n## [0.3.0] - 2026-11-22\n")
+        self.repo.commit()
+        self.repo.write("CHANGELOG.md", "# The change log\n\n## [Unreleased]\n\n## [0.3.0] - 2026-11-22\n")
+        self.repo.write("changes/6.md", self.FRAGMENT.replace("#7", "#6"))
+        self.assertQuiet(self.check())
+
+    def test_a_commit_named_release_may_edit_it(self) -> None:
+        self.repo.git("checkout", "-q", "-b", "release")
+        self.repo.write("CHANGELOG.md", "# Changelog\n\n## [Unreleased]\n\n## [0.3.1] - 2026-11-23\n\n## [0.3.0] - 2026-11-22\n")
+        self.repo.git("commit", "-q", "--no-verify", "-am", "Fix a typo in the notes (#7)")
+        self.assertFires(self.check("--base", "main"), "a released section changed")
+        self.repo.git("commit", "-q", "--no-verify", "--amend", "-m", "Release 0.3.1: the shelf sorts again (#7)")
+        self.assertQuiet(self.check("--base", "main"))
+
+    def test_a_change_to_what_omabook_does_leaves_a_fragment(self) -> None:
+        self.repo.write("src/shelf.cpp", "int a = 2;\n")
+        self.assertFires(self.check(), "no changes/<issue>.md says how")
+        self.repo.write("changes/7.md", self.FRAGMENT)
+        self.assertQuiet(self.check())
+        self.repo.write("changes/7.md", self.FRAGMENT.replace("Fixed", "Mended"))
+        self.assertFires(self.check(), "section is Mended")
+        self.repo.write("changes/7.md", "---\nsection: none\n---\n\n- Only the code moved.\n")
+        self.assertQuiet(self.check())
+
+    def test_a_change_beside_the_program_needs_none(self) -> None:
+        self.repo.write("docs/notes.md", "How it works.\n")
+        self.assertQuiet(self.check())
 
 
 if __name__ == "__main__":

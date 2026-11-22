@@ -1,0 +1,160 @@
+#!/usr/bin/env python3
+"""The change log's notes for a release, from the fragments each change left in changes/.
+
+A change someone using Omabook would notice adds changes/<issue>.md (or
+changes/<issue>-<word>.md for a second one) and never edits CHANGELOG.md:
+
+    ---
+    section: Added
+    ---
+
+    - What it brings, as a person sees it (#123).
+
+`section` is one of Keep a Changelog's: Added, Changed, Deprecated, Removed,
+Fixed, Security; or `none` for a change no one would notice, the body saying
+why. The body is the line or lines, each starting with "- ".
+
+  bin/release-notes 0.4.0 [--date 2026-12-01]
+      moves every fragment's lines (and any still under [Unreleased]) into a new
+      section for 0.4.0 under [Unreleased], in the CHANGELOG's order, sorted by
+      issue within a section, and removes the fragments: the release commit's work
+  bin/release-notes --check [FILES]
+      says what is wrong with the fragments (all of them when no FILES are given)
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime
+import re
+import sys
+from dataclasses import dataclass, field
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+SECTIONS = ("Added", "Changed", "Deprecated", "Removed", "Fixed", "Security")
+NAME = re.compile(r"^(\d+)(?:-[\w-]+)?\.md$")
+UNRELEASED = "## [Unreleased]"
+
+
+@dataclass
+class Fragment:
+    path: Path
+    issue: int
+    section: str
+    items: list[str] = field(default_factory=list)
+
+
+def items(body: str) -> list[str]:
+    """The body's lines, each "- " line with the indented lines that continue it."""
+    found: list[str] = []
+    for line in body.strip("\n").splitlines():
+        if line.startswith("- "):
+            found.append(line)
+        elif line.strip() and found and line.startswith(" "):
+            found[-1] += "\n" + line
+        elif line.strip():
+            raise ValueError(f"not a line of the change log (start it with '- '): {line[:60]!r}")
+    return found
+
+
+def parse(path: Path) -> Fragment:
+    match = NAME.match(path.name)
+    if not match:
+        raise ValueError("name it changes/<issue>.md, or changes/<issue>-<word>.md")
+    parts = path.read_text(encoding="utf-8").split("---\n", 2)
+    if len(parts) != 3 or parts[0].strip():
+        raise ValueError("start it with front matter: ---, section: Added, ---")
+    meta = dict(line.split(":", 1) for line in parts[1].splitlines() if ":" in line)
+    section = meta.get("section", "").strip()
+    if section not in (*SECTIONS, "none"):
+        raise ValueError(f"section is {section or 'missing'}; one of {', '.join(SECTIONS)}, or none")
+    found = items(parts[2])
+    if not found:
+        raise ValueError("it has no line: say what changed (or, for section none, why no one would notice)")
+    return Fragment(path, int(match.group(1)), section, found if section != "none" else [])
+
+
+def fragments(folder: Path) -> list[Fragment]:
+    paths = sorted(folder.glob("*.md")) if folder.is_dir() else []
+    return sorted((parse(path) for path in paths), key=lambda fragment: (fragment.issue, fragment.path.name))
+
+
+def check(paths: list[str]) -> int:
+    chosen = [Path(path) for path in paths] or sorted((ROOT / "changes").glob("*.md"))
+    problems = []
+    for path in chosen:
+        try:
+            parse(path)
+        except (ValueError, OSError) as error:
+            problems.append(f"{path}: {error}")
+    print("\n".join(problems), file=sys.stderr, end="\n" if problems else "")
+    return 1 if problems else 0
+
+
+def unreleased(lines: list[str]) -> tuple[int, int, dict[str, list[str]]]:
+    """Where [Unreleased] starts and ends, and the lines still in it, by section."""
+    start = lines.index(UNRELEASED)
+    end = next((i for i in range(start + 1, len(lines)) if lines[i].startswith("## [")), len(lines))
+    sections: dict[str, list[str]] = {}
+    current = None
+    for line in lines[start + 1 : end]:
+        if line.startswith("### "):
+            current = sections.setdefault(line[4:].strip(), [])
+        elif line.startswith("- ") and current is not None:
+            current.append(line)
+        elif line.strip() and current:
+            current[-1] += "\n" + line
+    return start, end, sections
+
+
+def section_text(version: str, date: str, sections: dict[str, list[str]]) -> list[str]:
+    out = [f"## [{version}] - {date}", ""]
+    for name in [*SECTIONS, *(name for name in sections if name not in SECTIONS)]:
+        if sections.get(name):
+            out += [f"### {name}", "", *sections[name], ""]
+    return out
+
+
+def release(version: str, date: str) -> int:
+    changelog = ROOT / "CHANGELOG.md"
+    lines = changelog.read_text(encoding="utf-8").splitlines()
+    if any(line.startswith(f"## [{version}]") for line in lines):
+        print(f"release-notes: CHANGELOG.md already has {version}", file=sys.stderr)
+        return 1
+    try:
+        found = fragments(ROOT / "changes")
+    except ValueError as error:
+        print(f"release-notes: {error}; see bin/release-notes --check", file=sys.stderr)
+        return 1
+    start, end, sections = unreleased(lines)
+    for fragment in found:
+        sections.setdefault(fragment.section, []).extend(fragment.items)
+    sections.pop("none", None)
+    if not any(sections.values()):
+        print("release-notes: nothing to release: no fragment in changes/ and nothing under [Unreleased]", file=sys.stderr)
+        return 1
+    lines[start:end] = [UNRELEASED, "", *section_text(version, date, sections)]
+    changelog.write_text("\n".join(lines).rstrip("\n") + "\n", encoding="utf-8")
+    for fragment in found:
+        fragment.path.unlink()
+    count = sum(len(entries) for entries in sections.values())
+    print(f"CHANGELOG.md: {version} with {count} line(s); {len(found)} fragment(s) removed from changes/")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("version", nargs="?")
+    parser.add_argument("--date", default=datetime.date.today().isoformat())
+    parser.add_argument("--check", nargs="*", metavar="FILE")
+    args = parser.parse_args(argv)
+    if args.check is not None:
+        return check(args.check)
+    if not args.version or not re.fullmatch(r"\d+(\.\d+)+", args.version):
+        parser.error("give the version to release, such as 0.4.0")
+    return release(args.version, args.date)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

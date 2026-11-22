@@ -28,6 +28,7 @@ hand: `bin/check` (it compares the working tree with `main`).
 | File size, function complexity | [30-size-and-complexity.md](30-size-and-complexity.md) | `check_file_size.py`, lizard |
 | Secrets | `.talismanrc` | Talisman, `pretool_guard.py` |
 | Commit names its issue | the workspace's `AGENTS.md` | `check_commit_msg.py` |
+| Change notes in `changes/<issue>.md`; `CHANGELOG.md` gains lines only in a release | `AGENTS.md`, `bin/release-notes` | `check_changelog.py` (in `bin/check`) |
 
 ## When a check is wrong
 
