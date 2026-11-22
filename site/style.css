@@ -2,10 +2,10 @@
 @font-face{font-family:"Omabook Mono";src:url(fonts/jetbrains-mono-Bold.woff2) format("woff2");font-weight:700;font-style:normal;font-display:swap}
 /* Direction B: Keyboard. A terminal pane, themes that follow Omarchy, key-lettered sections. */
 :root,:root:has(input[value=auto]:checked){--bg:#1a1b26;--bg2:#16161e;--fg:#c0caf5;--dim:#9aa5ce;--line:#3b4261;--a1:#7aa2f7;--a2:#bb9af7;--a3:#9ece6a;--a4:#e0af68;--on:#16161e;--mono:"Omabook Mono","JetBrains Mono",ui-monospace,Menlo,Consolas,monospace}
-@media (prefers-color-scheme:light){:root,:root:has(input[value=auto]:checked){--bg:#eff1f5;--bg2:#e6e9ef;--fg:#4c4f69;--dim:#5c5f77;--line:#bcc0cc;--a1:#1e66f5;--a2:#8839ef;--a3:#2a7a1a;--a4:#a15c07;--on:#eff1f5}}
+@media (prefers-color-scheme:light){:root,:root:has(input[value=auto]:checked){--bg:#eff1f5;--bg2:#e6e9ef;--fg:#4c4f69;--dim:#5c5f77;--line:#bcc0cc;--a1:#1555d4;--a2:#7a2ee0;--a3:#246d17;--a4:#8a4f05;--on:#eff1f5}}
 :root:has(input[value=tokyo]:checked){--bg:#1a1b26;--bg2:#16161e;--fg:#c0caf5;--dim:#9aa5ce;--line:#3b4261;--a1:#7aa2f7;--a2:#bb9af7;--a3:#9ece6a;--a4:#e0af68;--on:#16161e}
 :root:has(input[value=gruvbox]:checked){--bg:#282828;--bg2:#1d2021;--fg:#ebdbb2;--dim:#bdae93;--line:#504945;--a1:#83a598;--a2:#d3869b;--a3:#b8bb26;--a4:#fabd2f;--on:#1d2021}
-:root:has(input[value=latte]:checked){--bg:#eff1f5;--bg2:#e6e9ef;--fg:#4c4f69;--dim:#5c5f77;--line:#bcc0cc;--a1:#1e66f5;--a2:#8839ef;--a3:#2a7a1a;--a4:#a15c07;--on:#eff1f5}
+:root:has(input[value=latte]:checked){--bg:#eff1f5;--bg2:#e6e9ef;--fg:#4c4f69;--dim:#5c5f77;--line:#bcc0cc;--a1:#1555d4;--a2:#7a2ee0;--a3:#246d17;--a4:#8a4f05;--on:#eff1f5}
 :root:has(input[value=forest]:checked){--bg:#2d353b;--bg2:#232a2e;--fg:#d3c6aa;--dim:#9da9a0;--line:#475258;--a1:#7fbbb3;--a2:#d699b6;--a3:#a7c080;--a4:#dbbc7f;--on:#232a2e}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--fg);font:1rem/1.65 var(--mono);transition:background .25s,color .25s}
@@ -62,7 +62,7 @@ details{border-top:1px solid var(--line);padding:.7rem 0}summary{cursor:pointer;
 .count{color:var(--dim);font-size:.88rem}
 .plug-grid{display:grid;gap:1rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,22rem),1fr))}
 .plug{border:1px solid var(--line);border-radius:6px;padding:1.1rem 1.25rem;background:var(--bg2)}.plug header{display:flex;justify-content:space-between;gap:.75rem;align-items:center}.plug h3{margin:0}.plug h3::before{content:""}.plug p{color:var(--dim);font-size:.92rem}.plug.example{border-style:dashed}
-.badge{font-size:.68rem;padding:.1rem .45rem;border-radius:3px;border:1px solid var(--line);color:var(--dim)}.badge.ok{color:var(--a3);border-color:var(--a3)}
+.badge{font-size:.75rem;padding:.1rem .45rem;border-radius:3px;border:1px solid var(--line);color:var(--dim)}.badge.ok{color:var(--a3);border-color:var(--a3)}
 .meta{display:grid;grid-template-columns:max-content 1fr;gap:.15rem 1rem;font-size:.8rem}.meta dt{color:var(--dim)}.meta dd{margin:0;overflow-wrap:anywhere}.cmd code::before{content:"$ ";color:var(--a3)}
 .foot{max-width:76rem;margin:0 auto;padding:2rem 1rem 3rem;border-top:1px solid var(--line);color:var(--dim);font-size:.85rem}.foot p{margin:.3rem 0}
 @media(max-width:40rem){dl.caps{grid-template-columns:1fr}.pane{padding-inline:1rem}.pane-h{margin-inline:-1rem;padding-inline:1rem}}
@@ -82,3 +82,42 @@ details{border-top:1px solid var(--line);padding:.7rem 0}summary{cursor:pointer;
 .ph{color:var(--dim);font-size:.85rem}
 .flex2{display:grid;gap:1.25rem;grid-template-columns:repeat(auto-fit,minmax(min(100%,20rem),1fr))}
 @media(max-width:60rem){.top{position:static}}
+
+/* The product page, bolder: the page's own devices (the key letter, the pane, the mono type, the theme's colors) at full strength. */
+.home .hero{padding:clamp(2rem,6vw,5rem) 0 3.5rem}
+.home .hero h1{font-size:clamp(2.5rem,8.4vw,6rem);line-height:.98;letter-spacing:-.04em;max-width:13ch;margin-bottom:1.75rem}
+.home .hero h1 .hi{color:var(--a1);display:inline}
+.home .lede{font-size:clamp(1.05rem,2vw,1.3rem);color:var(--fg);max-width:34rem;line-height:1.55}
+.home .term{max-width:30rem;margin-bottom:2.5rem;box-shadow:0 24px 48px -28px rgba(0,0,0,.55)}
+.home .term pre{font-size:1.02rem;line-height:1.8}
+.cur{display:inline-block;width:.6em;height:1.1em;background:var(--a3);vertical-align:text-bottom;animation:cur 1.1s steps(1) infinite}
+@keyframes cur{50%{opacity:0}}
+.home .cta .btn{font-size:1.05rem;padding:.8rem 1.5rem}
+.home .hero .win{margin-inline:0;border-width:2px}
+.home .pane{border:0;border-top:2px solid var(--a1);border-radius:0;background:none;padding:2.5rem 0 3rem;margin:0}
+.home .pane:nth-of-type(4n+3){border-top-color:var(--a2)}
+.home .pane:nth-of-type(4n+4){border-top-color:var(--a3)}
+.home .pane:nth-of-type(4n+5){border-top-color:var(--a4)}
+.home .pane-h{display:flex;align-items:center;gap:1.2rem;margin:0 0 .6rem;padding:0;border:0;background:none}
+.home .pane-h kbd{font-size:clamp(1.4rem,3vw,2.2rem);min-width:1.8em;padding:.15em .3em;border-bottom-width:4px;border-radius:6px;color:var(--a1)}
+.home .pane-h h2{font-size:clamp(1.7rem,4.2vw,3rem);line-height:1.05;letter-spacing:-.03em;margin:0}
+.home .sub{font-size:1.05rem;color:var(--a1);margin:0 0 1.75rem;max-width:36rem}
+.home dl.points dt{font-size:1.02rem}
+/* The graph is the peak of the page: a whole band, its heading largest, its pictures widest. */
+.home #graph{border-top:0;background:var(--bg2);margin-inline:-1rem;padding-inline:1rem;padding-block:3.5rem 4rem}
+body.home{overflow-x:clip}
+@media(min-width:60rem){.home #graph{margin-inline:calc(-1 * (50vw - 50%) + 6.5rem);padding-inline:3rem}}
+.home #graph .pane-h h2{font-size:clamp(2.2rem,6vw,4.5rem);letter-spacing:-.04em}
+.home #graph .pane-h kbd{font-size:clamp(2rem,5vw,3.6rem)}
+.home #graph .sub{font-size:1.25rem}
+.home #graph .win{box-shadow:0 30px 60px -30px rgba(0,0,0,.65)}
+/* Three readers side by side, each led by what it is. */
+@media(min-width:60rem){.home #readers{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 2.5rem}.home #readers>.pane-h,.home #readers>.sub{grid-column:1/-1}}
+.home .scen{border-top:0;padding:0 0 1rem}
+.home .scen h3{font-size:1.6rem;color:var(--a1);letter-spacing:-.02em;margin:.5rem 0 .2rem}
+.home .scen h3::before{content:""}
+.home .scen:nth-of-type(2) h3{color:var(--a3)}
+.home .scen:nth-of-type(3) h3{color:var(--a4)}
+.home .scen-t{font-size:1.1rem;color:var(--fg);margin:.2rem 0 .6rem}
+@media(max-width:60rem){.home .pane{padding-block:2rem 2.5rem}.home .hero h1{max-width:none}}
+@media (prefers-reduced-motion:reduce){.cur{animation:none}}

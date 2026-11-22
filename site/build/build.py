@@ -240,7 +240,8 @@ def plugins_page(offline):
 
 
 def main():
-    write("index.html", frame("", "", "Omabook: your books, and what connects them", fragment("product.html")))
+    page = frame("", "", "Omabook: your books, and what connects them", fragment("product.html"))
+    write("index.html", page.replace('<body class="dir-b">', '<body class="dir-b home">'))
     section_pages("docs", DOCS, "Documentation")
     section_pages("help", HELPS, "Help")
     plugins_page("--offline" in sys.argv)
