@@ -16,6 +16,7 @@ license=('MIT' 'GPL-3.0-or-later')
 # is tested.
 options=('!debug' '!lto')
 depends=(
+  'ffmpeg'
   'hicolor-icon-theme'
   'libarchive'
   'libsodium'
