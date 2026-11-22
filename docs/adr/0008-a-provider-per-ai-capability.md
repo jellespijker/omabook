@@ -311,3 +311,31 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   it; pressing the microphone again stops it before it listens, and a book being read aloud pauses.
 - **Where**: the companion's question and "ask about your library" (`AskDialog`'s `voice`); "Change
   Omabook" takes no voice. With the AI Off there is no microphone, as for a note.
+
+## As built in #151
+
+- **Recordings are written out a piece at a time** (`Transcriber`): five minutes each, cut as a WAV of 16 kHz
+  mono (`RecordingPieces`: a WAV of 16-bit samples and Ogg Opus by Omabook itself, anything else through
+  ffmpeg), which every speech-to-text provider takes at once, Gemini's inline audio of up to 14 MB too. Each
+  piece goes the ways the registry gives speech to text, through a `RecognitionQueue` of the transcriber's own,
+  so the privacy rule, AI Off and the waiting for a server that is away hold as for one recording; with the
+  AI Off nothing of the recording is read at all. A word's moment is counted from the recording's start; one
+  said across two pieces may come out in either.
+- **Kept on this computer, not in the change log** (`TranscriptStore`, the data folder's
+  `omabook/transcripts`): by the SHA-256 of the recording, which is the library's hash of a book's file, each
+  piece the moment it is written out, then the whole. Stopping loses at most the piece under way; started
+  again, it goes on from there. Hours of words in the log would go to every computer, and each writes out
+  what it has, as the meaning index is kept (ADR 0007). `omabook.recognize.audio` keeps its results in the
+  plugin's data as before.
+- **One recording at a time for everyone**: the window's transcriber is the plugins' too
+  (`ScriptServices::transcriber`); a plugin without a window makes one of its own.
+- **A recording in the library is a book** (`RecordingBook`): MP3, M4B, M4A, AAC, Ogg, Opus, FLAC and WAV are
+  formats Omabook reads, last in its order, whose text is the transcript in chapters of ten minutes named by
+  their moment. Before it is written out, opening it says how (`NotTranscribed`). Written out from the
+  window, its words go into the shelf's search (`BookWords`, #136), and the reader, the search in a book, the
+  command line and the MCP server read it as any book.
+- **Started by the person in the window** (Write Out in the details, Shift+E): it asks for hosted, as reading a
+  note does (#84), so a hosted way is taken only where they allowed one for speech to text. Starting another
+  recording stops the one under way, kept as far as it got.
+- **A plugin's one call** is `omabook.recognize.transcript(file, {language, hosted, again, onProgress,
+  onWaiting})`, whose promise has `stop()`; the Notebooks plugin can move onto it from `recognize.audio`.

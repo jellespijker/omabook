@@ -2425,5 +2425,20 @@
   "Hold the companion's microphone, or Ctrl+M in its question, and say what you want to know: it is asked when you let go, and the answer is shown and read aloud. Asking again, Escape or {reader.read_aloud_stop} stops it. {library.ask} takes a spoken question too.": "Maintenez le microphone du compagnon, ou Ctrl+M dans sa question, et dites ce que vous voulez savoir : la question est posée quand vous relâchez, et la réponse est affichée et lue à voix haute. Demander à nouveau, Échap ou {reader.read_aloud_stop} l'arrête. {library.ask} accepte aussi une question parlée.",
   "Reads the answer aloud": "Lit la réponse à voix haute",
   "Stop reading": "Arrêter la lecture",
-  "The AI": "L'IA"
+  "The AI": "L'IA",
+  "%1 is a recording, and it isn't written out yet. Write it out from its details beside the shelf, and it reads here as text.": "%1 est un enregistrement, et il n’est pas encore transcrit. Transcris-le depuis ses détails à côté de l’étagère, et il se lira ici comme du texte.",
+  "%1 is read with ffmpeg, which isn't installed. Install the ffmpeg package.": "%1 se lit avec ffmpeg, qui n’est pas installé. Installe le paquet ffmpeg.",
+  "Being written out in the background.": "Transcription en cours en arrière-plan.",
+  "Not written out yet. Written out, it reads as a book, and the search finds it by what is said in it.": "Pas encore transcrit. Une fois transcrit, il se lit comme un livre, et la recherche le trouve par ce qui s’y dit.",
+  "Stop Writing Out": "Arrêter la transcription",
+  "Write Out": "Transcrire",
+  "Writing out the recording stopped. What was written out is kept, and it goes on from there when it is started again.": "La transcription de l’enregistrement s’est arrêtée. Ce qui a été transcrit est gardé, et elle reprend de là quand on la relance.",
+  "Writing out “%1”: %2": "Transcription de « %1 » : %2",
+  "Writing out “%1”…": "Transcription de « %1 »…",
+  "Written out by the sentence: the way it was written out gives no word its own moment.": "Transcrit phrase par phrase : la façon dont il a été transcrit ne donne à aucun mot son propre instant.",
+  "Written out in part, %1 of %2. It goes on from there.": "Transcrit en partie, %1 sur %2. La suite reprend de là.",
+  "Written out, each word with its moment.": "Transcrit, chaque mot avec son instant.",
+  "Go On Writing Out": "Reprendre la transcription",
+  "The transcript can't be kept in %1: %2": "La transcription ne peut pas être gardée dans %1 : %2",
+  "Write out the selected recording through speech to text, or stop writing it out": "Transcrire l’enregistrement sélectionné par la parole en texte, ou arrêter sa transcription"
 }

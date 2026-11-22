@@ -111,6 +111,11 @@ public:
         DictationBusy,          // {}: another field is listened for
         DictationNothingHeard,  // {}
         VoxtypeDictationFailed, // {what it said}
+        // Writing recordings out (formats, services; #151).
+        NotTranscribed,        // {file name}: a recording in the library, not written out yet
+        TranscriptUnwritten,   // {path, the system's reason}
+        RecordingNeedsFfmpeg,  // {file name}: neither a WAV nor an Opus recording, and no ffmpeg to read it
+        TranscriptionStopped,  // {}: stopped; what was written out is kept
         // Reading a book aloud (services; #73); "name" is the engine's, "where" a server's address.
         NoVoice,            // {}: neither Piper with a voice nor speech-dispatcher is installed
         PiperMissing,       // {}

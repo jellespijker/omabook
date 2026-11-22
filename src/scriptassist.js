@@ -111,6 +111,23 @@
                 return recognition(function (chosen, waiting, resolve, reject) {
                     return assist.audio(file, chosen, waiting, resolve, reject);
                 }, options);
+            },
+            // A recording written out whole, a piece at a time, which stop()
+            // stops and a later call goes on with (#151). The options are
+            // {language, hosted, again, onProgress(done, total), onWaiting}.
+            transcript: function (file, options) {
+                need(file, "string", "The recording");
+                options = options === undefined || options === null ? {} : options;
+                need(options, "object", "The options");
+                if (options.onProgress !== undefined && options.onProgress !== null)
+                    need(options.onProgress, "function", "onProgress");
+                var job = 0;
+                var promise = recognition(function (chosen, waiting, resolve, reject) {
+                    job = assist.transcript(file, chosen, options.onProgress || null, waiting, resolve, reject);
+                    return job;
+                }, options);
+                promise.stop = function () { return assist.stopTranscript(job); };
+                return promise;
             }
         }
     };

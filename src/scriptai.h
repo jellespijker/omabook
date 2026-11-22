@@ -3,6 +3,7 @@
 #include <QJSEngine>
 #include <QJSValue>
 #include <QJsonObject>
+#include <QList>
 #include <QObject>
 #include <QString>
 #include <QVariantMap>
@@ -14,6 +15,7 @@
 class AiProvider;
 class RecognitionQueue;
 class ScriptPlugin;
+class Transcriber;
 class Voice;
 
 // The C++ side of `omabook.ai` and `omabook.recognize` (#84), beside
@@ -68,6 +70,15 @@ public:
     Q_INVOKABLE int audio(const QString &file, const QString &options, const QJSValue &onWaiting, const QJSValue &resolve,
                           const QJSValue &reject);
     Q_INVOKABLE bool cancel(int job);
+    // A recording of the plugin's written out whole (#151), `recognize.transcript`:
+    // a piece at a time in the background, each kept as it is written out, so
+    // one stopped goes on from there when asked again; kept whole, it is
+    // answered at once. `options` is JSON: {language, hosted, again}; told
+    // how far it is with onProgress(done, total). Answers the request's number.
+    Q_INVOKABLE int transcript(const QString &file, const QString &options, const QJSValue &onProgress, const QJSValue &onWaiting,
+                               const QJSValue &resolve, const QJSValue &reject);
+    // Stops it, keeping what was written out; its promise is rejected.
+    Q_INVOKABLE bool stopTranscript(int job);
 
     // Reads `text` aloud with the voice the person chose (`ai.speak`); a new
     // one stops the one before. `options` is JSON: {language, hosted}. The
@@ -89,9 +100,14 @@ private:
     int submit(Recognition::Input input, const QJsonObject &options, const QJSValue &onWaiting, const QJSValue &resolve,
                const QJSValue &reject);
     [[nodiscard]] RecognitionQueue *queue();
+    // The window's, which writes out one recording at a time for everyone; else one of its own.
+    [[nodiscard]] Transcriber *transcriber();
+    void told(const QJSValue &callback, const QJSValueList &arguments);
 
     ScriptPlugin *m_plugin;
     std::unique_ptr<RecognitionQueue> m_queue;
+    std::unique_ptr<Transcriber> m_transcriber;
+    QList<int> m_transcripts; // its own, under way or waiting their turn
     // What is being read aloud, and what is told when it ends.
     std::unique_ptr<Voice> m_voice;
     QJSValue m_spoken, m_notSpoken;

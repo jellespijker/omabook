@@ -2326,5 +2326,20 @@
   "Hold the companion's microphone, or Ctrl+M in its question, and say what you want to know: it is asked when you let go, and the answer is shown and read aloud. Asking again, Escape or {reader.read_aloud_stop} stops it. {library.ask} takes a spoken question too.": "Halte das Mikrofon des Begleiters oder Strg+M in seiner Frage gedrückt und sag, was du wissen willst: Die Frage wird gestellt, wenn du loslässt, und die Antwort wird angezeigt und vorgelesen. Erneutes Fragen, Escape oder {reader.read_aloud_stop} beendet sie. Auch {library.ask} nimmt eine gesprochene Frage an.",
   "Reads the answer aloud": "Liest die Antwort vor",
   "Stop reading": "Vorlesen beenden",
-  "The AI": "Die KI"
+  "The AI": "Die KI",
+  "%1 is a recording, and it isn't written out yet. Write it out from its details beside the shelf, and it reads here as text.": "%1 ist eine Aufnahme und noch nicht ausgeschrieben. Schreib sie in ihren Details neben dem Regal aus, dann liest sie sich hier als Text.",
+  "%1 is read with ffmpeg, which isn't installed. Install the ffmpeg package.": "%1 wird mit ffmpeg gelesen, das nicht installiert ist. Installiere das Paket ffmpeg.",
+  "Being written out in the background.": "Wird im Hintergrund ausgeschrieben.",
+  "Not written out yet. Written out, it reads as a book, and the search finds it by what is said in it.": "Noch nicht ausgeschrieben. Ausgeschrieben liest sie sich wie ein Buch, und die Suche findet sie an dem, was darin gesagt wird.",
+  "Stop Writing Out": "Ausschreiben anhalten",
+  "Write Out": "Ausschreiben",
+  "Writing out the recording stopped. What was written out is kept, and it goes on from there when it is started again.": "Das Ausschreiben der Aufnahme wurde angehalten. Was schon ausgeschrieben ist, bleibt erhalten, und beim nächsten Start geht es dort weiter.",
+  "Writing out “%1”: %2": "„%1“ wird ausgeschrieben: %2",
+  "Writing out “%1”…": "„%1“ wird ausgeschrieben …",
+  "Written out by the sentence: the way it was written out gives no word its own moment.": "Satzweise ausgeschrieben: Der Weg, auf dem sie ausgeschrieben wurde, gibt keinem Wort seinen eigenen Zeitpunkt.",
+  "Written out in part, %1 of %2. It goes on from there.": "Zum Teil ausgeschrieben, %1 von %2. Es geht dort weiter.",
+  "Written out, each word with its moment.": "Ausgeschrieben, jedes Wort mit seinem Zeitpunkt.",
+  "Go On Writing Out": "Weiter ausschreiben",
+  "The transcript can't be kept in %1: %2": "Die Abschrift kann nicht in %1 aufbewahrt werden: %2",
+  "Write out the selected recording through speech to text, or stop writing it out": "Die ausgewählte Aufnahme mit Sprache zu Text ausschreiben, oder das Ausschreiben anhalten"
 }

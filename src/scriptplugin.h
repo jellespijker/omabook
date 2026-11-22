@@ -29,6 +29,7 @@ class AudioDevices;
 class QNetworkAccessManager;
 class ScriptDesk;
 class Settings;
+class Transcriber;
 
 // What a script plugin is given to work with. Each is optional: a plugin
 // checked from the command line has no window, and may have no library.
@@ -55,6 +56,9 @@ struct ScriptServices {
     // where the last sync saw it (PluginFileSync::fetch), and says whether it
     // is here then, later or at once; none where nothing can fetch (#135).
     std::function<void(const QString &plugin, const QString &path, const std::function<void(bool here)> &done)> fetchFile;
+    // What writes recordings out (#151), one at a time for the window and every
+    // plugin; none, and a plugin makes one of its own.
+    Transcriber *transcriber = nullptr;
 };
 
 // plugin.json of a script plugin (read in scriptmanifest.cpp):

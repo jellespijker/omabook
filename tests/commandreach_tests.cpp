@@ -8,8 +8,7 @@
 //
 // A new command fails here until it has one. There is no command that is
 // the keyboard's by nature; one that ever is goes in `keyboardOnly` with the
-// reason. (Out of layout_tests.cpp,
-// which had reached its size.)
+// reason. (Out of layout_tests.cpp, which had reached its size, #151.)
 
 #include <QPointingDevice>
 #include <QQuickStyle>
@@ -92,11 +91,33 @@ class CommandReachTests : public QObject {
         QTRY_VERIFY(desk.shows("detailsFoundBy"));
         gather("found");
         books->setQuery({});
+        recording();
         desk.backend->setView("stacks");
         QTRY_VERIFY(desk.find("shelfLoader")->property("status").toInt() == 1);
         gather("stacks");
         desk.backend->setView("covers");
         QTRY_VERIFY(desk.find("shelfLoader")->property("status").toInt() == 1);
+    }
+
+    // A recording (#151): its details write it out.
+    void recording() {
+        Desk &desk = *m_desk;
+        const QString file = desk.dir.filePath("Harbour Talk - Mira Okafor.wav");
+        // A WAV of 16 kHz mono with two samples of silence.
+        QVERIFY(Fixtures::write(file, QByteArray::fromHex("524946462800000057415645666d7420100000000100010080"
+                                                          "3e0000007d0000020010006461746104000000")
+                                          + QByteArray(4, '\0')));
+        const qint64 talk = desk.backend->library()->add(file).id;
+        QVERIFY(talk > 0);
+        desk.backend->reload();
+        // Selected once the shelf has it, which the reload brings a moment later.
+        const auto selected = [&desk, talk] {
+            desk.call("selectOnShelf", talk);
+            return desk.find("library")->property("selectedId").toLongLong() == talk;
+        };
+        QTRY_VERIFY(selected());
+        QTRY_VERIFY(desk.shows("transcribeButton"));
+        gather("recording");
     }
 
     // The graph of a book, a thing in it selected; the book's chronology, the

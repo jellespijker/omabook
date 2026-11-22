@@ -18,6 +18,8 @@ OpenedDocument openFb2(const QString &path);
 OpenedDocument openText(const QString &path);
 OpenedDocument openPdf(const QString &path);
 OpenedDocument openComic(const QString &path);
+// A recording, as the book of its transcript (recordingbook.h, #151).
+OpenedDocument openRecording(const QString &path);
 
 // What every opener does with its own kind of book: the book once it has
 // loaded, or what its loading said was wrong.

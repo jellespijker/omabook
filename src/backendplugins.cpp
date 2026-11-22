@@ -21,6 +21,7 @@ void Backend::startScripts(const QString &pluginFolder) {
     services.ai = [this](QString *why) { return m_aiFactory(why); };
     services.network = &m_network;
     services.audio = &m_audio;
+    services.transcriber = m_transcripts.transcriber();
     services.desk = &m_pluginDesk;
     // A file that travels on demand comes from the computer it is on, beside the window (#135).
     services.fetchFile = [this](const QString &plugin, const QString &path, const std::function<void(bool)> &done) {

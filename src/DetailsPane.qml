@@ -253,6 +253,43 @@ Item {
                     onClicked: win.showMenu("book")
                 }
             }
+            // A recording (#151): written out through speech to text, it reads
+            // as a book and the search finds it by what is said in it.
+            ColumnLayout {
+                id: writing
+                objectName: "detailsRecording"
+                readonly property var state: {
+                    backend.transcripts.revision
+                    return pane.hasBook && !pane.launcher ? backend.transcripts.state(pane.book.bookId) : ({})
+                }
+                readonly property string now: writing.state.state || ""
+                Layout.fillWidth: true
+                visible: writing.state.recording === true
+                spacing: 6
+                Label {
+                    objectName: "detailsRecordingState"
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    color: theme.colors.muted
+                    text: writing.now === "whole"
+                          ? (writing.state.timed ? qsTr("Written out, each word with its moment.")
+                                                 : qsTr("Written out by the sentence: the way it was written out gives no word its own moment."))
+                          : writing.now === "writing" ? qsTr("Being written out in the background.")
+                          : (writing.state.unavailable || "") !== "" ? writing.state.unavailable
+                          : writing.now === "partly"
+                            ? qsTr("Written out in part, %1 of %2. It goes on from there.").arg(writing.state.done.toLocaleString(Qt.locale(), 'f', 0)).arg(writing.state.total.toLocaleString(Qt.locale(), 'f', 0))
+                          : qsTr("Not written out yet. Written out, it reads as a book, and the search finds it by what is said in it.")
+                }
+                AppButton {
+                    objectName: "transcribeButton"
+                    runs: "library.transcribe"
+                    visible: writing.now !== "whole"
+                    enabled: writing.now === "writing" || (writing.state.unavailable || "") === ""
+                    text: writing.now === "writing" ? qsTr("Stop Writing Out") : writing.now === "partly" ? qsTr("Go On Writing Out") : qsTr("Write Out")
+                    focusPolicy: Qt.NoFocus
+                    onClicked: backend.transcripts.toggle(pane.book.bookId)
+                }
+            }
             Label {
                 objectName: "sendStatus"
                 Layout.fillWidth: true

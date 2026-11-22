@@ -89,6 +89,7 @@
         <file alias="PluginMark.qml">PluginMark.qml</file>
         <file alias="RecordingMark.qml">RecordingMark.qml</file>
         <file alias="DictationButton.qml">DictationButton.qml</file>
+        <file alias="TranscribingMark.qml">TranscribingMark.qml</file>
         <file alias="PluginNewSheet.qml">PluginNewSheet.qml</file>
         <file alias="PluginInstallSheet.qml">PluginInstallSheet.qml</file>
         <file alias="ReaderView.qml">ReaderView.qml</file>

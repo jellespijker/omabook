@@ -75,6 +75,15 @@ QList<Entry> assistEntries() {
          "`/audio/transcriptions` (`recognition.transcription_url` and `transcription_model`, else the AI server "
          "and `whisper-1`), else whisper.cpp on this computer (`whisper-cli`, a `ggml-*.bin` model). Answers, "
          "waits, is kept and keeps to your own servers as `ink` does."},
+        {"recognize.transcript", "recognize.transcript(file, {language, hosted, again, onProgress, onWaiting})", "",
+         "A recording in the plugin's folder written out whole, however long, through the speech-to-text capability "
+         "(voxtype first, a hosted way only with `hosted: true` and hosted allowed for it, nothing with the AI Off), "
+         "as `audio` answers it: `{text, segments, timed, language, model, server, at, kept}`, each word's moment "
+         "from the start of the recording where the way gives them (`timed`). It is written out in the background "
+         "five minutes at a time, one recording at a time for Omabook and every plugin, telling `onProgress(done, "
+         "total)` of the pieces; each piece is kept on this computer as it is written out, so `stop()` on the "
+         "promise (which is then rejected) loses at most the piece under way, and a later call goes on from there. "
+         "Written out whole, it is answered from what was kept (`kept`); `again: true` writes it out anew."},
     };
 }
 

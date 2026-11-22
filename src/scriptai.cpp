@@ -5,7 +5,9 @@
 #include <QJsonDocument>
 #include <QtConcurrent/QtConcurrentRun>
 #include <expected>
+#include <memory>
 #include <tuple>
+#include <utility>
 #include <vector>
 
 #include "aicall.h"
@@ -17,6 +19,7 @@
 #include "recognitionqueue.h"
 #include "scriptplugin.h"
 #include "settings.h"
+#include "transcriber.h"
 #include "voice.h"
 #include "voices.h"
 
@@ -115,6 +118,10 @@ ScriptAi::ScriptAi(ScriptPlugin *plugin) : m_plugin(plugin) {
 ScriptAi::~ScriptAi() {
     if (AudioDevices *audio = m_plugin->m_services.audio; audio && m_voice)
         audio->endedSpeaking(this);
+    // What it asked to have written out stops with it, kept as far as it got; nobody is told.
+    for (const int job : std::exchange(m_transcripts, {}))
+        if (Transcriber *writing = m_plugin->m_services.transcriber ? m_plugin->m_services.transcriber : m_transcriber.get())
+            writing->stop(job);
 }
 
 QJSValue ScriptAi::build(QJSEngine &engine) {
@@ -286,6 +293,61 @@ int ScriptAi::submit(Recognition::Input input, const QJsonObject &options, const
             m_plugin->report(problem);
     };
     return recognizing->submit(std::move(request), done, waiting);
+}
+
+int ScriptAi::transcript(const QString &file, const QString &options, const QJSValue &onProgress, const QJSValue &onWaiting,
+                         const QJSValue &resolve, const QJSValue &reject) {
+    const QString path = m_plugin->inside(file, false);
+    Transcriber *const writing = transcriber();
+    if (path.isEmpty() || writing == nullptr) {
+        reject.call({path.isEmpty() ? tr("The recording \"%1\" can't be read: it should be a file of the plugin's own folder.").arg(file)
+                                    : tr("Nothing can be recognised here: Omabook's settings aren't open.")});
+        return 0;
+    }
+    const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    m_plugin->busy(1);
+    const auto job = std::make_shared<int>(0);
+    const auto done = [this, job, resolve, reject](const std::expected<Recognition::Result, QString> &outcome) {
+        // Gone with the plugin: nobody is told.
+        if (!m_transcripts.removeOne(*job))
+            return;
+        if (outcome)
+            resolve.call({compact(outcome->toJson())});
+        else
+            reject.call({outcome.error()});
+        m_plugin->busy(-1);
+    };
+    *job = writing->transcribe({.file = path,
+                                .language = chosen.value("language"_L1).toString().trimmed(),
+                                .hosted = chosen.value("hosted"_L1).toBool(),
+                                .again = chosen.value("again"_L1).toBool(),
+                                .key = {}},
+                               done, [this, onProgress](Transcriber::Progress at) { told(onProgress, {at.done, at.total}); },
+                               [this, onWaiting](const QString &why) { told(onWaiting, {why}); });
+    m_transcripts.append(*job);
+    return *job;
+}
+
+bool ScriptAi::stopTranscript(int job) {
+    Transcriber *const writing = m_transcripts.contains(job) ? transcriber() : nullptr;
+    return writing != nullptr && writing->stop(job);
+}
+
+Transcriber *ScriptAi::transcriber() {
+    if (Transcriber *shared = m_plugin->m_services.transcriber)
+        return shared;
+    if (!m_transcriber && m_plugin->m_services.settings != nullptr)
+        m_transcriber = std::make_unique<Transcriber>(RecognitionQueue::routeFor(*m_plugin->m_services.settings));
+    return m_transcriber.get();
+}
+
+void ScriptAi::told(const QJSValue &callback, const QJSValueList &arguments) {
+    if (!callback.isCallable())
+        return;
+    QString problem;
+    m_plugin->call(callback, arguments, &problem);
+    if (!problem.isEmpty())
+        m_plugin->report(problem);
 }
 
 RecognitionQueue *ScriptAi::queue() {

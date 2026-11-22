@@ -27,6 +27,7 @@
 #include "settings.h"
 #include "spacedesk.h"
 #include "speechinstall.h"
+#include "transcriptdesk.h"
 
 // The library as the window uses it: the shelf, adding and removing books,
 // editing their details, and looking details up online or with AI. It holds
@@ -64,6 +65,8 @@ class Backend : public QObject {
     Q_PROPERTY(Dictation *dictation READ dictation CONSTANT)
     // An answer to a question asked by voice, read aloud (#149).
     Q_PROPERTY(SpokenAnswer *spokenAnswer READ spokenAnswer CONSTANT)
+    // Writing out the library's recordings (#151).
+    Q_PROPERTY(TranscriptDesk *transcripts READ transcripts CONSTANT)
     // The plugin manager: every plugin sorted by what it does, what needs
     // attention, and installing, removing, ordering and trying them.
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
@@ -178,6 +181,7 @@ public:
     SpeechInstall *speech() noexcept { return &m_speech; }
     Dictation *dictation() noexcept { return &m_dictation; }
     SpokenAnswer *spokenAnswer() noexcept { return &m_spokenAnswer; }
+    TranscriptDesk *transcripts() noexcept { return &m_transcripts; }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
     SpaceDesk *spaces() noexcept { return &m_spaces; }
@@ -354,6 +358,8 @@ private:
     SpeechInstall m_speech{m_settings};
     Dictation m_dictation{m_settings, &m_audio};
     SpokenAnswer m_spokenAnswer{m_settings, &m_audio};
+    // Before the plugins too, which write their recordings out through it.
+    TranscriptDesk m_transcripts{m_settings, [this] { return m_library.get(); }};
     // Files the person picks for a plugin, and the clipboard (#131).
     PluginDesk m_pluginDesk{m_picker};
     std::unique_ptr<ScriptPlugins> m_scripts;

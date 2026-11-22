@@ -58,6 +58,16 @@ constexpr auto formats = std::to_array<Format>({
     {"lrf"_L1, "Sony (LRF)"_L1},
     {"djvu"_L1, "DjVu"_L1},
     {"chm"_L1, "Help (CHM)"_L1},
+    // Recordings, read as what is said in them once written out (#151): last, after every book.
+    {"mp3"_L1, "Recording (MP3)"_L1, openRecording},
+    {"m4b"_L1, "Audiobook (M4B)"_L1, openRecording},
+    {"m4a"_L1, "Recording (M4A)"_L1, openRecording},
+    {"aac"_L1, "Recording (AAC)"_L1, openRecording},
+    {"opus"_L1, "Recording (Opus)"_L1, openRecording},
+    {"ogg"_L1, "Recording (Ogg)"_L1, openRecording},
+    {"oga"_L1, "Recording (Ogg)"_L1, openRecording},
+    {"flac"_L1, "Recording (FLAC)"_L1, openRecording},
+    {"wav"_L1, "Recording (WAV)"_L1, openRecording},
 });
 
 // The Kindle formats, which say who they are without being converted.

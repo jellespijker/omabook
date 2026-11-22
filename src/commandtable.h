@@ -56,6 +56,7 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"library.new", {"B"}, tr("Add a book that has no file: one on your shelf, or one to read some day")},
     {"library.edit", {"E"}, tr("Edit the selected book's details")},
     {"library.lookup", {"M"}, tr("Look the selected book's details up")},
+    {"library.transcribe", {"Shift+E"}, tr("Write out the selected recording through speech to text, or stop writing it out")},
     {"library.export", {"X"}, tr("Save a copy of the selected book elsewhere")},
     {"library.remove", {"D", "Delete"}, tr("Remove the selected book (asks first)")},
     {"library.sort", {"S"}, tr("Change the order of the shelf")},

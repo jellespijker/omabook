@@ -68,6 +68,10 @@ _Avoid_: OCR (alone), transcription (for ink)
 The words of a recording, written out by voxtype or whisper.cpp on this computer or by a transcription server (`Recognition::Result`); each word with its moment where the way gives them (whisper.cpp and most servers do, voxtype doesn't: `timed`).
 _Avoid_: Captions, subtitles
 
+**Writing out**:
+Making a recording's transcript through the speech-to-text capability, a piece of five minutes at a time, each kept as it is written out, so a long recording stops and goes on where it was (`Transcriber`, `TranscriptStore`). A recording in the library written out reads as a book (`RecordingBook`).
+_Avoid_: Transcoding, dictation (that is #148's, as it is said)
+
 **Own server**:
 A server what is written and said may be sent to without asking: on this computer, on the tailnet, or at an address the person marked as theirs. Any other is hosted, and is sent it only where chosen twice over: allowed in the settings and asked for (`RecognitionRoute::whyNot`).
 _Avoid_: Local server (for the tailnet), trusted server

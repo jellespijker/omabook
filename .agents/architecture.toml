@@ -28,7 +28,7 @@ uses = ["foundation"]
 modules = [
   "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
   "formatprovider", "formatreaders", "formats", "documenttext", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
-  "textstretches", "koreaderdocument", "zipedit", "opfdetails", "epubdetails", "sentences",
+  "textstretches", "koreaderdocument", "zipedit", "opfdetails", "epubdetails", "sentences", "transcriptstore", "recordingbook",
 ]
 
 [layers.library]
@@ -67,7 +67,7 @@ modules = [
   "dictation", "dictationclip", "voxtypedictation", "spokenanswer",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
-  "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "gemini", "geminiprovider", "geminirecognizers", "geminivoice",
+  "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
 ]
 
 [layers.operations]
@@ -96,7 +96,7 @@ modules = [
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
-  "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys",
+  "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys", "transcriptdesk",
 ]
 
 [layers.app]
