@@ -177,7 +177,7 @@ jobs:
             pkg=$(ls "$RUNNER_TEMP"/recipe/omabook-*.pkg.tar.zst)
             {
               echo "$(basename "$pkg"): $(stat -c %s "$pkg") bytes compressed ($(du -h "$pkg" | cut -f1))"
-              pacman -Qip "$pkg" | grep -E '^(Installed Size)'
+              bsdtar -xOf "$pkg" .PKGINFO | awk -F' = ' '$1 == "size" { printf "%d bytes installed (%.1f MiB)\n", $2, $2 / 1048576 }'
             } > package-size.txt
           fi
           cat ./*.txt
