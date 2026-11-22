@@ -132,17 +132,32 @@ bool giveCopies(Taking &taking, const QList<Book> &copies, const SyncManifest::M
         return false;
     const QString &title = copies.first().meta.title;
     BookMeta meta = merged.meta;
-    if (merged.takeCover && !taking.peer.dryRun)
+    if (merged.takeCover && !taking.peer.dryRun && taking.peer.remote != nullptr)
         meta.cover = fetchCover(taking, listed);
     for (const Book &copy : copies) {
+        // Without a cover to write and with its words, a copy is given nothing:
+        // on the side asked, the cover comes from the side that reaches it (#168).
+        const bool writes = behind(copy) && (!meta.cover.isNull() || !SyncCopies::sameWords(copy.meta, meta));
         QString error;
-        if (behind(copy) && !taking.peer.dryRun && !taking.library.setMeta(copy.id, meta, &error, settled)) {
+        if (writes && !taking.peer.dryRun && !taking.library.setMeta(copy.id, meta, &error, settled)) {
             taking.summary.problems << title + ": " + error;
             return false;
         }
     }
     note(taking.summary.detailsTaken, taking.summary.titles.detailsTaken, title);
     return true;
+}
+
+// Of two covers, one side's and none: whatever the times say, the side
+// without one takes it, as no picture can be taken. Both sides decide this
+// alike, whichever starts the sync, and once given it settles (#168).
+void preferACover(SyncManifest::MergedBookDetails &merged, bool mine, bool theirs) {
+    if (mine == theirs)
+        return;
+    merged.takeCover = theirs;
+    merged.sendCover = mine;
+    merged.takeFields = merged.takeFields || theirs;
+    merged.sendFields = merged.sendFields || mine;
 }
 
 // Whether the book `gid` stands for is paired on less than its global id (#158).
@@ -167,15 +182,21 @@ bool takeDetails(Taking &taking, const QList<Book> &copies, const QJsonObject &t
     const QString gid = taking.standsFor(Spaces::bookId(taking.library, here.id));
     const QJsonObject mine = Replication::bookView(taking.mine.books.value(gid));
     // The covers compared are the pictures of the copies that speak for the
-    // book on each side, so both sides compare the same two (#154).
-    const bool covers = !listed.isEmpty() && coverHash(taking.library, here.id) != listed.value("cover_hash").toString();
+    // book on each side, so both sides compare the same two (#154): theirs as
+    // their manifest lists it, else, on the side asked, as their log says it,
+    // so the side asked decides the cover as the side that asks does (#168).
+    const QString myCover = coverHash(taking.library, here.id);
+    const QString theirCover = (listed.isEmpty() ? theirs : listed).value("cover_hash").toString();
+    const bool covers = myCover != theirCover;
     SyncManifest::MergedBookDetails merged = SyncManifest::decideDetails(here, mine, theirs, true, taking.peer.details, covers);
+    if (covers)
+        preferACover(merged, !myCover.isEmpty(), !theirCover.isEmpty());
     if (pairedWeakly(taking, gid))
         SyncRenames::hold(here, theirs, {.details = taking.peer.details, .accept = taking.peer.acceptRenames}, merged, taking.summary);
     const qint64 settled = settledAt(copies, mine, theirs);
     if (merged.undecided && !merged.takeFields && !merged.sendFields)
         note(taking.summary.detailsUndecided, taking.summary.titles.detailsUndecided, here.meta.title);
-    if (merged.sendCover && !taking.peer.dryRun)
+    if (merged.sendCover && !taking.peer.dryRun && taking.peer.remote != nullptr)
         giveCover(taking, here, listed, settled);
     const bool asLogged = settlesCopies(taking, copies, gid, merged, mine.value("title").toString(), settled);
     // A copy that has the details decided already, and no cover to take, is
