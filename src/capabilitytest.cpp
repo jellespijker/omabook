@@ -112,13 +112,13 @@ constexpr auto worded = std::to_array<Worded>({
     return copy;
 }
 
-[[nodiscard]] Started askAnswers(const Settings &settings, Capability capability, const QString &defaultsFile, QObject *context,
+[[nodiscard]] Started askAnswers(const Settings &settings, Capability capability, const QString &defaultsFile, const QObject *context,
                                  const Ends &ends) {
     auto made = AiRegistry::answers(settings, {}, defaultsFile);
     if (!made)
         return std::unexpected(made.error());
     AiProvider *provider = made->get();
-    auto reply = std::make_shared<QString>();
+    const auto reply = std::make_shared<QString>();
     QObject::connect(provider, &AiProvider::delta, context, [reply](const QString &text) { *reply += text; });
     QObject::connect(provider, &AiProvider::finished, context, [reply, ends] { ends.said(reply->simplified()); });
     QObject::connect(provider, &AiProvider::failed, context,
@@ -132,7 +132,7 @@ constexpr auto worded = std::to_array<Worded>({
 }
 
 // The first way the registry gives, as the row names it, and only that one.
-[[nodiscard]] Started recognize(const Settings &settings, Recognition::Input input, QObject *context, const Ends &ends) {
+[[nodiscard]] Started recognize(const Settings &settings, Recognition::Input input, const QObject *context, const Ends &ends) {
     auto ways = AiRegistry::recognizers(settings, input.kind, true);
     if (!ways || ways->empty())
         return std::unexpected(Failure::said(ways ? QString() : ways.error()));
@@ -150,7 +150,7 @@ constexpr auto worded = std::to_array<Worded>({
     return Worker{.object = std::move(first), .stop = [way] { way->cancel(); }};
 }
 
-[[nodiscard]] Started speak(const Settings &settings, QObject *context, const Ends &ends) {
+[[nodiscard]] Started speak(const Settings &settings, const QObject *context, const Ends &ends) {
     auto made = AiRegistry::voice(settings);
     if (!made)
         return std::unexpected(made.error());
@@ -165,7 +165,7 @@ constexpr auto worded = std::to_array<Worded>({
 
 using Made = std::expected<Embeddings::Vectors, Failure>;
 
-[[nodiscard]] Started embed(const Settings &settings, std::chrono::milliseconds timeout, QObject *context, const Ends &ends) {
+[[nodiscard]] Started embed(const Settings &settings, std::chrono::milliseconds timeout, const QObject *context, const Ends &ends) {
     const auto route = AiRegistry::embeddings(settings);
     if (!route)
         return std::unexpected(route.error());
@@ -189,7 +189,7 @@ struct Asking {
     QString defaultsFile;
     std::chrono::milliseconds timeout;
     QString clip; // where the clip speech to text hears is put
-    QObject *context;
+    const QObject *context;
     Ends ends;
 };
 
@@ -253,7 +253,7 @@ CapabilityTest::CapabilityTest(Settings *settings, QString defaultsFile, QObject
 CapabilityTest::~CapabilityTest() = default;
 
 QString CapabilityTest::whyOf(Failure::Code code) {
-    const auto found = std::ranges::find(worded, code, &Worded::code);
+    const auto *const found = std::ranges::find(worded, code, &Worded::code);
     return found == worded.end() ? u"failed"_s : QString(found->why);
 }
 
@@ -280,11 +280,11 @@ QString CapabilityTest::whyOf(CapabilityLack lack) {
 
 std::vector<Ink::Stroke> CapabilityTest::drawnWord() {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    const auto stroke = [now](int at, std::vector<QPointF> points) {
+    const auto stroke = [now](int at, const std::vector<QPointF> &points) {
         Ink::Stroke drawn;
         drawn.id = u"test-%1"_s.arg(at);
         drawn.width = 4.0;
-        drawn.began = now + at * 400;
+        drawn.began = now + qint64{at} * 400;
         quint32 ms = 0;
         for (const QPointF &point : points) {
             drawn.points.push_back({.at = point, .pressure = 0.5F, .xTilt = 0.0F, .yTilt = 0.0F, .ms = ms});
