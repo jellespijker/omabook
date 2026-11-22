@@ -1,0 +1,26 @@
+#!/bin/bash
+set -euo pipefail
+
+# Once per clone (the settings are the repository's, so every worktree of it
+# shares them): the merge drivers .gitattributes names for the files tickets
+# still share (#198), and the harness's hooks. Running it again is harmless.
+#   bin/setup                  both
+#   bin/setup --merge-drivers  only the merge drivers
+root="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$root"
+
+driver() {
+  git config "merge.$1.name" "$2"
+  git config "merge.$1.driver" "python3 bin/merge/$1.py %O %A %B %P"
+}
+driver catalog "Omabook's translation catalogs, key by key"
+driver architecture "Omabook's architecture.toml, table by table and name by name"
+driver baseline "Omabook's harness baselines, key by key, the lower ceiling kept"
+echo "bin/setup: merge drivers catalog, architecture and baseline registered."
+[[ "${1:-}" == --merge-drivers ]] && exit 0
+
+if command -v uvx >/dev/null; then
+  uvx pre-commit install
+else
+  echo "bin/setup: uvx is not installed; install it, then run: uvx pre-commit install" >&2
+fi

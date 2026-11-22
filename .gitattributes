@@ -1,0 +1,6 @@
+# The files tickets still share are merged by what they hold, not line by line
+# (#198): the drivers are in bin/merge/, registered by bin/setup. Where a driver
+# is not registered, git merges these files as any other.
+src/i18n/*.json merge=catalog
+.agents/architecture.toml merge=architecture
+.agents/*-baseline.json merge=baseline

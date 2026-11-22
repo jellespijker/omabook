@@ -24,7 +24,8 @@ the code**, not after a check fails:
 | [.agents/rules/25-design-patterns.md](.agents/rules/25-design-patterns.md) | A new class, interface or dependency |
 | [.agents/rules/30-size-and-complexity.md](.agents/rules/30-size-and-complexity.md) | Growing a file or a function |
 
-Once per clone: `uvx pre-commit install`. Before handing work in: `bin/check`.
+Once per clone: `bin/setup` (the harness's hooks and the merge drivers). Before
+handing work in: `bin/check`.
 Never skip the hooks (`--no-verify`) and never edit a baseline by hand.
 
 ## Building
@@ -49,8 +50,27 @@ the subject or the body: `Turn whole pages, or scroll on through the chapters (#
 Write `#12` for an issue of this repository and `jellespijker/omabook-storyteller#2`
 for another's. If there is no issue for the work, deposit one
 (`herdr-kanban deposit`) before you commit. A change someone using Omabook would
-notice gets a line in `CHANGELOG.md` under *Unreleased*, and in
-`src/whatsnew.cpp` when it is worth showing in the window.
+notice gets a line in its change notes (below), and in `src/whatsnew.cpp` when
+it is worth showing in the window.
+
+## Change notes, tests and the shared files
+
+Tickets land side by side, so a change adds files of its own rather than lines
+to shared lists (#198):
+
+- **Change notes** go in `changes/<issue>.md`, never in `CHANGELOG.md`: front
+  matter `section: Added` (or Changed, Deprecated, Removed, Fixed, Security),
+  then the line or lines, each starting with `- `. A change to `src/` or `share/`
+  no one would notice says so with `section: none` and why. `bin/check`
+  refuses one without, and any line added to `CHANGELOG.md`; a release runs
+  `bin/release-notes <version>`, which writes the version's section and removes
+  the fragments.
+- **Test suites are found by name**: a new `tests/<area>_tests.cpp` is built and
+  run with no list to edit. What it needs beyond the others goes in
+  `tests/<area>_tests.cmake` (see `tests/suites.cmake`).
+- **What stays shared** (the translation catalogs, `.agents/architecture.toml`,
+  the baselines) is merged by the drivers in `bin/merge/`, which `bin/setup`
+  registers. After a merge that touched strings, run `bin/i18n`.
 
 ## Tickets
 
