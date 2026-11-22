@@ -41,3 +41,24 @@ double AudioDevices::elapsed() const {
 double AudioDevices::level() const {
     return !m_recordings.isEmpty() && m_recordings.first().recorder ? m_recordings.first().recorder->level() : 0.0;
 }
+
+void AudioDevices::beganSpeaking(const QObject *who, const QString &name) {
+    endedSpeaking(who);
+    m_speakers.append({.who = who, .name = name});
+    emit speakingChanged();
+}
+
+void AudioDevices::endedSpeaking(const QObject *who) {
+    const qsizetype before = m_speakers.size();
+    m_speakers.removeIf([who](const Speaker &speaker) { return speaker.who.data() == who || !speaker.who; });
+    if (m_speakers.size() != before)
+        emit speakingChanged();
+}
+
+QString AudioDevices::speaker() const {
+    QStringList names;
+    for (const Speaker &speaker : m_speakers)
+        if (!names.contains(speaker.name))
+            names << speaker.name;
+    return names.join(u", ");
+}

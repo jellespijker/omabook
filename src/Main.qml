@@ -266,7 +266,9 @@ ApplicationWindow {
     Key { command: "global.pane_narrower"; onActivated: win.resizePane(-1) }
     Key { command: "library.publish"; when: library.visible && backend.collections.length > 0; onActivated: win.showPublish(0) }
     Key { command: "library.subscribe"; when: library.visible; onActivated: win.showSubscribe() }
-    Key { command: "library.stats"; when: library.visible; onActivated: readingStats.show() }
+    // Shift+R, as over a book, stops a plugin reading aloud over the library (#147) while one does.
+    Key { command: "library.stats"; when: library.visible && !backend.audio.speaking; onActivated: readingStats.show() }
+    Key { command: "reader.read_aloud_stop"; when: !win.inReader && backend.audio.speaking; onActivated: backend.audio.stopSpeaking() }
 
     // Right-to-left languages mirror the window; the Translator sets the
     // application's layout direction.
@@ -337,6 +339,13 @@ ApplicationWindow {
             active: false
             visible: win.inReader && !win.chronologyShown
             sourceComponent: ReaderView { active: win.inReader && win.keys && !win.chronologyShown }
+        }
+        ReadAloudBar {
+            inLibrary: true
+            z: 2
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.bottom: parent.bottom
+            anchors.bottomMargin: 16
         }
         // Which tenant of the graph the graph and the chronology show (TenantChoice).
         GraphTenants { id: graphTenants; objectName: "graphTenants"; source: backend }

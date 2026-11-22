@@ -20,6 +20,11 @@ ServerVoice::~ServerVoice() { stop(); }
 
 QStringList ServerVoice::voices() { return {u"alloy"_s, u"echo"_s, u"fable"_s, u"nova"_s, u"onyx"_s, u"shimmer"_s}; }
 
+QStringList ServerVoice::openAiVoices() {
+    return {u"alloy"_s, u"ash"_s,  u"ballad"_s,  u"coral"_s, u"echo"_s,  u"fable"_s, u"nova"_s,
+            u"onyx"_s,  u"sage"_s, u"shimmer"_s, u"verse"_s, u"marin"_s, u"cedar"_s};
+}
+
 QJsonObject ServerVoice::request(const QString &model, const QString &sentence, const Speech &how) {
     return {{"model"_L1, model},
             {"input"_L1, sentence},

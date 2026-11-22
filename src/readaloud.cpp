@@ -57,6 +57,7 @@ ReadAloud::ReadAloud(Reader *reader) : QObject(reader), m_reader(reader) {
         if (!m_narration->from(m_reader->section(), 0))
             stop();
     });
+    connect(m_reader->backend()->settings(), &Settings::changed, this, &ReadAloud::rechoose);
     connect(&m_terminal, &InstallTerminal::openChanged, this, &ReadAloud::offerChanged);
     connect(&m_terminal, &InstallTerminal::closed, this, &ReadAloud::installed);
 }
@@ -76,7 +77,7 @@ int ReadAloud::section() const {
 
 std::optional<Narration::Spoken> ReadAloud::current() const { return m_narration ? m_narration->current() : std::nullopt; }
 
-QString ReadAloud::voice() const { return m_reader->backend()->settings()->readAloud().value("voice"_L1).toString(); }
+QString ReadAloud::voice() const { return Voices::speech(*m_reader->backend()->settings(), {}).voice; }
 
 void ReadAloud::setVoice(const QString &voice) { choose(u"voice"_s, voice); }
 
@@ -85,17 +86,27 @@ double ReadAloud::rate() const { return Voices::speech(*m_reader->backend()->set
 void ReadAloud::setRate(double rate) { choose(u"rate"_s, std::round(std::clamp(rate, 0.5, 2.0) * 10) / 10); }
 
 void ReadAloud::choose(const QString &key, const QJsonValue &value) {
-    Settings &settings = *m_reader->backend()->settings();
-    QJsonObject chosen = settings.readAloud();
-    if (chosen.value(key) == value)
-        return;
-    chosen.insert(key, value);
-    settings.setReadAloud(chosen);
-    if (m_narration) {
-        const std::shared_ptr<const Document> document = m_reader->document();
-        m_narration->setSpeech(Voices::speech(settings, document ? document->meta().language : QString()));
-    }
+    Voices::keep(*m_reader->backend()->settings(), key, value);
     emit choicesChanged();
+}
+
+void ReadAloud::rechoose() {
+    if (!m_narration)
+        return;
+    const Settings &settings = *m_reader->backend()->settings();
+    m_narration->setSpeech(Voices::speech(settings, language()));
+    const QString reading = Voices::reader(settings);
+    if (reading == m_reading)
+        return;
+    auto voice = m_maker ? m_maker() : AiRegistry::voice(settings);
+    if (reading.isEmpty() || !voice) {
+        // Nothing that may read now: a hosted voice with the AI turned off, say.
+        failed(voice ? Voices::engine(settings).error() : voice.error());
+        return;
+    }
+    m_reading = reading;
+    m_narration->setVoice(*std::move(voice));
+    refresh();
 }
 
 void ReadAloud::refresh() {
@@ -106,9 +117,7 @@ void ReadAloud::refresh() {
         m_why.clear();
         m_voices.clear();
     } else if (const auto engine = Voices::engine(settings)) {
-        m_engine = *engine;
-        if (*engine == "piper"_L1 || *engine == "gemini"_L1)
-            m_engine[0] = m_engine.at(0).toUpper(); // Piper, Gemini: names
+        m_engine = Voices::nameOf(*engine);
         m_why.clear();
         m_voices = Voices::offered(settings);
     } else {
@@ -219,6 +228,7 @@ void ReadAloud::start(const QString &atTop) {
         return;
     }
     m_narration = std::move(narration);
+    m_reading = Voices::reader(*m_reader->backend()->settings());
     m_bookId = m_reader->bookId();
     connect(m_narration.get(), &Narration::moved, this, &ReadAloud::moved);
     connect(m_narration.get(), &Narration::playingChanged, this, &ReadAloud::stateChanged);

@@ -2304,7 +2304,6 @@
   "A sentence on": "Une phrase en avant",
   "Faster": "Plus vite",
   "Go on": "Continuer",
-  "It is read on this computer, and nothing is sent anywhere: by Piper (piper-tts and a voice for your language, such as piper-voices-en-us) or else by speech-dispatcher. A server of your own that reads aloud can do it instead: `read_aloud` in config.json, with `engine` set to `server` and its `url`. It is never asked while the AI is off, nor a hosted one unless you allow it there.": "La lecture se fait sur cet ordinateur, et rien n'est envoyé nulle part : par Piper (piper-tts et une voix pour votre langue, comme piper-voices-fr-fr) ou sinon par speech-dispatcher. Un serveur à vous qui lit à voix haute peut le faire à la place : `read_aloud` dans config.json, avec `engine` à `server` et son `url`. Il n'est jamais sollicité tant que l'IA est désactivée, ni un serveur hébergé sauf si vous l'y autorisez.",
   "Nothing on this computer reads aloud: install Piper (piper-tts) and a voice for it (piper-voices-en-us, say), or speech-dispatcher.": "Rien sur cet ordinateur ne lit à voix haute : installez Piper (piper-tts) et une voix pour lui (piper-voices-fr-fr, par exemple), ou speech-dispatcher.",
   "%1 and %2, from Arch's own packages: small and quick, and it sounds like a machine.": "%1 et %2, des paquets d'Arch lui-même : légère et rapide, et elle sonne comme une machine.",
   "%1 and %2, from the AUR, where Arch's users share packages that Arch itself doesn't check: larger, and it sounds like a person.": "%1 et %2, de l'AUR, où les utilisateurs d'Arch partagent des paquets qu'Arch lui-même ne vérifie pas : plus lourde, et elle sonne comme une personne.",
@@ -2374,5 +2373,17 @@
   "voxtype isn't installed on this computer (there is no %1 command).": "voxtype n'est pas installé sur cet ordinateur (il n'y a pas de commande %1).",
   "voxtype on this computer": "voxtype sur cet ordinateur",
   "voxtype reads only WAV recordings, and ffmpeg isn't installed to make one of %1.": "voxtype ne lit que les enregistrements WAV, et ffmpeg n'est pas installé pour en faire un de %1.",
-  "voxtype, on this computer only": "voxtype, sur cet ordinateur seulement"
+  "voxtype, on this computer only": "voxtype, sur cet ordinateur seulement",
+  "%1 is reading aloud": "%1 lit à voix haute",
+  "A plugin can read something to you in the same voice. The bar over the page, or over the shelf, says which plugin reads, and {reader.read_aloud_stop} or the bar's ✕ stops it.": "Un plugin peut vous lire quelque chose avec la même voix. La barre au-dessus de la page, ou de l'étagère, dit quel plugin lit, et {reader.read_aloud_stop} ou le ✕ de la barre l'arrête.",
+  "A plugin reading aloud": "Un plugin qui lit à voix haute",
+  "Choose what reads in the settings ({global.settings}), on the AI page, in the row Text to speech: Piper (piper-tts and a voice for your language, such as piper-voices-en-us) or speech-dispatcher on this computer, a server of your own, or OpenAI's or Gemini's voices with their API key. Each keeps its own voice and speed, and Hear It reads a sentence with them. Choosing another while a book is read goes on from the same sentence. A server is never asked while the AI is off, nor a hosted voice unless you allow a hosted service for text to speech; a voice on this computer reads with the AI off too.": "Choisissez ce qui lit dans les réglages ({global.settings}), sur la page IA, à la ligne Texte en parole : Piper (piper-tts et une voix pour votre langue, comme piper-voices-fr-fr) ou speech-dispatcher sur cet ordinateur, un serveur à vous, ou les voix d'OpenAI ou de Gemini avec leur clé d'API. Chacun garde sa voix et sa vitesse, et Écouter lit une phrase avec elles. En choisir un autre pendant la lecture d'un livre reprend à la même phrase. Un serveur n'est jamais sollicité tant que l'IA est désactivée, ni une voix hébergée sauf si vous autorisez un service hébergé pour le texte en parole ; une voix sur cet ordinateur lit aussi quand l'IA est désactivée.",
+  "Hear It": "Écouter",
+  "Its voices read at their own pace.": "Ses voix lisent à leur propre rythme.",
+  "OpenAI's API key, from its platform's API keys page": "La clé d'API d'OpenAI, de la page API keys de sa plateforme",
+  "OpenAI's key is kept in the keyring; paste another to replace it": "La clé d'OpenAI est gardée dans le trousseau ; collez-en une autre pour la remplacer",
+  "OpenAI's voices need its API key: give it on the AI page, where it is kept in the keyring, or set OPENAI_API_KEY.": "Les voix d'OpenAI ont besoin de sa clé d'API : donnez-la sur la page IA, où elle est gardée dans le trousseau, ou définissez OPENAI_API_KEY.",
+  "OpenAI's voices, with an API key": "Les voix d'OpenAI, avec une clé d'API",
+  "Reads a sentence with this voice": "Lit une phrase avec cette voix",
+  "This is how your books will be read aloud.": "Voici comment vos livres vous seront lus."
 }

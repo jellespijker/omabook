@@ -38,7 +38,8 @@ Item {
     Key { command: "reader.layout"; when: reader.open && !keys.host.mapping; onActivated: keys.host.cycles.layout() }
     // Read aloud (#73) from the words at the top of the page, pause and go on; stop; a sentence back or on.
     Key { command: "reader.read_aloud"; when: reader.open && !keys.host.mapping; onActivated: reader.readAloud.toggle(keys.host.content ? keys.host.content.placeText() : "") }
-    Key { command: "reader.read_aloud_stop"; when: reader.readAloud.active; onActivated: reader.readAloud.stop() }
+    // A book read aloud, and a plugin reading aloud (#147), both stop.
+    Key { command: "reader.read_aloud_stop"; when: reader.readAloud.active || (reader.open && backend.audio.speaking); onActivated: { reader.readAloud.stop(); backend.audio.stopSpeaking() } }
     Key { command: "reader.sentence_back"; when: reader.readAloud.active && !keys.host.mapping; onActivated: reader.readAloud.back() }
     Key { command: "reader.sentence_next"; when: reader.readAloud.active && !keys.host.mapping; onActivated: reader.readAloud.next() }
     Key { command: "reader.select"; when: keys.host.paging; onActivated: keys.host.startSelecting("menu") }

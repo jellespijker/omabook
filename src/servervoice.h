@@ -10,10 +10,10 @@
 #include "localvoices.h"
 #include "voice.h"
 
-// A server of the OpenAI-compatible API that reads aloud (#73): each
-// sentence is sent to its /audio/speech, and the WAV it answers is played.
-// Only a server the person chose for it, and only their own unless they
-// allowed hosted ones (Voices::choose says which may be asked).
+// A server of the OpenAI-compatible API that reads aloud (#73), or OpenAI's
+// own (#147): each sentence is sent to its /audio/speech, and the WAV it
+// answers is played. Only a server the person chose for it, and only their
+// own unless they allowed hosted ones (Voices::choose says which may be asked).
 class ServerVoice : public Voice {
     Q_OBJECT
 
@@ -27,14 +27,19 @@ public:
     ServerVoice &operator=(ServerVoice &&) = delete;
 
     static constexpr auto defaultModel = "tts-1";
-    // The voices OpenAI's speech has, which servers that copy it take too.
+    // OpenAI's own model for its voices, by its API reference of 2026-11-22.
+    static constexpr auto openAiModel = "gpt-4o-mini-tts";
+    // The voices OpenAI's first speech had, which servers that copy it take too.
     [[nodiscard]] static QStringList voices();
+    // The voices OpenAI has now, by the same reference.
+    [[nodiscard]] static QStringList openAiVoices();
     // What is asked for one sentence.
     [[nodiscard]] static QJsonObject request(const QString &model, const QString &sentence, const Speech &how);
 
     void say(const QString &sentence, const Speech &how) override;
     void stop() override;
-    [[nodiscard]] QString name() const override { return m_server.host(); }
+    // A server by its host; OpenAI by its name.
+    [[nodiscard]] QString name() const override { return m_server.preset == u"openai" ? m_server.name : m_server.host(); }
 
 private:
     void heard(QNetworkReply *reply);

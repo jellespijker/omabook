@@ -15,6 +15,8 @@
 // desktop's microphone and speakers, or the tests' stand-ins), and who is
 // recording now, which the window shows for as long as anyone is, with a way
 // to stop it (RecordingMark.qml). Nothing records without being shown here.
+// So too who reads aloud (`ai.speak`, #147): the bar over the page names the
+// plugin, and it, or Shift+R, stops it.
 class AudioDevices : public QObject {
     Q_OBJECT
     Q_PROPERTY(bool recording READ recording NOTIFY recordingChanged)
@@ -25,6 +27,9 @@ class AudioDevices : public QObject {
     // it is, 0 to 1.
     Q_PROPERTY(double elapsed READ elapsed NOTIFY progressed)
     Q_PROPERTY(double level READ level NOTIFY progressed)
+    // Whether a plugin reads aloud, and which, by their names.
+    Q_PROPERTY(bool speaking READ speaking NOTIFY speakingChanged)
+    Q_PROPERTY(QString speaker READ speaker NOTIFY speakingChanged)
 
 public:
     using Inputs = std::function<std::unique_ptr<AudioInput>()>;
@@ -49,10 +54,20 @@ public:
     // The window's stop: every recording ends, and its plugin is told.
     Q_INVOKABLE void stopRecording() { emit stopAsked(); }
 
+    // `who` (a plugin's, named `name`) began reading aloud, and ended.
+    void beganSpeaking(const QObject *who, const QString &name);
+    void endedSpeaking(const QObject *who);
+    [[nodiscard]] bool speaking() const { return !m_speakers.isEmpty(); }
+    [[nodiscard]] QString speaker() const;
+    // The window's stop: whoever reads aloud stops, and its plugin is told.
+    Q_INVOKABLE void stopSpeaking() { emit stopSpeakingAsked(); }
+
 signals:
     void recordingChanged();
     void progressed();
     void stopAsked();
+    void speakingChanged();
+    void stopSpeakingAsked();
 
 private:
     struct Recording {
@@ -63,4 +78,9 @@ private:
     Inputs m_inputs;
     Outputs m_outputs;
     QList<Recording> m_recordings;
+    struct Speaker {
+        QPointer<const QObject> who;
+        QString name;
+    };
+    QList<Speaker> m_speakers;
 };

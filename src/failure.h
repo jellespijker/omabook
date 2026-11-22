@@ -117,6 +117,7 @@ public:
         VoiceServerFailed,  // {where, HTTP status or the network's reason}
         VoiceStopped,       // {name, what it said}
         VoiceUnplayed,      // {the player's reason}
+        VoiceOpenAiNoKey,   // {}: OpenAI's voices, and no key for it (#147)
         NothingToReadAloud, // {}: pages of pictures
         // Spaces and others' annotations (library, operations; #85).
         NoSuchSpace,            // {the name or id asked for}

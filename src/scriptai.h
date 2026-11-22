@@ -70,7 +70,8 @@ public:
     Q_INVOKABLE bool cancel(int job);
 
     // Reads `text` aloud with the voice the person chose (`ai.speak`); a new
-    // one stops the one before. `options` is JSON: {language, hosted}.
+    // one stops the one before. `options` is JSON: {language, hosted}. The
+    // window shows it, naming the plugin, and can stop it (AudioDevices, #147).
     Q_INVOKABLE void speak(const QString &text, const QString &options, const QJSValue &resolve, const QJSValue &reject);
     Q_INVOKABLE void stopSpeaking();
     // The embeddings of each text (`ai.embed`), on a thread of their own;

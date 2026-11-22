@@ -5,7 +5,7 @@ import QtQuick.Layouts
 
 // The provider of one capability on the AI page: chosen from those that can
 // serve it, by their ids (AiCapabilityRows::offered), worded here; named
-// where there is only one (a voice #147 adds is an id more).
+// where there is only one.
 GridLayout {
     id: choice
     property var info: ({})
@@ -18,7 +18,9 @@ GridLayout {
         case "claude": return qsTr("Claude Code, with your subscription")
         case "agy": return qsTr("Antigravity, with your subscription")
         case "anthropic": return qsTr("Claude, with an API key")
-        case "openai": return qsTr("A server (OpenAI-compatible)")
+        case "openai":
+            return choice.capability === "text-to-speech" ? qsTr("OpenAI's voices, with an API key")
+                                                          : qsTr("A server (OpenAI-compatible)")
         case "command": return qsTr("A command")
         case "gemini": return qsTr("Gemini, with an API key")
         case "answers": return qsTr("The same as for answers")

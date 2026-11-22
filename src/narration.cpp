@@ -1,6 +1,7 @@
 #include "narration.h"
 
 #include <algorithm>
+#include <utility>
 
 Narration::Narration(int sections, std::function<QString(int section)> read, std::unique_ptr<Voice> voice, Sentences::Lines lines,
                      QObject *parent)
@@ -10,6 +11,18 @@ Narration::Narration(int sections, std::function<QString(int section)> read, std
 }
 
 Narration::~Narration() { m_voice->stop(); }
+
+void Narration::setVoice(std::unique_ptr<Voice> voice) {
+    m_voice->stop();
+    m_voice->disconnect(this);
+    // Its signal may still be on the way out of it.
+    m_voice.release()->deleteLater();
+    m_voice = std::move(voice);
+    connect(m_voice.get(), &Voice::spoken, this, &Narration::spoken);
+    connect(m_voice.get(), &Voice::failed, this, &Narration::stopped);
+    if (m_playing)
+        sayCurrent();
+}
 
 const QList<Sentences::Sentence> &Narration::sentencesOf(int section) const {
     auto found = m_sentences.find(section);

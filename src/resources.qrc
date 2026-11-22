@@ -120,7 +120,8 @@
         <file alias="AiCapabilityRow.qml">AiCapabilityRow.qml</file>
         <file alias="AiProviderChoice.qml">AiProviderChoice.qml</file>
         <file alias="AiServerSetup.qml">AiServerSetup.qml</file>
-        <file alias="GeminiKey.qml">GeminiKey.qml</file>
+        <file alias="VoiceSetup.qml">VoiceSetup.qml</file>
+        <file alias="ApiKey.qml">ApiKey.qml</file>
         <file alias="AiAnswersSetup.qml">AiAnswersSetup.qml</file>
         <file alias="GraphBuildDialog.qml">GraphBuildDialog.qml</file>
         <file alias="Thinking.qml">Thinking.qml</file>

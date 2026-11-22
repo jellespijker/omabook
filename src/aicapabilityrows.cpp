@@ -1,7 +1,9 @@
 #include "aicapabilityrows.h"
 
 #include <QJsonObject>
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <utility>
 
 #include "ai.h"
@@ -14,6 +16,7 @@
 #include "secretstore.h"
 #include "servervoice.h"
 #include "settings.h"
+#include "voices.h"
 
 using namespace Qt::StringLiterals;
 
@@ -84,8 +87,7 @@ constexpr auto answering =
         // The first there is (voxtype, whisper.cpp, a server: #146), or one alone.
         return {u"auto"_s, u"voxtype"_s, u"whisper.cpp"_s, u"server"_s, u"gemini"_s};
     case Capability::TextToSpeech:
-        // The voices #147 adds come here, each an id more.
-        return {u"auto"_s, u"piper"_s, u"speech-dispatcher"_s, u"server"_s, u"gemini"_s};
+        return {u"auto"_s, u"piper"_s, u"speech-dispatcher"_s, u"server"_s, u"openai"_s, u"gemini"_s};
     case Capability::Embeddings:
         return {u"server"_s, u"gemini"_s};
     }
@@ -119,7 +121,39 @@ constexpr auto answering =
     return {};
 }
 
+// OpenAI's voices (#147) are text to speech's "openai", not answers' server.
+[[nodiscard]] bool openAiVoice(Capability capability, const QString &chosen) {
+    return capability == Capability::TextToSpeech && chosen == "openai"_L1;
+}
+
+// The field of the older key a capability's model is kept in, for the provider chosen.
+[[nodiscard]] QLatin1StringView modelField(Capability capability, const QString &chosen) {
+    return openAiVoice(capability, chosen) ? "openai_model"_L1 : setUpOf(capability).model;
+}
+
+// What text to speech's row has besides: the voices of the engine in use,
+// the one chosen and how fast, and whether it takes a pace at all.
+void addVoice(QVariantMap &row, const Settings &settings) {
+    const Speech speech = Voices::speech(settings, {});
+    row.insert(u"voices"_s, Voices::offered(settings));
+    row.insert(u"voice"_s, speech.voice);
+    row.insert(u"rate"_s, speech.rate);
+    row.insert(u"paced"_s, Voices::paced(settings));
+}
+
+// Whether a key is kept for the provider chosen: Gemini's one key, OpenAI's
+// for its voices, or one for the address given here.
+[[nodiscard]] bool keyHeld(const Settings &settings, Capability capability, const QString &chosen, const QString &address) {
+    if (chosen == "gemini"_L1)
+        return Gemini::hasKey();
+    if (openAiVoice(capability, chosen))
+        return Voices::openAiHasKey(settings);
+    return !address.isEmpty() && !AiEndpoints::keptKey(address, Secrets::shared()).isEmpty();
+}
+
 [[nodiscard]] QString modelDefaultOf(const Settings &settings, Capability capability, const QString &chosen) {
+    if (openAiVoice(capability, chosen))
+        return QString::fromLatin1(ServerVoice::openAiModel);
     if (chosen == "gemini"_L1 && !setUpOf(capability).model.isEmpty())
         return Gemini::modelDefault(capability);
     switch (capability) {
@@ -141,7 +175,7 @@ constexpr auto answering =
 } // namespace
 
 AiCapabilityRows::AiCapabilityRows(Settings *settings, QString defaultsFile, QObject *parent)
-    : QObject(parent), m_settings(settings), m_defaultsFile(std::move(defaultsFile)) {
+    : QObject(parent), m_settings(settings), m_defaultsFile(std::move(defaultsFile)), m_preview(settings) {
     connect(m_settings, &Settings::changed, this, [this] {
         if (m_watching)
             refresh();
@@ -152,6 +186,8 @@ void AiCapabilityRows::watch(bool on) {
     m_watching = on;
     if (on)
         refresh();
+    else
+        m_preview.stop(); // the page is put away: so is what it plays
 }
 
 bool AiCapabilityRows::aiOn() const { return !m_settings->aiOff(); }
@@ -171,10 +207,10 @@ QVariantMap AiCapabilityRows::row(Capability capability) const {
     row.insert(u"addressDefault"_s, m_settings->aiProvider() == "openai"_L1 ? AiEndpoints::name(*m_settings) : QString());
     // Asked of the keyring only for an address given here: the AI server's
     // key is the AI's, set up with it.
-    row.insert(u"hasKey"_s, chosen == "gemini"_L1 ? Gemini::hasKey()
-                                                  : !address.isEmpty() && !AiEndpoints::keptKey(address, Secrets::shared()).isEmpty());
+    row.insert(u"hasKey"_s, keyHeld(*m_settings, capability, chosen, address));
     row.insert(u"inTheClear"_s, !address.isEmpty() && AiEndpoints::inTheClear(address));
-    QString modelChoice = setUp.model.isEmpty() ? QString() : older.value(setUp.model).toString().trimmed();
+    const QLatin1StringView model = modelField(capability, chosen);
+    QString modelChoice = model.isEmpty() ? QString() : older.value(model).toString().trimmed();
     // Gemini's models are its own, kept with it.
     if (chosen == "gemini"_L1 && !setUp.model.isEmpty())
         modelChoice = Gemini::modelChosen(*m_settings, capability);
@@ -185,6 +221,8 @@ QVariantMap AiCapabilityRows::row(Capability capability) const {
         const auto ways = AiRegistry::recognizers(*m_settings, Recognition::Kind::Audio, true);
         row.insert(u"timed"_s, ways && !ways->empty() && ways->front()->timesWords());
     }
+    if (capability == Capability::TextToSpeech && status.available)
+        addVoice(row, *m_settings);
     return row;
 }
 
@@ -288,8 +326,8 @@ void AiCapabilityRows::setModel(const QString &capability, const QString &model)
     const auto which = Capabilities::named(capability);
     if (!which || setUpOf(*which).model.isEmpty())
         return;
-    if (chosenOf(*m_settings, *which) != "gemini"_L1) {
-        setUp(*which, setUpOf(*which).model, model);
+    if (const QString chosen = chosenOf(*m_settings, *which); chosen != "gemini"_L1) {
+        setUp(*which, modelField(*which, chosen), model);
         return;
     }
     Gemini::chooseModel(*m_settings, *which, model);
@@ -311,6 +349,13 @@ QString AiCapabilityRows::setKey(const QString &capability, const QString &key) 
         emit keyKept();
         return kept ? QString() : kept.error().text();
     }
+    // OpenAI's key is the one it answers with too.
+    if (which && openAiVoice(*which, chosenOf(*m_settings, *which))) {
+        const auto kept = AiEndpoints::keepKey(Voices::openAiUrl(*m_settings), key, Secrets::shared());
+        refresh();
+        emit keyKept();
+        return kept ? QString() : kept.error();
+    }
     if (!which || setUpOf(*which).address.isEmpty())
         return {};
     const QString address = olderOf(*m_settings, *which).value(setUpOf(*which).address).toString().trimmed();
@@ -319,6 +364,16 @@ QString AiCapabilityRows::setKey(const QString &capability, const QString &key) 
     const auto kept = AiEndpoints::keepKey(address, key, Secrets::shared());
     refresh();
     return kept ? QString() : kept.error();
+}
+
+void AiCapabilityRows::setVoice(const QString &voice) {
+    Voices::keep(*m_settings, u"voice"_s, voice);
+    refresh();
+}
+
+void AiCapabilityRows::setRate(double rate) {
+    Voices::keep(*m_settings, u"rate"_s, std::round(std::clamp(rate, 0.5, 2.0) * 10) / 10);
+    refresh();
 }
 
 void AiCapabilityRows::setAiOn(bool on) {

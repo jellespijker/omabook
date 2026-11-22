@@ -12,11 +12,11 @@ ColumnLayout {
     property var info: ({})
     readonly property string capability: info.capability || ""
     readonly property var desk: aiAgent.capabilities
-    // Gemini has its key in a row of its own (GeminiKey) and no address.
-    readonly property bool gemini: info.chosen === "gemini"
-    readonly property bool server: (capability === "embeddings" && !gemini) || (info.chosen === "server" && capability !== "handwriting")
+    // Gemini, and OpenAI's voices, have their key in a row of their own (ApiKey) and no address.
+    readonly property bool keyed: info.chosen === "gemini" || (capability === "text-to-speech" && info.chosen === "openai")
+    readonly property bool server: (capability === "embeddings" && !keyed) || (info.chosen === "server" && capability !== "handwriting")
     spacing: 8
-    visible: server || gemini || capability === "handwriting"
+    visible: server || keyed || capability === "handwriting"
 
     TextField {
         id: address

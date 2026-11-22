@@ -5,7 +5,9 @@
 // off); the engines' command lines; and in the window, the sentence marked on
 // the page, the page following it so the place is kept, in a flowing book
 // set justified and hyphenated and in a PDF, its highlights left as they
-// were, and the control and the Aa panel laid out at the window's sizes.
+// were, and the control and the Aa panel laid out at the window's sizes;
+// another voice chosen mid-book reading on from the same place, and a plugin
+// reading aloud shown by its name and stopped (#147).
 //
 // OMABOOK_SHOTS=<folder> saves a picture of each, to look at by eye.
 
@@ -16,12 +18,15 @@
 #include <QTextDocument>
 #include <QtTest>
 
+#include "audiodevices.h"
 #include "desk.h"
 #include "highlights.h"
 #include "localvoices.h"
 #include "narration.h"
 #include "readaloud.h"
 #include "readinghighlights.h"
+#include "scriptplugin.h"
+#include "scriptplugins.h"
 #include "sentences.h"
 #include "servervoice.h"
 #include "voices.h"
@@ -159,6 +164,30 @@ struct Bench {
         return quick ? quick->textDocument() : nullptr;
     }
 };
+
+// A plugin that reads aloud with the person's voice, and says how it ended.
+const QByteArray speaker = R"js(
+var heard = "waiting";
+function speak() {
+    heard = "waiting";
+    omabook.ai.speak("Call me Ishmael.").then(function () { heard = "done"; }, function (error) { heard = "failed: " + error; });
+    return true;
+}
+function result() { return heard; }
+)js";
+
+// What a function of the script answered.
+QJsonValue answer(ScriptPlugin &plugin, const QString &function) {
+    bool done = false;
+    QJsonValue result;
+    plugin.callFunction(function, {}, [&](const QJsonValue &value, const QString &problem) {
+        result = problem.isEmpty() ? value : QJsonValue("problem: " + problem);
+        done = true;
+    });
+    if (!QTest::qWaitFor([&done] { return done; }, 5000))
+        return QJsonValue("no answer");
+    return result;
+}
 
 } // namespace
 
@@ -444,6 +473,95 @@ private slots:
         bench.voice->finish();
         QCOMPARE(bench.voice->said.last(), QString("The lantern went out."));
         QTRY_COMPARE(bench.desk.reader->section(), 1);
+    }
+
+    // Another voice chosen while a book is read (on the AI page) reads on
+    // from the sentence it was at, the place kept; one that may not read
+    // now, a server's with the AI turned off, stops it and says why.
+    void anotherVoiceChosenMidBookReadsOnFromTheSamePlace() {
+        Bench bench("epub");
+        bench.desk.settings->setReadAloud({{"engine", "server"}, {"url", "http://localhost:8880/v1"}});
+        bench.key(Qt::Key_R);
+        QTRY_VERIFY(bench.voice && bench.aloud()->speaking());
+        for (int i = 0; i < 3; ++i)
+            bench.voice->finish();
+        const QString words = bench.aloud()->words();
+        const int section = bench.desk.reader->section();
+        const double fraction = bench.desk.reader->fraction();
+        const QPointer<FakeVoice> before = bench.voice;
+        QJsonObject setUp = bench.desk.settings->readAloud();
+        setUp.insert("url", "http://localhost:8881/v1");
+        bench.desk.settings->setReadAloud(setUp);
+        QTRY_VERIFY(bench.voice != before);
+        QVERIFY(!before || before->stops > 0);
+        QCOMPARE(bench.voice->said, QStringList{words});
+        QCOMPARE(bench.aloud()->words(), words);
+        QCOMPARE(bench.desk.reader->section(), section);
+        QCOMPARE(bench.desk.reader->fraction(), fraction);
+        QVERIFY(bench.aloud()->speaking());
+        // Its voice and pace changing goes on with the same voice.
+        const QPointer<FakeVoice> now = bench.voice;
+        bench.aloud()->setRate(1.3);
+        QCOMPARE(bench.voice, now);
+        bench.voice->finish();
+        QCOMPARE(bench.voice->heard.rate, 1.3);
+        bench.desk.settings->setAiProvider("off");
+        QTRY_VERIFY(!bench.aloud()->active());
+        QVERIFY2(bench.desk.backend->message().contains("AI is off"), qPrintable(bench.desk.backend->message()));
+        QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(bench.desk.warnings.join('\n')));
+    }
+
+    // A plugin reading aloud (`ai.speak`) is shown as a book read aloud is,
+    // over the page and over the library, by the plugin's name; Shift+R, or
+    // the bar's stop, stops it, and the plugin is told it ended.
+    void aPluginReadingAloudIsShownAndStopped() {
+        Bench bench("epub");
+        // speech-dispatcher, reading until it is stopped.
+        const QString bin = bench.desk.dir.filePath("bin");
+        QVERIFY(QDir().mkpath(bin));
+        QVERIFY(Fixtures::write(bin + "/spd-say", "#!/bin/bash\n[ \"$1\" = -S ] && exit 0\nexec sleep 30\n"));
+        QVERIFY(QFile::setPermissions(bin + "/spd-say", QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner));
+        const QByteArray path = qgetenv("PATH");
+        qputenv("PATH", bin.toUtf8() + ":" + path);
+        bench.desk.settings->setReadAloud({{"engine", "speech-dispatcher"}});
+        const QString folder = bench.desk.dir.filePath("plugins/notes");
+        QVERIFY(QDir().mkpath(folder + "/data"));
+        QVERIFY(Fixtures::write(folder + "/plugin.json", R"({"name": "Notes", "script": "main.js"})"));
+        QVERIFY(Fixtures::write(folder + "/main.js", speaker));
+        bench.desk.backend->scripts()->reload();
+        QTRY_VERIFY(bench.desk.backend->scripts()->plugin("notes") != nullptr);
+        ScriptPlugin &plugin = *bench.desk.backend->scripts()->plugin("notes");
+        AudioDevices &audio = *bench.desk.backend->audio();
+
+        QVERIFY(answer(plugin, "speak").toBool());
+        QTRY_VERIFY(audio.speaking());
+        QTRY_VERIFY(bench.desk.shows("readAloudBar"));
+        QCOMPARE(bench.desk.find("aloudSpeaker")->property("text").toString(), QString("Notes is reading aloud"));
+        QVERIFY(!bench.desk.shows("aloudPause"));
+        bench.desk.shot("read-aloud-plugin");
+        bench.key(Qt::Key_R, Qt::ShiftModifier);
+        QTRY_VERIFY(!audio.speaking());
+        QTRY_VERIFY(!bench.desk.shows("readAloudBar"));
+        QTRY_COMPARE(answer(plugin, "result").toString(), QString("done"));
+
+        // Over the library, its stop stops it as Shift+R does.
+        bench.desk.reader->close();
+        QTRY_VERIFY(!bench.desk.reader->isOpen());
+        QVERIFY(answer(plugin, "speak").toBool());
+        QTRY_VERIFY(bench.desk.shows("speakingBar"));
+        bench.desk.shot("read-aloud-plugin-library");
+        bench.key(Qt::Key_R, Qt::ShiftModifier);
+        QTRY_VERIFY(!audio.speaking());
+        QTRY_COMPARE(answer(plugin, "result").toString(), QString("done"));
+        QVERIFY(answer(plugin, "speak").toBool());
+        QTRY_VERIFY(bench.desk.shows("speakingBar"));
+        QObject *stop = bench.desk.find("speakingBar")->findChild<QObject *>("aloudStop");
+        QVERIFY(stop);
+        QVERIFY(QMetaObject::invokeMethod(stop, "clicked"));
+        QTRY_VERIFY(!bench.desk.shows("speakingBar"));
+        QTRY_COMPARE(answer(plugin, "result").toString(), QString("done"));
+        qputenv("PATH", path);
+        QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(bench.desk.warnings.join('\n')));
     }
 
     // The control over the page and the Aa panel with reading aloud in it, at the window's sizes.

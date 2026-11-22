@@ -2,7 +2,8 @@
 // its provider and model, whether it may be hosted, and why it can't be used
 // with what to do; every row worked with a fake provider (a server on this
 // computer, a whisper.cpp and a speech-dispatcher that are scripts), by the
-// keyboard and the controls a finger taps, in English and in German.
+// keyboard and the controls a finger taps, in English and in German; and
+// text to speech's voice, pace and preview, OpenAI's voices among them (#147).
 
 #include <QDir>
 #include <QFile>
@@ -323,7 +324,7 @@ private slots:
         Desk desk("en", {}, false);
         QVERIFY(fakeProviders(desk, server));
         const QList<std::pair<QString, int>> rows{
-            {"answers", 6}, {"handwriting", 1}, {"speech-to-text", 4}, {"text-to-speech", 4}, {"embeddings", 1}};
+            {"answers", 6}, {"handwriting", 1}, {"speech-to-text", 4}, {"text-to-speech", 5}, {"embeddings", 1}};
         for (const auto &[row, index] : rows) {
             desk.find("aiSettings")->setProperty("current", row);
             pick(desk, row + "Provider", index);
@@ -391,6 +392,81 @@ private slots:
         QTRY_VERIFY(text(desk, "answersSummary").endsWith("your own computers"));
         desk.shot("ai-page-rows");
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Text to speech's row: the voice and pace of the provider in use, kept
+    // for each; a sentence to hear it by; OpenAI's voices with their key; and
+    // the row laid out in a long language, under fingers and right to left.
+    void theVoiceIsChosenAndHeardInItsRow() {
+        FakeServer server;
+        server.answering = answers;
+        Desk desk("en", {}, false);
+        QVERIFY(fakeProviders(desk, server));
+        const QString log = desk.dir.filePath("said.log");
+        QVERIFY(program(desk.dir.filePath("bin/spd-say"), "#!/bin/bash\necho \"$*\" >> '" + log.toUtf8() + "'\n"));
+        desk.find("aiSettings")->setProperty("current", QString("text-to-speech"));
+        pick(desk, "text-to-speechProvider", 2);
+        QTRY_VERIFY(desk.shows("voiceChoice"));
+        QCOMPARE(value(desk, "voiceChoice", "count").toInt(), 9); // automatic, and speech-dispatcher's eight
+        pick(desk, "voiceChoice", 2);
+        QVERIFY(QMetaObject::invokeMethod(desk.find("voiceSlower"), "clicked"));
+        QTRY_COMPARE(text(desk, "voiceRate"), QString("0.9×"));
+        const QJsonObject dispatcher = desk.settings->readAloud().value("voices").toObject().value("speech-dispatcher").toObject();
+        QCOMPARE(dispatcher.value("voice").toString(), QString("female2"));
+        QCOMPARE(dispatcher.value("rate").toDouble(), 0.9);
+        // Heard: the sentence read with them.
+        QVERIFY(QMetaObject::invokeMethod(desk.find("voicePreview"), "clicked"));
+        QTRY_VERIFY(QString::fromUtf8(contents(log)).contains("-t female2"));
+        QVERIFY(QString::fromUtf8(contents(log)).contains("This is how your books will be read aloud."));
+        QTRY_COMPARE(text(desk, "voicePreview"), QString("Hear It"));
+        desk.shot("ai-page-voice");
+
+        // OpenAI's voices: a key, then hosted allowed, then its own voices, none chosen yet.
+        desk.settings->setReadAloud([&] {
+            QJsonObject setUp = desk.settings->readAloud();
+            setUp.insert("openai_url", server.url());
+            return setUp;
+        }());
+        pick(desk, "text-to-speechProvider", 4);
+        QCOMPARE(desk.settings->readAloud().value("engine").toString(), QString("openai"));
+        QTRY_COMPARE(text(desk, "text-to-speechSummary"), QString("Only a hosted service is set up, and hosted isn't allowed for it"));
+        tick(desk, "text-to-speechHosted", true);
+        QTRY_COMPARE(text(desk, "text-to-speechSummary"), QString("A key is needed"));
+        QTRY_VERIFY(desk.shows("text-to-speechOpenAiKey"));
+        QVERIFY(!desk.shows("text-to-speechAddress"));
+        desk.find("text-to-speechOpenAiKey")->setProperty("text", "sk-voices");
+        QVERIFY(QMetaObject::invokeMethod(desk.find("text-to-speechOpenAiKey"), "accepted"));
+        QCOMPARE(AiEndpoints::keptKey(server.url(), m_secrets), QString("sk-voices"));
+        QTRY_VERIFY2(text(desk, "text-to-speechSummary").startsWith("OpenAI · "), qPrintable(text(desk, "text-to-speechSummary")));
+        QTRY_COMPARE(value(desk, "voiceChoice", "count").toInt(), 14);
+        QCOMPARE(value(desk, "voiceChoice", "currentIndex").toInt(), 0);
+        type(desk, "text-to-speechModel", "tts-1-hd");
+        QCOMPARE(desk.settings->readAloud().value("openai_model").toString(), QString("tts-1-hd"));
+        QVERIFY(!desk.settings->readAloud().contains("model"));
+        QTRY_VERIFY(text(desk, "text-to-speechSummary").contains("tts-1-hd"));
+        desk.shot("ai-page-voice-openai");
+        // Back to speech-dispatcher: its voice and pace come back.
+        pick(desk, "text-to-speechProvider", 2);
+        QTRY_COMPARE(value(desk, "voiceChoice", "currentIndex").toInt(), 2);
+        QCOMPARE(text(desk, "voiceRate"), QString("0.9×"));
+        QVERIFY(AiEndpoints::keepKey(server.url(), {}, m_secrets));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+
+        for (const auto &[language, touch] : {std::pair{QByteArray("de"), false}, {QByteArray("de"), true}, {QByteArray("ar"), false}}) {
+            Desk other(language, touch ? QByteArray() : lightTheme, touch);
+            QVERIFY(fakeProviders(other, server));
+            other.find("aiSettings")->setProperty("current", QString("text-to-speech"));
+            pick(other, "text-to-speechProvider", 2);
+            QTRY_VERIFY(other.shows("voiceChoice"));
+            for (const QSize &size : dialogSizes()) {
+                QVERIFY(other.resize(size));
+                other.settle();
+                look(other, "ai-voice");
+            }
+            QVERIFY2(other.warnings.isEmpty(), qPrintable(other.warnings.join('\n')));
+        }
+        const QStringList problems = std::exchange(found, {});
+        QVERIFY2(problems.isEmpty(), qPrintable(problems.mid(0, 40).join('\n')));
     }
 
     // The page at every size, in a long language, under fingers and right to

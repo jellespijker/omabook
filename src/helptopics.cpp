@@ -269,10 +269,15 @@ QList<Manual::Section> readAloudSections() {
                     "back or on, and {reader.read_aloud_stop} stops. How fast, and in which voice, is in the Aa panel "
                     "({reader.format}).")},
         {Manual::tr("The voice"),
-         Manual::tr("It is read on this computer, and nothing is sent anywhere: by Piper (piper-tts and a voice for your language, "
-                    "such as piper-voices-en-us) or else by speech-dispatcher. A server of your own that reads aloud can do it "
-                    "instead: `read_aloud` in config.json, with `engine` set to `server` and its `url`. It is never asked while "
-                    "the AI is off, nor a hosted one unless you allow it there.")},
+         Manual::tr("Choose what reads in the settings ({global.settings}), on the AI page, in the row Text to speech: Piper "
+                    "(piper-tts and a voice for your language, such as piper-voices-en-us) or speech-dispatcher on this computer, "
+                    "a server of your own, or OpenAI's or Gemini's voices with their API key. Each keeps its own voice and speed, "
+                    "and Hear It reads a sentence with them. Choosing another while a book is read goes on from the same "
+                    "sentence. A server is never asked while the AI is off, nor a hosted voice unless you allow a hosted service "
+                    "for text to speech; a voice on this computer reads with the AI off too.")},
+        {Manual::tr("A plugin reading aloud"),
+         Manual::tr("A plugin can read something to you in the same voice. The bar over the page, or over the shelf, says "
+                    "which plugin reads, and {reader.read_aloud_stop} or the bar's ✕ stops it.")},
     };
 }
 

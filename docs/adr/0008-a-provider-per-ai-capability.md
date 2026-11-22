@@ -247,3 +247,27 @@ Where the code asked for it, #143 differs from the decision above, as follows:
 - **Its errors are codes**: a refused key (`API_KEY_INVALID`, 401, 403) is `GeminiRefusedKey`, no key
   `GeminiNoKey`, a blocked prompt `AiDeclined`, a sentence without sound `GeminiNoSound`, and the rest
   the codes every server's errors are (`AiFailures::ofServer`).
+
+## As built in #147
+
+- **Text to speech's providers** are `read_aloud.engine`'s: automatic (Piper with a voice, else
+  speech-dispatcher), `piper`, `speech-dispatcher`, `server` (an OpenAI-compatible `/audio/speech`, the
+  AI server unless `url` names one), `openai` and `gemini` (#145). `openai` is a `ServerVoice` at
+  OpenAI's address (`read_aloud.openai_url` for a proxy or a test) with its model
+  (`read_aloud.openai_model`, `gpt-4o-mini-tts` by OpenAI's API reference of 2026-11-22) and its
+  thirteen voices; its key is the one OpenAI answers with (`OPENAI_API_KEY`, else the keyring's for its
+  address), given in the row. Like Gemini's, it is always hosted: it reads only where hosted is allowed
+  for text to speech, never with the AI Off, and says `no-key` without a key.
+- **Voice and speed per provider**: `read_aloud.voices` keeps `{voice, rate}` for each engine, as one
+  engine's voice means nothing to another; `voice` and `rate` beside it stay the engine in use's, which an
+  older Omabook reads. A config.json without `voices` has its one voice for every engine, as before.
+  Gemini's voices take no pace, and the row says so.
+- **The row's preview** (`VoicePreview`, "Hear It") reads a sentence in the window's language with the
+  voice the registry gives the person's own use, so the privacy rule and AI Off hold for it as for a book.
+- **Switching provider mid-book** keeps the place: while a book is read, `ReadAloud` follows the settings,
+  and where what reads changes (`Voices::reader`: the engine and its set-up, not its voice or pace) the
+  narration is given the new voice, which reads the same sentence again; one that may not read now (a
+  hosted voice with the AI turned off) stops it and says why.
+- **A plugin reading aloud** (`ai.speak`) is shown where the person can stop it: `AudioDevices` knows who
+  speaks, as it knows who records, and `ReadAloudBar` names the plugin over the page, or over the shelf;
+  Shift+R, or the bar's stop, stops it, and the plugin's promise is kept as for its own `stop()`.

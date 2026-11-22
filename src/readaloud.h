@@ -24,7 +24,10 @@ class Reader;
 // a chapter the view keeps it in sight, which is what keeps the place).
 // Paused, it stays on its sentence, which going on reads again; stopped, the
 // next start is from wherever the reader is then. How fast, and in which
-// voice, is kept in the settings (Voices).
+// voice, is kept in the settings, for each engine (Voices). Another engine
+// chosen while it reads (on the AI page, #147) reads on from the same
+// sentence; one that may not read (a hosted voice with the AI turned off)
+// stops it, saying why.
 class ReadAloud : public QObject {
     Q_OBJECT
     // Whether the book is being read aloud, or paused partway.
@@ -122,6 +125,8 @@ private:
     // Where in a section the words at the top of the page start; -1 when they aren't found.
     [[nodiscard]] qsizetype offsetOf(int section, const QString &atTop) const;
     void choose(const QString &key, const QJsonValue &value);
+    // The settings changed while it reads: the voice, its pace, or what reads.
+    void rechoose();
     // Asks whether to install a voice, to read from `atTop` of `book` once there is one (0: only to have one).
     void offer(qint64 book, const QString &atTop);
     void installed();
@@ -131,6 +136,8 @@ private:
     VoiceMaker m_maker;
     QString m_makerName;
     std::unique_ptr<Narration> m_narration;
+    // What reads it (Voices::reader), to tell when another is chosen.
+    QString m_reading;
     qint64 m_bookId = 0;
     int m_sentences = 0;
     // The reader is being moved to the sentence's section, not by the person.

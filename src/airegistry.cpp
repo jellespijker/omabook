@@ -105,6 +105,7 @@ private:
     case Failure::Code::HostedNotChosen:
         return CapabilityLack::HostedNotChosen;
     case Failure::Code::GeminiNoKey:
+    case Failure::Code::VoiceOpenAiNoKey:
         return CapabilityLack::NoKey;
     case Failure::Code::NoVoice:
     case Failure::Code::PiperMissing:
@@ -163,15 +164,18 @@ private:
     const auto made = Voices::choose(settings, ask.hosted);
     if (!made)
         return refused(settings, Capability::TextToSpeech, made.error());
-    const bool server = *engine == "server"_L1;
-    const bool gemini = *engine == "gemini"_L1;
-    QString model = server ? settings.readAloud().value("model"_L1).toString() : QString();
-    if (gemini)
+    const bool local = *engine == "piper"_L1 || *engine == "speech-dispatcher"_L1;
+    QString model;
+    if (*engine == "server"_L1)
+        model = settings.readAloud().value("model"_L1).toString();
+    else if (*engine == "openai"_L1)
+        model = settings.readAloud().value("openai_model"_L1).toString();
+    else if (*engine == "gemini"_L1)
         model = Gemini::modelFor(settings, Capability::TextToSpeech);
     return {.capability = Capability::TextToSpeech,
             .available = true,
             // A server that keeping to one's own would refuse is someone else's.
-            .hosted = (server || gemini) && !Voices::engine(settings, false),
+            .hosted = !local && !Voices::engine(settings, false),
             .provider = (*made)->name(),
             .model = model,
             .why = CapabilityLack::None,

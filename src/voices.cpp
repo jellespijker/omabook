@@ -2,6 +2,7 @@
 
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 #include <QStandardPaths>
 #include <QUrl>
@@ -22,6 +23,13 @@ namespace {
 
 [[nodiscard]] QString chosen(const Settings &settings, QLatin1StringView key) {
     return settings.readAloud().value(key).toString().trimmed();
+}
+
+// OpenAI's row of the servers: its address and the variable its key may be in.
+[[nodiscard]] const AiEndpoint &openAiRow() {
+    const AiEndpoint *row = AiEndpoints::find(u"openai"_s);
+    Q_ASSERT(row != nullptr);
+    return *row;
 }
 
 [[nodiscard]] QString piperProgram(const Settings &settings) {
@@ -82,6 +90,47 @@ namespace {
     }
 }
 
+[[nodiscard]] QString openAiKey(const Settings &settings) {
+    if (const QString key = qEnvironmentVariable(openAiRow().keyVariable).trimmed(); !key.isEmpty())
+        return key;
+    return AiEndpoints::keptKey(Voices::openAiUrl(settings), Secrets::shared());
+}
+
+// OpenAI's voices (#147), if they may be asked: as Gemini's, never with the
+// AI off and only where hosted is allowed, with the key OpenAI answers with
+// (OPENAI_API_KEY, else the keyring's for its address).
+[[nodiscard]] std::expected<AiServer, Failure> openAi(const Settings &settings, AiPrivacy::HostedAsked asked) {
+    if (settings.aiOff())
+        return std::unexpected(Failure(Failure::Code::VoiceAiOff));
+    switch (AiPrivacy::refusal(settings, Capability::TextToSpeech, true, asked)) {
+    case CapabilityLack::None:
+        break;
+    case CapabilityLack::HostedNotChosen:
+        return std::unexpected(Failure(Failure::Code::HostedNotChosen, {u"OpenAI"_s}));
+    default:
+        return std::unexpected(Failure(Failure::Code::VoiceServerHosted, {u"OpenAI"_s}));
+    }
+    const QString key = openAiKey(settings);
+    if (key.isEmpty())
+        return std::unexpected(Failure(Failure::Code::VoiceOpenAiNoKey));
+    return AiServer{
+        .preset = u"openai"_s, .name = u"OpenAI"_s, .baseUrl = Voices::openAiUrl(settings), .key = key, .keyFile = {}, .model = {}};
+}
+
+[[nodiscard]] QString openAiModel(const Settings &settings) {
+    const QString model = chosen(settings, "openai_model"_L1);
+    return model.isEmpty() ? QString::fromLatin1(ServerVoice::openAiModel) : model;
+}
+
+// The engine whose voice and pace are kept: the one in use, else the one chosen.
+[[nodiscard]] QString speaking(const Settings &settings) {
+    const auto which = Voices::engine(settings);
+    if (which)
+        return *which;
+    const QString wanted = chosen(settings, "engine"_L1);
+    return wanted.isEmpty() ? u"auto"_s : wanted;
+}
+
 [[nodiscard]] bool piperReady(const Settings &settings) { return !piperProgram(settings).isEmpty() && !PiperVoice::findModels().isEmpty(); }
 [[nodiscard]] bool dispatcherReady() {
     return !QStandardPaths::findExecutable(QString::fromLatin1(SpeechDispatcherVoice::program)).isEmpty();
@@ -100,6 +149,11 @@ std::expected<QString, Failure> Voices::engine(const Settings &settings, AiPriva
         if (auto reachable = gemini(settings, asked); !reachable)
             return std::unexpected(reachable.error());
         return u"gemini"_s;
+    }
+    if (wanted == "openai"_L1) {
+        if (auto reachable = openAi(settings, asked); !reachable)
+            return std::unexpected(reachable.error());
+        return u"openai"_s;
     }
     if (wanted == "piper"_L1) {
         if (piperProgram(settings).isEmpty())
@@ -129,6 +183,12 @@ std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &se
             return std::unexpected(reachable.error());
         return std::make_unique<GeminiVoice>(*std::move(reachable), Gemini::modelFor(settings, Capability::TextToSpeech));
     }
+    if (*which == "openai"_L1) {
+        auto reachable = openAi(settings, asked);
+        if (!reachable)
+            return std::unexpected(reachable.error());
+        return std::make_unique<ServerVoice>(*std::move(reachable), openAiModel(settings));
+    }
     if (*which == "server"_L1) {
         auto reachable = server(settings, asked);
         if (!reachable)
@@ -150,12 +210,69 @@ QStringList Voices::offered(const Settings &settings) {
     }
     if (*which == "gemini"_L1)
         return Gemini::voices();
+    if (*which == "openai"_L1)
+        return ServerVoice::openAiVoices();
     return *which == "server"_L1 ? ServerVoice::voices() : SpeechDispatcherVoice::voices();
 }
 
 Speech Voices::speech(const Settings &settings, const QString &language) {
     const QJsonObject chosenNow = settings.readAloud();
-    return {.rate = std::clamp(chosenNow.value("rate"_L1).toDouble(1.0), 0.5, 2.0),
-            .voice = chosenNow.value("voice"_L1).toString(),
+    const QJsonObject perEngine = chosenNow.value("voices"_L1).toObject();
+    const QJsonObject own = perEngine.value(speaking(settings)).toObject();
+    // Without "voices" (an older config.json), the one voice stands for every engine.
+    const QJsonValue voice = chosenNow.contains("voices"_L1) ? own.value("voice"_L1) : chosenNow.value("voice"_L1);
+    return {.rate = std::clamp(own.value("rate"_L1).toDouble(chosenNow.value("rate"_L1).toDouble(1.0)), 0.5, 2.0),
+            .voice = voice.toString(),
             .language = language};
 }
+
+void Voices::keep(Settings &settings, const QString &field, const QJsonValue &value) {
+    QJsonObject chosenNow = settings.readAloud();
+    QJsonObject perEngine = chosenNow.value("voices"_L1).toObject();
+    const QString which = speaking(settings);
+    QJsonObject own = perEngine.value(which).toObject();
+    if (chosenNow.contains("voices"_L1) && own.value(field) == value && chosenNow.value(field) == value)
+        return;
+    // The first time, every engine's speed is what it was; the voice only the engine's own.
+    if (!chosenNow.contains("voices"_L1) && chosenNow.contains("rate"_L1))
+        own.insert(u"rate"_s, chosenNow.value("rate"_L1));
+    own.insert(field, value);
+    perEngine.insert(which, own);
+    chosenNow.insert(u"voices"_s, perEngine);
+    // As an older Omabook reads it: what the engine in use reads with.
+    chosenNow.insert(field, value);
+    settings.setReadAloud(chosenNow);
+}
+
+QString Voices::reader(const Settings &settings) {
+    const auto which = engine(settings);
+    if (!which)
+        return {};
+    QJsonObject setUp = settings.readAloud();
+    for (const auto *field : {"voice", "rate", "voices", "hosted"})
+        setUp.remove(QLatin1StringView(field));
+    if (*which == "gemini"_L1)
+        setUp.insert(u"gemini"_s, settings.gemini());
+    return *which + u' ' + QString::fromUtf8(QJsonDocument(setUp).toJson(QJsonDocument::Compact));
+}
+
+QString Voices::openAiUrl(const Settings &settings) {
+    QString base = chosen(settings, "openai_url"_L1);
+    if (base.isEmpty())
+        base = QString::fromLatin1(openAiRow().baseUrl);
+    while (base.endsWith(u'/'))
+        base.chop(1);
+    return base;
+}
+
+bool Voices::openAiHasKey(const Settings &settings) { return !openAiKey(settings).isEmpty(); }
+
+QString Voices::nameOf(const QString &engine) {
+    if (engine == "piper"_L1)
+        return u"Piper"_s;
+    if (engine == "openai"_L1)
+        return u"OpenAI"_s;
+    return engine == "gemini"_L1 ? u"Gemini"_s : engine;
+}
+
+bool Voices::paced(const Settings &settings) { return speaking(settings) != "gemini"_L1; }

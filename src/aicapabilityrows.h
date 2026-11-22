@@ -7,6 +7,7 @@
 #include <QVariantMap>
 
 #include "aicapability.h"
+#include "voicepreview.h"
 
 class Settings;
 
@@ -29,10 +30,15 @@ class AiCapabilityRows : public QObject {
     //   capability, available, hosted, provider, model, why, message,
     //   hostedAllowed, chosen (the provider's id), offered (ids),
     //   address, addressDefault, hasKey, inTheClear, modelChoice, modelDefault,
-    //   and for speech to text, timed (whether its words have their moments)
+    //   and for speech to text, timed (whether its words have their moments);
+//   for text to speech, where it may read, voices (the engine's), voice,
+//   rate and paced (whether it takes a pace: Gemini's doesn't), each kept
+//   per engine (#147)
     Q_PROPERTY(QVariantList rows READ rows NOTIFY changed)
     // Off stops every model (#133): `ai_provider` "off".
     Q_PROPERTY(bool aiOn READ aiOn NOTIFY changed)
+    // A sentence read by the voice chosen for text to speech (#147).
+    Q_PROPERTY(VoicePreview *preview READ preview CONSTANT)
 
 public:
     explicit AiCapabilityRows(Settings *settings, QString defaultsFile = {}, QObject *parent = nullptr);
@@ -51,7 +57,11 @@ public:
     // Keeps the key for that server in the keyring; "" forgets it. Says why
     // when it couldn't be kept, else "".
     Q_INVOKABLE QString setKey(const QString &capability, const QString &key);
+    // Text to speech's voice and pace, for the engine in use.
+    Q_INVOKABLE void setVoice(const QString &voice);
+    Q_INVOKABLE void setRate(double rate);
     Q_INVOKABLE void setAiOn(bool on);
+    [[nodiscard]] VoicePreview *preview() noexcept { return &m_preview; }
     // Whether the page is in front of somebody: the rows are worked out, and
     // kept up with the settings, only then, as they ask the keyring and PATH.
     Q_INVOKABLE void watch(bool on);
@@ -73,4 +83,5 @@ private:
     QString m_defaultsFile;
     QVariantList m_rows;
     bool m_watching = false;
+    VoicePreview m_preview;
 };

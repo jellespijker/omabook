@@ -50,6 +50,9 @@ public:
     void next();
     void back();
     void setSpeech(const Speech &how) { m_how = how; }
+    // Another voice reads on from the sentence being read (#147): the place
+    // stays, and if it was being read it is read again by the new one.
+    void setVoice(std::unique_ptr<Voice> voice);
 
     [[nodiscard]] bool playing() const noexcept { return m_playing; }
     [[nodiscard]] std::optional<Spoken> current() const noexcept { return m_current; }

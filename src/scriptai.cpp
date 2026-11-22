@@ -10,6 +10,7 @@
 
 #include "aicall.h"
 #include "airegistry.h"
+#include "audiodevices.h"
 #include "embeddings.h"
 #include "failure.h"
 #include "inkcodec.h"
@@ -105,9 +106,16 @@ constexpr auto assistName = "omabook-api/assist";
 
 } // namespace
 
-ScriptAi::ScriptAi(ScriptPlugin *plugin) : m_plugin(plugin) {}
+ScriptAi::ScriptAi(ScriptPlugin *plugin) : m_plugin(plugin) {
+    // The window's stop (the bar over the page, Shift+R) stops it as the plugin's own does.
+    if (const AudioDevices *audio = m_plugin->m_services.audio)
+        connect(audio, &AudioDevices::stopSpeakingAsked, this, &ScriptAi::stopSpeaking);
+}
 
-ScriptAi::~ScriptAi() = default;
+ScriptAi::~ScriptAi() {
+    if (AudioDevices *audio = m_plugin->m_services.audio; audio && m_voice)
+        audio->endedSpeaking(this);
+}
 
 QJSValue ScriptAi::build(QJSEngine &engine) {
     QFile bundled(u":/scriptassist.js"_s);
@@ -307,6 +315,9 @@ void ScriptAi::speak(const QString &text, const QString &options, const QJSValue
     m_plugin->busy(1);
     connect(m_voice.get(), &Voice::spoken, this, [this] { settleSpeech({}); });
     connect(m_voice.get(), &Voice::failed, this, [this](const Failure &why) { settleSpeech(why.text()); });
+    // Read where the person sees who reads, and can stop it.
+    if (AudioDevices *audio = m_plugin->m_services.audio)
+        audio->beganSpeaking(this, m_plugin->m_manifest.name.isEmpty() ? m_plugin->m_manifest.id : m_plugin->m_manifest.name);
     m_voice->say(text, Voices::speech(*settings, chosen.value("language"_L1).toString()));
 }
 
@@ -324,6 +335,8 @@ void ScriptAi::settleSpeech(const QString &why) {
     // Its signal may still be on the way out of it: let it go once that is done.
     m_voice->disconnect(this);
     m_voice.release()->deleteLater();
+    if (AudioDevices *audio = m_plugin->m_services.audio)
+        audio->endedSpeaking(this);
     const QJSValue told = why.isEmpty() ? m_spoken : m_notSpoken;
     m_spoken = m_notSpoken = QJSValue();
     told.call(why.isEmpty() ? QJSValueList() : QJSValueList{why});

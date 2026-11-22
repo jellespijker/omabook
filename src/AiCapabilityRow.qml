@@ -230,11 +230,19 @@ ColumnLayout {
             Layout.fillWidth: true
             info: row.info
         }
-        // Gemini's key, wherever Gemini is chosen (#145).
-        GeminiKey {
+        // Gemini's key, wherever Gemini is chosen (#145), and OpenAI's for its voices (#147).
+        ApiKey {
             Layout.fillWidth: true
-            visible: row.info.chosen === "gemini"
+            visible: row.info.chosen === "gemini" || (row.capability === "text-to-speech" && row.info.chosen === "openai")
+            provider: row.info.chosen === "openai" ? "openai" : "gemini"
             info: row.info
+        }
+        // The voice, its pace and a sentence to hear it by (#147).
+        Loader {
+            Layout.fillWidth: true
+            active: row.capability === "text-to-speech" && !!row.info.available
+            visible: active
+            sourceComponent: VoiceSetup { info: row.info }
         }
 
         // Its set-up: the AI's own for answers and quick work, else a server's.
