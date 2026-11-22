@@ -50,6 +50,8 @@ public:
     // error naming the model, as OpenAI's "model_not_found" (its error codes
     // name none for a model shut down, so its words are read too).
     [[nodiscard]] static bool modelGone(int status, const QByteArray &answer);
+    // The same of the error itself ({code, message}), as the Realtime API sends it too (#169).
+    [[nodiscard]] static bool modelGone(const QJsonObject &error);
 
     void say(const QString &sentence, const Speech &how) override;
     void stop() override;

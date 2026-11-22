@@ -10,6 +10,7 @@
   "%1 and %2, from Arch's own packages: small and quick, and it sounds like a machine.": "%1 and %2, from Arch's own packages: small and quick, and it sounds like a machine.",
   "%1 and %2, from the AUR, where Arch's users share packages that Arch itself doesn't check: larger, and it sounds like a person.": "%1 and %2, from the AUR, where Arch's users share packages that Arch itself doesn't check: larger, and it sounds like a person.",
   "%1 answered with an error (%2).": "%1 answered with an error (%2).",
+  "%1 answered without the sound of what it was to read aloud.": "%1 answered without the sound of what it was to read aloud.",
   "%1 answered: %2": "%1 answered: %2",
   "%1 books are read by converting them to EPUB with Calibre, and the Calibre plugin is switched off. Switch it on under Plugins and open the book again.": "%1 books are read by converting them to EPUB with Calibre, and the Calibre plugin is switched off. Switch it on under Plugins and open the book again.",
   "%1 books are read by converting them to EPUB, which needs Calibre's ebook-convert. Install the calibre package and open the book again.": "%1 books are read by converting them to EPUB, which needs Calibre's ebook-convert. Install the calibre package and open the book again.",
@@ -25,6 +26,7 @@
   "%1 could not show this view: its QML file has a mistake in it.": "%1 could not show this view: its QML file has a mistake in it.",
   "%1 couldn't be made into one book.": "%1 couldn't be made into one book.",
   "%1 couldn't read it aloud (%2).": "%1 couldn't read it aloud (%2).",
+  "%1 didn't accept the API key for reading aloud; give another on the AI page.": "%1 didn't accept the API key for reading aloud; give another on the AI page.",
   "%1 didn't accept the key; put one in the settings.": "%1 didn't accept the key; put one in the settings.",
   "%1 didn't answer within %n seconds.": {
     "one": "%1 didn't answer within %n second.",

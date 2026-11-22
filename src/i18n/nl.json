@@ -1372,6 +1372,8 @@
   "%1 has an update: %2. Install it under Plugins.": "%1 heeft een update: %2. Installeer hem bij Plug-ins.",
   "%1 has no model \"%2\".": "%1 heeft geen model ‘%2’.",
   "%1 has retired its speech model %2, so it can't read aloud with it: choose another for text to speech on the AI page.": "%1 heeft zijn spraakmodel %2 uit de roulatie genomen en kan er niet meer mee voorlezen: kies op de pagina AI een ander voor tekst naar spraak.",
+  "%1 didn't accept the API key for reading aloud; give another on the AI page.": "%1 nam de API-sleutel voor voorlezen niet aan; geef een andere op de AI-pagina.",
+  "%1 answered without the sound of what it was to read aloud.": "%1 antwoordde zonder het geluid van wat het moest voorlezen.",
   "%1 is up to date.": "%1 is bijgewerkt.",
   "%1 needs a newer Omabook than this": "%1 heeft een nieuwere Omabook nodig dan deze",
   "%1 stopped with an error after its update, so Omabook went back to version %2.": "%1 stopte met een fout na zijn update, dus Omabook ging terug naar versie %2.",

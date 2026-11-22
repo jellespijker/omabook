@@ -24,6 +24,8 @@ moves those lines under its version.
 ### Fixed
 
 - A sync settles a book's cover whichever computer starts it (#168): of a book with a cover on one computer and none on the other, the one without takes it, whatever the times say, and a dry run from either computer lists the book alike, as one whose details are the same on both lists it from neither. A cover given to the computer asked is now listed among the details it takes.
+### Changed
+- OpenAI's voices read on after OpenAI shuts down its speech API on 2027-01-06 (#169): once OpenAI says its model there is gone, the same sentence is read by its successor, gpt-realtime-2.1-mini, over OpenAI's Realtime API, and so is every one after it; a model of the Realtime API (`gpt-realtime-…`) chosen on the AI page reads there at once. Its voices are those the Realtime API has, at up to one and a half times their pace; as before, only where hosted is allowed for text to speech, never with the AI turned off, and "Hear It" and Stop work as they did. Omabook now needs `qt6-websockets`.
 
 ## [0.3.2] - 2026-11-22
 

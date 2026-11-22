@@ -766,7 +766,7 @@ The package is downloaded first because pacman asks for a signature file next to
 
 ## Build
 
-Omabook needs what every Omarchy app needs (CMake, a C++ compiler, Qt 6 base, declarative, SVG and Wayland) plus `libarchive`, `poppler-qt6`, `libsodium`, and `qt6-multimedia` with `opus` for plugins' recordings (`qt6-multimedia-ffmpeg` is the backend that reaches PipeWire). Calibre is optional, for the formats that are converted. The `hyphen-*` dictionaries are optional too, for justified text broken by its language; the tests of it need `hyphen-en`, `hyphen-de` and `hyphen-nl` (or a folder of `hyph_*.dic` files in `OMABOOK_HYPHENATION_PATH`) and are skipped without them.
+Omabook needs what every Omarchy app needs (CMake, a C++ compiler, Qt 6 base, declarative, SVG and Wayland) plus `libarchive`, `poppler-qt6`, `libsodium`, `qt6-multimedia` with `opus` for plugins' recordings (`qt6-multimedia-ffmpeg` is the backend that reaches PipeWire), and `qt6-websockets` for OpenAI's voices over its Realtime API. Calibre is optional, for the formats that are converted. The `hyphen-*` dictionaries are optional too, for justified text broken by its language; the tests of it need `hyphen-en`, `hyphen-de` and `hyphen-nl` (or a folder of `hyph_*.dic` files in `OMABOOK_HYPHENATION_PATH`) and are skipped without them.
 
 ```bash
 bin/build            # builds into build/

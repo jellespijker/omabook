@@ -128,6 +128,8 @@ public:
         VoiceUnplayed,      // {the player's reason}
         VoiceOpenAiNoKey,   // {}: OpenAI's voices, and no key for it (#147)
         VoiceModelRetired,  // {where, model}: the server retired the model, and there is none to fall back to (#162)
+        VoiceKeyRefused,    // {where}: the server didn't accept the key (OpenAI's Realtime API, #169)
+        VoiceNoSound,       // {where}: it answered a sentence to read aloud without its sound (#169)
         NothingToReadAloud, // {}: pages of pictures
         // Spaces and others' annotations (library, operations; #85).
         NoSuchSpace,            // {the name or id asked for}

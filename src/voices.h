@@ -3,6 +3,7 @@
 #include <QJsonValue>
 #include <QString>
 #include <QStringList>
+#include <QUrl>
 #include <expected>
 #include <memory>
 
@@ -25,8 +26,10 @@ class Settings;
 //   "piper_program"  Piper's command, when it isn't piper-tts or piper on the path
 //   "url", "model"   the server of the OpenAI-compatible API that reads
 //                    aloud (else the AI server), and its model ("tts-1")
-//   "openai_model"   OpenAI's model ("gpt-4o-mini-tts"), and "openai_url" for a
-//   "openai_url"     proxy or a test; the key is the one OpenAI answers with
+//   "openai_model"   OpenAI's model ("gpt-4o-mini-tts", "gpt-realtime-2.1-mini" once
+//                    OpenAI has shut that down: a model of its Realtime API is read
+//                    there, #169), and "openai_url" (and "openai_realtime_url")
+//   "openai_url"     for a proxy or a test; the key is the one OpenAI answers with
 //   "openai_retired" the models OpenAI said it has retired (#162): one
 //                    chosen of them reads with the default instead
 //   "hosted"         whether a hosted server may be sent the book's text
@@ -56,6 +59,13 @@ void keep(Settings &settings, const QString &field, const QJsonValue &value);
 // whether there is a key for it.
 [[nodiscard]] QString openAiUrl(const Settings &settings);
 [[nodiscard]] bool openAiHasKey(const Settings &settings);
+// Where OpenAI's Realtime API is ("openai_realtime_url", else the same host
+// as openAiUrl over a WebSocket), for the models that speak only there (#169).
+[[nodiscard]] QUrl openAiRealtimeUrl(const Settings &settings);
+// The model OpenAI's voices read with when none is chosen, or the one chosen
+// is retired: /audio/speech's default, else, once OpenAI has said it shut
+// that down, its successor over the Realtime API (#169).
+[[nodiscard]] QString openAiDefault(const Settings &settings);
 // OpenAI's model chosen for its voices when OpenAI has retired it (it reads
 // with the default instead), else empty.
 [[nodiscard]] QString retiredChoice(const Settings &settings);

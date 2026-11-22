@@ -263,21 +263,9 @@ private slots:
         QVERIFY(row().value("modelRetired").toString().isEmpty());
         QVERIFY(AiEndpoints::keepKey(server.url(), {}, m_secrets));
     }
-    // With the default retired too, there is nothing to fall back to: it says
-    // so, once, by the model's name (not a status); and any other failure is
-    // no reason to change models.
-    void withTheDefaultRetiredItSaysSo() {
-        FakeServer server;
-        server.answering = [](const FakeServer::Request &asked) { return retired(asked.json().value("model").toString()); };
-        QVERIFY(AiEndpoints::keepKey(server.url(), "sk-voices", m_secrets));
-        const auto chosen = settings({{"engine", "openai"}, {"openai_url", server.url()}}, true);
-        VoicePreview preview(chosen.get());
-        preview.play("Hi.", "en");
-        QTRY_VERIFY(!preview.playing());
-        QCOMPARE(preview.why(), Failure(Failure::Code::VoiceModelRetired, {"OpenAI", ServerVoice::openAiModel}).text());
-        QCOMPARE(server.received.size(), 1);
-        QVERIFY(Voices::retiredChoice(*chosen).isEmpty());
-
+    // Any other failure is no reason to change models. (With the default
+    // retired too, its successor reads over the Realtime API: realtimevoice_tests, #169.)
+    void anotherFailureIsNoReasonToChangeModels() {
         FakeServer failing;
         failing.answering = [](const FakeServer::Request &) {
             return FakeServer::Reply{.status = "500 Internal Server Error", .body = "{}"};
@@ -290,7 +278,6 @@ private slots:
         QCOMPARE(again.why(), Failure(Failure::Code::VoiceServerFailed, {"OpenAI", "500"}).text());
         QCOMPARE(failing.received.size(), 1);
         QVERIFY(Voices::retiredChoice(*other).isEmpty());
-        QVERIFY(AiEndpoints::keepKey(server.url(), {}, m_secrets));
         QVERIFY(AiEndpoints::keepKey(failing.url(), {}, m_secrets));
     }
     // What says a model is gone, and what doesn't: a 404 of a wrong address isn't.

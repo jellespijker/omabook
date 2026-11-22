@@ -360,3 +360,23 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   the press, so the key's release is watched on the window (`HeldKeys`). In a note or a question field
   Ctrl+M stays that field's dictation. While it listens the mark at the top says "Listening for what to do",
   with Stop; Escape lets go of what was said. With the AI Off nothing listens.
+
+## As built in #169
+
+- **OpenAI's voices speak two APIs** (`OpenAiVoice`): `/audio/speech` (`ServerVoice`) for the models that still
+  have it, and the Realtime API (`RealtimeVoice`, a WebSocket by Qt WebSockets, so `qt6-websockets` is a
+  dependency) for the ones that speak only there, `gpt-realtime-…`, among them `gpt-realtime-2.1-mini`, which
+  OpenAI's deprecations page names as the successor of every `/audio/speech` model, all shut down on
+  2027-01-06 (checked on 2026-11-22). The default stays `gpt-4o-mini-tts` until OpenAI says it is gone; then
+  the same sentence is read by the successor, the default is kept as retired (`read_aloud.openai_retired`,
+  #162's), and from then on the default is the successor (`Voices::openAiDefault`).
+- **A sentence is a response out of band** (`conversation: "none"`): the session is told to read the text as
+  it is written, in a voice and at a pace (0.5 to 1.5 of the voice's own; the API's is 0.25 to 1.5) that
+  can't change once it has spoken, so one session is kept while they stay and another opened when they
+  change. Its sound (PCM, 24 kHz mono) is played whole, as `/audio/speech`'s WAV is. Stopping a sentence
+  being made lets its session go.
+- **The same rules**: it is OpenAI's provider with OpenAI's key, so hosted only where allowed for text to
+  speech, never with the AI Off; the preview and the reading bar's stop hold for it as for every voice.
+  `read_aloud.openai_realtime_url` names the Realtime API for a proxy or a test, else it is `openai_url`'s
+  host over `wss://`. Its errors are codes: a refused key `VoiceKeyRefused`, a model gone
+  `VoiceModelRetired`, an answer without sound `VoiceNoSound`, the rest `VoiceServerFailed` with what it said.

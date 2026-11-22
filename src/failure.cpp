@@ -149,6 +149,8 @@ constexpr auto wordings = std::to_array<Wording>({
      tr("OpenAI's voices need its API key: give it on the AI page, where it is kept in the keyring, or set OPENAI_API_KEY.")},
     {Failure::Code::VoiceModelRetired,
      tr("%1 has retired its speech model %2, so it can't read aloud with it: choose another for text to speech on the AI page.")},
+    {Failure::Code::VoiceKeyRefused, tr("%1 didn't accept the API key for reading aloud; give another on the AI page.")},
+    {Failure::Code::VoiceNoSound, tr("%1 answered without the sound of what it was to read aloud.")},
     {Failure::Code::NothingToReadAloud, tr("These pages are pictures, so there are no words to read aloud.")},
     {Failure::Code::AiUnreachable, tr("Can't reach the AI server at %1 (%2).")},
     {Failure::Code::AiTimedOut, tr("The AI server at %1 took too long to answer.")},

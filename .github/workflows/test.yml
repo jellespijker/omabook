@@ -32,10 +32,11 @@ jobs:
             deps=("${depends[@]}" "${makedepends[@]}" "${checkdepends[@]}")
           else
             deps=(hicolor-icon-theme qt6-base qt6-declarative qt6-svg qt6-wayland xdg-desktop-portal libarchive poppler-qt6 libsodium
-                  qt6-multimedia qt6-multimedia-ffmpeg opus
+                  qt6-multimedia qt6-multimedia-ffmpeg opus qt6-websockets
                   cmake gcc make pkgconf ttf-dejavu zip hyphen-en hyphen-de hyphen-nl)
           fi
-          pacman -S --noconfirm --needed base-devel cmake dbus "${deps[@]%%[<>=]*}"
+          # qt6-websockets (#169) until omarchy-pkgs' recipe has it too.
+          pacman -S --noconfirm --needed base-devel cmake dbus qt6-websockets "${deps[@]%%[<>=]*}"
 
       - name: Set up a user and a locale like a desktop's
         # Root can read any file, so tests about unreadable ones need an ordinary user, with a second group for tests that change a file's group; and the container generates no locale.

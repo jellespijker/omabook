@@ -11,14 +11,15 @@
 #include "voice.h"
 
 // A sound file played to the desktop's speakers, once, saying when it ended:
-// how a sentence Piper or a server made is heard.
+// how a sentence Piper or a server made is heard. A voice that is given one
+// (RealtimeVoice) may be given a stand-in in the tests, which plays nothing.
 class SoundOut : public QObject {
     Q_OBJECT
 
 public:
     explicit SoundOut(QObject *parent = nullptr);
-    void play(const QString &file);
-    void stop();
+    virtual void play(const QString &file);
+    virtual void stop();
 
 signals:
     void ended();

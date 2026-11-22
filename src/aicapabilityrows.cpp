@@ -153,7 +153,7 @@ void addVoice(QVariantMap &row, const Settings &settings) {
 
 [[nodiscard]] QString modelDefaultOf(const Settings &settings, Capability capability, const QString &chosen) {
     if (openAiVoice(capability, chosen))
-        return QString::fromLatin1(ServerVoice::openAiModel);
+        return Voices::openAiDefault(settings);
     if (chosen == "gemini"_L1 && !setUpOf(capability).model.isEmpty())
         return Gemini::modelDefault(capability);
     switch (capability) {

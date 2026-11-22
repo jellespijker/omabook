@@ -39,7 +39,10 @@ QJsonObject ServerVoice::request(const QString &model, const QString &sentence, 
 bool ServerVoice::modelGone(int status, const QByteArray &answer) {
     if (status != 400 && status != 404 && status != 410)
         return false;
-    const QJsonObject error = QJsonDocument::fromJson(answer).object().value("error"_L1).toObject();
+    return modelGone(QJsonDocument::fromJson(answer).object().value("error"_L1).toObject());
+}
+
+bool ServerVoice::modelGone(const QJsonObject &error) {
     const QString code = error.value("code"_L1).toString();
     if (code == "model_not_found"_L1 || code == "model_retired"_L1 || code == "model_deprecated"_L1)
         return true;

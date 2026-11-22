@@ -1372,6 +1372,8 @@
   "%1 has an update: %2. Install it under Plugins.": "Für %1 gibt es ein Update: %2. Installiere es unter Plugins.",
   "%1 has no model \"%2\".": "%1 hat kein Modell „%2“.",
   "%1 has retired its speech model %2, so it can't read aloud with it: choose another for text to speech on the AI page.": "%1 hat sein Sprachmodell %2 eingestellt und kann damit nicht mehr vorlesen: wähle auf der Seite KI ein anderes für Text zu Sprache.",
+  "%1 didn't accept the API key for reading aloud; give another on the AI page.": "%1 hat den API-Schlüssel zum Vorlesen nicht angenommen; gib auf der KI-Seite einen anderen ein.",
+  "%1 answered without the sound of what it was to read aloud.": "%1 hat ohne den Ton dessen geantwortet, was es vorlesen sollte.",
   "%1 is up to date.": "%1 ist auf dem neuesten Stand.",
   "%1 needs a newer Omabook than this": "%1 braucht ein neueres Omabook als dieses",
   "%1 stopped with an error after its update, so Omabook went back to version %2.": "%1 wurde nach seinem Update mit einem Fehler beendet, also ging Omabook zurück zu Version %2.",

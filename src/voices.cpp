@@ -13,6 +13,8 @@
 #include "gemini.h"
 #include "geminivoice.h"
 #include "localvoices.h"
+#include "openaivoice.h"
+#include "realtimevoice.h"
 #include "secretstore.h"
 #include "servervoice.h"
 #include "settings.h"
@@ -136,7 +138,7 @@ void keepRetired(Settings &settings, const QStringList &models) {
 // The model chosen, unless OpenAI has retired it: then its default.
 [[nodiscard]] QString openAiModel(const Settings &settings) {
     const QString model = chosen(settings, "openai_model"_L1);
-    return model.isEmpty() || retiredModels(settings).contains(model) ? QString::fromLatin1(ServerVoice::openAiModel) : model;
+    return model.isEmpty() || retiredModels(settings).contains(model) ? Voices::openAiDefault(settings) : model;
 }
 
 // The engine whose voice and pace are kept: the one in use, else the one chosen.
@@ -204,7 +206,7 @@ std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &se
         auto reachable = openAi(settings, asked);
         if (!reachable)
             return std::unexpected(reachable.error());
-        return std::make_unique<ServerVoice>(*std::move(reachable), openAiModel(settings), QString::fromLatin1(ServerVoice::openAiModel));
+        return std::make_unique<OpenAiVoice>(*std::move(reachable), Voices::openAiRealtimeUrl(settings), openAiModel(settings));
     }
     if (*which == "server"_L1) {
         auto reachable = server(settings, asked);
@@ -228,7 +230,7 @@ QStringList Voices::offered(const Settings &settings) {
     if (*which == "gemini"_L1)
         return Gemini::voices();
     if (*which == "openai"_L1)
-        return ServerVoice::openAiVoices();
+        return RealtimeVoice::realtimeOnly(openAiModel(settings)) ? RealtimeVoice::voices() : ServerVoice::openAiVoices();
     return *which == "server"_L1 ? ServerVoice::voices() : SpeechDispatcherVoice::voices();
 }
 
@@ -281,6 +283,19 @@ QString Voices::openAiUrl(const Settings &settings) {
     while (base.endsWith(u'/'))
         base.chop(1);
     return base;
+}
+
+QUrl Voices::openAiRealtimeUrl(const Settings &settings) {
+    QString named = chosen(settings, "openai_realtime_url"_L1);
+    while (named.endsWith(u'/'))
+        named.chop(1);
+    return named.isEmpty() ? RealtimeVoice::addressOf(openAiUrl(settings)) : QUrl(named);
+}
+
+QString Voices::openAiDefault(const Settings &settings) {
+    // /audio/speech's, until OpenAI says it has shut it down (2027-01-06): then its successor's, over the Realtime API.
+    return retiredModels(settings).contains(QString::fromLatin1(ServerVoice::openAiModel)) ? QString::fromLatin1(RealtimeVoice::openAiModel)
+                                                                                           : QString::fromLatin1(ServerVoice::openAiModel);
 }
 
 bool Voices::openAiHasKey(const Settings &settings) { return !openAiKey(settings).isEmpty(); }
