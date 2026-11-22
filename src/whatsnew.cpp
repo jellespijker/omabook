@@ -213,6 +213,11 @@ QList<Manual::Step> speechRelease() {
                     "the cursor is; a quick press listens until the next. It goes through speech to text as you chose it on "
                     "the AI page ({global.settings}), voxtype first, and the top of the window says while it listens."),
          "", "reader.note", "reader", ""},
+        {"spoken-answers", "0.3.1", Manual::tr("Ask by voice, and hear the answer"),
+         Manual::tr("Hold the companion's microphone, or Ctrl+M in its question, and say what you want to know: it is asked "
+                    "when you let go, and the answer is shown and read aloud. Asking again, Escape or {reader.read_aloud_stop} "
+                    "stops it. {library.ask} takes a spoken question too."),
+         "", "reader.ask", "reader", ""},
     };
 }
 

@@ -459,6 +459,7 @@ ApplicationWindow {
     AskDialog {
         id: askLibrary
         objectName: "askLibrary"
+        voice: true
         heading: qsTr("Ask about your library")
         placeholder: qsTr("Which of my books…?")
         reply: librarian.answer

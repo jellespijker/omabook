@@ -25,6 +25,9 @@ ColumnLayout {
     // The space between the things in the column.
     property alias gap: column.spacing
     readonly property alias scroller: flick
+    // How much of the column's edge the scroll bar covers while it scrolls:
+    // a control there (at the end of a row) stays clear of it by this much.
+    readonly property real barRoom: flick.interactive ? bar.width : 0
 
     anchors.fill: parent
     spacing: 16
@@ -49,7 +52,8 @@ ColumnLayout {
         clip: true
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height + 1
-        ScrollBar.vertical: ScrollBar {}
+        // Only while it scrolls: unseen, it would still take the presses at the column's edge.
+        ScrollBar.vertical: ScrollBar { id: bar; visible: flick.interactive }
 
         ColumnLayout {
             id: column

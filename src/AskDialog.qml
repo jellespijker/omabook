@@ -5,6 +5,10 @@ import QtQuick.Layouts
 
 // One line to the AI and its answer under it. Used twice: to ask about the
 // library as a whole, and to ask for a change to how Omabook looks or works.
+//
+// Where it may be asked by voice (`voice`, #149), the line's microphone, or
+// Ctrl+M held in it, hears the question, asks it, and has the answer read
+// aloud as well as shown; asking again, the button or Shift+R stops it.
 AppPopup {
     id: dialog
     property string heading
@@ -26,6 +30,24 @@ AppPopup {
     property string onlyName
     property bool only: false
     signal onlyToggled(bool only)
+    // It may be asked by voice, and its answer read aloud.
+    property bool voice: false
+    // The question was said: its answer is read aloud too, once it is written.
+    property bool aloud: false
+    readonly property var spoken: backend.spokenAnswer
+    function readAloud() {
+        spoken.say(reply, assistant.providerName || qsTr("The AI"), Qt.uiLanguage || Qt.locale().name)
+    }
+    function ask(text, voiced) {
+        if (text.trim() === "") return
+        aloud = voiced
+        asked(text)
+    }
+    onWorkingChanged: {
+        if (working || !aloud) return
+        aloud = false
+        if (reply !== "") readAloud()
+    }
 
     widest: 640
     onOpened: {
@@ -34,6 +56,7 @@ AppPopup {
     }
 
     DialogBody {
+        id: body
 
         Label {
             Layout.fillWidth: true
@@ -49,16 +72,42 @@ AppPopup {
             color: theme.colors.muted
             wrapMode: Text.Wrap
         }
-        TextField {
-            id: words
-            objectName: dialog.objectName + "Words"
+        RowLayout {
             Layout.fillWidth: true
+            // Clear of the scroll bar, which would take the microphone's presses.
+            Layout.rightMargin: body.barRoom
             visible: librarian.hasAi
-            enabled: !dialog.working
-            placeholderText: dialog.placeholder
-            selectByMouse: true
-            Material.roundedScale: theme.radius
-            onAccepted: if (text.trim() !== "") dialog.asked(text)
+            spacing: 6
+            LayoutMirroring.enabled: win.rightToLeft
+            LayoutMirroring.childrenInherit: true
+            TextField {
+                id: words
+                objectName: dialog.objectName + "Words"
+                Layout.fillWidth: true
+                enabled: !dialog.working
+                placeholderText: dialog.placeholder
+                selectByMouse: true
+                Material.roundedScale: theme.radius
+                // Typed after voxtype's own dictation typed it: still said.
+                onAccepted: {
+                    dialog.ask(text, mic.voxtyped)
+                    mic.voxtyped = false
+                }
+            }
+            // Asked by voice: held while speaking, or Ctrl+M in the line (#148).
+            DictationButton {
+                id: mic
+                objectName: dialog.objectName + "Voice"
+                target: words
+                active: dialog.voice && dialog.opened && librarian.hasAi
+                property bool voxtyped: false
+                onStarted: {
+                    voxtyped = false
+                    dialog.spoken.stop()
+                }
+                onWritten: dialog.ask(words.text, true)
+                onVoxtyping: voxtyped = true
+            }
         }
         Switch {
             objectName: dialog.objectName + "Only"
@@ -146,6 +195,13 @@ AppPopup {
                 enabled: !dialog.working
                 text: dialog.offer
                 onClicked: dialog.offered()
+            },
+            AppButton {
+                objectName: dialog.objectName + "Aloud"
+                visible: dialog.voice && (dialog.spoken.speaking || (dialog.reply !== "" && !dialog.working))
+                text: dialog.spoken.speaking ? qsTr("Stop reading") : qsTr("Read aloud")
+                Accessible.description: qsTr("Reads the answer aloud")
+                onClicked: dialog.spoken.speaking ? dialog.spoken.stop() : dialog.readAloud()
             },
             AppButton {
                 objectName: dialog.objectName + "Undo"

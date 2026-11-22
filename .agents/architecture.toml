@@ -64,7 +64,7 @@ modules = [
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "voxtypelocal", "localspeech", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
-  "dictation", "dictationclip", "voxtypedictation",
+  "dictation", "dictationclip", "voxtypedictation", "spokenanswer",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
   "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "gemini", "geminiprovider", "geminirecognizers", "geminivoice",

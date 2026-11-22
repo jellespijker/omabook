@@ -29,6 +29,11 @@ Item {
     readonly property bool takesPen: true
     // The words are about to go in: the field may need to be opened again first.
     signal hearing(string text)
+    // It began to listen; and the words are in the field, for one that sends them on (#149).
+    signal started()
+    signal written(string text)
+    // voxtype's own dictation types the words into the field itself, keys and all.
+    signal voxtyping()
 
     readonly property var dictation: backend.dictation
     // The field's number while it is listened or written for; 0 otherwise.
@@ -71,6 +76,7 @@ Item {
         pressedAt = Date.now()
         held = true
         field = dictation.listen(plugin, hosted)
+        started()
     }
     function release() {
         if (!held) return
@@ -97,6 +103,7 @@ Item {
         target.insert(at, text)
         target.cursorPosition = at + text.length
         target.forceActiveFocus()
+        written(words)
     }
 
     Connections {
@@ -115,6 +122,7 @@ Item {
         function onHandedOver(field) {
             if (field !== mic.field) return
             mic.field = 0
+            mic.voxtyping()
             backend.say(qsTr("voxtype writes out what you said and types it here."))
         }
     }

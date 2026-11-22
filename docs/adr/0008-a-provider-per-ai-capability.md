@@ -295,3 +295,19 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   keys.json: it belongs to the field that has the keyboard, not to a place of the window.
 - **Plugins** get the same microphone for their views' text fields (`DictationButton { target; plugin;
   hosted }` under `import Omabook`); the plugin never has the recording, only the words it puts in the field.
+
+## As built in #149
+
+- **Spoken answers are dictation and text to speech, nothing of their own** (`SpokenAnswer`,
+  `spokenanswer.h`): the question is heard by #148's `DictationButton` and `Dictation`, so it goes the
+  ways speech to text goes, hosted only as for a note; the answer is read by the voice the registry gives
+  the person's own use (`AiRegistry::voice`), a sentence at a time by a `Narration` of one section, so a
+  local voice reads and a hosted one only where it is allowed, as for a book. No capability was added.
+- **Said, then read**: a question heard is asked as soon as its words are in the field, and its answer
+  is read once it is written, not as it streams; a typed question's answer is only shown, and the
+  answer's "Read aloud" reads it on asking. Markdown is read as its text, without its marks.
+- **One voice at a time**: while an answer is read, `AudioDevices` names the AI as it names a plugin
+  reading (`ai.speak`), so the bar over the page or the shelf shows it with its stop, and Shift+R stops
+  it; pressing the microphone again stops it before it listens, and a book being read aloud pauses.
+- **Where**: the companion's question and "ask about your library" (`AskDialog`'s `voice`); "Change
+  Omabook" takes no voice. With the AI Off there is no microphone, as for a note.

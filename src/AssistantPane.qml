@@ -5,6 +5,10 @@ import QtQuick.Layouts
 
 // The reading companion: ask about what you are reading. It is sent the
 // chapter in front of you, or the book so far, and never what comes after.
+//
+// It can be asked by voice (#149): the question field's microphone, or Ctrl+M
+// held in it, hears the question, asks it, and has the answer read aloud as
+// well as shown. Asking again, Escape, the button or Shift+R stops it.
 Item {
     id: pane
     // The passage selected in the book, if any.
@@ -20,11 +24,33 @@ Item {
         question.selectAll()
         takeFocus()
     }
-    function send(text, scope) {
+    function send(text, scope, voiced) {
         if (text.trim() === "" || assistant.busy)
             return
+        pane.aloud = !!voiced
         assistant.ask(text, scope, pane.selection)
         question.text = ""
+    }
+
+    // The question was said: its answer is read aloud too, once it is written.
+    property bool aloud: false
+    readonly property var spoken: backend.spokenAnswer
+    readonly property string answer: {
+        const said = assistant.messages
+        return said.length > 0 && said[said.length - 1].role !== "user" ? said[said.length - 1].text : ""
+    }
+    function readAloud() {
+        // One voice at a time: the book's reading aloud waits.
+        if (reader.readAloud.speaking) reader.readAloud.toggle()
+        spoken.say(answer, assistant.providerName || qsTr("The AI"), Qt.uiLanguage || Qt.locale().name)
+    }
+    Connections {
+        target: assistant
+        function onBusyChanged() {
+            if (assistant.busy || !pane.aloud) return
+            pane.aloud = false
+            if (pane.answer !== "") pane.readAloud()
+        }
     }
 
     Rectangle {
@@ -206,20 +232,58 @@ Item {
                 visible: assistant.busy
                 focusPolicy: Qt.NoFocus
                 text: qsTr("Stop")
-                onClicked: assistant.cancel()
+                // What was written so far is not read aloud.
+                onClicked: {
+                    pane.aloud = false
+                    assistant.cancel()
+                }
+            }
+            AppButton {
+                objectName: "answerAloud"
+                visible: pane.spoken.speaking || (pane.answer !== "" && !assistant.busy)
+                focusPolicy: Qt.NoFocus
+                text: pane.spoken.speaking ? qsTr("Stop reading") : qsTr("Read aloud")
+                Accessible.description: qsTr("Reads the answer aloud")
+                onClicked: pane.spoken.speaking ? pane.spoken.stop() : pane.readAloud()
             }
         }
 
-        TextField {
-            id: question
-            objectName: "question"
+        RowLayout {
             Layout.fillWidth: true
             visible: assistant.available
-            placeholderText: qsTr("Ask about this chapter")
-            selectByMouse: true
-            Material.roundedScale: theme.radius
-            onAccepted: pane.send(text, "chapter")
-            Keys.onEscapePressed: pane.done()
+            spacing: 6
+            LayoutMirroring.enabled: win.rightToLeft
+            LayoutMirroring.childrenInherit: true
+            TextField {
+                id: question
+                objectName: "question"
+                Layout.fillWidth: true
+                placeholderText: qsTr("Ask about this chapter")
+                selectByMouse: true
+                Material.roundedScale: theme.radius
+                // Typed after voxtype's own dictation typed it: still said.
+                onAccepted: {
+                    pane.send(text, "chapter", mic.voxtyped)
+                    mic.voxtyped = false
+                }
+                // An answer being read stops first; then the companion closes.
+                Keys.onEscapePressed: pane.spoken.speaking ? pane.spoken.stop() : pane.done()
+            }
+            // Asked by voice: held while speaking, or Ctrl+M in the field (#148).
+            DictationButton {
+                id: mic
+                objectName: "askByVoice"
+                target: question
+                active: assistant.available
+                property bool voxtyped: false
+                onStarted: {
+                    voxtyped = false
+                    pane.spoken.stop()
+                    if (reader.readAloud.speaking) reader.readAloud.toggle()
+                }
+                onWritten: pane.send(question.text, "chapter", true)
+                onVoxtyping: voxtyped = true
+            }
         }
     }
 }

@@ -131,3 +131,7 @@ _Avoid_: Backend, engine (alone), vendor, model (what a provider runs)
 **Dictation**:
 Saying words into a text field instead of typing them: heard while the person holds the field's microphone or its key (or between two presses), written out by speech to text, and put where the cursor is; or voxtype's own dictation, which types them itself (`Dictation`, #148). A recording is something kept; dictation keeps nothing but the words.
 _Avoid_: Recording (for this), voice input, speech recognition (for the whole of it)
+
+**Spoken answer**:
+An AI's answer read aloud, to a question asked by dictation: the companion's or one about the library, read by the voice chosen for text to speech and stopped by asking again (`SpokenAnswer`, #149).
+_Avoid_: Voice mode, voice assistant, reading aloud (that is a book's)

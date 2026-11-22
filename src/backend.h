@@ -14,6 +14,7 @@
 #include "audiodevices.h"
 #include "booklistmodel.h"
 #include "dictation.h"
+#include "spokenanswer.h"
 #include "filepicker.h"
 #include "folio.h"
 #include "library.h"
@@ -61,6 +62,8 @@ class Backend : public QObject {
     Q_PROPERTY(SpeechInstall *speech READ speech CONSTANT)
     // Dictating into a note field, and whether it listens now (#148).
     Q_PROPERTY(Dictation *dictation READ dictation CONSTANT)
+    // An answer to a question asked by voice, read aloud (#149).
+    Q_PROPERTY(SpokenAnswer *spokenAnswer READ spokenAnswer CONSTANT)
     // The plugin manager: every plugin sorted by what it does, what needs
     // attention, and installing, removing, ordering and trying them.
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
@@ -174,6 +177,7 @@ public:
     AudioDevices *audio() noexcept { return &m_audio; }
     SpeechInstall *speech() noexcept { return &m_speech; }
     Dictation *dictation() noexcept { return &m_dictation; }
+    SpokenAnswer *spokenAnswer() noexcept { return &m_spokenAnswer; }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
     SpaceDesk *spaces() noexcept { return &m_spaces; }
@@ -349,6 +353,7 @@ private:
     AudioDevices m_audio;
     SpeechInstall m_speech{m_settings};
     Dictation m_dictation{m_settings, &m_audio};
+    SpokenAnswer m_spokenAnswer{m_settings, &m_audio};
     // Files the person picks for a plugin, and the clipboard (#131).
     PluginDesk m_pluginDesk{m_picker};
     std::unique_ptr<ScriptPlugins> m_scripts;
