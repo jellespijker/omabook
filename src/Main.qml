@@ -490,5 +490,5 @@ ApplicationWindow {
 
     RemovalDialog { id: removal }
     VoiceInstallDialog {}
-    RecordingMark { devices: backend.audio }
+    RecordingMark { devices: backend.audio; dictation: backend.dictation }
 }

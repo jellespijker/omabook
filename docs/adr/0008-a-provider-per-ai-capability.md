@@ -271,3 +271,27 @@ Where the code asked for it, #143 differs from the decision above, as follows:
 - **A plugin reading aloud** (`ai.speak`) is shown where the person can stop it: `AudioDevices` knows who
   speaks, as it knows who records, and `ReadAloudBar` names the plugin over the page, or over the shelf;
   Shift+R, or the bar's stop, stops it, and the plugin's promise is kept as for its own `stop()`.
+
+## As built in #148
+
+- **Dictation is speech to text, one field at a time** (`Dictation`, `dictation.h`): what is said is heard as
+  16 kHz mono and kept in memory (`DictationClip`, at most five minutes), written as a WAV to a folder of its
+  own for the way the registry gives (`RecognitionQueue`, with no library: nothing is kept in the change
+  log), and gone once it is written out. A WAV is what voxtype and whisper.cpp read as it is, so dictation
+  needs no ffmpeg.
+- **Hosted as for a recording**: Omabook's own note fields ask for hosted, so a hosted provider writes out
+  dictation only where the person allowed hosted for speech to text; a plugin's view must say `hosted: true`
+  as well, as `recognize` has it. With the AI Off there is no microphone and nothing listens, voxtype's own
+  dictation included.
+- **voxtype's own dictation, where chosen** (`recognition.dictation: "voxtype"`, a choice in the speech to text
+  row where voxtype is found): `voxtype record start --type --no-auto-submit --no-osd`, then `stop` or
+  `cancel`, so voxtype's daemon listens and types the words into the field that has the keyboard, with no
+  Enter after them and no overlay over Omabook's own mark (`VoxtypeDictation`). It is this computer's, so it
+  needs no hosted choice; it is still never started with the AI Off.
+- **The person starts it**: a field listens only when its microphone (`DictationButton.qml`) is pressed, by
+  mouse, finger or pen, or its key is pressed in it (Ctrl+M, `DictationKeys`): held, it is push to talk; a
+  quick press listens until the next. While it listens the mark at the top of the window says who listens
+  (Omabook, the plugin, or voxtype), and Stop, the microphone, the key or Escape ends it. The key is not in
+  keys.json: it belongs to the field that has the keyboard, not to a place of the window.
+- **Plugins** get the same microphone for their views' text fields (`DictationButton { target; plugin;
+  hosted }` under `import Omabook`); the plugin never has the recording, only the words it puts in the field.

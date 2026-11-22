@@ -11,6 +11,9 @@ import QtQuick.Layouts
 // A note written by hand (#90) shows its ink instead (NoteInk), which the pen
 // writes on wherever it stands; edited, Ctrl+Z and Ctrl+Shift+Z undo and redo
 // a pause of the pen, X takes the eraser, W shows its words.
+//
+// A typed note can be said instead (#148): its microphone, or Ctrl+M held in
+// the field, writes out what is said where the cursor is.
 FocusScope {
     id: card
     // The note's number; 0 for one being written on a passage that has none yet.
@@ -165,6 +168,14 @@ FocusScope {
                 Layout.fillWidth: true
                 spacing: 6
                 readonly property bool pressing: done.pressed || removal.pressed
+                // Said rather than typed (#148): held while speaking, or Ctrl+M in the field.
+                DictationButton {
+                    objectName: "noteDictate"
+                    target: field
+                    active: card.editing && !card.ink
+                    // Words that come once the note was left open it again, so they aren't lost.
+                    onHearing: if (!card.editing) card.edit()
+                }
                 Item { Layout.fillWidth: true }
                 AppButton {
                     id: removal

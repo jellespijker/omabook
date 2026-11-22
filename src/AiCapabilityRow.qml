@@ -222,6 +222,15 @@ ColumnLayout {
                     text: qsTr("Install voxtype…")
                     onClicked: backend.speech.install()
                 }
+                // Dictating into a note (#148): voxtype's own dictation, which types what is said.
+                CheckBox {
+                    objectName: "dictateWithVoxtype"
+                    Layout.fillWidth: true
+                    visible: backend.dictation.voxtypeFound
+                    text: qsTr("Dictate with voxtype's own dictation")
+                    checked: backend.dictation.withVoxtype
+                    onToggled: backend.dictation.withVoxtype = checked
+                }
             }
         }
 

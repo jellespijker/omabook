@@ -13,6 +13,7 @@
 #include "ai.h"
 #include "audiodevices.h"
 #include "booklistmodel.h"
+#include "dictation.h"
 #include "filepicker.h"
 #include "folio.h"
 #include "library.h"
@@ -58,6 +59,8 @@ class Backend : public QObject {
     Q_PROPERTY(AudioDevices *audio READ audio CONSTANT)
     // What writes out speech here, and installing voxtype where Omarchy can (#146).
     Q_PROPERTY(SpeechInstall *speech READ speech CONSTANT)
+    // Dictating into a note field, and whether it listens now (#148).
+    Q_PROPERTY(Dictation *dictation READ dictation CONSTANT)
     // The plugin manager: every plugin sorted by what it does, what needs
     // attention, and installing, removing, ordering and trying them.
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
@@ -170,6 +173,7 @@ public:
     ScriptPlugins *scripts() noexcept { return m_scripts.get(); }
     AudioDevices *audio() noexcept { return &m_audio; }
     SpeechInstall *speech() noexcept { return &m_speech; }
+    Dictation *dictation() noexcept { return &m_dictation; }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
     SpaceDesk *spaces() noexcept { return &m_spaces; }
@@ -344,6 +348,7 @@ private:
     // Before the plugins, which use it until they go.
     AudioDevices m_audio;
     SpeechInstall m_speech{m_settings};
+    Dictation m_dictation{m_settings, &m_audio};
     // Files the person picks for a plugin, and the clipboard (#131).
     PluginDesk m_pluginDesk{m_picker};
     std::unique_ptr<ScriptPlugins> m_scripts;

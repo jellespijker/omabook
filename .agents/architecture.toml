@@ -64,6 +64,7 @@ modules = [
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "voxtypelocal", "localspeech", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
+  "dictation", "dictationclip", "voxtypedictation",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
   "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "gemini", "geminiprovider", "geminirecognizers", "geminivoice",
@@ -95,7 +96,7 @@ modules = [
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
-  "readaloud", "linkinbox", "installterminal", "speechinstall",
+  "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys",
 ]
 
 [layers.app]

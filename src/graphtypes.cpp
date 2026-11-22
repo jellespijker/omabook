@@ -1,9 +1,11 @@
 #include <QQmlEngine>
+#include <QUrl>
 
 #include "annotationfinder.h"
 #include "annotationlayerview.h"
 #include "chronologycanvas.h"
 #include "chronologymodel.h"
+#include "dictationkeys.h"
 #include "graphcanvas.h"
 #include "graphmodel.h"
 #include "graphtenants.h"
@@ -34,6 +36,9 @@ void registerGraphTypes() {
         qmlRegisterType<ReadingStatsView>("Omabook", 1, 0, "ReadingStats");
         // Others' annotations on it, as a layer beside one's own (#85).
         qmlRegisterType<AnnotationLayerView>("Omabook", 1, 0, "AnnotationLayerView");
+        // Dictating into a field (#148): the window's note fields, and plugins' views.
+        qmlRegisterType<DictationKeys>("Omabook", 1, 0, "DictationKeys");
+        qmlRegisterType(QUrl(QStringLiteral("qrc:/DictationButton.qml")), "Omabook", 1, 0, "DictationButton");
         return true;
     }();
 }

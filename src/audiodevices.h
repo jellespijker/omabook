@@ -6,6 +6,7 @@
 #include <QString>
 #include <functional>
 #include <memory>
+#include <utility>
 
 #include "audioports.h"
 #include "audiorecorder.h"
@@ -38,6 +39,9 @@ public:
     explicit AudioDevices(Inputs inputs = AudioPorts::microphone, Outputs outputs = AudioPorts::speakers, QObject *parent = nullptr);
 
     [[nodiscard]] std::unique_ptr<AudioInput> microphone() const { return m_inputs(); }
+    // Where recordings listen from now on: a test's microphone (TestAudio) in
+    // place of the desktop's, for the window's own dictation (#148) in a test.
+    void setInputs(Inputs inputs) { m_inputs = std::move(inputs); }
     [[nodiscard]] std::unique_ptr<AudioOutput> speakers() const { return m_outputs(); }
 
     // A recording began, by `who`, and ended; told as it goes on.

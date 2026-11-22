@@ -205,6 +205,17 @@ QList<Manual::Step> providersRelease() {
     };
 }
 
+// The next release's entries: dictating notes (#148).
+QList<Manual::Step> speechRelease() {
+    return {
+        {"dictation", "0.3.1", Manual::tr("Say a note instead of typing it"),
+         Manual::tr("A margin note's microphone, or Ctrl+M in it, listens while you hold it and writes out what you say where "
+                    "the cursor is; a quick press listens until the next. It goes through speech to text as you chose it on "
+                    "the AI page ({global.settings}), voxtype first, and the top of the window says while it listens."),
+         "", "reader.note", "reader", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -283,5 +294,6 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease();
+    } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
+           + speechRelease();
 }

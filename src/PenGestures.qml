@@ -32,12 +32,27 @@ InkSurface {
     // Set once made: as the root of its file the surface's type is seen at
     // its own revision, which has no containmentMask to bind.
     Component.onCompleted: pen.containmentMask = mask
+    // A control of the reading view's that is the pen's to press (a note's
+    // microphone, #148), at a point of `item`: the pen is then not this surface's.
+    function takesPen(item, x, y) {
+        if (!item.visible || !item.enabled) return false
+        if (item.takesPen === true && x >= 0 && y >= 0 && x <= item.width && y <= item.height) return true
+        for (const child of item.children) {
+            const at = item.mapToItem(child, x, y)
+            if (pen.takesPen(child, at.x, at.y)) return true
+        }
+        return false
+    }
     QtObject {
         id: mask
         function contains(point: point): bool {
             const handles = pen.host ? pen.host.selectionHandles : null
             const at = handles ? pen.mapToItem(handles, point.x, point.y) : point
-            return point.x >= 0 && point.y >= 0 && point.x <= pen.width && point.y <= pen.height && !(handles && handles.hit(at.x, at.y))
+            if (point.x < 0 || point.y < 0 || point.x > pen.width || point.y > pen.height || (handles && handles.hit(at.x, at.y)))
+                return false
+            const view = pen.host
+            const there = view ? pen.mapToItem(view, point.x, point.y) : point
+            return !(view && pen.takesPen(view, there.x, there.y))
         }
     }
 

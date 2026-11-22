@@ -127,3 +127,7 @@ _Avoid_: Feature, tier (for all six), task, skill
 **Provider**:
 What does a capability's work: a service (Claude's API, Gemini's, OpenAI's), a subscription through its agent (Claude Code, Antigravity), a server (Ollama, Omarchy's local models, another of the OpenAI-compatible API), a program on this computer (voxtype, whisper.cpp, Piper, speech-dispatcher) or a command; the person's own or hosted, as an own server is (`AiProvider`, ADR 0008).
 _Avoid_: Backend, engine (alone), vendor, model (what a provider runs)
+
+**Dictation**:
+Saying words into a text field instead of typing them: heard while the person holds the field's microphone or its key (or between two presses), written out by speech to text, and put where the cursor is; or voxtype's own dictation, which types them itself (`Dictation`, #148). A recording is something kept; dictation keeps nothing but the words.
+_Avoid_: Recording (for this), voice input, speech recognition (for the whole of it)

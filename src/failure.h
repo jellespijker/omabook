@@ -107,6 +107,10 @@ public:
         VoxtypeMissing,        // {program}
         VoxtypeNeedsWav,       // {file name}
         VoxtypeFailed,         // {what it said}
+        // Dictating into a field (services, #148).
+        DictationBusy,          // {}: another field is listened for
+        DictationNothingHeard,  // {}
+        VoxtypeDictationFailed, // {what it said}
         // Reading a book aloud (services; #73); "name" is the engine's, "where" a server's address.
         NoVoice,            // {}: neither Piper with a voice nor speech-dispatcher is installed
         PiperMissing,       // {}
