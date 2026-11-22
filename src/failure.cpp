@@ -240,8 +240,6 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NotCopied, tr("The book couldn't be copied to %1: %2")},
     {Failure::Code::MailNotSetUp,
      tr("Set up sending by mail first: the Kindle's address, your mail server and the address you send from, in Phones and e-readers.")},
-    {Failure::Code::MailNotSetUp, tr("Set up sending by mail first: the Kindle's address, your mail server and the address you send from, "
-                                     "in the settings under E-readers and phones.")},
     {Failure::Code::MailUnreachable, tr("The mail server %1 can't be reached: %2")},
     {Failure::Code::MailRefused, tr("The mail server %1 turned the book away: %2")},
     {Failure::Code::PortTaken, tr("Another program is using port %2 on %1, so Omabook can't serve there. Choose another port.")},
