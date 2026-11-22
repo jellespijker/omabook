@@ -5,8 +5,9 @@ import QtQuick.Layouts
 
 // A server one capability is sent to, on the AI page: its address (none for
 // the AI server), its key, kept in the keyring and never shown again, and the
-// model. Handwriting has the AI server's vision model, or Gemini's; speech
-// and voices have a server only where one is chosen for them.
+// model. Handwriting has a server of its own (the AI server unless another
+// address is given, #170) or Gemini; speech and voices have a server only
+// where one is chosen for them.
 ColumnLayout {
     id: setup
     property var info: ({})
@@ -15,6 +16,7 @@ ColumnLayout {
     // Gemini, and OpenAI's voices, have their key in a row of their own (ApiKey) and no address.
     readonly property bool keyed: info.chosen === "gemini" || (capability === "text-to-speech" && info.chosen === "openai")
     readonly property bool server: (capability === "embeddings" && !keyed) || (info.chosen === "server" && capability !== "handwriting")
+                                   || (capability === "handwriting" && info.chosen === "ai-server")
     spacing: 8
     visible: server || keyed || capability === "handwriting"
 

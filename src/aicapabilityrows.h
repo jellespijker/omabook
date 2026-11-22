@@ -7,6 +7,7 @@
 #include <QVariantMap>
 
 #include "aicapability.h"
+#include "capabilitytest.h"
 #include "voicepreview.h"
 
 class Settings;
@@ -31,10 +32,11 @@ class AiCapabilityRows : public QObject {
     //   hostedAllowed, chosen (the provider's id), offered (ids),
     //   address, addressDefault, hasKey, inTheClear, modelChoice, modelDefault,
     //   and for speech to text, timed (whether its words have their moments);
-//   for text to speech, where it may read, voices (the engine's), voice,
-//   rate and paced (whether it takes a pace: Gemini's doesn't), each kept
-//   per engine (#147), and modelRetired, the model chosen for OpenAI's
-//   voices when OpenAI has retired it (#162)
+    //   for text to speech, where it may read, voices (the engine's), voice,
+    //   rate and paced (whether it takes a pace: Gemini's doesn't), each kept
+    //   per engine (#147), and modelRetired, the model chosen for OpenAI's
+    //   voices when OpenAI has retired it (#162); and test, what its Test came
+    //   to (CapabilityTest::outcome, #170)
     Q_PROPERTY(QVariantList rows READ rows NOTIFY changed)
     // Off stops every model (#133): `ai_provider` "off".
     Q_PROPERTY(bool aiOn READ aiOn NOTIFY changed)
@@ -62,6 +64,10 @@ public:
     Q_INVOKABLE void setVoice(const QString &voice);
     Q_INVOKABLE void setRate(double rate);
     Q_INVOKABLE void setAiOn(bool on);
+    // One small real request through what the row uses (#170); `hostedOnce`
+    // when the person said yes to sending this one to someone else's computer.
+    Q_INVOKABLE void test(const QString &capability, bool hostedOnce = false);
+    [[nodiscard]] CapabilityTest *tester() noexcept { return &m_test; }
     [[nodiscard]] VoicePreview *preview() noexcept { return &m_preview; }
     // Whether the page is in front of somebody: the rows are worked out, and
     // kept up with the settings, only then, as they ask the keyring and PATH.
@@ -85,4 +91,5 @@ private:
     QVariantList m_rows;
     bool m_watching = false;
     VoicePreview m_preview;
+    CapabilityTest m_test;
 };

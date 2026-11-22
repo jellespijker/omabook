@@ -21,7 +21,11 @@ BookInkWords::BookInkWords(RecognitionQueue::Route route, SetUp setUp, Recogniti
 BookInkWords::BookInkWords(const Settings &settings, RecognitionQueue::LibraryOf library, QObject *parent)
     : BookInkWords(RecognitionQueue::routeFor(settings), [&settings] { return setUp(settings); }, std::move(library), parent) {}
 
-bool BookInkWords::setUp(const Settings &settings) { return !settings.recognition().value("ink_model"_L1).toString().trimmed().isEmpty(); }
+bool BookInkWords::setUp(const Settings &settings) {
+    // A model chosen to read it, or a server of its own (#170).
+    const auto named = [&settings](QLatin1StringView field) { return !settings.recognition().value(field).toString().trimmed().isEmpty(); };
+    return named("ink_model"_L1) || named("ink_url"_L1);
+}
 
 void BookInkWords::setRest(std::chrono::milliseconds rest) { m_rest.setInterval(rest); }
 

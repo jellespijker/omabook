@@ -48,7 +48,7 @@ AppPopup {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 color: theme.colors.muted
-                text: qsTr("The AI reads what you have read of these books and notes the people, places, ideas and plot lines in them. Each book is taken as far as you read it, and nothing is sent twice.")
+                text: qsTr("The model for quick work (its row on the AI page of Settings) reads what you have read of these books and notes the people, places, ideas and plot lines in them. Each book is taken as far as you read it, and nothing is sent twice.")
             }
             ComboBox {
                 id: which

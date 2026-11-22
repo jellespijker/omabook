@@ -21,8 +21,10 @@ class Settings;
 // (`...:cloud`) is someone else's computer however near its server is.
 //
 // config.json's "recognition" holds what is chosen:
-//   "ink_model"            the vision model handwriting is read by; else the
-//                          AI server's main model, else the first it lists
+//   "ink_url"              a server of the OpenAI-compatible API handwriting
+//                          is read by (#170); else the AI server itself
+//   "ink_model"            the vision model handwriting is read by; else, on
+//                          the AI server, its main model, else the first it lists
 //   "transcription_url"    a server of the OpenAI-compatible API that
 //                          transcribes; else the AI server itself
 //   "transcription_model"  the model it transcribes with ("whisper-1" unless said)

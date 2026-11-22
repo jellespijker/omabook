@@ -56,10 +56,14 @@ constexpr auto inkInstructions = "The picture is handwriting. Write out exactly 
 [[nodiscard]] std::optional<Failure> awayFailure(int status, const QNetworkReply &reply, const QString &where) {
     if (status == 0)
         return Failure{.why = Why::Away,
-                       .message = sentence(::Failure(::Failure::Code::RecognizerUnreachable, {where, reply.errorString()}).text())};
+                       .message = sentence(::Failure(::Failure::Code::RecognizerUnreachable, {where, reply.errorString()}).text()),
+                       .lacking = false,
+                       .code = ::Failure::Code::RecognizerUnreachable};
     if (status == 429 || status == 502 || status == 503 || status == 504)
         return Failure{.why = Why::Away,
-                       .message = sentence(::Failure(::Failure::Code::RecognizerBusy, {where, QString::number(status)}).text())};
+                       .message = sentence(::Failure(::Failure::Code::RecognizerBusy, {where, QString::number(status)}).text()),
+                       .lacking = false,
+                       .code = ::Failure::Code::RecognizerBusy};
     return std::nullopt;
 }
 
@@ -71,18 +75,27 @@ constexpr auto inkInstructions = "The picture is handwriting. Write out exactly 
         return *away;
     const QString said = serverMessage(body);
     if (status == 401 || status == 403)
-        return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerRefusedKey, {where}).text())};
+        return {.why = Why::Refused,
+                .message = sentence(::Failure(::Failure::Code::RecognizerRefusedKey, {where}).text()),
+                .lacking = false,
+                .code = ::Failure::Code::RecognizerRefusedKey};
     // A server without the service answers that the address isn't there.
     const bool aboutTheModel = said.contains("model"_L1, Qt::CaseInsensitive);
     if (transcribing && !aboutTheModel && (status == 404 || status == 405 || status == 501))
-        return {
-            .why = Why::Unsupported, .message = sentence(::Failure(::Failure::Code::RecognizerNoSpeech, {where}).text()), .lacking = true};
+        return {.why = Why::Unsupported,
+                .message = sentence(::Failure(::Failure::Code::RecognizerNoSpeech, {where}).text()),
+                .lacking = true,
+                .code = ::Failure::Code::RecognizerNoSpeech};
     if (status == 404 || said.contains("not found"_L1, Qt::CaseInsensitive))
         return {.why = Why::Refused,
                 .message = sentence(::Failure(::Failure::Code::RecognizerNoModel, {where, model}).text()),
-                .lacking = true};
+                .lacking = true,
+                .code = ::Failure::Code::RecognizerNoModel};
     if (!transcribing && (said.contains("image"_L1, Qt::CaseInsensitive) || said.contains("vision"_L1, Qt::CaseInsensitive)))
-        return {.why = Why::Refused, .message = ::Failure(::Failure::Code::RecognizerNoVision, {model, where}).text(), .lacking = true};
+        return {.why = Why::Refused,
+                .message = ::Failure(::Failure::Code::RecognizerNoVision, {model, where}).text(),
+                .lacking = true,
+                .code = ::Failure::Code::RecognizerNoVision};
     if (!said.isEmpty())
         return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerAnswered, {where, said}).text())};
     return {.why = Why::Refused, .message = sentence(::Failure(::Failure::Code::RecognizerError, {where, QString::number(status)}).text())};
@@ -131,12 +144,15 @@ Recognition::Failure failure(const QNetworkReply &reply, const QByteArray &body,
     return failureOf(reply, body, where, model, transcribing);
 }
 
-Vision::Vision(AiServer server, QString model, QObject *parent)
-    : Recognizer(parent), m_server(std::move(server)), m_model(std::move(model)) {}
+Vision::Vision(AiServer server, QString model, Whose whose, QObject *parent)
+    : Recognizer(parent), m_server(std::move(server)), m_model(std::move(model)), m_whose(whose) {}
 
 Vision::~Vision() { cancel(); }
 
-QString Vision::where() const { return tr("the AI server at %1").arg(m_server.host()); }
+QString Vision::where() const {
+    return m_whose == Whose::Handwriting ? tr("the handwriting server at %1").arg(m_server.host())
+                                         : tr("the AI server at %1").arg(m_server.host());
+}
 
 void Vision::resolve() {
     if (!m_model.isEmpty() || !m_server.model.isEmpty()) {
@@ -162,7 +178,7 @@ void Vision::resolve() {
             listed.append(model.toObject().value("id"_L1).toString());
         const auto model = OpenAiProvider::defaultModel(m_server, listed);
         if (!model) {
-            emit failed({.why = Why::Refused, .message = model.error().text(), .lacking = true});
+            emit failed({.why = Why::Refused, .message = model.error().text(), .lacking = true, .code = model.error().code()});
             return;
         }
         m_model = *model;

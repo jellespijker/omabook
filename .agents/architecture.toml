@@ -67,7 +67,7 @@ modules = [
   "dictation", "dictationclip", "voxtypedictation", "spokenanswer", "voicecommands",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "realtimevoice", "openaivoice", "voices",
-  "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
+  "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "capabilitytest", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
 ]
 
 [layers.operations]

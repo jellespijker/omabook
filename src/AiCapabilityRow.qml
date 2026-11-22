@@ -37,6 +37,15 @@ ColumnLayout {
         "text-to-speech": qsTr("Reads books aloud."),
         "embeddings": qsTr("Indexes books by what they mean, so a passage is found by its sense, not only its words.")
     })
+    // What each is used for in Omabook, from the code's own uses (#170).
+    readonly property var usedFor: ({
+        "answers": qsTr("Used for the companion's answers, catch-ups and who's who, asking about your library, connections between books, Change Omabook, and what plugins write."),
+        "quick": qsTr("Used for building the knowledge graph, tidying the library (series and collections), finding a book's details, finding books by a description, the companion's suggested questions, and voice commands Omabook doesn't know itself."),
+        "handwriting": qsTr("Used for reading your handwritten notes, the handwriting on a book's pages so that search finds it, and Notebooks' pages."),
+        "speech-to-text": qsTr("Used for dictating into a note or a question, voice commands, and writing out recordings."),
+        "text-to-speech": qsTr("Used for reading books aloud, reading the companion's answers aloud, and plugins that speak."),
+        "embeddings": qsTr("Used for finding passages by what they mean in Find, and plugins that search by meaning.")
+    })
     // What goes to the provider, for the warning when it may be hosted.
     readonly property var sent: ({
         "answers": qsTr("Careful: your questions, with the part of the book they are about, then go to someone else's computer, and they can read them."),
@@ -75,7 +84,7 @@ ColumnLayout {
                                                         : qsTr("Install it, or choose another below.")
         case "no-server":
             switch (info.capability) {
-            case "handwriting": return qsTr("Choose a server for answers that reads pictures, such as Ollama with a vision model.")
+            case "handwriting": return qsTr("Give the address of a server with a model that reads pictures, such as Ollama with a vision model, or choose a server for answers.")
             case "speech-to-text": return qsTr("Install whisper.cpp with a model, or give a transcription server's address below.")
             case "text-to-speech": return qsTr("Give the server's address below, or choose a voice on this computer.")
             case "embeddings": return qsTr("Run Ollama with nomic-embed-text (ollama pull nomic-embed-text), or give a server's address below.")
@@ -109,6 +118,8 @@ ColumnLayout {
         Keys.onPressed: (event) => {
             if (event.key === Qt.Key_Down || event.key === Qt.Key_J) { row.step(1); event.accepted = true }
             else if (event.key === Qt.Key_Up || event.key === Qt.Key_K) { row.step(-1); event.accepted = true }
+            // T tests it, as its Test button does (#170).
+            else if (event.key === Qt.Key_T && rowTest.ready) { rowTest.test(); event.accepted = true }
         }
         onClicked: row.toggled()
         Accessible.name: (row.titles[row.capability] || "") + ": " + row.summary
@@ -145,6 +156,14 @@ ColumnLayout {
                     Layout.fillWidth: true
                     text: row.summary
                     color: row.info.available ? theme.colors.muted : theme.colors.orange
+                    font.pixelSize: 12
+                    wrapMode: Text.Wrap
+                }
+                Label {
+                    objectName: row.capability + "UsedFor"
+                    Layout.fillWidth: true
+                    text: row.usedFor[row.capability] || ""
+                    color: theme.colors.muted
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
                 }
@@ -194,6 +213,13 @@ ColumnLayout {
                 onClicked: reader.readAloud.offerInstall()
             }
             Item { Layout.fillWidth: true }
+        }
+
+        // One small real request through what the row uses, and what came back (#170).
+        AiCapabilityTest {
+            id: rowTest
+            Layout.fillWidth: true
+            info: row.info
         }
 
         // What writes out recordings, and voxtype to install on Omarchy (#146).

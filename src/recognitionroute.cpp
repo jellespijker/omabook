@@ -23,12 +23,12 @@ namespace {
     return settings.recognition().value(key).toString().trimmed();
 }
 
-// The server speech is sent to: the one named for it, else the AI server.
-[[nodiscard]] std::expected<AiServer, QString> transcriber(const Settings &settings) {
-    const QString url = chosen(settings, "transcription_url"_L1);
-    if (url.isEmpty())
-        return AiEndpoints::server(settings);
-    QString base = url;
+// A server named for one capability in "recognition" (`transcription_url`,
+// `ink_url`), with the key kept for its address; none where none is named.
+[[nodiscard]] std::optional<AiServer> named(const Settings &settings, QLatin1StringView field) {
+    QString base = chosen(settings, field);
+    if (base.isEmpty())
+        return std::nullopt;
     while (base.endsWith(u'/'))
         base.chop(1);
     return AiServer{.preset = u"custom"_s,
@@ -39,13 +39,20 @@ namespace {
                     .model = {}};
 }
 
+// The server speech is sent to: the one named for it, else the AI server.
+[[nodiscard]] std::expected<AiServer, QString> transcriber(const Settings &settings) {
+    if (auto server = named(settings, "transcription_url"_L1))
+        return *std::move(server);
+    return AiEndpoints::server(settings);
+}
+
 using RecognitionRoute::Lack;
 using RecognitionRoute::Refusal;
 using RecognitionRoute::Ways;
 
-[[nodiscard]] Ways inkWays(AiServer server, const QString &model) {
+[[nodiscard]] Ways inkWays(AiServer server, const QString &model, Recognizers::Vision::Whose whose) {
     Ways ways;
-    ways.push_back(std::make_unique<Recognizers::Vision>(std::move(server), model));
+    ways.push_back(std::make_unique<Recognizers::Vision>(std::move(server), model, whose));
     return ways;
 }
 
@@ -105,6 +112,12 @@ using RecognitionRoute::Ways;
     if (geminiChosen(settings, Capability::Handwriting))
         return geminiWays(settings, Capability::Handwriting, hostedAsked);
     QString model = chosen(settings, "ink_model"_L1);
+    // A server of its own (#170): its model, else the first it lists.
+    if (auto own = named(settings, "ink_url"_L1)) {
+        if (auto refused = hostedRefusal(settings, Capability::Handwriting, own->baseUrl, model, hostedAsked))
+            return std::unexpected(std::move(*refused));
+        return inkWays(*std::move(own), model, Recognizers::Vision::Whose::Handwriting);
+    }
     if (model.isEmpty())
         model = Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
     const auto server = AiEndpoints::server(settings, model);
@@ -115,7 +128,7 @@ using RecognitionRoute::Ways;
         model = server->model;
     if (auto refused = hostedRefusal(settings, Capability::Handwriting, server->baseUrl, model, hostedAsked))
         return std::unexpected(std::move(*refused));
-    return inkWays(*server, model);
+    return inkWays(*server, model, Recognizers::Vision::Whose::AiServer);
 }
 
 // The ways speech may go, as they are found, and why the others can't.

@@ -3,6 +3,7 @@
 #include <QNetworkAccessManager>
 #include <QPointer>
 #include <QString>
+#include <cstdint>
 
 #include "aiendpoint.h"
 #include "recognition.h"
@@ -26,8 +27,12 @@ class Vision : public Recognition::Recognizer {
     Q_OBJECT
 
 public:
+    // Whose server it is: the AI server answers come from, or one named for
+    // handwriting alone (`recognition.ink_url`, #170).
+    enum class Whose : std::uint8_t { AiServer, Handwriting };
+
     // An empty model is the server's first that runs on it, asked when resolved.
-    Vision(AiServer server, QString model, QObject *parent = nullptr);
+    Vision(AiServer server, QString model, Whose whose = Whose::AiServer, QObject *parent = nullptr);
     ~Vision() override;
     Vision(const Vision &) = delete;
     Vision &operator=(const Vision &) = delete;
@@ -45,6 +50,7 @@ private:
 
     AiServer m_server;
     QString m_model;
+    Whose m_whose;
     QString m_language;
     QNetworkAccessManager m_network;
     QPointer<QNetworkReply> m_reply;

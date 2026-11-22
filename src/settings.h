@@ -58,6 +58,8 @@ public:
     explicit Settings(const QString &file = {}, QObject *parent = nullptr);
     // Where config.json is when no file is given.
     static QString defaultFile();
+    // The config.json these are.
+    [[nodiscard]] QString file() const { return m_file; }
 
     // The library in use, and every library that has been. Setting it makes
     // it the one in use from now on, for the window, the command line and

@@ -124,6 +124,7 @@
         <file alias="ReadingSitesDialog.qml">ReadingSitesDialog.qml</file>
         <file alias="AiSettingsDialog.qml">AiSettingsDialog.qml</file>
         <file alias="AiCapabilityRow.qml">AiCapabilityRow.qml</file>
+        <file alias="AiCapabilityTest.qml">AiCapabilityTest.qml</file>
         <file alias="AiProviderChoice.qml">AiProviderChoice.qml</file>
         <file alias="AiServerSetup.qml">AiServerSetup.qml</file>
         <file alias="VoiceSetup.qml">VoiceSetup.qml</file>
@@ -168,6 +169,8 @@
         <file>plugin-templates/format/plugin.json</file>
         <file>plugin-templates/format/main.js</file>
         <file alias="omabook.svg">../share/omabook.svg</file>
+        <!-- What speech to text hears when its row of the AI page is tested (#170). -->
+        <file alias="sounds/test-clip.wav">sounds/test-clip.wav</file>
         <file alias="i18n/en.json">i18n/en.json</file>
         <file alias="i18n/de.json">i18n/de.json</file>
         <file alias="i18n/es-MX.json">i18n/es-MX.json</file>

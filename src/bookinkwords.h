@@ -19,9 +19,10 @@ class Settings;
 // only the computer the ink was written on has it read.
 //
 // Only when recognition is set up for handwriting (a model chosen to read it,
-// the settings' "ink_model"), and only by the person's own servers (this
-// computer, the tailnet, one they marked as theirs): book ink is never sent to
-// a hosted one, whatever the settings allow for a plugin that asks.
+// the settings' "ink_model", or a server of its own, "ink_url"), and only by
+// the person's own servers (this computer, the tailnet, one they marked as
+// theirs): book ink is never sent to a hosted one, whatever the settings
+// allow for a plugin that asks.
 class BookInkWords : public QObject {
     Q_OBJECT
 

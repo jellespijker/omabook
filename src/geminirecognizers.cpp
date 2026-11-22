@@ -23,7 +23,10 @@ using Why = Recognition::Failure::Why;
                                              bool transcribing) {
     const int status = reply.attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
     if (Gemini::keyRefused(status, QJsonDocument::fromJson(body).object()))
-        return {.why = Why::Refused, .message = Failure(Failure::Code::GeminiRefusedKey).text(), .lacking = false};
+        return {.why = Why::Refused,
+                .message = Failure(Failure::Code::GeminiRefusedKey).text(),
+                .lacking = false,
+                .code = Failure::Code::GeminiRefusedKey};
     return Recognizers::failure(reply, body, where, model, transcribing);
 }
 

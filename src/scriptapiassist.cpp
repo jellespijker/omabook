@@ -58,8 +58,9 @@ QList<Entry> assistEntries() {
          "change or one is recognised), `\"unknown-kind\"` or `\"no-settings\"`; empty when available. "
          "`message` says it in the desktop's language."},
         {"recognize.ink", "recognize.ink(strokes, {language, hosted, again, onWaiting})", "",
-         "Recognised text from handwriting, read by a vision model on the AI server (config.json's "
-         "`recognition.ink_model`, else the server's main model). `strokes` are the items of a set of strokes as "
+         "Recognised text from handwriting, read by a vision model on the AI server, or on handwriting's own server "
+         "(config.json's `recognition.ink_url`), with `recognition.ink_model`, else the server's main model. `strokes` are "
+         "the items of a set of strokes as "
          "`omabook.log` keeps them (`{id: base64}`), or a list of strokes, each its base64 or `{points: [{x, y, "
          "pressure, ms}], width}`. A promise of `{kind, text, segments: [{text, start, end, words}], language, "
          "model, server, at, kept}`, which has `cancel()`. It runs in the background, one recognition at a time; "

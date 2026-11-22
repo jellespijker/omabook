@@ -33,7 +33,7 @@ struct SetUp {
 [[nodiscard]] SetUp setUpOf(Capability capability) {
     switch (capability) {
     case Capability::Handwriting:
-        return {"recognition"_L1, "ink_model"_L1, {}};
+        return {"recognition"_L1, "ink_model"_L1, "ink_url"_L1};
     case Capability::SpeechToText:
         return {"recognition"_L1, "transcription_model"_L1, "transcription_url"_L1};
     case Capability::TextToSpeech:
@@ -158,6 +158,9 @@ void addVoice(QVariantMap &row, const Settings &settings) {
         return Gemini::modelDefault(capability);
     switch (capability) {
     case Capability::Handwriting:
+        // A server of its own reads with the first model it lists (#170).
+        if (!settings.recognition().value("ink_url"_L1).toString().trimmed().isEmpty())
+            return {};
         return Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
     case Capability::SpeechToText:
         return QString::fromLatin1(Recognizers::defaultTranscriptionModel);
@@ -175,19 +178,23 @@ void addVoice(QVariantMap &row, const Settings &settings) {
 } // namespace
 
 AiCapabilityRows::AiCapabilityRows(Settings *settings, QString defaultsFile, QObject *parent)
-    : QObject(parent), m_settings(settings), m_defaultsFile(std::move(defaultsFile)), m_preview(settings) {
+    : QObject(parent), m_settings(settings), m_defaultsFile(std::move(defaultsFile)), m_preview(settings),
+      m_test(settings, m_defaultsFile) {
     connect(m_settings, &Settings::changed, this, [this] {
         if (m_watching)
             refresh();
     });
+    connect(&m_test, &CapabilityTest::changed, this, &AiCapabilityRows::refresh);
 }
 
 void AiCapabilityRows::watch(bool on) {
     m_watching = on;
-    if (on)
+    if (on) {
         refresh();
-    else
-        m_preview.stop(); // the page is put away: so is what it plays
+        return;
+    }
+    m_preview.stop(); // the page is put away: so is what it plays, and what it tests
+    m_test.stop();
 }
 
 bool AiCapabilityRows::aiOn() const { return !m_settings->aiOff(); }
@@ -226,6 +233,7 @@ QVariantMap AiCapabilityRows::row(Capability capability) const {
     }
     if (capability == Capability::TextToSpeech && status.available)
         addVoice(row, *m_settings);
+    row.insert(u"test"_s, m_test.outcome(capability));
     return row;
 }
 
@@ -380,6 +388,11 @@ void AiCapabilityRows::setVoice(const QString &voice) {
 void AiCapabilityRows::setRate(double rate) {
     Voices::keep(*m_settings, u"rate"_s, std::round(std::clamp(rate, 0.5, 2.0) * 10) / 10);
     refresh();
+}
+
+void AiCapabilityRows::test(const QString &capability, bool hostedOnce) {
+    if (const auto which = Capabilities::named(capability))
+        m_test.run(*which, hostedOnce);
 }
 
 void AiCapabilityRows::setAiOn(bool on) {

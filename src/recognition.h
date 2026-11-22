@@ -10,6 +10,7 @@
 #include <optional>
 #include <vector>
 
+#include "failure.h"
 #include "inkstroke.h"
 
 // Recognition (#84): recognised text from handwriting and transcripts from
@@ -91,6 +92,10 @@ struct Failure {
     // It lacks what was asked for: the model, one that reads pictures, or
     // transcription at all (#133), so it would fail the same way again.
     bool lacking = false;
+    // What the message says, as a code (ADR 0005), where the way knows it: a
+    // server's refused key, its missing model, its being away. Said for words
+    // passed on as they were said.
+    ::Failure::Code code = ::Failure::Code::Said;
 };
 
 // One way of recognising. Each recognises one input at a time and says how

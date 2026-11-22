@@ -380,3 +380,28 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   `read_aloud.openai_realtime_url` names the Realtime API for a proxy or a test, else it is `openai_url`'s
   host over `wss://`. Its errors are codes: a refused key `VoiceKeyRefused`, a model gone
   `VoiceModelRetired`, an answer without sound `VoiceNoSound`, the rest `VoiceServerFailed` with what it said.
+
+## As built in #170
+
+- **Handwriting has a server of its own**: `recognition.ink_url`, an OpenAI-compatible server it alone is
+  sent to, its key kept in the keyring for that address and its model `ink_model` (else the first the
+  server lists), set up in the row as speech to text's and the meaning index's are. Without one it is the
+  AI server, as before, so an older config.json reads on unchanged. The privacy rule takes that address
+  for handwriting alone. Every capability that can use a server now names its own but quick work, which
+  still shares answers' provider (as built in #143).
+- **Each row says what it is used for**, from the code's uses: answers the companion (its answers,
+  catch-ups, who's who), asking about the library, connections between books, Change Omabook and what
+  plugins write; quick work the knowledge graph (`Prompts::graphExtraction`), the library's series and
+  collections, a book's details, finding books by a description, the companion's suggested questions and
+  the voice commands the grammar doesn't know; handwriting notes, book ink and Notebooks' pages; speech to
+  text dictation, voice commands and recordings written out; text to speech reading aloud and spoken
+  answers; embeddings Find by meaning and plugins' `ai.embed`.
+- **A row's Test** (`CapabilityTest`) sends one small real request through exactly what the registry gives
+  that row for the person's own use: answers and quick a two-word reply, each on its tier; handwriting a
+  drawn "OK"; speech to text a bundled clip, to the first way only; text to speech a sentence (Hear It's);
+  embeddings one vector. Its outcome is the reply and the time, or a code the row words (`no-route`,
+  `refused-key`, `no-model`, `timeout`, `hosted-not-allowed`, `ai-off`, else `failed`) beside the failure's
+  own words; a recognizer's failure carries its code for it (`Recognition::Failure::code`). A test the row
+  would refuse as hosted asks first, and on a yes goes through a copy of the settings that allows hosted
+  for that capability alone; nothing is tested with the AI Off, not even a local voice. Picking a model
+  from the server's list, and offering a missing one, is #172's.

@@ -24,7 +24,7 @@ GridLayout {
         case "command": return qsTr("A command")
         case "gemini": return qsTr("Gemini, with an API key")
         case "answers": return qsTr("The same as for answers")
-        case "ai-server": return qsTr("The AI server, with a model that reads pictures")
+        case "ai-server": return qsTr("A server with a model that reads pictures (the AI server unless you give another)")
         case "whisper.cpp": return qsTr("whisper.cpp, on this computer only")
         case "auto":
             return choice.capability === "speech-to-text" ? qsTr("Automatic: voxtype, whisper.cpp or a server, the first that is there")
