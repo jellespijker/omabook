@@ -3,7 +3,10 @@
 #include <QDateTime>
 #include <QJsonArray>
 #include <QStringList>
+#include <QFileInfo>
 #include <span>
+#include <tuple>
+#include <utility>
 #include <vector>
 
 #include "library.h"
@@ -72,6 +75,27 @@ void HubSnapshots::answer(HubRequests &requests, const Snapshots &snapshots) {
     requests.add(u"snapshot-diff"_s, diffed(snapshots));
     requests.add(u"snapshot-restore"_s, restored(snapshots));
 }
+
+namespace {
+
+// The libraries the hub keeps, by their snapshots' tag and their name.
+[[nodiscard]] QList<std::pair<QString, QString>> librariesOf(HubKeeper &keeper) {
+    QList<std::pair<QString, QString>> libraries;
+    std::ignore = keeper.whole([&libraries](std::span<Library *const> kept) -> std::expected<void, Failure> {
+        for (const Library *library : kept)
+            libraries.append({Snapshots::libraryTag(*library), QFileInfo(library->root()).fileName()});
+        return {};
+    });
+    return libraries;
+}
+
+// Each warning new, or standing a week since told, in the journal.
+void tell(const SnapshotHealth &health, HubKeeper &keeper, const QDateTime &now) {
+    for (const auto &warning : health.toTell(health.warnings(librariesOf(keeper), now), now))
+        qCWarning(lcHub).noquote() << "Snapshots:" << warning.why.english();
+}
+
+} // namespace
 
 SnapshotReason HubSnapshots::reasonOf(HubKeeper::Moment moment) {
     switch (moment) {
@@ -145,5 +169,44 @@ HubSchedule::Job HubSnapshots::destinations(const SnapshotDestinations &destinat
         for (const auto &[name, failure] : round.failed)
             names << name;
         return std::unexpected(Failure(Failure::Code::DestinationsNotCopied, {names.join(u", ")}));
+    };
+}
+
+HubSchedule::Job HubSnapshots::noted(const SnapshotHealth &health, HubSchedule::Job job) {
+    return [&health, job = std::move(job)](HubKeeper &keeper) -> std::expected<void, Failure> {
+        const auto done = job(keeper);
+        if (!health.chosen())
+            return done;
+        const QDateTime now = QDateTime::currentDateTime();
+        health.noteSnapshot(done, now);
+        health.look(now);
+        tell(health, keeper, now);
+        return done;
+    };
+}
+
+HubSchedule::Job HubSnapshots::check(const SnapshotHealth &health, SnapshotHealth::Depth depth) {
+    return [&health, depth](HubKeeper &keeper) -> std::expected<void, Failure> {
+        if (!health.chosen())
+            return {};
+        const QDateTime now = QDateTime::currentDateTime();
+        health.check(depth, now);
+        health.look(now);
+        tell(health, keeper, now);
+        return {};
+    };
+}
+
+HubSchedule::Job HubSnapshots::warn(const SnapshotHealth &health) {
+    return [&health](HubKeeper &keeper) -> std::expected<void, Failure> {
+        if (health.chosen())
+            tell(health, keeper, QDateTime::currentDateTime());
+        return {};
+    };
+}
+
+HubRequests::Answer HubSnapshots::status(const SnapshotHealth &health) {
+    return [&health]([[maybe_unused]] const QJsonObject &asked, HubKeeper &keeper) -> std::expected<QJsonObject, Failure> {
+        return health.json(health.warnings(librariesOf(keeper), QDateTime::currentDateTime()));
     };
 }

@@ -112,10 +112,10 @@ public:
         DictationNothingHeard,  // {}
         VoxtypeDictationFailed, // {what it said}
         // Writing recordings out (formats, services; #151).
-        NotTranscribed,        // {file name}: a recording in the library, not written out yet
-        TranscriptUnwritten,   // {path, the system's reason}
-        RecordingNeedsFfmpeg,  // {file name}: neither a WAV nor an Opus recording, and no ffmpeg to read it
-        TranscriptionStopped,  // {}: stopped; what was written out is kept
+        NotTranscribed,       // {file name}: a recording in the library, not written out yet
+        TranscriptUnwritten,  // {path, the system's reason}
+        RecordingNeedsFfmpeg, // {file name}: neither a WAV nor an Opus recording, and no ffmpeg to read it
+        TranscriptionStopped, // {}: stopped; what was written out is kept
         // Reading a book aloud (services; #73); "name" is the engine's, "where" a server's address.
         NoVoice,            // {}: neither Piper with a voice nor speech-dispatcher is installed
         PiperMissing,       // {}
@@ -207,43 +207,43 @@ public:
         HubNotLinked,       // {host}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
-        AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)
+        AiOff,                   // {}: set to Off in the settings, so nothing is asked of any model or server (#133)
         AiHostedNotAllowed,      // {name}: someone else's computer, and hosted isn't allowed for answers (ADR 0008)
         AiQuickHostedNotAllowed, // {name}: the same for quick work
         HostedNotChosen,         // {where}: someone else's computer, and the plugin asking didn't ask for a hosted one
-        AiUnreachable,       // {where, the network's reason}
-        AiTimedOut,          // {where}
-        AiQuickWaits,        // {where}: quick work waits for its server, away, rather than go to answers' fallback (#174)
-        NoFallback,          // {}: no fallback to try, or none that may be used (#174)
-        AiWantsKey,          // {where}
-        AiRefusedKey,        // {where}
-        AnthropicRefusedKey, // {}
-        GeminiNoKey,         // {}: no key for the Gemini API in the keyring (#145)
-        GeminiRefusedKey,    // {}
-        GeminiNoSound,       // {}: it answered a sentence to read aloud without its sound
-        RecordingTooLarge,   // {recording, the most it takes in MB}: too long to be sent at once
-        KeyNotKept,          // {the keyring's reason}
-        KeyNotForgotten,     // {}
-        AiLimited,           // {where, what it said}: busy, or over a rate or a quota
-        AiNoModel,           // {where, model}
-        AiNoModelSaid,       // {where, model, what it said}
-        AiAnswered,          // {where, what it said}
-        AiError,             // {where, HTTP status}
-        AiDeclined,          // {}
-        AiListsNoModels,     // {where}
-        AiModelsElsewhere,   // {where}
-        ModelNotPulled,      // {model, where, what it said}: Ollama didn't download it (#172)
-        ModelSearchUnanswered, // {site, the network's reason or its HTTP status}: a search for models (#175)
-        ModelHosted,         // {model}: it runs on Ollama's computers, and hosted isn't allowed for the capability
-        NoServerToInstallOn, // {}: no Ollama server for the capability to install a model onto
-        ModelNotDownloaded,  // {model, why}: a speech model's file didn't come down
-        AiNoCommand,         // {}
-        AiPromptUnwritten,   // {}
-        AiStopped,           // {name}
-        AiProgramSaid,       // {name, what it said}
-        AiModelRefused,      // {name, model, what it said}
-        AgentReachedForTool, // {}
-        AgentNoAnswer,       // {}
+        AiUnreachable,           // {where, the network's reason}
+        AiTimedOut,              // {where}
+        AiQuickWaits,            // {where}: quick work waits for its server, away, rather than go to answers' fallback (#174)
+        NoFallback,              // {}: no fallback to try, or none that may be used (#174)
+        AiWantsKey,              // {where}
+        AiRefusedKey,            // {where}
+        AnthropicRefusedKey,     // {}
+        GeminiNoKey,             // {}: no key for the Gemini API in the keyring (#145)
+        GeminiRefusedKey,        // {}
+        GeminiNoSound,           // {}: it answered a sentence to read aloud without its sound
+        RecordingTooLarge,       // {recording, the most it takes in MB}: too long to be sent at once
+        KeyNotKept,              // {the keyring's reason}
+        KeyNotForgotten,         // {}
+        AiLimited,               // {where, what it said}: busy, or over a rate or a quota
+        AiNoModel,               // {where, model}
+        AiNoModelSaid,           // {where, model, what it said}
+        AiAnswered,              // {where, what it said}
+        AiError,                 // {where, HTTP status}
+        AiDeclined,              // {}
+        AiListsNoModels,         // {where}
+        AiModelsElsewhere,       // {where}
+        ModelNotPulled,          // {model, where, what it said}: Ollama didn't download it (#172)
+        ModelSearchUnanswered,   // {site, the network's reason or its HTTP status}: a search for models (#175)
+        ModelHosted,             // {model}: it runs on Ollama's computers, and hosted isn't allowed for the capability
+        NoServerToInstallOn,     // {}: no Ollama server for the capability to install a model onto
+        ModelNotDownloaded,      // {model, why}: a speech model's file didn't come down
+        AiNoCommand,             // {}
+        AiPromptUnwritten,       // {}
+        AiStopped,               // {name}
+        AiProgramSaid,           // {name, what it said}
+        AiModelRefused,          // {name, model, what it said}
+        AgentReachedForTool,     // {}
+        AgentNoAnswer,           // {}
         // Not failures but notes on the way: a refused model, and the one that answered instead.
         AiMainModelReplaced,   // {refused, instead}
         AiMainModelToDefault,  // {refused}
@@ -285,6 +285,20 @@ public:
         DestinationIsTheRepository,   // {location}
         DestinationCredentialMissing, // {the credential's name}
         DestinationsNotCopied,        // {the destinations' names}
+        // Warnings of the snapshots, each saying what to do (services, #184).
+        SnapshotPasswordMissing,  // {repository, where its password goes}
+        SnapshotDiskAbsent,       // {destination, its folder}
+        SnapshotsUnreadable,      // {repository, what restic said}
+        SnapshotFailed,           // {repository, what restic said}
+        NoSnapshotYet,            // {library, repository}
+        SnapshotTooOld,           // {library, repository}, counted: hours
+        SnapshotCheckFailed,      // {repository, what restic said}
+        SnapshotCheckOverdue,     // {repository}, counted: days
+        SnapshotDataCheckFailed,  // {repository, what restic said}
+        SnapshotDataCheckOverdue, // {repository}, counted: days
+        SnapshotDiskNearlyFull,   // {repository, room left}
+        NoSecondDiskCopy,         // {}
+        NoCopyAway,               // {}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

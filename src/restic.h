@@ -81,6 +81,11 @@ struct Backup {
 // The bytes the repository takes where it is kept.
 [[nodiscard]] std::expected<qint64, Failure> size(const ResticRepository &repository);
 
+// Checks that the repository is whole: its structure, and with `readData`
+// its data read back too, all of it ("all") or a part restic takes ("3/12").
+// What is wrong is said as restic said it.
+[[nodiscard]] std::expected<void, Failure> check(const ResticRepository &repository, const QString &readData = {});
+
 // `path` as a restic pattern that matches only that path: its *, ?, [ and \ escaped.
 [[nodiscard]] QString literal(const QString &path);
 

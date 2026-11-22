@@ -28,7 +28,7 @@
 //
 // Then each line is a request: `computers` and `unlink` (this computer's own
 // key) are answered here; the hub's own requests the session hands on
-// (relayed(): `status`, and sync from #188) go to the daemon (ADR 0013) with
+// (relayed(): `status`, `snapshots` and its warnings (#184), and sync from #188) go to the daemon (ADR 0013) with
 // "computer" set to this computer's name, whatever the line said. Any other
 // request is refused. Answers are HubRequests' ({"ok": true, ...} or
 // {"ok": false, "error": ...}). Every refusal, a computer that claims another's

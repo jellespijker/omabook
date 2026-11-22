@@ -6,11 +6,13 @@
 // test's own, never the user's library or home.
 
 #include <QDir>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QProcess>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <algorithm>
 
 #include "bookmeta.h"
 #include "fixtures.h"
@@ -19,6 +21,7 @@
 #include "hubsnapshots.h"
 #include "library.h"
 #include "libraryhold.h"
+#include "snapshothealth.h"
 #include "snapshots.h"
 
 using namespace Qt::StringLiterals;
@@ -152,6 +155,54 @@ private slots:
                     return QJsonObject{};
                 }));
         }
+    }
+
+    void theHubsWarningsAreKeptAndAsked() {
+        const Hub hub;
+        QVERIFY(hub.library(u"home"_s));
+        Snapshots made = hub.snapshots();
+        QVERIFY(made.setUp(hub.dir.filePath(u"repository"_s)));
+        const Snapshots snapshots = hub.snapshots();
+        const SnapshotHealth health(snapshots);
+        HubKeeper keeper(hub.libraries);
+        QVERIFY(keeper.open());
+        const auto asked = [&] {
+            const auto answer = HubSnapshots::status(health)(QJsonObject{}, keeper);
+            return answer ? *answer : QJsonObject();
+        };
+        // Its nightly snapshot and its checks, kept: all is well.
+        QVERIFY(HubSnapshots::noted(health, HubSnapshots::nightly(snapshots))(keeper));
+        QVERIFY(HubSnapshots::check(health, SnapshotHealth::Depth::Light)(keeper));
+        QVERIFY(HubSnapshots::check(health, SnapshotHealth::Depth::Data)(keeper));
+        QVERIFY(HubSnapshots::warn(health)(keeper));
+        const QJsonObject fine = asked();
+        QVERIFY(fine.value("set_up"_L1).toBool());
+        for (const auto &warning : fine.value("warnings"_L1).toArray()) // the host's disk may be full, which is no part of this
+            QCOMPARE(warning["kind"_L1].toString(), u"disk-nearly-full"_s);
+        const QJsonObject own = fine.value("repositories"_L1).toArray().first().toObject();
+        QVERIFY(own.value("check"_L1)["done"_L1].toBool() && own.value("data_check"_L1)["done"_L1].toBool());
+        QVERIFY(!own.value("newest"_L1).toString().isEmpty());
+
+        // A nightly that fails is kept as failed, and the job is tried again.
+        const HubSchedule::Job failing = [](HubKeeper &) -> std::expected<void, Failure> {
+            return std::unexpected(Failure(Failure::Code::ResticFailed, {u"no space left on device"_s}));
+        };
+        QVERIFY(!HubSnapshots::noted(health, failing)(keeper));
+        const QJsonArray warnings = asked().value("warnings"_L1).toArray();
+        QVERIFY(std::ranges::any_of(warnings, [](const QJsonValue &warning) {
+            return warning["kind"_L1].toString() == "snapshot-failed"_L1 && warning["text"_L1].toString().contains("no space left"_L1);
+        }));
+
+        // The hub's secret gone: its password is missing, and where it goes is said.
+        QVERIFY(QFile::remove(hub.place.state() + u"/secrets/snapshots"_s));
+        const Snapshots locked = hub.snapshots();
+        const SnapshotHealth lockedHealth(locked);
+        const auto answer = HubSnapshots::status(lockedHealth)(QJsonObject{}, keeper);
+        QVERIFY(answer);
+        const QJsonArray missing = answer->value("warnings"_L1).toArray();
+        QCOMPARE(missing.size(), 1);
+        QCOMPARE(missing.first()["kind"_L1].toString(), u"password-missing"_s);
+        QVERIFY(missing.first()["text"_L1].toString().contains(hub.place.state() + u"/secrets/snapshots"_s));
     }
 };
 

@@ -22,6 +22,7 @@ using namespace Qt::StringLiterals;
 struct Ran {
     int code = 0;
     QByteArray output;
+    QByteArray errors;
 };
 
 // The last thing restic said on standard error: why it stopped.
@@ -94,7 +95,7 @@ struct Call {
         qCWarning(lcLibrary).noquote() << "restic" << arguments.value(0) << "failed:" << QString::fromUtf8(errors).trimmed();
         return std::unexpected(Failure(Failure::Code::ResticFailed, {lastSaid(errors)}));
     }
-    return Ran{.code = code, .output = process.readAllStandardOutput()};
+    return Ran{.code = code, .output = process.readAllStandardOutput(), .errors = errors};
 }
 
 // restic's times have nanoseconds, which Qt doesn't read.
@@ -194,6 +195,26 @@ std::expected<void, Failure> Restic::restore(const ResticRepository &repository,
     for (const QString &path : including)
         arguments << u"--include"_s << literal(path);
     return run(repository, arguments).transform([](const Ran &) {});
+}
+
+std::expected<void, Failure> Restic::check(const ResticRepository &repository, const QString &readData) {
+    QStringList arguments{u"check"_s};
+    if (readData == "all"_L1)
+        arguments << u"--read-data"_s;
+    else if (!readData.isEmpty())
+        arguments << u"--read-data-subset="_s + readData;
+    // 1 is a repository with errors, said on standard output; the rest stopped it.
+    const auto ran = run(repository, arguments, 1);
+    if (!ran)
+        return std::unexpected(ran.error());
+    if (ran->code == 0)
+        return {};
+    const QStringList lines = QString::fromUtf8(ran->output).split(u'\n', Qt::SkipEmptyParts);
+    const auto wrong = std::ranges::find_if(lines, [](const QString &line) { return line.contains("error"_L1, Qt::CaseInsensitive); });
+    const QString said = wrong != lines.end() ? wrong->trimmed() : lastSaid(ran->errors);
+    qCWarning(lcLibrary).noquote() << "restic check of" << repository.location
+                                   << "found errors:" << QString::fromUtf8(ran->output).trimmed();
+    return std::unexpected(Failure(Failure::Code::ResticFailed, {said}));
 }
 
 QString Restic::literal(const QString &path) {

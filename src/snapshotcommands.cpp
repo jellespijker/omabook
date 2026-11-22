@@ -18,6 +18,7 @@
 #include "librarymigrations.h"
 #include "settings.h"
 #include "snapshotdestinations.h"
+#include "snapshothealthcommands.h"
 #include "snapshotrestore.h"
 #include "snapshotrestorecommands.h"
 
@@ -152,13 +153,18 @@ int copiedToDestinations(const SnapshotPlace &place) {
     return round.failed.isEmpty() ? 0 : 1;
 }
 
-// The nightly one when it is due, then the copies to the destinations.
+// The nightly one when it is due, then the copies to the destinations; one
+// that ran, whether it went through, is kept for the warnings after the
+// copies, so what they hold is seen too, and a new warning told (#184).
 int nightly(const QCommandLineParser &parser, const Snapshots &snapshots, const Library &library) {
-    const auto taken = snapshots.nightly(library, QDateTime::currentDateTime());
-    if (!taken)
-        return fail(taken.error());
-    const int code = said(parser, *taken);
-    return code == 0 ? copiedToDestinations(snapshots.place()) : code;
+    const QDateTime now = QDateTime::currentDateTime();
+    const auto taken = snapshots.nightly(library, now);
+    int code = taken ? said(parser, *taken) : fail(taken.error());
+    if (code == 0)
+        code = copiedToDestinations(snapshots.place());
+    if (!taken || *taken)
+        afterNightly(snapshots, library, taken.transform([](const auto &) {}), now);
+    return code;
 }
 
 // setup, now, list and nightly.
@@ -170,10 +176,11 @@ int takeOrList(const QStringList &arguments) {
         "list lists them; nightly takes the night's, when it is due, thins the older ones (every one of 14 days, "
         "then one a day for 7 days, a week for 4 weeks, a month for 12 months, and one of every year) and copies them "
         "to each destination (omabook snapshot destination --help). A sync, an import or a tidy that changes something "
-        "takes a moment snapshot first, once snapshots are set up. diff and restore go back to one: omabook snapshot diff --help."_s);
+        "takes a moment snapshot first, once snapshots are set up. diff and restore go back to one: omabook snapshot diff --help; "
+        "status and check say how they stand: omabook snapshot status --help."_s);
     parser.addHelpOption();
-    parser.addPositionalArgument(u"what"_s, u"setup, now, list or nightly; or diff, restore or destination."_s,
-                                 u"<setup|now|list|nightly|diff|restore|destination>"_s);
+    parser.addPositionalArgument(u"what"_s, u"setup, now, list or nightly; or diff, restore, destination, status or check."_s,
+                                 u"<setup|now|list|nightly|diff|restore|destination|status|check>"_s);
     parser.addOption({u"json"_s, u"Print the result as JSON."_s});
     parser.addOption({u"library"_s,
                       u"Use the library in this folder instead of the current one, for this run only "
@@ -227,6 +234,9 @@ int runSnapshotCli(const QStringList &arguments) {
     // And where else they are kept (#182).
     if (arguments.value(2) == "destination"_L1)
         return runSnapshotDestinationCli(arguments);
+    // And how they stand (#184).
+    if (const QString word = firstWord(arguments); word == "status"_L1 || word == "check"_L1)
+        return runSnapshotHealthCli(arguments);
     return takeOrList(arguments);
 }
 

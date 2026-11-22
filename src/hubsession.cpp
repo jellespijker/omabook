@@ -42,7 +42,7 @@ QString HubSession::shown(QStringView said) {
 QJsonObject HubSession::hello() { return {{"request", "hello"}, {"protocol", protocol}}; }
 
 const QStringList &HubSession::relayed() {
-    static const QStringList relayed{u"status"_s};
+    static const QStringList relayed{u"snapshots"_s, u"status"_s};
     return relayed;
 }
 

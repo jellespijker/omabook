@@ -4,6 +4,7 @@
 #include "hubrequests.h"
 #include "hubschedule.h"
 #include "snapshotdestinations.h"
+#include "snapshothealth.h"
 #include "snapshots.h"
 
 // The hub's snapshots (#181, ADR 0013 and 0014), through the seams the hub's
@@ -38,5 +39,21 @@ void answer(HubRequests &requests, const Snapshots &snapshots);
 [[nodiscard]] HubSchedule::Job destinations(const SnapshotDestinations &destinations);
 
 [[nodiscard]] SnapshotReason reasonOf(HubKeeper::Moment moment);
+
+// The warnings of the hub's snapshots (#184), told in its journal, and asked
+// by the person's computers. `health` must outlive what these return.
+//
+// `job` (the nightly one), how it went kept for the warnings, then a look at
+// what each repository holds, and each new warning told.
+[[nodiscard]] HubSchedule::Job noted(const SnapshotHealth &health, HubSchedule::Job job);
+// restic's check of each repository (weekly light, monthly reading the data
+// back), then the same. A check that fails is a warning, not a job to try
+// again within the hour.
+[[nodiscard]] HubSchedule::Job check(const SnapshotHealth &health, SnapshotHealth::Depth depth);
+// Each warning that came, or stood a week since told, said in the journal:
+// worked out from what is known, without asking restic, so it runs often.
+[[nodiscard]] HubSchedule::Job warn(const SnapshotHealth &health);
+// The request "snapshots": each repository with what is known of it, and the warnings.
+[[nodiscard]] HubRequests::Answer status(const SnapshotHealth &health);
 
 } // namespace HubSnapshots

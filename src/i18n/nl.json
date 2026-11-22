@@ -2627,5 +2627,27 @@
   "The snapshots are kept in %1 already; a destination is another place.": "De snapshots worden al bewaard in %1; een bestemming is een andere plek.",
   "No value was given for %1.": "Er is geen waarde gegeven voor %1.",
   "The snapshots couldn't be copied to %1.": "De snapshots konden niet naar %1 gekopieerd worden.",
-  "%1 didn't answer within %2 seconds: is it on, and reached from here?": "%1 antwoordde niet binnen %2 seconden: staat het aan, en is het van hieruit bereikbaar?"
+  "%1 didn't answer within %2 seconds: is it on, and reached from here?": "%1 antwoordde niet binnen %2 seconden: staat het aan, en is het van hieruit bereikbaar?",
+  "The snapshots in %1 can't be opened: their password isn't in %2. Put the recovery key back there, readable by you alone (chmod 600), or no snapshot is taken there.": "De snapshots in %1 gaan niet open: hun wachtwoord staat niet in %2. Zet de herstelsleutel daar terug, alleen voor jou leesbaar (chmod 600), anders wordt daar geen snapshot gemaakt.",
+  "The disk of %1 isn't there (%2), so no snapshot is copied to it. Plug it in or mount it: the next copy brings it up to date.": "De schijf van %1 is er niet (%2), dus er wordt geen snapshot naartoe gekopieerd. Sluit hem aan of koppel hem: de volgende kopie brengt hem bij.",
+  "The snapshots in %1 can't be read: %2. See that they can be reached, then look again: omabook snapshot status": "De snapshots in %1 zijn niet te lezen: %2. Zorg dat ze te bereiken zijn en kijk dan opnieuw: omabook snapshot status",
+  "The last snapshot into %1 failed: %2. Mend what it says, then take one: omabook snapshot now": "De laatste snapshot in %1 is mislukt: %2. Verhelp wat er staat en maak er dan een: omabook snapshot now",
+  "%1 has no snapshot in %2 yet. Take one: omabook snapshot now": "%1 heeft nog geen snapshot in %2. Maak er een: omabook snapshot now",
+  "The newest snapshot of %1 in %2 is %n hours old. See why none was taken since (omabook snapshot status, and the log), then take one: omabook snapshot now": {
+    "one": "De nieuwste snapshot van %1 in %2 is %n uur oud. Kijk waarom er sindsdien geen is gemaakt (omabook snapshot status, en het logboek), en maak er dan een: omabook snapshot now",
+    "other": "De nieuwste snapshot van %1 in %2 is %n uur oud. Kijk waarom er sindsdien geen is gemaakt (omabook snapshot status, en het logboek), en maak er dan een: omabook snapshot now"
+  },
+  "restic's check of the snapshots in %1 failed: %2. Check them again: omabook snapshot check. Should it fail again, they may be damaged: take a snapshot elsewhere before trusting them.": "De controle door restic van de snapshots in %1 is mislukt: %2. Controleer ze opnieuw: omabook snapshot check. Mislukt het weer, dan zijn ze misschien beschadigd: maak elders een snapshot voor je erop vertrouwt.",
+  "The snapshots in %1 haven't been checked for %n days. Check them: omabook snapshot check": {
+    "one": "De snapshots in %1 zijn al %n dag niet gecontroleerd. Controleer ze: omabook snapshot check",
+    "other": "De snapshots in %1 zijn al %n dagen niet gecontroleerd. Controleer ze: omabook snapshot check"
+  },
+  "Reading back the snapshots in %1 failed: %2. Read them back again: omabook snapshot check --read-data. Should it fail again, they are damaged: take a snapshot elsewhere before trusting them.": "Het teruglezen van de snapshots in %1 is mislukt: %2. Lees ze opnieuw terug: omabook snapshot check --read-data. Mislukt het weer, dan zijn ze beschadigd: maak elders een snapshot voor je erop vertrouwt.",
+  "The snapshots in %1 haven't been read back for %n days. Read them back: omabook snapshot check --read-data": {
+    "one": "De snapshots in %1 zijn al %n dag niet teruggelezen. Lees ze terug: omabook snapshot check --read-data",
+    "other": "De snapshots in %1 zijn al %n dagen niet teruggelezen. Lees ze terug: omabook snapshot check --read-data"
+  },
+  "The disk of the snapshots in %1 is nearly full: %2 left. Make room, or move them to a bigger disk, before a snapshot fails.": "De schijf van de snapshots in %1 is bijna vol: nog %2 vrij. Maak ruimte, of verhuis ze naar een grotere schijf, voor een snapshot mislukt.",
+  "The libraries are no longer kept three times: no second disk holds their snapshots as it should. Mend what is said of it, or add one: omabook snapshot destination add": "De bibliotheken worden niet meer drie keer bewaard: geen tweede schijf houdt hun snapshots bij zoals het hoort. Verhelp wat erover gezegd wordt, of voeg er een toe: omabook snapshot destination add",
+  "The libraries are no longer kept away from home: no place away holds their snapshots as it should. Mend what is said of it, or add one: omabook snapshot destination add": "De bibliotheken worden niet meer buiten de deur bewaard: geen plek elders houdt hun snapshots bij zoals het hoort. Verhelp wat erover gezegd wordt, of voeg er een toe: omabook snapshot destination add"
 }

@@ -8,6 +8,7 @@
 #include <QJsonObject>
 #include <QLocalSocket>
 #include <QTime>
+#include <chrono>
 #include <cstdio>
 #include <functional>
 #include <optional>
@@ -27,6 +28,7 @@
 #include "hubsnapshots.h"
 #include "log.h"
 #include "snapshotdestinations.h"
+#include "snapshothealth.h"
 #include "snapshotretention.h"
 
 using namespace Qt::StringLiterals;
@@ -88,15 +90,22 @@ int run(const QCommandLineParser &parser) {
     const Snapshots snapshots(SnapshotPlace::ofHub(place)); // before the keeper, which runs its moment snapshots
     const SnapshotDestinations destinations(SnapshotPlace::ofHub(place));
     HubKeeper keeper(folder);
+    const SnapshotHealth health(snapshots);
     HubRequests requests = HubRequests::usual();
     HubSchedule schedule(keeper, place.state());
     // What comes later hooks in here, before the libraries open (requests.add, #182 on).
     // The moment snapshots before each write that changes much, and the nightly one (#181).
     keeper.before(HubSnapshots::before(snapshots));
     HubSnapshots::answer(requests, snapshots); // their diff and restore (#183)
-    schedule.daily(u"snapshot"_s, QTime(SnapshotRetention::nightHour, 0), HubSnapshots::nightly(snapshots));
+    schedule.daily(u"snapshot"_s, QTime(SnapshotRetention::nightHour, 0), HubSnapshots::noted(health, HubSnapshots::nightly(snapshots)));
     // Then copied to the second disk and away from home, an hour on (#182).
-    schedule.daily(u"destinations"_s, QTime(SnapshotRetention::nightHour + 1, 0), HubSnapshots::destinations(destinations));
+    schedule.daily(u"destinations"_s, QTime(SnapshotRetention::nightHour + 1, 0),
+                   HubSnapshots::destinations(destinations));
+    // Their checks, and the warnings told in the journal and asked by the person's computers (#184).
+    schedule.every(u"check"_s, std::chrono::days(7), HubSnapshots::check(health, SnapshotHealth::Depth::Light));
+    schedule.every(u"check-data"_s, std::chrono::days(30), HubSnapshots::check(health, SnapshotHealth::Depth::Data));
+    schedule.every(u"warnings"_s, std::chrono::hours(1), HubSnapshots::warn(health));
+    requests.add(u"snapshots"_s, HubSnapshots::status(health));
     if (const auto opened = keeper.open(); !opened)
         return failLine(opened.error().text());
     HubDaemon daemon(keeper, requests);
@@ -182,6 +191,20 @@ int keyedSession(const QString &fingerprint) {
     return eachLine([&session](const QByteArray &line) { return session.answer(line); }, [&session] { return session.over(); });
 }
 
+// How the hub's snapshots stand (#184), as its daemon says: what to see to, or that all is well.
+void printSnapshots(const QJsonObject &snapshots) {
+    if (snapshots.isEmpty())
+        return;
+    if (!snapshots.value("set_up"_L1).toBool()) {
+        printLine(stdout, u"Snapshots aren't set up on this hub, so nothing is kept to go back to: omabook snapshot setup --hub"_s);
+        return;
+    }
+    const QJsonArray warnings = snapshots.value("warnings"_L1).toArray();
+    printLine(stdout, warnings.isEmpty() ? u"Snapshots: all is well."_s : u"Snapshots, to see to:"_s);
+    for (const auto &warning : warnings)
+        printLine(stdout, u"  - "_s + warning["text"_L1].toString());
+}
+
 int status(const QCommandLineParser &parser, const QStringList &words) {
     QJsonObject answer;
     if (!words.isEmpty()) {
@@ -190,11 +213,16 @@ int status(const QCommandLineParser &parser, const QStringList &words) {
         if (!asked)
             return failLine(asked.error().text());
         answer = *asked;
+        if (const auto kept = HubLinks().ask(words.first(), {{"request", "snapshots"}}); kept && kept->value("ok"_L1).toBool())
+            answer.insert("snapshots"_L1, *kept);
     } else {
         Asking daemon(HubPlace::usual().socket());
         if (!daemon.connected())
             return failLine(Failure(Failure::Code::HubNotRunning, {HubPlace::usual().socket()}).text());
         answer = QJsonDocument::fromJson(daemon.ask(compact({{"request", "status"}}))).object();
+        const QJsonObject kept = QJsonDocument::fromJson(daemon.ask(compact({{"request", "snapshots"}}))).object();
+        if (answer.value("ok"_L1).toBool() && kept.value("ok"_L1).toBool())
+            answer.insert("snapshots"_L1, kept);
     }
     if (parser.isSet(u"json"_s))
         printLine(stdout, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Indented)).trimmed());
@@ -206,6 +234,7 @@ int status(const QCommandLineParser &parser, const QStringList &words) {
                                                                         answer.value("folder"_L1).toString()));
     for (const auto &library : answer.value("libraries"_L1).toArray())
         printLine(stdout, u"  %1  %2 books"_s.arg(library["name"_L1].toString(), QString::number(library["books"_L1].toInt())));
+    printSnapshots(answer.value("snapshots"_L1).toObject());
     return 0;
 }
 
