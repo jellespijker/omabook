@@ -86,7 +86,7 @@ modules = [
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synccopies", "syncrenames", "synctake", "synctakeannotations", "synctakecollections", "synctakegraph",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
   "kosyncroutes", "opdsroutes", "deviceserver", "deviceserving", "serveservice", "koreadersync", "sendbook",
-  "hubkeeper", "hubrequests", "hubdaemon", "hubschedule",
+  "hubkeeper", "hubrequests", "hubdaemon", "hubschedule", "hubsnapshots",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

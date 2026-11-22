@@ -19,6 +19,7 @@
 #include <utility>
 
 #include "library.h"
+#include "libraryhold.h"
 #include "log.h"
 #include "scriptplugins.h"
 #include "secretfile.h"
@@ -31,6 +32,8 @@ using namespace Qt::StringLiterals;
 
 // systemd's credential with the password, on a hub (LoadCredentialEncrypted=).
 constexpr auto credential = "omabook-snapshots"_L1;
+// The hub's secret with it (HubPlace::secret).
+constexpr auto secretName = "snapshots"_L1;
 
 [[nodiscard]] QString configOf(const QString &state) { return state + u"/snapshots.json"_s; }
 
@@ -60,21 +63,57 @@ constexpr auto credential = "omabook-snapshots"_L1;
     return key;
 }
 
+// Keeps a new password: as the hub's secret on a hub (restic then has it
+// handed over), else in its 0600 file.
+[[nodiscard]] std::expected<void, Failure> keepPassword(const SnapshotPlace &place, const QString &key, ResticRepository &made) {
+    const QByteArray bytes = key.toLatin1();
+    if (place.hub) {
+        if (const auto kept = place.hub->keepSecret(secretName, bytes); !kept)
+            return std::unexpected(Failure(Failure::Code::SnapshotPasswordUnkept, {kept.error().text()}));
+        made.password = bytes;
+        return {};
+    }
+    if (const auto kept =
+            SecretFile::keep(made.passwordFile, std::as_bytes(std::span(bytes.constData(), bytes.size())), SecretFile::Placing::Replace);
+        !kept)
+        return std::unexpected(Failure(Failure::Code::SnapshotPasswordUnkept, {kept.error()}));
+    return {};
+}
+
+// The password, and whether it is a new one: what systemd handed over as a
+// credential, or the file there is, else a new one, kept.
+struct Password {
+    QString key;
+    bool made = false;
+};
+
+[[nodiscard]] std::expected<Password, Failure> choosePassword(const SnapshotPlace &place, ResticRepository &made) {
+    if (!made.password.isEmpty())
+        return Password{.key = QString::fromUtf8(made.password), .made = false};
+    if (QFile given(made.passwordFile); given.open(QIODevice::ReadOnly))
+        return Password{.key = QString::fromUtf8(given.readAll()).trimmed(), .made = false};
+    if (QFileInfo::exists(made.passwordFile)) // there, and not this user's to read
+        return std::unexpected(Failure(Failure::Code::SnapshotPasswordUnkept, {made.passwordFile}));
+    const QString key = recoveryKey();
+    if (const auto kept = keepPassword(place, key, made); !kept)
+        return std::unexpected(kept.error());
+    return Password{.key = key, .made = true};
+}
+
 [[nodiscard]] QString hashOf(QByteArrayView bytes, int length = 16) {
     return QString::fromLatin1(QCryptographicHash::hash(bytes, QCryptographicHash::Sha256).toHex().left(length));
 }
 
-// What a snapshot holds of one library, and what restic is to leave out.
-struct Plan {
-    QString staging;          // where the database's copy and the manifest wait
-    QStringList paths;        // what restic keeps
-    QStringList leftOut;      // whole paths left out of those
-    QStringList leftOutNames; // files left out wherever they are
-};
+using Plan = Snapshots::Staged;
 
 [[nodiscard]] Plan planFor(const Library &library, const SnapshotContents &contents, const QString &staging) {
     const QString root = library.root();
-    Plan plan{.staging = staging, .paths = {root, staging}, .leftOut = {}, .leftOutNames = {u".details.lock"_s}};
+    Plan plan{.root = root,
+              .tag = Snapshots::libraryTag(library),
+              .folder = staging,
+              .paths = {root, staging},
+              .leftOut = {},
+              .leftOutNames = {u".details.lock"_s, QString::fromLatin1(LibraryHold::fileName)}};
     // The database is kept as its copy; the format copies are older databases.
     for (const QString &file :
          {library.databasePath(), library.databasePath() + u"-wal"_s, library.databasePath() + u"-shm"_s, library.backupFolder()})
@@ -93,7 +132,7 @@ struct Plan {
     QCryptographicHash hash(QCryptographicHash::Sha256);
     QStringList files;
     for (const QString &path : plan.paths) {
-        if (path == plan.staging || QFileInfo(path).isFile()) {
+        if (path == plan.folder || QFileInfo(path).isFile()) {
             files << path;
             continue;
         }
@@ -106,9 +145,9 @@ struct Plan {
     }
     std::ranges::sort(files);
     for (const QString &file : files) {
-        if (file == plan.staging) {
+        if (file == plan.folder) {
             for (const QString &staged : {u"omabook.db"_s, u"snapshot.json"_s}) {
-                QFile copy(plan.staging + u'/' + staged);
+                QFile copy(plan.folder + u'/' + staged);
                 if (copy.open(QIODevice::ReadOnly))
                     hash.addData(&copy);
             }
@@ -158,6 +197,14 @@ SnapshotPlace SnapshotPlace::in(const QString &state) {
     return place;
 }
 
+SnapshotPlace SnapshotPlace::ofHub(const HubPlace &hub) {
+    SnapshotPlace place = in(hub.state() + u"/snapshots"_s);
+    place.hub = hub;
+    place.repository.passwordFile.clear();
+    place.repository.password = hub.secret(secretName).value_or(QByteArray());
+    return place;
+}
+
 QString SnapshotPlace::defaultRepository() {
     return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + u"/omabook/snapshots"_s;
 }
@@ -168,7 +215,10 @@ SnapshotContents SnapshotContents::here() {
 
 Snapshots::Snapshots(SnapshotPlace place, SnapshotContents contents) : m_place(std::move(place)), m_contents(std::move(contents)) {}
 
-bool Snapshots::ready() const { return !m_place.repository.location.isEmpty() && QFileInfo::exists(m_place.repository.passwordFile); }
+bool Snapshots::ready() const {
+    return !m_place.repository.location.isEmpty()
+           && (!m_place.repository.password.isEmpty() || QFileInfo::exists(m_place.repository.passwordFile));
+}
 
 std::expected<QString, Failure> Snapshots::setUp(const QString &repository) {
     if (ready())
@@ -181,21 +231,13 @@ std::expected<QString, Failure> Snapshots::setUp(const QString &repository) {
         return std::unexpected(Failure(Failure::Code::FolderUnmade, {m_place.state}));
     ResticRepository made = m_place.repository;
     made.location = location;
-    // A hub's credential is its own password; here one is made.
-    const bool ownPassword = !QFileInfo::exists(made.passwordFile);
-    QString key;
-    if (ownPassword) {
-        key = recoveryKey();
-        const QByteArray bytes = key.toLatin1();
-        if (const auto kept = SecretFile::keep(made.passwordFile, std::as_bytes(std::span(bytes.constData(), bytes.size())),
-                                               SecretFile::Placing::Replace);
-            !kept)
-            return std::unexpected(Failure(Failure::Code::SnapshotPasswordUnkept, {kept.error()}));
-    } else if (QFile given(made.passwordFile); given.open(QIODevice::ReadOnly)) {
-        key = QString::fromUtf8(given.readAll()).trimmed();
-    }
+    const auto password = choosePassword(m_place, made);
+    if (!password)
+        return std::unexpected(password.error());
+    const bool ownPassword = password->made;
+    QString key = password->key;
     if (const auto initialised = Restic::init(made); !initialised) {
-        if (ownPassword)
+        if (ownPassword && !m_place.hub)
             QFile::remove(made.passwordFile);
         return std::unexpected(initialised.error());
     }
@@ -208,13 +250,12 @@ std::expected<QString, Failure> Snapshots::setUp(const QString &repository) {
     return key;
 }
 
-std::expected<Snapshots::Taken, Failure> Snapshots::take(const Library &library, SnapshotReason reason) const {
+std::expected<Snapshots::Staged, Failure> Snapshots::stage(const Library &library) const {
     if (!ready())
         return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
-    const QString tag = libraryTag(library);
-    const QString staging = m_place.state + u"/staging/"_s + tag.section(u':', 1);
+    const QString staging = m_place.state + u"/staging/"_s + libraryTag(library).section(u':', 1);
     QDir(staging).removeRecursively();
-    const auto cleanUp = qScopeGuard([&staging] { QDir(staging).removeRecursively(); });
+    auto cleanUp = qScopeGuard([&staging] { QDir(staging).removeRecursively(); });
     if (!QDir().mkpath(staging))
         return std::unexpected(Failure(Failure::Code::FolderUnmade, {staging}));
     {
@@ -227,22 +268,35 @@ std::expected<Snapshots::Taken, Failure> Snapshots::take(const Library &library,
     }
     if (!writeManifest(library, m_contents, staging))
         return std::unexpected(Failure(Failure::Code::FolderUnmade, {staging}));
-    const Plan plan = planFor(library, m_contents, staging);
-    const QString state = stateOf(plan);
+    cleanUp.dismiss();
+    return planFor(library, m_contents, staging);
+}
+
+std::expected<Snapshots::Taken, Failure> Snapshots::keep(const Staged &staged, SnapshotReason reason) const {
+    const auto cleanUp = qScopeGuard([&staged] { QDir(staged.folder).removeRecursively(); });
+    const QString state = stateOf(staged);
     const bool moment = reason != SnapshotReason::Nightly;
     if (moment) {
-        const auto earlier = list(library);
+        const auto earlier = listOf(staged.tag);
         if (!earlier)
             return std::unexpected(earlier.error());
         if (!earlier->isEmpty() && earlier->last().tagged(u"state:"_s) == state)
             return Taken{.id = earlier->last().id, .unchanged = true};
     }
-    const QStringList tags{u"omabook"_s, tag, moment ? u"moment"_s : u"nightly"_s, u"reason:"_s + reasonName(reason), u"state:"_s + state};
-    const auto made = Restic::backup(m_place.repository, backupOf(plan, tags));
+    const QStringList tags{u"omabook"_s, staged.tag, moment ? u"moment"_s : u"nightly"_s, u"reason:"_s + reasonName(reason),
+                           u"state:"_s + state};
+    const auto made = Restic::backup(m_place.repository, backupOf(staged, tags));
     if (!made)
         return std::unexpected(made.error());
-    qCInfo(lcLibrary).noquote() << "snapshot" << made->left(8) << "of" << library.root() << "before" << reasonName(reason);
+    qCInfo(lcLibrary).noquote() << "snapshot" << made->left(8) << "of" << staged.root << "before" << reasonName(reason);
     return Taken{.id = *made, .unchanged = false};
+}
+
+std::expected<Snapshots::Taken, Failure> Snapshots::take(const Library &library, SnapshotReason reason) const {
+    const auto staged = stage(library);
+    if (!staged)
+        return std::unexpected(staged.error());
+    return keep(*staged, reason);
 }
 
 std::expected<std::optional<Snapshots::Taken>, Failure> Snapshots::before(const Library &library, SnapshotReason moment) const {
@@ -271,14 +325,20 @@ std::expected<std::optional<Snapshots::Taken>, Failure> Snapshots::nightly(const
     return *taken;
 }
 
-std::expected<QList<Restic::Snapshot>, Failure> Snapshots::list(const Library &library) const {
+std::expected<QList<Restic::Snapshot>, Failure> Snapshots::list(const Library &library) const { return listOf(libraryTag(library)); }
+
+std::expected<QList<Restic::Snapshot>, Failure> Snapshots::listOf(const QString &tag) const {
     if (!ready())
         return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
-    return Restic::snapshots(m_place.repository, {u"omabook"_s, libraryTag(library)});
+    return Restic::snapshots(m_place.repository, {u"omabook"_s, tag});
 }
 
 std::expected<qsizetype, Failure> Snapshots::thin(const Library &library, const QDateTime &now) const {
-    const auto snapshots = list(library);
+    return thin(libraryTag(library), now);
+}
+
+std::expected<qsizetype, Failure> Snapshots::thin(const QString &tag, const QDateTime &now) const {
+    const auto snapshots = listOf(tag);
     if (!snapshots)
         return std::unexpected(snapshots.error());
     QList<SnapshotRetention::Dated> dated;

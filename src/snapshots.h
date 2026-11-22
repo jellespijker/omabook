@@ -2,11 +2,13 @@
 
 #include <QDateTime>
 #include <QString>
+#include <QStringList>
 #include <cstdint>
 #include <expected>
 #include <optional>
 
 #include "failure.h"
+#include "hubplace.h"
 #include "restic.h"
 
 class Library;
@@ -23,11 +25,16 @@ enum class SnapshotReason : std::uint8_t { Nightly, Asked, Sync, Import, Tidy, M
 struct SnapshotPlace {
     QString state;
     ResticRepository repository;
+    // On a hub, where its password is one of the hub's secrets (snapshots).
+    std::optional<HubPlace> hub;
 
     // This computer's: $XDG_STATE_HOME/omabook/snapshots.
     [[nodiscard]] static SnapshotPlace here();
     // The one kept in `state`, as a test or a hub chooses it.
     [[nodiscard]] static SnapshotPlace in(const QString &state);
+    // A hub's: in its state folder, with its secret "snapshots" (systemd's
+    // credential omabook-hub.snapshots, or the 0600 file HubPlace keeps).
+    [[nodiscard]] static SnapshotPlace ofHub(const HubPlace &hub);
     // The repository chosen when none is: $XDG_DATA_HOME/omabook/snapshots.
     [[nodiscard]] static QString defaultRepository();
 };
@@ -66,7 +73,20 @@ public:
         QString id;             // the snapshot's, or the last one's when nothing changed
         bool unchanged = false; // nothing changed since the last one, so none was taken
     };
-    // A snapshot of `library` now, for `reason`. A moment snapshot only when
+    // A library's database copied, with what else its snapshot holds: the
+    // part of a snapshot that has to see the library alone, in its write turn
+    // or a hub keeper's lock (HubSnapshots). Its folder goes with keep().
+    struct Staged {
+        QString root, tag, folder;
+        QStringList paths;        // what restic keeps
+        QStringList leftOut;      // whole paths left out of those
+        QStringList leftOutNames; // files left out wherever they are
+    };
+    [[nodiscard]] std::expected<Staged, Failure> stage(const Library &library) const;
+    // The snapshot of what was staged, taken by restic: see take().
+    [[nodiscard]] std::expected<Taken, Failure> keep(const Staged &staged, SnapshotReason reason) const;
+
+    // A snapshot of `library` now, for `reason`: stage() and keep(). A moment snapshot only when
     // something changed since the library's last one; a nightly one always.
     [[nodiscard]] std::expected<Taken, Failure> take(const Library &library, SnapshotReason reason) const;
     // A moment snapshot just before something risky, when snapshots are set
@@ -81,6 +101,9 @@ public:
     // Forgets the library's snapshots that are kept no longer at `now`
     // (SnapshotRetention), and says how many.
     [[nodiscard]] std::expected<qsizetype, Failure> thin(const Library &library, const QDateTime &now) const;
+    // The same of the library of that tag (libraryTag).
+    [[nodiscard]] std::expected<qsizetype, Failure> thin(const QString &tag, const QDateTime &now) const;
+    [[nodiscard]] const SnapshotPlace &place() const noexcept { return m_place; }
 
     // The tags of a snapshot: "omabook", "library:<key>", "nightly" or
     // "moment", "reason:<why>" and "state:<what it held>".
@@ -88,6 +111,8 @@ public:
     [[nodiscard]] static QString libraryTag(const Library &library);
 
 private:
+    [[nodiscard]] std::expected<QList<Restic::Snapshot>, Failure> listOf(const QString &tag) const;
+
     SnapshotPlace m_place;
     SnapshotContents m_contents;
 };

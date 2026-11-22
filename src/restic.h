@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QByteArray>
 #include <QDateTime>
 #include <QList>
 #include <QString>
@@ -16,6 +17,9 @@
 struct ResticRepository {
     QString location;     // restic's --repo: a folder, sftp:..., s3:..., rclone:...
     QString passwordFile; // read by restic; 0600, or one of systemd's credentials
+    // Or the password itself, as a hub reads its secrets (HubPlace::secret):
+    // handed to restic alone, in its environment, never on its command line.
+    QByteArray password;
     QString program = QStringLiteral("restic");
 };
 

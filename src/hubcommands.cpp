@@ -7,6 +7,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocalSocket>
+#include <QTime>
 #include <cstdio>
 #include <optional>
 #include <print>
@@ -17,7 +18,9 @@
 #include "hubplace.h"
 #include "hubrequests.h"
 #include "hubschedule.h"
+#include "hubsnapshots.h"
 #include "log.h"
+#include "snapshotretention.h"
 
 using namespace Qt::StringLiterals;
 
@@ -75,12 +78,14 @@ int run(const QCommandLineParser &parser) {
     }
     if (HubDaemon::answersAt(place.socket()))
         return failLine(Failure(Failure::Code::HubRunning, {place.socket()}).text());
+    const Snapshots snapshots(SnapshotPlace::ofHub(place)); // before the keeper, which runs its moment snapshots
     HubKeeper keeper(folder);
     const HubRequests requests = HubRequests::usual();
     HubSchedule schedule(keeper, place.state());
-    // What comes later hooks in here, before the libraries open: the moment
-    // snapshots (keeper.before), the nightly one (schedule.daily) and their
-    // requests (requests.add), #181 on.
+    // What comes later hooks in here, before the libraries open (requests.add, #182 on).
+    // The moment snapshots before each write that changes much, and the nightly one (#181).
+    keeper.before(HubSnapshots::before(snapshots));
+    schedule.daily(u"snapshot"_s, QTime(SnapshotRetention::nightHour, 0), HubSnapshots::nightly(snapshots));
     if (const auto opened = keeper.open(); !opened)
         return failLine(opened.error().text());
     HubDaemon daemon(keeper, requests);

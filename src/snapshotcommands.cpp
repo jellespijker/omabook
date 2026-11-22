@@ -12,6 +12,7 @@
 #include <print>
 #include <tuple>
 
+#include "hubplace.h"
 #include "library.h"
 #include "librarymigrations.h"
 #include "settings.h"
@@ -99,7 +100,7 @@ int setUp(const QCommandLineParser &parser, Snapshots &snapshots) {
     const auto key = snapshots.setUp(parser.value(u"repository"_s));
     if (!key)
         return fail(key.error());
-    const QString repository = SnapshotPlace::here().repository.location;
+    const QString repository = snapshots.place().repository.location;
     if (parser.isSet(u"json"_s)) {
         printJson({{u"repository"_s, repository}, {u"recovery_key"_s, *key}});
         return 0;
@@ -166,6 +167,8 @@ int runSnapshotCli(const QStringList &arguments) {
                       u"setup: where to keep the snapshots, a folder or anything restic takes (sftp:host:/path, "
                       "s3:..., rclone:...); a folder in your Omabook data when not given."_s,
                       u"where"_s});
+    parser.addOption({u"hub"_s, u"setup: set them up for the hub on this computer (omabook hub run), its password one of the hub's "
+                                "secrets; its daemon takes them from then on."_s});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = u"omabook snapshot"_s;
@@ -175,7 +178,11 @@ int runSnapshotCli(const QStringList &arguments) {
         printLine(stderr, parser.helpText().trimmed());
         return 1;
     }
-    Snapshots snapshots(SnapshotPlace::here());
+    if (parser.isSet(u"hub"_s) && what != "setup"_L1) {
+        printLine(stderr, u"The hub's daemon takes its snapshots; --hub only sets them up."_s);
+        return 1;
+    }
+    Snapshots snapshots(parser.isSet(u"hub"_s) ? SnapshotPlace::ofHub(HubPlace::usual()) : SnapshotPlace::here());
     if (what == "setup"_L1)
         return setUp(parser, snapshots);
     if (!snapshots.ready())

@@ -39,11 +39,14 @@ struct Ran {
     for (const QString &name : environment.keys())
         if (name.startsWith("RESTIC_"_L1))
             environment.remove(name);
+    QStringList options{u"--repo"_s, repository.location, u"--retry-lock"_s, u"2m"_s};
+    if (repository.password.isEmpty())
+        options << u"--password-file"_s << repository.passwordFile;
+    else
+        environment.insert(u"RESTIC_PASSWORD"_s, QString::fromUtf8(repository.password));
     QProcess process;
     process.setProcessEnvironment(environment);
-    process.start(program,
-                  QStringList{u"--repo"_s, repository.location, u"--password-file"_s, repository.passwordFile, u"--retry-lock"_s, u"2m"_s}
-                      + arguments);
+    process.start(program, options + arguments);
     if (!process.waitForStarted())
         return std::unexpected(Failure(Failure::Code::ResticMissing, {repository.program}));
     process.closeWriteChannel();
