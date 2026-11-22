@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.3.2] - 2026-11-22
+
+0.3.1's one-time library upgrade could take a book's own identifiers away; this one keeps them. Upgrade to 0.3.2, not 0.3.1.
+
 ### Fixed
 
 - Bringing a library up to date, and a sync, no longer remove a book's own identifiers as another's (#166): an ISBN equal to the book's own, and a Goodreads id or Calibre uuid first recorded on a book of its title, stay with it, whichever book an older Omabook gave them to first. One whose book can't be told is kept and named. And `--unlink` finds a link by the title a book has on this computer, also when this computer's log still has the wrong title an older Omabook gave it.
@@ -410,7 +414,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/jellespijker/omabook/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/jellespijker/omabook/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jellespijker/omabook/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/jellespijker/omabook/compare/v0.2.1...v0.2.2
