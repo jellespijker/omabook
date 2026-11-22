@@ -331,7 +331,8 @@ SnapshotDestinations::Round SnapshotDestinations::copyAll(const QDateTime &now) 
 }
 
 bool SnapshotDestinations::backedUp() const {
-    bool disk = false, away = false;
+    bool disk = false;
+    bool away = false;
     for (const SnapshotDestination &destination : list()) {
         if (const auto state = stateOf(destination.name); !state || !state->done)
             continue;

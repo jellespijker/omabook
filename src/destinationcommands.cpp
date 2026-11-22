@@ -75,7 +75,7 @@ int add(const QCommandLineParser &parser, SnapshotDestinations &destinations) {
         return 1;
     }
     const QStringList credentials = parser.values(u"credential"_s);
-    SnapshotDestination destination{.name = words.at(1), .location = words.at(2), .credentials = credentials};
+    const SnapshotDestination destination{.name = words.at(1), .location = words.at(2), .credentials = credentials};
     const auto key = destinations.add(destination, credentialsGiven(credentials));
     if (!key)
         return fail(key.error());

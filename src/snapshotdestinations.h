@@ -64,7 +64,7 @@ public:
     // is so copies stay deduplicated, keeps its password and `credentials`
     // (name and value) as secrets, and gives the password back as its
     // recovery key. A folder must be on a disk that is there (its parent is).
-    [[nodiscard]] std::expected<QString, Failure> add(const SnapshotDestination &destination,
+    [[nodiscard]] std::expected<QString, Failure> add(const SnapshotDestination &asked,
                                                       const QList<std::pair<QString, QByteArray>> &credentials);
     // Forgets the destination and its secrets; what is kept there stays.
     [[nodiscard]] std::expected<void, Failure> remove(const QString &name);
