@@ -113,6 +113,9 @@ struct SyncSummary {
         // The identifiers a book had of one kept apart from it, removed on
         // either computer (StrayIdentifiers), as "<title>: <scheme> <value>" (#164).
         QStringList identifiersRemoved;
+        // The same that a book kept apart had first, but neither has as its
+        // own, so whose it is can't be told: kept, and named (#166).
+        QStringList identifiersKept;
     } titles;
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all

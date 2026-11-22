@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- Bringing a library up to date, and a sync, no longer remove a book's own identifiers as another's (#166): an ISBN equal to the book's own, and a Goodreads id or Calibre uuid first recorded on a book of its title, stay with it, whichever book an older Omabook gave them to first. One whose book can't be told is kept and named. And `--unlink` finds a link by the title a book has on this computer, also when this computer's log still has the wrong title an older Omabook gave it.
+
 ## [0.3.1] - 2026-11-22
 
 ### Fixed

@@ -260,13 +260,18 @@ void LibraryMigrations::unstrayIdentifiers(Library &library) {
     due.finish();
     if (!repair)
         return;
-    const QStringList removed = StrayIdentifiers::remove(library, Replication::operations(library), false);
+    const auto [removed, doubtful] = StrayIdentifiers::remove(library, Replication::operations(library), false);
     library.exec("DELETE FROM library_state WHERE key = 'unstray_identifiers'");
-    if (removed.isEmpty())
+    const auto count = [](qsizetype n) { return n == 1 ? QString("1 identifier") : QString("%1 identifiers").arg(n); };
+    if (!removed.isEmpty())
+        qCInfo(lcLibrary).noquote() << removed.size() << "identifiers books had of a book kept apart from them were removed";
+    if (!library.m_bringingUpToDate)
         return;
-    qCInfo(lcLibrary).noquote() << removed.size() << "identifiers books had of a book kept apart from them were removed";
-    if (library.m_bringingUpToDate)
-        library.m_bringingUpToDate(
-            QString("Removed %1 that a book had of another an older Omabook took it for: %2.")
-                .arg(removed.size() == 1 ? QString("1 identifier") : QString("%1 identifiers").arg(removed.size()), removed.join("; ")));
+    if (!removed.isEmpty())
+        library.m_bringingUpToDate(QString("Removed %1 that a book had of another an older Omabook took it for: %2.")
+                                       .arg(count(removed.size()), removed.join("; ")));
+    if (!doubtful.isEmpty())
+        library.m_bringingUpToDate(QString("Kept %1 that a book shares with another an older Omabook took it for, as whose they "
+                                           "are can't be told: %2.")
+                                       .arg(count(doubtful.size()), doubtful.join("; ")));
 }

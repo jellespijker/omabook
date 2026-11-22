@@ -1,10 +1,13 @@
 #pragma once
 
+#include <QHash>
 #include <QList>
 #include <QSet>
 #include <QString>
 #include <QStringList>
+#include <optional>
 #include <span>
+#include <utility>
 
 #include "spacereplay.h"
 
@@ -24,6 +27,15 @@ class Library;
 // book (a "not_same_as", which record() writes). The judgement is the log's
 // alone, so every computer that holds the same operations judges alike.
 namespace BookLinks {
+
+// Of each book's id, every title the log says it had, with when.
+using Titles = QHash<QString, QList<std::pair<qint64, QString>>>;
+[[nodiscard]] Titles titlesOf(std::span<const SpaceOperation> ops);
+
+// The title an id had at `at`, as when a link was made: the last one written
+// by then, else the first after (a link a sync made before the other side's
+// details arrived); none when the log names none.
+[[nodiscard]] std::optional<QString> titleAt(const Titles &titles, const QString &id, qint64 at);
 
 // `ops` without the same-as links of books that are not the same book.
 [[nodiscard]] QList<SpaceOperation> trusted(std::span<const SpaceOperation> ops);
@@ -49,7 +61,8 @@ QStringList record(const Library &library, std::span<const SpaceOperation> ops);
 // still wrong (#160): one an older Omabook made after it had already given one
 // book the other's title, so their titles agreed then. The links between a
 // book titled `title` (case set aside, on either computer) and one whose
-// title disagrees with it, each as the log says its title now; never one
+// title disagrees with it, each as its title is now: as this library has it,
+// for a book here (#166), else as the log says it last; never one
 // between two files' ids. Each is recorded as not one book (a "not_same_as",
 // as record() writes them) unless `dryRun`. Answers each pair, as
 // "<one title> / <the other>"; none when no such link is there.

@@ -129,8 +129,11 @@ namespace {
 // The identifiers books here have of a book kept apart from them, removed
 // (StrayIdentifiers, #164), or with `dryRun` only named, as the log `ops` says.
 void unstray(Library &library, std::span<const SpaceOperation> ops, bool dryRun, SyncSummary &summary) {
-    summary.titles.identifiersRemoved << StrayIdentifiers::remove(library, ops, dryRun);
+    const StrayIdentifiers::Removed said = StrayIdentifiers::remove(library, ops, dryRun);
+    summary.titles.identifiersRemoved << said.removed;
     summary.titles.identifiersRemoved.removeDuplicates();
+    summary.titles.identifiersKept << said.doubtful;
+    summary.titles.identifiersKept.removeDuplicates();
 }
 
 // The links the person asked to drop (SyncOptions::unlink, #160), each
@@ -267,9 +270,12 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     for (const auto &title : titles.value("apart").toArray())
         summary.titles.apart << title.toString();
     summary.titles.apart.removeDuplicates();
-    for (const auto &removed : titles.value("identifiers_removed").toArray())
-        summary.titles.identifiersRemoved << removed.toString();
-    summary.titles.identifiersRemoved.removeDuplicates();
+    for (const auto &[key, named] : {std::pair{"identifiers_removed", &summary.titles.identifiersRemoved},
+                                     std::pair{"identifiers_kept", &summary.titles.identifiersKept}}) {
+        for (const auto &identifier : titles.value(QLatin1StringView(key)).toArray())
+            *named << identifier.toString();
+        named->removeDuplicates();
+    }
     summary.collectionsSent += there.value("collections_taken").toInt();
     summary.graphSent += there.value("graph_taken").toInt();
     summary.annotationsSent += there.value("annotations_taken").toInt();
@@ -471,7 +477,8 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
                                {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)},
                                {"renamed_here", QJsonArray::fromStringList(taken.titles.renamedHere)},
                                {"apart", QJsonArray::fromStringList(taken.titles.apart)},
-                               {"identifiers_removed", QJsonArray::fromStringList(taken.titles.identifiersRemoved)}}}},
+                               {"identifiers_removed", QJsonArray::fromStringList(taken.titles.identifiersRemoved)},
+                               {"identifiers_kept", QJsonArray::fromStringList(taken.titles.identifiersKept)}}}},
         // Once this side is who it is to be: the person a pairing just made it may be theirs (#51).
         with(pairing, with(SpaceCarry::introduction(library), carried(library, request, request.value("carrying").toBool() && !dryRun))));
 }

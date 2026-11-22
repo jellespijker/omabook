@@ -55,17 +55,21 @@ rewrites what a book is.
 - **And by the person, on request.** A link an older Omabook made after it had already given one book the
   other's title holds by the rule above (the titles agreed then), and once the title is put right it shows as
   a rename no sync does. `omabook sync <computer> --unlink "<title>"` records each link between a book of
-  that title and one whose title, as the log says it now, disagrees as `not_same_as` (#160); a dry run's
+  that title and one whose title now disagrees as `not_same_as` (#160): the title a book has on this computer,
+  else the one the log says it has now, which may still be the wrong one after it was put right here (#166); a dry run's
   renames say how. Nothing drops such a link by itself: "the titles disagree now" is also what a book renamed
   on purpose on one computer looks like, and that one stays paired.
 - **Identifiers travel only within one book** (#164). A book paired on less than its global id takes none of
   the other's, nor are the copies of it here that such a link folds together given each other's details. An
   identifier of a strong scheme that a book shares with one kept apart from it (`not_same_as`) is stray when it is
-  the other's own and not this one's (its ISBN now, or what its id is made of), or neither's own and the other
-  had it first, as the log says (StrayIdentifiers). A
-  sync takes no stray identifier, removes the ones here (after `--unlink`, before anything else of that sync,
-  and once what came in is stored, before it is taken in) and names them; the one-off repair of format 44 does
-  the same at upgrade.
+  the other's own and not this one's (StrayIdentifiers). A book's own (#166): what its id is made of; its ISBN
+  (the one it has here, else the one the log says it has now); and a key first recorded, as the log says, on a
+  book whose title then agrees with its title now (the Goodreads id of its entry, its Calibre uuid). Which book
+  had a key first does not say whose it is, since an older Omabook copied keys between the books it took for
+  one: one that neither has as its own, or both, is kept, and named when the other had it first. A
+  sync takes no stray identifier, nor one in doubt, removes the stray ones here (after `--unlink`, before
+  anything else of that sync, and once what came in is stored, before it is taken in) and names them; the
+  one-off repair of format 44 does the same at upgrade.
 - **A new book without a file is given an id of a strong key, else its title and authors**, never one
   another book here has; one received from another computer keeps the id it has there.
 
