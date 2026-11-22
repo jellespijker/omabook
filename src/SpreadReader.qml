@@ -90,8 +90,11 @@ Item {
         breaks = reader.pageBreaks(firstText.textDocument, pageHeight)
         // Cut again into more or fewer pages (the window or a pane beside
         // the page changed width, the type changed), the spread still holds
-        // the words that began it, which the same page number no longer does.
-        if (wanted >= 0) settle()
+        // the words that began it, which the same page number no longer does;
+        // the note being written first, as its column can take a page (#165).
+        const held = notes ? notes.held(firstText.textDocument) : -1
+        if (held >= 0) turnTo(pageOf(firstText.positionToRectangle(held).y))
+        else if (wanted >= 0) settle()
         else if (placeAt >= 0) show(pageOf(firstText.positionToRectangle(placeAt).y))
         else show(Math.round(reader.fraction * lastLeft))
     }
@@ -259,7 +262,7 @@ Item {
             const start = sheet.text.selectionStart
             // The page it starts on, which a card about it stands by.
             const shown = sheetShowing(firstText.positionToRectangle(start).y) || sheet
-            return { text: shown.text, start: start, end: sheet.text.selectionEnd }
+            return { text: shown.text, chapter: firstText, start: start, end: sheet.text.selectionEnd }
         }
         return null
     }

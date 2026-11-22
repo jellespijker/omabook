@@ -12,9 +12,12 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-22
+
 ### Fixed
 
 - Two books an older Omabook took for one gain nothing of each other any more (#164): a sync that unlinks them (`--unlink`) no longer gives one the other's identifiers, such as its ISBN, and a book paired by an identifier never takes the other side's identifiers, nor is a second copy of it given the other's title. An identifier a book already got of a book kept apart from it is removed, once as the library is brought up to date and at each sync, and named.
+- A margin note written on the right-hand page of two side by side is kept (#165). The first note in a book makes room for the margin column, which can leave one page where there were two; the note was then written on a page no longer shown and lost, or had no field to type in. The page with its words now stays in sight while it is written, and the note is kept on its passage.
 
 ## [0.3.0] - 2026-11-22
 
@@ -403,7 +406,8 @@ suggestions of what to read next, changing Omabook by asking, plugins and
 scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
-[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/jellespijker/omabook/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jellespijker/omabook/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/jellespijker/omabook/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/jellespijker/omabook/compare/v0.2.0.2...v0.2.1
