@@ -484,3 +484,22 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   model (as GETs, nothing in a body), never a book, a note or a recording; with the AI Off nothing is searched.
 - **Where it shows**: "Find a Model…" in each row of the AI page (`ModelFinder.qml`) and with #172's offer of a
   missing model, in the row and in Find's pane. `ModelFit::suggested` stays the one offered without a search.
+
+## As built in #204
+
+- **Ollama is asked by its own API** (`OllamaProvider`, `/api/chat` at the server's root), not the OpenAI-compatible
+  one beside it, which can't say how much room a request gets. Ollama gives a model 2048 or 4096 tokens unless told
+  more and keeps a longer prompt's end: a section for the graph (some 6,000 tokens with its instructions) reached
+  the model as its last 2,000, without the instructions or the JSON asked for, so `gemma4:e2b` wrote about the book
+  and nothing was found. Each request now asks for the room it needs (`num_ctx`: what it sends at three characters
+  a token, and 4,096 more for the answer and any thinking, as a power of two from 8,192 to 131,072, so requests of
+  one size share a loaded model). Only the `ollama` preset goes this way; another server, hosted or own, is asked
+  by Chat Completions as before, with nothing of Ollama's.
+- **Work read into structure says its shape** (`AiRequest::format`, a JSON Schema; the graph's is
+  `Prompts::graphExtraction`'s): Ollama holds the model to it (`format`), the others go by the prompt. Such an
+  answer is of use only whole, so it is held until it ends, and one cut off where the room ran out
+  (`done_reason: "length"`) is asked again with twice the room; prose is shown as it is written and never asked
+  twice. Thinking comes apart (`thinking`) or between `<think>` tags in the answer, and is left out as before.
+- **An address works with or without `/v1`** (`AiEndpoints::apiUrl`): one that is only a server's
+  (`http://desktop:11434`) gets `/v1`, where every OpenAI-compatible server has its API; one with a path keeps it.
+  The AI server's (`ai_endpoint.base_url`) and the meaning index's (`meaning.url`) are read so.

@@ -76,8 +76,16 @@ QString AiEndpoints::preset(const Settings &settings) {
     return settings.aiEndpoint().value("preset"_L1).toString(fallback);
 }
 
+QString AiEndpoints::apiUrl(const QString &typed) {
+    QString url = trimmedUrl(typed);
+    const QUrl parsed(url);
+    if (!url.isEmpty() && parsed.isValid() && !parsed.host().isEmpty() && parsed.path().isEmpty())
+        url += u"/v1"_s;
+    return url;
+}
+
 QString AiEndpoints::baseUrl(const Settings &settings) {
-    QString typed = trimmedUrl(settings.aiEndpoint().value("base_url"_L1).toString());
+    QString typed = apiUrl(settings.aiEndpoint().value("base_url"_L1).toString());
     if (!typed.isEmpty())
         return typed;
     const AiEndpoint *row = find(preset(settings));

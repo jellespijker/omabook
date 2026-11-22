@@ -13,6 +13,7 @@
 #include "airegistry.h"
 #include "gemini.h"
 #include "geminiprovider.h"
+#include "ollamaprovider.h"
 #include "omarchylocal.h"
 #include "openaiprovider.h"
 #include "secretstore.h"
@@ -243,7 +244,11 @@ std::unique_ptr<AiProvider> makeAiProvider(const Settings &settings, QString *wh
                 *why = server.error();
             return nullptr;
         }
-        provider = std::make_unique<OpenAiProvider>(*server);
+        // Ollama by its own API, which gives a request the room it needs (#204).
+        if (server->preset == "ollama")
+            provider = std::make_unique<OllamaProvider>(*server);
+        else
+            provider = std::make_unique<OpenAiProvider>(*server);
     } else if (choice.id == "gemini") {
         auto api = Gemini::api(settings);
         if (!api) {

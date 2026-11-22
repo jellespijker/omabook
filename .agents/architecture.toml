@@ -71,6 +71,7 @@ modules = [
   "modelfit", "modelscout", "modelhelp", "scriptremedy",
   "serverreach", "aifallback",
   "modeldiscovery", "modelsearch",
+  "ollamaprovider",
 ]
 
 [layers.operations]

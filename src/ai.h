@@ -43,6 +43,11 @@ struct AiRequest {
     // The answer is for a person to read as it is written: the HTML-like
     // tags some models wrap one in are taken out (see AiCall, MarkupFilter).
     bool prose = false;
+    // The shape the answer must have, as a JSON Schema, for work read into
+    // structure; empty for an answer of any shape. A server that can hold a
+    // model to it (Ollama's `format`, OllamaProvider) is given it; the rest
+    // go by the prompt, which says it too.
+    QJsonObject format;
 };
 
 // The model each kind of work goes to, by the name the provider knows it

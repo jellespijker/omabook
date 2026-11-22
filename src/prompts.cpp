@@ -144,10 +144,49 @@ QString Prompts::cast(const QString &notes, const QString &since, const QList<Se
 
 QStringList Prompts::graphKinds() { return GraphNode::storyKinds(); }
 
+namespace {
+
+QJsonObject typed(const char *type) { return {{"type", type}}; }
+
+QJsonObject objectOf(const QJsonObject &properties, const QJsonArray &required) {
+    return {{"type", "object"}, {"properties", properties}, {"required", required}};
+}
+
+// The answer graphExtraction asks for, as a JSON Schema: what a server that
+// can hold a model to a shape (Ollama's `format`) holds it to, so a small
+// model answers in it rather than about it (#204). What the prompt says of
+// each field stays the prompt's.
+QJsonObject graphShape() {
+    const QJsonObject words{{"type", "array"}, {"items", typed("string")}};
+    const QJsonObject node = objectOf({{"kind", typed("string")},
+                                       {"name", typed("string")},
+                                       {"aliases", words},
+                                       {"summary", typed("string")},
+                                       {"section", typed("integer")},
+                                       {"quote", typed("string")},
+                                       {"same_as", typed("string")},
+                                       {"when", typed("object")},
+                                       {"timeline", typed("string")}},
+                                      {"kind", "name", "summary", "section"});
+    const QJsonObject edge = objectOf({{"from", typed("string")},
+                                       {"to", typed("string")},
+                                       {"relation", typed("string")},
+                                       {"section", typed("integer")},
+                                       {"quote", typed("string")},
+                                       {"inferred", typed("boolean")}},
+                                      {"from", "to", "relation"});
+    return objectOf(
+        {{"nodes", QJsonObject{{"type", "array"}, {"items", node}}}, {"edges", QJsonObject{{"type", "array"}, {"items", edge}}}},
+        {"nodes", "edges"});
+}
+
+} // namespace
+
 AiRequest Prompts::graphExtraction(const BookMeta &book, const QString &known, const QString &text, const QString &elsewhere) {
     AiRequest request;
     // Reading into structure: the quick model's work, and most of what a library costs to build.
     request.tier = AiRequest::Quick;
+    request.format = graphShape();
     request.system =
         "You keep the knowledge graph of a book for Omabook, an ebook reader: what its reader knows after the pages "
         "they have read, as things (nodes) and how they relate (edges). You are given the things already in the graph "

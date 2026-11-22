@@ -50,6 +50,10 @@ namespace AiEndpoints {
 // The row of that id, or null.
 [[nodiscard]] const AiEndpoint *find(const QString &id);
 
+// An OpenAI-compatible API's address as typed: without the slash at the
+// end, and with `/v1` after an address that is only a server's (Ollama's
+// "http://desktop:11434"), where every such server has its API (#204).
+[[nodiscard]] QString apiUrl(const QString &typed);
 // The preset and address the settings hold (`ai_endpoint`), with the
 // preset's own address where none was typed in.
 [[nodiscard]] QString preset(const Settings &settings);

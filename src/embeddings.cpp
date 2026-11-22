@@ -23,16 +23,9 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-[[nodiscard]] QString trimmedUrl(QString url) {
-    url = url.trimmed();
-    while (url.endsWith(u'/'))
-        url.chop(1);
-    return url;
-}
-
 // The server named for embeddings, else the AI server.
 [[nodiscard]] std::expected<AiServer, QString> serverOf(const Settings &settings, const QString &omarchyProgram) {
-    const QString url = trimmedUrl(settings.meaning().value("url"_L1).toString());
+    const QString url = AiEndpoints::apiUrl(settings.meaning().value("url"_L1).toString());
     if (url.isEmpty())
         return AiEndpoints::server(settings, {}, omarchyProgram);
     return AiServer{.preset = u"custom"_s,
