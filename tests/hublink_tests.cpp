@@ -19,17 +19,19 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QStandardPaths>
 #include <QTcpServer>
 #include <QTemporaryDir>
 #include <QtTest>
-#include <pwd.h>
-#include <unistd.h>
+#include <algorithm>
+#include <tuple>
 
 #include "crypto.h"
 #include "fixtures.h"
 #include "hubcomputers.h"
 #include "hubsession.h"
+#include "log.h"
 #include "person.h"
 #include "sshkey.h"
 
@@ -171,6 +173,136 @@ struct InProcess {
     return server.listen(QHostAddress::LocalHost) ? server.serverPort() : 0;
 }
 
+// A hub reached through a real sshd, the test's own (#180): its host key, its
+// user (by the passwd stand-in preloaded into sshd and ssh, where the
+// container's user has none), that user's home, a free port and two linked
+// computers' keys, laptop and desktop, all in a temporary folder. Its log
+// is sshd's, and the session's in the hub's log.
+struct RealHub {
+    QTemporaryDir dir;
+    QString home = dir.filePath(u"home"_s);
+    QString sshd = QStandardPaths::findExecutable(u"sshd"_s, {u"/usr/sbin"_s, u"/usr/bin"_s, u"/usr/local/sbin"_s});
+    QString ssh = QStandardPaths::findExecutable(u"ssh"_s);
+    QString agent = QStandardPaths::findExecutable(u"ssh-agent"_s, {u"/usr/sbin"_s, u"/usr/bin"_s, u"/usr/local/bin"_s});
+    QString env = QStandardPaths::findExecutable(u"env"_s);
+    HubComputers computers{home + u"/state/omabook-hub"_s,
+                           home + u"/.ssh/authorized_keys"_s,
+                           {env, u"HOME="_s + home, u"XDG_STATE_HOME="_s + home + u"/state"_s, u"XDG_RUNTIME_DIR="_s + home + u"/runtime"_s,
+                            u"XDG_CONFIG_HOME="_s + home + u"/config"_s, u"XDG_DATA_HOME="_s + home + u"/data"_s,
+                            u"DBUS_SESSION_BUS_ADDRESS=unix:path="_s + home + u"/no-bus"_s,
+                            QFileInfo(QString::fromLatin1(OMABOOK_BINARY)).absoluteFilePath()}};
+    quint16 port = 0;
+    QProcess server;
+    QProcess agentProcess;
+
+    RealHub() { server.setProcessChannelMode(QProcess::MergedChannels); }
+    RealHub(const RealHub &) = delete;
+    RealHub &operator=(const RealHub &) = delete;
+    RealHub(RealHub &&) = delete;
+    RealHub &operator=(RealHub &&) = delete;
+    ~RealHub() {
+        for (QProcess *process : {&server, &agentProcess}) {
+            process->kill();
+            process->waitForFinished(5000);
+        }
+    }
+
+    [[nodiscard]] bool found() const { return !sshd.isEmpty() && !ssh.isEmpty() && !agent.isEmpty() && !env.isEmpty(); }
+
+    // sshd, ssh and ssh-agent see the test's user, with its home here.
+    [[nodiscard]] QProcessEnvironment environment() const {
+        QProcessEnvironment environment = homeAt(dir.filePath(u"client"_s), qEnvironmentVariable("PATH"));
+        environment.insert(u"LD_PRELOAD"_s, QString::fromLatin1(HUBLINK_PASSWD));
+        environment.insert(u"HUBLINK_PASSWD_NAME"_s, u"hubtest"_s);
+        environment.insert(u"HUBLINK_PASSWD_HOME"_s, home);
+        return environment;
+    }
+
+    [[nodiscard]] QString fingerprint(const QString &computer) const {
+        const auto key = SshKey::publicOf(dir.filePath(computer));
+        return key ? SshKey::fingerprint(*key) : QString();
+    }
+
+    // Links laptop and desktop, and starts sshd and an agent; why not, when not.
+    [[nodiscard]] QString start() {
+        const auto person = Person::generate();
+        if (!person || !SshKey::generate(dir.filePath(u"host_key"_s), u"the test's sshd"_s))
+            return u"no keys made"_s;
+        for (const QString &computer : {u"laptop"_s, u"desktop"_s}) {
+            const auto key = SshKey::generate(dir.filePath(computer), computer);
+            if (!key)
+                return whyNot(key);
+            if (const auto linked = computers.link(asking(computer, SshKey::line(*key), *person)); !linked)
+                return whyNot(linked);
+        }
+        port = freePort();
+        const QString config = u"Port %1\nListenAddress 127.0.0.1\nHostKey %2\nPidFile none\nUsePAM no\nStrictModes no\n"
+                               "PasswordAuthentication no\nKbdInteractiveAuthentication no\nPubkeyAuthentication yes\n"
+                               "AuthorizedKeysFile %3\nLogLevel DEBUG1\n"_s.arg(QString::number(port), dir.filePath(u"host_key"_s),
+                                                                                home + u"/.ssh/authorized_keys"_s);
+        if (port == 0 || !Fixtures::write(dir.filePath(u"sshd_config"_s), config.toUtf8()))
+            return u"no port, or no sshd_config"_s;
+        server.setProcessEnvironment(environment());
+        server.start(sshd, {u"-D"_s, u"-E"_s, dir.filePath(u"sshd.log"_s), u"-f"_s, dir.filePath(u"sshd_config"_s)});
+        agentProcess.setProcessEnvironment(environment());
+        agentProcess.start(agent, {u"-D"_s, u"-a"_s, agentSocket()});
+        const bool listening =
+            QTest::qWaitFor([this] { return sshdLog().contains(u"listening on"_s) || server.state() == QProcess::NotRunning; }, 10000);
+        if (!listening || server.state() != QProcess::Running
+            || !QTest::qWaitFor([this] { return QFileInfo::exists(agentSocket()); }, 10000))
+            return u"sshd or ssh-agent didn't start: "_s + QString::fromUtf8(server.readAll()) + sshdLog();
+        return {};
+    }
+
+    [[nodiscard]] QString agentSocket() const { return dir.filePath(u"agent.sock"_s); }
+
+    // ssh to the hub with `computer`'s key, `options` before the host and `command` after it.
+    [[nodiscard]] std::pair<int, QString> client(const QString &computer, const QStringList &options, const QString &command,
+                                                 const QByteArray &input) {
+        QStringList arguments{u"-F"_s, u"/dev/null"_s,
+                              u"-p"_s, QString::number(port),
+                              u"-o"_s, u"BatchMode=yes"_s,
+                              u"-o"_s, u"StrictHostKeyChecking=no"_s,
+                              u"-o"_s, u"UserKnownHostsFile=/dev/null"_s,
+                              u"-o"_s, u"GlobalKnownHostsFile=/dev/null"_s,
+                              u"-o"_s, u"IdentityAgent=none"_s,
+                              u"-o"_s, u"LogLevel=ERROR"_s,
+                              u"-i"_s, dir.filePath(computer),
+                              u"-o"_s, u"IdentitiesOnly=yes"_s};
+        // ssh keeps the first value of an option: the attempt's own come first.
+        arguments = options + arguments;
+        arguments << u"hubtest@127.0.0.1"_s;
+        if (!command.isEmpty())
+            arguments << command;
+        QProcess process;
+        process.setProcessEnvironment(environment());
+        process.start(ssh, arguments);
+        process.write(input);
+        process.closeWriteChannel();
+        const bool ended = process.waitForFinished(30000);
+        if (!ended)
+            process.kill();
+        return {ended ? process.exitCode() : -1, QString::fromUtf8(process.readAllStandardOutput() + process.readAllStandardError())};
+    }
+
+    // What sshd and its sessions wrote (-E): the hub's sshd log.
+    [[nodiscard]] QString sshdLog() const {
+        QFile file(dir.filePath(u"sshd.log"_s));
+        return file.open(QIODevice::ReadOnly) ? QString::fromUtf8(file.readAll()) : QString();
+    }
+
+    // The hub's own log, where the session writes.
+    [[nodiscard]] QList<Log::Entry> log() const { return Log::read({.lines = 1000}, home + u"/state/omabook-hub"_s); }
+    [[nodiscard]] bool logged(const QString &words) const {
+        return std::ranges::any_of(log(), [&words](const Log::Entry &entry) { return entry.message.contains(words); });
+    }
+    [[nodiscard]] QString logLines() const {
+        QStringList lines;
+        for (const Log::Entry &entry : log())
+            lines << entry.level + u" "_s + entry.message;
+        return lines.join('\n');
+    }
+};
 } // namespace
 
 class HubLinkTests : public QObject {
@@ -361,77 +493,90 @@ private slots:
         QCOMPARE(code(asking(u"desktop"_s, key, *other)), Failure::Code::HubNotOwner);
     }
 
-    void aRealSshdRunsOnlyTheSession() {
-        QString sshd = QStandardPaths::findExecutable(u"sshd"_s);
-        if (sshd.isEmpty())
-            sshd = QStandardPaths::findExecutable(u"sshd"_s, {u"/usr/sbin"_s, u"/usr/bin"_s, u"/usr/local/sbin"_s});
-        const QString ssh = QStandardPaths::findExecutable(u"ssh"_s);
-        const QString env = QStandardPaths::findExecutable(u"env"_s);
-        if (sshd.isEmpty() || ssh.isEmpty() || env.isEmpty())
-            QSKIP("No sshd and ssh on this computer to start one of the test's own.");
-        const QTemporaryDir dir;
-        const QString home = dir.filePath(u"home"_s);
-        const auto hostKey = SshKey::generate(dir.filePath(u"host_key"_s), u"the test's sshd"_s);
-        const auto key = SshKey::generate(dir.filePath(u"key"_s), u"laptop"_s);
-        const auto person = Person::generate();
-        QVERIFY2(hostKey && key && person, "made");
-        // The session finds its state in the test's folder: sshd hands it its user's own home.
-        HubComputers computers(home + u"/state/omabook-hub"_s, home + u"/.ssh/authorized_keys"_s,
-                               {env, u"HOME="_s + home, u"XDG_STATE_HOME="_s + home + u"/state"_s,
-                                u"XDG_RUNTIME_DIR="_s + home + u"/runtime"_s, u"XDG_CONFIG_HOME="_s + home + u"/config"_s,
-                                u"XDG_DATA_HOME="_s + home + u"/data"_s, u"DBUS_SESSION_BUS_ADDRESS=unix:path="_s + home + u"/no-bus"_s,
-                                QFileInfo(QString::fromLatin1(OMABOOK_BINARY)).absoluteFilePath()});
-        const auto linked = computers.link(asking(u"laptop"_s, SshKey::line(*key), *person));
-        QVERIFY2(linked, qPrintable(whyNot(linked)));
-        const quint16 port = freePort();
-        QVERIFY(port != 0);
-        QVERIFY(Fixtures::write(dir.filePath(u"sshd_config"_s),
-                                u"Port %1\nListenAddress 127.0.0.1\nHostKey %2\nPidFile none\nUsePAM no\n"
-                                "StrictModes no\nPasswordAuthentication no\nKbdInteractiveAuthentication no\n"
-                                "PubkeyAuthentication yes\nAuthorizedKeysFile %3\n"_s
-                                    .arg(QString::number(port), dir.filePath(u"host_key"_s), home + u"/.ssh/authorized_keys"_s)
-                                    .toUtf8()));
-        QProcess server;
-        server.setProcessChannelMode(QProcess::MergedChannels);
-        server.start(sshd, {u"-D"_s, u"-e"_s, u"-f"_s, dir.filePath(u"sshd_config"_s)});
-        QByteArray log;
-        const bool listening = QTest::qWaitFor(
-            [&] { return (log += server.readAll()).contains("listening on") || server.state() == QProcess::NotRunning; }, 10000);
-        QVERIFY2(listening && server.state() == QProcess::Running, log.constData());
-        const passwd *user = ::getpwuid(::geteuid());
-        QVERIFY(user != nullptr);
-        const QString target = QString::fromLocal8Bit(user->pw_name) + u"@127.0.0.1"_s;
-        const QStringList options{u"-F"_s, u"/dev/null"_s,
-                                  u"-p"_s, QString::number(port),
-                                  u"-o"_s, u"BatchMode=yes"_s,
-                                  u"-o"_s, u"StrictHostKeyChecking=no"_s,
-                                  u"-o"_s, u"UserKnownHostsFile=/dev/null"_s,
-                                  u"-o"_s, u"GlobalKnownHostsFile=/dev/null"_s,
-                                  u"-o"_s, u"IdentityAgent=none"_s,
-                                  u"-o"_s, u"LogLevel=ERROR"_s,
-                                  u"-i"_s, dir.filePath(u"key"_s),
-                                  u"-o"_s, u"IdentitiesOnly=yes"_s};
-        const auto client = [&](const QStringList &more, const QByteArray &input) {
-            QProcess process;
-            process.start(ssh, options + more);
-            process.write(input);
-            process.closeWriteChannel();
-            const bool ended = process.waitForFinished(30000);
-            return std::pair{ended ? process.exitCode() : -1,
-                             QString::fromUtf8(process.readAllStandardOutput() + process.readAllStandardError())};
-        };
-        const auto [greeted, said] = client({u"--"_s, target, u"omabook hub session"_s}, hello);
-        QVERIFY2(greeted == 0, qPrintable(said + QString::fromUtf8(log + server.readAll())));
+    void aRealSshdRunsNothingButTheSession() {
+        RealHub hub;
+        if (!hub.found())
+            QSKIP("No sshd, ssh and ssh-agent on this computer to start a hub's sshd of the test's own.");
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        const auto [greeted, said] = hub.client(u"laptop"_s, {}, u"omabook hub session"_s, hello);
+        QVERIFY2(greeted == 0, qPrintable(said + hub.sshdLog()));
         QCOMPARE(answers(said).value(0).value("computer").toString(), u"laptop"_s);
-        const QString pwned = dir.filePath(u"pwned"_s);
-        const auto [refused, why] = client({u"--"_s, target, u"touch '%1'"_s.arg(pwned)}, {});
-        QVERIFY2(refused == 1 && why.contains(u"opens only the hub's session"_s), qPrintable(why));
-        // No forwarding through it either (restrict): not even to the sshd itself.
-        const auto [forwarded, banner] = client({u"-W"_s, u"127.0.0.1:%1"_s.arg(port), target}, {});
-        QVERIFY2(forwarded != 0 && !banner.contains(u"SSH-2.0"_s), qPrintable(banner));
+        QVERIFY2(hub.logged(u"A session began for laptop"_s), qPrintable(hub.logLines()));
+        // Another command asked of ssh: a shell's, or the session for another computer's key.
+        const QString pwned = hub.dir.filePath(u"pwned"_s);
+        for (const QString &command :
+             {u"touch '%1'"_s.arg(pwned), u"omabook hub session --key '%1'"_s.arg(hub.fingerprint(u"desktop"_s))}) {
+            const auto [refused, why] = hub.client(u"laptop"_s, {}, command, hello);
+            QVERIFY2(refused == 1 && why.contains(u"opens only the hub's session"_s), qPrintable(why));
+            QVERIFY2(hub.logged(u"asked to run "_s + command.left(20)), qPrintable(hub.logLines()));
+        }
         QVERIFY(!QFileInfo::exists(pwned));
-        server.kill();
-        QVERIFY(server.waitForFinished(10000));
+        // A first line other than the hello.
+        const auto [unsaid, noHello] = hub.client(u"laptop"_s, {}, u"omabook hub session"_s,
+                                                  R"({"request": "status"})"
+                                                  "\n" + hello);
+        QVERIFY2(unsaid == 1 && noHello.contains(u"speaks protocol 1"_s) && answers(noHello).size() == 1, qPrintable(noHello));
+        QVERIFY2(hub.logged(u"began with something other than a hello"_s), qPrintable(hub.logLines()));
+    }
+
+    void aRealSshdForwardsNothingThroughTheKey() {
+        RealHub hub;
+        if (!hub.found())
+            QSKIP("No sshd, ssh and ssh-agent on this computer to start a hub's sshd of the test's own.");
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        // Ports, either way: to the sshd itself, and from the hub back here.
+        const auto [local, banner] = hub.client(u"laptop"_s, {u"-W"_s, u"127.0.0.1:%1"_s.arg(hub.port)}, {}, {});
+        QVERIFY2(local != 0 && !banner.contains(u"SSH-2.0"_s), qPrintable(banner));
+        const auto [remote, refused] =
+            hub.client(u"laptop"_s, {u"-N"_s, u"-o"_s, u"ExitOnForwardFailure=yes"_s, u"-R"_s, u"0:127.0.0.1:%1"_s.arg(hub.port)}, {}, {});
+        QVERIFY2(remote != 0 && refused.contains(u"forwarding failed"_s), qPrintable(refused));
+        // An agent and a terminal: sshd gives the session neither, which it would refuse.
+        const auto [agent, unforwarded] =
+            hub.client(u"laptop"_s, {u"-A"_s, u"-o"_s, u"IdentityAgent="_s + hub.agentSocket()}, u"omabook hub session"_s, hello);
+        QVERIFY2(agent == 0 && answers(unforwarded).value(0).value("ok").toBool(), qPrintable(unforwarded + hub.sshdLog()));
+        // With a terminal asked for, sshd refuses it and the session runs without one.
+        const auto [terminal, noTerminal] = hub.client(u"laptop"_s, {u"-tt"_s}, u"omabook hub session"_s, hello);
+        QVERIFY2(noTerminal.contains(u"PTY allocation request failed"_s), qPrintable(noTerminal));
+        std::ignore = terminal; // ssh, holding a terminal it never got, ends as it likes.
+        const QString log = hub.sshdLog();
+        for (const QString &trace : {u"refused local port forward"_s, u"tcpip-forward listen"_s, u"agent forwarding disabled"_s,
+                                     u"Allocating a pty not permitted"_s})
+            QVERIFY2(log.contains(trace, Qt::CaseInsensitive),
+                     qPrintable(trace + u" isn't in the hub's sshd log:\n"_s
+                                + log.split(u'\n')
+                                      .filter(QRegularExpression(u"agent|pty|tty|forward|tcpip|req|disabled|permit|refus"_s,
+                                                                 QRegularExpression::CaseInsensitiveOption))
+                                      .join(u'\n')
+                                      .right(3500)));
+        QVERIFY2(!hub.logged(u"came with"_s), qPrintable(hub.logLines()));
+    }
+
+    void aKeyCantSpeakForAnotherComputer() {
+        RealHub hub;
+        if (!hub.found())
+            QSKIP("No sshd, ssh and ssh-agent on this computer to start a hub's sshd of the test's own.");
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        const auto [code, said] = hub.client(u"laptop"_s, {}, u"omabook hub session"_s,
+                                             R"({"request": "hello", "protocol": 1, "computer": "desktop"})"
+                                             "\n"
+                                             R"({"request": "unlink", "computer": "desktop"})"
+                                             "\n");
+        const QList<QJsonObject> answered = answers(said);
+        QVERIFY2(answered.size() == 2, qPrintable(said));
+        QCOMPARE(answered.at(0).value("computer").toString(), u"laptop"_s);
+        QCOMPARE(answered.at(1).value("computer").toString(), u"laptop"_s);
+        std::ignore = code;
+        // Its own key went, the other's stayed: and that one still opens the hub.
+        QCOMPARE(hub.computers.computers().size(), 1);
+        QCOMPARE(hub.computers.computers().at(0).name, u"desktop"_s);
+        const auto [other, still] = hub.client(u"desktop"_s, {}, u"omabook hub session"_s, hello);
+        QVERIFY2(other == 0 && answers(still).value(0).value("computer").toString() == u"desktop"_s, qPrintable(still));
+        QVERIFY2(hub.logged(u"said it was desktop"_s), qPrintable(hub.logLines()));
+        const auto [gone, turnedAway] = hub.client(u"laptop"_s, {}, u"omabook hub session"_s, hello);
+        QVERIFY2(gone != 0 && turnedAway.contains(u"Permission denied"_s), qPrintable(turnedAway));
     }
 };
 

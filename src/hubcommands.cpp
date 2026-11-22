@@ -13,6 +13,7 @@
 #include <optional>
 #include <print>
 #include <tuple>
+#include <unistd.h>
 
 #include "hubcomputers.h"
 #include "hubdaemon.h"
@@ -143,16 +144,29 @@ int session() {
 // (HubSession), whatever the client asked ssh to run, as the computer whose
 // key has `fingerprint`. The daemon is asked only once a request needs it.
 int keyedSession(const QString &fingerprint) {
-    if (const QString asked = qEnvironmentVariable("SSH_ORIGINAL_COMMAND"); !HubSession::asksForSession(asked)) {
-        QJsonObject refused = HubRequests::refusal(Failure(Failure::Code::HubOnlySession, {asked}));
+    const HubPlace place = HubPlace::usual();
+    // What it refuses is in the hub's log, beside what its daemon says, and
+    // only there: its standard error goes back to the client over ssh.
+    qInstallMessageHandler([](QtMsgType, const QMessageLogContext &, const QString &) {});
+    Log::install(u"hub"_s, place.state());
+    const auto refuse = [&fingerprint](const QString &what, const QString &logged) {
+        qCWarning(lcHub).noquote() << "The key" << fingerprint << logged << "instead of the session: refused.";
+        QJsonObject refused = HubRequests::refusal(Failure(Failure::Code::HubOnlySession, {what}));
         refused.insert("protocol"_L1, HubSession::protocol);
         printLine(stdout, QString::fromUtf8(compact(refused)));
         return 1;
-    }
+    };
+    if (const QString asked = qEnvironmentVariable("SSH_ORIGINAL_COMMAND"); !HubSession::asksForSession(asked))
+        return refuse(asked, u"asked to run "_s + HubSession::shown(asked));
+    // The key's line forbids both (restrict); should either come along all the same, nothing runs.
+    if (qEnvironmentVariableIsSet("SSH_TTY") || ::isatty(STDIN_FILENO) != 0)
+        return refuse(u"a terminal"_s, u"came with a terminal"_s);
+    if (qEnvironmentVariableIsSet("SSH_AUTH_SOCK"))
+        return refuse(u"a forwarded agent"_s, u"came with a forwarded agent"_s);
     std::optional<Asking> daemon;
-    HubSession session(HubComputers::usual(HubPlace::usual()), fingerprint, [&daemon](const QByteArray &request) {
+    HubSession session(HubComputers::usual(place), fingerprint, [&daemon, &place](const QByteArray &request) {
         if (!daemon) {
-            daemon.emplace(HubPlace::usual().socket());
+            daemon.emplace(place.socket());
             if (!daemon->connected()) {
                 daemon.reset();
                 return notRunning();

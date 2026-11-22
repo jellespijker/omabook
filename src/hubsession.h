@@ -31,7 +31,8 @@
 // (relayed(): `status`, and sync from #188) go to the daemon (ADR 0013) with
 // "computer" set to this computer's name, whatever the line said. Any other
 // request is refused. Answers are HubRequests' ({"ok": true, ...} or
-// {"ok": false, "error": ...}).
+// {"ok": false, "error": ...}). Every refusal, a computer that claims another's
+// name, and each session's start leave a line in the hub's log.
 class HubSession {
 public:
     static constexpr int protocol = 1;
@@ -54,11 +55,15 @@ public:
     // Whether `command`, what the client asked ssh to run there
     // (SSH_ORIGINAL_COMMAND), asks for the session: nothing, or the session itself.
     [[nodiscard]] static bool asksForSession(QStringView command);
+    // What a client sent, as the hub's log keeps it: one line, cut short.
+    [[nodiscard]] static QString shown(QStringView said);
 
 private:
     [[nodiscard]] QJsonObject greet(const QJsonObject &asked);
     [[nodiscard]] QJsonObject answerTo(const QJsonObject &asked);
     [[nodiscard]] QJsonObject ending(QJsonObject answer);
+    // Logs a request that names a computer other than the key's own.
+    void noteClaim(const QJsonObject &asked, const QString &name) const;
 
     HubComputers m_computers;
     QString m_fingerprint;
