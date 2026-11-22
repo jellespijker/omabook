@@ -883,6 +883,29 @@ and an issue number in each commit. Set it up once with `uvx pre-commit install`
 on a branch with `bin/check`. The rules are in `.agents/rules/`, and what changed
 between releases in [CHANGELOG.md](CHANGELOG.md).
 
+### Releases
+
+The package's recipe is `packaging/omarchy-pkgs/PKGBUILD` (with `.omarchy/package.json`
+beside it), the one proposed to omarchy-pkgs. Three workflows hold a release to it:
+
+- **Release check** (`release-check.yml`, on every push to main) builds every suite as the
+  package is built: a Release build with the flags of Arch's `makepkg.conf`
+  (`-D_GLIBCXX_ASSERTIONS`, no LTO, as the recipe's `!lto` asks), with only the DejaVu fonts
+  the recipe's `checkdepends` bring, under a session bus. It proves that a failure depending
+  on those flags or fonts shows on the push that caused it, not at a tag.
+- **Release, package job** (on a `v*` tag) builds the recipe from the checked-out tag in a
+  clean `archlinux:latest`, tests included, and publishes the package (and the signed
+  repository). It proves the package people install passed every suite.
+- **Release, recipe job** (on the same tag) builds the recipe exactly as omarchy-pkgs' builder
+  does: the tag's tarball from GitHub, its sha256 filled in, dependencies from pacman, makepkg
+  as an ordinary user in `en_US.UTF-8`. It attaches the filled-in `PKGBUILD`,
+  `omarchy-package.json`, `check-summary.txt` and `package-size.txt` to the release, which is
+  what the omarchy-pkgs pull request needs. It proves the recipe builds and passes `check()`
+  as submitted.
+
+Running the Release workflow by hand (`workflow_dispatch`, from any branch) is a dry run of
+both its jobs that publishes nothing; the recipe job then builds the newest tag, or the one given.
+
 ## License
 
 MIT. The theme, translator, build scripts and portal file picker come from the Omarchy apps by David Heinemeier Hansson, under the same license.

@@ -1,0 +1,104 @@
+name: Release check
+
+# Every suite, built and run the way the release workflow builds the package
+# (release.yml): a Release build with Arch's makepkg flags (-D_GLIBCXX_ASSERTIONS,
+# no LTO, as the recipe's options=('!lto') asks), with only the DejaVu fonts the
+# recipe's checkdepends bring, under a session bus as its check() runs. So a
+# failure that depends on the flags or the fonts shows on the push that caused
+# it, not at a tag. ccache keeps the build well under the release's hour.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-check:
+    name: Release build, DejaVu only, every suite
+    runs-on: ubuntu-latest
+    container: archlinux:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Install git for the checkout
+        run: pacman -Syu --noconfirm --needed git
+
+      - uses: actions/checkout@v4
+
+      - name: Install the recipe's dependencies
+        # packaging/omarchy-pkgs/PKGBUILD is the one list of what the package needs.
+        run: |
+          source packaging/omarchy-pkgs/PKGBUILD
+          deps=("${depends[@]}" "${makedepends[@]}" "${checkdepends[@]}")
+          pacman -S --noconfirm --needed base-devel ccache "${deps[@]%%[<>=]*}"
+
+      - name: Take makepkg's flags
+        run: |
+          source /etc/makepkg.conf
+          [[ $CXXFLAGS == *-D_GLIBCXX_ASSERTIONS* ]] || { echo "makepkg.conf has no -D_GLIBCXX_ASSERTIONS: $CXXFLAGS"; exit 1; }
+          {
+            echo "CFLAGS=$CFLAGS"
+            echo "CXXFLAGS=$CXXFLAGS"
+            echo "LDFLAGS=$LDFLAGS"
+            echo "CCACHE_DIR=$GITHUB_WORKSPACE/.ccache"
+            echo "CCACHE_MAXSIZE=2G"
+            echo "FONTCONFIG_FILE=/opt/release-fonts/fonts.conf"
+          } >> "$GITHUB_ENV"
+          echo "CXXFLAGS=$CXXFLAGS"
+          echo "LDFLAGS=$LDFLAGS"
+
+      - name: Show only the DejaVu fonts
+        # Other packages may bring fonts of their own; the release container has DejaVu alone.
+        run: |
+          mkdir -p /opt/release-fonts/fonts /opt/release-fonts/cache
+          mapfile -t dejavu < <(fc-list : file | sed 's/: *$//' | grep -i /dejavu)
+          (( ${#dejavu[@]} )) || { echo "no DejaVu fonts installed"; exit 1; }
+          cp "${dejavu[@]}" /opt/release-fonts/fonts/
+          cat > /opt/release-fonts/fonts.conf <<'CONF'
+          <?xml version="1.0"?>
+          <!DOCTYPE fontconfig SYSTEM "fonts.dtd">
+          <fontconfig>
+            <dir>/opt/release-fonts/fonts</dir>
+            <cachedir>/opt/release-fonts/cache</cachedir>
+            <include ignore_missing="yes">/etc/fonts/conf.d</include>
+          </fontconfig>
+          CONF
+          families=$(fc-list : family | sort -u)
+          echo "$families"
+          if grep -vi dejavu <<<"$families"; then echo "fonts other than DejaVu are visible"; exit 1; fi
+
+      - name: Restore the compiler cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .ccache
+          key: release-check-ccache-${{ github.sha }}
+          restore-keys: release-check-ccache-
+
+      - name: Set up a user and a locale like a desktop's
+        # As in the Test workflow: tests about unreadable files need an ordinary user.
+        run: |
+          useradd -m tester
+          groupadd other
+          usermod -aG other tester
+          mkdir -p .ccache
+          chown -R tester . /opt/release-fonts/cache
+          sed -i 's/^#en_US.UTF-8/en_US.UTF-8/' /etc/locale.gen
+          locale-gen
+
+      - name: Build
+        run: |
+          su tester -c 'cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache >/dev/null && bin/build'
+          su tester -c 'ccache --show-stats'
+
+      - name: Save the compiler cache
+        if: always()
+        uses: actions/cache/save@v4
+        with:
+          path: .ccache
+          key: release-check-ccache-${{ github.sha }}
+
+      - name: Test
+        run: su tester -c 'LANG=en_US.UTF-8 QT_QPA_PLATFORM=offscreen dbus-run-session -- ctest --test-dir build --output-on-failure --no-tests=error -j3'

@@ -1,0 +1,65 @@
+# Maintainer: Jelle Spijker
+
+pkgname=omabook
+pkgver=0.0.0
+pkgrel=1
+pkgdesc="An ebook library and reader for Omarchy, with a knowledge graph of what you read and AI as a first-class citizen"
+arch=('x86_64' 'aarch64')
+url='https://github.com/jellespijker/omabook'
+# Omabook's own source is MIT. share/omabook/calibre_bridge.py runs inside
+# Calibre and is GPL-3.0-or-later; the program links Poppler (GPL).
+license=('MIT' 'GPL-3.0-or-later')
+# Not with link-time optimisation, which makepkg turns on: GCC 16's, across
+# the whole program, took a function for one value of an argument its callers
+# pass several of (GraphCut::whole always cut at 2), and failed
+# tenantreaders_tests (#112). The package is built as every build of Omabook
+# is tested.
+options=('!debug' '!lto')
+depends=(
+  'hicolor-icon-theme'
+  'libarchive'
+  'libsodium'
+  'opus'
+  'poppler-qt6'
+  'qt6-base'
+  'qt6-declarative'
+  'qt6-multimedia'
+  'qt6-multimedia-ffmpeg'
+  'qt6-svg'
+  'qt6-wayland'
+  'qt6-websockets'
+  'xdg-desktop-portal'
+)
+optdepends=(
+  'calibre: import Calibre libraries, use its metadata plugins, and read Kindle and other converted formats'
+  'gnome-keyring: keep reading-site tokens in the keyring'
+  'folio: Omabook libraries, what is being read and "Add to Library" in the file manager'
+  'openssh: sync a library with another computer'
+  'hyphen-en: hyphenate English books'
+  'hyphen-de: hyphenate German books'
+  'hyphen-nl: hyphenate Dutch books'
+  'speech-dispatcher: read books aloud, with espeak-ng or another synthesiser'
+  'piper-tts: read books aloud in a natural voice, with a piper-voices-* voice (both from the AUR)'
+  'voxtype-bin: write out recordings on this computer, with the speech to text Omarchy ships (from the omarchy repository)'
+)
+makedepends=('cmake' 'gcc' 'make' 'pkgconf')
+# The window tests measure text, so they need a font; the CLI tests make zips;
+# the hyphenation tests need the dictionaries.
+checkdepends=('dbus' 'ttf-dejavu' 'zip' 'hyphen-en' 'hyphen-de' 'hyphen-nl')
+source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+build() {
+  cd "$srcdir/$pkgname-$pkgver"
+  ./bin/build
+}
+
+check() {
+  cd "$srcdir/$pkgname-$pkgver"
+  QT_QPA_PLATFORM=offscreen dbus-run-session -- ctest --test-dir build --output-on-failure
+}
+
+package() {
+  cd "$srcdir/$pkgname-$pkgver"
+  DESTDIR="$pkgdir" cmake --install build --prefix /usr
+}
