@@ -579,7 +579,7 @@ omabook graph show 12 --beyond            # the book's graph with what it connec
 omabook graph log                         # the reading log: what was read on which day
 ```
 
-Over MCP the same are `graph_find`, `graph_node`, `graph_book`, `graph_scope`, `graph_scopes`, `graph_add`, `graph_link`, `graph_unlink`, `graph_merge`, `graph_remove`, `graph_build`, `graph_connect`, `graph_export`, `graph_copy_scope`, `graph_remove_scope` and `graph_reading_log` (`graph_node` takes `timeline`, and `book` with `up_to_section` for a thing as known at a place; each step past the reader's furthest place is marked `"ahead"`), and a book's graph is the resource `omabook://graph/book/{id}`. Script plugins have it as `omabook.graph` (`find`, `node`, `around`, `ofBook`, `beyond`, `connect`, `whole`, `upsert`, `link`, `unlink`, `merge`, `remove`, `scopes`, `copyScope`, `removeScope`, `exported`, and `layers`, the worlds shared with you); see `omabook plugin api`.
+Over MCP the same are `graph_find`, `graph_node`, `graph_book`, `graph_scope`, `graph_scopes`, `graph_add`, `graph_link`, `graph_unlink`, `graph_merge`, `graph_remove`, `graph_build`, `graph_connect`, `graph_export`, `graph_copy_scope`, `graph_remove_scope` and `graph_reading_log` (`graph_node` takes `timeline`, and `book` with `up_to_section` for a thing as known at a place; each step past the reader's furthest place is marked `"ahead"`), and a book's graph is the resource `omabook://graph/book/{id}`. Script plugins have it as `omabook.graph` (`find`, `node`, `around`, `ofBook`, `beyond`, `connect`, `whole`, `upsert`, `link`, `unlink`, `merge`, `remove`, `scopes`, `copyScope`, `removeScope`, `exported`, `timeline` and `branch` for the chronology, and `layers`, the worlds shared with you); see `omabook plugin api`.
 
 ### Browsing it
 
@@ -620,6 +620,7 @@ The chronology puts the events of the books you read in the order they **happen*
 
 - **Never ahead of you.** Every time and every order is a fact with the place in the book where it was told, like the rest of the graph. So the chronology holds only what you have read: an event you haven't reached isn't on it, not even on a timeline it shares with a book you finished.
 - **Timelines.** An event is on one or more: the book's own, its series', a world several books share, or real history. A real date or a real event (a war, a coronation) puts it on real history, which is how books with nothing else in common meet. A series' or a world's timeline is shared only by books on the same side of a library split into top collections.
+- **Timelines that branch.** A timeline can branch off another at an event: the same up to it, its own after it. Alternate history is a branch of real history, so a novel in which the war ends otherwise keeps what happens otherwise off real history; a world that departs from another, a reboot, or a Storyteller story's branch is a branch too, and a branch can branch again. The events before the split show on both; the branch is drawn beside its parent from the split on, the split marked and named, and none of it shows before you have read the split. When the AI reads an alternate history it only proposes the branch: the chronology asks whether to take it, and until you do its events stay in their book's own order.
 - **The AI notes the times.** As it builds a book's graph, the model also notes when each event happens, as far as the book says: a date, a year or a span, on the real calendar or the story's own, "around" where the book hedges, or only the book's words ("three years before the war"). It notes what comes before or after what, and marks an order it concluded as inferred. It never guesses a date: what the book doesn't say stays unknown. `omabook graph build <book> --again` reads the times into a book built before.
 - **Or by hand.** Say when an event happens, put two in order, place one on a timeline, or make a timeline of your own (see below). What you put in is marked as yours and wins over what the books say.
 - **What can't be ordered is said.** Events with no time and no order are listed apart. A contradiction (A before B and B before A, two books giving times that can't both be, a date that disagrees with an order) is shown with where each statement was said and which one is followed, never quietly resolved.
@@ -646,9 +647,11 @@ omabook chronology set-when "The siege" 1944-06-06   # or a span 1939..1945; --c
 omabook chronology order "The flood" before "The siege"   # before, after, during or same
 omabook chronology timeline add "The Third Age" --kind world
 omabook chronology place "The siege" on "The Third Age"
+omabook chronology timeline branch "The Peace" --from "Real history" --at "The siege"   # alternate history from there
+omabook chronology timeline accept "Alternate history from the siege"   # take a branch the AI proposed, or refuse it
 ```
 
-With no book it takes every book you read; `--collection` takes one collection's. `omabook graph chronology` is the same command. An event or a timeline is its number or its name, and what doesn't check out is refused with why. Over MCP the same are `chronology`, `chronology_set_when`, `chronology_order`, `chronology_place` and `chronology_timeline_add`.
+With no book it takes every book you read; `--collection` takes one collection's. `omabook graph chronology` is the same command. An event or a timeline is its number or its name, and what doesn't check out is refused with why. Over MCP the same are `chronology`, `chronology_set_when`, `chronology_order`, `chronology_place`, `chronology_timeline_add`, `chronology_timeline_branch` and `chronology_timeline_decide`. Plugins branch a timeline with `omabook.graph.branch`, and find a book's own with `omabook.graph.timeline`.
 
 ## Commands
 

@@ -43,7 +43,12 @@ constexpr auto usage = "Usage: omabook chronology [book] [options]\n\n"
                        "                                             One event in order with another\n"
                        "  chronology place <event> on <timeline>     Put an event on a timeline\n"
                        "  chronology timeline add <name> [--kind book|series|world|history|reader]\n"
-                       "                                             A timeline of its own\n\n"
+                       "                                             A timeline of its own\n"
+                       "  chronology timeline branch <name> --from <timeline> --at <event>\n"
+                       "                                             A timeline the same as another up to an event and its own\n"
+                       "                                             after it: alternate history, from real history\n"
+                       "  chronology timeline accept|refuse <branch>\n"
+                       "                                             Take a branch the AI proposed, or not\n\n"
                        "An event or a timeline is its number or its name. What is put in by hand wins over what the books say, and is\n"
                        "marked so. Times are Y, Y-MM, Y-MM-DD, Y-MM-DDTHH or Y-MM-DDTHH:MM, on the Gregorian calendar unless --calendar\n"
                        "names the story's own. `omabook graph chronology` is the same command. Every command takes --json and\n"
@@ -80,7 +85,8 @@ void addOptions(QCommandLineParser &parser) {
     parser.addOption({"collection", "Only the events of this collection's books (omabook collections lists them).", "name"});
     parser.addOption({"scope", "A graph of its own, such as world:42; the general graph when not given.", "scope"});
     parser.addOption({"timeline", "Only this timeline, by its number or name.", "timeline"});
-    parser.addOption({"from", "Only what happens from this time on.", "time"});
+    parser.addOption({"from", "Only what happens from this time on; timeline branch: the timeline it branches off.", "time"});
+    parser.addOption({"at", "timeline branch: the event where it branches off, by its number or name.", "event"});
     parser.addOption({"to", "Only what happens up to this time.", "time"});
     parser.addOption(
         {"calendar", "The calendar of --from and --to, or of set-when's time; each timeline's own, or the Gregorian.", "calendar"});
@@ -120,6 +126,21 @@ void addOptions(QCommandLineParser &parser) {
     return ask;
 }
 
+// `timeline add|branch|accept|refuse <name>`; none for another.
+[[nodiscard]] std::optional<Answer> timelineWritten(Graph &graph, const QStringList &words, const QCommandLineParser &parser) {
+    const QString what = words.value(1);
+    const QString name = words.mid(2).join(u' ');
+    if (what == "add"_L1)
+        return ChronologyOps::addTimeline(graph, name, parser.value("kind"));
+    if (what == "branch"_L1 && (parser.value("from").isEmpty() || parser.value("at").isEmpty()))
+        return std::unexpected(u"A branch branches off a timeline (--from) at an event (--at)."_s);
+    if (what == "branch"_L1)
+        return ChronologyOps::branch(graph, name, parser.value("from"), parser.value("at"), parser.value("scope"));
+    if (what == "accept"_L1 || what == "refuse"_L1)
+        return ChronologyOps::decide(graph, name, what == "accept"_L1, parser.value("scope"));
+    return std::nullopt;
+}
+
 // One of the writers, as the words ask; none when they ask for none of them.
 [[nodiscard]] std::optional<Answer> written(const Library &library, const QStringList &words, const QCommandLineParser &parser) {
     // Made by hand in a tenant: the collection's, or the library's only one.
@@ -140,8 +161,8 @@ void addOptions(QCommandLineParser &parser) {
         return ChronologyOps::order(graph, words.at(1), words.mid(2, words.size() - 3).join(u' '), words.last(), scope);
     if (sub == "place"_L1 && words.size() == 4 && words.at(2) == "on"_L1)
         return ChronologyOps::place(graph, words.at(1), words.at(3), scope);
-    if (sub == "timeline"_L1 && words.value(1) == "add"_L1 && words.size() >= 3)
-        return ChronologyOps::addTimeline(graph, words.mid(2).join(u' '), parser.value("kind"));
+    if (sub == "timeline"_L1 && words.size() >= 3)
+        return timelineWritten(graph, words, parser);
     return std::nullopt;
 }
 

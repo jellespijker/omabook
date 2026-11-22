@@ -10,10 +10,13 @@
 #include <cmath>
 #include <ranges>
 
+#include "chronologyframe.h"
 #include "graphcanvas.h"
 #include "threadclock.h"
 
 using Chronology::Chart::Mark;
+using ChronologyFrame::faded;
+using ChronologyFrame::markSize;
 
 namespace {
 
@@ -24,8 +27,6 @@ constexpr double captionHeight = 20; // a lane's name, over its rows
 constexpr double rowHeight = 22;
 constexpr double laneFoot = 6;
 constexpr double bandGap = 14;
-constexpr double markSize = 5; // half a moment's mark
-constexpr double barHeight = 10;
 constexpr double tickRoom = 110; // the least room between two of a ruler's words
 constexpr int longestName = 28;  // what an event's name is cut to beside its mark
 
@@ -34,11 +35,6 @@ constexpr qsizetype mostLayouts = 20000;
 
 [[nodiscard]] QString shortened(const QString &text, int most) {
     return text.size() > most ? text.left(most - 1).trimmed() + QChar(0x2026) : text;
-}
-
-[[nodiscard]] QColor faded(QColor color, double alpha) {
-    color.setAlphaF(static_cast<float>(color.alphaF() * alpha));
-    return color;
 }
 
 // How far the ring around a mark reaches: the selected one's, the one pointed at, or none.
@@ -55,69 +51,6 @@ constexpr qsizetype mostLayouts = 20000;
 }
 
 } // namespace
-
-// The frame's shapes: rectangles, which every renderer of the scene graph
-// draws (the software one too, which draws no geometry of one's own).
-struct ChronologyCanvas::Shapes {
-    QList<std::pair<QRectF, QColor>> rects;
-    bool mirrored = false;
-    double width = 0;
-
-    // A rectangle whose left edge is at `left` as time runs.
-    void rect(double left, double top, double w, double h, const QColor &color) {
-        if (w > 0 && h > 0 && color.alpha() > 0)
-            rects.append({QRectF(mirrored ? width - left - w : left, top, w, h), color});
-    }
-    // How a mark looks: its colour, the ring of the selected one or the one
-    // pointed at (`grow` wide, none when 0), the ring of one in a
-    // contradiction, and the inside of one of someone else's graph.
-    struct Look {
-        QColor fill, ring, trouble, hollow;
-        double grow = 0;
-    };
-    // A mark from `from` to `to`, at `y` down: a bar for a span, a square about `from` for a moment.
-    void mark(const Mark &mark, double from, double to, double y, const Look &look) {
-        const double half = mark.span ? barHeight / 2 : markSize;
-        const double left = mark.span ? from : from - markSize;
-        const double wide = mark.span ? to - from : 2 * markSize;
-        const auto box = [&](double out, const QColor &color) {
-            rect(left - out, y - half - out, wide + 2 * out, 2 * half + 2 * out, color);
-        };
-        if (look.grow > 0)
-            box(look.grow, look.ring);
-        if (mark.contradicted)
-            box(2, look.trouble);
-        box(0, look.fill);
-        if (look.hollow.isValid())
-            box(-2, look.hollow);
-        if (mark.openFrom)
-            runsOn(from, y, -1, look.fill);
-        if (mark.openTo)
-            runsOn(to, y, 1, look.fill);
-    }
-    // An end of a span that runs on: the bar fades out past it, `way` -1 before it and 1 after.
-    void runsOn(double at, double y, int way, const QColor &color) {
-        for (const auto [step, alpha] : std::array<std::pair<int, double>, 3>{{{0, 0.6}, {1, 0.35}, {2, 0.15}}})
-            rect(way < 0 ? at - (step + 1) * 5.0 : at + step * 5.0, y - barHeight / 2, 5, barHeight, faded(color, alpha));
-    }
-};
-
-// The frame's words, each laid out once and kept, by the colour they are written in.
-struct ChronologyCanvas::Words {
-    struct Placed {
-        QPointF at;
-        QTextLayout *layout = nullptr;
-    };
-    QList<Placed> ink, muted, lit;
-    bool mirrored = false;
-    double width = 0;
-
-    // A box of words, its left edge at `left` as time runs.
-    void add(QList<Placed> &to, double left, double top, QTextLayout &layout) const {
-        const double wide = layout.lineAt(0).naturalTextWidth();
-        to.append({{mirrored ? width - left - wide : left, top}, &layout});
-    }
-};
 
 ChronologyCanvas::ChronologyCanvas(QQuickItem *parent) : QQuickItem(parent) { setFlag(ItemHasContents, true); }
 
@@ -383,8 +316,19 @@ void ChronologyCanvas::addRulers(Shapes &shapes, Words &words) {
         const double y = top - m_scroll;
         if (y + captionHeight < 0 || y > height())
             continue;
-        shapes.rect(side, y, width() - 2 * side, 1, faint);
-        words.add(words.muted, side, y + 3, layoutOf(shortened(m_browser->laneName(static_cast<int>(lane)), 60), 11, true));
+        QTextLayout &name = layoutOf(shortened(m_browser->laneName(static_cast<int>(lane)), 60), 11, true);
+        const Chronology::Chart::LaneOf &of = chart.lanes.at(lane);
+        if (!of.split) {
+            shapes.rect(side, y, width() - 2 * side, 1, faint);
+            words.add(words.muted, side, y + 3, name);
+            continue;
+        }
+        // A branch from where it splits off its parent on, and named there.
+        const double x = std::clamp(xOf(of.splitAt), side, width() - side);
+        shapes.rect(x, y, width() - side - x, 1, line);
+        shapes.split(x, of.parent >= 0 ? rowY(of.parent, 0) : y, y, faded(m_accent, 0.8));
+        const double wide = name.lineAt(0).naturalTextWidth();
+        words.add(words.muted, x + 8 + wide <= width() - side ? x + 8 : side, y + 3, name);
     }
 }
 

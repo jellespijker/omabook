@@ -217,6 +217,9 @@ QString ChronologyBrowser::fromOf(qint64 event) const { return m_read.events.val
 
 QString ChronologyBrowser::laneName(int lane) const {
     const GraphNode &timeline = m_chart.lanes.at(lane).timeline;
+    if (const auto &split = m_chart.lanes.at(lane).split)
+        return tr("%1, off %2 at %3", "a branch of a timeline: its name, the timeline it branches off, the event it splits at")
+            .arg(timeline.name, split->parent.name, split->at.name);
     if (timeline.id != 0)
         return timeline.name;
     const auto book = timeline.bookId > 0 && library() ? library()->book(timeline.bookId) : std::nullopt;

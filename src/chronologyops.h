@@ -66,5 +66,12 @@ struct Said {
 // A timeline: whose it is (book, series, world, history or reader; the
 // reader's when not said).
 [[nodiscard]] std::expected<QJsonObject, QString> addTimeline(Graph &graph, const QString &name, const QString &kind = {});
+// A timeline that branches off another at an event (#171,
+// chronologybranch.h): the timeline `name` names, such as a book's own, or a
+// branch made by that name; alternate history when `from` is real history.
+[[nodiscard]] std::expected<QJsonObject, QString> branch(Graph &graph, const QString &name, const QString &from, const QString &at,
+                                                         const QString &scope = {});
+// The reader's word on a branch the AI proposed: taken, or not.
+[[nodiscard]] std::expected<QJsonObject, QString> decide(Graph &graph, const QString &branch, bool accept, const QString &scope = {});
 
 } // namespace ChronologyOps

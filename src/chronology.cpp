@@ -155,12 +155,14 @@ QString Chronology::name(Whose whose) {
         return u"history"_s;
     case Whose::Reader:
         return u"reader"_s;
+    case Whose::Branch:
+        return u"branch"_s;
     }
     return {};
 }
 
 std::optional<Chronology::Whose> Chronology::whose(const QString &name) {
-    for (const Whose whose : {Whose::Book, Whose::Series, Whose::World, Whose::History, Whose::Reader})
+    for (const Whose whose : {Whose::Book, Whose::Series, Whose::World, Whose::History, Whose::Reader, Whose::Branch})
         if (Chronology::name(whose) == name)
             return whose;
     return std::nullopt;

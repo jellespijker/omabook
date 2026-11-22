@@ -122,6 +122,26 @@ _Avoid_: Copy, partition, side
 The tenant of the books that are in no top-level collection.
 _Avoid_: None, default, uncategorised
 
+**Timeline**:
+One order of story time that events are on in the chronology: a book's own, a series', a world's, real history (one for the whole library), one the reader names, or a branch. Two books share a timeline when their events are on the same one (`Chronology::Whose`).
+_Avoid_: Reveal history, "When it was revealed" (the order a reader learned things in), track
+
+**Branch**:
+A timeline that is the same as another, its parent, up to an event and its own after it: the events before the split are shared with the parent, those after are the branch's alone. A branch can branch again (`Chronology::Split`, ADR 0015).
+_Avoid_: Fork, copy, version (for the timeline; a Storyteller story's branch is a book, whose timeline is a branch)
+
+**Alternate history**:
+A branch of real history: a book's world that is ours up to an event and goes otherwise after it. Its events are never on real history.
+_Avoid_: Fiction on real history, counterfactual
+
+**Split**:
+The event at which a branch departs from its parent, with the place in a book where that was revealed; neither it nor what comes after shows before it is read.
+_Avoid_: Divergence point, fork point, branch point
+
+**Proposed branch**:
+A branch the AI recognised while building a book's graph, waiting for the reader to take it or not; until taken it is no timeline, and its events stay in their book's own order (`Chronology::Standing`).
+_Avoid_: Suggestion, guess, pending timeline
+
 ## AI
 
 **Capability**:

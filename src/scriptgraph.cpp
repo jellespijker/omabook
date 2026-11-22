@@ -8,6 +8,8 @@
 #include <utility>
 
 #include "aicall.h"
+#include "chronology.h"
+#include "chronologybranch.h"
 #include "graphlinks.h"
 #include "library.h"
 #include "scriptplugin.h"
@@ -152,6 +154,39 @@ double ScriptGraph::bookNode(double id) {
         return 0;
     }
     return static_cast<double>(Graph(*library).bookNode(number(id)));
+}
+
+double ScriptGraph::timeline(double book) {
+    const Library *library = this->library(true);
+    if (!library)
+        return 0;
+    if (!library->book(number(book))) {
+        fail(u"There is no book %1 in the library."_s.arg(number(book)));
+        return 0;
+    }
+    Graph graph = Graph::ofReader(*library, number(book));
+    return static_cast<double>(Chronology::timelineFor(graph, *library, number(book), Chronology::Whose::Book, {}));
+}
+
+double ScriptGraph::branch(const QString &options) {
+    const Library *library = this->library(true);
+    if (!library)
+        return 0;
+    const QJsonObject given = object(options);
+    const qint64 book = given.value("book").toInteger();
+    const std::optional<GraphPlace> at = place(book, given);
+    Graph graph = book > 0 ? Graph::ofReader(*library, book) : Graph(*library);
+    const auto made = Chronology::branch(graph, {.timeline = given.value("timeline").toInteger(),
+                                                 .name = given.value("name").toString(),
+                                                 .from = given.value("from").toInteger(),
+                                                 .at = given.value("at").toInteger(),
+                                                 .revealed = at ? std::optional(GraphMoment{*at, {}}) : std::nullopt,
+                                                 .proposed = false});
+    if (!made) {
+        fail(made.error().text());
+        return 0;
+    }
+    return static_cast<double>(*made);
 }
 
 bool ScriptGraph::unsee(double id, double book) {

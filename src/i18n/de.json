@@ -2504,5 +2504,18 @@
   "systemd wouldn't run Omabook's background service: %1": "systemd wollte Omabooks Hintergrunddienst nicht ausführen: %1",
   "{library.devices} shows a QR code of your library's catalog for KOReader, Librera or Moon+ Reader to scan, serves it on your tailnet or your home network, and on with the window closed if you like.": "{library.devices} zeigt einen QR-Code des Katalogs deiner Bibliothek, den KOReader, Librera oder Moon+ Reader scannen, bietet ihn in deinem Tailnet oder Heimnetz an, und auf Wunsch auch bei geschlossenem Fenster.",
   "An OPDS catalog": "Ein OPDS-Katalog",
-  "For e-reader and phone apps to browse and download books.": "Für Apps auf E-Readern und Handys, um Bücher zu durchsuchen und herunterzuladen."
+  "For e-reader and phone apps to browse and download books.": "Für Apps auf E-Readern und Handys, um Bücher zu durchsuchen und herunterzuladen.",
+  "%1, off %2 at %3": "%1, abzweigend von %2 bei %3",
+  "A timeline can branch off another at an event: the same up to it, its own after it, as alternate history is of real history. Its lane begins where it splits off, beside the one it branches off, and shares what came before. When the AI reads one, it only proposes it: take it or not over the lanes. By hand, `omabook chronology timeline branch <name> --from <timeline> --at <event>`.": "Eine Zeitleiste kann bei einem Ereignis von einer anderen abzweigen: bis dahin gleich, danach ihre eigene, so wie eine alternative Geschichte von der wirklichen. Ihre Spur beginnt dort, wo sie abzweigt, neben der, von der sie abzweigt, und teilt, was davor geschah. Erkennt die KI eine, schlägt sie sie nur vor: über den Spuren übernehmen oder nicht. Von Hand: `omabook chronology timeline branch <name> --from <timeline> --at <event>`.",
+  "Not a branch": "Keine Abzweigung",
+  "The AI reads a branch: %1, off %2 at %3.": "Die KI liest eine Abzweigung: %1, von %2 bei %3.",
+  "Timelines that branch": "Zeitleisten, die abzweigen",
+  "There is no thing %1 in the graph.": "Im Graphen gibt es nichts mit der Nummer %1.",
+  "%1 is a %2, not a %3.": "%1 ist ein %2, kein %3.",
+  "There is a timeline called %1 already, and it is no branch: call the branch otherwise.": "Es gibt schon eine Zeitleiste namens %1, und sie ist keine Abzweigung: nenne die Abzweigung anders.",
+  "%1 would branch off itself: %2 is %1 or one of its branches.": "%1 würde von sich selbst abzweigen: %2 ist %1 oder eine ihrer Abzweigungen.",
+  "The branch could not be kept.": "Die Abzweigung konnte nicht gespeichert werden.",
+  "%1 branches off no timeline.": "%1 zweigt von keiner Zeitleiste ab.",
+  "The word on %1 could not be kept.": "Die Entscheidung über %1 konnte nicht gespeichert werden.",
+  "A branch branches off a timeline at an event: omabook chronology timeline branch <name> --from <timeline> --at <event>": "Eine Abzweigung zweigt bei einem Ereignis von einer Zeitleiste ab: omabook chronology timeline branch <name> --from <timeline> --at <event>"
 }

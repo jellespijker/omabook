@@ -167,6 +167,24 @@ int arrange(QList<Mark> &marks, const QHash<qint64, int> &depth) {
     return all;
 }
 
+// Each branch of a band to its parent's lane there.
+void tieBranches(QList<Chart::LaneOf> &lanes, const QList<int> &ofBand) {
+    for (const int lane : ofBand) {
+        const std::optional<Split> &split = lanes.at(lane).split;
+        if (!split)
+            continue;
+        for (const int other : ofBand)
+            if (lanes.at(other).timeline.id == split->parent.id)
+                lanes[lane].parent = other;
+    }
+}
+
+// Where along its band a branch splits off: at the event it splits at.
+[[nodiscard]] double splitAlong(const Band &band, const Lane &lane, const QHash<qint64, Placing> &placed) {
+    const Placing split = lane.split ? placed.value(lane.split->at.id) : Placing{};
+    return band.at((split.from + split.to) / 2);
+}
+
 [[nodiscard]] Band bandOf(int part, const Axis &axis) {
     Band band;
     band.part = part;
@@ -204,6 +222,9 @@ Chart::Chart Chart::chart(const QList<Part> &parts) {
                 band.lanes.append(laneAt);
                 QList<Mark> marks;
                 for (const Item &item : lane.items) {
+                    // What a branch shares is drawn on its parent's lane alone.
+                    if (lane.shared.contains(item.event.id))
+                        continue;
                     const Placing placing = placed.value(item.event.id);
                     marks.append({.event = item.event.id,
                                   .lane = laneAt,
@@ -227,8 +248,14 @@ Chart::Chart Chart::chart(const QList<Part> &parts) {
                     drawn.marksOf[mark.event].append(static_cast<int>(drawn.marks.size()));
                     drawn.marks.append(mark);
                 }
-                drawn.lanes.append({.band = static_cast<int>(drawn.bands.size()), .timeline = lane.timeline, .rows = rows});
+                drawn.lanes.append({.band = static_cast<int>(drawn.bands.size()),
+                                    .timeline = lane.timeline,
+                                    .rows = rows,
+                                    .split = lane.split,
+                                    .splitAt = splitAlong(band, lane, placed),
+                                    .parent = -1});
             }
+            tieBranches(drawn.lanes, band.lanes);
             drawn.bands.append(std::move(band));
         }
     }

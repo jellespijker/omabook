@@ -155,14 +155,21 @@ QJsonObject Chronology::Item::toJson() const {
 
 QJsonObject Chronology::Lane::toJson() const {
     QJsonArray itemList;
-    for (const Item &item : items)
-        itemList << item.toJson();
+    for (const Item &item : items) {
+        QJsonObject object = item.toJson();
+        if (shared.contains(item.event.id))
+            object.insert("shared", true);
+        itemList << object;
+    }
     QJsonArray contradictionList;
     for (const Contradiction &contradiction : contradictions)
         contradictionList << contradiction.toJson();
     const QJsonObject line{
         {"id", timeline.id}, {"name", timeline.name}, {"whose", timeline.data.value("timeline").toString()}, {"book", timeline.bookId}};
-    return {{"timeline", line}, {"calendar", calendar}, {"items", itemList}, {"contradictions", contradictionList}};
+    QJsonObject lane{{"timeline", line}, {"calendar", calendar}, {"items", itemList}, {"contradictions", contradictionList}};
+    if (split)
+        lane.insert("branch", split->toJson());
+    return lane;
 }
 
 Chronology::Orderer::Orderer(const Facts &facts) {

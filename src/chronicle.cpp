@@ -25,7 +25,7 @@ constexpr auto eventKind = "event"_L1;
 [[nodiscard]] QString kept(const QString &scope) { return scope.isNull() ? u""_s : scope; }
 
 [[nodiscard]] bool ofChronology(const GraphEdge &edge) {
-    return edge.kind == Chronology::onRelation() || Chronology::orderRelations().contains(edge.kind);
+    return edge.kind == Chronology::onRelation() || Chronology::orderRelations().contains(edge.kind) || Chronology::ofBranch(edge.kind);
 }
 
 // The timeline of a book's own order, which is none of the graph's.
@@ -138,6 +138,8 @@ void take(Facts &facts, const GraphNode &node, const QList<GraphFact> &told, QLi
     const GraphNode asKnown = Graph::asKnown(node, told, 0, known);
     if (node.kind == Chronology::timelineKind()) {
         facts.timelines.append(asKnown);
+        if (Chronology::hasStanding(told))
+            facts.standing.insert(node.id, Chronology::standingOf(told, known));
         return;
     }
     facts.events.append(asKnown);
@@ -154,6 +156,109 @@ void keepEdges(Facts &facts, QList<GraphEdge> edges, const GraphKnown &known) {
         return !ofChronology(edge) || !known(edge.learned) || !things.contains(edge.source) || !things.contains(edge.target);
     });
     facts.edges = std::move(edges);
+}
+
+// The lanes of the timelines, each branch's with what it shares of its
+// parent's: made once each, a parent's before its branches'.
+class Branches {
+public:
+    Branches(const Chronology::Orderer &orderer, const QHash<qint64, GraphNode> &timelines, const QMap<qint64, QList<qint64>> &on,
+             const QHash<qint64, Chronology::Split> &splits)
+        : m_orderer(&orderer), m_timelines(&timelines), m_on(&on), m_splits(&splits) {}
+
+    // Every lane there is: of each timeline with an event, and of each
+    // branch whose split is placed; a branch right after its parent.
+    [[nodiscard]] QList<Lane> lanes() {
+        QList<qint64> roots;
+        for (const qint64 id : m_timelines->keys())
+            if (!branches(id))
+                roots.append(id);
+        std::ranges::sort(roots);
+        QList<Lane> all;
+        QSet<qint64> done;
+        for (const qint64 root : std::as_const(roots))
+            add(root, all, done);
+        // What is left goes round in a circle of branches: each a lane of its own.
+        QList<qint64> rest = m_timelines->keys();
+        std::ranges::sort(rest);
+        for (const qint64 id : std::as_const(rest))
+            add(id, all, done);
+        return all;
+    }
+
+private:
+    // Whether a timeline branches off another that is drawn, at an event that is placed.
+    [[nodiscard]] bool branches(qint64 id) const {
+        const auto split = m_splits->constFind(id);
+        return split != m_splits->cend() && m_timelines->contains(split->parent.id) && m_orderer->placed(split->at.id);
+    }
+
+    void add(qint64 id, QList<Lane> &all, QSet<qint64> &done) {
+        if (done.contains(id))
+            return;
+        done.insert(id);
+        if (const Lane lane = of(id); !lane.items.isEmpty() && (m_on->contains(id) || lane.split))
+            all.append(lane);
+        QList<qint64> children;
+        for (auto split = m_splits->cbegin(); split != m_splits->cend(); ++split)
+            if (split->parent.id == id && branches(split.key()))
+                children.append(split.key());
+        std::ranges::sort(children);
+        for (const qint64 child : std::as_const(children))
+            add(child, all, done);
+    }
+
+    // A timeline's lane: its own events, and a branch's parent's up to the split.
+    Lane of(qint64 id) {
+        if (const auto made = m_made.constFind(id); made != m_made.cend())
+            return *made;
+        QList<qint64> events = m_on->value(id);
+        QSet<qint64> shared;
+        std::optional<Chronology::Split> split;
+        if (branches(id) && !m_making.contains(id)) {
+            m_making.insert(id);
+            const Lane parent = of(m_splits->value(id).parent.id);
+            m_making.remove(id);
+            split = m_splits->value(id);
+            shared = sharedUpTo(parent, split->at.id);
+            for (const qint64 event : std::as_const(shared))
+                if (!events.contains(event))
+                    events.append(event);
+        }
+        Lane lane = m_orderer->order(m_timelines->value(id), events);
+        lane.split = std::move(split);
+        lane.shared = std::move(shared);
+        m_made.insert(id, lane);
+        return lane;
+    }
+
+    // What a branch shares of its parent's lane: everything up to and at the
+    // time of the event it splits at; that event alone when the parent hasn't it.
+    [[nodiscard]] static QSet<qint64> sharedUpTo(const Lane &parent, qint64 at) {
+        const auto split = std::ranges::find(parent.items, at, [](const Chronology::Item &item) { return item.event.id; });
+        QSet<qint64> shared{at};
+        if (split == parent.items.cend())
+            return shared;
+        for (const Chronology::Item &item : parent.items)
+            if (item.rank <= split->rank)
+                shared.insert(item.event.id);
+        return shared;
+    }
+
+    const Chronology::Orderer *m_orderer;
+    const QHash<qint64, GraphNode> *m_timelines;
+    const QMap<qint64, QList<qint64>> *m_on;
+    const QHash<qint64, Chronology::Split> *m_splits;
+    QHash<qint64, Lane> m_made;
+    QSet<qint64> m_making;
+};
+
+// The things a split can tie: the timelines and the events.
+[[nodiscard]] QHash<qint64, GraphNode> thingsOf(const Facts &facts) {
+    QHash<qint64, GraphNode> things;
+    for (const GraphNode &node : std::as_const(facts.events) + facts.timelines)
+        things.insert(node.id, node);
+    return things;
 }
 
 } // namespace
@@ -189,14 +294,30 @@ QJsonObject Chronology::Chronicle::toJson() const {
         unplacedList << item.toJson();
     for (const Contradiction &contradiction : contradictions)
         contradictionList << contradiction.toJson();
-    return {{"lanes", laneList}, {"axes", axisList}, {"unplaced", unplacedList}, {"contradictions", contradictionList}};
+    QJsonArray proposalList;
+    for (const Proposal &proposal : proposals)
+        proposalList << proposal.toJson();
+    return {{"lanes", laneList},
+            {"axes", axisList},
+            {"unplaced", unplacedList},
+            {"contradictions", contradictionList},
+            {"proposals", proposalList}};
 }
 
 Chronology::Chronicle Chronology::chronicle(const Facts &facts) {
     const Orderer orderer(facts);
+    Chronicle told;
+    const QHash<qint64, Split> splits = splitsOf(facts.edges, thingsOf(facts), facts.standing);
     QHash<qint64, GraphNode> timelines;
-    for (const GraphNode &timeline : facts.timelines)
-        timelines.insert(timeline.id, timeline);
+    for (const GraphNode &timeline : facts.timelines) {
+        // A branch the reader hasn't taken is no timeline yet; one proposed is asked about.
+        const auto split = splits.constFind(timeline.id);
+        const Standing standing = facts.standing.value(timeline.id, Standing::Accepted);
+        if (standing == Standing::Proposed && split != splits.cend())
+            told.proposals.append({.timeline = timeline, .split = *split});
+        if (standing == Standing::Accepted)
+            timelines.insert(timeline.id, timeline);
+    }
     QMap<qint64, QList<qint64>> on; // each timeline's events, by timeline
     QSet<qint64> onOne;
     for (const GraphEdge &edge : facts.edges)
@@ -204,7 +325,6 @@ Chronology::Chronicle Chronology::chronicle(const Facts &facts) {
             on[edge.target].append(edge.source);
             onOne.insert(edge.source);
         }
-    Chronicle told;
     QMap<qint64, QList<qint64>> own; // the events on no timeline, by book
     for (const GraphNode &event : facts.events)
         if (!orderer.placed(event.id))
@@ -212,8 +332,7 @@ Chronology::Chronicle Chronology::chronicle(const Facts &facts) {
         else if (!onOne.contains(event.id))
             own[orderer.book(event.id)].append(event.id);
     std::ranges::sort(told.unplaced, {}, [&orderer](const Item &item) { return std::pair{orderer.met(item.event.id), item.event.id}; });
-    for (auto events = on.cbegin(); events != on.cend(); ++events)
-        told.lanes.append(orderer.order(timelines.value(events.key()), *events));
+    told.lanes = Branches(orderer, timelines, on, splits).lanes();
     for (auto events = own.cbegin(); events != own.cend(); ++events)
         told.lanes.append(orderer.order(ownTimeline(events.key()), *events));
     told.axes = axesOf(orderer, told.lanes);

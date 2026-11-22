@@ -39,6 +39,7 @@
         <file alias="ChronologyLayer.qml">ChronologyLayer.qml</file>
         <file alias="ChronologyPalette.qml">ChronologyPalette.qml</file>
         <file alias="ChronologyPane.qml">ChronologyPane.qml</file>
+        <file alias="ChronologyProposed.qml">ChronologyProposed.qml</file>
         <file alias="ChronologyRange.qml">ChronologyRange.qml</file>
         <file alias="ChronologyUnplaced.qml">ChronologyUnplaced.qml</file>
         <file alias="CollectionDialog.qml">CollectionDialog.qml</file>

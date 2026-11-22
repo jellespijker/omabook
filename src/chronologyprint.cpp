@@ -69,6 +69,8 @@ struct Names {
         head += u" ("_s + line.value("whose").toString() + u")"_s;
     if (!calendar.isEmpty())
         head += u", on "_s + calendarName(calendar);
+    if (const QJsonObject split = lane.value("branch").toObject(); !split.isEmpty())
+        head += u", branching off %1 at %2"_s.arg(split.value("from_name").toString(), split.value("at_name").toString());
     QStringList lines{head};
     for (const auto &value : lane.value("items").toArray()) {
         const QJsonObject item = value.toObject();
@@ -79,11 +81,27 @@ struct Names {
             text += u"  during "_s + names.events.value(within);
         if (item.contains("revealed"))
             text += u"  ("_s + names.where(item.value("revealed").toObject()) + u")"_s;
+        if (item.value("shared").toBool())
+            text += u"  shared"_s;
         lines << text;
     }
     for (const auto &value : lane.value("contradictions").toArray())
         lines += contradictionLines(value.toObject(), names);
     return lines;
+}
+
+// The branches the AI proposed (#171), each with its number to take it or not by.
+[[nodiscard]] QStringList proposalLines(const QJsonArray &proposals, const Names &names) {
+    if (proposals.isEmpty())
+        return {};
+    QStringList lines{u"Proposed by the AI, not taken yet (omabook chronology timeline accept|refuse <number>):"_s};
+    for (const auto &value : proposals) {
+        const QJsonObject proposal = value.toObject();
+        lines << u"  %1  %2, branching off %3 at %4  (%5)"_s.arg(proposal.value("timeline").toInteger())
+                     .arg(proposal.value("name").toString(), proposal.value("from_name").toString(), proposal.value("at_name").toString(),
+                          names.where(proposal.value("revealed").toObject()));
+    }
+    return lines << QString();
 }
 
 [[nodiscard]] QStringList partLines(const QJsonObject &part, const Names &given) {
@@ -111,6 +129,7 @@ struct Names {
                          + timeText(value.toObject().value("time").toObject(), gregorian);
         lines << QString();
     }
+    lines += proposalLines(part.value("proposals").toArray(), names);
     if (const QJsonArray contradictions = part.value("contradictions").toArray(); !contradictions.isEmpty()) {
         lines << u"Between calendars:"_s;
         for (const auto &value : contradictions)
@@ -162,6 +181,10 @@ QString ChronologyPrint::text(const QJsonObject &answer, const std::function<QSt
 
 QString ChronologyPrint::written(const QJsonObject &answer) {
     const QString name = answer.value("name").toString();
+    if (answer.contains("standing"))
+        return u"%1: %2."_s.arg(name, answer.value("standing").toString());
+    if (answer.contains("at_name"))
+        return u"%1 branches off %2 at %3, by hand."_s.arg(name, answer.value("from_name").toString(), answer.value("at_name").toString());
     if (answer.contains("fact"))
         return u"%1: %2, by hand."_s.arg(name, timeText(answer.value("time").toObject(), gregorian));
     if (answer.contains("relation"))

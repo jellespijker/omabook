@@ -2605,5 +2605,18 @@
   "systemd wouldn't run Omabook's background service: %1": "systemd n'a pas voulu faire tourner le service d'arrière-plan d'Omabook : %1",
   "{library.devices} shows a QR code of your library's catalog for KOReader, Librera or Moon+ Reader to scan, serves it on your tailnet or your home network, and on with the window closed if you like.": "{library.devices} montre un code QR du catalogue de votre bibliothèque, que KOReader, Librera ou Moon+ Reader scannent, le sert sur votre tailnet ou votre réseau domestique, et aussi fenêtre fermée si vous voulez.",
   "An OPDS catalog": "Un catalogue OPDS",
-  "For e-reader and phone apps to browse and download books.": "Pour que les applis des liseuses et téléphones parcourent et téléchargent les livres."
+  "For e-reader and phone apps to browse and download books.": "Pour que les applis des liseuses et téléphones parcourent et téléchargent les livres.",
+  "%1, off %2 at %3": "%1, bifurquant de %2 à %3",
+  "A timeline can branch off another at an event: the same up to it, its own after it, as alternate history is of real history. Its lane begins where it splits off, beside the one it branches off, and shares what came before. When the AI reads one, it only proposes it: take it or not over the lanes. By hand, `omabook chronology timeline branch <name> --from <timeline> --at <event>`.": "Une chronologie peut bifurquer d'une autre à un événement : la même jusque-là, la sienne ensuite, comme une uchronie bifurque de l'histoire réelle. Sa ligne commence là où elle bifurque, à côté de celle dont elle part, et partage ce qui précède. Quand l'IA en lit une, elle ne fait que la proposer : à accepter ou non au-dessus des lignes. À la main : `omabook chronology timeline branch <name> --from <timeline> --at <event>`.",
+  "Not a branch": "Pas une bifurcation",
+  "The AI reads a branch: %1, off %2 at %3.": "L'IA lit une bifurcation : %1, de %2 à %3.",
+  "Timelines that branch": "Chronologies qui bifurquent",
+  "There is no thing %1 in the graph.": "Il n'y a rien portant le numéro %1 dans le graphe.",
+  "%1 is a %2, not a %3.": "%1 est un %2, pas un %3.",
+  "There is a timeline called %1 already, and it is no branch: call the branch otherwise.": "Il existe déjà une chronologie appelée %1, et ce n'est pas une bifurcation : nommez la bifurcation autrement.",
+  "%1 would branch off itself: %2 is %1 or one of its branches.": "%1 bifurquerait d'elle-même : %2 est %1 ou l'une de ses bifurcations.",
+  "The branch could not be kept.": "La bifurcation n'a pas pu être enregistrée.",
+  "%1 branches off no timeline.": "%1 ne bifurque d'aucune chronologie.",
+  "The word on %1 could not be kept.": "La décision sur %1 n'a pas pu être enregistrée.",
+  "A branch branches off a timeline at an event: omabook chronology timeline branch <name> --from <timeline> --at <event>": "Une bifurcation part d'une chronologie à un événement : omabook chronology timeline branch <name> --from <timeline> --at <event>"
 }

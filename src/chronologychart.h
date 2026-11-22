@@ -28,6 +28,10 @@
 //
 // An event "during" another of the same lane is on a row under it; spans
 // that overlap go on rows of their own, so that each can be seen.
+//
+// A branch (chronologybranch.h) is drawn beside its parent from the split
+// on: the events it shares with its parent are marks of the parent's lane
+// only, and the branch's lane begins at the event it splits at.
 namespace Chronology::Chart {
 
 // A part of the library to show the chronicle of: a tenant, with its name
@@ -54,6 +58,11 @@ struct LaneOf {
     int band = 0;
     GraphNode timeline; // id 0 for a book's own order (its bookId)
     int rows = 1;
+    // Of a branch: where it splits off, along the band (the event it splits
+    // at), and its parent's lane on the same band, or -1.
+    std::optional<Split> split;
+    double splitAt = 0;
+    int parent = -1;
 };
 
 struct Mark {

@@ -262,6 +262,42 @@ private slots:
         QCOMPARE(story.machine.omabook({"graph", "scopes", "--library", story.machine.library}).code, 0);
     }
 
+    // A timeline that branches off another at an event (#171), by hand and
+    // through the tools: the same up to it, its own after it.
+    void aTimelineBranchesOnTheCommandLineAndOverMcp() {
+        const Story story;
+        auto ran = story.run({"timeline", "branch", "The Peace", "--from", "The War", "--at", "The siege"});
+        QVERIFY2(ran.code == 0 && ran.output.contains("The Peace branches off The War at The siege, by hand."),
+                 qPrintable(ran.output + ran.errors));
+        QCOMPARE(story.run({"set-when", "The meeting", "1943"}).code, 0);
+        QCOMPARE(story.run({"place", "The meeting", "on", "The Peace"}).code, 0);
+        const QJsonObject peace = laneNamed(story.json(), "The Peace");
+        QCOMPARE(peace.value("branch").toObject().value("from_name").toString(), QString("The War"));
+        QVERIFY(itemNamed(peace, "The siege").value("shared").toBool());
+        QVERIFY(!itemNamed(peace, "The meeting").isEmpty() && !itemNamed(peace, "The meeting").value("shared").toBool());
+        QVERIFY(itemNamed(laneNamed(story.json(), "The War"), "The meeting").isEmpty());
+        ran = story.run({});
+        QVERIFY2(ran.output.contains("The Peace (branch), on the Gregorian calendar, branching off The War at The siege"),
+                 qPrintable(ran.output));
+        QVERIFY(story.run({"timeline", "branch", "The Truce", "--from", "The War", "--at", "Nobody"}).errors.contains("no event called"));
+        QVERIFY(story.run({"timeline", "branch", "The Truce", "--from", "The War"}).errors.contains("--at"));
+        QVERIFY(
+            story.run({"timeline", "branch", "The War", "--from", "The Peace", "--at", "The siege"}).errors.contains("branch off itself"));
+        QVERIFY(story.run({"timeline", "accept", "The War"}).errors.contains("branches off no timeline"));
+        QVERIFY(story.run({"timeline", "add", "Elsewhere", "--kind", "branch"}).errors.contains("timeline branch"));
+
+        Server server(story.machine);
+        QVERIFY(server.data("chronology_timeline_branch", {{"name", "The Truce"}, {"from", "The War"}, {"at", "The flood"}})
+                    .value("timeline")
+                    .toInteger()
+                > 0);
+        QVERIFY(server.data("chronology", {{"timeline", "The Truce"}}).value("events").toObject().value("shown").toInt() > 0);
+        QCOMPARE(server.data("chronology_timeline_decide", {{"timeline", "The Truce"}, {"word", "refuse"}}).value("standing").toString(),
+                 QString("refused"));
+        QVERIFY(laneNamed(story.json(), "The Truce").isEmpty());
+        QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
+    }
+
     void theToolsAreTheCommands() {
         const Story story;
         Server server(story.machine);

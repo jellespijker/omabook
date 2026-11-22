@@ -129,6 +129,7 @@ private slots:
             {"space_join", "spaces"}, {"space_name", "spaces"}, {"space_sync", "spaces"}, {"space_files", "spaces"}, {"space_annotations", "spaces"}, {"space_fetch_file", "spaces"},
             {"chronology", "chronology"}, {"chronology_set_when", "chronology"}, {"chronology_order", "chronology"},
             {"chronology_place", "chronology"}, {"chronology_timeline_add", "chronology"},
+            {"chronology_timeline_branch", "chronology"}, {"chronology_timeline_decide", "chronology"},
         };
         const Machine machine;
         Server server(machine);

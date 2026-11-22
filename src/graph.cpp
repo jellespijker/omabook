@@ -284,7 +284,7 @@ qint64 Graph::recordFact(qint64 node, const QString &kind, const QString &value,
 qint64 Graph::learn(qint64 id, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed) {
     const QString said = GraphFact::kept(kind, value);
     const auto known = node(id);
-    if (!known || said.isEmpty() || (kind != "summary" && kind != "alias" && kind != "when"))
+    if (!known || said.isEmpty() || (kind != "summary" && kind != "alias" && kind != "when" && kind != "branch"))
         return 0;
     if (kind == "summary") {
         m_library->exec("UPDATE graph_nodes SET summary = ?, updated = ? WHERE id = ?", {said, Spaces::wallSeconds(*m_library), id});

@@ -218,6 +218,15 @@ public:
         AiMainModelToDefault,  // {refused}
         AiQuickModelReplaced,  // {refused, instead}
         AiQuickModelToDefault, // {refused}
+        // The chronology's timelines that branch (library, #171).
+        NoThingNumbered,       // {its number}
+        NotOfKind,             // {its name, its kind, the kind asked for}
+        TimelineNoBranch,      // {name}: a timeline of that name is there, and is no branch
+        BranchOffItself,       // {the branch, the timeline it would branch off}
+        BranchNotKept,         // {}
+        BranchesOffNothing,    // {timeline}
+        BranchWordNotKept,     // {branch}
+        BranchMadeByBranching, // {}: a branch is not added as a kind of timeline
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

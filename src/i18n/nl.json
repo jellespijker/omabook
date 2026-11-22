@@ -2504,5 +2504,18 @@
   "systemd wouldn't run Omabook's background service: %1": "systemd wilde de achtergronddienst van Omabook niet draaien: %1",
   "{library.devices} shows a QR code of your library's catalog for KOReader, Librera or Moon+ Reader to scan, serves it on your tailnet or your home network, and on with the window closed if you like.": "{library.devices} toont een QR-code van de catalogus van je bibliotheek, die KOReader, Librera of Moon+ Reader scannen, biedt hem aan op je tailnet of je thuisnetwerk, en desgewenst ook als het venster dicht is.",
   "An OPDS catalog": "Een OPDS-catalogus",
-  "For e-reader and phone apps to browse and download books.": "Voor apps op e-readers en telefoons om boeken te bekijken en te downloaden."
+  "For e-reader and phone apps to browse and download books.": "Voor apps op e-readers en telefoons om boeken te bekijken en te downloaden.",
+  "%1, off %2 at %3": "%1, aftakkend van %2 bij %3",
+  "A timeline can branch off another at an event: the same up to it, its own after it, as alternate history is of real history. Its lane begins where it splits off, beside the one it branches off, and shares what came before. When the AI reads one, it only proposes it: take it or not over the lanes. By hand, `omabook chronology timeline branch <name> --from <timeline> --at <event>`.": "Een tijdlijn kan bij een gebeurtenis van een andere aftakken: tot daar dezelfde, daarna een eigen, zoals alternatieve geschiedenis van de echte. Haar baan begint waar ze aftakt, naast die waarvan ze aftakt, en deelt wat daarvoor kwam. Leest de AI er een, dan stelt hij die alleen voor: boven de banen overnemen of niet. Met de hand: `omabook chronology timeline branch <name> --from <timeline> --at <event>`.",
+  "Not a branch": "Geen aftakking",
+  "The AI reads a branch: %1, off %2 at %3.": "De AI leest een aftakking: %1, van %2 bij %3.",
+  "Timelines that branch": "Tijdlijnen die aftakken",
+  "There is no thing %1 in the graph.": "Er is niets met nummer %1 in de graaf.",
+  "%1 is a %2, not a %3.": "%1 is een %2, geen %3.",
+  "There is a timeline called %1 already, and it is no branch: call the branch otherwise.": "Er is al een tijdlijn die %1 heet, en dat is geen aftakking: noem de aftakking anders.",
+  "%1 would branch off itself: %2 is %1 or one of its branches.": "%1 zou van zichzelf aftakken: %2 is %1 of een van haar aftakkingen.",
+  "The branch could not be kept.": "De aftakking kon niet bewaard worden.",
+  "%1 branches off no timeline.": "%1 takt van geen tijdlijn af.",
+  "The word on %1 could not be kept.": "Het besluit over %1 kon niet bewaard worden.",
+  "A branch branches off a timeline at an event: omabook chronology timeline branch <name> --from <timeline> --at <event>": "Een aftakking takt bij een gebeurtenis van een tijdlijn af: omabook chronology timeline branch <name> --from <timeline> --at <event>"
 }

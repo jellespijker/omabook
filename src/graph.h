@@ -61,14 +61,15 @@ struct GraphMoment {
 // One thing learned of a node, with the moment it was revealed: what is
 // said of it ("summary"), another name it goes by ("alias"), what a tenant
 // calls it, renamed there by hand ("name", of no book, #110), or for an
-// event when it happens in its world ("when", chronology.h). A node's
+// event when it happens in its world ("when", chronology.h), or the
+// reader's word on a timeline that branches ("branch", chronologybranch.h). A node's
 // summary changes as its book goes on, and each version is kept here, so
 // what was known at any place is known later too. A fact of no book (put
 // in by hand, or from another source) has a place whose bookId is 0.
 struct GraphFact {
     qint64 id = 0;
     qint64 node = 0;
-    QString kind;  // "summary", "alias", "name" or "when"
+    QString kind;  // "summary", "alias", "name", "when" or "branch"
     QString value; // for "when", an EventTime as it is kept (EventTime::written)
     GraphMoment revealed;
 
@@ -252,8 +253,9 @@ public:
     qint64 link(qint64 source, qint64 target, const QString &kind, const QString &note = {},
                 const std::optional<GraphPlace> &learned = std::nullopt, const QString &anchor = {});
     // Keeps a fact of a node: a summary (which becomes its summary now),
-    // another name (which it goes by from now on) or a time (kept as
-    // EventTime writes it, and only when it is one), revealed at a moment, or
+    // another name (which it goes by from now on), a time (kept as
+    // EventTime writes it, and only when it is one) or a word on a branch
+    // (chronologybranch.h), revealed at a moment, or
     // at none. The same fact revealed again in the same book keeps the
     // earlier moment. Answers the fact's id, 0 when nothing was kept.
     qint64 learn(qint64 node, const QString &kind, const QString &value, const std::optional<GraphMoment> &revealed = std::nullopt);

@@ -8,6 +8,8 @@
 #include "chronicle.h"
 #include "chroniclefilter.h"
 #include "chronology.h"
+#include "chronologybranch.h"
+#include "failure.h"
 #include "graphcontext.h"
 #include "spaces.h"
 #include "tenancy.h"
@@ -307,6 +309,8 @@ std::expected<QJsonObject, QString> ChronologyOps::place(Graph &graph, const QSt
 
 std::expected<QJsonObject, QString> ChronologyOps::addTimeline(Graph &graph, const QString &name, const QString &kind) {
     const auto whose = kind.isEmpty() ? std::optional(Chronology::Whose::Reader) : Chronology::whose(kind.simplified().toLower());
+    if (whose == Chronology::Whose::Branch)
+        return std::unexpected(Failure(Failure::Code::BranchMadeByBranching).text());
     if (!whose)
         return std::unexpected(u"\"%1\" is no kind of timeline: book, series, world, history or reader."_s.arg(kind));
     if (name.simplified().isEmpty() && *whose != Chronology::Whose::History)
@@ -316,4 +320,35 @@ std::expected<QJsonObject, QString> ChronologyOps::addTimeline(Graph &graph, con
     if (!node)
         return std::unexpected(u"The timeline could not be kept."_s);
     return QJsonObject{{"timeline", id}, {"name", node->name}, {"whose", Chronology::name(*whose)}, {"by_hand", true}};
+}
+
+std::expected<QJsonObject, QString> ChronologyOps::branch(Graph &graph, const QString &name, const QString &from, const QString &at,
+                                                          const QString &scope) {
+    const auto parent = named(graph, scope, Chronology::timelineKind(), from);
+    if (!parent)
+        return std::unexpected(parent.error());
+    const auto split = named(graph, scope, eventKind, at);
+    if (!split)
+        return std::unexpected(split.error());
+    // A timeline there is already (a book's own) branches; another name is a branch of its own.
+    const qint64 existing = name.simplified().isEmpty() ? 0 : named(graph, scope, Chronology::timelineKind(), name).value_or(0);
+    const auto made = Chronology::branch(
+        graph, {.timeline = existing, .name = name, .from = *parent, .at = *split, .revealed = std::nullopt, .proposed = false});
+    if (!made)
+        return std::unexpected(made.error().text());
+    return QJsonObject{{"timeline", *made}, {"name", nameOf(graph, *made)},     {"from", *parent}, {"from_name", nameOf(graph, *parent)},
+                       {"at", *split},      {"at_name", nameOf(graph, *split)}, {"by_hand", true}};
+}
+
+std::expected<QJsonObject, QString> ChronologyOps::decide(Graph &graph, const QString &branch, bool accept, const QString &scope) {
+    const auto timeline = named(graph, scope, Chronology::timelineKind(), branch);
+    if (!timeline)
+        return std::unexpected(timeline.error());
+    const auto fact = Chronology::decide(graph, *timeline, accept);
+    if (!fact)
+        return std::unexpected(fact.error().text());
+    return QJsonObject{{"timeline", *timeline},
+                       {"name", nameOf(graph, *timeline)},
+                       {"standing", Chronology::name(accept ? Chronology::Standing::Accepted : Chronology::Standing::Refused)},
+                       {"fact", *fact}};
 }

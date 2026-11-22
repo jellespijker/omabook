@@ -122,7 +122,9 @@ Manual::Topic themesTopic() {
 }
 
 Manual::Topic chronologyTopic() {
-    return {"chronology", Manual::tr("The chronology"), Manual::tr("When the events of your books happen in their stories."),
+    return {"chronology",
+            Manual::tr("The chronology"),
+            Manual::tr("When the events of your books happen in their stories."),
             {
                 {Manual::tr("Story time"),
                  Manual::tr("The chronology puts the events you read in the order they happen in their world, not the "
@@ -137,6 +139,12 @@ Manual::Topic chronologyTopic() {
                  Manual::tr("Each lane is a timeline: a book's own, a series', a world's or real history, under the ruler "
                             "of its calendar. Lanes that line up share one axis. A real date puts an event on real history, "
                             "which is how books with nothing else in common meet.")},
+                {Manual::tr("Timelines that branch"),
+                 Manual::tr("A timeline can branch off another at an event: the same up to it, its own after it, as "
+                            "alternate history is of real history. Its lane begins where it splits off, beside the one it "
+                            "branches off, and shares what came before. When the AI reads one, it only proposes it: take "
+                            "it or not over the lanes. By hand, `omabook chronology timeline branch <name> --from "
+                            "<timeline> --at <event>`.")},
                 {Manual::tr("Where the times come from"),
                  Manual::tr("As the AI builds a book's graph, it notes when events happen, as far as the book says, and "
                             "what comes before what; it never guesses a date. `omabook graph build <book> --again` does "

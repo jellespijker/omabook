@@ -211,6 +211,19 @@ FocusScope {
             readonly property real sideWidth: carded && pane.cardBeside ? Math.min(360, Math.round(width * 0.36)) : 0
             readonly property real underHeight: !carded || pane.cardBeside ? 0 : either ? height : Math.min(Math.round(height * 0.5), 300)
             readonly property real listHeight: unplacedList.visible ? unplacedList.height : 0
+            readonly property real askHeight: proposed.visible ? proposed.height : 0
+
+            // The branches the AI proposed, one at a time to take or not (#171).
+            ChronologyProposed {
+                id: proposed
+                objectName: "chronologyProposals"
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.rightMargin: body.sideWidth
+                anchors.top: parent.top
+                room: body.height >= 200 && !(body.carded && body.either)
+                browser: chronology
+            }
 
             ChronologyCanvas {
                 id: canvas
@@ -221,6 +234,7 @@ FocusScope {
                 readonly property string runs: "chronology.left chronology.right chronology.up chronology.down chronology.pan_left "
                                                + "chronology.pan_right chronology.pan_up chronology.pan_down chronology.zoom_in chronology.zoom_out"
                 anchors.fill: parent
+                anchors.topMargin: body.askHeight
                 anchors.rightMargin: body.sideWidth
                 anchors.bottomMargin: body.underHeight + body.listHeight
                 visible: !(body.carded && body.either)

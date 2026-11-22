@@ -26,7 +26,9 @@
 // - a timeline is a thing of its own (kind "timeline": a book's, a series',
 //   a world's, real history, or one the reader names), and an event is "on"
 //   one or more of them. Two books share a timeline when their events are on
-//   the same one.
+//   the same one;
+// - a timeline can branch off another at an event (chronologybranch.h): the
+//   same up to it, its own after it, as alternate history is of real history.
 //
 // An event with none of these is simply not placed yet.
 namespace Chronology {
@@ -40,8 +42,10 @@ namespace Chronology {
 // The note on an order that was concluded rather than read in so many words.
 [[nodiscard]] inline QString inferred() { return QStringLiteral("inferred"); }
 
-// Whose a timeline is, kept in its data as {"timeline": "history"}.
-enum class Whose { Book, Series, World, History, Reader };
+// Whose a timeline is, kept in its data as {"timeline": "history"}. A
+// branch is one made to branch off another (chronologybranch.h); any other
+// can branch too.
+enum class Whose { Book, Series, World, History, Reader, Branch };
 [[nodiscard]] QString name(Whose whose);
 [[nodiscard]] std::optional<Whose> whose(const QString &name);
 

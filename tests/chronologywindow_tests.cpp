@@ -11,6 +11,7 @@
 #include <QtTest>
 
 #include "chronology.h"
+#include "chronologybranch.h"
 #include "desk.h"
 #include "eventtime.h"
 #include "graph.h"
@@ -27,7 +28,8 @@ namespace {
 // What is known of when the events of a book happen, as hard on a layout
 // as it gets: long names, a span that runs on, one during another, one
 // only in order, one put on another calendar, one with no time at all, and
-// two that contradict each other. The book is read to its fourth chapter.
+// two that contradict each other; a branch of real history taken, and one
+// proposed. The book is read to its fourth chapter.
 struct Story {
     qint64 book = 0, siege = 0, sortie = 0, flood = 0, unplaced = 0, keeper = 0;
 };
@@ -68,6 +70,23 @@ struct Story {
     const qint64 tide = event("The tide turns", harbour, at(2, 0.5));
     std::ignore = Chronology::setWhen(graph, tide, timeOf(R"({"calendar": "Third Age of the Harbour", "at": "301-04-01"})"),
                                       GraphMoment{at(2, 0.5), "The tide tur"});
+    // A branch of real history the reader took, drawn from the siege on, and
+    // one the AI proposes, asked about over the lanes (#171).
+    const qint64 held = Chronology::branch(graph, {.timeline = 0,
+                                                   .name = "The harbour that held: an alternate history of the long siege",
+                                                   .from = history,
+                                                   .at = story.siege,
+                                                   .revealed = GraphMoment{at(1, 0.2), {}},
+                                                   .proposed = false})
+                            .value_or(0);
+    const qint64 lit = event("The lanterns never go out", held, at(1, 0.3));
+    std::ignore = Chronology::setWhen(graph, lit, timeOf(R"({"calendar": "gregorian", "at": "1943"})"), GraphMoment{at(1, 0.3), {}});
+    std::ignore = Chronology::branch(graph, {.timeline = 0,
+                                             .name = "Alternate history from the sortie at dawn, in which the keepers win the war",
+                                             .from = history,
+                                             .at = story.sortie,
+                                             .revealed = GraphMoment{at(2, 0.2), {}},
+                                             .proposed = true});
     story.unplaced = graph.upsert({}, "event", "A rumour that nobody can place in time", {}, {}, at(1, 0.9), "A rumour");
     story.keeper = graph.upsert({}, "character", "Wilhelmina Overbeck-Saltonstall", {}, {}, at(0, 0.1), "Wilhelmina");
     graph.link(story.sortie, story.keeper, "led by", {}, at(1, 0.4));
@@ -136,7 +155,7 @@ private slots:
         QVERIFY(desk.run("library.chronology_book"));
         QTRY_VERIFY(shown(desk));
         QCOMPARE(chronology(desk)->property("showing").toString(), QString("book"));
-        QCOMPARE(chronology(desk)->property("eventCount").toInt(), 6);
+        QCOMPARE(chronology(desk)->property("eventCount").toInt(), 7);
         QVERIFY(!desk.shows("library"));
         // Escape goes back to the shelf.
         QVERIFY(desk.run("chronology.close"));
@@ -205,7 +224,7 @@ private slots:
         QCOMPARE(browser->property("shownCount").toInt(), 1);
         QTRY_VERIFY(desk.shows("chronologyFilters"));
         QVERIFY(desk.run("chronology.filter_clear"));
-        QCOMPARE(browser->property("shownCount").toInt(), 6);
+        QCOMPARE(browser->property("shownCount").toInt(), 7);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

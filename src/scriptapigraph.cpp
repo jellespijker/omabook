@@ -45,6 +45,17 @@ QList<Entry> graphEntries() {
              "The node that stands for a book in the general graph (kind `book`, with its authors, series and tags related "
              "to it), made when it isn't there yet and brought up to date when it is: its number, to `link` things to the "
              "book. Throws for a book the library hasn't."},
+            {"graph.timeline", "graph.timeline(book)", "",
+             "The timeline of a book's own story in the chronology, made when it isn't there yet: its number, for `branch` "
+             "and to put events on with `link(event, timeline, \"on\")`. An event is placed in it by a time or an order: "
+             "`link(event, other, \"before\")` (or `after`, `during`, `same time as`). Throws for a book the library hasn't."},
+            {"graph.branch", "graph.branch({timeline, name, from, at, book, section, fraction})", "",
+             "Makes a timeline branch off another at an event: the same up to that event, its own after it, as a story's "
+             "branch is of the story it branches off. `from` is the timeline it branches off (a `graph.timeline`) and `at` "
+             "the event it splits at, by their numbers; `timeline` the one that branches (a branch book's own), or `name` "
+             "makes one. The events before the split are shared with `from` and show on both; the branch's own go on it "
+             "with `link`. With `book` and `section` the split is revealed there, and no reader of that book sees it "
+             "earlier. Branched again, it takes the new split. Answers the branch's number; what is wrong is thrown."},
             {"graph.unsee", "graph.unsee(id, book)", "",
              "Takes away that a node was met in a book (what `upsert` with `book` marked), so a reader of the book no longer "
              "meets it there; the node and its relations stay. It goes to the person's other computers as the mark did, and "

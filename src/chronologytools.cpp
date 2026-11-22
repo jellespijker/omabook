@@ -29,7 +29,9 @@ const bool registered = [] {
          "book says it and where that was revealed), which timelines line up on one axis (\"axes\"), the events of which "
          "neither a time nor an order is known (\"unplaced\"), and every contradiction with all its statements and where "
          "each was revealed, and the one set aside by the rule. A part for each side of a library kept apart by its top "
-         "collections. \"events\" says how many are shown of how many known; \"by_hand\" marks what the user put in.",
+         "collections. A branch's lane says what it branches off and at which event (\"branch\") and marks the events it "
+         "shares with it (\"shared\"); \"proposals\" are the branches the AI proposed that the user has not taken or "
+         "refused yet. \"events\" says how many are shown of how many known; \"by_hand\" marks what the user put in.",
          schema({{"book", integer("Only this book's events, by its number.", 1)},
                  {"series", string("Only the events of this series' books.")},
                  {"collection", string("Only the events of this collection's books.")},
@@ -114,6 +116,35 @@ const bool registered = [] {
                   Changes, [](const QJsonObject &arguments) {
                       return command(QStringList{"chronology", "timeline", "add", arguments.value("name").toString()}
                                      + options(arguments, {{"kind", "--kind"}}));
+                  }});
+
+    registerTool({"chronology_timeline_branch", "Branch a timeline off another",
+                  "Makes a timeline that is the same as another up to an event and its own after it: alternate history (a "
+                  "branch of real history), an alternative universe, a story that goes another way. The events before the "
+                  "event are shared with the timeline it branches off; put the branch's own on it with chronology_place. "
+                  "Named after a timeline there is already (a book's own), that one branches. A branch can branch again.",
+                  schema({{"name", string("The branch: a new one's name, or a timeline there is, by its number or name.")},
+                          {"from", string("The timeline it branches off: its number or name (\"Real history\").")},
+                          {"at", string("The event where it goes another way: its number or name.")},
+                          {"scope", scope}},
+                         {"name", "from", "at"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command(QStringList{"chronology", "timeline", "branch", arguments.value("name").toString()}
+                                     + options(arguments, {{"from", "--from"}, {"at", "--at"}, {"scope", "--scope"}}));
+                  }});
+
+    registerTool({"chronology_timeline_decide", "Take a proposed branch, or not",
+                  "The user's word on a branch the AI proposed while building a book's graph (the chronology lists them as "
+                  "\"proposals\"): accepted, it is a timeline of its own beside the one it branches off; refused, its events "
+                  "stay in their book's own order. Only on the user's word.",
+                  schema({{"timeline", string("The proposed branch: its number or name.")},
+                          {"word", choice("Take it, or not.", {"accept", "refuse"})},
+                          {"scope", scope}},
+                         {"timeline", "word"}),
+                  Changes, [](const QJsonObject &arguments) {
+                      return command(
+                          QStringList{"chronology", "timeline", arguments.value("word").toString(), arguments.value("timeline").toString()}
+                          + options(arguments, {{"scope", "--scope"}}));
                   }});
     return true;
 }();

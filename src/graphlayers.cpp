@@ -122,8 +122,8 @@ private:
 
     void take(Layer &layer, const ReducedFact &fact) {
         const qint64 node = thing(fact.nodeGid);
-        // What is said of a thing, its names, and when an event happens (chronology.h).
-        const bool told = fact.kind == "summary"_L1 || fact.kind == "alias"_L1 || fact.kind == "when"_L1;
+        // What is said of a thing, its names, when an event happens (chronology.h) and the word on a branch.
+        const bool told = fact.kind == "summary"_L1 || fact.kind == "alias"_L1 || fact.kind == "when"_L1 || fact.kind == "branch"_L1;
         if (!alive(fact) || node == 0 || !told || fact.value.isEmpty())
             return;
         if (const auto at = here(fact.bookGid, fact.moment))

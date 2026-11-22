@@ -73,6 +73,8 @@ void merge(Facts &into, const Facts &more) {
     for (auto met = more.met.cbegin(); met != more.met.cend(); ++met)
         into.met.insert(met.key(), *met);
     into.edges += more.edges;
+    for (auto standing = more.standing.cbegin(); standing != more.standing.cend(); ++standing)
+        into.standing.insert(standing.key(), *standing);
 }
 
 // Of these things and relations, what each event involves, of those known.

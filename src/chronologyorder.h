@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QtTypes>
 #include <optional>
@@ -10,6 +11,7 @@
 
 #include "calendars.h"
 #include "chronology.h"
+#include "chronologybranch.h"
 #include "graph.h"
 
 // Events in the order they happen (#43): from the times, the relations of
@@ -60,9 +62,11 @@ struct Facts {
     QHash<qint64, QList<Dated>> times;    // each event's times, in the order revealed
     QHash<qint64, QList<GraphPlace>> met; // where each event was met, in the books the reader knows it from
     // The relations of order between events, as they were written
-    // ("before", "after", "during", "same time as"), and each event "on" its
-    // timelines.
+    // ("before", "after", "during", "same time as"), each event "on" its
+    // timelines, and each branch's to its parent and its split.
     QList<GraphEdge> edges;
+    // The latest word on each timeline the AI proposed as a branch.
+    QHash<qint64, Standing> standing;
 };
 
 // The order a reader comes to things in, across books: by book, then place;
@@ -124,6 +128,10 @@ struct Lane {
     QString calendar;   // the axis's; empty when none of its events has a date on one
     QList<Item> items;  // in order
     QList<Contradiction> contradictions;
+    // Of a branch: where it departs from its parent, and the events before
+    // that it shares with it, which are among its items.
+    std::optional<Split> split;
+    QSet<qint64> shared;
 
     [[nodiscard]] QJsonObject toJson() const;
 };

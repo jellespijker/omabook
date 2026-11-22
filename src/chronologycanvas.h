@@ -10,6 +10,10 @@
 
 #include "chronologymodel.h"
 
+namespace ChronologyFrame {
+struct Shapes;
+struct Words;
+} // namespace ChronologyFrame
 class QSGRectangleNode;
 class QSGTextNode;
 class QTextLayout;
@@ -18,7 +22,8 @@ class QTextLayout;
 // years, months or days (or none, for a band in order alone), each lane a
 // row of marks under it, a moment a square and a span a bar, an event
 // during another on a row under it; what someone shared hollow, what is in
-// a contradiction ringed, and "you are here" where the reader is.
+// a contradiction ringed, and "you are here" where the reader is. A branch
+// begins where it splits off its parent, marked there.
 //
 // Drawn with Qt Quick's scene graph, not a painter: the shapes of a frame
 // are rectangle nodes kept from frame to frame, the words a few text nodes,
@@ -89,8 +94,8 @@ protected:
     void geometryChange(const QRectF &newGeometry, const QRectF &oldGeometry) override;
 
 private:
-    struct Shapes;
-    struct Words;
+    using Shapes = ChronologyFrame::Shapes;
+    using Words = ChronologyFrame::Words;
     void relayout();
     void addRulers(Shapes &shapes, Words &words);
     void addMarks(Shapes &shapes, Words &words);

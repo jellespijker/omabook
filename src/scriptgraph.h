@@ -43,6 +43,13 @@ public:
     // The node that stands for a book (Graph::bookNode), made when it isn't
     // there yet: its number, or 0 (thrown) for a book the library hasn't.
     Q_INVOKABLE double bookNode(double id);
+    // The timeline of a book's own story (Chronology::timelineFor), made when
+    // it isn't there yet: its number, or 0 (thrown) for a book the library hasn't.
+    Q_INVOKABLE double timeline(double book);
+    // A timeline that branches off another at an event (#171,
+    // chronologybranch.h): `options` is {timeline, name, from, at, book,
+    // section, fraction}, as JSON. Its number; what is wrong is thrown.
+    Q_INVOKABLE double branch(const QString &options);
     // Takes away where a thing was met in a book (Graph::unsee); false when it wasn't.
     Q_INVOKABLE bool unsee(double id, double book);
     Q_INVOKABLE bool unlink(double edge);

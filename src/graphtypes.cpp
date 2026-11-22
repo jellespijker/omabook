@@ -5,6 +5,7 @@
 #include "annotationlayerview.h"
 #include "chronologycanvas.h"
 #include "chronologymodel.h"
+#include "chronologyproposals.h"
 #include "dictationkeys.h"
 #include "graphcanvas.h"
 #include "graphmodel.h"
@@ -27,6 +28,8 @@ void registerGraphTypes() {
         qmlRegisterType<GraphTenants>("Omabook", 1, 0, "GraphTenants");
         qmlRegisterType<ChronologyBrowser>("Omabook", 1, 0, "ChronologyBrowser");
         qmlRegisterType<ChronologyCanvas>("Omabook", 1, 0, "ChronologyCanvas");
+        // The branches the AI proposed, to take or not (#171).
+        qmlRegisterType<ChronologyProposals>("Omabook", 1, 0, "ChronologyProposals");
         // The ink surface, for the window and for plugins' panels (#78).
         registerInkTypes();
         // The open book's margin notes, for the reading view (#82).

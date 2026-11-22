@@ -200,6 +200,8 @@
             },
             whole: function (scope, limit) { return parse(graphed.whole(String(scope || ""), Number(limit) || 2000)); },
             bookNode: function (id) { return graphed.bookNode(Number(id) || 0); },
+            timeline: function (book) { return graphed.timeline(Number(book) || 0); },
+            branch: function (branching) { return graphed.branch(JSON.stringify(branching || {})); },
             upsert: function (thing) {
                 need(thing, "object", "The node");
                 return host.graphUpsert(JSON.stringify(thing));

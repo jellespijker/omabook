@@ -21,7 +21,8 @@ struct Timed {
     int times = 0;   // "when" facts kept
     int orders = 0;  // relations of order kept
     int placed = 0;  // events put on a timeline
-    int dropped = 0; // times and orders given that were none, or of no event
+    int proposed = 0; // branches proposed (chronologybranch.h)
+    int dropped = 0;  // times, orders and branches given that were none, or of no event
 
     Timed &operator+=(const Timed &other);
     [[nodiscard]] QJsonObject toJson() const;
@@ -37,7 +38,9 @@ using NodeOf = std::function<qint64(const QString &name)>;
 // "timeline" of its nodes and its edges of order, placed in `passages`.
 // Every event the answer gives goes on a timeline: the book's own unless
 // the model names another, and real history too when it is dated on the
-// real calendar.
+// real calendar, unless the book departs from real history. A timeline the
+// answer says branches off another at an event is proposed as a branch
+// (chronologybranch.h), and the events it names are put on it alone.
 [[nodiscard]] Timed applyTimes(Graph &graph, const Library &library, qint64 bookId, const QList<Passage> &passages,
                                const QJsonObject &answer, const NodeOf &nodeOf);
 

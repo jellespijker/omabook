@@ -25,6 +25,11 @@
 // - Timelines line up on one axis when they share a calendar (or one tied
 //   to it), an event, or a relation between their events: the axis is then
 //   one order of all their events, by which the lanes are drawn side by side.
+// - A branch (chronologybranch.h) is a lane of its own events and of those
+//   of its parent up to the event it splits at (in its parent's order),
+//   which it shares; it comes right after its parent's. A branch proposed
+//   and not accepted yet, or refused, is no lane: its events are in their
+//   book's own order, and it is listed apart, as a proposal.
 //
 // It is read within one tenant of the library (ADR 0003): a scope of the
 // graph as one tenant sees it, so that a timeline shared by books of two
@@ -55,6 +60,7 @@ struct Chronicle {
     QList<Axis> axes;                    // every lane on exactly one
     QList<Item> unplaced;                // by where each was first met
     QList<Contradiction> contradictions; // of no one lane: ties between calendars
+    QList<Proposal> proposals;           // branches waiting for the reader's word
 
     [[nodiscard]] QJsonObject toJson() const;
 };
