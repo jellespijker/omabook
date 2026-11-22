@@ -88,6 +88,11 @@ QString standInSsh(const QString &folder, const QString &binary);
 // Whether the middle of an item is on screen: in the window, and inside
 // what each flickable around it shows, which clips the rest.
 [[nodiscard]] bool middleShown(const QQuickWindow &window, const QQuickItem &item);
+// Whether the item's middle could be brought into sight, scrolling each
+// flickable around it, once the window has drawn what it just showed: a row
+// that has only just appeared stands, until a frame lays its column out,
+// where it is in sight, and is under the fold once it is (#201).
+[[nodiscard]] bool scrolledIntoSight(QQuickWindow &window, const QQuickItem &item);
 
 template <typename Result> [[nodiscard]] QString whyNot(const Result &result) {
     if (result)

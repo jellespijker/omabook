@@ -15,6 +15,7 @@
 #include <QPair>
 #include <QQuickItem>
 #include <QQuickWindow>
+#include <QSignalSpy>
 #include <QPdfWriter>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -22,6 +23,7 @@
 #include <QTemporaryDir>
 #include <QtEndian>
 #include <QtGlobal>
+#include <algorithm>
 #include <archive.h>
 #include <archive_entry.h>
 
@@ -553,6 +555,40 @@ bool middleShown(const QQuickWindow &window, const QQuickItem &item) {
         if (up->inherits("QQuickFlickable") && !up->mapRectToScene(QRectF(0, 0, up->width(), up->height())).contains(middle))
             return false;
     return QRectF(0, 0, window.width(), window.height()).contains(middle);
+}
+
+namespace {
+
+// Once the window has drawn a couple of frames: what was shown is laid out.
+void drawn(QQuickWindow &window, int frames = 2) {
+    for (int frame = 0; frame < frames; ++frame) {
+        QSignalSpy swapped(&window, &QQuickWindow::frameSwapped);
+        window.update();
+        swapped.wait(150);
+    }
+}
+
+// The nearest flickable around the item scrolled to show it a third down.
+void scrollTo(const QQuickItem &item) {
+    for (QQuickItem *up = item.parentItem(); up; up = up->parentItem())
+        if (up->inherits("QQuickFlickable")) {
+            const double top = item.mapToItem(up->property("contentItem").value<QQuickItem *>(), QPointF(0, 0)).y();
+            const double room = up->height(), y = up->property("contentY").toReal();
+            if (top < y || top + item.height() > y + room)
+                up->setProperty("contentY", std::clamp(top - room / 3, 0.0, std::max(0.0, up->property("contentHeight").toReal() - room)));
+            return;
+        }
+}
+
+} // namespace
+
+bool scrolledIntoSight(QQuickWindow &window, const QQuickItem &item) {
+    drawn(window);
+    for (int tries = 0; tries < 40 && !middleShown(window, item); ++tries) {
+        scrollTo(item);
+        drawn(window);
+    }
+    return middleShown(window, item);
 }
 
 } // namespace Fixtures

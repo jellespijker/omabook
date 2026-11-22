@@ -4841,20 +4841,8 @@ private:
         QQuickItem *item = nullptr;
         QTRY_VERIFY((item = qobject_cast<QQuickItem *>(desk.find(name))) && item->isVisible());
         // Scrolled into sight, in a panel taller than the window, once the
-        // panel has laid out what it just showed.
-        const auto inSight = [&] { return Fixtures::middleShown(*desk.window, *item); };
-        for (int tries = 0; tries < 40 && !inSight(); ++tries) {
-            for (QQuickItem *up = item->parentItem(); up; up = up->parentItem())
-                if (up->inherits("QQuickFlickable")) {
-                    const double top = item->mapToItem(up->property("contentItem").value<QQuickItem *>(), QPointF(0, 0)).y();
-                    const double room = up->height(), y = up->property("contentY").toReal();
-                    if (top < y || top + item->height() > y + room)
-                        up->setProperty("contentY", std::clamp(top - room / 3, 0.0, std::max(0.0, up->property("contentHeight").toReal() - room)));
-                    break;
-                }
-            QTest::qWait(50);
-        }
-        QTest::qWait(100);
+        // panel has laid out what it just showed (#201).
+        QVERIFY2(Fixtures::scrolledIntoSight(*desk.window, *item), qPrintable(name + " can't be brought into sight to click"));
         QTest::mouseClick(desk.window, Qt::LeftButton, {}, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
     }
     // The page has the keyboard again, not the map.
