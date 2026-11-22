@@ -18,6 +18,7 @@
 #include <QtTest>
 #include <qpa/qwindowsysteminterface.h>
 
+#include <algorithm>
 #include <cmath>
 
 #include "desk.h"
@@ -146,21 +147,28 @@ struct Bench {
                     return surface()->mapRectToScene(Ink::bounds(*shown));
         return {};
     }
-    // Whether the margin's stroke is beside the word's line, left of the column, and the underline under the word.
+    // Whether the margin's stroke is beside its line, left of the column, and the underline under the word.
+    // Its line is where the words of the line it was drawn beside start now: laid out again, they may run
+    // on to the next line, and the word with them.
     [[nodiscard]] QString notBeside(const QString &words, const QString &state) {
+        const QList<LineInk::Line> lines = kept();
+        const auto beside = std::ranges::find(lines, QString("margin-ink"), &LineInk::Line::kind);
+        if (beside == lines.cend())
+            return state + ": no margin ink";
+        const QRectF line = word(beside->passage.quote.simplified().left(16));
         const QRectF at = word(words);
         const QRectF margin = drawn("margin-ink");
         const QRectF under = drawn("line-ink");
         const QRectF column = columnInScene();
         if (margin.isNull() || under.isNull())
             return state + ": not drawn";
-        if (margin.right() > column.left() + 0.5 || margin.center().y() < at.top() || margin.center().y() > at.bottom())
+        if (margin.right() > column.left() + 0.5 || margin.center().y() < line.top() || margin.center().y() > line.bottom())
             return QString("%1: the margin's ink at %2,%3 is not beside the line at %4..%5 left of %6")
                 .arg(state)
                 .arg(margin.center().x())
                 .arg(margin.center().y())
-                .arg(at.top())
-                .arg(at.bottom())
+                .arg(line.top())
+                .arg(line.bottom())
                 .arg(column.left());
         if (std::abs(under.left() - at.left()) > 4 || under.center().y() < at.center().y() || under.top() > at.bottom() + 4)
             return QString("%1: the underline at %2,%3 is not under the word at %4,%5")
