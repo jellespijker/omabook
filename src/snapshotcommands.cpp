@@ -199,7 +199,8 @@ int runSnapshotCli(const QStringList &arguments) {
 std::optional<SnapshotReason> riskyMoment(const QStringList &arguments) {
     if (std::ranges::any_of(looks, [&arguments](QLatin1StringView look) { return given(arguments, look); }))
         return std::nullopt;
-    const QString command = arguments.value(1), word = firstWord(arguments);
+    const QString command = arguments.value(1);
+    const QString word = firstWord(arguments);
     const auto *const found = std::ranges::find_if(risky, [&](const Risky &one) {
         return command == one.command && (one.word.isEmpty() || word == one.word) && (one.option.isEmpty() || given(arguments, one.option));
     });

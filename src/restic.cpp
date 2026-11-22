@@ -67,7 +67,7 @@ struct Ran {
 
 [[nodiscard]] QStringList strings(const QJsonArray &array) {
     QStringList list;
-    for (const QJsonValue &value : array)
+    for (const QJsonValue value : array)
         list << value.toString();
     return list;
 }
@@ -110,7 +110,7 @@ std::expected<QList<Restic::Snapshot>, Failure> Restic::snapshots(const ResticRe
     if (!ran)
         return std::unexpected(ran.error());
     QList<Snapshot> found;
-    for (const QJsonValue &value : QJsonDocument::fromJson(ran->output).array()) {
+    for (const QJsonValue value : QJsonDocument::fromJson(ran->output).array()) {
         const QJsonObject snapshot = value.toObject();
         found << Snapshot{.id = snapshot.value("id"_L1).toString(),
                           .time = timeOf(snapshot.value("time"_L1).toString()),
