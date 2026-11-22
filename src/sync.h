@@ -110,6 +110,9 @@ struct SyncSummary {
         QStringList apart;
         // The links `unlink` asked to drop, as "<one title> / <the other>" (#160).
         QStringList unlinked;
+        // The identifiers a book had of one kept apart from it, removed on
+        // either computer (StrayIdentifiers), as "<title>: <scheme> <value>" (#164).
+        QStringList identifiersRemoved;
     } titles;
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all

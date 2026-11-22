@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Fixed
+
+- Two books an older Omabook took for one gain nothing of each other any more (#164): a sync that unlinks them (`--unlink`) no longer gives one the other's identifiers, such as its ISBN, and a book paired by an identifier never takes the other side's identifiers, nor is a second copy of it given the other's title. An identifier a book already got of a book kept apart from it is removed, once as the library is brought up to date and at each sync, and named.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

@@ -2,27 +2,26 @@
 
 #include <QHash>
 #include <QImageReader>
-#include <QJsonDocument>
 #include <QSet>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <compare>
 #include <functional>
-#include <tuple>
 
 #include "bookidentity.h"
 #include "booklinks.h"
 #include "changelog.h"
 #include "graph.h"
 #include "hlc.h"
-#include "readingformat.h"
 #include "replication.h"
 #include "spacereducer.h"
 #include "spaces.h"
+#include "strayidentifiers.h"
 #include "synccopies.h"
 #include "syncmanifest.h"
 #include "syncrenames.h"
 #include "synctakeannotations.h"
+#include "synctakecollections.h"
 #include "synctakegraph.h"
 
 using namespace Qt::StringLiterals;
@@ -35,12 +34,14 @@ namespace {
 // sends it nor takes it in.
 bool travels(const QString &scheme) { return scheme.compare(QStringLiteral("generated"), Qt::CaseInsensitive) != 0; }
 
-// The names elsewhere they have of a book and this side lacks. Names that came
-// by sync keep the details' time, so they are no reason to send the details back.
-bool fillNames(Library &library, const Book &mine, const QJsonObject &identifiers, bool dryRun) {
+// The names elsewhere they have of a book and this side lacks, but the stray
+// ones. Names that came by sync keep the details' time, so they are no reason
+// to send the details back.
+bool fillNames(Library &library, const Book &mine, const QJsonObject &identifiers, const QSet<QString> &stray, bool dryRun) {
     bool changed = false;
     for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (travels(it.key()) && !mine.identifiers.contains(it.key())) {
+        if (travels(it.key()) && !mine.identifiers.contains(it.key())
+            && !StrayIdentifiers::isStray(stray, it.key(), it.value().toVariant().toString())) {
             changed = true;
             if (!dryRun)
                 library.setIdentifier(mine.id, it.key(), it.value().toVariant().toString(), SyncManifest::myDetailsHlc(library, mine));
@@ -66,8 +67,9 @@ struct Taking {
     ReducedState merged;       // both sides' operations, as the log's rules merge them
     QHash<QString, QJsonObject> listed;
     QTemporaryDir scratch;
-    QSet<qint64> gone; // the books here the other side removed
-    QSet<QString> weak; // the books paired on less than their global id (BookLinks::weaklyPaired)
+    QSet<qint64> gone;                   // the books here the other side removed
+    QSet<QString> weak;                  // the books paired on less than their global id (BookLinks::weaklyPaired)
+    QHash<QString, QSet<QString>> stray; // the identifiers books have of one kept apart (StrayIdentifiers)
 
     [[nodiscard]] QString standsFor(const QString &gid) const { return canonical.value(gid, gid); }
 };
@@ -148,6 +150,14 @@ bool giveCopies(Taking &taking, const QList<Book> &copies, const SyncManifest::M
     return taking.weak.contains(gid) || !BookIdentity::strongId(gid);
 }
 
+// Whether the copies here of the book `gid` stands for are given its details
+// as the log says them, `mine` titled so, once they are decided (#154): never
+// copies an identifier folds together, which may be two books (#158, #164).
+[[nodiscard]] bool settlesCopies(const Taking &taking, const QList<Book> &copies, const QString &gid,
+                                 const SyncManifest::MergedBookDetails &merged, const QString &mine, qint64 settled) {
+    return copies.size() > 1 && settled > 0 && !merged.undecided && !mine.isEmpty() && !pairedWeakly(taking, gid);
+}
+
 // Of a book both sides hold: the details field by field by each field's time,
 // as both sides decide alike, then what is said of its reading. `copies` are
 // the books here that are this one book to the log, the one that speaks for
@@ -167,7 +177,7 @@ bool takeDetails(Taking &taking, const QList<Book> &copies, const QJsonObject &t
         note(taking.summary.detailsUndecided, taking.summary.titles.detailsUndecided, here.meta.title);
     if (merged.sendCover && !taking.peer.dryRun)
         giveCover(taking, here, listed, settled);
-    const bool asLogged = copies.size() > 1 && settled > 0 && !merged.undecided && !mine.value("title").toString().isEmpty();
+    const bool asLogged = settlesCopies(taking, copies, gid, merged, mine.value("title").toString(), settled);
     // A copy that has the details decided already, and no cover to take, is
     // given nothing and counted for nothing: the logs may say them otherwise
     // (an older copy's id the log folds into this book), but a write of what
@@ -226,7 +236,9 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
     const bool details = takeDetails(taking, copies, *theirs, taking.listed.value(gid));
     bool reading = false;
     for (const Book &copy : copies)
-        reading = SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun, !pairedWeakly(taking, gid)) || reading;
+        reading = SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun,
+                                        {.take = !pairedWeakly(taking, gid), .stray = taking.stray.value(gid)})
+                  || reading;
     if (reading)
         note(taking.summary.readingTaken, taking.summary.titles.readingTaken, here.meta.title);
     // The book's node in the knowledge graph says the same as the library.
@@ -235,51 +247,6 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
             Graph(taking.library).bookNode(copy.id);
 }
 
-[[nodiscard]] QString fieldOf(const ReducedCollection &collection, const QString &field) { return collection.fields.value(field).value; }
-
-[[nodiscard]] QJsonObject objectOf(const QString &text) { return QJsonDocument::fromJson(text.toUtf8()).object(); }
-
-// A collection as the log says it is now, written over `row` when there is
-// one, its books by the id they stand for here.
-[[nodiscard]] Collection collectionFrom(const Taking &taking, const ReducedCollection &reduced, const Collection *row,
-                                        const QHash<QString, qint64> &parents, const QHash<QString, qint64> &books) {
-    Collection collection;
-    collection.id = row ? row->id : 0;
-    collection.name = fieldOf(reduced, u"name"_s);
-    collection.parent = parents.value(fieldOf(reduced, u"parent"_s));
-    collection.rule = fieldOf(reduced, u"rule"_s).trimmed();
-    collection.shelf = objectOf(fieldOf(reduced, u"shelf"_s));
-    collection.format = ReadingFormat::fitting(objectOf(fieldOf(reduced, u"format"_s)));
-    collection.removed = SpaceReducer::isRemoved(reduced.alive, reduced.removed);
-    collection.updated = std::max(reduced.alive.hlc, reduced.removed.hlc);
-    // A removed one keeps only its name and place, as removing it leaves it.
-    if (collection.removed) {
-        collection.rule.clear();
-        collection.shelf = {};
-        collection.format = {};
-        return collection;
-    }
-    for (auto book = reduced.books.cbegin(); book != reduced.books.cend(); ++book)
-        if (const qint64 id = books.value(taking.standsFor(book.key())); id > 0 && book->value == "in"_L1)
-            collection.included.insert(id);
-        else if (id > 0 && book->value == "out"_L1)
-            collection.excluded.insert(id);
-    return collection;
-}
-
-[[nodiscard]] bool sameCollection(const Collection &row, const Collection &log) {
-    if (row.removed && log.removed)
-        return true;
-    return std::tie(row.name, row.parent, row.rule, row.removed, row.included, row.excluded)
-               == std::tie(log.name, log.parent, log.rule, log.removed, log.included, log.excluded)
-           && row.shelf == log.shelf && row.format == log.format;
-}
-
-// The collections as the log says them, both sides' operations merged by its
-// rules (each field the latest; of the books in it by hand, an add over a
-// concurrent remove): each that the log says otherwise than here is written
-// as it says, a parent before what is in it. One removed that this side never
-// had is not made.
 // The name each thing of the graph was given, by its id (before same-as links fold them).
 [[nodiscard]] QHash<QString, QString> thingNames(std::span<const SpaceOperation> ops) {
     QHash<QString, std::pair<qint64, QString>> latest;
@@ -298,34 +265,6 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
     for (const Book &book : taking.library.books())
         books.insert(taking.standsFor(Spaces::bookId(taking.library, book.id)), book.id);
     return books;
-}
-
-void takeCollections(Taking &taking) {
-    const QHash<QString, qint64> books = booksHere(taking);
-    QHash<QString, Collection> rows;
-    QHash<QString, qint64> ids;
-    for (const Collection &collection : taking.library.collections(true)) {
-        const QString gid = Spaces::collectionId(taking.library, collection.id);
-        rows.insert(gid, collection);
-        ids.insert(gid, collection.id);
-    }
-    QStringList order = taking.merged.collections.keys();
-    std::ranges::stable_sort(order, {}, [](const QString &gid) { return gid.count(u'/'); });
-    const Library::Batch batch(taking.library);
-    for (const QString &gid : std::as_const(order)) {
-        const ReducedCollection &reduced = taking.merged.collections[gid];
-        const auto row = rows.constFind(gid);
-        const Collection log = collectionFrom(taking, reduced, row == rows.cend() ? nullptr : &*row, ids, books);
-        if ((row == rows.cend() && log.removed) || log.name.isEmpty() || (row != rows.cend() && sameCollection(*row, log)))
-            continue;
-        ++taking.summary.collectionsTaken;
-        if (taking.peer.dryRun)
-            continue;
-        if (const std::optional<qint64> stored = taking.library.storeCollection(log)) {
-            Spaces::setGlobalId(taking.library, u"collection"_s, *stored, gid);
-            ids.insert(gid, *stored);
-        }
-    }
 }
 
 // A book here that this computer's own log says is removed: a same-as link
@@ -381,7 +320,8 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
                   .listed = {},
                   .scratch = {},
                   .gone = {},
-                  .weak = BookLinks::weaklyPaired(ops)};
+                  .weak = BookLinks::weaklyPaired(ops),
+                  .stray = StrayIdentifiers::of(ops)};
     for (const auto &value : peer.books) {
         const QJsonObject book = value.toObject();
         const QString gid = taking.standsFor(book.value("gid").toString());
@@ -395,7 +335,8 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
         if (!copies.isEmpty())
             takeBook(taking, copies);
     }
-    takeCollections(taking);
+    summary.collectionsTaken +=
+        SyncTakeCollections::take(library, taking.merged.collections, booksHere(taking), taking.canonical, peer.dryRun);
     summary.annotationsTaken +=
         SyncTakeAnnotations::take(library, taking.merged.annotations, booksHere(taking), taking.canonical, peer.dryRun);
     // A dry run leaves the graph be, as it always did.
@@ -444,7 +385,7 @@ QSet<QString> SyncTake::heldBy(const QJsonArray &books) {
     return held;
 }
 
-bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, bool names) {
+bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names) {
     const std::optional<Book> mine = library.book(id);
     if (!mine)
         return false;
@@ -462,15 +403,15 @@ bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &their
         if (!dryRun)
             library.setPaper(id, true);
     }
-    return (names && fillNames(library, *mine, theirs.value("identifiers").toObject(), dryRun)) || changed;
+    return (names.take && fillNames(library, *mine, theirs.value("identifiers").toObject(), names.stray, dryRun)) || changed;
 }
 
-QStringList SyncTake::readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt) {
+QStringList SyncTake::readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names) {
     QStringList arguments{"set",      QString::number(id),          "--status", book.shelf.isEmpty() ? QStringLiteral("none") : book.shelf,
                           "--rating", QString::number(book.rating), "--paper",  book.paper ? QStringLiteral("yes") : QStringLiteral("no")};
     if (!book.finished.isEmpty())
         arguments << "--finished" << book.finished;
-    for (auto it = book.identifiers.begin(); it != book.identifiers.end(); ++it)
+    for (auto it = book.identifiers.begin(); it != book.identifiers.end() && names; ++it)
         if (const QString value = it.value().toVariant().toString(); !value.isEmpty() && travels(it.key()))
             arguments << "--identifier" << it.key() + "=" + value;
     if (detailsAt)

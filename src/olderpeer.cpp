@@ -41,11 +41,13 @@ QString writeDetails(const OlderPeer::Sync &sync, const QJsonObject &metaJson) {
 }
 
 // Whether the other side says less of a book's reading than this one does
-// now, so it is given this side's.
-bool saysLess(const QJsonObject &theirs, const Book &mine) {
+// now, so it is given this side's; of its names elsewhere only with `names`.
+bool saysLess(const QJsonObject &theirs, const Book &mine, bool names) {
     if ((theirs.value("shelf").toString().isEmpty() && !mine.shelf.isEmpty()) || (theirs.value("rating").toInt() == 0 && mine.rating > 0)
         || (theirs.value("finished").toString().isEmpty() && !mine.finished.isEmpty()) || (!theirs.value("paper").toBool() && mine.paper))
         return true;
+    if (!names)
+        return false;
     const QJsonObject identifiers = theirs.value("identifiers").toObject();
     return std::ranges::any_of(mine.identifiers.keys(), [&](const QString &scheme) {
         return scheme.compare(QStringLiteral("generated"), Qt::CaseInsensitive) != 0 && !identifiers.contains(scheme);
@@ -207,12 +209,16 @@ void OlderPeer::mergeBook(const Sync &sync, qint64 mine, bool arrived, const QJs
         sync.current ? std::optional<qint64>(SyncManifest::wireTimestamp(SyncManifest::theirDetailsHlc(theirs), false)) : std::nullopt;
     if (const std::optional<Book> here = arrived ? std::nullopt : sync.library.book(mine))
         mergeDetails(sync, *here, theirs, detailsThere);
-    if (SyncTake::fillReading(sync.library, mine, theirs, sync.options.dryRun) && !arrived)
+    // A book without a file was found by its entry keys, which may be another's: names
+    // elsewhere go only between copies of one file (#164).
+    const bool names = arrived || !theirs.value("files").toArray().isEmpty();
+    if (SyncTake::fillReading(sync.library, mine, theirs, sync.options.dryRun, {.take = names, .stray = {}}) && !arrived)
         note(sync.summary.readingTaken, sync.summary.titles.readingTaken, title);
     // Older Omabooks don't say "shelf"; they are given nothing they can't keep.
-    if (const std::optional<Book> merged = sync.library.book(mine); merged && theirs.contains("shelf") && saysLess(theirs, *merged)) {
+    if (const std::optional<Book> merged = sync.library.book(mine);
+        merged && theirs.contains("shelf") && saysLess(theirs, *merged, names)) {
         if (sync.options.dryRun
-            || sync.remote.omabook(SyncTake::readingArguments(theirs.value("id").toInteger(), *merged, detailsThere)).ok())
+            || sync.remote.omabook(SyncTake::readingArguments(theirs.value("id").toInteger(), *merged, detailsThere, names)).ok())
             note(sync.summary.readingSent, sync.summary.titles.readingSent, title);
     }
     mergePlace(sync, mine, theirs);
