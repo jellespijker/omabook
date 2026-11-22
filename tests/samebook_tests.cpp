@@ -252,6 +252,48 @@ private slots:
         QCOMPARE(countApart(again), qsizetype{1});
     }
 
+    // A library of 0.3.0, where a book kept apart from another has its ISBN,
+    // which the Lady of Crows gained of Silent Striders after #160's unlink
+    // (#164): brought up to date, it loses that identifier, once, and says
+    // so; the other book keeps its own.
+    void anUpgradeRemovesAnIdentifierOfABookKeptApart() {
+        QTemporaryDir dir;
+        const QString root = dir.filePath("A");
+        const QString isbn = "9781565048836";
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            const qint64 striders = toRead(library, "Silent Striders & Black Furies", "2", isbn);
+            QVERIFY(striders > 0 && library.setIdentifier(striders, "isbn", isbn));
+            const qint64 crows = toRead(library, "The Lady of Crows", "1");
+            QVERIFY(crows > 0 && library.setIdentifier(crows, "isbn", isbn));
+            ChangeLog::append(library, {.space = Spaces::personalSpace(library),
+                                        .entity = "book",
+                                        .id = std::max(Spaces::bookId(library, crows), Spaces::bookId(library, striders)),
+                                        .field = "not_same_as",
+                                        .value = std::min(Spaces::bookId(library, crows), Spaces::bookId(library, striders)),
+                                        .hlc = std::nullopt});
+            QVERIFY(ChangeLog::exec(library, "PRAGMA user_version = 43"));
+            QVERIFY(ChangeLog::exec(library, "DELETE FROM library_state WHERE key = 'unstray_identifiers'"));
+        }
+        QStringList said;
+        {
+            Library library(root);
+            library.onBringingUpToDate([&said](const QString &line) { said << line; });
+            QVERIFY(library.open());
+            QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
+            QVERIFY(!library.books("The Lady of Crows").first().identifiers.contains("isbn"));
+            QCOMPARE(library.books("Silent Striders & Black Furies").first().identifiers.value("isbn").toString(), isbn);
+        }
+        QVERIFY2(said.join('\n').contains("The Lady of Crows: isbn " + isbn), qPrintable(said.join('\n')));
+        said.clear();
+        Library again(root);
+        again.onBringingUpToDate([&said](const QString &line) { said << line; });
+        QVERIFY(again.open());
+        QCOMPARE(said, QStringList());
+        QCOMPARE(again.books("Silent Striders & Black Furies").first().identifiers.value("isbn").toString(), isbn);
+    }
+
     // The two libraries, synced both ways, several times: no title, authors
     // or ISBN ever goes to another book, one sync settles them, and a dry
     // run from either side says the same.
