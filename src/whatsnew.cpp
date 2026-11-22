@@ -178,6 +178,33 @@ QList<Manual::Step> listeningRelease() {
     };
 }
 
+// The 0.3.0 release's entries: the AI page, with a provider for each thing a model is asked for (#143, #144), Gemini
+// (#145), voxtype for recordings (#146) and voices to choose from, with a sentence to hear first (#147).
+QList<Manual::Step> providersRelease() {
+    return {
+        {"ai-page", "0.3.0", Manual::tr("A provider for each use of AI"),
+         Manual::tr("In the settings ({global.settings}), AI Settings opens a page with a row for each thing a model is asked "
+                    "for: answers, quick work, handwriting, speech to text, text to speech and meaning. Each has a provider of its "
+                    "own, and uses a hosted service only once you allow it in that row."),
+         "", "global.settings", "", ""},
+        {"gemini", "0.3.0", Manual::tr("Gemini, with a key of your own"),
+         Manual::tr("Gemini can answer, read handwriting, write out recordings, read aloud and index books by their meaning, "
+                    "with a key you give once on the AI page ({global.settings}). It is someone else's computer, so a row uses "
+                    "it only once you allow that."),
+         "", "global.settings", "", ""},
+        {"voxtype", "0.3.0", Manual::tr("Recordings written out by voxtype"),
+         Manual::tr("Where voxtype, the speech to text Omarchy ships for dictation, is installed, it writes out recordings on "
+                    "this computer, before whisper.cpp or a server. On Omarchy without it, the AI page ({global.settings}) "
+                    "offers to install it."),
+         "", "global.settings", "", ""},
+        {"voices", "0.3.0", Manual::tr("Voices to choose from"),
+         Manual::tr("{reader.read_aloud} reads with Piper or speech-dispatcher on this computer, a server of your own, or "
+                    "OpenAI's and Gemini's voices once you allow them. Choose one, its voice and its speed in the AI page's Text "
+                    "to speech row, and hear a sentence first with Hear It."),
+         "", "reader.read_aloud", "reader", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -256,5 +283,5 @@ QList<Manual::Step> Manual::features() {
          tr("{library.chronology_book} shows when a book's events happen in its story, on its timelines and with the "
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
-    } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease();
+    } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease();
 }
