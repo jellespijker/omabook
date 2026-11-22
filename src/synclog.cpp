@@ -19,6 +19,7 @@
 #include "spacecarry.h"
 #include "spacereplay.h"
 #include "spaces.h"
+#include "strayidentifiers.h"
 #include "synctake.h"
 
 namespace {
@@ -125,20 +126,37 @@ namespace {
     return paired;
 }
 
+// The identifiers books here have of a book kept apart from them, removed
+// (StrayIdentifiers, #164), or with `dryRun` only named, as the log `ops` says.
+void unstray(Library &library, std::span<const SpaceOperation> ops, bool dryRun, SyncSummary &summary) {
+    summary.titles.identifiersRemoved << StrayIdentifiers::remove(library, ops, dryRun);
+    summary.titles.identifiersRemoved.removeDuplicates();
+}
+
 // The links the person asked to drop (SyncOptions::unlink, #160), each
 // recorded here as not one book before the log goes, so it goes with it; a
-// dry run only names them.
-void unlink(const Library &library, const SyncOptions &options, SyncSummary &summary) {
+// dry run only names them. And then, before anything else of the sync
+// touches the two, what either has of the other goes (#164).
+void unlink(Library &library, const SyncOptions &options, SyncSummary &summary) {
     for (const QString &title : options.unlink)
         summary.titles.unlinked << BookLinks::unlink(library, Replication::operations(library), title, options.dryRun);
     summary.titles.unlinked.removeDuplicates();
+    if (!options.dryRun)
+        unstray(library, Replication::operations(library), false, summary);
 }
 
 // Before what came in is compacted: the links it brought that are not of one
-// book stay dropped (BookLinks::record), and are named among the books kept apart.
-void keepApart(const Library &library, SyncSummary &summary) {
+// book stay dropped (BookLinks::record), and are named among the books kept
+// apart; and before anything is taken in, what books here have of a book kept
+// apart goes. A dry run, of the log and `incoming`, only names that.
+void keepApart(Library &library, const QList<SpaceOperation> &incoming, bool dryRun, SyncSummary &summary) {
+    if (dryRun) {
+        unstray(library, Replication::operations(library) + incoming, true, summary);
+        return;
+    }
     summary.titles.apart << BookLinks::record(library, Replication::operations(library));
     summary.titles.apart.removeDuplicates();
+    unstray(library, Replication::operations(library), false, summary);
 }
 
 [[nodiscard]] QSet<QString> heldIn(const QJsonArray &names) {
@@ -249,6 +267,9 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     for (const auto &title : titles.value("apart").toArray())
         summary.titles.apart << title.toString();
     summary.titles.apart.removeDuplicates();
+    for (const auto &removed : titles.value("identifiers_removed").toArray())
+        summary.titles.identifiersRemoved << removed.toString();
+    summary.titles.identifiersRemoved.removeDuplicates();
     summary.collectionsSent += there.value("collections_taken").toInt();
     summary.graphSent += there.value("graph_taken").toInt();
     summary.annotationsSent += there.value("annotations_taken").toInt();
@@ -353,8 +374,7 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     summary.titles.detailsUndecided.clear();
     if (dryRun)
         incoming << wouldLink(library, paired, answer->value("would_link").toArray(), incoming);
-    else
-        keepApart(library, summary);
+    keepApart(library, incoming, dryRun, summary);
     SyncTake::Taken described = SyncTake::take(library, incoming,
                                                {.device = theirDevice,
                                                 .details = options.details,
@@ -420,8 +440,7 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
     const QList<qint64> changed = takePlaces(library, incoming, dryRun);
     if (dryRun)
         incoming << wouldLink(library, paired, request.value("would_link").toArray(), incoming);
-    else
-        keepApart(library, taken);
+    keepApart(library, incoming, dryRun, taken);
     // The side asked has no books of the other's to describe: it never fetches any.
     std::ignore = SyncTake::take(library, incoming,
                                  {.device = theirDevice,
@@ -451,7 +470,8 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
                                {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
                                {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)},
                                {"renamed_here", QJsonArray::fromStringList(taken.titles.renamedHere)},
-                               {"apart", QJsonArray::fromStringList(taken.titles.apart)}}}},
+                               {"apart", QJsonArray::fromStringList(taken.titles.apart)},
+                               {"identifiers_removed", QJsonArray::fromStringList(taken.titles.identifiersRemoved)}}}},
         // Once this side is who it is to be: the person a pairing just made it may be theirs (#51).
         with(pairing, with(SpaceCarry::introduction(library), carried(library, request, request.value("carrying").toBool() && !dryRun))));
 }

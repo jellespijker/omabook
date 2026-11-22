@@ -9,6 +9,8 @@
 
 #include <QDateTime>
 #include <QDir>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QTemporaryDir>
 #include <QtTest>
 #include <algorithm>
@@ -536,6 +538,112 @@ private slots:
             if (logged)
                 QCOMPARE(now, *logged);
             logged = now;
+        }
+    }
+
+    // The case of #164: a Goodreads entry without an ISBN on A, linked by an
+    // older Omabook (as #160's test builds it) to a book with one on B. Both
+    // hold both books, as syncs with that Omabook left them, and B's copy of
+    // the entry was given the other's ISBN as an identifier then. In the run
+    // that unlinks them, from either side, and after, no book gains anything
+    // of the other's, identifiers included; and the ISBN B's copy got from the
+    // book now kept apart is removed, and said to be.
+    void anUnlinkedPairGainsNothingOfTheOther_data() {
+        QTest::addColumn<bool>("fromA");
+        QTest::newRow("unlinked from A") << true;
+        QTest::newRow("unlinked from B") << false;
+    }
+
+    void anUnlinkedPairGainsNothingOfTheOther() {
+        QFETCH(const bool, fromA);
+        QTemporaryDir dir;
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const QString isbn = "9781565048836";
+        const QString title = "Silent Striders & Black Furies";
+        const qint64 striders = toRead(b, title, "2", isbn);
+        const qint64 theirStriders = toRead(a, title, "2", isbn);
+        const qint64 crows = toRead(a, "The Lady of Crows", "1");
+        const qint64 copy = toRead(b, "The Lady of Crows", "1");
+        QVERIFY(striders > 0 && theirStriders > 0 && crows > 0 && copy > 0);
+        QVERIFY(b.setIdentifier(striders, "isbn", isbn) && a.setIdentifier(theirStriders, "isbn", isbn));
+        QCOMPARE(Spaces::bookId(a, crows), Spaces::bookId(b, copy));
+        QCOMPARE(Spaces::bookId(a, theirStriders), Spaces::bookId(b, striders));
+        // What the older Omabook did: B's copy of the entry took the other's ISBN, and A's its title, when it linked them.
+        // Each a while after what came before, on either computer's clock.
+        QVERIFY(b.setIdentifier(copy, "isbn", isbn));
+        const qint64 later = QDateTime::currentSecsSinceEpoch() + 20;
+        BookMeta corrupted = a.book(crows)->meta;
+        corrupted.title = title;
+        QVERIFY(a.setMeta(crows, corrupted, nullptr, Hlc::pack(later, 0)));
+        ChangeLog::append(a, {.space = Spaces::personalSpace(a),
+                              .entity = "book",
+                              .id = std::max(Spaces::bookId(a, crows), Spaces::bookId(b, striders)),
+                              .field = "same_as",
+                              .value = std::min(Spaces::bookId(a, crows), Spaces::bookId(b, striders)),
+                              .hlc = Hlc::pack(later + 10, 0)});
+        BookMeta putRight = a.book(crows)->meta;
+        putRight.title = "The Lady of Crows";
+        QVERIFY(a.setMeta(crows, putRight, nullptr, Hlc::pack(later + 20, 0)));
+        QCOMPARE(BookLinks::record(a, Replication::operations(a)), QStringList());
+        QJsonObject copyOwn = b.book(copy)->identifiers;
+        const QList<std::tuple<Library *, qint64, Book>> books{
+            {&a, crows, *a.book(crows)}, {&a, theirStriders, *a.book(theirStriders)}, {&b, striders, *b.book(striders)}};
+        const auto expectOwn = [&](const QString &when, bool repaired) {
+            for (const auto &[library, id, before] : books) {
+                const std::optional<Book> now = library->book(id);
+                QVERIFY2(now, qPrintable(when + ": " + before.meta.title + " is gone"));
+                QVERIFY2(now->identifiers == before.identifiers,
+                         qPrintable(when + ": " + before.meta.title + " has "
+                                    + QString::fromUtf8(QJsonDocument(now->identifiers).toJson(QJsonDocument::Compact))));
+                QCOMPARE((Identity{now->meta.title, now->meta.authors, now->meta.isbn}),
+                         (Identity{before.meta.title, before.meta.authors, before.meta.isbn}));
+            }
+            if (repaired)
+                copyOwn.remove("isbn");
+            QCOMPARE(b.book(copy)->identifiers, copyOwn);
+        };
+        QVERIFY(syncFrom(true, a, b, dir).problems.isEmpty());
+        expectOwn("a sync before the unlink", false);
+
+        SyncOptions unlink;
+        unlink.unlink = QStringList{title};
+        const SyncSummary unlinked = syncFrom(fromA, a, b, dir, unlink);
+        QVERIFY2(unlinked.problems.isEmpty(), qPrintable(unlinked.problems.join('\n')));
+        QCOMPARE(unlinked.titles.unlinked, QStringList{title + " / The Lady of Crows"});
+        expectOwn("the sync that unlinks", true);
+        QCOMPARE(unlinked.titles.identifiersRemoved, QStringList{"The Lady of Crows: isbn " + isbn});
+        for (const bool side : {!fromA, fromA}) {
+            const SyncSummary later = syncFrom(side, a, b, dir);
+            QVERIFY2(later.problems.isEmpty(), qPrintable(later.problems.join('\n')));
+            QCOMPARE(later.titles.identifiersRemoved, QStringList());
+            expectOwn("a later sync", false);
+        }
+    }
+
+    // Two books paired at their first meeting by their Goodreads id, each
+    // with its own other names: their ids differ, so no identifier goes from
+    // one to the other, from either side, at that sync or any later one (#164).
+    void noIdentifierMovesBetweenBooksPairedByOne() {
+        QTemporaryDir dir;
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const qint64 mine = toRead(a, "The Lady of Crows", "1");
+        const qint64 theirs = toRead(b, "The Lady of Crows", "1", "9781565048836");
+        QVERIFY(mine > 0 && theirs > 0);
+        QVERIFY(a.setIdentifier(mine, "amazon", "B00CROWS") && b.setIdentifier(theirs, "calibre", silentUuid));
+        QVERIFY(Spaces::bookId(a, mine) != Spaces::bookId(b, theirs));
+        const QJsonObject ours = a.book(mine)->identifiers;
+        const QJsonObject others = b.book(theirs)->identifiers;
+        for (const bool side : {true, false, true}) {
+            const SyncSummary synced = syncFrom(side, a, b, dir);
+            QVERIFY2(synced.problems.isEmpty(), qPrintable(synced.problems.join('\n')));
+            QCOMPARE(a.books().size(), 1);
+            QCOMPARE(b.books().size(), 1);
+            QCOMPARE(a.book(mine)->identifiers, ours);
+            QCOMPARE(b.book(theirs)->identifiers, others);
         }
     }
 

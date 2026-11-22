@@ -68,17 +68,25 @@ struct Taken {
 // `summary`.
 [[nodiscard]] Taken take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary);
 
+// Which of the other side's names elsewhere for a book this one takes: only
+// within one book (#164). None of a book paired on less than its global id,
+// which may be another's (#158); and never one `stray` names, that it has of
+// a book kept apart from it (StrayIdentifiers).
+struct Names {
+    bool take = true;
+    QSet<QString> stray;
+};
+
 // Takes in what the other side says of a book's reading where this side says
 // nothing: an empty shelf, no stars, no finished day; a paper copy either side
-// has is had; with `names`, the names elsewhere this one lacks (never of a
-// book paired on less than its global id, which may be another's, #158).
+// has is had; and the names elsewhere this one lacks, as `names` says.
 // Whether that changes anything; with `dryRun` only that.
-bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, bool names = true);
+bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names = {});
 
-// `omabook set` arguments that give the other side a book's reading and its
-// names elsewhere, with `detailsAt` (for an Omabook there that keeps it) the
-// time its details are stamped with there.
-[[nodiscard]] QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt);
+// `omabook set` arguments that give the other side a book's reading and,
+// with `names`, its names elsewhere, with `detailsAt` (for an Omabook there
+// that keeps it) the time its details are stamped with there.
+[[nodiscard]] QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names = true);
 
 // Whose details settle the undecided ones, as the other side sees it.
 [[nodiscard]] QString otherSide(SyncOptions::Details details);

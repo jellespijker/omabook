@@ -167,6 +167,9 @@ void printKeptApart(const SyncSummary &summary, const QString &host, const QStri
                               .arg(computer));
     printSection("Kept apart: they share an identifier, or were linked by an older Omabook, but are not one book", summary.titles.apart);
     printSection(summary.dryRun ? "Would be unlinked" : "Unlinked, and kept apart from now on", summary.titles.unlinked);
+    printSection(summary.dryRun ? "Identifiers that would be removed, as they are of a book kept apart"
+                                : "Identifiers removed, as they are of a book kept apart",
+                 summary.titles.identifiersRemoved);
 }
 
 // The titles `--unlink` was given that named no link to unlink (#160).
