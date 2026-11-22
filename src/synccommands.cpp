@@ -170,6 +170,7 @@ void printKeptApart(const SyncSummary &summary, const QString &host, const QStri
     printSection(summary.dryRun ? "Identifiers that would be removed, as they are of a book kept apart"
                                 : "Identifiers removed, as they are of a book kept apart",
                  summary.titles.identifiersRemoved);
+    printSection("Identifiers kept, shared with a book kept apart: whose they are can't be told", summary.titles.identifiersKept);
 }
 
 // The titles `--unlink` was given that named no link to unlink (#160).

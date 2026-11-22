@@ -19,6 +19,14 @@ moves those lines under its version.
 - Dictate notes (#148): a margin note's microphone, held while you speak or pressed once to start and again to stop, by mouse, finger or pen, writes out what you say where the cursor is (in place of what is selected); Ctrl+M held in the field does the same, and Escape stops it. It goes through speech to text as you chose it on the AI page, voxtype first, to a hosted service only where you allowed one for speech to text, and not at all with the AI turned off. It listens only once you press it, and the top of the window says that it listens, with Stop. What you said is kept in memory, never in the library, and gone once it is written out. Where voxtype is installed, the AI page's Speech to text row can choose voxtype's own dictation instead (`voxtype record start`/`stop`), which types what you say into the note. A plugin's view gets the same microphone for its own text fields (`DictationButton` under `import Omabook`), and every text field takes voxtype's system-wide typing as it is typed.
 - Ask by voice, and hear the answer (#149): the reading companion and "ask about your library" have the same microphone beside their question. Hold it, or Ctrl+M in the question, by mouse, finger or pen, and say what you want to know: it is asked when you let go, and the answer is shown and read aloud by the voice chosen for text to speech, the bar over the page naming the AI that reads. Asking again stops it at once, as do Escape, Shift+R and the bar's ✕; a book being read aloud waits. "Read aloud" hears the last answer again. The companion is still sent the book only as far as you have read, and with the AI turned off there is nothing to ask.
 
+## [0.3.2] - 2026-11-22
+
+0.3.1's one-time library upgrade could take a book's own identifiers away; this one keeps them. Upgrade to 0.3.2, not 0.3.1.
+
+### Fixed
+
+- Bringing a library up to date, and a sync, no longer remove a book's own identifiers as another's (#166): an ISBN equal to the book's own, and a Goodreads id or Calibre uuid first recorded on a book of its title, stay with it, whichever book an older Omabook gave them to first. One whose book can't be told is kept and named. And `--unlink` finds a link by the title a book has on this computer, also when this computer's log still has the wrong title an older Omabook gave it.
+
 ## [0.3.1] - 2026-11-22
 
 ### Fixed
@@ -414,6 +422,7 @@ scripts, sync with other computers, a knowledge graph of what you read,
 reading sites (Goodreads, Open Library, Hardcover), and help you can search.
 
 [Unreleased]: https://github.com/jellespijker/omabook/compare/v0.3.0...HEAD
+[0.3.2]: https://github.com/jellespijker/omabook/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/jellespijker/omabook/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/jellespijker/omabook/compare/v0.2.2...v0.3.0
 [0.2.2]: https://github.com/jellespijker/omabook/compare/v0.2.1...v0.2.2

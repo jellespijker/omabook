@@ -689,6 +689,141 @@ private slots:
         }
     }
 
+    // The shape of #166, with titles of its own: a book with a file (an
+    // orchard), its Goodreads entry, a second book with its file and entry (a
+    // hollow), and a third book's entry (a lantern). An older Omabook linked
+    // the hollow's entry and the orchard's to the lantern's (by bookkeeping,
+    // their titles disagreeing), gave the lantern the orchard's title and
+    // names elsewhere and the hollow's authors, linked it so to the orchard's
+    // file (the titles agreeing then), and left the orchard's file with no
+    // ISBN in the log. The person put the lantern's title right. Brought up to
+    // date, the library keeps each book's own ISBN and Goodreads id, and loses
+    // only the ISBN the lantern had of the orchard.
+    void anUpgradeKeepsEachBooksOwnIdentifiers() {
+        QTemporaryDir dir;
+        const QString root = dir.filePath("A");
+        const QString orchardIsbn = "9780000001115";
+        const QString hollowIsbn = "9780000002228";
+        const QString orchardUuid = "2b7d4e1a-5c3f-4a9b-8e60-7d1c2f3a4b5c";
+        const QString orchardFile = dir.filePath("orchard.epub");
+        const QString hollowFile = dir.filePath("hollow.epub");
+        QVERIFY(Fixtures::epub(orchardFile, "The Glass Orchard") && Fixtures::epub(hollowFile, "Copper Hollow"));
+        QHash<QString, Book> before;
+        {
+            Library library(root);
+            QVERIFY(library.open());
+            const qint64 orchardEntry = toRead(library, "The Glass Orchard", "5001", orchardIsbn);
+            const qint64 hollowEntry = toRead(library, "Copper Hollow", "5002", hollowIsbn);
+            const qint64 lantern = toRead(library, "The Salt Lantern", "5003");
+            const qint64 orchard = fromCalibre(library, orchardFile, "The Glass Orchard", orchardIsbn,
+                                               {{"isbn", orchardIsbn}, {"goodreads", "5001"}, {"calibre", orchardUuid}});
+            const qint64 hollow =
+                fromCalibre(library, hollowFile, "Copper Hollow", hollowIsbn, {{"isbn", hollowIsbn}, {"goodreads", "5002"}});
+            QVERIFY(orchardEntry > 0 && hollowEntry > 0 && lantern > 0 && orchard > 0 && hollow > 0);
+            const QString lanternId = Spaces::bookId(library, lantern);
+            const QString orchardId = Spaces::bookId(library, orchard);
+            linkAsBefore(library, Spaces::bookId(library, hollowEntry), lanternId);
+            linkAsBefore(library, lanternId, Spaces::bookId(library, orchardEntry));
+            BookMeta corrupted = library.book(lantern)->meta;
+            corrupted.title = "The Glass Orchard";
+            corrupted.authors = library.book(hollow)->meta.authors;
+            QVERIFY(library.setMeta(lantern, corrupted));
+            QVERIFY(library.setIdentifier(lantern, "isbn", orchardIsbn) && library.setIdentifier(lantern, "calibre", orchardUuid));
+            ChangeLog::append(library, {.space = Spaces::personalSpace(library),
+                                        .entity = "book",
+                                        .id = orchardId,
+                                        .field = "isbn",
+                                        .value = {},
+                                        .hlc = std::nullopt});
+            linkAsBefore(library, lanternId, orchardId);
+            BookMeta putRight = library.book(lantern)->meta;
+            putRight.title = "The Salt Lantern";
+            putRight.authors = QStringList{"Ann Author"};
+            QVERIFY(library.setMeta(lantern, putRight));
+            for (const Book &book : library.books())
+                before.insert(Spaces::bookId(library, book.id), book);
+            QVERIFY(ChangeLog::exec(library, "PRAGMA user_version = 42"));
+            QVERIFY(ChangeLog::exec(library, "DELETE FROM library_state WHERE key IN ('judge_links', 'unstray_identifiers')"));
+        }
+        QStringList said;
+        Library library(root);
+        library.onBringingUpToDate([&said](const QString &line) { said << line; });
+        QVERIFY(library.open());
+        QCOMPARE(library.formatVersion(), LibraryMigrations::currentFormat());
+        QVERIFY2(!said.join('\n').contains("The Glass Orchard:"), qPrintable(said.join('\n')));
+        QVERIFY2(
+            said.join('\n').contains("Removed 1 identifier that a book had of another an older Omabook took it for: The Salt Lantern: isbn "
+                                     + orchardIsbn + "."),
+            qPrintable(said.join('\n')));
+        QCOMPARE(library.books().size(), before.size());
+        for (const Book &book : library.books()) {
+            const Book was = before.value(Spaces::bookId(library, book.id));
+            QCOMPARE((Identity{book.meta.title, book.meta.authors, book.meta.isbn}),
+                     (Identity{was.meta.title, was.meta.authors, was.meta.isbn}));
+            QJsonObject own = was.identifiers;
+            if (was.meta.title == "The Salt Lantern")
+                own.remove("isbn");
+            QVERIFY2(
+                book.identifiers == own,
+                qPrintable(book.meta.title + ": " + QString::fromUtf8(QJsonDocument(book.identifiers).toJson(QJsonDocument::Compact))));
+        }
+    }
+
+    // The link behind the rename #166 found: an older Omabook linked the
+    // lantern's entry to the orchard's when it had given it the orchard's
+    // title, on both computers. The person put the lantern right on A; B has
+    // it right too, but its log still says the orchard's title. From B, `--unlink` finds the link by the title the
+    // book has there, and the sync keeps both books' names.
+    void anUnlinkFindsTheLinkByTheTitleABookHasHere() {
+        QTemporaryDir dir;
+        Library a(dir.filePath("A"));
+        Library b(dir.filePath("B"));
+        QVERIFY(a.open() && b.open());
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        const qint64 lantern = toRead(a, "The Salt Lantern", "5003");
+        const qint64 copy = toRead(b, "The Salt Lantern", "5003");
+        const qint64 orchard = toRead(b, "The Glass Orchard", "5001", "9780000001115");
+        QVERIFY(lantern > 0 && copy > 0 && orchard > 0 && toRead(a, "The Glass Orchard", "5001", "9780000001115") > 0);
+        const QString lanternId = Spaces::bookId(b, copy);
+        QCOMPARE(Spaces::bookId(a, lantern), lanternId);
+        BookMeta corrupted = a.book(lantern)->meta;
+        corrupted.title = "The Glass Orchard";
+        QVERIFY(a.setMeta(lantern, corrupted, nullptr, Hlc::pack(now + 10, 0)));
+        // What an older Omabook left in B's log, and never in the book there.
+        ChangeLog::append(b, {.space = Spaces::personalSpace(b),
+                              .entity = "book",
+                              .id = lanternId,
+                              .field = "title",
+                              .value = "The Glass Orchard",
+                              .hlc = Hlc::pack(now + 10, 0)});
+        for (const Library *library : {&a, &b})
+            ChangeLog::append(*library, {.space = Spaces::personalSpace(*library),
+                                         .entity = "book",
+                                         .id = std::max(lanternId, Spaces::bookId(b, orchard)),
+                                         .field = "same_as",
+                                         .value = std::min(lanternId, Spaces::bookId(b, orchard)),
+                                         .hlc = Hlc::pack(now + 20, 0)});
+        BookMeta putRight = a.book(lantern)->meta;
+        putRight.title = "The Salt Lantern";
+        QVERIFY(a.setMeta(lantern, putRight, nullptr, Hlc::pack(now + 60, 0)));
+        QCOMPARE(BookLinks::record(b, Replication::operations(b)), QStringList());
+        QCOMPARE(b.book(copy)->meta.title, QString("The Salt Lantern"));
+        const QStringList pair{"The Glass Orchard / The Salt Lantern"};
+        QCOMPARE(BookLinks::unlink(b, Replication::operations(b), "The Salt Lantern", true), pair);
+        SyncOptions unlink;
+        unlink.unlink = QStringList{"The Salt Lantern"};
+        const SyncSummary unlinked = syncFrom(false, a, b, dir, unlink);
+        QVERIFY2(unlinked.problems.isEmpty(), qPrintable(unlinked.problems.join('\n')));
+        QCOMPARE(unlinked.titles.unlinked, pair);
+        QCOMPARE(countApart(a), qsizetype{1});
+        QCOMPARE(countApart(b), qsizetype{1});
+        for (const Library *library : {&a, &b}) {
+            QCOMPARE(library->books("The Salt Lantern").size(), 1);
+            QCOMPARE(library->books("The Glass Orchard").size(), 1);
+            QCOMPARE(library->books("The Glass Orchard").first().identifiers.value("goodreads").toString(), QString("5001"));
+        }
+    }
+
     // Two books to read, one on each side, with the same Goodreads id and
     // titles that disagree: never paired, and said to be kept apart. Each
     // side keeps its own: that identifier names a book there, so neither is

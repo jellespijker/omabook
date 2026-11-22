@@ -67,9 +67,9 @@ struct Taking {
     ReducedState merged;       // both sides' operations, as the log's rules merge them
     QHash<QString, QJsonObject> listed;
     QTemporaryDir scratch;
-    QSet<qint64> gone;                   // the books here the other side removed
-    QSet<QString> weak;                  // the books paired on less than their global id (BookLinks::weaklyPaired)
-    QHash<QString, QSet<QString>> stray; // the identifiers books have of one kept apart (StrayIdentifiers)
+    QSet<qint64> gone;      // the books here the other side removed
+    QSet<QString> weak;     // the books paired on less than their global id (BookLinks::weaklyPaired)
+    StrayIdentifiers stray; // the identifiers books have of one kept apart
 
     [[nodiscard]] QString standsFor(const QString &gid) const { return canonical.value(gid, gid); }
 };
@@ -226,6 +226,13 @@ void takeRemovals(Taking &taking, const QList<Book> &books) {
     }
 }
 
+// The identifiers a copy here, of the book `standsFor`, takes none of:
+// a book's kept apart from it, and those whose book can't be told (#166).
+[[nodiscard]] QSet<QString> strayIn(const Taking &taking, const Book &copy, const QString &standsFor) {
+    const QString gid = Spaces::bookId(taking.library, copy.id);
+    return taking.stray.of(copy, gid, standsFor) | taking.stray.doubtful(copy, gid, standsFor);
+}
+
 // One book both sides hold, decided once for all its copies here, and counted once.
 void takeBook(Taking &taking, const QList<Book> &copies) {
     const Book &here = copies.first();
@@ -237,7 +244,7 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
     bool reading = false;
     for (const Book &copy : copies)
         reading = SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun,
-                                        {.take = !pairedWeakly(taking, gid), .stray = taking.stray.value(gid)})
+                                        {.take = !pairedWeakly(taking, gid), .stray = strayIn(taking, copy, gid)})
                   || reading;
     if (reading)
         note(taking.summary.readingTaken, taking.summary.titles.readingTaken, here.meta.title);
@@ -321,7 +328,7 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
                   .scratch = {},
                   .gone = {},
                   .weak = BookLinks::weaklyPaired(ops),
-                  .stray = StrayIdentifiers::of(ops)};
+                  .stray = StrayIdentifiers(ops)};
     for (const auto &value : peer.books) {
         const QJsonObject book = value.toObject();
         const QString gid = taking.standsFor(book.value("gid").toString());
