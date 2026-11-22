@@ -244,14 +244,23 @@ struct RealHub {
             return u"no port, or no sshd_config"_s;
         server.setProcessEnvironment(environment());
         server.start(sshd, {u"-D"_s, u"-E"_s, dir.filePath(u"sshd.log"_s), u"-f"_s, dir.filePath(u"sshd_config"_s)});
-        agentProcess.setProcessEnvironment(environment());
-        agentProcess.start(agent, {u"-D"_s, u"-a"_s, agentSocket()});
         const bool listening =
             QTest::qWaitFor([this] { return sshdLog().contains(u"listening on"_s) || server.state() == QProcess::NotRunning; }, 10000);
-        if (!listening || server.state() != QProcess::Running
-            || !QTest::qWaitFor([this] { return QFileInfo::exists(agentSocket()); }, 10000))
-            return u"sshd or ssh-agent didn't start: "_s + QString::fromUtf8(server.readAll()) + sshdLog();
+        if (!listening || server.state() != QProcess::Running)
+            return u"sshd didn't start: "_s + QString::fromUtf8(server.readAll()) + sshdLog();
         return {};
+    }
+
+    // An agent of the test's own, for a client to try to forward; why not, when not.
+    [[nodiscard]] QString startAgent() {
+        agentProcess.setProcessChannelMode(QProcess::MergedChannels);
+        agentProcess.setProcessEnvironment(environment());
+        agentProcess.start(agent, {u"-D"_s, u"-a"_s, agentSocket()});
+        if (QTest::qWaitFor([this] { return QFileInfo::exists(agentSocket()) || agentProcess.state() == QProcess::NotRunning; }, 20000)
+            && agentProcess.state() == QProcess::Running)
+            return {};
+        return u"ssh-agent didn't start (%1): "_s.arg(agentProcess.state() == QProcess::Running ? u"no socket yet"_s : u"it ended"_s)
+               + QString::fromUtf8(agentProcess.readAll());
     }
 
     [[nodiscard]] QString agentSocket() const { return dir.filePath(u"agent.sock"_s); }
@@ -533,6 +542,8 @@ private slots:
             hub.client(u"laptop"_s, {u"-N"_s, u"-o"_s, u"ExitOnForwardFailure=yes"_s, u"-R"_s, u"0:127.0.0.1:%1"_s.arg(hub.port)}, {}, {});
         QVERIFY2(remote != 0 && refused.contains(u"forwarding failed"_s), qPrintable(refused));
         // An agent and a terminal: sshd gives the session neither, which it would refuse.
+        const QString agentStarted = hub.startAgent();
+        QVERIFY2(agentStarted.isEmpty(), qPrintable(agentStarted));
         const auto [agent, unforwarded] =
             hub.client(u"laptop"_s, {u"-A"_s, u"-o"_s, u"IdentityAgent="_s + hub.agentSocket()}, u"omabook hub session"_s, hello);
         QVERIFY2(agent == 0 && answers(unforwarded).value(0).value("ok").toBool(), qPrintable(unforwarded + hub.sshdLog()));
