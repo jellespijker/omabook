@@ -106,7 +106,6 @@ details{border-top:1px solid var(--line);padding:.7rem 0}summary{cursor:pointer;
 /* The graph is the peak of the page: a whole band, its heading largest, its pictures widest. */
 .home #graph{border-top:0;background:var(--bg2);margin-inline:-1rem;padding-inline:1rem;padding-block:3.5rem 4rem}
 body.home{overflow-x:clip}
-@media(min-width:60rem){.home #graph{margin-inline:calc(-1 * (50vw - 50%) + 6.5rem);padding-inline:3rem}}
 .home #graph .pane-h h2{font-size:clamp(2.2rem,6vw,4.5rem);letter-spacing:-.04em}
 .home #graph .pane-h kbd{font-size:clamp(2rem,5vw,3.6rem)}
 .home #graph .sub{font-size:1.25rem}
@@ -149,3 +148,53 @@ body.home{overflow-x:clip}
   details[open]>p{animation:rise .25s cubic-bezier(.16,1,.3,1)}
 }
 .rail a:focus-visible kbd{color:var(--a4);border-color:var(--a4)}
+
+/* Every size: the grid never grows past the screen, the reading column can shrink, and the page scales up where there is room. */
+.docs{grid-template-columns:minmax(0,1fr)}
+@media(min-width:60rem){.docs{grid-template-columns:15rem minmax(0,1fr)}}
+.prose,.col,.plugins-page>*{min-width:0}
+.prose pre,.prose table{max-width:100%}
+.prose code{overflow-wrap:anywhere}
+.prose pre code{overflow-wrap:normal}
+@media(min-width:112rem){html{font-size:112.5%}}
+@media(min-width:150rem){html{font-size:131%}}
+@media(max-width:22rem){body{font-size:.94rem}.home .hero h1{font-size:2.15rem}.themes span{padding:.2rem .4rem}.pane-h{gap:.7rem}}
+@media(pointer:coarse){.themes span,.top nav a,.rail a,.toc a,summary,.pager a{min-height:44px;display:inline-flex;align-items:center}.top nav{gap:0 .4rem}.top nav a{padding-inline:.5rem}.rail ul{gap:0 .4rem}}
+@media(max-height:32rem) and (orientation:landscape){.home .hero{padding-block:1.5rem}.top{position:static}}
+@media print{.top,.rail,.themes,.skip,.pager,.cur{display:none}body{background:#fff;color:#000}a{color:#000}.pane,.win{break-inside:avoid;border-color:#999}.home #graph{background:none}}
+
+/* Header and tables on small screens: one row each, the theme strip scrolls sideways, and a table becomes a list. */
+@media(max-width:60rem){
+  .top{gap:.6rem 1rem;padding-block:.7rem}
+  .brand{flex:1 1 auto}
+  .top nav{order:2;flex:1 1 100%;flex-wrap:nowrap;overflow-x:auto;gap:1.3rem;padding-bottom:.2rem;scrollbar-width:thin}
+  .top nav a{white-space:nowrap}
+  .themes{order:3;flex:1 1 100%;overflow-x:auto;scrollbar-width:thin}
+  .themes fieldset{flex-wrap:nowrap;white-space:nowrap}
+}
+@media(max-width:40rem){
+  .prose table:not(.keys) thead{display:none}
+  .prose table:not(.keys) tr{display:block;padding:.7rem 0;border-bottom:1px solid var(--line)}
+  .prose table:not(.keys) th,.prose table:not(.keys) td{display:block;border:0;padding:.1rem 0;white-space:normal}
+  .keys th{white-space:normal}
+}
+@media(max-width:60rem){
+  .rail ul,.toc ol{display:flex;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;gap:.2rem 1.2rem;scrollbar-width:thin;padding-bottom:.4rem}
+  .rail li,.toc li{flex:none;margin:0}
+  .rail a,.toc a{white-space:nowrap}
+  .toc-h{margin-bottom:.3rem}
+}
+.wrap{grid-template-columns:minmax(0,1fr)}
+@media(min-width:60rem){.wrap{grid-template-columns:13rem minmax(0,1fr)}}
+.wrap>*,.docs>*{min-width:0}
+.top{min-width:0}
+.top>*{min-width:0;max-width:100%}
+.themes label{position:relative}
+/* Wide screens: the hero uses the room, text on the left and the shelf beside it. */
+@media(min-width:90rem){
+  .wrap,.plugins-page,.docs,.help,.foot{max-width:100rem}
+  .home .hero{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.25fr);column-gap:3rem;align-items:start}
+  .home .hero>*{grid-column:1}
+  .home .hero>.win{grid-column:2;grid-row:1/span 4;margin-top:0;position:sticky;top:5rem}
+  .home .hero h1{max-width:none}
+}
