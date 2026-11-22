@@ -834,6 +834,18 @@ private slots:
 
     // --- When knowledge is revealed, and spoilers ---
 
+    // A book read back to its very start, none of the way (#159), keeps
+    // what was read past it as read, and what lies further on as ahead.
+    void spoilersStayAheadOfABookReadBackToItsStart() {
+        Story story;
+        story.library.setProgress(story.first, {2, 0.6, 30, 0});
+        story.library.setProgress(story.first, {0, 0.0, 0, 0});
+        GraphBrowser browser;
+        browser.setLibrary(&story.library);
+        browser.showBook(story.first);
+        QCOMPARE(browser.spoilersAfter().value("section").toInt(), 2);
+    }
+
     void spoilersAreKeptApartInTheDetails() {
         Story story;
         Graph graph(story.library);

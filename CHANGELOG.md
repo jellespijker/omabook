@@ -26,6 +26,7 @@ moves those lines under its version.
 ### Fixed
 
 - A page of a PDF turned just as the pages are laid out anew stays turned (#159): with End, an arrow or a tap while a busy computer counts the pages and sets two side by side, or as the layout changes, the reader went back to the page it was on before.
+- What lies ahead in a book stays hidden in its graph after going back to its very start (#159): with the reading place at none of the way, the graph took the book for one not begun and showed everything, even past where it was ever read.
 
 ## [0.2.1] - 2026-11-21
 

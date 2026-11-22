@@ -162,9 +162,14 @@ GraphPlace GraphContext::furthest(const Library &library, qint64 bookId) {
 
 std::optional<GraphPlace> GraphContext::spoilersAfter(const Library &library, qint64 bookId) {
     const auto book = library.book(bookId);
-    if (!book || book->status() == "read" || book->percent <= 0)
+    if (!book || book->status() == "read")
         return std::nullopt;
-    return furthest(library, bookId);
+    // A book not begun has none; one gone back to its very start (none of
+    // the way, as the reader says there) has been read as far as it ever was.
+    const GraphPlace far = furthest(library, bookId);
+    if (book->percent <= 0 && far.section <= 0 && far.fraction <= 0)
+        return std::nullopt;
+    return far;
 }
 
 GraphKnown GraphContext::readerKnows(const Library &library) {
