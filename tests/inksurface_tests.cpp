@@ -217,6 +217,10 @@ public:
     // Waits for the pen's pause and answers the batches sent.
     QList<QVariantMap> pause() {
         QTest::qWait(surface->batchPause() + 40);
+        // On a processor too busy to wake the test in time, the wait ends
+        // without the event loop having run since the pause was over, and
+        // the batch's timer not yet heard: it runs once more now.
+        QCoreApplication::processEvents();
         return std::exchange(batches, {});
     }
     [[nodiscard]] bool frame() {
