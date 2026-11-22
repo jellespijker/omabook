@@ -215,6 +215,14 @@ void tombstone(const Library &library, const QString &entity, const QString &gid
     return ChangeLog::statements(library).first(u"SELECT 1 FROM "_s + table + u" WHERE id = ?"_s, {id}).has_value();
 }
 
+// A kind of row's global ids, by local id.
+[[nodiscard]] QHash<qint64, QString> globalIdsOf(const Library &library, const QString &entity) {
+    QHash<qint64, QString> ids;
+    for (QSqlQuery row = ChangeLog::query(library, u"SELECT local_id, global_id FROM global_ids WHERE entity = ?"_s, {entity}); row.next();)
+        ids.insert(row.value(0).toLongLong(), row.value(1).toString());
+    return ids;
+}
+
 } // namespace
 
 void ChangeLogGraph::syncToLog(const Library &library, bool baseline) {
@@ -284,4 +292,31 @@ void ChangeLogGraph::detectDeletedEntity(const Library &library, const QString &
         if (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value != "1"_L1)
             ChangeLog::append(library, {space, entity, gid, u"removed"_s, u"1"_s, Spaces::tickHlc(library)});
     }
+}
+
+ChangeLogGraph::GlobalIds ChangeLogGraph::globalIds(const Library &library) {
+    GlobalIds graph;
+    const QHash<qint64, QString> books = globalIdsOf(library, u"book"_s);
+    QHash<qint64, QString> nodes = globalIdsOf(library, u"node"_s);
+    for (QSqlQuery row = ChangeLog::query(library, u"SELECT id, scope, kind, name FROM graph_nodes"_s); row.next();) {
+        QString &id = nodes[row.value(0).toLongLong()];
+        if (id.isEmpty())
+            id = Spaces::nodeGlobalId(row.value(1).toString(), row.value(2).toString(), row.value(3).toString());
+        graph.things.insert(id);
+    }
+    const QHash<qint64, QString> edges = globalIdsOf(library, u"edge"_s);
+    for (QSqlQuery row = ChangeLog::query(library, u"SELECT id, source, target, kind FROM graph_edges"_s); row.next();) {
+        const QString known = edges.value(row.value(0).toLongLong());
+        graph.relations.insert(known.isEmpty() ? Spaces::edgeGlobalId(nodes.value(row.value(1).toLongLong()),
+                                                                      nodes.value(row.value(2).toLongLong()), row.value(3).toString())
+                                               : known);
+    }
+    const QHash<qint64, QString> facts = globalIdsOf(library, u"fact"_s);
+    for (QSqlQuery row = ChangeLog::query(library, u"SELECT id, node_id, kind, value, book_id FROM graph_facts"_s); row.next();) {
+        const QString known = facts.value(row.value(0).toLongLong());
+        graph.facts.insert(known.isEmpty() ? Spaces::factGlobalId(nodes.value(row.value(1).toLongLong()), row.value(2).toString(),
+                                                                  row.value(3).toString(), books.value(row.value(4).toLongLong()))
+                                           : known);
+    }
+    return graph;
 }

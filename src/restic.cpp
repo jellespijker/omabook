@@ -130,6 +130,14 @@ std::expected<void, Failure> Restic::forget(const ResticRepository &repository, 
     return run(repository, QStringList{u"forget"_s, u"--prune"_s} + ids).transform([](const Ran &) {});
 }
 
+std::expected<void, Failure> Restic::restore(const ResticRepository &repository, const QString &id, const QString &target,
+                                             const QStringList &including) {
+    QStringList arguments{u"restore"_s, id, u"--target"_s, target};
+    for (const QString &path : including)
+        arguments << u"--include"_s << literal(path);
+    return run(repository, arguments).transform([](const Ran &) {});
+}
+
 QString Restic::literal(const QString &path) {
     QString pattern;
     for (const QChar c : path) {

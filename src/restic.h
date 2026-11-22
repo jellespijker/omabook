@@ -56,6 +56,11 @@ struct Backup {
 // Forgets the snapshots of these ids and gives back the room only they took.
 [[nodiscard]] std::expected<void, Failure> forget(const ResticRepository &repository, const QStringList &ids);
 
+// Restores the snapshot `id` into `target`, each path as it was under it
+// (target + the path), only what `including` names (whole folders) when given.
+[[nodiscard]] std::expected<void, Failure> restore(const ResticRepository &repository, const QString &id, const QString &target,
+                                                   const QStringList &including = {});
+
 // `path` as a restic pattern that matches only that path: its *, ?, [ and \ escaped.
 [[nodiscard]] QString literal(const QString &path);
 

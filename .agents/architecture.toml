@@ -44,7 +44,7 @@ modules = [
   "sharedspace", "signedops", "spacediff", "booklinks", "bookidentity", "bookpairing", "strayidentifiers", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "chronologybranch", "tenancy", "tenancyschema", "tenancyleave",
-  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginfiles", "pluginnews", "highlights", "bookink",
+  "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginfiles", "pluginnews", "highlights", "bookink", "librarydiff", "bookrestore",
   "annotationink", "lineink", "opkinds", "keptops",
   "booksearch", "annotationwords", "meaningindex", "bookwords",
   "readinglog", "readingstats", "readinggoal",
@@ -76,7 +76,7 @@ modules = [
   "modeldiscovery", "modelsearch",
   "ollamaprovider",
   "aitopic",
-  "restic", "snapshotretention", "snapshots",
+  "restic", "snapshotretention", "snapshots", "snapshotrestore",
 ]
 
 [layers.operations]
@@ -97,6 +97,7 @@ modules = [
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "snapshotrestorecommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

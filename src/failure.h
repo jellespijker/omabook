@@ -266,6 +266,15 @@ public:
         SnapshotNotCopied,      // {the database's reason}
         ResticMissing,          // {program}
         ResticFailed,           // {what restic said}
+        // Going back to a snapshot (#183).
+        SnapshotNotFound,      // {id}
+        SnapshotIdAmbiguous,   // {id}
+        SnapshotNotRestored,   // {why}
+        SnapshotBookNotFound,  // {book}
+        SnapshotBookAmbiguous, // {book}
+        RestoreBookGone,       // {title}
+        RestoreFolderTaken,    // {folder}
+        RestoreNothingAsked,   // {}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

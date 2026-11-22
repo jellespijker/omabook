@@ -1,6 +1,7 @@
 #pragma once
 
 #include "hubkeeper.h"
+#include "hubrequests.h"
 #include "hubschedule.h"
 #include "snapshots.h"
 
@@ -19,6 +20,15 @@ namespace HubSnapshots {
 // once the lock is given back, so requests wait only for the copies; then
 // the thinning.
 [[nodiscard]] HubSchedule::Job nightly(const Snapshots &snapshots);
+
+// The requests of going back to a snapshot (#183), added to the hub's:
+//   {"request": "snapshots", "library"}: its snapshots, oldest first ({"snapshots": [...]});
+//   {"request": "snapshot-diff", "library", "from", "to"?}: the library diff
+//     from one snapshot to another, or to now (SnapshotRestore::Compared::toJson);
+//   {"request": "snapshot-restore", "library", "snapshot", "book", "parts": ["details", "annotations"]}:
+//     one book put back, in the keeper's lock after its moment snapshot ({"restored", "undo"}).
+// A whole library is restored into a new folder on a computer, not through the hub.
+void answer(HubRequests &requests, const Snapshots &snapshots);
 
 [[nodiscard]] SnapshotReason reasonOf(HubKeeper::Moment moment);
 

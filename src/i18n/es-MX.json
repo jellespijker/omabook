@@ -2711,5 +2711,13 @@
   "The hub can't write its computers' keys to %1: %2": "El hub no puede escribir las claves de sus computadoras en %1: %2",
   "This computer's key for its hubs can't be kept in %1: %2": "La clave de esta computadora para sus hubs no se puede guardar en %1: %2",
   "The hub at %1 can't be reached, or has no Omabook: %2": "No se puede llegar al hub en %1, o no tiene Omabook: %2",
-  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Esta computadora no está enlazada al hub en %1. Enlázala: omabook hub add %1"
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Esta computadora no está enlazada al hub en %1. Enlázala: omabook hub add %1",
+  "This library has no snapshot %1 (omabook snapshot list lists them).": "Esta biblioteca no tiene ningún snapshot %1 (omabook snapshot list los enumera).",
+  "More than one snapshot begins with %1: give more of its id.": "Más de un snapshot empieza con %1: da más de su id.",
+  "The snapshot couldn't be restored: %1": "No se pudo restaurar el snapshot: %1",
+  "The snapshot holds no book %1.": "El snapshot no contiene ningún libro %1.",
+  "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Más de un libro se llama %1: nómbralo por su id global (omabook snapshot diff --json los muestra).",
+  "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 ya no está en esta biblioteca, así que no se puede devolver nada de él: restaura la biblioteca entera en una carpeta nueva para recuperarlo.",
+  "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Una biblioteca se restaura solo en una carpeta nueva o vacía, nunca encima de la biblioteca ni dentro de ella: %1 no lo es.",
+  "Say what to put back of the book: its details, its annotations, or both.": "Di qué devolver del libro: sus datos, sus anotaciones o ambos."
 }

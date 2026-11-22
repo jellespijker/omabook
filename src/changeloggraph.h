@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QList>
+#include <QSet>
 #include <QString>
 #include <QtTypes>
 
@@ -23,5 +24,13 @@ struct Rows {
 };
 // Takes in just those rows, and a tombstone for each that is gone.
 void syncRowsToLog(const Library &library, const Rows &rows);
+
+// The global ids of the whole graph, of every tenant, as the log names its
+// rows: its things, relations and facts (what the library diff counts, #183).
+// A row the log hasn't named yet is named as Spaces would name it.
+struct GlobalIds {
+    QSet<QString> things, relations, facts;
+};
+[[nodiscard]] GlobalIds globalIds(const Library &library);
 
 } // namespace ChangeLogGraph

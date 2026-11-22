@@ -2610,5 +2610,13 @@
   "The hub can't write its computers' keys to %1: %2": "Der Hub kann die Schlüssel seiner Computer nicht in %1 schreiben: %2",
   "This computer's key for its hubs can't be kept in %1: %2": "Der Schlüssel dieses Computers für seine Hubs kann nicht in %1 aufbewahrt werden: %2",
   "The hub at %1 can't be reached, or has no Omabook: %2": "Der Hub unter %1 ist nicht erreichbar oder hat kein Omabook: %2",
-  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Dieser Computer ist nicht mit dem Hub unter %1 verbunden. Verbinde ihn: omabook hub add %1"
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Dieser Computer ist nicht mit dem Hub unter %1 verbunden. Verbinde ihn: omabook hub add %1",
+  "This library has no snapshot %1 (omabook snapshot list lists them).": "Diese Bibliothek hat keinen Snapshot %1 (omabook snapshot list listet sie auf).",
+  "More than one snapshot begins with %1: give more of its id.": "Mehr als ein Snapshot beginnt mit %1: gib mehr von seiner ID an.",
+  "The snapshot couldn't be restored: %1": "Der Snapshot konnte nicht wiederhergestellt werden: %1",
+  "The snapshot holds no book %1.": "Der Snapshot enthält kein Buch %1.",
+  "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Mehr als ein Buch heißt %1: nenne es bei seiner globalen ID (omabook snapshot diff --json zeigt sie).",
+  "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 ist nicht mehr in dieser Bibliothek, also kann nichts davon zurückgelegt werden: stelle die ganze Bibliothek in einem neuen Ordner wieder her, um es zurückzubekommen.",
+  "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Eine Bibliothek wird nur in einen neuen oder leeren Ordner wiederhergestellt, nie über die Bibliothek oder in sie hinein: %1 ist keiner.",
+  "Say what to put back of the book: its details, its annotations, or both.": "Sag, was vom Buch zurückgelegt werden soll: seine Angaben, seine Anmerkungen oder beides."
 }

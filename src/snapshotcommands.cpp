@@ -16,6 +16,8 @@
 #include "library.h"
 #include "librarymigrations.h"
 #include "settings.h"
+#include "snapshotrestore.h"
+#include "snapshotrestorecommands.h"
 
 namespace {
 
@@ -89,13 +91,6 @@ constexpr std::array valued{"--library"_L1, "--model"_L1,     "--user"_L1,
     return Settings().libraryPath();
 }
 
-[[nodiscard]] QJsonObject snapshotJson(const Restic::Snapshot &snapshot) {
-    return {{u"id"_s, snapshot.id},
-            {u"time"_s, snapshot.time.toString(Qt::ISODate)},
-            {u"kind"_s, snapshot.tags.contains(u"nightly"_s) ? u"nightly"_s : u"moment"_s},
-            {u"reason"_s, snapshot.tagged(u"reason:"_s)}};
-}
-
 int setUp(const QCommandLineParser &parser, Snapshots &snapshots) {
     const auto key = snapshots.setUp(parser.value(u"repository"_s));
     if (!key)
@@ -118,14 +113,14 @@ int list(const QCommandLineParser &parser, const Snapshots &snapshots, const Lib
     if (parser.isSet(u"json"_s)) {
         QJsonArray array;
         for (const Restic::Snapshot &snapshot : *found)
-            array << snapshotJson(snapshot);
+            array << SnapshotRestore::toJson(snapshot);
         printJson({{u"library"_s, library.root()}, {u"snapshots"_s, array}});
         return 0;
     }
     if (found->isEmpty())
         printLine(stdout, u"No snapshots of this library yet."_s);
     for (const Restic::Snapshot &snapshot : *found) {
-        const QJsonObject json = snapshotJson(snapshot);
+        const QJsonObject json = SnapshotRestore::toJson(snapshot);
         printLine(stdout, u"%1  %2  %3 (%4)"_s.arg(snapshot.time.toString(u"yyyy-MM-dd HH:mm"_s), snapshot.shortId(),
                                                    json.value("kind"_L1).toString(), json.value("reason"_L1).toString()));
     }
@@ -146,18 +141,19 @@ int said(const QCommandLineParser &parser, const std::optional<Snapshots::Taken>
     return 0;
 }
 
-} // namespace
-
-int runSnapshotCli(const QStringList &arguments) {
+// setup, now, list and nightly.
+int takeOrList(const QStringList &arguments) {
     QCommandLineParser parser;
     parser.setApplicationDescription(
         u"Snapshots of the library, made with restic: encrypted, each keeping only what changed, kept to go back to. "
         "setup makes the place for them and the recovery key, shown once; now takes one (when something changed); "
         "list lists them; nightly takes the night's, when it is due, and thins the older ones: every one of 14 days, "
         "then one a day for 7 days, a week for 4 weeks, a month for 12 months, and one of every year. A sync, an "
-        "import or a tidy that changes something takes a moment snapshot first, once snapshots are set up."_s);
+        "import or a tidy that changes something takes a moment snapshot first, once snapshots are set up. "
+        "diff and restore go back to one: omabook snapshot diff --help."_s);
     parser.addHelpOption();
-    parser.addPositionalArgument(u"what"_s, u"setup, now, list or nightly."_s, u"<setup|now|list|nightly>"_s);
+    parser.addPositionalArgument(u"what"_s, u"setup, now, list or nightly; or diff or restore."_s,
+                                 u"<setup|now|list|nightly|diff|restore>"_s);
     parser.addOption({u"json"_s, u"Print the result as JSON."_s});
     parser.addOption({u"library"_s,
                       u"Use the library in this folder instead of the current one, for this run only "
@@ -201,6 +197,15 @@ int runSnapshotCli(const QStringList &arguments) {
     }
     const auto taken = snapshots.nightly(library, QDateTime::currentDateTime());
     return taken ? said(parser, *taken) : fail(taken.error());
+}
+
+} // namespace
+
+int runSnapshotCli(const QStringList &arguments) {
+    // Going back to one is a command of its own (#183).
+    if (const QString word = firstWord(arguments); word == "diff"_L1 || word == "restore"_L1)
+        return runSnapshotRestoreCli(arguments);
+    return takeOrList(arguments);
 }
 
 std::optional<SnapshotReason> riskyMoment(const QStringList &arguments) {

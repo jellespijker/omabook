@@ -2610,5 +2610,13 @@
   "The hub can't write its computers' keys to %1: %2": "De hub kan de sleutels van zijn computers niet naar %1 schrijven: %2",
   "This computer's key for its hubs can't be kept in %1: %2": "De sleutel van deze computer voor zijn hubs kan niet in %1 bewaard worden: %2",
   "The hub at %1 can't be reached, or has no Omabook: %2": "De hub op %1 is niet bereikbaar, of heeft geen Omabook: %2",
-  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Deze computer is niet gekoppeld aan de hub op %1. Koppel hem: omabook hub add %1"
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Deze computer is niet gekoppeld aan de hub op %1. Koppel hem: omabook hub add %1",
+  "This library has no snapshot %1 (omabook snapshot list lists them).": "Deze bibliotheek heeft geen snapshot %1 (omabook snapshot list somt ze op).",
+  "More than one snapshot begins with %1: give more of its id.": "Meer dan één snapshot begint met %1: geef meer van zijn id.",
+  "The snapshot couldn't be restored: %1": "De snapshot kon niet worden teruggezet: %1",
+  "The snapshot holds no book %1.": "De snapshot bevat geen boek %1.",
+  "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Meer dan één boek heet %1: noem het bij zijn globale id (omabook snapshot diff --json toont ze).",
+  "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 staat niet meer in deze bibliotheek, dus er kan niets van worden teruggezet: zet de hele bibliotheek terug in een nieuwe map om het terug te krijgen.",
+  "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Een bibliotheek wordt alleen teruggezet in een nieuwe of lege map, nooit over de bibliotheek heen of erin: %1 is dat niet.",
+  "Say what to put back of the book: its details, its annotations, or both.": "Zeg wat er van het boek moet worden teruggezet: zijn gegevens, zijn aantekeningen of allebei."
 }

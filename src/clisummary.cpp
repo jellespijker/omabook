@@ -51,6 +51,7 @@ QString cliSummary() {
            "  opds <address> [--add N]        Browse an OPDS catalog, and add a book from it\n"
            "  identity [--export]             Print your id and its fingerprint, to share spaces with others\n"
            "  snapshot setup|now|list|nightly  Encrypted snapshots of the library to go back to, made with restic\n"
+           "  snapshot diff|restore <id>      What changed since a snapshot; the library, or one book, as it was\n"
            "  spaces [create|invite|join|sync|remove]  The spaces you are in; shared ones several people write\n"
            "  hub run|session|status          Be a hub: keep libraries without a window, always on, as their one writer\n"
            "  hub add|remove|computers <host> Link this computer to your hub, over ssh, by a key that opens only Omabook\n"

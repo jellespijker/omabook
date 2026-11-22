@@ -86,11 +86,12 @@ int run(const QCommandLineParser &parser) {
         return failLine(Failure(Failure::Code::HubRunning, {place.socket()}).text());
     const Snapshots snapshots(SnapshotPlace::ofHub(place)); // before the keeper, which runs its moment snapshots
     HubKeeper keeper(folder);
-    const HubRequests requests = HubRequests::usual();
+    HubRequests requests = HubRequests::usual();
     HubSchedule schedule(keeper, place.state());
     // What comes later hooks in here, before the libraries open (requests.add, #182 on).
     // The moment snapshots before each write that changes much, and the nightly one (#181).
     keeper.before(HubSnapshots::before(snapshots));
+    HubSnapshots::answer(requests, snapshots); // their diff and restore (#183)
     schedule.daily(u"snapshot"_s, QTime(SnapshotRetention::nightHour, 0), HubSnapshots::nightly(snapshots));
     if (const auto opened = keeper.open(); !opened)
         return failLine(opened.error().text());

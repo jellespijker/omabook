@@ -2711,5 +2711,13 @@
   "The hub can't write its computers' keys to %1: %2": "Le hub ne peut pas écrire les clés de ses ordinateurs dans %1 : %2",
   "This computer's key for its hubs can't be kept in %1: %2": "La clé de cet ordinateur pour ses hubs ne peut pas être gardée dans %1 : %2",
   "The hub at %1 can't be reached, or has no Omabook: %2": "Le hub à %1 est injoignable, ou n'a pas Omabook : %2",
-  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Cet ordinateur n'est pas lié au hub à %1. Liez-le : omabook hub add %1"
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Cet ordinateur n'est pas lié au hub à %1. Liez-le : omabook hub add %1",
+  "This library has no snapshot %1 (omabook snapshot list lists them).": "Cette bibliothèque n'a pas de snapshot %1 (omabook snapshot list les énumère).",
+  "More than one snapshot begins with %1: give more of its id.": "Plus d'un snapshot commence par %1 : donnez davantage de son identifiant.",
+  "The snapshot couldn't be restored: %1": "Le snapshot n'a pas pu être restauré : %1",
+  "The snapshot holds no book %1.": "Le snapshot ne contient aucun livre %1.",
+  "More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).": "Plus d'un livre s'appelle %1 : désignez-le par son identifiant global (omabook snapshot diff --json les montre).",
+  "%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.": "%1 n'est plus dans cette bibliothèque, rien de lui ne peut donc y être remis : restaurez toute la bibliothèque dans un nouveau dossier pour le retrouver.",
+  "A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.": "Une bibliothèque n'est restaurée que dans un dossier nouveau ou vide, jamais par-dessus la bibliothèque ni à l'intérieur : %1 n'en est pas un.",
+  "Say what to put back of the book: its details, its annotations, or both.": "Dites ce qu'il faut remettre du livre : ses détails, ses annotations, ou les deux."
 }
