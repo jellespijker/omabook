@@ -282,6 +282,18 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubBadRequest, tr("The hub takes each request as one line of JSON: an object that names its request.")},
     {Failure::Code::HubSecretOpen, tr("The secret %1 can be read by others; only the hub's own user may (chmod 600 it).")},
     {Failure::Code::HubSecretUnreadable, tr("The hub can't read the secret %1: %2")},
+    {Failure::Code::HubProtocol, tr("The hub speaks protocol %1, and a session starts with its hello.")},
+    {Failure::Code::HubOnlySession, tr("This key opens only the hub's session, never %1.")},
+    {Failure::Code::HubNotAComputer, tr("This key no longer opens the hub. Link the computer again: omabook hub add")},
+    {Failure::Code::HubNotOwner, tr("The hub belongs to someone else: it takes only its owner's computers.")},
+    {Failure::Code::HubBadSignature, tr("The link isn't signed by the person it names.")},
+    {Failure::Code::HubBadKey, tr("That is no ed25519 public key, which is what the hub takes for a computer.")},
+    {Failure::Code::HubBadComputerName, tr("%1 can't name a computer: use letters, digits, dots, dashes and underscores.")},
+    {Failure::Code::HubNoSuchComputer, tr("No computer called %1 is linked to the hub.")},
+    {Failure::Code::HubKeysUnwritable, tr("The hub can't write its computers' keys to %1: %2")},
+    {Failure::Code::HubKeyUnmade, tr("This computer's key for its hubs can't be kept in %1: %2")},
+    {Failure::Code::HubUnreachable, tr("The hub at %1 can't be reached, or has no Omabook: %2")},
+    {Failure::Code::HubNotLinked, tr("This computer isn't linked to the hub at %1. Link it: omabook hub add %1")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

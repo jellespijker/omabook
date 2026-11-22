@@ -2598,5 +2598,17 @@
   "The snapshots' password couldn't be kept: %1": "Het wachtwoord van de snapshots kon niet worden bewaard: %1",
   "The library couldn't be copied for its snapshot: %1": "De bibliotheek kon niet worden gekopieerd voor haar snapshot: %1",
   "restic (%1) isn't installed here, and snapshots are made with it.": "restic (%1) is hier niet geïnstalleerd, en snapshots worden ermee gemaakt.",
-  "restic couldn't make or read the snapshots: %1": "restic kon de snapshots niet maken of lezen: %1"
+  "restic couldn't make or read the snapshots: %1": "restic kon de snapshots niet maken of lezen: %1",
+  "The hub speaks protocol %1, and a session starts with its hello.": "De hub spreekt protocol %1, en een sessie begint met zijn hallo.",
+  "This key opens only the hub's session, never %1.": "Deze sleutel opent alleen de sessie van de hub, nooit %1.",
+  "This key no longer opens the hub. Link the computer again: omabook hub add": "Deze sleutel opent de hub niet meer. Koppel de computer opnieuw: omabook hub add",
+  "The hub belongs to someone else: it takes only its owner's computers.": "De hub is van iemand anders: hij neemt alleen de computers van zijn eigenaar aan.",
+  "The link isn't signed by the person it names.": "De koppeling is niet ondertekend door de persoon die ze noemt.",
+  "That is no ed25519 public key, which is what the hub takes for a computer.": "Dat is geen openbare ed25519-sleutel, en alleen die neemt de hub aan voor een computer.",
+  "%1 can't name a computer: use letters, digits, dots, dashes and underscores.": "%1 kan geen computer heten: gebruik letters, cijfers, punten, streepjes en liggende streepjes.",
+  "No computer called %1 is linked to the hub.": "Er is geen computer met de naam %1 aan de hub gekoppeld.",
+  "The hub can't write its computers' keys to %1: %2": "De hub kan de sleutels van zijn computers niet naar %1 schrijven: %2",
+  "This computer's key for its hubs can't be kept in %1: %2": "De sleutel van deze computer voor zijn hubs kan niet in %1 bewaard worden: %2",
+  "The hub at %1 can't be reached, or has no Omabook: %2": "De hub op %1 is niet bereikbaar, of heeft geen Omabook: %2",
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Deze computer is niet gekoppeld aan de hub op %1. Koppel hem: omabook hub add %1"
 }

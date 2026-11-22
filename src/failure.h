@@ -192,6 +192,19 @@ public:
         HubBadRequest,       // {}
         HubSecretOpen,       // {file}: others may read it
         HubSecretUnreadable, // {file, the system's reason}
+        // A person's computers linked to their hub (#180, ADR 0012).
+        HubProtocol,        // {the protocol it speaks}: no hello in it first
+        HubOnlySession,     // {the command the client asked for}
+        HubNotAComputer,    // {}: the key isn't linked
+        HubNotOwner,        // {}: the computer isn't its owner's
+        HubBadSignature,    // {}
+        HubBadKey,          // {}
+        HubBadComputerName, // {name}
+        HubNoSuchComputer,  // {name}
+        HubKeysUnwritable,  // {file, the system's reason}
+        HubKeyUnmade,       // {file, the system's reason}
+        HubUnreachable,     // {host, what ssh said}
+        HubNotLinked,       // {host}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)

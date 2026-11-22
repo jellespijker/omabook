@@ -2699,5 +2699,17 @@
   "The snapshots' password couldn't be kept: %1": "No se pudo guardar la contraseña de las instantáneas: %1",
   "The library couldn't be copied for its snapshot: %1": "No se pudo copiar la biblioteca para su instantánea: %1",
   "restic (%1) isn't installed here, and snapshots are made with it.": "restic (%1) no está instalado aquí, y las instantáneas se hacen con él.",
-  "restic couldn't make or read the snapshots: %1": "restic no pudo crear ni leer las instantáneas: %1"
+  "restic couldn't make or read the snapshots: %1": "restic no pudo crear ni leer las instantáneas: %1",
+  "The hub speaks protocol %1, and a session starts with its hello.": "El hub habla el protocolo %1, y una sesión empieza con su saludo.",
+  "This key opens only the hub's session, never %1.": "Esta clave abre solo la sesión del hub, nunca %1.",
+  "This key no longer opens the hub. Link the computer again: omabook hub add": "Esta clave ya no abre el hub. Vuelve a enlazar la computadora: omabook hub add",
+  "The hub belongs to someone else: it takes only its owner's computers.": "El hub es de otra persona: solo acepta las computadoras de su dueño.",
+  "The link isn't signed by the person it names.": "El enlace no está firmado por la persona que nombra.",
+  "That is no ed25519 public key, which is what the hub takes for a computer.": "Esa no es una clave pública ed25519, que es lo que el hub acepta para una computadora.",
+  "%1 can't name a computer: use letters, digits, dots, dashes and underscores.": "%1 no puede nombrar una computadora: usa letras, dígitos, puntos, guiones y guiones bajos.",
+  "No computer called %1 is linked to the hub.": "Ninguna computadora llamada %1 está enlazada al hub.",
+  "The hub can't write its computers' keys to %1: %2": "El hub no puede escribir las claves de sus computadoras en %1: %2",
+  "This computer's key for its hubs can't be kept in %1: %2": "La clave de esta computadora para sus hubs no se puede guardar en %1: %2",
+  "The hub at %1 can't be reached, or has no Omabook: %2": "No se puede llegar al hub en %1, o no tiene Omabook: %2",
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Esta computadora no está enlazada al hub en %1. Enlázala: omabook hub add %1"
 }

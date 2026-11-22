@@ -25,6 +25,13 @@ its own over HTTPS.
 - There's no second protocol to design, version and secure, and no new open port for management.
 - Being reachable means being reachable over ssh: on the tailnet, or as the person sets up ssh.
 - The window's Hubs panel (#189) is a client of the same session requests as the command line.
+- **How it is built (#180).** A computer's key for its hubs is its own, ed25519, made by Omabook. `hub add` installs it
+  over the person's ssh (`omabook hub allow` there), signed by their identity, as
+  `restrict,command="'<omabook>' hub session --key '<its fingerprint>'"`: the hub writes the fingerprint, so the
+  session knows the computer by its key, never by what the client says, and `restrict` stands for
+  `no-port-forwarding,no-pty` and the rest. The session speaks a versioned protocol, one JSON object a line: first
+  `{"request": "hello", "protocol": 1}`, then only its requests; anything else ends it. The requests the daemon
+  answers are handed on with the computer's name in them, the ground the sync with the hub (#188) builds on.
 
 ## Alternatives considered
 

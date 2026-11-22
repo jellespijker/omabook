@@ -26,8 +26,8 @@ public:
         QString error; // what the command wrote to standard error
         bool ok() const { return code == 0; }
     };
-    // Runs `omabook <arguments>` there, on its library.
-    Result omabook(const QStringList &arguments) const;
+    // Runs `omabook <arguments>` there, on its library; a file here can be its input.
+    Result omabook(const QStringList &arguments, const QString &inputFile = {}) const;
     // Runs a shell command there; a file here can be its input or take its output.
     Result run(const QString &command, const QString &inputFile = {}, const QString &outputFile = {}) const;
     bool fetch(const QString &remoteFile, const QString &localFile) const;

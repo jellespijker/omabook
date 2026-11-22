@@ -2598,5 +2598,17 @@
   "The snapshots' password couldn't be kept: %1": "Das Passwort der Snapshots konnte nicht gespeichert werden: %1",
   "The library couldn't be copied for its snapshot: %1": "Die Bibliothek konnte für ihren Snapshot nicht kopiert werden: %1",
   "restic (%1) isn't installed here, and snapshots are made with it.": "restic (%1) ist hier nicht installiert, und Snapshots werden damit gemacht.",
-  "restic couldn't make or read the snapshots: %1": "restic konnte die Snapshots nicht anlegen oder lesen: %1"
+  "restic couldn't make or read the snapshots: %1": "restic konnte die Snapshots nicht anlegen oder lesen: %1",
+  "The hub speaks protocol %1, and a session starts with its hello.": "Der Hub spricht Protokoll %1, und eine Sitzung beginnt mit seinem Hallo.",
+  "This key opens only the hub's session, never %1.": "Dieser Schlüssel öffnet nur die Sitzung des Hubs, niemals %1.",
+  "This key no longer opens the hub. Link the computer again: omabook hub add": "Dieser Schlüssel öffnet den Hub nicht mehr. Verbinde den Computer erneut: omabook hub add",
+  "The hub belongs to someone else: it takes only its owner's computers.": "Der Hub gehört jemand anderem: er nimmt nur die Computer seines Besitzers an.",
+  "The link isn't signed by the person it names.": "Die Verbindung ist nicht von der Person signiert, die sie nennt.",
+  "That is no ed25519 public key, which is what the hub takes for a computer.": "Das ist kein öffentlicher ed25519-Schlüssel, und nur den nimmt der Hub für einen Computer an.",
+  "%1 can't name a computer: use letters, digits, dots, dashes and underscores.": "%1 kann keinen Computer benennen: Verwende Buchstaben, Ziffern, Punkte, Bindestriche und Unterstriche.",
+  "No computer called %1 is linked to the hub.": "Kein Computer namens %1 ist mit dem Hub verbunden.",
+  "The hub can't write its computers' keys to %1: %2": "Der Hub kann die Schlüssel seiner Computer nicht in %1 schreiben: %2",
+  "This computer's key for its hubs can't be kept in %1: %2": "Der Schlüssel dieses Computers für seine Hubs kann nicht in %1 aufbewahrt werden: %2",
+  "The hub at %1 can't be reached, or has no Omabook: %2": "Der Hub unter %1 ist nicht erreichbar oder hat kein Omabook: %2",
+  "This computer isn't linked to the hub at %1. Link it: omabook hub add %1": "Dieser Computer ist nicht mit dem Hub unter %1 verbunden. Verbinde ihn: omabook hub add %1"
 }

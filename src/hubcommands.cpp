@@ -9,15 +9,20 @@
 #include <QLocalSocket>
 #include <QTime>
 #include <cstdio>
+#include <functional>
 #include <optional>
 #include <print>
 #include <tuple>
 
+#include "hubcomputers.h"
 #include "hubdaemon.h"
 #include "hubkeeper.h"
+#include "hublinkcommands.h"
+#include "hublinks.h"
 #include "hubplace.h"
 #include "hubrequests.h"
 #include "hubschedule.h"
+#include "hubsession.h"
 #include "hubsnapshots.h"
 #include "log.h"
 #include "snapshotretention.h"
@@ -98,14 +103,10 @@ int run(const QCommandLineParser &parser) {
     return QCoreApplication::exec();
 }
 
-// Each line read is a request, handed to the daemon; each answer a line printed.
-int session() {
-    Asking daemon(HubPlace::usual().socket());
-    if (!daemon.connected()) {
-        printLine(stdout,
-                  QString::fromUtf8(compact(HubRequests::refusal(Failure(Failure::Code::HubNotRunning, {HubPlace::usual().socket()})))));
-        return 1;
-    }
+// Reads standard input a line at a time, each line printed back answered by
+// `answer`, until the input ends, a line is too long, or `over` says the
+// session has ended.
+int eachLine(const std::function<QByteArray(const QByteArray &)> &answer, const std::function<bool()> &over) {
     QFile input;
     if (!input.open(stdin, QIODevice::ReadOnly))
         return 1;
@@ -118,15 +119,64 @@ int session() {
             return 1;
         }
         if (const QByteArray request = line.trimmed(); !request.isEmpty())
-            printLine(stdout, QString::fromUtf8(daemon.ask(request)));
+            printLine(stdout, QString::fromUtf8(answer(request)));
+        if (over())
+            return 1;
     }
 }
 
-int status(const QCommandLineParser &parser) {
+[[nodiscard]] QByteArray notRunning() {
+    return compact(HubRequests::refusal(Failure(Failure::Code::HubNotRunning, {HubPlace::usual().socket()})));
+}
+
+// On the hub itself, by its own user: each line handed to the daemon.
+int session() {
     Asking daemon(HubPlace::usual().socket());
-    if (!daemon.connected())
-        return failLine(Failure(Failure::Code::HubNotRunning, {HubPlace::usual().socket()}).text());
-    const QJsonObject answer = QJsonDocument::fromJson(daemon.ask(compact({{"request", "status"}}))).object();
+    if (!daemon.connected()) {
+        printLine(stdout, QString::fromUtf8(notRunning()));
+        return 1;
+    }
+    return eachLine([&daemon](const QByteArray &request) { return daemon.ask(request); }, [] { return false; });
+}
+
+// A computer's key's forced command (ADR 0012): the session's protocol
+// (HubSession), whatever the client asked ssh to run, as the computer whose
+// key has `fingerprint`. The daemon is asked only once a request needs it.
+int keyedSession(const QString &fingerprint) {
+    if (const QString asked = qEnvironmentVariable("SSH_ORIGINAL_COMMAND"); !HubSession::asksForSession(asked)) {
+        QJsonObject refused = HubRequests::refusal(Failure(Failure::Code::HubOnlySession, {asked}));
+        refused.insert("protocol"_L1, HubSession::protocol);
+        printLine(stdout, QString::fromUtf8(compact(refused)));
+        return 1;
+    }
+    std::optional<Asking> daemon;
+    HubSession session(HubComputers::usual(HubPlace::usual()), fingerprint, [&daemon](const QByteArray &request) {
+        if (!daemon) {
+            daemon.emplace(HubPlace::usual().socket());
+            if (!daemon->connected()) {
+                daemon.reset();
+                return notRunning();
+            }
+        }
+        return daemon->ask(request);
+    });
+    return eachLine([&session](const QByteArray &line) { return session.answer(line); }, [&session] { return session.over(); });
+}
+
+int status(const QCommandLineParser &parser, const QStringList &words) {
+    QJsonObject answer;
+    if (!words.isEmpty()) {
+        // A hub elsewhere, through this computer's key for it.
+        const auto asked = HubLinks().ask(words.first(), {{"request", "status"}});
+        if (!asked)
+            return failLine(asked.error().text());
+        answer = *asked;
+    } else {
+        Asking daemon(HubPlace::usual().socket());
+        if (!daemon.connected())
+            return failLine(Failure(Failure::Code::HubNotRunning, {HubPlace::usual().socket()}).text());
+        answer = QJsonDocument::fromJson(daemon.ask(compact({{"request", "status"}}))).object();
+    }
     if (parser.isSet(u"json"_s))
         printLine(stdout, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Indented)).trimmed());
     if (!answer.value("ok"_L1).toBool())
@@ -146,21 +196,34 @@ int runHubCli(const QStringList &arguments) {
     QCommandLineParser parser;
     parser.setApplicationDescription(
         u"The hub: an Omabook without a window that is always on. run keeps its libraries, as their one writer, until "
-        "stopped (its systemd unit starts it); session is what a computer's key runs on the hub, one JSON request a "
-        "line in and one answer a line out; status asks the running hub what it keeps."_s);
+        "stopped (its systemd unit starts it); status asks the running hub what it keeps, or the hub at <host>. On a "
+        "computer, add <host> links it to its person's hub over ssh: a key of its own, installed there to run nothing but "
+        "the hub's session; remove <host> takes it off again, and computers <host> lists the hub's computers. On the hub, "
+        "computers lists them and forget <computer> takes one's key away; session is what a computer's key runs there, "
+        "one JSON request a line in and one answer a line out, and allow is what add runs there."_s);
     parser.addHelpOption();
-    parser.addPositionalArgument(u"what"_s, u"run | session | status"_s);
+    parser.addPositionalArgument(
+        u"what"_s, u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | forget <computer> | session"_s);
     parser.addOption({u"libraries"_s, u"With run: keep the libraries in this folder, from now on."_s, u"folder"_s});
-    parser.addOption({u"json"_s, u"With status: print it as JSON."_s});
+    parser.addOption({u"json"_s, u"With status or computers: print it as JSON."_s});
+    parser.addOption({u"name"_s, u"With add: what the hub calls this computer (its host name otherwise)."_s, u"name"_s});
+    parser.addOption(
+        {u"key"_s, u"With session: the fingerprint of the computer's key it runs for (the hub writes it)."_s, u"fingerprint"_s});
+    parser.addOption({u"identity"_s, u"With allow: the person whose computer it is."_s, u"id"_s});
+    parser.addOption({u"signature"_s, u"With allow: the person's signature of the link."_s, u"signature"_s});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = u"omabook hub"_s;
     parser.process(rest);
-    const QStringList words = parser.positionalArguments();
-    const QString what = words.value(0);
-    if (words.size() != 1 || !QStringList{u"run"_s, u"session"_s, u"status"_s}.contains(what))
+    QStringList words = parser.positionalArguments();
+    const QString what = words.isEmpty() ? QString() : words.takeFirst();
+    if (isHubLinkCommand(what))
+        return runHubLink(what, words, parser);
+    if (what == u"status"_s && words.size() <= 1)
+        return status(parser, words);
+    if (!words.isEmpty() || !QStringList{u"run"_s, u"session"_s}.contains(what))
         return failLine(parser.helpText().trimmed());
     if (what == u"run"_s)
         return run(parser);
-    return what == u"session"_s ? session() : status(parser);
+    return parser.isSet(u"key"_s) ? keyedSession(parser.value(u"key"_s)) : session();
 }

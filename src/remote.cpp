@@ -42,7 +42,7 @@ Remote::Result Remote::run(const QString &command, const QString &inputFile, con
     return result;
 }
 
-Remote::Result Remote::omabook(const QStringList &arguments) const {
+Remote::Result Remote::omabook(const QStringList &arguments, const QString &inputFile) const {
     // An ssh command doesn't get a login shell's PATH, and ~/.local/bin is
     // where a build of one's own lives.
     QString command = "PATH=\"$HOME/.local/bin:$PATH\" omabook";
@@ -50,7 +50,7 @@ Remote::Result Remote::omabook(const QStringList &arguments) const {
         command += " " + quote(argument);
     if (!m_folder.isEmpty())
         command += " --library " + quote(m_folder);
-    return run(command);
+    return run(command, inputFile);
 }
 
 bool Remote::fetch(const QString &remoteFile, const QString &localFile) const {

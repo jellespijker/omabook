@@ -23,8 +23,10 @@ namespace {
 
 constexpr auto folderName = "omabook-hub";
 constexpr mode_t groupOrOthers = 0077U;
-// The system variant's runtime folder, as its unit's RuntimeDirectory= makes it.
+// The system variant's runtime and state folders, as its unit's
+// RuntimeDirectory= and StateDirectory= make them.
 constexpr auto systemRuntime = "/run/omabook-hub";
+constexpr auto systemState = "/var/lib/omabook-hub";
 // A secret is a word: never a path that leads out of the secrets' folder.
 const QRegularExpression &secretName() {
     static const QRegularExpression name(u"^[a-z0-9][a-z0-9-]*$"_s);
@@ -67,7 +69,11 @@ const QRegularExpression &secretName() {
 
 HubPlace HubPlace::usual() {
     const QString home = QDir::homePath();
-    const QString state = fromSystemd("STATE_DIRECTORY");
+    QString state = fromSystemd("STATE_DIRECTORY");
+    // A session (sshd starts it, not systemd) or `sudo -u omabook omabook hub
+    // run --libraries` finds the system variant's state, as the unit does.
+    if (state.isEmpty() && mine(QString::fromLatin1(systemState)))
+        state = QString::fromLatin1(systemState);
     QString runtime = fromSystemd("RUNTIME_DIRECTORY");
     if (runtime.isEmpty() && mine(QString::fromLatin1(systemRuntime)))
         runtime = QString::fromLatin1(systemRuntime);

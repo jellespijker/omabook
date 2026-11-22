@@ -24,8 +24,9 @@ public:
 
     // systemd's folders when it runs the daemon (StateDirectory=,
     // RuntimeDirectory=, ImportCredential=), and a session finds the same: the
-    // system variant's /run/omabook-hub when it is this user's, else the user's
-    // own ($XDG_STATE_HOME/omabook-hub, $XDG_RUNTIME_DIR/omabook-hub).
+    // system variant's /var/lib/omabook-hub and /run/omabook-hub when they are
+    // this user's, else the user's own ($XDG_STATE_HOME/omabook-hub,
+    // $XDG_RUNTIME_DIR/omabook-hub).
     [[nodiscard]] static HubPlace usual();
 
     explicit HubPlace(Folders folders) : m_folders(std::move(folders)) {}
