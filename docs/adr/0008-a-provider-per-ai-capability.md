@@ -453,3 +453,34 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   server away, and the companion's answer carries the note `AiAnsweredInstead`. Each row's fallback has its own
   Test (`CapabilityTest::run(…, fallback)`), through a copy of the settings that tries it as though the first
   were away (`AiFallback::tryInstead`); with none to try it says `no-route`.
+
+## As built in #175
+
+- **Discovery on two sites, by capability** (`Discovery`, `modeldiscovery.h`, for what is known without the network;
+  `ModelSearch`, `modelsearch.h`, for asking): Ollama documents no API to search its library (its API is a server's
+  own, checked on 2026-11-22), so its search page, `ollama.com/search?q=…&c=…`, is read by the marks it gives its own
+  tests (`x-test-search-response-title`, `x-test-capability`, `x-test-size`, `x-test-pull-count`), a result for
+  each size; each one's size and licence come from its registry's manifest (`registry.ollama.ai/v2/…/manifests/…`,
+  the licence's layer). Hugging Face's Hub API (`/api/models?search=…&pipeline_tag=…&filter=gguf&sort=downloads`)
+  is searched by task (`image-text-to-text` for handwriting, `feature-extraction` for embeddings,
+  `text-generation` for answers and quick work), its licence from its `license:` tag, and a repository's files
+  (`/api/models/<repo>/tree/main`) give the GGUF Ollama would pull (`hf.co/<repo>:<quant>`, Q4_K_M first, with a
+  vision model's mmproj); one without a GGUF is left out. Ollama's categories are `vision` and `embedding`.
+- **Speech either way** isn't served by Ollama: whisper.cpp's models (`ggml-*.bin` of `ggerganov/whisper.cpp`) and
+  Piper's voices (`*.onnx` of `rhasspy/piper-voices`, with their `.onnx.json`) are files of the Hub, downloaded
+  where those engines look (`$XDG_DATA_HOME/whisper.cpp/models`, `$XDG_DATA_HOME/piper-voices`), then chosen:
+  whisper.cpp with that model for speech to text, Piper with that voice for text to speech. voxtype keeps its own
+  (`voxtype setup --download`, #146).
+- **Fit by memory**: what a model needs is its download and room for a context on top (`Discovery::needs`), from
+  the files' sizes, or for Ollama's library from its parameters at Q4_K_M where the manifest doesn't say. It is
+  marked as fitting the GPU's free memory, the computer's (slower), too big, or can't be told: this computer's
+  memory is read from `/proc/meminfo` and each GPU's `mem_info_vram_*`; a server elsewhere doesn't say its own, so
+  there it is shown and not judged. That includes a fallback server (#174) chosen for the capability.
+- **Install and choose with one press**: onto the capability's Ollama server, the one #172's `ModelFit::placeOf`
+  gives, by `/api/pull` with its progress, then chosen in the key its provider keeps it; the row then runs its
+  Test once (#170). A model that runs on Ollama's computers (`:cloud`) is marked hosted and installed only where
+  hosted is allowed for the capability (`ModelHosted`).
+- **Privacy**: nothing is asked until the person searches; a search sends only the words typed and the kind of
+  model (as GETs, nothing in a body), never a book, a note or a recording; with the AI Off nothing is searched.
+- **Where it shows**: "Find a Model…" in each row of the AI page (`ModelFinder.qml`) and with #172's offer of a
+  missing model, in the row and in Find's pane. `ModelFit::suggested` stays the one offered without a search.

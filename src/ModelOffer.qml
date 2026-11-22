@@ -16,6 +16,8 @@ ColumnLayout {
     // What the objectNames start with: "findModel", "embeddingsModel", ...
     property string name: "model"
     readonly property string stage: help ? help.state : ""
+    // A model found by a search was installed and chosen (#175).
+    signal found()
 
     visible: stage !== "" && stage !== "none" && stage !== "there"
     spacing: 8
@@ -95,5 +97,13 @@ ColumnLayout {
             text: qsTr("Try Again")
             onClicked: offer.help.size !== "" ? offer.help.download() : offer.help.look()
         }
+    }
+    // Beyond the server and the kept suggestion: a search of Ollama's library and Hugging Face (#175).
+    ModelFinder {
+        Layout.fillWidth: true
+        visible: ["suggest", "missing", "offer"].indexOf(offer.stage) >= 0
+        capability: offer.help ? offer.help.capability : ""
+        name: offer.name + "Find"
+        onChosen: offer.found()
     }
 }

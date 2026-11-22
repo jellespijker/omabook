@@ -15,6 +15,7 @@
 #include "marginnotes.h"
 #include "meaningfinder.h"
 #include "modelhelp.h"
+#include "modelsearch.h"
 #include "qrview.h"
 #include "readingstatsview.h"
 
@@ -40,6 +41,8 @@ void registerGraphTypes() {
         qmlRegisterType<MeaningFinder>("Omabook", 1, 0, "MeaningFinder");
         // A capability's model found on its server, or downloaded onto it (#172).
         qmlRegisterType<ModelHelp>("Omabook", 1, 0, "ModelHelp");
+        // Models found on Ollama's library and Hugging Face, installed and chosen (#175).
+        qmlRegisterType<ModelSearch>("Omabook", 1, 0, "ModelSearch");
         // The reading statistics and the year's goal (#68).
         qmlRegisterType<ReadingStatsView>("Omabook", 1, 0, "ReadingStats");
         // Others' annotations on it, as a layer beside one's own (#85).

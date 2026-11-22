@@ -130,6 +130,7 @@
         <file alias="AiProviderChoice.qml">AiProviderChoice.qml</file>
         <file alias="AiServerSetup.qml">AiServerSetup.qml</file>
         <file alias="AiFallbackSetup.qml">AiFallbackSetup.qml</file>
+        <file alias="ModelFinder.qml">ModelFinder.qml</file>
         <file alias="VoiceSetup.qml">VoiceSetup.qml</file>
         <file alias="ApiKey.qml">ApiKey.qml</file>
         <file alias="AiAnswersSetup.qml">AiAnswersSetup.qml</file>

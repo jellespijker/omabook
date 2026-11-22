@@ -36,7 +36,7 @@ enum class Fit : std::uint8_t { Fits, Unfit, Unknown };
 // A small, well-known model to download for the capability on Ollama, and
 // its download size, from Ollama's library. Speech either way has none:
 // Ollama serves neither, and this computer's ways (voxtype, whisper.cpp,
-// Piper) are installed in their row. Kept up by hand; #175 finds more.
+// Piper) are installed in their row. Kept up by hand; #175 finds more (Discovery, ModelSearch).
 struct Suggestion {
     QString name;
     qint64 bytes = 0;

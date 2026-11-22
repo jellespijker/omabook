@@ -210,9 +210,18 @@ ColumnLayout {
         }
         // Its model, when the server hasn't it: one there that can, or one to download (#172).
         ModelOffer {
+            id: offer
             Layout.fillWidth: true
             name: row.capability + "Offer"
             help: modelHelp
+            onFound: rowTest.test()
+        }
+        // A model beyond what its server has, found on Ollama's library or Hugging Face, then tested once (#175).
+        ModelFinder {
+            Layout.fillWidth: true
+            visible: !offer.visible && row.capability !== ""
+            capability: row.capability
+            onChosen: rowTest.test()
         }
         RowLayout {
             Layout.fillWidth: true

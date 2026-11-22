@@ -208,6 +208,10 @@ public:
         AiListsNoModels,     // {where}
         AiModelsElsewhere,   // {where}
         ModelNotPulled,      // {model, where, what it said}: Ollama didn't download it (#172)
+        ModelSearchUnanswered, // {site, the network's reason or its HTTP status}: a search for models (#175)
+        ModelHosted,         // {model}: it runs on Ollama's computers, and hosted isn't allowed for the capability
+        NoServerToInstallOn, // {}: no Ollama server for the capability to install a model onto
+        ModelNotDownloaded,  // {model, why}: a speech model's file didn't come down
         AiNoCommand,         // {}
         AiPromptUnwritten,   // {}
         AiStopped,           // {name}

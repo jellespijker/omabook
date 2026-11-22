@@ -70,6 +70,7 @@ modules = [
   "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "capabilitytest", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
   "modelfit", "modelscout", "modelhelp", "scriptremedy",
   "serverreach", "aifallback",
+  "modeldiscovery", "modelsearch",
 ]
 
 [layers.operations]
