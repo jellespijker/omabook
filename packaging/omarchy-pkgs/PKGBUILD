@@ -5,7 +5,7 @@ pkgver=0.0.0
 pkgrel=1
 pkgdesc="An ebook library and reader for Omarchy, with a knowledge graph of what you read and AI as a first-class citizen"
 arch=('x86_64' 'aarch64')
-url='https://github.com/jellespijker/omabook'
+url='https://jellespijker.github.io/omabook/'
 # Omabook's own source is MIT. share/omabook/calibre_bridge.py runs inside
 # Calibre and is GPL-3.0-or-later; the program links Poppler (GPL).
 license=('MIT' 'GPL-3.0-or-later')
@@ -48,7 +48,7 @@ makedepends=('cmake' 'gcc' 'make' 'pkgconf')
 # The window tests measure text, so they need a font; the CLI tests make zips;
 # the hyphenation tests need the dictionaries.
 checkdepends=('dbus' 'ttf-dejavu' 'zip' 'hyphen-en' 'hyphen-de' 'hyphen-nl')
-source=("$pkgname-$pkgver.tar.gz::$url/archive/refs/tags/v$pkgver.tar.gz")
+source=("$pkgname-$pkgver.tar.gz::https://github.com/jellespijker/omabook/archive/refs/tags/v$pkgver.tar.gz")
 sha256sums=('SKIP')
 
 build() {
