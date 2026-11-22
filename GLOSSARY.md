@@ -143,3 +143,25 @@ _Avoid_: Voice mode, voice assistant, reading aloud (that is a book's)
 **Voice command**:
 A command said while reading ("next chapter", "go to chapter 5"), heard by dictation and understood by a grammar of the command table in the window's five languages, or by the model for quick work where the grammar doesn't know it (`VoiceGrammar`, `VoiceCommands`, #150). It runs what the command's key runs, or one of the three only said: a chapter by its number, highlighting the selection, and what a word means.
 _Avoid_: Voice control, wake word, speech command
+
+## Hub and backups
+
+**Hub**:
+An Omabook without a window that is always on and belongs to one person: it keeps their libraries for their computers to sync with, serves them to phones and e-readers, does their background work (the knowledge graph, the meaning index, writing out recordings) and backs them up. Managed only from that person's own computers.
+_Avoid_: Server (an own server is an AI's), headless Omabook, NAS, cloud
+
+**Snapshot**:
+A library as it stood at one moment, kept so it can be gone back to: encrypted, read-only, and one of a series. Only snapshots count as copies of a library; a synced library does not, since a sync carries a mistake to every computer.
+_Avoid_: Backup (for a single copy), sync, mirror, replica
+
+**Moment snapshot**:
+A snapshot taken just before something that changes much at once (a sync, an import, a tidy, a restore, an upgrade, a bulk change by an agent) or when the person asks, kept a short while and then thinned like the others.
+_Avoid_: Checkpoint, restore point, undo
+
+**Library diff**:
+What changed in a library between two snapshots, or a snapshot and now, told as the person sees the library: books added or removed, details before and after, notes, highlights and ink, graph facts, notebook pages. Not a list of changed files.
+_Avoid_: Changelog, file diff, delta
+
+**Destination**:
+Where a hub keeps its snapshots: a second disk of the hub, another computer over SFTP, a storage service, or another of the person's hubs. Three copies on two kinds of medium with one away from home count as backed up.
+_Avoid_: Target, remote, repository (restic's word for what is kept there)
