@@ -2,6 +2,7 @@
 
 #include <QVariantMap>
 #include <QtConcurrent>
+#include <utility>
 
 #include "airegistry.h"
 #include "document.h"
@@ -36,6 +37,34 @@ namespace {
     return u"none"_s;
 }
 
+// What to do about a failure, as the pane words it (#172).
+[[nodiscard]] QString whyOf(const Failure &failure) {
+    switch (failure.code()) {
+    case Failure::Code::AiNoModel:
+    case Failure::Code::AiNoModelSaid:
+        return u"no-model"_s;
+    case Failure::Code::AiUnreachable:
+    case Failure::Code::AiTimedOut:
+        return u"unreachable"_s;
+    case Failure::Code::AiWantsKey:
+    case Failure::Code::AiRefusedKey:
+    case Failure::Code::GeminiRefusedKey:
+        return u"refused"_s;
+    case Failure::Code::GeminiNoKey:
+        return u"no-key"_s;
+    case Failure::Code::MeaningHosted:
+        return u"hosted-not-allowed"_s;
+    case Failure::Code::HostedNotChosen:
+        return u"hosted-not-chosen"_s;
+    case Failure::Code::AiOff:
+        return u"ai-off"_s;
+    case Failure::Code::Said: // no server set up, in the words of the one that said so
+        return u"no-server"_s;
+    default:
+        return u"failed"_s;
+    }
+}
+
 } // namespace
 
 MeaningFinder::MeaningFinder(QObject *parent) : QObject(parent) {
@@ -52,6 +81,21 @@ MeaningFinder::~MeaningFinder() {
 }
 
 QObject *MeaningFinder::reader() const { return m_reader; }
+
+QObject *MeaningFinder::settings() const { return m_settings; }
+
+void MeaningFinder::setSettings(QObject *settings) {
+    if (settings == m_settings)
+        return;
+    m_settings = settings;
+    emit readerChanged();
+    look();
+}
+
+void MeaningFinder::setProblem(const std::optional<Failure> &failure) {
+    m_problem = failure ? failure->text() : QString();
+    m_why = failure ? whyOf(*failure) : QString();
+}
 
 void MeaningFinder::setReader(QObject *reader) {
     auto *given = qobject_cast<Reader *>(reader);
@@ -76,8 +120,9 @@ void MeaningFinder::look() {
     if (!library || m_reader->bookId() <= 0 || m_look.isRunning() || m_index.isRunning())
         return;
     m_bookId = m_reader->bookId();
-    m_look.setFuture(QtConcurrent::run([root = library->root(), bookId = m_bookId] {
-        const Settings settings;
+    const auto *given = qobject_cast<const Settings *>(m_settings);
+    m_look.setFuture(QtConcurrent::run([root = library->root(), bookId = m_bookId, file = given ? given->file() : QString()] {
+        const Settings settings(file);
         Look look{.route = AiRegistry::embeddings(settings), .freshness = MeaningSearch::Freshness::None, .due = false};
         const auto library = opened(root);
         if (!look.route || !library)
@@ -97,16 +142,30 @@ void MeaningFinder::looked() {
         return;
     }
     m_route = seen.route ? std::optional(*seen.route) : std::nullopt;
-    m_problem = seen.route ? QString() : seen.route.error().text();
+    // Why it couldn't be indexed stays said until it is asked for again.
+    if (!seen.route)
+        setProblem(seen.route.error());
+    else
+        setProblem(m_bookId == m_leftAlone ? m_failed : std::nullopt);
     m_where = seen.route ? tr("%1 on %2 (%3)").arg(seen.route->model, seen.route->server.name, seen.route->server.host()) : QString();
     setState(seen.route ? stateOf(seen.freshness) : u"refused"_s);
-    if (seen.due && m_bookId != m_leftAlone)
+    if (std::exchange(m_asked, false) || (seen.due && m_bookId != m_leftAlone))
         start();
 }
 
 void MeaningFinder::index() {
+    if (!m_reader || !m_reader->library() || m_reader->bookId() <= 0 || m_index.isRunning())
+        return;
     m_leftAlone = 0;
-    start();
+    m_failed.reset();
+    setProblem(std::nullopt);
+    // The press shows at once; the settings are looked at again (a model chosen since), then it starts.
+    m_asked = true;
+    m_progress = 0;
+    setState(u"indexing"_s);
+    if (m_look.isRunning())
+        return; // that look starts it
+    look();
 }
 
 void MeaningFinder::start() {
@@ -137,13 +196,15 @@ void MeaningFinder::cancel() { m_stop.request_stop(); }
 void MeaningFinder::indexed() {
     const Made made = m_index.result();
     if (made) {
-        m_problem.clear();
+        m_failed.reset();
+        setProblem(std::nullopt);
         setState(u"ready"_s);
     } else {
         m_leftAlone = m_bookId;
-        m_problem = made.error().code() == Failure::Code::MeaningCancelled ? QString() : made.error().text();
-        if (!m_problem.isEmpty())
-            qCWarning(lcLibrary).noquote() << "book" << m_bookId << "can't be indexed by its meaning:" << m_problem;
+        m_failed = made.error().code() == Failure::Code::MeaningCancelled ? std::nullopt : std::optional(made.error());
+        setProblem(m_failed);
+        if (m_failed)
+            qCWarning(lcLibrary).noquote() << "book" << m_bookId << "can't be indexed by its meaning:" << m_failed->english();
         setState(u"none"_s);
     }
     look();
@@ -181,7 +242,7 @@ void MeaningFinder::searched() {
     emit changed();
     const Hits hits = m_search.result();
     if (!hits) {
-        m_problem = hits.error().text();
+        setProblem(hits.error());
         emit changed();
         return;
     }

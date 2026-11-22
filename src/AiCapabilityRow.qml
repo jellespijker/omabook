@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
+import Omabook
 
 // One row of the AI page: a capability, how it stands (its provider and
 // model, or why it can't be used), and, open, what can be chosen for it. The
@@ -20,6 +21,15 @@ ColumnLayout {
     signal step(int by)
 
     spacing: 8
+
+    // Whether its server has the model asked for, looked at when the row is opened (#172).
+    readonly property QtObject windowSettings: settings
+    ModelHelp {
+        id: modelHelp
+        settings: row.windowSettings
+        capability: row.capability
+    }
+    onOpenChanged: if (open && info.available) modelHelp.look()
 
     readonly property var titles: ({
         "answers": qsTr("Answers"),
@@ -192,6 +202,12 @@ ColumnLayout {
             visible: !row.info.available && text !== ""
             wrapMode: Text.Wrap
             text: [row.info.message, row.toDo(row.info)].filter(part => !!part).join(" ")
+        }
+        // Its model, when the server hasn't it: one there that can, or one to download (#172).
+        ModelOffer {
+            Layout.fillWidth: true
+            name: row.capability + "Offer"
+            help: modelHelp
         }
         RowLayout {
             Layout.fillWidth: true

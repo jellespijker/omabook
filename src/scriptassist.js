@@ -53,6 +53,19 @@
         ai: {
             available: function () { return assist.available(); },
             status: function (options) { return assist.status(JSON.stringify(asking(options))); },
+            // A promise of the model chosen for a capability whose model the
+            // server lacks (`status`'s `remedy`, #172): one there, or one
+            // downloaded onto Ollama, telling onProgress(0 to 1).
+            remedy: function (options) {
+                options = options === undefined || options === null ? {} : options;
+                need(options, "object", "The options");
+                if (options.onProgress !== undefined && options.onProgress !== null)
+                    need(options.onProgress, "function", "onProgress");
+                var chosen = JSON.stringify(asking(options));
+                return new Promise(function (resolve, reject) {
+                    assist.remedy(chosen, options.onProgress || null, resolve, reject);
+                });
+            },
             ask: function (prompt, options) {
                 need(prompt, "string", "The prompt");
                 // The system prompt alone, as a string, is still understood.

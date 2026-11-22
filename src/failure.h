@@ -195,6 +195,7 @@ public:
         AiDeclined,          // {}
         AiListsNoModels,     // {where}
         AiModelsElsewhere,   // {where}
+        ModelNotPulled,      // {model, where, what it said}: Ollama didn't download it (#172)
         AiNoCommand,         // {}
         AiPromptUnwritten,   // {}
         AiStopped,           // {name}

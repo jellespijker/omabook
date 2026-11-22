@@ -18,6 +18,7 @@
 #include "inkcodec.h"
 #include "recognitionqueue.h"
 #include "scriptplugin.h"
+#include "scriptremedy.h"
 #include "settings.h"
 #include "transcriber.h"
 #include "voice.h"
@@ -177,7 +178,49 @@ QVariantMap ScriptAi::status(const QString &options) {
     if (!capability)
         return unavailable(chosen.value("capability"_L1).toString(), u"unknown-capability"_s,
                            tr("Omabook has no capability called %1.").arg(chosen.value("capability"_L1).toString()));
-    return statusOf(*capability, chosen);
+    QVariantMap found = statusOf(*capability, chosen);
+    // Handwriting or speech the server was asked for and lacked a model for, as `recognize.status` says it.
+    std::optional<Recognition::Kind> kind;
+    if (*capability == Capability::Handwriting)
+        kind = Recognition::Kind::Ink;
+    else if (*capability == Capability::SpeechToText)
+        kind = Recognition::Kind::Audio;
+    if (const auto lacking = kind && m_queue && found.value(u"available"_s).toBool()
+                                 ? m_queue->lacking(*kind, chosen.value("hosted"_L1).toBool())
+                                 : std::nullopt)
+        found = unavailable(Capabilities::name(*capability), Capabilities::lackName(CapabilityLack::NoModel), *lacking);
+    // A model the server has that can do it, or one to download onto it (#172).
+    if (found.value(u"why"_s).toString() == Capabilities::lackName(CapabilityLack::NoModel) && remedies())
+        found.insert(u"remedy"_s, remedies()->remedy(*capability));
+    return found;
+}
+
+ScriptRemedy *ScriptAi::remedies() {
+    if (!m_remedy && m_plugin->m_services.settings)
+        m_remedy = std::make_unique<ScriptRemedy>(m_plugin->m_services.settings);
+    return m_remedy.get();
+}
+
+void ScriptAi::remedy(const QString &options, const QJSValue &onProgress, const QJSValue &resolve, const QJSValue &reject) {
+    const QJsonObject chosen = QJsonDocument::fromJson(options.toUtf8()).object();
+    const auto capability = capabilityOf(chosen);
+    if (!capability || !remedies()) {
+        reject.call({tr("Omabook has no capability called %1.").arg(chosen.value("capability"_L1).toString())});
+        return;
+    }
+    m_plugin->busy(1);
+    remedies()->carryOut(*capability, {.progress = [this, onProgress](double done) { told(onProgress, {done}); },
+                                       .done =
+                                           [this, resolve](const QString &model) {
+                                               // The queue's ways are the new model's now, which it hasn't found lacking.
+                                               told(resolve, {model});
+                                               m_plugin->busy(-1);
+                                           },
+                                       .failed =
+                                           [this, reject](const QString &why) {
+                                               told(reject, {why});
+                                               m_plugin->busy(-1);
+                                           }});
 }
 
 void ScriptAi::ask(const QString &prompt, const QString &options, const QJSValue &onText, const QJSValue &resolve, const QJSValue &reject) {

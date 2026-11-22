@@ -47,6 +47,7 @@
         <file alias="SubscribeDialog.qml">SubscribeDialog.qml</file>
         <file alias="EditDialog.qml">EditDialog.qml</file>
         <file alias="FindPopup.qml">FindPopup.qml</file>
+        <file alias="ModelOffer.qml">ModelOffer.qml</file>
         <file alias="FlowReader.qml">FlowReader.qml</file>
         <file alias="LineInkLayer.qml">LineInkLayer.qml</file>
         <file alias="HelpOverlay.qml">HelpOverlay.qml</file>

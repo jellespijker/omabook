@@ -68,6 +68,7 @@ modules = [
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "realtimevoice", "openaivoice", "voices",
   "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "capabilitytest", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
+  "modelfit", "modelscout", "modelhelp", "scriptremedy",
 ]
 
 [layers.operations]

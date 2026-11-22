@@ -173,6 +173,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::AiListsNoModels, tr("The AI server at %1 lists no models.")},
     {Failure::Code::AiModelsElsewhere,
      tr("Every model the AI server at %1 lists runs elsewhere; pick one in the settings to send your text there.")},
+    {Failure::Code::ModelNotPulled, tr("%1 couldn't be downloaded onto %2: %3")},
     {Failure::Code::AiNoCommand, tr("No AI command is set.")},
     {Failure::Code::AiPromptUnwritten, tr("The question can't be written to a temporary file.")},
     {Failure::Code::AiStopped, tr("%1 stopped with an error.")},

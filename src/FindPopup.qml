@@ -32,11 +32,39 @@ AppPopup {
     }
     // The window's reader, by a name of the popup's own: inside AnnotationFinder `reader` is its own.
     readonly property QtObject windowReader: reader
+    readonly property QtObject windowSettings: settings
+    property string whySeen: ""
+    // The embedding model, found on the server or downloaded onto it, then indexed with.
+    ModelHelp {
+        id: findModel
+        capability: "embeddings"
+        settings: popup.windowSettings
+        onChosen: meant.index()
+    }
+    // What to do, by why indexing couldn't start or stopped.
+    function toDo(why) {
+        switch (why) {
+        case "unreachable": return qsTr("Start the server, or check its address on the AI page, then index again.")
+        case "refused":
+        case "no-key": return qsTr("Give the server's key on the AI page.")
+        case "hosted-not-allowed": return qsTr("Allow a hosted service for meaning on the AI page, or choose a server of your own.")
+        case "ai-off": return qsTr("Turn on Use AI on the AI page.")
+        case "no-server": return qsTr("Run Ollama, or give a server's address for meaning on the AI page.")
+        }
+        return ""
+    }
     AnnotationFinder { id: noted; reader: popup.windowReader }
     // What the words mean, found beside the window and added when it is there.
     MeaningFinder {
         id: meant
         reader: popup.windowReader
+        settings: popup.windowSettings
+        // The server lacks the model: what it has is looked at, to offer one (#172).
+        onChanged: {
+            if (meant.why === popup.whySeen) return
+            popup.whySeen = meant.why
+            if (meant.why === "no-model") findModel.look()
+        }
         onFound: (results) => {
             const words = popup.results.filter(result => !result.meant)
             popup.results = words.concat(results)
@@ -101,17 +129,50 @@ AppPopup {
                 Layout.fillWidth: true
                 wrapMode: Text.Wrap
                 font.pixelSize: 12
+                // Why not is said below, with what to do.
+                visible: !whyNot.visible
                 color: meant.hosted && meant.state !== "ready" ? theme.colors.orange : theme.colors.muted
-                text: meant.state === "refused" ? meant.problem
-                      : meant.state === "indexing" ? qsTr("Indexing this book by its meaning with %1… %2%").arg(meant.where).arg(Math.round(meant.progress * 100))
-                      : meant.state === "ready" ? (meant.problem !== "" ? meant.problem : qsTr("Also found by what the words mean."))
+                text: meant.state === "indexing" ? (meant.where !== "" ? qsTr("Indexing this book by its meaning with %1… %2%").arg(meant.where).arg(Math.round(meant.progress * 100))
+                                                                       : qsTr("Indexing this book by its meaning…"))
+                      : meant.state === "ready" ? qsTr("Also found by what the words mean.")
                       : meant.hosted ? qsTr("Find what you mean, not only your words: the book's text goes to %1 to be indexed, someone else's computer, as your settings allow.").arg(meant.where)
                       : qsTr("Find what you mean, not only your words: the book's text is indexed by %1, your own server.").arg(meant.where)
             }
+            // Why it couldn't be indexed or searched, and what to do (#172).
+            ColumnLayout {
+                id: whyNot
+                objectName: "findMeaningWhy"
+                Layout.fillWidth: true
+                visible: meant.problem !== "" && meant.state !== "indexing"
+                spacing: 6
+                Label {
+                    objectName: "findMeaningProblem"
+                    Layout.fillWidth: true
+                    wrapMode: Text.Wrap
+                    font.pixelSize: 12
+                    color: theme.colors.orange
+                    text: [meant.problem, popup.toDo(meant.why)].filter(part => !!part).join(" ")
+                }
+                ModelOffer {
+                    Layout.fillWidth: true
+                    name: "findModel"
+                    help: findModel
+                    visible: meant.why === "no-model" && stage !== "" && stage !== "none" && stage !== "there"
+                }
+                AppButton {
+                    objectName: "findMeaningSettings"
+                    visible: popup.toDo(meant.why) !== "" && meant.why !== "unreachable"
+                    text: qsTr("AI Page…")
+                    onClicked: {
+                        popup.close()
+                        win.showAiSettings()
+                    }
+                }
+            }
             AppButton {
                 objectName: "findMeaningIndex"
-                visible: meant.state === "none" || meant.state === "stale"
-                text: meant.state === "stale" ? qsTr("Index again") : qsTr("Index")
+                visible: (meant.state === "none" || meant.state === "stale") && findModel.state !== "downloading"
+                text: meant.state === "stale" ? qsTr("Index again") : meant.problem !== "" ? qsTr("Index again") : qsTr("Index")
                 onClicked: meant.index()
             }
             AppButton {

@@ -405,3 +405,24 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   would refuse as hosted asks first, and on a yes goes through a copy of the settings that allows hosted
   for that capability alone; nothing is tested with the AI Off, not even a local voice. Picking a model
   from the server's list, and offering a missing one, is #172's.
+
+## As built in #172
+
+- **A missing model is found where the failure shows** (`ModelHelp`, `modelhelp.h`): Find's pane, the AI page's
+  row (looked at when it is opened) and a plugin (`ai.status`'s `remedy`, `ai.remedy`) ask the capability's
+  server what it has (`ModelScout`: Ollama's `/api/tags` and `/api/show`, else the OpenAI-compatible
+  `/models`), sending only model names, and nothing with the AI Off. Where the model asked for isn't there, or
+  is there and can't do it (a main model that doesn't read pictures, asked to read handwriting), one on the
+  server that fits is offered; fit is what Ollama says a model does (`capabilities`: `vision`, `embedding`,
+  `completion`), else its family and name (`ModelFit::fit`), and a model that can't be told is never offered.
+- **Else a small, well-known one is suggested**, kept in the code with its download size (`ModelFit::suggested`:
+  `nomic-embed-text` for embeddings, `qwen2.5vl:3b` for handwriting, `llama3.2:3b` and `:1b` for answers and
+  quick), downloaded onto an Ollama server with one press through `/api/pull`, its progress shown, then chosen
+  for the capability in the key its provider keeps it (`ModelFit::choose`). Speech either way has none: Ollama
+  serves neither, and this computer's ways are installed in their rows. A server that isn't Ollama is only
+  told what it lacks.
+- **Find's pane says why** (`MeaningFinder::why`, from the failure's code): no model, the server away, its key
+  refused, hosted not allowed, the AI Off, no server; said until Index is pressed again, which shows at once.
+- **Handwriting's own server** (#170's `recognition.ink_url`, else the AI server) is the one looked at and sent a
+  download (`ModelFit::placeOf`).
+- **Seams left**: #170's Test can report a missing model through the same `ModelHelp`, and #175's discovery on Ollama and Hugging Face replaces the kept list in `ModelFit::suggested`.

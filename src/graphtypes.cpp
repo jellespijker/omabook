@@ -13,6 +13,7 @@
 #include "inksurface.h"
 #include "marginnotes.h"
 #include "meaningfinder.h"
+#include "modelhelp.h"
 #include "readingstatsview.h"
 
 void registerGraphTypes() {
@@ -33,6 +34,8 @@ void registerGraphTypes() {
         qmlRegisterType<AnnotationFinder>("Omabook", 1, 0, "AnnotationFinder");
         // The open book found by what it means, for the reader's Find (#72).
         qmlRegisterType<MeaningFinder>("Omabook", 1, 0, "MeaningFinder");
+        // A capability's model found on its server, or downloaded onto it (#172).
+        qmlRegisterType<ModelHelp>("Omabook", 1, 0, "ModelHelp");
         // The reading statistics and the year's goal (#68).
         qmlRegisterType<ReadingStatsView>("Omabook", 1, 0, "ReadingStats");
         // Others' annotations on it, as a layer beside one's own (#85).

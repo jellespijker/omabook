@@ -15,6 +15,7 @@
 class AiProvider;
 class RecognitionQueue;
 class ScriptPlugin;
+class ScriptRemedy;
 class Transcriber;
 class Voice;
 
@@ -51,7 +52,13 @@ public:
     // `why` a code (Capabilities::lackName, or "unknown-capability"); `ai.status`.
     // `options` is JSON: {capability, model, hosted}; the capability is answers
     // (quick for the model "quick") unless named.
+    // Where its model is missing on the server (`why` "no-model"), `remedy` says
+    // what can be done: {action ("use" or "download"), model, size, server} (#172).
     Q_INVOKABLE QVariantMap status(const QString &options);
+    // Does what `remedy` says (`ai.remedy`): chooses the model on the server,
+    // or downloads it onto Ollama and chooses it, telling onProgress(0 to 1);
+    // resolved with the model. `options` is JSON: {capability}.
+    Q_INVOKABLE void remedy(const QString &options, const QJSValue &onProgress, const QJSValue &resolve, const QJSValue &reject);
     // `options` is JSON: {system, model, hosted}, `hosted` as for status().
     Q_INVOKABLE void ask(const QString &prompt, const QString &options, const QJSValue &onText, const QJSValue &resolve,
                          const QJSValue &reject);
@@ -100,12 +107,15 @@ private:
     int submit(Recognition::Input input, const QJsonObject &options, const QJSValue &onWaiting, const QJSValue &resolve,
                const QJSValue &reject);
     [[nodiscard]] RecognitionQueue *queue();
+    // Made the first time a model is missing; none without settings.
+    [[nodiscard]] ScriptRemedy *remedies();
     // The window's, which writes out one recording at a time for everyone; else one of its own.
     [[nodiscard]] Transcriber *transcriber();
     void told(const QJSValue &callback, const QJSValueList &arguments);
 
     ScriptPlugin *m_plugin;
     std::unique_ptr<RecognitionQueue> m_queue;
+    std::unique_ptr<ScriptRemedy> m_remedy;
     std::unique_ptr<Transcriber> m_transcriber;
     QList<int> m_transcripts; // its own, under way or waiting their turn
     // What is being read aloud, and what is told when it ends.

@@ -6,6 +6,7 @@
 #include <QString>
 #include <QVariantList>
 #include <expected>
+#include <optional>
 #include <stop_token>
 
 #include "embeddings.h"
@@ -26,6 +27,8 @@ class MeaningFinder : public QObject {
     Q_OBJECT
     // The reader whose open book is looked in (the window's `reader`).
     Q_PROPERTY(QObject *reader READ reader WRITE setReader NOTIFY readerChanged)
+    // The window's settings, read again on the thread that looks (else config.json where it always is).
+    Q_PROPERTY(QObject *settings READ settings WRITE setSettings NOTIFY readerChanged)
     // "none" (not indexed), "stale" (its file or the model changed), "indexing",
     // "ready", or "refused" when its text may not be sent anywhere (`problem` says why).
     Q_PROPERTY(QString state READ state NOTIFY changed)
@@ -35,6 +38,10 @@ class MeaningFinder : public QObject {
     Q_PROPERTY(QString where READ where NOTIFY changed)
     Q_PROPERTY(bool hosted READ hosted NOTIFY changed)
     Q_PROPERTY(QString problem READ problem NOTIFY changed)
+    // Why, as a code the pane words what to do by (#172): "no-model", "unreachable",
+    // "refused" (its key), "no-key", "hosted-not-allowed", "hosted-not-chosen",
+    // "ai-off", "no-server", "failed" (anything else); empty with no problem.
+    Q_PROPERTY(QString why READ why NOTIFY changed)
     Q_PROPERTY(bool searching READ searching NOTIFY changed)
     // Past the reader's place too.
     Q_PROPERTY(bool whole MEMBER m_whole NOTIFY wholeChanged)
@@ -55,9 +62,13 @@ public:
     [[nodiscard]] QString where() const { return m_where; }
     [[nodiscard]] bool hosted() const { return m_route && m_route->hosted; }
     [[nodiscard]] QString problem() const { return m_problem; }
+    [[nodiscard]] QString why() const { return m_why; }
+    [[nodiscard]] QObject *settings() const;
+    void setSettings(QObject *settings);
     [[nodiscard]] bool searching() const { return m_search.isRunning(); }
 
-    // Indexes the open book, and keeps it up to date from now on.
+    // Indexes the open book, and keeps it up to date from now on: shown at
+    // once, with the settings looked at again first.
     Q_INVOKABLE void index();
     Q_INVOKABLE void cancel();
     // Finds the words by meaning in the open book, once it is indexed: found()
@@ -86,12 +97,17 @@ private:
     void indexed();
     void searched();
     void setState(const QString &state);
+    void setProblem(const std::optional<Failure> &failure);
     [[nodiscard]] QString whereIs(int section) const;
 
     QPointer<Reader> m_reader;
     QString m_state = QStringLiteral("none");
     double m_progress = 0;
-    QString m_where, m_problem;
+    QString m_where, m_problem, m_why;
+    QPointer<QObject> m_settings;
+    // Why the book's indexing failed, said until it is asked for again.
+    std::optional<Failure> m_failed;
+    bool m_asked = false; // to be indexed once looked at
     bool m_whole = false;
     std::optional<Embeddings::Route> m_route;
     qint64 m_bookId = 0; // the book looked at, indexed or searched
