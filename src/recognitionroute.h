@@ -76,5 +76,8 @@ struct Refusal {
 // for speech those above. Fails, in plain
 // words, when there is none that may be used (the privacy rule says why).
 [[nodiscard]] std::expected<Ways, QString> ways(const Settings &settings, Recognition::Kind kind, bool hostedAsked);
+// Where the first server can't be reached and the ways go to its fallback
+// instead (#174, AiFallback), what the first is called; empty when they don't.
+[[nodiscard]] QString insteadOf(const Settings &settings, Recognition::Kind kind, bool hostedAsked);
 
 } // namespace RecognitionRoute

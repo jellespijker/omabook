@@ -27,8 +27,12 @@ struct CapabilityStatus {
     QString model;    // empty for the provider's own default, or none
     CapabilityLack why = CapabilityLack::None;
     Failure failure; // why not, when it isn't available
+    // Where its first server can't be reached and its fallback is used
+    // instead (#174), what the first is called; `provider` is then the fallback.
+    QString insteadOf;
 
-    // {capability, available, hosted, provider, model, why, message}.
+    // {capability, available, hosted, provider, model, why, message, fallback
+    // (whether the fallback is what answers), first (the one away)}.
     [[nodiscard]] QJsonObject toJson() const;
 };
 

@@ -426,3 +426,30 @@ Where the code asked for it, #143 differs from the decision above, as follows:
 - **Handwriting's own server** (#170's `recognition.ink_url`, else the AI server) is the one looked at and sent a
   download (`ModelFit::placeOf`).
 - **Seams left**: #170's Test can report a missing model through the same `ModelHelp`, and #175's discovery on Ollama and Hugging Face replaces the kept list in `ModelFit::suggested`.
+
+## As built in #174
+
+- **A fallback per capability, for a first that can't be reached** (`AiFallback`, `aifallback.h`): kept in
+  `capabilities.<name>.fallback` as `{to, url, model, hosted}`, `to` being `this-computer`, `server` or `none`, its
+  key in the keyring by its address. Only a server is passed over, and only when no connection to it can be made
+  (`ServerReach`: tried for a second at most, what it came to held ten seconds when there and thirty when away, so
+  nothing hangs and the first is tried again by itself); one that answers with an error is kept, and its error
+  shown. A harness, a command, Omarchy's local models and Gemini have no fallback.
+- **Each capability's default** (`AiFallback::rule`): embeddings and handwriting fall back to Ollama on this
+  computer (`http://localhost:11434/v1`), speech to text to voxtype and whisper.cpp (the server's way goes after
+  them), text to speech to Piper or speech-dispatcher, each only where the first isn't this computer already.
+  Answers have none unless one is chosen in their row. Quick work never falls back: it shares answers' server
+  (as built in #143), so with answers on their fallback its requests are refused before anything is sent
+  (`AiQuickWaits`, `unreachable`), and as a graph request that failed marks nothing as built, the same pages go
+  to the server once it is back.
+- **The same rules**: the fallback goes through the registry as the first does, so nothing falls back with the AI
+  Off; a fallback that is someone else's computer is used only with its own `hosted` allowance, and never for
+  one who kept to their own (`hosted: false`, or not asked for where it must be).
+- **Embeddings stay consistent by keeping the model**: of the three ways (search with the model a book was
+  indexed with, index again, or one model on both), the fallback is always asked for the first's model, so
+  what either made is searched together; a fallback without it says `no-model`, and #172's help offers it there.
+- **Visible where it is used**: the status says `fallback` and `first` (the host away), which a plugin's
+  `ai.status` answers too; the row's summary and its "When it can't be reached" part say it, Find names the
+  server away, and the companion's answer carries the note `AiAnsweredInstead`. Each row's fallback has its own
+  Test (`CapabilityTest::run(…, fallback)`), through a copy of the settings that tries it as though the first
+  were away (`AiFallback::tryInstead`); with none to try it says `no-route`.

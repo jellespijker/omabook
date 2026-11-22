@@ -13,7 +13,10 @@ ColumnLayout {
     property var info: ({})
     readonly property string capability: info.capability || ""
     readonly property var desk: aiAgent.capabilities
-    readonly property var outcome: info.test || ({})
+    // The row's fallback rather than its first (#174), as though the first were away.
+    property bool fallback: false
+    readonly property string named: capability + (fallback ? "Fallback" : "")
+    readonly property var outcome: (fallback ? (info.fallbackChoice || {}).test : info.test) || ({})
     readonly property bool running: outcome.state === "running"
     // Whether it can be tested now: the AI on, and none under way.
     readonly property bool ready: desk.aiOn && !running
@@ -24,11 +27,11 @@ ColumnLayout {
     function test() {
         if (!ready)
             return
-        if (info.why === "hosted-not-allowed") {
+        if (!fallback && info.why === "hosted-not-allowed") {
             asking = true
             return
         }
-        desk.test(capability, false)
+        desk.test(capability, false, fallback)
     }
     function seconds(ms) { return (Number(ms || 0) / 1000).toLocaleString(Qt.locale(), 'f', 1) }
     function passed(outcome) {
@@ -69,14 +72,15 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: 8
         AppButton {
-            objectName: check.capability + "Test"
-            text: qsTr("Test")
+            objectName: check.named + "Test"
+            text: check.fallback ? qsTr("Test the Fallback") : qsTr("Test")
             enabled: check.ready && !check.asking
-            Accessible.description: qsTr("Sends one small request through this row's provider and model (T).")
+            Accessible.description: check.fallback ? qsTr("Sends one small request to the fallback, as though the first couldn't be reached.")
+                                                   : qsTr("Sends one small request through this row's provider and model (T).")
             onClicked: check.test()
         }
         Label {
-            objectName: check.capability + "TestResult"
+            objectName: check.named + "TestResult"
             Layout.fillWidth: true
             visible: text !== ""
             wrapMode: Text.Wrap
@@ -86,7 +90,7 @@ ColumnLayout {
     }
     // Hosted isn't allowed for it: this one test goes there only on a yes.
     Label {
-        objectName: check.capability + "TestAsk"
+        objectName: check.named + "TestAsk"
         Layout.fillWidth: true
         visible: check.asking
         wrapMode: Text.Wrap
@@ -97,16 +101,16 @@ ColumnLayout {
         spacing: 8
         visible: check.asking
         AppButton {
-            objectName: check.capability + "TestHosted"
+            objectName: check.named + "TestHosted"
             primary: true
             text: qsTr("Send the Test")
             onClicked: {
                 check.asking = false
-                check.desk.test(check.capability, true)
+                check.desk.test(check.capability, true, check.fallback)
             }
         }
         AppButton {
-            objectName: check.capability + "TestCancel"
+            objectName: check.named + "TestCancel"
             text: qsTr("Cancel")
             onClicked: check.asking = false
         }

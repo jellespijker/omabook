@@ -21,6 +21,7 @@ public:
     struct Reply {
         QByteArray status = "200 OK";
         QByteArray body;
+        QByteArray type = "application/json"; // "text/event-stream" for an answer streamed
     };
     struct Request {
         QByteArray line; // "POST /v1/chat/completions HTTP/1.1"
@@ -54,7 +55,7 @@ public:
                 const Reply reply = answering           ? answering(received.last())
                                     : replies.isEmpty() ? Reply{.status = "500 Internal Server Error", .body = "{}"}
                                                         : replies.takeFirst();
-                socket->write("HTTP/1.1 " + reply.status + "\r\nContent-Type: application/json\r\nContent-Length: "
+                socket->write("HTTP/1.1 " + reply.status + "\r\nContent-Type: " + reply.type + "\r\nContent-Length: "
                               + QByteArray::number(reply.body.size()) + "\r\nConnection: close\r\n\r\n" + reply.body);
                 socket->disconnectFromHost();
             });

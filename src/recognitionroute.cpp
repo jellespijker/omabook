@@ -5,6 +5,7 @@
 #include <QUrl>
 
 #include "ai.h"
+#include "aifallback.h"
 #include "aiprivacy.h"
 #include "failure.h"
 #include "gemini.h"
@@ -49,6 +50,15 @@ namespace {
 using RecognitionRoute::Lack;
 using RecognitionRoute::Refusal;
 using RecognitionRoute::Ways;
+
+// The ways, and where the first server can't be reached and its fallback is
+// taken in its place (#174), what the first is called.
+struct Planned {
+    Ways ways;
+    QString insteadOf;
+};
+
+[[nodiscard]] Planned alone(Ways &&ways) { return {.ways = std::move(ways), .insteadOf = {}}; }
 
 [[nodiscard]] Ways inkWays(AiServer server, const QString &model, Recognizers::Vision::Whose whose) {
     Ways ways;
@@ -108,15 +118,24 @@ using RecognitionRoute::Ways;
     return ways;
 }
 
-[[nodiscard]] std::expected<Ways, Refusal> inkPlan(const Settings &settings, bool hostedAsked) {
+// The vision model on its server, or on its fallback where that server is away.
+[[nodiscard]] Planned inkOn(const Settings &settings, AiServer server, const QString &model, Recognizers::Vision::Whose whose,
+                            bool hostedAsked) {
+    if (auto instead = AiFallback::instead(settings, Capability::Handwriting, server.baseUrl, model, hostedAsked))
+        return {.ways = inkWays(std::move(instead->server), instead->model, Recognizers::Vision::Whose::Handwriting),
+                .insteadOf = instead->first};
+    return alone(inkWays(std::move(server), model, whose));
+}
+
+[[nodiscard]] std::expected<Planned, Refusal> inkPlan(const Settings &settings, bool hostedAsked) {
     if (geminiChosen(settings, Capability::Handwriting))
-        return geminiWays(settings, Capability::Handwriting, hostedAsked);
+        return geminiWays(settings, Capability::Handwriting, hostedAsked).transform(alone);
     QString model = chosen(settings, "ink_model"_L1);
     // A server of its own (#170): its model, else the first it lists.
     if (auto own = named(settings, "ink_url"_L1)) {
         if (auto refused = hostedRefusal(settings, Capability::Handwriting, own->baseUrl, model, hostedAsked))
             return std::unexpected(std::move(*refused));
-        return inkWays(*std::move(own), model, Recognizers::Vision::Whose::Handwriting);
+        return inkOn(settings, *std::move(own), model, Recognizers::Vision::Whose::Handwriting, hostedAsked);
     }
     if (model.isEmpty())
         model = Ai::models(settings, AiEndpoints::modelsKey(settings)).main;
@@ -128,7 +147,7 @@ using RecognitionRoute::Ways;
         model = server->model;
     if (auto refused = hostedRefusal(settings, Capability::Handwriting, server->baseUrl, model, hostedAsked))
         return std::unexpected(std::move(*refused));
-    return inkWays(*server, model, Recognizers::Vision::Whose::AiServer);
+    return inkOn(settings, *server, model, Recognizers::Vision::Whose::AiServer, hostedAsked);
 }
 
 // The ways speech may go, as they are found, and why the others can't.
@@ -136,16 +155,31 @@ struct Speech {
     Ways ways;
     QStringList missing;
     std::optional<Refusal> refused;
+    // The server, first but away, which goes after this computer's ways (#174).
+    std::unique_ptr<Recognition::Recognizer> last;
+    QString insteadOf;
 };
 
-void addServer(const Settings &settings, bool hostedAsked, Speech &speech) {
+// The server; where it comes first and can't be reached, its fallback in its
+// place, or this computer's ways before it.
+void addServer(const Settings &settings, bool hostedAsked, Speech &speech, bool first = false) {
     const auto server = transcriber(settings);
     if (!server)
         return;
     const QString model = chosen(settings, "transcription_model"_L1);
     speech.refused = hostedRefusal(settings, Capability::SpeechToText, server->baseUrl, model, hostedAsked);
-    if (!speech.refused)
+    if (speech.refused)
+        return;
+    auto instead = first ? AiFallback::instead(settings, Capability::SpeechToText, server->baseUrl, model, hostedAsked) : std::nullopt;
+    if (!instead) {
         speech.ways.push_back(std::make_unique<Recognizers::Transcription>(*server, model));
+        return;
+    }
+    speech.insteadOf = instead->first;
+    if (instead->to == AiFallback::To::Server)
+        speech.ways.push_back(std::make_unique<Recognizers::Transcription>(std::move(instead->server), instead->model));
+    else
+        speech.last = std::make_unique<Recognizers::Transcription>(*server, model);
 }
 
 // On this computer: nothing to ask of anyone. One that isn't installed is
@@ -182,18 +216,18 @@ void addVoxtype(const Settings &settings, Speech &speech) {
 // one of the others, as they always went, and voxtype after them.
 // A way chosen alone on the AI page (#144) is the only one: "voxtype" or
 // "whisper.cpp"; "server" puts the server first, as one chosen before did.
-[[nodiscard]] std::expected<Ways, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
+[[nodiscard]] std::expected<Planned, Refusal> speechPlan(const Settings &settings, bool hostedAsked) {
     Speech speech;
     const QString provider = AiPrivacy::chosen(settings, Capability::SpeechToText).value("provider"_L1).toString();
     // Gemini alone: a recording that may not go there goes nowhere else instead.
     if (provider == "gemini"_L1)
-        return geminiWays(settings, Capability::SpeechToText, hostedAsked);
+        return geminiWays(settings, Capability::SpeechToText, hostedAsked).transform(alone);
     if (provider == "voxtype"_L1) {
         addVoxtype(settings, speech);
     } else if (provider == "whisper.cpp"_L1) {
         addWhisper(settings, speech);
     } else if (provider == "server"_L1 || chosenBefore(settings)) {
-        addServer(settings, hostedAsked, speech);
+        addServer(settings, hostedAsked, speech, true);
         addWhisper(settings, speech);
         addVoxtype(settings, speech);
     } else {
@@ -201,14 +235,20 @@ void addVoxtype(const Settings &settings, Speech &speech) {
         addWhisper(settings, speech);
         addServer(settings, hostedAsked, speech);
     }
+    if (speech.last) {
+        // Nothing here to hear it: the server stays the one asked, away or not.
+        if (speech.ways.empty())
+            speech.insteadOf.clear();
+        speech.ways.push_back(std::move(speech.last));
+    }
     if (!speech.ways.empty())
-        return std::move(speech.ways);
+        return Planned{.ways = std::move(speech.ways), .insteadOf = speech.insteadOf};
     const QString missing = speech.missing.join(u' ');
     return std::unexpected(speech.refused ? Refusal{.lack = speech.refused->lack, .message = speech.refused->message + u' ' + missing}
                                           : Refusal{.lack = Lack::NoServer, .message = missing});
 }
 
-[[nodiscard]] std::expected<Ways, Refusal> plan(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
+[[nodiscard]] std::expected<Planned, Refusal> plan(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
     if (settings.aiOff())
         return std::unexpected(Refusal{.lack = Lack::AiOff, .message = ::Failure(::Failure::Code::AiOff).text()});
     return kind == Recognition::Kind::Ink ? inkPlan(settings, hostedAsked) : speechPlan(settings, hostedAsked);
@@ -227,7 +267,14 @@ std::optional<RecognitionRoute::Refusal> RecognitionRoute::refusal(const Setting
 }
 
 std::expected<RecognitionRoute::Ways, QString> RecognitionRoute::ways(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
-    return plan(settings, kind, hostedAsked).transform_error([](const Refusal &refused) { return refused.message; });
+    return plan(settings, kind, hostedAsked)
+        .transform([](Planned &&planned) { return std::move(planned.ways); })
+        .transform_error([](const Refusal &refused) { return refused.message; });
+}
+
+QString RecognitionRoute::insteadOf(const Settings &settings, Recognition::Kind kind, bool hostedAsked) {
+    const auto planned = plan(settings, kind, hostedAsked);
+    return planned ? planned->insteadOf : QString();
 }
 
 QString RecognitionRoute::voxtypeProgram(const Settings &settings) {

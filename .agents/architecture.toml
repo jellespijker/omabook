@@ -69,6 +69,7 @@ modules = [
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "realtimevoice", "openaivoice", "voices",
   "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "capabilitytest", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
   "modelfit", "modelscout", "modelhelp", "scriptremedy",
+  "serverreach", "aifallback",
 ]
 
 [layers.operations]

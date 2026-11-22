@@ -148,6 +148,9 @@ void MeaningFinder::looked() {
     else
         setProblem(m_bookId == m_leftAlone ? m_failed : std::nullopt);
     m_where = seen.route ? tr("%1 on %2 (%3)").arg(seen.route->model, seen.route->server.name, seen.route->server.host()) : QString();
+    // Its server away: the fallback indexes and searches, and Find says so (#174).
+    if (seen.route && !seen.route->insteadOf.isEmpty())
+        m_where = tr("%1, as %2 can't be reached now").arg(m_where, seen.route->insteadOf);
     setState(seen.route ? stateOf(seen.freshness) : u"refused"_s);
     if (std::exchange(m_asked, false) || (seen.due && m_bookId != m_leftAlone))
         start();

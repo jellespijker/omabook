@@ -9,6 +9,7 @@
 #include <algorithm>
 
 #include "aiendpoint.h"
+#include "aifallback.h"
 #include "aiprivacy.h"
 #include "gemini.h"
 #include "geminivoice.h"
@@ -155,6 +156,24 @@ void keepRetired(Settings &settings, const QStringList &models) {
     return !QStandardPaths::findExecutable(QString::fromLatin1(SpeechDispatcherVoice::program)).isEmpty();
 }
 
+// What reads in place of a server that can't be reached (#174): the
+// fallback's server, else this computer's voice, Piper or speech-dispatcher
+// as automatic has them; none where it answers, or nothing else may read.
+[[nodiscard]] std::unique_ptr<Voice> fallbackFor(const Settings &settings, const AiServer &first, const QString &model,
+                                                 AiPrivacy::HostedAsked asked) {
+    auto instead = AiFallback::instead(settings, Capability::TextToSpeech, first.baseUrl, model, asked);
+    if (!instead)
+        return nullptr;
+    if (instead->to == AiFallback::To::Server)
+        return std::make_unique<ServerVoice>(std::move(instead->server),
+                                             instead->model.isEmpty() ? QString::fromLatin1(ServerVoice::defaultModel) : instead->model);
+    if (piperReady(settings))
+        return std::make_unique<PiperVoice>(piperProgram(settings), PiperVoice::findModels());
+    if (dispatcherReady())
+        return std::make_unique<SpeechDispatcherVoice>(QStandardPaths::findExecutable(QString::fromLatin1(SpeechDispatcherVoice::program)));
+    return nullptr;
+}
+
 } // namespace
 
 std::expected<QString, Failure> Voices::engine(const Settings &settings, AiPrivacy::HostedAsked asked) {
@@ -206,15 +225,39 @@ std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &se
         auto reachable = openAi(settings, asked);
         if (!reachable)
             return std::unexpected(reachable.error());
+        if (auto instead = fallbackFor(settings, *reachable, openAiModel(settings), asked))
+            return instead;
         return std::make_unique<OpenAiVoice>(*std::move(reachable), Voices::openAiRealtimeUrl(settings), openAiModel(settings));
     }
     if (*which == "server"_L1) {
         auto reachable = server(settings, asked);
         if (!reachable)
             return std::unexpected(reachable.error());
+        if (auto instead = fallbackFor(settings, *reachable, serverModel(settings), asked))
+            return instead;
         return std::make_unique<ServerVoice>(*std::move(reachable), serverModel(settings));
     }
     return std::make_unique<SpeechDispatcherVoice>(QStandardPaths::findExecutable(QString::fromLatin1(SpeechDispatcherVoice::program)));
+}
+
+std::optional<AiFallback::Instead> Voices::insteadOf(const Settings &settings, AiPrivacy::HostedAsked asked) {
+    const auto which = engine(settings, asked);
+    std::expected<AiServer, Failure> first = std::unexpected(Failure());
+    QString model;
+    if (which && *which == "server"_L1) {
+        first = server(settings, asked);
+        model = serverModel(settings);
+    } else if (which && *which == "openai"_L1) {
+        first = openAi(settings, asked);
+        model = openAiModel(settings);
+    }
+    if (!first)
+        return std::nullopt;
+    auto instead = AiFallback::instead(settings, Capability::TextToSpeech, first->baseUrl, model, asked);
+    // This computer's voice reads only where there is one.
+    if (instead && instead->to == AiFallback::To::ThisComputer && !piperReady(settings) && !dispatcherReady())
+        return std::nullopt;
+    return instead;
 }
 
 QStringList Voices::offered(const Settings &settings) {

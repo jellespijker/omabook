@@ -32,6 +32,10 @@ struct Route {
     // Gemini's own API (#145) rather than the OpenAI-compatible one; `server`
     // then has its address and key.
     bool gemini = false;
+    // Where the first server can't be reached and `server` is its fallback
+    // (#174), what the first is called; asked for the same model, so what
+    // either made is searched together.
+    QString insteadOf;
 };
 // The route the settings choose ("meaning" in config.json; Settings::meaning).
 // Fails when the AI is off, when there is no server, or the one there is may

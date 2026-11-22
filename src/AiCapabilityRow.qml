@@ -115,6 +115,8 @@ ColumnLayout {
         // voxtype gives only the words (#146).
         if (info.timed === false) parts.push(qsTr("no word timestamps"))
         parts.push(info.hosted ? qsTr("someone else's computer") : qsTr("your own computers"))
+        // Its first can't be reached: the fallback is in use (#174).
+        if (info.fallback) parts.push(qsTr("%1 can't be reached").arg(info.first))
         return parts.filter(part => !!part).join(" · ")
     }
 
@@ -330,6 +332,12 @@ ColumnLayout {
                 checked: settings.meaningAll
                 onToggled: settings.meaningAll = checked
             }
+        }
+
+        // What it uses when its first can't be reached (#174).
+        AiFallbackSetup {
+            Layout.fillWidth: true
+            info: row.info
         }
 
         // Whether it may go to someone else's computer: for this one alone.

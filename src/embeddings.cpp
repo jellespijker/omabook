@@ -12,6 +12,7 @@
 #include <utility>
 
 #include "aifailures.h"
+#include "aifallback.h"
 #include "aiprivacy.h"
 #include "gemini.h"
 #include "meaningindex.h"
@@ -84,7 +85,8 @@ namespace {
         .server = {.preset = u"gemini"_s, .name = u"Gemini"_s, .baseUrl = api->baseUrl, .key = api->key, .keyFile = {}, .model = {}},
         .model = Gemini::modelFor(settings, Capability::Embeddings),
         .hosted = true,
-        .gemini = true};
+        .gemini = true,
+        .insteadOf = {}};
 }
 
 [[nodiscard]] std::expected<Embeddings::Vectors, Failure> geminiVectors(const Embeddings::Route &route, const QStringList &texts,
@@ -128,7 +130,10 @@ std::expected<Embeddings::Route, Failure> Embeddings::route(const Settings &sett
     default:
         return std::unexpected(Failure(Failure::Code::MeaningHosted, {where}));
     }
-    return Route{.server = *server, .model = model, .hosted = hosted};
+    // The first away: its fallback, by the same rule, with the same model.
+    if (const auto instead = AiFallback::instead(settings, Capability::Embeddings, server->baseUrl, model, asked))
+        return Route{.server = instead->server, .model = model, .hosted = instead->hosted, .gemini = false, .insteadOf = instead->first};
+    return Route{.server = *server, .model = model, .hosted = hosted, .gemini = false, .insteadOf = {}};
 }
 
 QString Embeddings::asked(const QString &model, const QString &text, Use use) {

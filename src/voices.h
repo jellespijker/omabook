@@ -7,6 +7,7 @@
 #include <expected>
 #include <memory>
 
+#include "aifallback.h"
 #include "aiprivacy.h"
 #include "failure.h"
 #include "voice.h"
@@ -46,6 +47,9 @@ namespace Voices {
 // That engine's voice, made; or why there is none. Asked through
 // AiRegistry::voice, as every use of a model is.
 [[nodiscard]] std::expected<std::unique_ptr<Voice>, Failure> choose(const Settings &settings, AiPrivacy::HostedAsked asked = std::nullopt);
+// Where that engine's server can't be reached, the fallback that reads
+// instead (#174); none when it reads itself.
+[[nodiscard]] std::optional<AiFallback::Instead> insteadOf(const Settings &settings, AiPrivacy::HostedAsked asked = std::nullopt);
 // The voices it has to choose from, by name; none when there is no engine.
 [[nodiscard]] QStringList offered(const Settings &settings);
 // How fast and in which voice, as chosen for the engine in use, for a book in `language`.

@@ -36,7 +36,8 @@ class AiCapabilityRows : public QObject {
     //   rate and paced (whether it takes a pace: Gemini's doesn't), each kept
     //   per engine (#147), and modelRetired, the model chosen for OpenAI's
     //   voices when OpenAI has retired it (#162); and test, what its Test came
-    //   to (CapabilityTest::outcome, #170)
+    //   to (CapabilityTest::outcome, #170); and fallbackChoice, the server used when the
+    //   first can't be reached (AiFallback::describe, #174), with its own test
     Q_PROPERTY(QVariantList rows READ rows NOTIFY changed)
     // Off stops every model (#133): `ai_provider` "off".
     Q_PROPERTY(bool aiOn READ aiOn NOTIFY changed)
@@ -66,7 +67,12 @@ public:
     Q_INVOKABLE void setAiOn(bool on);
     // One small real request through what the row uses (#170); `hostedOnce`
     // when the person said yes to sending this one to someone else's computer.
-    Q_INVOKABLE void test(const QString &capability, bool hostedOnce = false);
+    // With `fallback`, its fallback, as though the first were away (#174).
+    Q_INVOKABLE void test(const QString &capability, bool hostedOnce = false, bool fallback = false);
+    // Its fallback (#174): any of {to, url, model, hosted}, as AiFallback::choose takes them.
+    Q_INVOKABLE void setFallback(const QString &capability, const QVariantMap &fields);
+    // Keeps the key for the fallback's server in the keyring; "" forgets it. Says why when it couldn't be.
+    Q_INVOKABLE QString setFallbackKey(const QString &capability, const QString &key);
     [[nodiscard]] CapabilityTest *tester() noexcept { return &m_test; }
     [[nodiscard]] VoicePreview *preview() noexcept { return &m_preview; }
     // Whether the page is in front of somebody: the rows are worked out, and

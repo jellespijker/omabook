@@ -274,7 +274,9 @@ private slots:
         QVERIFY(!capability(desk, "speech-to-text").contains("provider"));
 
         // Embeddings at a hosted address: refused until allowed for it, and
-        // only for it.
+        // only for it. Without a fallback (#174), it stays the one shown, away or not.
+        pick(desk, "embeddingsFallbackTo", 0);
+        QCOMPARE(capability(desk, "embeddings").value("fallback").toObject().value("to").toString(), QString("none"));
         type(desk, "embeddingsAddress", "https://api.example.com/v1");
         QCOMPARE(desk.settings->meaning().value("url").toString(), QString("https://api.example.com/v1"));
         QTRY_COMPARE(text(desk, "embeddingsSummary"), QString("Only a hosted service is set up, and hosted isn't allowed for it"));

@@ -152,6 +152,10 @@ _Avoid_: Feature, tier (for all six), task, skill
 What does a capability's work: a service (Claude's API, Gemini's, OpenAI's), a subscription through its agent (Claude Code, Antigravity), a server (Ollama, Omarchy's local models, another of the OpenAI-compatible API), a program on this computer (voxtype, whisper.cpp, Piper, speech-dispatcher) or a command; the person's own or hosted, as an own server is (`AiProvider`, ADR 0008).
 _Avoid_: Backend, engine (alone), vendor, model (what a provider runs)
 
+**Fallback**:
+The second provider a capability uses while its first server can't be reached at all (off, or the laptop away from home), never when it answers with an error: this computer, or another server chosen in its row, by the same privacy rule, with a hosted one needing its own allowance. Omabook goes back to the first by itself once it answers; quick work has none and waits for its server (`AiFallback`, `ServerReach`, #174).
+_Avoid_: Failover, backup server, retry (that is another model on the same provider)
+
 **Dictation**:
 Saying words into a text field instead of typing them: heard while the person holds the field's microphone or its key (or between two presses), written out by speech to text, and put where the cursor is; or voxtype's own dictation, which types them itself (`Dictation`, #148). A recording is something kept; dictation keeps nothing but the words.
 _Avoid_: Recording (for this), voice input, speech recognition (for the whole of it)

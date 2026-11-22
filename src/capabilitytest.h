@@ -6,6 +6,7 @@
 #include <chrono>
 #include <map>
 #include <memory>
+#include <utility>
 #include <vector>
 
 #include "aicapability.h"
@@ -38,14 +39,16 @@ public:
     CapabilityTest(CapabilityTest &&) = delete;
     CapabilityTest &operator=(CapabilityTest &&) = delete;
 
-    // Tests the capability; one under way for it is stopped first.
-    void run(Capability capability, bool hostedOnce);
+    // Tests the capability; one under way for it is stopped first. With
+    // `fallback`, its fallback (#174), as though the first were away: hosted
+    // only by the fallback's own allowance, or `hostedOnce`.
+    void run(Capability capability, bool hostedOnce, bool fallback = false);
     // Stops every test under way; what they came to is forgotten.
     void stop();
     // {state: "running", "passed" or "failed", said (the reply, the words
     // read or heard, the sentence said, the vector's length), ms, why,
-    // message}; empty when none ran.
-    [[nodiscard]] QVariantMap outcome(Capability capability) const;
+    // message}; empty when none ran. Its fallback's apart.
+    [[nodiscard]] QVariantMap outcome(Capability capability, bool fallback = false) const;
     // How long a test may take before it is "timeout": a minute, as a vision
     // model may first have to be loaded.
     void setTimeout(std::chrono::milliseconds timeout) noexcept { m_timeout = timeout; }
@@ -63,12 +66,14 @@ signals:
 
 private:
     struct Running;
-    void finish(Capability capability, int generation, QVariantMap outcome);
+    // The capability, and whether it is its fallback that is tested.
+    using Which = std::pair<Capability, bool>;
+    void finish(Which which, int generation, QVariantMap outcome);
 
     Settings *m_settings;
     QString m_defaultsFile;
     std::chrono::milliseconds m_timeout{std::chrono::minutes(1)};
     int m_generation = 0;
-    std::map<Capability, std::unique_ptr<Running>> m_running;
-    std::map<Capability, QVariantMap> m_outcomes;
+    std::map<Which, std::unique_ptr<Running>> m_running;
+    std::map<Which, QVariantMap> m_outcomes;
 };

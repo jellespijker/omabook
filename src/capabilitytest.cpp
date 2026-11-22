@@ -18,10 +18,12 @@
 #include <utility>
 
 #include "ai.h"
+#include "aifallback.h"
 #include "aiprivacy.h"
 #include "airegistry.h"
 #include "embeddings.h"
 #include "recognition.h"
+#include "serverreach.h"
 #include "settings.h"
 #include "voice.h"
 #include "voices.h"
@@ -95,15 +97,23 @@ constexpr auto worded = std::to_array<Worded>({
     return {{u"state"_s, u"failed"_s}, {u"why"_s, why}, {u"message"_s, message}};
 }
 
-// A copy of the settings that allows hosted for this capability alone, for
-// a test the person said yes to sending to someone else's computer.
-[[nodiscard]] std::unique_ptr<Settings> hostedCopy(const Settings &settings, Capability capability, const QTemporaryDir &dir) {
+// A copy of the settings to test by, theirs staying as they are.
+[[nodiscard]] std::unique_ptr<Settings> copyOf(const Settings &settings, const QTemporaryDir &dir) {
     const QString file = dir.filePath(u"config.json"_s);
     if (!dir.isValid() || (QFile::exists(settings.file()) && !QFile::copy(settings.file(), file)))
         return nullptr;
     auto copy = std::make_unique<Settings>(file);
     if (!copy->hasCapabilities())
         AiPrivacy::carryOver(*copy);
+    return copy;
+}
+
+// A copy of the settings that allows hosted for this capability alone, for
+// a test the person said yes to sending to someone else's computer.
+[[nodiscard]] std::unique_ptr<Settings> hostedCopy(const Settings &settings, Capability capability, const QTemporaryDir &dir) {
+    auto copy = copyOf(settings, dir);
+    if (!copy)
+        return nullptr;
     QJsonObject all = copy->capabilities();
     QJsonObject one = all.value(Capabilities::name(capability)).toObject();
     one.insert(u"hosted"_s, true);
@@ -302,14 +312,16 @@ std::vector<Ink::Stroke> CapabilityTest::drawnWord() {
             stroke(2, {{140.0, 10.0}, {120.0, 35.0}, {101.0, 55.0}}), stroke(3, {{110.0, 45.0}, {125.0, 68.0}, {142.0, 90.0}})};
 }
 
-void CapabilityTest::run(Capability capability, bool hostedOnce) {
-    m_running.erase(capability);
+void CapabilityTest::run(Capability capability, bool hostedOnce, bool fallback) {
+    const Which which{capability, fallback};
+    m_running.erase(which);
+    // A test asks again whether the servers are there, rather than go by what was found a while ago.
+    ServerReach::forget();
     const int generation = ++m_generation;
-    const auto end = [this, capability, generation](QVariantMap outcome) {
+    const auto end = [this, which, generation](QVariantMap outcome) {
         // Never while it is being started: a test ends after it began.
         QMetaObject::invokeMethod(
-            this, [this, capability, generation, outcome = std::move(outcome)] { finish(capability, generation, outcome); },
-            Qt::QueuedConnection);
+            this, [this, which, generation, outcome = std::move(outcome)] { finish(which, generation, outcome); }, Qt::QueuedConnection);
     };
     const Ends ends{.said = [end](const QString &said) { end({{u"state"_s, u"passed"_s}, {u"said"_s, said}}); },
                     .failed = [end](const QString &why, const QString &message) { end(failedWith(why, message)); }};
@@ -319,12 +331,21 @@ void CapabilityTest::run(Capability capability, bool hostedOnce) {
     running->deadline.setSingleShot(true);
     // Queued, as the timer goes with the test it ends.
     connect(
-        &running->deadline, &QTimer::timeout, this,
-        [this, capability, generation] { finish(capability, generation, failedWith(u"timeout"_s, {})); }, Qt::QueuedConnection);
+        &running->deadline, &QTimer::timeout, this, [this, which, generation] { finish(which, generation, failedWith(u"timeout"_s, {})); },
+        Qt::QueuedConnection);
     running->deadline.start(m_timeout);
 
     const Settings *used = m_settings;
-    if (hostedOnce && !m_settings->aiOff() && !AiPrivacy::hostedAllowed(*m_settings, capability)) {
+    if (fallback) {
+        // The fallback, as though the first were away (#174): hosted only by its own allowance, or this one yes.
+        running->copy = copyOf(*m_settings, running->dir);
+        if (running->copy) {
+            AiFallback::tryInstead(*running->copy, capability);
+            if (hostedOnce)
+                AiFallback::choose(*running->copy, capability, {{u"hosted"_s, true}});
+            used = running->copy.get();
+        }
+    } else if (hostedOnce && !m_settings->aiOff() && !AiPrivacy::hostedAllowed(*m_settings, capability)) {
         running->copy = hostedCopy(*m_settings, capability, running->dir);
         if (running->copy)
             used = running->copy.get();
@@ -336,6 +357,8 @@ void CapabilityTest::run(Capability capability, bool hostedOnce) {
         end(failedWith(u"ai-off"_s, Failure(Code::AiOff).text()));
     } else if (!status.available) {
         end(failedWith(whyOf(status.why), status.failure.text()));
+    } else if (fallback && status.insteadOf.isEmpty()) {
+        end(failedWith(u"no-route"_s, Failure(Code::NoFallback).text()));
     } else {
         Started started = start(capability, *used,
                                 {.defaultsFile = m_defaultsFile,
@@ -348,18 +371,18 @@ void CapabilityTest::run(Capability capability, bool hostedOnce) {
         else
             end(failedWith(whyOf(started.error().code()), started.error().text()));
     }
-    m_running[capability] = std::move(running);
-    m_outcomes[capability] = {{u"state"_s, u"running"_s}};
+    m_running[which] = std::move(running);
+    m_outcomes[which] = {{u"state"_s, u"running"_s}};
     emit changed();
 }
 
-void CapabilityTest::finish(Capability capability, int generation, QVariantMap outcome) {
-    const auto found = m_running.find(capability);
+void CapabilityTest::finish(Which which, int generation, QVariantMap outcome) {
+    const auto found = m_running.find(which);
     if (found == m_running.end() || found->second->generation != generation)
         return; // stopped, or tested again since
     outcome.insert(u"ms"_s, found->second->clock.elapsed());
     m_running.erase(found);
-    m_outcomes[capability] = std::move(outcome);
+    m_outcomes[which] = std::move(outcome);
     emit changed();
 }
 
@@ -369,7 +392,7 @@ void CapabilityTest::stop() {
     emit changed();
 }
 
-QVariantMap CapabilityTest::outcome(Capability capability) const {
-    const auto found = m_outcomes.find(capability);
+QVariantMap CapabilityTest::outcome(Capability capability, bool fallback) const {
+    const auto found = m_outcomes.find({capability, fallback});
     return found == m_outcomes.end() ? QVariantMap() : found->second;
 }

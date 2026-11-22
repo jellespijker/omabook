@@ -8,6 +8,7 @@
 
 #include "ai.h"
 #include "aiendpoint.h"
+#include "aifallback.h"
 #include "aiprivacy.h"
 #include "airegistry.h"
 #include "embeddings.h"
@@ -234,6 +235,10 @@ QVariantMap AiCapabilityRows::row(Capability capability) const {
     if (capability == Capability::TextToSpeech && status.available)
         addVoice(row, *m_settings);
     row.insert(u"test"_s, m_test.outcome(capability));
+    // Its fallback, when the first can't be reached (#174), with its own Test.
+    QVariantMap fallback = AiFallback::describe(*m_settings, capability);
+    fallback.insert(u"test"_s, m_test.outcome(capability, true));
+    row.insert(u"fallbackChoice"_s, fallback);
     return row;
 }
 
@@ -390,9 +395,26 @@ void AiCapabilityRows::setRate(double rate) {
     refresh();
 }
 
-void AiCapabilityRows::test(const QString &capability, bool hostedOnce) {
+void AiCapabilityRows::test(const QString &capability, bool hostedOnce, bool fallback) {
     if (const auto which = Capabilities::named(capability))
-        m_test.run(*which, hostedOnce);
+        m_test.run(*which, hostedOnce, fallback);
+}
+
+void AiCapabilityRows::setFallback(const QString &capability, const QVariantMap &fields) {
+    if (const auto which = Capabilities::named(capability)) {
+        AiFallback::choose(*m_settings, *which, fields);
+        refresh();
+    }
+}
+
+QString AiCapabilityRows::setFallbackKey(const QString &capability, const QString &key) {
+    const auto which = Capabilities::named(capability);
+    const QString address = which ? AiFallback::chosen(*m_settings, *which).url : QString();
+    if (address.isEmpty())
+        return {};
+    const auto kept = AiEndpoints::keepKey(address, key, Secrets::shared());
+    refresh();
+    return kept ? QString() : kept.error();
 }
 
 void AiCapabilityRows::setAiOn(bool on) {

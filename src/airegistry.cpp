@@ -5,7 +5,9 @@
 
 #include "ai.h"
 #include "aiendpoint.h"
+#include "aifallback.h"
 #include "gemini.h"
+#include "openaiprovider.h"
 #include "settings.h"
 #include "voice.h"
 #include "voices.h"
@@ -15,12 +17,14 @@ using namespace Qt::StringLiterals;
 namespace {
 
 // One provider serves answers and quick work. Where only one of the two may
-// use it (hosted allowed for answers, not for quick), a request of the other
-// is refused here, before anything is sent.
+// use it (hosted allowed for answers, not for quick; answers' fallback, for
+// which quick work waits), a request of the other is refused here, before
+// anything is sent. A note, where there is one, is said with every answer:
+// that the fallback answered (#174).
 class OneTierOnly : public AiProvider {
 public:
-    OneTierOnly(std::unique_ptr<AiProvider> serving, AiRequest::Tier refused, Failure why)
-        : m_serving(std::move(serving)), m_refused(refused), m_why(std::move(why)) {
+    OneTierOnly(std::unique_ptr<AiProvider> serving, AiRequest::Tier refused, Failure why, std::optional<Failure> note = std::nullopt)
+        : m_serving(std::move(serving)), m_refused(refused), m_why(std::move(why)), m_note(std::move(note)) {
         setModels(m_serving->models());
         connect(m_serving.get(), &AiProvider::delta, this, &AiProvider::delta);
         connect(m_serving.get(), &AiProvider::finished, this, &AiProvider::finished);
@@ -32,6 +36,8 @@ public:
     void ask(const AiRequest &request) override {
         if (request.tier != m_refused) {
             m_serving->ask(request);
+            if (m_note)
+                QMetaObject::invokeMethod(this, [this] { emit noted(*m_note); }, Qt::QueuedConnection);
             return;
         }
         // Later, as a provider's answer always comes: the asker connects first.
@@ -43,7 +49,25 @@ private:
     std::unique_ptr<AiProvider> m_serving;
     AiRequest::Tier m_refused;
     Failure m_why;
+    std::optional<Failure> m_note;
 };
+
+// Where answers are asked when that is a server of the person's choosing (a
+// fallback stands in for nothing else): none for a harness, an API, a
+// command or Omarchy's local models, which are this computer.
+[[nodiscard]] QString answersFirst(const Settings &settings) {
+    if (settings.aiProvider() != "openai"_L1 || AiEndpoints::preset(settings) == "omarchy-local"_L1)
+        return {};
+    return AiEndpoints::baseUrl(settings);
+}
+
+// Answers' fallback, where their server can't be reached: quick work, which
+// shares that server, waits for it.
+[[nodiscard]] std::optional<AiFallback::Instead> answersInstead(const Settings &settings, const QString &model,
+                                                                AiPrivacy::HostedAsked asked) {
+    const QString first = answersFirst(settings);
+    return first.isEmpty() ? std::nullopt : AiFallback::instead(settings, Capability::Answers, first, model, asked);
+}
 
 // The model a request of `word` goes to: the capability's own for none.
 [[nodiscard]] QString modelOf(const AiModels &models, Capability capability, const QString &word) {
@@ -90,6 +114,20 @@ private:
     else if (status.why == CapabilityLack::HostedNotChosen)
         status.failure = Failure(Failure::Code::HostedNotChosen, {choice.name});
     status.available = status.why == CapabilityLack::None;
+    if (!status.available)
+        return status;
+    if (const auto instead = answersInstead(settings, status.model, ask.hosted)) {
+        status.insteadOf = instead->first;
+        if (capability == Capability::Quick) {
+            status.available = false;
+            status.why = CapabilityLack::Unreachable;
+            status.failure = Failure(Failure::Code::AiQuickWaits, {instead->first});
+            return status;
+        }
+        status.provider = instead->server.name;
+        status.model = instead->model;
+        status.hosted = instead->hosted;
+    }
     return status;
 }
 
@@ -126,7 +164,8 @@ private:
             .provider = {},
             .model = {},
             .why = lackOf(settings, failure),
-            .failure = failure};
+            .failure = failure,
+            .insteadOf = {}};
 }
 
 [[nodiscard]] CapabilityStatus recognitionStatus(const Settings &settings, Capability capability, const AiRegistry::Ask &ask) {
@@ -140,7 +179,8 @@ private:
                 .provider = {},
                 .model = {},
                 .why = refusal->lack,
-                .failure = Failure::said(refusal->message)};
+                .failure = Failure::said(refusal->message),
+                .insteadOf = {}};
     const auto used = RecognitionRoute::ways(settings, kind, asked);
     const auto own = RecognitionRoute::ways(settings, kind, false);
     if (!used || used->empty())
@@ -154,7 +194,8 @@ private:
             .provider = first.where(),
             .model = first.model(),
             .why = CapabilityLack::None,
-            .failure = {}};
+            .failure = {},
+            .insteadOf = RecognitionRoute::insteadOf(settings, kind, asked)};
 }
 
 [[nodiscard]] CapabilityStatus voiceStatus(const Settings &settings, const AiRegistry::Ask &ask) {
@@ -172,14 +213,17 @@ private:
         model = settings.readAloud().value("openai_model"_L1).toString(); // else it reads with the default (#162)
     else if (*engine == "gemini"_L1)
         model = Gemini::modelFor(settings, Capability::TextToSpeech);
+    // Its server away: the fallback's voice reads, this computer's or a server's (#174).
+    const auto instead = Voices::insteadOf(settings, ask.hosted);
     return {.capability = Capability::TextToSpeech,
             .available = true,
             // A server that keeping to one's own would refuse is someone else's.
-            .hosted = !local && !Voices::engine(settings, false),
+            .hosted = instead ? instead->hosted : !local && !Voices::engine(settings, false),
             .provider = (*made)->name(),
-            .model = model,
+            .model = instead ? instead->model : model,
             .why = CapabilityLack::None,
-            .failure = {}};
+            .failure = {},
+            .insteadOf = instead ? instead->first : QString()};
 }
 
 [[nodiscard]] CapabilityStatus embeddingsStatus(const Settings &settings, const AiRegistry::Ask &ask) {
@@ -192,7 +236,8 @@ private:
             .provider = route->server.name,
             .model = route->model,
             .why = CapabilityLack::None,
-            .failure = {}};
+            .failure = {},
+            .insteadOf = route->insteadOf};
 }
 
 } // namespace
@@ -204,7 +249,9 @@ QJsonObject CapabilityStatus::toJson() const {
             {u"provider"_s, provider},
             {u"model"_s, model},
             {u"why"_s, Capabilities::lackName(why)},
-            {u"message"_s, available ? QString() : failure.text()}};
+            {u"message"_s, available ? QString() : failure.text()},
+            {u"fallback"_s, available && !insteadOf.isEmpty()},
+            {u"first"_s, insteadOf}};
 }
 
 CapabilityStatus AiRegistry::status(const Settings &settings, Capability capability, const Ask &ask, const QString &defaultsFile) {
@@ -236,6 +283,15 @@ std::expected<std::unique_ptr<AiProvider>, Failure> AiRegistry::answers(const Se
     const CapabilityStatus quick = status(settings, Capability::Quick, ask, defaultsFile);
     if (!main.available && !quick.available)
         return std::unexpected(main.failure);
+    // Their server away: the fallback answers, saying so, and quick work waits for the server (#174).
+    if (main.available && !main.insteadOf.isEmpty()) {
+        if (const auto instead = answersInstead(settings, main.model, ask.hosted)) {
+            auto fallback = std::make_unique<OpenAiProvider>(instead->server);
+            fallback->setModels({.main = instead->model, .quick = instead->model});
+            return std::make_unique<OneTierOnly>(std::move(fallback), AiRequest::Quick, quick.failure,
+                                                 Failure(Failure::Code::AiAnsweredInstead, {instead->server.name, instead->first}));
+        }
+    }
     QString why;
     std::unique_ptr<AiProvider> made = makeAiProvider(settings, &why, defaultsFile);
     if (!made)

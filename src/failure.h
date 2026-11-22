@@ -188,6 +188,8 @@ public:
         HostedNotChosen,         // {where}: someone else's computer, and the plugin asking didn't ask for a hosted one
         AiUnreachable,       // {where, the network's reason}
         AiTimedOut,          // {where}
+        AiQuickWaits,        // {where}: quick work waits for its server, away, rather than go to answers' fallback (#174)
+        NoFallback,          // {}: no fallback to try, or none that may be used (#174)
         AiWantsKey,          // {where}
         AiRefusedKey,        // {where}
         AnthropicRefusedKey, // {}
@@ -227,6 +229,7 @@ public:
         BranchesOffNothing,    // {timeline}
         BranchWordNotKept,     // {branch}
         BranchMadeByBranching, // {}: a branch is not added as a kind of timeline
+        AiAnsweredInstead,     // {who answered, the first, away}: the fallback answered (#174)
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.
