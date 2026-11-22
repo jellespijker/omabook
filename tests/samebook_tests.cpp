@@ -476,8 +476,10 @@ private slots:
         const SyncSummary synced = syncFrom(true, a, b, dir, other);
         QCOMPARE(synced.titles.unlinked, QStringList());
         QVERIFY2(synced.problems.isEmpty(), qPrintable(synced.problems.join('\n')));
-        QVERIFY2(synced.titles.renamedHere == QStringList{"The Lady of Crows: title → Crows of the Lady"},
-                 qPrintable((synced.titles.renamedHere + synced.titles.renamedThere + synced.titles.apart + synced.titles.detailsTaken).join('\n')));
+        QVERIFY2(
+            synced.titles.renamedHere == QStringList{"The Lady of Crows: title → Crows of the Lady"},
+            qPrintable(
+                (synced.titles.renamedHere + synced.titles.renamedThere + synced.titles.apart + synced.titles.detailsTaken).join('\n')));
         QCOMPARE(synced.received + synced.sent, 0);
         QCOMPARE(countApart(a) + countApart(b), qsizetype{0});
         QCOMPARE(a.books().size(), 1);

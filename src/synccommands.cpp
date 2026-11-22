@@ -173,7 +173,8 @@ void printKeptApart(const SyncSummary &summary, const QString &host, const QStri
 [[nodiscard]] QStringList unlinkedNothing(const SyncOptions &options, const SyncSummary &summary) {
     QStringList none;
     for (const QString &title : options.unlink)
-        if (std::ranges::none_of(summary.titles.unlinked, [&](const QString &pair) { return pair.contains(title.trimmed(), Qt::CaseInsensitive); }))
+        if (std::ranges::none_of(summary.titles.unlinked,
+                                 [&](const QString &pair) { return pair.contains(title.trimmed(), Qt::CaseInsensitive); }))
             none << title;
     return none;
 }

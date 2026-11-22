@@ -123,7 +123,8 @@ QStringList BookLinks::record(const Library &library, std::span<const SpaceOpera
             continue;
         pairs.insert(pairOf(link.id, link.value));
         writeApart(library, link);
-        written << pairTitles(titleAt(titles, link.id, link.hlc).value_or(link.id), titleAt(titles, link.value, link.hlc).value_or(link.value));
+        written << pairTitles(titleAt(titles, link.id, link.hlc).value_or(link.id),
+                              titleAt(titles, link.value, link.hlc).value_or(link.value));
     }
     return written;
 }
