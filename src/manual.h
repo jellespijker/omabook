@@ -136,6 +136,9 @@ private:
     QString plain(const QString &text) const;
     QString html(const QString &text) const;
     QVariantMap card(const Step &step) const;
+    // The panels' keys, in two lists of a size to read (panelkeys.cpp).
+    static QList<Panel> readingPanels();
+    static QList<Panel> toolPanels();
 
     Settings *m_settings;
     Customization *m_custom;

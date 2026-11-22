@@ -205,24 +205,55 @@ QList<Manual::Step> providersRelease() {
     };
 }
 
-// The next release's entries: dictating notes (#148).
+// The 0.4.0 release's entries: dictation (#148), asking by voice (#149), voice commands (#150), recordings written out
+// (#151), ink in the margins (#152), the margin folded to dots (#167), each AI row tested (#170) and a missing model
+// found or fetched (#172), OpenAI's voices over its Realtime API (#169), and sound following the desktop (#173).
 QList<Manual::Step> speechRelease() {
     return {
-        {"dictation", "0.3.1", Manual::tr("Say a note instead of typing it"),
+        {"dictation", "0.4.0", Manual::tr("Say a note instead of typing it"),
          Manual::tr("A margin note's microphone, or Ctrl+M in it, listens while you hold it and writes out what you say where "
                     "the cursor is; a quick press listens until the next. It goes through speech to text as you chose it on "
                     "the AI page ({global.settings}), voxtype first, and the top of the window says while it listens."),
          "", "reader.note", "reader", ""},
-        {"spoken-answers", "0.3.1", Manual::tr("Ask by voice, and hear the answer"),
+        {"spoken-answers", "0.4.0", Manual::tr("Ask by voice, and hear the answer"),
          Manual::tr("Hold the companion's microphone, or Ctrl+M in its question, and say what you want to know: it is asked "
                     "when you let go, and the answer is shown and read aloud. Asking again, Escape or {reader.read_aloud_stop} "
                     "stops it. {library.ask} takes a spoken question too."),
          "", "reader.ask", "reader", ""},
-        {"voice-commands", "0.3.1", Manual::tr("Say what to do while you read"),
+        {"voice-commands", "0.4.0", Manual::tr("Say what to do while you read"),
          Manual::tr("Hold {reader.voice}, or Speak in the bar, and say “next chapter”, “previous page”, “read aloud”, “go to "
                     "chapter 5”, “highlight this” or “what does this word mean”, in any of the window's languages. It listens "
                     "only while you ask it to, and the top of the window says so."),
          "", "reader.voice", "reader", ""},
+        {"transcripts", "0.4.0", Manual::tr("Recordings, written out"),
+         Manual::tr("An MP3, M4B or other recording in the library becomes a book to read once it is written out: "
+                    "{library.transcribe}, or Write Out in its details, does it in the background through speech to text, "
+                    "and the search then finds what is said in it."),
+         "", "library.transcribe", "library", ""},
+        {"margin-ink", "0.4.0", Manual::tr("Ink in the margins"),
+         Manual::tr("{reader.ink} writes and draws in the margins and between the lines of an EPUB, a FictionBook, Markdown "
+                    "or a text, as on a PDF's pages. Each stroke stays beside its line however the text is laid out."),
+         "", "reader.ink", "reader", ""},
+        {"fold-margin", "0.4.0", Manual::tr("Fold the margin notes away"),
+         Manual::tr("{reader.fold_margin} folds the margin column away for every book, and the text takes its room. A dot "
+                    "beside a line stands for its notes; a click, a tap or the pen opens them beside the words."),
+         "", "reader.fold_margin", "reader", ""},
+        {"ai-tests", "0.4.0", Manual::tr("Each use of AI, tested"),
+         Manual::tr("Each row of the AI page ({global.settings}) says what Omabook uses it for, and its Test sends one small "
+                    "request and shows what came back, or why not. Handwriting can have a server of its own."),
+         "", "global.settings", "", ""},
+        {"missing-model", "0.4.0", Manual::tr("A missing model, found or fetched"),
+         Manual::tr("Where a model isn't on its server, Omabook offers one the server has that can do the work, or downloads "
+                    "a small, well-known one onto Ollama with one press."),
+         "", "global.settings", "", ""},
+        {"realtime-voices", "0.4.0", Manual::tr("OpenAI's voices read on"),
+         Manual::tr("When OpenAI shuts its speech API down in January 2027, {reader.read_aloud} goes on with its voices over "
+                    "its Realtime API, from the same sentence."),
+         "", "reader.read_aloud", "reader", ""},
+        {"sound-follows", "0.4.0", Manual::tr("Sound follows the desktop"),
+         Manual::tr("Switch to headphones or a Bluetooth speaker, or unplug them, and what is read aloud or played moves "
+                    "along as it plays; dictation listens on the new microphone."),
+         "", "", "", ""},
     };
 }
 
