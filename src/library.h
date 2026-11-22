@@ -235,6 +235,8 @@ public:
     // Where copies of the database are kept: one is made each time an
     // Omabook update changes the library's format, before anything changes.
     QString backupFolder() const;
+    // Writes a whole, consistent copy of the database to `file` (a snapshot's, #181), or says why it couldn't.
+    [[nodiscard]] std::expected<void, QString> copyInto(const QString &file) const;
     // The format the database is in, counted from 1; it only ever goes up.
     int formatVersion() const;
     // Who signs what this library writes to its change log (ADR 0001,

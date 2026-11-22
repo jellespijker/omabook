@@ -2693,5 +2693,11 @@
   "The hub takes no request called %1.": "Le hub n'accepte aucune requête nommée %1.",
   "The hub takes each request as one line of JSON: an object that names its request.": "Le hub reçoit chaque requête comme une ligne de JSON : un objet qui nomme sa requête.",
   "The secret %1 can be read by others; only the hub's own user may (chmod 600 it).": "Le secret %1 peut être lu par d'autres ; seul l'utilisateur propre du hub le peut (chmod 600).",
-  "The hub can't read the secret %1: %2": "Le hub ne peut pas lire le secret %1 : %2"
+  "The hub can't read the secret %1: %2": "Le hub ne peut pas lire le secret %1 : %2",
+  "Snapshots aren't set up on this computer yet: omabook snapshot setup makes a place for them, and the recovery key to keep.": "Les instantanés ne sont pas encore configurés sur cet ordinateur : omabook snapshot setup leur prépare une place, et la clé de récupération à conserver.",
+  "Snapshots are set up already, in %1. Their recovery key was shown when they were set up.": "Les instantanés sont déjà configurés, dans %1. Leur clé de récupération a été affichée lors de la configuration.",
+  "The snapshots' password couldn't be kept: %1": "Le mot de passe des instantanés n'a pas pu être conservé : %1",
+  "The library couldn't be copied for its snapshot: %1": "La bibliothèque n'a pas pu être copiée pour son instantané : %1",
+  "restic (%1) isn't installed here, and snapshots are made with it.": "restic (%1) n'est pas installé ici, et les instantanés sont faits avec lui.",
+  "restic couldn't make or read the snapshots: %1": "restic n'a pas pu créer ou lire les instantanés : %1"
 }

@@ -2592,5 +2592,11 @@
   "The hub takes no request called %1.": "De hub neemt geen verzoek met de naam %1 aan.",
   "The hub takes each request as one line of JSON: an object that names its request.": "De hub neemt elk verzoek aan als één regel JSON: een object dat zijn verzoek noemt.",
   "The secret %1 can be read by others; only the hub's own user may (chmod 600 it).": "Het geheim %1 kan door anderen gelezen worden; alleen de eigen gebruiker van de hub mag dat (chmod 600).",
-  "The hub can't read the secret %1: %2": "De hub kan het geheim %1 niet lezen: %2"
+  "The hub can't read the secret %1: %2": "De hub kan het geheim %1 niet lezen: %2",
+  "Snapshots aren't set up on this computer yet: omabook snapshot setup makes a place for them, and the recovery key to keep.": "Snapshots zijn op deze computer nog niet ingesteld: omabook snapshot setup maakt er een plek voor, en de herstelsleutel om te bewaren.",
+  "Snapshots are set up already, in %1. Their recovery key was shown when they were set up.": "Snapshots zijn al ingesteld, in %1. Hun herstelsleutel werd getoond toen ze werden ingesteld.",
+  "The snapshots' password couldn't be kept: %1": "Het wachtwoord van de snapshots kon niet worden bewaard: %1",
+  "The library couldn't be copied for its snapshot: %1": "De bibliotheek kon niet worden gekopieerd voor haar snapshot: %1",
+  "restic (%1) isn't installed here, and snapshots are made with it.": "restic (%1) is hier niet geïnstalleerd, en snapshots worden ermee gemaakt.",
+  "restic couldn't make or read the snapshots: %1": "restic kon de snapshots niet maken of lezen: %1"
 }

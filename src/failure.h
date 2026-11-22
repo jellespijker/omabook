@@ -246,6 +246,13 @@ public:
         BranchWordNotKept,     // {branch}
         BranchMadeByBranching, // {}: a branch is not added as a kind of timeline
         AiAnsweredInstead,     // {who answered, the first, away}: the fallback answered (#174)
+        // Snapshots of a library, made with restic (services, #181).
+        SnapshotsNotSetUp,      // {}
+        SnapshotsSetUpAlready,  // {repository}
+        SnapshotPasswordUnkept, // {the system's reason}
+        SnapshotNotCopied,      // {the database's reason}
+        ResticMissing,          // {program}
+        ResticFailed,           // {what restic said}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

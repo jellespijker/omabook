@@ -63,6 +63,7 @@
 #include "secretstore.h"
 #include "settings.h"
 #include "sitedesk.h"
+#include "snapshotcommands.h"
 #include "spacecommands.h"
 #include "synccommands.h"
 #include "theme.h"
@@ -1951,6 +1952,7 @@ constexpr std::array cliCommands{
     CliCommand{"manifest"_L1, runManifestCli},
     CliCommand{"identity"_L1, runIdentityCli},
     CliCommand{"hub"_L1, runHubCli},
+    CliCommand{"snapshot"_L1, runSnapshotCli},
     CliCommand{"spaces"_L1, runSpacesCli},
     CliCommand{"plugins"_L1, plugins},
     CliCommand{"plugin"_L1, runPluginCli},
@@ -1994,9 +1996,8 @@ QStringList commandFirst(const QStringList &arguments) {
 }
 
 int runCli(const QStringList &given) {
-    // --model <name> is taken by every command: the model for whatever the
-    // command asks the AI, this once. "main" and "quick" name the two the
-    // settings hold; anything else is a model's own name.
+    // --model <name> is taken by every command: the model for whatever the command asks the AI, this once.
+    // "main" and "quick" name the two the settings hold; anything else is a model's own name.
     QStringList arguments = given;
     QString model;
     for (qsizetype i = 2; i < arguments.size();) {
@@ -2011,16 +2012,15 @@ int runCli(const QStringList &given) {
         }
     }
     const Ai::ModelOverride forThisRun(model);
-    // Book formats that script plugins add are read by every command, the
-    // MCP server and the file manager's helper; the plugins are loaded only
-    // when a format Omabook doesn't read itself is asked about.
+    // Book formats that script plugins add are read by every command, the MCP server and the file manager's
+    // helper; the plugins are loaded only when a format Omabook doesn't read itself is asked about.
     ScriptFormats::loadOnDemand();
     const auto unloadScripts = qScopeGuard([] { ScriptFormats::unload(); });
     if (const auto command = cliCommand(arguments.value(1)); command != cliCommands.end()) {
+        snapshotBeforeRisky(arguments); // a moment snapshot first, of a sync, an import, a tidy (#181)
         const int code = command->run(arguments);
-        // What a command changed in a library shows in its view in the file
-        // manager at once; a library nothing changed in costs a look at its
-        // change counter. Folio's own commands keep the views themselves.
+        // What a command changed in a library shows in its view in the file manager at once; a library nothing
+        // changed in costs a look at its change counter. Folio's own commands keep the views themselves.
         if (command->name != "folio"_L1)
             Folio::follow(Settings());
         return code;

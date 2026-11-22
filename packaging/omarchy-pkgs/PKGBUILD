@@ -15,6 +15,8 @@ license=('MIT' 'GPL-3.0-or-later')
 # tenantreaders_tests (#112). The package is built as every build of Omabook
 # is tested.
 options=('!debug' '!lto')
+# restic makes the snapshots, the only copies of a library that count (ADR 0014):
+# a dependency, not a suggestion, as the snapshot tests need it too (#181).
 depends=(
   'ffmpeg'
   'hicolor-icon-theme'
@@ -29,6 +31,7 @@ depends=(
   'qt6-svg'
   'qt6-wayland'
   'qt6-websockets'
+  'restic'
   'xdg-desktop-portal'
 )
 optdepends=(

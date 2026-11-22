@@ -37,11 +37,21 @@ std::expected<void, QString> Library::backUp(int schema) const {
         QString("%1/omabook-format-%2-%3.db").arg(folder).arg(schema).arg(QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss"));
     if (!QDir().mkpath(folder))
         return std::unexpected(folder + " can't be made.");
+    if (const auto copied = copyInto(file); !copied)
+        return copied;
+    // The last five are kept; older ones go.
+    const QFileInfoList kept = QDir(folder).entryInfoList({"omabook-format-*.db"}, QDir::Files, QDir::Time);
+    for (const QFileInfo &old : kept | std::views::drop(5))
+        QFile::remove(old.filePath());
+    return {};
+}
+
+std::expected<void, QString> Library::copyInto(const QString &file) const {
     // SQLite writes the copy itself, whole and consistent, also while the
     // write-ahead log holds changes the main file doesn't have yet. On a
-    // connection of its own: this one is in the transaction that sets the
-    // library up, where VACUUM can't run, and has written nothing yet, so the
-    // other reads what this one would.
+    // connection of its own: this one is in a transaction (the one that sets
+    // the library up, or a snapshot's batch), where VACUUM can't run, and has
+    // written nothing yet, so the other reads what this one would.
     QFile::remove(file);
     const QString connection = m_connection + "-copy";
     QString failed;
@@ -58,10 +68,6 @@ std::expected<void, QString> Library::backUp(int schema) const {
     QSqlDatabase::removeDatabase(connection);
     if (!failed.isEmpty())
         return std::unexpected(failed);
-    // The last five are kept; older ones go.
-    const QFileInfoList kept = QDir(folder).entryInfoList({"omabook-format-*.db"}, QDir::Files, QDir::Time);
-    for (const QFileInfo &old : kept | std::views::drop(5))
-        QFile::remove(old.filePath());
     return {};
 }
 
