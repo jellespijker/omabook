@@ -5,6 +5,8 @@
 #include <QJsonDocument>
 #include <QMap>
 #include <algorithm>
+#include <cstdlib>
+#include <ranges>
 #include <tuple>
 #include <utility>
 
@@ -26,6 +28,21 @@ using AnnotationLayers::Person;
 
 constexpr auto strokesField = "set:strokes"_L1;
 constexpr auto annotationsPart = "annotations"_L1;
+
+// A person's own hue, of their id, and how far apart two people's are told at a glance.
+constexpr int saturation = 160;
+constexpr int lightness = 120;
+constexpr int apartHue = 30;
+
+[[nodiscard]] int hueOf(const QString &person) {
+    const QByteArray hash = QCryptographicHash::hash(person.toUtf8(), QCryptographicHash::Sha1);
+    return (static_cast<quint8>(hash.at(0)) * 256 + static_cast<quint8>(hash.at(1))) % 360;
+}
+
+[[nodiscard]] int hueGap(int one, int other) {
+    const int gap = std::abs(one - other) % 360;
+    return std::min(gap, 360 - gap);
+}
 
 [[nodiscard]] QString text(const ReducedAnnotation &annotation, const QString &field) { return annotation.fields.value(field).value; }
 
@@ -165,7 +182,7 @@ private:
     const auto found = std::ranges::find(people, id, &Person::person);
     if (found != people.end())
         return *found;
-    people << Person{.person = id, .name = {}, .spaces = {}, .annotations = {}};
+    people << Person{.person = id, .name = {}, .spaces = {}, .color = {}, .annotations = {}};
     return people.last();
 }
 
@@ -199,6 +216,13 @@ AnnotationLayers::Layers AnnotationLayers::read(const Library &library, const Gr
     std::ranges::sort(layers.people, [](const Person &a, const Person &b) {
         return std::tuple(a.name.isEmpty(), a.name.toLower(), a.person) < std::tuple(b.name.isEmpty(), b.name.toLower(), b.person);
     });
+    // Two people shown together are never in one colour, nor in two alike.
+    QStringList people;
+    for (const Person &person : std::as_const(layers.people))
+        people << person.person;
+    const QList<QColor> colors = colorsOf(people);
+    for (qsizetype at = 0; at < layers.people.size(); ++at)
+        layers.people[at].color = colors.at(at);
     return layers;
 }
 
@@ -206,10 +230,31 @@ AnnotationLayers::Layers AnnotationLayers::read(const Library &library, qint64 b
     return read(library, GraphContext::readerKnows(library), bookId);
 }
 
-QColor AnnotationLayers::colorOf(const QString &person) {
-    const QByteArray hash = QCryptographicHash::hash(person.toUtf8(), QCryptographicHash::Sha1);
-    const int hue = (static_cast<quint8>(hash.at(0)) * 256 + static_cast<quint8>(hash.at(1))) % 360;
-    return QColor::fromHsl(hue, 160, 120);
+QColor AnnotationLayers::colorOf(const QString &person) { return QColor::fromHsl(hueOf(person), saturation, lightness); }
+
+QList<QColor> AnnotationLayers::colorsOf(const QStringList &people) {
+    // Given out in the order of their ids, which every computer has alike.
+    QStringList ordered = people;
+    std::ranges::sort(ordered);
+    QHash<QString, int> hues;
+    QList<int> taken;
+    for (const QString &person : std::as_const(ordered)) {
+        const int own = hueOf(person);
+        // Their own, then a step either way of it, two steps, and so on round the wheel.
+        const auto steps = std::views::iota(0, 360 / apartHue) | std::views::transform([own](int step) {
+                               const int away = ((step + 1) / 2) * apartHue * (step % 2 == 1 ? 1 : -1);
+                               return (own + away + 360) % 360;
+                           });
+        const auto apart = std::ranges::find_if(
+            steps, [&taken](int hue) { return std::ranges::none_of(taken, [hue](int other) { return hueGap(hue, other) < apartHue; }); });
+        const int hue = apart != steps.end() ? *apart : own; // more people than the wheel holds apart
+        taken << hue;
+        hues.insert(person, hue);
+    }
+    QList<QColor> colors;
+    for (const QString &person : people)
+        colors << QColor::fromHsl(hues.value(person), saturation, lightness);
+    return colors;
 }
 
 QString AnnotationLayers::calledOf(const Person &person) { return person.name.isEmpty() ? person.person.left(8) : person.name; }
@@ -227,7 +272,7 @@ QJsonObject AnnotationLayers::toJson(const Person &person) {
                                          {"strokes", static_cast<qint64>(one.strokes.size())}});
     return {{"person", person.person},
             {"name", calledOf(person)},
-            {"color", colorOf(person.person).name()},
+            {"color", person.color.name()},
             {"spaces", QJsonArray::fromStringList(person.spaces)},
             {"annotations", annotations}};
 }

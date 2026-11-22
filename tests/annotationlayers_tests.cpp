@@ -12,6 +12,7 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <algorithm>
+#include <cstdlib>
 #include <initializer_list>
 #include <vector>
 
@@ -111,6 +112,12 @@ qint64 annotate(Someone &who, const QString &kind, int section, const QString &q
     return words;
 }
 
+// How far apart two colours' hues are, round the wheel.
+[[nodiscard]] int hueGap(const QColor &one, const QColor &other) {
+    const int gap = std::abs(one.hslHue() - other.hslHue());
+    return std::min(gap, 360 - gap);
+}
+
 [[nodiscard]] Ink::Stroke stroke(int at) {
     Ink::Stroke drawn{
         .id = Ink::newId(), .color = Qt::blue, .width = 2, .pressured = false, .tilted = false, .began = 1000 + at, .points = {}};
@@ -179,9 +186,11 @@ private slots:
         QCOMPARE(behind.people.first().annotations.first().book, bo.dune());
         QCOMPARE(seen(ada.library).size(), 1);
         QVERIFY(seen(ada.library).first().endsWith("Bo: Arrakis"));
-        // The same colour for Ada on every computer, and another for Bo.
+        // The same colour for Ada on every computer, and, where a third reader
+        // sees them both, one well apart from it for Bo.
         QCOMPARE(AnnotationLayers::toJson(behind.people.first()).value("color").toString(), AnnotationLayers::colorOf(ada.id).name());
-        QVERIFY(AnnotationLayers::colorOf(ada.id) != AnnotationLayers::colorOf(bo.id));
+        const QList<QColor> both = AnnotationLayers::colorsOf({ada.id, bo.id});
+        QVERIFY2(hueGap(both.at(0), both.at(1)) >= 30, qPrintable(both.at(0).name() + u' ' + both.at(1).name()));
 
         // Reading on brings the rest; a place asked for further on never does.
         bo.readTo(7);
@@ -205,6 +214,28 @@ private slots:
         synced(bo, space, folder);
         QVERIFY(seen(bo.library).isEmpty());
         QVERIFY(seen(ada.library).isEmpty());
+    }
+
+    // Two people whose own colours are one and the same, or alike, are shown
+    // apart, the same on every computer; a person alone keeps their own.
+    void peopleShownTogetherAreNeverInOneColour() {
+        // Ids that fall on the same hue, as random ids now and then do.
+        QStringList same{QString("person-0")};
+        for (int n = 1; same.size() < 3; ++n)
+            if (const QString id = QString("person-%1").arg(n);
+                AnnotationLayers::colorOf(id).hslHue() == AnnotationLayers::colorOf(same.first()).hslHue())
+                same << id;
+        const QList<QColor> colors = AnnotationLayers::colorsOf(same);
+        QCOMPARE(colors.size(), 3);
+        for (qsizetype one = 0; one < colors.size(); ++one)
+            for (qsizetype other = one + 1; other < colors.size(); ++other)
+                QVERIFY2(hueGap(colors.at(one), colors.at(other)) >= 30,
+                         qPrintable(colors.at(one).name() + u' ' + colors.at(other).name()));
+        // The first of them by id keeps their own; the order given changes nothing.
+        QCOMPARE(colors.first(), AnnotationLayers::colorOf(same.first()));
+        const QList<QColor> backwards = AnnotationLayers::colorsOf({same.at(2), same.at(1), same.at(0)});
+        QCOMPARE(backwards, (QList<QColor>{colors.at(2), colors.at(1), colors.at(0)}));
+        QCOMPARE(AnnotationLayers::colorsOf({same.at(1)}), QList<QColor>{AnnotationLayers::colorOf(same.at(1))});
     }
 
     // Two members, each going by the name they chose (#124): it travels in the

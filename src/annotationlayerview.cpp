@@ -26,7 +26,7 @@ namespace {
 // Their strokes, in their colour: what tells their ink from one's own, and
 // one person's from another's. Each id is made theirs, so two people's never meet.
 void addTheirs(std::vector<Ink::Stroke> &into, const AnnotationLayers::Person &person, const AnnotationLayers::Annotation &annotation) {
-    const QColor color = AnnotationLayers::colorOf(person.person);
+    const QColor color = person.color;
     for (Ink::Stroke stroke : annotation.strokes) {
         stroke.id = person.person.left(12) + u':' + stroke.id;
         stroke.color = color;
@@ -88,7 +88,7 @@ QVariantList AnnotationLayerView::people() const {
         if (!person.annotations.isEmpty())
             list << QVariantMap{{"person", person.person},
                                 {"called", AnnotationLayers::calledOf(person)},
-                                {"color", AnnotationLayers::colorOf(person.person)},
+                                {"color", person.color},
                                 {"count", person.annotations.size()},
                                 {"shown", !hidden.contains(person.person)}};
     return list;
@@ -150,7 +150,7 @@ QVariantList AnnotationLayerView::passagesIn(QQuickTextDocument *chapter) const 
                             {"kind", one.annotation->kind},
                             {"person", one.person->person},
                             {"called", AnnotationLayers::calledOf(*one.person)},
-                            {"color", AnnotationLayers::colorOf(one.person->person)},
+                            {"color", one.person->color},
                             {"rects", variants(TextGeometry::rects(*document, static_cast<int>(one.start), static_cast<int>(one.end)))}};
     return list;
 }
@@ -166,7 +166,7 @@ QVariantList AnnotationLayerView::notesIn(QQuickTextDocument *chapter) const {
                                 {"ink", !one.annotation->strokes.empty()},
                                 {"person", one.person->person},
                                 {"called", AnnotationLayers::calledOf(*one.person)},
-                                {"color", AnnotationLayers::colorOf(one.person->person)}};
+                                {"color", one.person->color}};
     return list;
 }
 

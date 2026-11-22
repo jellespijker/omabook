@@ -55,6 +55,7 @@ struct Person {
     QString person;                // their person id
     QString name;                  // as they go by there; empty where none is known
     QStringList spaces;            // the spaces they are from
+    QColor color;                  // as shown beside the others of the layer (colorsOf)
     QList<Annotation> annotations; // in the order of the book
 };
 
@@ -69,8 +70,12 @@ struct Layers {
 // The same as far as the library's reader has read (GraphContext::readerKnows).
 [[nodiscard]] Layers read(const Library &library, qint64 bookId = 0);
 
-// The colour a person's annotations are shown in: the same on every computer.
+// A person's own colour: the same on every computer.
 [[nodiscard]] QColor colorOf(const QString &person);
+// The colours of people shown together, in their order: each their own where
+// it is well apart from the others', else the nearest that is; the same for
+// the same people on every computer, whatever order they are given in.
+[[nodiscard]] QList<QColor> colorsOf(const QStringList &people);
 // What a person is called where they have no name: the start of their id.
 [[nodiscard]] QString calledOf(const Person &person);
 
