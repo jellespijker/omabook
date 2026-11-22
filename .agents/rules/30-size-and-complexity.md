@@ -35,7 +35,7 @@ If the change doesn't fit, the plan says **which responsibility moves out,
 where to, and what the new module is called**, and the new module is placed in
 `.agents/architecture.toml`. A file at its ceiling is a reason for a new
 module, never for an exception. For `tests/`, a new area gets a new
-`tests/<area>_tests.cpp` (added to the `foreach` list in `CMakeLists.txt`).
+`tests/<area>_tests.cpp`, which the build finds by its name (`tests/suites.cmake`).
 
 ## Meet the budget honestly
 

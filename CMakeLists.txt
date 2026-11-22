@@ -64,175 +64,28 @@ enable_testing()
 set(omabook_test_home "${CMAKE_BINARY_DIR}/test-home")
 file(MAKE_DIRECTORY "${omabook_test_home}/.config" "${omabook_test_home}/.local/share" "${omabook_test_home}/.cache")
 set(omabook_test_environment "QT_QPA_PLATFORM=offscreen;XDG_STATE_HOME=${CMAKE_BINARY_DIR}/test-state;HOME=${omabook_test_home};XDG_CONFIG_HOME=${omabook_test_home}/.config;XDG_DATA_HOME=${omabook_test_home}/.local/share;XDG_CACHE_HOME=${omabook_test_home}/.cache")
-foreach(test formats bookplace library services graphsync spaces replication ui manual mcp calibre folio readingsites scripting pluginmanager pluginnaming graphview graph reading layout identity sharing pairing subscribing sharedgraph sharedspace linking sharingwindow opening upgrading pluginsync pluginformats upgradedsync duplicates restoring touch foundby graphcut chronology aiservers pluginworlds annotationsync chronicle chronologybuild spacefiles chronologycli chronologyview chronologywindow largelog tenancy bookview tenantswitch firstopen tenantreaders graphdegree tenantwrites graphsearch whatsnew graphacross plugindata hyphenation ink inksurface worldcli passages marginnotes highlights highlightview recognition bookink bookinkview audio pluginview failures handwrittennotes keptops annotations contentspane pagenotes collation readingstats statsview annotationlayers annotationlayerview pluginnews pluginbooks meaning pluginfiles pluginexports privatebooks privatebooksview fingerink embedding devices opds sendbook readaloud plugingraph scriptwatchdog pluginreading pluginrecording touchselect touchreader pluginlisting voiceinstall airegistry samebook settling aipage gemini pagereader voices lineink lineinkview dictation dictationview spreadnotes spokenanswer commandreach transcription transcriptview voicecommands voiceview marginfold realtimevoice librarywrites capabilitytest)
-  add_executable(${test}_tests tests/${test}_tests.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
-  target_link_libraries(${test}_tests PRIVATE omabook_core Qt6::Test)
-  add_test(NAME ${test}_tests COMMAND ${test}_tests)
-  set_tests_properties(${test}_tests PROPERTIES ENVIRONMENT "${omabook_test_environment}")
-endforeach()
-
-# Names sort the same under a C locale (a bare container, a desktop set to
-# C.UTF-8) as under a language's (#121): the tests that depend on it, again.
+# Names sort the same under a C locale as under a language's (#121): the
+# suites that depend on it run again with this (tests/<name>_tests.cmake).
 set(omabook_c_locale_environment "${omabook_test_environment};LANG=C.UTF-8;LC_ALL=C.UTF-8")
-add_test(NAME library_c_locale_tests COMMAND library_tests theShelfFiltersAndSorts)
-add_test(NAME formats_c_locale_tests COMMAND formats_tests comicReadsItsPagesInOrder)
-add_test(NAME collation_c_locale_tests COMMAND collation_tests)
-set_tests_properties(library_c_locale_tests formats_c_locale_tests collation_c_locale_tests PROPERTIES ENVIRONMENT "${omabook_c_locale_environment}")
-
-# Syncing runs the other computer's omabook over ssh; the test's "other
-# computer" is this build's binary behind a stand-in ssh.
-add_dependencies(services_tests omabook)
-target_compile_definitions(services_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(aiservers_tests omabook)
-target_compile_definitions(aiservers_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(graphsync_tests omabook)
-target_compile_definitions(graphsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(spaces_tests omabook)
-target_compile_definitions(spaces_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(sharing_tests omabook)
-target_compile_definitions(sharing_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# The library samples of every release, for the tests of the change log and of syncing through it.
-target_sources(spaces_tests PRIVATE tests/samples.cpp)
-target_sources(replication_tests PRIVATE tests/samples.cpp)
-target_sources(upgrading_tests PRIVATE tests/samples.cpp)
-target_sources(tenancy_tests PRIVATE tests/samples.cpp)
-target_sources(graphsearch_tests PRIVATE tests/samples.cpp)
-target_sources(firstopen_tests PRIVATE tests/samples.cpp)
-# The chronology's command and tools, run as a person and an agent meet them (#45).
-add_dependencies(chronologycli_tests omabook)
-target_compile_definitions(chronologycli_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(worldcli_tests omabook)
-target_compile_definitions(worldcli_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(meaning_tests omabook)
-target_compile_definitions(meaning_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A book's details written into its EPUB (#74): by the command, and synced over the stand-in ssh.
-add_dependencies(embedding_tests omabook)
-target_compile_definitions(embedding_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(failures_tests omabook)
-target_compile_definitions(failures_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# The first start after an update, with a plugin installed, runs the real binary (#60).
-add_dependencies(upgrading_tests omabook)
-target_compile_definitions(upgrading_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(replication_tests omabook)
-target_compile_definitions(replication_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Two libraries brought up from 0.1.5 and synced over the stand-in ssh.
-target_sources(upgradedsync_tests PRIVATE tests/samples.cpp)
-add_dependencies(upgradedsync_tests omabook)
-target_compile_definitions(upgradedsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Two copies of a book on one computer and one on the other, from the 0.1.5 sample, synced over the stand-in ssh (#58).
-target_sources(duplicates_tests PRIVATE tests/samples.cpp)
-add_dependencies(duplicates_tests omabook)
-target_compile_definitions(duplicates_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Two libraries shaped like the one 0.2.1 gave books the names of others, synced over the stand-in ssh (#158).
-# Free ink beside the lines of a flowing book between two libraries over the stand-in ssh (#152).
-add_dependencies(lineink_tests omabook)
-target_compile_definitions(lineink_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(samebook_tests omabook)
-target_compile_definitions(samebook_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Equal details of books paired by an identifier settle from either side, over the stand-in ssh (#168).
-add_dependencies(settling_tests omabook)
-target_compile_definitions(settling_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Bookmarks and highlights between two libraries over the stand-in ssh, of a sample too (#66).
-target_sources(annotationsync_tests PRIVATE tests/samples.cpp)
-add_dependencies(annotationsync_tests omabook)
-add_dependencies(highlights_tests omabook)
-target_compile_definitions(highlights_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-target_compile_definitions(annotationsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A library put back from a backup, or written by another program, then synced over the stand-in ssh (#61).
-add_dependencies(restoring_tests omabook)
-target_compile_definitions(restoring_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Pairing two computers syncs with the other one's omabook, over the stand-in ssh.
-add_dependencies(pairing_tests omabook)
-target_compile_definitions(pairing_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A book in a plugin's format synced to another computer, over the stand-in ssh.
-add_dependencies(pluginsync_tests omabook)
-target_compile_definitions(pluginsync_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(pluginfiles_tests omabook)
-target_compile_definitions(pluginfiles_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(pluginrecording_tests omabook)
-target_compile_definitions(pluginrecording_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A large change log synced, and the log a pairing brings in compacted, over the stand-in ssh (#103).
-target_sources(largelog_tests PRIVATE tests/samples.cpp)
-add_dependencies(largelog_tests omabook)
-target_compile_definitions(largelog_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A plugin's data in the change log, synced over the stand-in ssh (#76).
-add_dependencies(plugindata_tests omabook)
-target_compile_definitions(plugindata_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A plugin told of its data a sync brought, over the stand-in ssh (#126).
-add_dependencies(pluginnews_tests omabook)
-target_compile_definitions(pluginnews_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A sighting a plugin took away, synced over the stand-in ssh (#136).
-add_dependencies(plugingraph_tests omabook)
-target_compile_definitions(plugingraph_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A book in the format of a plugin that isn't installed, synced over the stand-in ssh.
-add_dependencies(pluginformats_tests omabook)
-target_compile_definitions(pluginformats_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-
-# Reading statistics and the year's goal, through the command, the tools and a sync (#68).
-add_dependencies(readingstats_tests omabook)
-target_compile_definitions(readingstats_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-
-# Pen, eraser and touch events with their times, contact sizes and proximity (#78).
-target_link_libraries(inksurface_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(highlightview_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(dictationview_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(spokenanswer_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(voiceview_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(bookinkview_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(fingerink_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(touchselect_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(touchreader_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(voiceinstall_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(lineinkview_tests PRIVATE Qt6::GuiPrivate)
-# Operations of a kind an older Omabook doesn't know, among three libraries over the stand-in ssh (#118).
-add_dependencies(keptops_tests omabook)
-target_compile_definitions(keptops_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# The annotations command and its MCP tools, run as a person and an agent meet them (#86).
-add_dependencies(annotations_tests omabook)
-target_compile_definitions(annotations_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Book ink between two libraries over the stand-in ssh (#83).
-add_dependencies(bookink_tests omabook)
-target_compile_definitions(bookink_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-target_link_libraries(handwrittennotes_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(spreadnotes_tests PRIVATE Qt6::GuiPrivate)
-target_link_libraries(marginfold_tests PRIVATE Qt6::GuiPrivate)
-
-# The Folio plugins are read from the source tree, as they are installed.
-target_compile_definitions(folio_tests PRIVATE OMABOOK_SOURCE="${CMAKE_SOURCE_DIR}")
-target_compile_definitions(folio_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-target_compile_definitions(folio_tests PRIVATE OMABOOK_TEST_TMP="${CMAKE_BINARY_DIR}")
-add_dependencies(folio_tests omabook)
-
-# The MCP server is tested the way an agent meets it: the real binary, spoken
-# to over standard input and output.
-add_dependencies(mcp_tests omabook)
-target_compile_definitions(mcp_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-
-# The knowledge graph's commands and tools are tested through the real binary too.
-add_dependencies(graph_tests omabook)
-target_compile_definitions(graph_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Two commands open one new library at once (#11).
-add_dependencies(opening_tests omabook)
-target_compile_definitions(opening_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(subscribing_tests omabook)
-target_compile_definitions(subscribing_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-add_dependencies(sharedgraph_tests omabook)
-target_compile_definitions(sharedgraph_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# A time, an order and a timeline travel to another computer through the log (#41).
-add_dependencies(chronology_tests omabook)
-target_compile_definitions(chronology_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>")
-# Sharing by link sends gists through GitHub's command line; the tests' gh is
-# a stand-in (tests/fakegh.cpp) that sends to the fake GitHub, in a folder of
-# its own so that a test can put it first on PATH.
-add_executable(fakegh tests/fakegh.cpp)
-target_link_libraries(fakegh PRIVATE Qt6::Core Qt6::Network)
-set_target_properties(fakegh PROPERTIES OUTPUT_NAME gh RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fake-gh")
-add_dependencies(linking_tests omabook fakegh)
-target_compile_definitions(linking_tests PRIVATE OMABOOK_BINARY="$<TARGET_FILE:omabook>" FAKE_GH="$<TARGET_FILE:fakegh>")
+include(tests/suites.cmake)
+omabook_test_suites(omabook_suites "${CMAKE_SOURCE_DIR}/tests")
+foreach(suite IN LISTS omabook_suites)
+  add_executable(${suite} tests/${suite}.cpp tests/fixtures.cpp src/resources.qrc ${omabook_themes})
+  target_link_libraries(${suite} PRIVATE omabook_core Qt6::Test)
+  add_test(NAME ${suite} COMMAND ${suite})
+  set_tests_properties(${suite} PROPERTIES ENVIRONMENT "${omabook_test_environment}")
+  if(EXISTS "${CMAKE_SOURCE_DIR}/tests/${suite}.cmake")
+    include("${CMAKE_SOURCE_DIR}/tests/${suite}.cmake")
+  endif()
+endforeach()
 
 # The commands agents use, driven through the real binary with no display.
 add_test(NAME cli_tests COMMAND ${CMAKE_SOURCE_DIR}/tests/cli_tests.sh $<TARGET_FILE:omabook>)
 set_tests_properties(cli_tests PROPERTIES ENVIRONMENT "${omabook_test_environment}")
+# The tools that keep tickets from meeting on shared files (#198): the change
+# log's fragments, the merge drivers, the suites found by name.
+add_test(NAME workflow_tests COMMAND python3 ${CMAKE_SOURCE_DIR}/tests/workflow_tests.py)
+set_tests_properties(workflow_tests PROPERTIES ENVIRONMENT "${omabook_test_environment};CMAKE_COMMAND=${CMAKE_COMMAND}")
 
 # `cmake --install build --prefix ~/.local` puts the app in the launcher
 # before it is packaged; a package installs the same files under /usr.
