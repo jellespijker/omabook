@@ -76,6 +76,8 @@ void ChronologyBrowser::setBackend(QObject *backend) {
 
 void ChronologyBrowser::setLibrary(const Library *library) { m_library = library; }
 
+Library *ChronologyBrowser::changing() const { return m_backend ? m_backend->library() : nullptr; }
+
 const Library *ChronologyBrowser::library() const { return m_backend ? m_backend->library() : m_library; }
 
 QString ChronologyBrowser::showing() const {

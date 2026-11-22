@@ -107,8 +107,10 @@ public:
 
     // For the picture.
     const Chronology::Chart::Chart &chart() const noexcept { return m_chart; }
-    // What was read, for the branches proposed (ChronologyProposals).
+    // What was read, for the branches proposed (ChronologyProposals), and the
+    // window's library to write the reader's word to; none without a backend.
     const Chronology::Reading::Read &reading() const noexcept { return m_read; }
+    Library *changing() const;
     // Whether the filters let each mark through, by its number in chart().marks.
     const QList<bool> &passes() const noexcept { return m_passes; }
     // What it is called, and whose shared graph it is of (empty for one's own).

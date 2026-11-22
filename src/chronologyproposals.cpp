@@ -2,7 +2,6 @@
 
 #include <QVariantMap>
 
-#include "backend.h"
 #include "chronologybranch.h"
 #include "chronologymodel.h"
 #include "graph.h"
@@ -23,9 +22,8 @@ void ChronologyProposals::setBrowser(QObject *browser) {
 }
 
 Library *ChronologyProposals::library() const {
-    if (auto *backend = m_browser ? qobject_cast<Backend *>(m_browser->backend()) : nullptr)
-        return backend->library();
-    return m_library;
+    Library *window = m_browser ? m_browser->changing() : nullptr;
+    return window ? window : m_library;
 }
 
 void ChronologyProposals::read() {
