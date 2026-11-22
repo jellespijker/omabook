@@ -13,6 +13,8 @@
 #include <QPageSize>
 #include <QPainter>
 #include <QPair>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QPdfWriter>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -543,6 +545,14 @@ qint64 privateNotebook(Library &library, const QString &folder, const QString &t
     if (!added.error.isEmpty() || !PrivateBooks::declare(library, {.format = "omanotebook", .plugin = "notebooks", .title = "Notebooks"}))
         return 0;
     return added.id;
+}
+
+bool middleShown(const QQuickWindow &window, const QQuickItem &item) {
+    const QPointF middle = item.mapToScene(QPointF(item.width() / 2, item.height() / 2));
+    for (const QQuickItem *up = item.parentItem(); up; up = up->parentItem())
+        if (up->inherits("QQuickFlickable") && !up->mapRectToScene(QRectF(0, 0, up->width(), up->height())).contains(middle))
+            return false;
+    return QRectF(0, 0, window.width(), window.height()).contains(middle);
 }
 
 } // namespace Fixtures

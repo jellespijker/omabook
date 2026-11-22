@@ -50,6 +50,6 @@
     "tests/readingsites_tests.cpp": 2405,
     "tests/scripting_tests.cpp": 2443,
     "tests/services_tests.cpp": 1963,
-    "tests/ui_tests.cpp": 7759
+    "tests/ui_tests.cpp": 7756
   }
 }

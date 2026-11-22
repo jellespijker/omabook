@@ -4842,10 +4842,7 @@ private:
         QTRY_VERIFY((item = qobject_cast<QQuickItem *>(desk.find(name))) && item->isVisible());
         // Scrolled into sight, in a panel taller than the window, once the
         // panel has laid out what it just showed.
-        const auto inSight = [&] {
-            const QPointF middle = item->mapToScene(QPointF(item->width() / 2, item->height() / 2));
-            return middle.x() >= 0 && middle.y() >= 0 && middle.x() < desk.window->width() && middle.y() < desk.window->height();
-        };
+        const auto inSight = [&] { return Fixtures::middleShown(*desk.window, *item); };
         for (int tries = 0; tries < 40 && !inSight(); ++tries) {
             for (QQuickItem *up = item->parentItem(); up; up = up->parentItem())
                 if (up->inherits("QQuickFlickable")) {

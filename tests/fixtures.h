@@ -12,6 +12,8 @@
 #include <QtTypes>
 
 class Library;
+class QQuickItem;
+class QQuickWindow;
 
 namespace Fixtures {
 
@@ -83,6 +85,10 @@ QString standInSsh(const QString &folder, const QString &binary);
 // QVERIFY2's message also when the check passes, and a result that holds a
 // value has no error to read (calling error() on it aborts under
 // _GLIBCXX_ASSERTIONS). Empty when there is a value. A Failure is worded.
+// Whether the middle of an item is on screen: in the window, and inside
+// what each flickable around it shows, which clips the rest.
+[[nodiscard]] bool middleShown(const QQuickWindow &window, const QQuickItem &item);
+
 template <typename Result> [[nodiscard]] QString whyNot(const Result &result) {
     if (result)
         return {};
