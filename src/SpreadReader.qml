@@ -402,6 +402,17 @@ Item {
         }
     }
 
+    // The button that folds the column away and back (#167), above the
+    // pages: in the gutter before the column, or beside the last page's lines.
+    MarginFold {
+        notes: spread.notes
+        y: Math.max(0, (spread.above - height) / 2)
+        x: {
+            const gap = folded ? Math.min(40, spread.gutter / 2) : spread.gutter
+            const end = win.rightToLeft ? sheetsRow.x - (gap + width) / 2 : sheetsRow.x + sheetsRow.width + (gap - width) / 2
+            return Math.max(2, Math.min(spread.width - width - 2, end))
+        }
+    }
     Binding { target: page0.text; property: "objectName"; value: "flowText" }
     Connections {
         target: page0.text

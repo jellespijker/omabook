@@ -97,6 +97,8 @@
         <file alias="ReadingMenu.qml">ReadingMenu.qml</file>
         <file alias="PageMarks.qml">PageMarks.qml</file>
         <file alias="MarginColumn.qml">MarginColumn.qml</file>
+        <file alias="MarginDots.qml">MarginDots.qml</file>
+        <file alias="MarginFold.qml">MarginFold.qml</file>
         <file alias="OthersNoteCard.qml">OthersNoteCard.qml</file>
         <file alias="OthersNotePopup.qml">OthersNotePopup.qml</file>
         <file alias="OthersAnnotations.qml">OthersAnnotations.qml</file>

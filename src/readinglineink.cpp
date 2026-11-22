@@ -194,6 +194,24 @@ std::optional<ReadingLineInk::View> ReadingLineInk::viewOf(const Shown &shown) c
     return view;
 }
 
+QVariantList ReadingLineInk::marginIn(QQuickItem *text) const {
+    const QTextDocument *document = text ? documentOf(text) : nullptr;
+    QList<LineInk::Line> margins;
+    for (const LineInk::Line &line : m_lines)
+        if (document && line.kind == QLatin1StringView(LineInk::marginKind) && line.passage.from.section == m_reader->section())
+            margins << line;
+    if (margins.isEmpty())
+        return {};
+    QVariantList found;
+    for (const LineInk::Placed &placed :
+         LineInk::place(*document, document->toPlainText(), {.left = 0, .right = text->width(), .leftRoom = 0, .rightRoom = 0}, margins)) {
+        const LineInk::Line &line = margins.at(placed.index);
+        const QColor kept = line.strokes.empty() ? m_foreground : line.strokes.front().color;
+        found << QVariantMap{{"id", line.id}, {"start", placed.anchor.start}, {"end", placed.anchor.end}, {"color", shownColor(kept)}};
+    }
+    return found;
+}
+
 std::vector<Ink::Stroke> ReadingLineInk::drawn(const View &view) const {
     std::vector<Ink::Stroke> all;
     for (const LineInk::Placed &placed : view.placed)

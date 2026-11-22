@@ -248,6 +248,12 @@ Item {
         const entry = model.notes.find(note => note.id === id)
         card.openOn(id, entry ? entry.note : "", text, start, end, false, entry ? entry.ink : false)
     }
+    // {reader.fold_margin}, the button at the margin's edge, the Aa panel (#167):
+    // the margin column folded away for every book, a dot beside each line with notes, or back.
+    function fold() {
+        settings.marginFolded = !settings.marginFolded
+        backend.say(settings.marginFolded ? qsTr("Margin notes folded away") : qsTr("Margin notes unfolded"))
+    }
     // E: the first note on the page, and from there the others.
     function go() {
         const seen = inSight()
@@ -280,6 +286,18 @@ Item {
         else if (seen) open(current, seen.text, seen.start, seen.end)
     }
 
+    // A click or a finger's tap beside a note's card closes it (and ReaderTouch), the note kept (#167).
+    function closeCard() {
+        if (!card.shown) return false
+        if (note.editing) note.finish()
+        else leave()
+        return true
+    }
+    TapHandler {
+        acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+        enabled: card.shown
+        onTapped: (point) => { if (!card.contains(card.mapFromItem(layer, point.position))) layer.closeCard() }
+    }
     // Going through the notes in the margin column.
     Item {
         id: keys

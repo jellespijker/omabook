@@ -81,6 +81,8 @@ Item {
             }
             const on = area.mapToItem(content, point.position.x, point.position.y)
             if (area.pressedOwn || area.ownTap(content, on.x, on.y) || area.tappedAt(point.position.x, point.position.y)) return
+            // A note's card beside its words, tapped beside, closes (#167).
+            if (content.notes && content.notes.closeCard()) return
             // What the page has to tap on itself: the line at a chapter's end.
             if (typeof content.activateAt === "function" && content.activateAt(on.x, on.y)) return
             const x = win.rightToLeft ? area.width - point.position.x : point.position.x

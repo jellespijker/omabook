@@ -109,12 +109,14 @@ double noteColumn(const Space &space) {
 } // namespace
 
 Columns columns(const Space &space, int wanted, int previous) {
-    const double notes = noteColumn(space);
+    const double column = noteColumn(space);
+    const double notes = space.folded ? 0 : column;
     Space text = space;
     if (notes > 0)
         text.available -= notes + space.gutter;
     Columns result = pagesIn(text, wanted, previous);
     result.notes = notes;
+    result.folded = space.folded ? column : 0;
     return result;
 }
 

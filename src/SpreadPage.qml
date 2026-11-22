@@ -89,6 +89,21 @@ Item {
             within: inked
         }
     }
+    // Without a margin column (#167, #157), a dot beside each of its lines
+    // with notes, in the half of the gutter at the end its lines end at.
+    MarginDots {
+        x: win.rightToLeft ? -width : sheet.width
+        width: Math.max(16, Math.min(40, spread.gutter / 2))
+        height: shownPart.height
+        on: sheet.there
+        reading: spread.notes
+        text: column
+        laid: spread.cut
+        place: function(position) {
+            const y = column.positionToRectangle(position).y
+            return sheet.there && y >= spread.breaks[sheet.index] && y < spread.breaks[sheet.index + 1] ? y - spread.breaks[sheet.index] : NaN
+        }
+    }
     // The fold before the next page, halfway across the gutter.
     Rectangle {
         visible: sheet.offset + 1 < spread.columns

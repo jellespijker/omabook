@@ -2359,5 +2359,22 @@
   "Speak": "Spreek",
   "The AI is still answering.": "De AI is nog aan het antwoorden.",
   "This book has no chapter %1.": "Dit boek heeft geen hoofdstuk %1.",
-  "What does “%1” mean here?": "Wat betekent „%1” hier?"
+  "What does “%1” mean here?": "Wat betekent „%1” hier?",
+  "%1, and %Ln more on this line": {
+    "one": "%1, en nog %Ln op deze regel",
+    "other": "%1, en nog %Ln op deze regel"
+  },
+  "A dot beside each line with notes opens them, and the text takes the margin's room": "Een stip naast elke regel met kanttekeningen opent ze, en de tekst neemt de ruimte van de marge in",
+  "Fold the margin notes away": "Kanttekeningen inklappen",
+  "Fold the margin notes away, a dot beside each line that has one, or unfold them": "De kanttekeningen inklappen, met een stip naast elke regel die er een heeft, of ze weer uitklappen",
+  "Folding the margin away": "De marge inklappen",
+  "Handwritten note": "Kanttekening met de hand",
+  "Ink in the margin": "Inkt in de marge",
+  "Ink in the margin beside this line": "Inkt in de marge naast deze regel",
+  "Margin notes folded away": "Kanttekeningen ingeklapt",
+  "Margin notes unfolded": "Kanttekeningen uitgeklapt",
+  "Note: %1": "Kanttekening: %1",
+  "Notes stand in a column beside the text where there is room, else a dot beside their line": "Kanttekeningen staan in een kolom naast de tekst waar er ruimte is, anders een stip naast hun regel",
+  "Unfold the margin notes": "Kanttekeningen uitklappen",
+  "{reader.fold_margin}, the small button at the margin's edge, or the Aa panel folds the margin notes away for every book, and the text takes their room. A dot beside each line with notes, ink in the margin or others' notes stands for them, in their colour, with a count where there are several: a click, a tap or the pen opens the first on a card beside its words, and Tab and Enter do it from the keyboard. The same dots stand beside the lines where the window has no room for the margin.": "{reader.fold_margin}, het knopje aan de rand van de marge of het Aa-paneel klapt de kanttekeningen voor elk boek in, en de tekst neemt hun ruimte in. Een stip naast elke regel met kanttekeningen, inkt in de marge of kanttekeningen van anderen staat voor ze, in hun kleur, met een aantal waar het er meer zijn: een klik, een tik of de pen opent de eerste op een kaart naast de woorden, en Tab en Enter doen het met het toetsenbord. Dezelfde stippen staan naast de regels waar het venster geen ruimte heeft voor de marge."
 }

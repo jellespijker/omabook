@@ -71,6 +71,9 @@ public:
     Q_INVOKABLE bool redo();
     // All the free ink of a chapter taken away, as a step of undo: the list's.
     Q_INVOKABLE bool eraseSection(int section);
+    // The lines of the chapter a TextEdit shows that have ink in a side
+    // margin, for a dot beside each (#167): [{id, start, end, color}].
+    Q_INVOKABLE QVariantList marginIn(QQuickItem *text) const;
     // Reads the ink again: another computer's came.
     Q_INVOKABLE void refresh();
     // Whether a finger is on the ink, or the touch of this moment was its (ReadingInk::touched).

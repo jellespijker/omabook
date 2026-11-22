@@ -2458,5 +2458,23 @@
   "Speak": "Parler",
   "The AI is still answering.": "L'IA est encore en train de répondre.",
   "This book has no chapter %1.": "Ce livre n'a pas de chapitre %1.",
-  "What does “%1” mean here?": "Que veut dire « %1 » ici ?"
+  "What does “%1” mean here?": "Que veut dire « %1 » ici ?",
+  "%1, and %Ln more on this line": {
+    "one": "%1, et %Ln autre sur cette ligne",
+    "many": "%1, et %Ln autres sur cette ligne",
+    "other": "%1, et %Ln autres sur cette ligne"
+  },
+  "A dot beside each line with notes opens them, and the text takes the margin's room": "Un point à côté de chaque ligne annotée ouvre ses notes, et le texte prend la place de la marge",
+  "Fold the margin notes away": "Replier les notes de marge",
+  "Fold the margin notes away, a dot beside each line that has one, or unfold them": "Replier les notes de marge, un point à côté de chaque ligne qui en a une, ou les déplier",
+  "Folding the margin away": "Replier la marge",
+  "Handwritten note": "Note manuscrite",
+  "Ink in the margin": "Encre dans la marge",
+  "Ink in the margin beside this line": "Encre dans la marge à côté de cette ligne",
+  "Margin notes folded away": "Notes de marge repliées",
+  "Margin notes unfolded": "Notes de marge dépliées",
+  "Note: %1": "Note : %1",
+  "Notes stand in a column beside the text where there is room, else a dot beside their line": "Les notes se tiennent dans une colonne à côté du texte s'il y a la place, sinon un point à côté de leur ligne",
+  "Unfold the margin notes": "Déplier les notes de marge",
+  "{reader.fold_margin}, the small button at the margin's edge, or the Aa panel folds the margin notes away for every book, and the text takes their room. A dot beside each line with notes, ink in the margin or others' notes stands for them, in their colour, with a count where there are several: a click, a tap or the pen opens the first on a card beside its words, and Tab and Enter do it from the keyboard. The same dots stand beside the lines where the window has no room for the margin.": "{reader.fold_margin}, le petit bouton au bord de la marge ou le panneau Aa replie les notes de marge pour tous les livres, et le texte prend leur place. Un point à côté de chaque ligne qui a des notes, de l'encre dans la marge ou des notes d'autres personnes les représente, dans leur couleur, avec un nombre quand il y en a plusieurs : un clic, un toucher ou le stylet ouvre la première sur une carte à côté de ses mots, et Tab puis Entrée le font au clavier. Les mêmes points se tiennent à côté des lignes quand la fenêtre n'a pas la place pour la marge."
 }

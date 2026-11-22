@@ -159,10 +159,16 @@ Manual::Topic chronologyTopic() {
             }};
 }
 
-// Notes and highlights on the pages of a PDF or a comic, and finding what
-// was written by its words (#115).
+// The margin folded away (#167), notes and highlights on the pages of a PDF
+// or a comic, and finding what was written by its words (#115).
 QList<Manual::Section> pageNoteSections() {
     return {
+        {Manual::tr("Folding the margin away"),
+         Manual::tr("{reader.fold_margin}, the small button at the margin's edge, or the Aa panel folds the margin notes "
+                    "away for every book, and the text takes their room. A dot beside each line with notes, ink in the "
+                    "margin or others' notes stands for them, in their colour, with a count where there are several: a "
+                    "click, a tap or the pen opens the first on a card beside its words, and Tab and Enter do it from "
+                    "the keyboard. The same dots stand beside the lines where the window has no room for the margin.")},
         {Manual::tr("Notes and highlights on pages"),
          Manual::tr("On a PDF's page, select words as in any book to highlight them or write a margin note on them. A "
                     "comic's pages are pictures: drag over a panel with the mouse, press and hold it with a finger, or press "

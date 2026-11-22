@@ -34,6 +34,8 @@ class Settings : public QObject {
     Q_PROPERTY(bool folio READ folio WRITE setFolio NOTIFY changed)
     // Whether a book's details go into its EPUB whenever they are edited (#74).
     Q_PROPERTY(bool writeDetails READ writeDetails WRITE setWriteDetails NOTIFY changed)
+    // Whether the margin column of a book's notes is folded away (#167).
+    Q_PROPERTY(bool marginFolded READ marginFolded WRITE setMarginFolded NOTIFY changed)
     Q_PROPERTY(int pages READ pages WRITE setPages NOTIFY changed)
     Q_PROPERTY(QVariantMap paneWidths READ paneWidths NOTIFY changed)
     Q_PROPERTY(QVariantMap highlightNames READ highlightNames NOTIFY changed)
@@ -104,6 +106,10 @@ public:
     // set` and by the tools. Off unless the person switches it on.
     bool writeDetails() const { return m_values.value("write_details").toBool(false); }
     void setWriteDetails(bool on) { set("write_details", on); }
+    // Whether the margin column is folded away for every book (#167): the
+    // page takes its room, and a dot beside a line opens the notes on it.
+    bool marginFolded() const { return m_values.value("margin_folded").toBool(false); }
+    void setMarginFolded(bool on) { set("margin_folded", on); }
     // How many pages of a flowing book stand side by side: 0 for as many as
     // the window has room for (see PageLayout::columns), else 1, 2 or 3.
     // In config.json, "pages": "auto", 1, 2 or 3.

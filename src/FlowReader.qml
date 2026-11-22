@@ -389,6 +389,33 @@ Flickable {
         laid: page.width + page.y
         place: function(position) { return page.y + page.positionToRectangle(position).y }
     }
+    // Without it, folded away or with no room for it (#167, #157), a dot beside each line with notes:
+    // over the scroll bar, which a narrow window's margin puts under them.
+    MarginDots {
+        id: dots
+        parent: flick
+        z: 2
+        y: -flick.contentY
+        readonly property real room: win.rightToLeft ? page.x : flick.width - page.x - page.width
+        x: win.rightToLeft ? page.x - width : page.x + page.width
+        width: Math.max(16, Math.min(40, room))
+        height: flick.contentHeight
+        reading: flick.notes
+        text: page
+        laid: page.width + page.y
+        place: margin.place
+    }
+    // The button that folds the column away and back, at the top of the gutter before it, or beside the lines.
+    MarginFold {
+        parent: flick
+        notes: flick.notes
+        y: 8
+        x: {
+            const gap = folded ? dots.width : reader.format.gutter
+            const end = win.rightToLeft ? page.x - (gap + width) / 2 : page.x + page.width + (gap - width) / 2
+            return Math.max(2, Math.min(flick.width - width - 2, end))
+        }
+    }
 
     // The chapter's end, when reading runs on: a quiet line saying so, and
     // what comes next, which a click or a tap goes on to.

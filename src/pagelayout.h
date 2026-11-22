@@ -77,6 +77,7 @@ struct Space {
     double margin = 56;        // at each outer edge of the spread
     double gutter = 56;        // between two pages
     bool notes = false;        // the book has margin notes, which want a margin column
+    bool folded = false;       // the reader folded that column away (#167)
     bool operator==(const Space &) const = default;
 };
 
@@ -88,6 +89,7 @@ struct Columns {
     double width = 0;       // each page's text, in pixels: never past the measure
     bool honoured = true;   // a choice of 1, 2 or 3 is what shows
     double notes = 0;       // the margin column's width, a gutter beyond the text; 0 for none
+    double folded = 0;      // the width it would have, folded away; 0 when it isn't or doesn't fit
     bool operator==(const Columns &) const = default;
 };
 
@@ -104,7 +106,8 @@ struct Columns {
 // what is left. Where it doesn't fit there is none, and each note is a mark
 // in the text instead. It is decided here, from the room alone, like the
 // pages: so the same window always cuts a chapter into the same pages, and
-// notes never move the text as they are written.
+// notes never move the text as they are written. A column folded away
+// (`Space::folded`) leaves its room to the pages, as one that doesn't fit.
 [[nodiscard]] Columns columns(const Space &space, int wanted, int previous = 0);
 
 // Where margin notes stand in the margin column, given where each would

@@ -53,4 +53,5 @@ Item {
     Key { command: "reader.select"; when: keys.host.paging; onActivated: keys.host.startSelecting("menu") }
     Key { command: "reader.note"; when: keys.host.paging; onActivated: keys.notes.write() }
     Key { command: "reader.notes"; when: keys.host.paging; onActivated: keys.notes.go() }
+    Key { command: "reader.fold_margin"; when: keys.host.paging && reader.kind === "flow"; onActivated: keys.notes.fold() }
 }

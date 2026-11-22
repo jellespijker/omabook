@@ -349,6 +349,31 @@ ColumnLayout {
     Stepper { key: "paragraph_spacing"; label: qsTr("Between paragraphs") }
     Stepper { key: "indent"; label: qsTr("First-line indent") }
     Stepper { key: "margins"; label: qsTr("Margins") }
+    // The margin notes' column folded away (#167), for every book, as the
+    // button at its edge does; a dot beside each line with notes opens them.
+    Switch {
+        id: folded
+        objectName: controls.prefix + "MarginFolded"
+        Layout.fillWidth: true
+        Layout.minimumHeight: 40
+        visible: !controls.picturesOnly
+        text: qsTr("Fold the margin notes away")
+        checked: settings.marginFolded
+        Accessible.name: text
+        onToggled: {
+            settings.marginFolded = checked
+            checked = Qt.binding(() => settings.marginFolded)
+        }
+    }
+    Label {
+        visible: folded.visible
+        Layout.fillWidth: true
+        wrapMode: Text.Wrap
+        color: theme.colors.muted
+        font.pixelSize: 12
+        text: folded.checked ? qsTr("A dot beside each line with notes opens them, and the text takes the margin's room")
+                             : qsTr("Notes stand in a column beside the text where there is room, else a dot beside their line")
+    }
 
     Label {
         Layout.topMargin: 4

@@ -127,6 +127,7 @@ void PageFormat::relayout() {
     // A book that scrolls is one column at any width.
     const bool scrolls = m_effective.value("layout").toString() == "scroll"_L1;
     space.notes = m_notes;
+    space.folded = m_settings->marginFolded();
     const PageLayout::Columns columns = PageLayout::columns(space, scrolls ? 1 : m_settings->pages(), m_columns.count);
     if (space == m_space && columns == m_columns)
         return;

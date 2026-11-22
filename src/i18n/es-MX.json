@@ -2458,5 +2458,23 @@
   "Speak": "Hablar",
   "The AI is still answering.": "La IA todavía está respondiendo.",
   "This book has no chapter %1.": "Este libro no tiene capítulo %1.",
-  "What does “%1” mean here?": "¿Qué significa “%1” aquí?"
+  "What does “%1” mean here?": "¿Qué significa “%1” aquí?",
+  "%1, and %Ln more on this line": {
+    "one": "%1, y %Ln más en esta línea",
+    "many": "%1, y %Ln más en esta línea",
+    "other": "%1, y %Ln más en esta línea"
+  },
+  "A dot beside each line with notes opens them, and the text takes the margin's room": "Un punto junto a cada línea con notas las abre, y el texto ocupa el espacio del margen",
+  "Fold the margin notes away": "Plegar las notas al margen",
+  "Fold the margin notes away, a dot beside each line that has one, or unfold them": "Plegar las notas al margen, con un punto junto a cada línea que tenga una, o desplegarlas",
+  "Folding the margin away": "Plegar el margen",
+  "Handwritten note": "Nota a mano",
+  "Ink in the margin": "Tinta en el margen",
+  "Ink in the margin beside this line": "Tinta en el margen junto a esta línea",
+  "Margin notes folded away": "Notas al margen plegadas",
+  "Margin notes unfolded": "Notas al margen desplegadas",
+  "Note: %1": "Nota: %1",
+  "Notes stand in a column beside the text where there is room, else a dot beside their line": "Las notas están en una columna junto al texto donde hay espacio; si no, un punto junto a su línea",
+  "Unfold the margin notes": "Desplegar las notas al margen",
+  "{reader.fold_margin}, the small button at the margin's edge, or the Aa panel folds the margin notes away for every book, and the text takes their room. A dot beside each line with notes, ink in the margin or others' notes stands for them, in their colour, with a count where there are several: a click, a tap or the pen opens the first on a card beside its words, and Tab and Enter do it from the keyboard. The same dots stand beside the lines where the window has no room for the margin.": "{reader.fold_margin}, el botón pequeño en el borde del margen o el panel Aa pliega las notas al margen para todos los libros, y el texto ocupa su espacio. Un punto junto a cada línea con notas, tinta en el margen o notas de otras personas las representa, en su color, con un número donde hay varias: un clic, un toque o el lápiz abre la primera en una tarjeta junto a sus palabras, y Tab y Enter lo hacen con el teclado. Los mismos puntos están junto a las líneas donde la ventana no tiene espacio para el margen."
 }

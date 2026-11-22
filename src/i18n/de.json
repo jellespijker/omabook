@@ -2359,5 +2359,22 @@
   "Speak": "Sprechen",
   "The AI is still answering.": "Die KI antwortet noch.",
   "This book has no chapter %1.": "Dieses Buch hat kein Kapitel %1.",
-  "What does “%1” mean here?": "Was bedeutet „%1“ hier?"
+  "What does “%1” mean here?": "Was bedeutet „%1“ hier?",
+  "%1, and %Ln more on this line": {
+    "one": "%1 und %Ln weitere in dieser Zeile",
+    "other": "%1 und %Ln weitere in dieser Zeile"
+  },
+  "A dot beside each line with notes opens them, and the text takes the margin's room": "Ein Punkt neben jeder Zeile mit Notizen öffnet sie, und der Text nimmt den Platz des Rands ein",
+  "Fold the margin notes away": "Randnotizen einklappen",
+  "Fold the margin notes away, a dot beside each line that has one, or unfold them": "Die Randnotizen einklappen, mit einem Punkt neben jeder Zeile, die eine hat, oder sie wieder ausklappen",
+  "Folding the margin away": "Den Rand einklappen",
+  "Handwritten note": "Handschriftliche Notiz",
+  "Ink in the margin": "Tinte am Rand",
+  "Ink in the margin beside this line": "Tinte am Rand neben dieser Zeile",
+  "Margin notes folded away": "Randnotizen eingeklappt",
+  "Margin notes unfolded": "Randnotizen ausgeklappt",
+  "Note: %1": "Notiz: %1",
+  "Notes stand in a column beside the text where there is room, else a dot beside their line": "Notizen stehen in einer Spalte neben dem Text, wo Platz ist, sonst ein Punkt neben ihrer Zeile",
+  "Unfold the margin notes": "Randnotizen ausklappen",
+  "{reader.fold_margin}, the small button at the margin's edge, or the Aa panel folds the margin notes away for every book, and the text takes their room. A dot beside each line with notes, ink in the margin or others' notes stands for them, in their colour, with a count where there are several: a click, a tap or the pen opens the first on a card beside its words, and Tab and Enter do it from the keyboard. The same dots stand beside the lines where the window has no room for the margin.": "{reader.fold_margin}, die kleine Schaltfläche am Rand oder das Aa-Feld klappt die Randnotizen für jedes Buch ein, und der Text nimmt ihren Platz ein. Ein Punkt neben jeder Zeile mit Notizen, Tinte am Rand oder Notizen anderer steht für sie, in ihrer Farbe, mit einer Zahl, wo es mehrere sind: Ein Klick, ein Tippen oder der Stift öffnet die erste auf einer Karte neben ihren Wörtern, und Tab und Enter tun es mit der Tastatur. Dieselben Punkte stehen neben den Zeilen, wo das Fenster keinen Platz für den Rand hat."
 }

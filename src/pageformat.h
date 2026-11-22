@@ -76,6 +76,8 @@ class PageFormat : public QObject {
     // the notes are marks in the text (PageLayout::columns).
     Q_PROPERTY(bool notes READ notes WRITE setNotes NOTIFY layoutChanged)
     Q_PROPERTY(double noteWidth READ noteWidth NOTIFY layoutChanged)
+    // Whether that column, which has room here, is folded away (#167, Settings::marginFolded).
+    Q_PROPERTY(bool marginFolded READ marginFolded NOTIFY layoutChanged)
     // The size of their type, `noteScale` the body's.
     Q_PROPERTY(int noteFontSize READ noteFontSize NOTIFY changed)
 
@@ -114,6 +116,7 @@ public:
     bool notes() const noexcept { return m_notes; }
     void setNotes(bool notes);
     double noteWidth() const noexcept { return m_columns.notes; }
+    bool marginFolded() const noexcept { return m_columns.folded > 0; }
     int noteFontSize() const;
 
     // Changes one option, for the open book alone or for the defaults; what
