@@ -269,7 +269,8 @@ private slots:
             process.start(QStringLiteral(OMABOOK_BINARY), arguments);
             process.closeWriteChannel();
             process.waitForFinished(120000);
-            return std::pair{process.exitCode(), QString::fromUtf8(process.readAllStandardOutput() + process.readAllStandardError())};
+            // Standard output alone: standard error tells the warnings besides.
+            return std::pair{process.exitCode(), QString::fromUtf8(process.readAllStandardOutput())};
         };
         QVERIFY(Fixtures::write(dir.filePath(u"A Book - Some One.txt"_s), "Words.\n"));
         QCOMPARE(omabook({u"add"_s, u"--library"_s, library, dir.filePath(u"A Book - Some One.txt"_s)}).first, 0);
@@ -278,14 +279,19 @@ private slots:
         QVERIFY2(unset == 0 && unsetSaid.contains(u"aren't set up"_s), qPrintable(unsetSaid));
         QCOMPARE(omabook({u"snapshot"_s, u"setup"_s, u"--repository"_s, dir.filePath(u"repository"_s)}).first, 0);
         QCOMPARE(omabook({u"snapshot"_s, u"now"_s, u"--library"_s, library}).first, 0);
-        const auto [checked, checkSaid] = omabook({u"snapshot"_s, u"check"_s, u"--read-data"_s, u"--library"_s, library});
-        QVERIFY2(checked == 0 && checkSaid.contains(u"well"_s), qPrintable(checkSaid));
+        // Checked, reading the data back: nothing to see to, but for the room on the host's disk, which is no part of the test.
+        const auto [checked, checkSaid] = omabook({u"snapshot"_s, u"check"_s, u"--read-data"_s, u"--json"_s, u"--library"_s, library});
+        const QJsonObject check = QJsonDocument::fromJson(checkSaid.toUtf8()).object();
+        QVERIFY2(check.value("repositories"_L1).toArray().first()["data_check"_L1]["done"_L1].toBool(), qPrintable(checkSaid));
+        for (const auto &warning : check.value("warnings"_L1).toArray())
+            QVERIFY2(warning["kind"_L1].toString() == "disk-nearly-full"_L1, qPrintable(checkSaid));
+        QVERIFY2(checked == 0 || !check.value("warnings"_L1).toArray().isEmpty(), qPrintable(checkSaid));
         const auto [fine, fineSaid] = omabook({u"snapshot"_s, u"status"_s, u"--json"_s, u"--library"_s, library});
-        QVERIFY2(fine == 0, qPrintable(fineSaid));
         const QJsonObject status = QJsonDocument::fromJson(fineSaid.toUtf8()).object();
         // Fine, but for the room on the host's disk, which is no part of the test.
         for (const auto &warning : status.value("warnings"_L1).toArray())
             QVERIFY2(warning["kind"_L1].toString() == "disk-nearly-full"_L1, qPrintable(fineSaid));
+        QVERIFY2(fine == 0 || !status.value("warnings"_L1).toArray().isEmpty(), qPrintable(fineSaid));
         QVERIFY(status.value("set_up"_L1).toBool());
         QVERIFY(!status.value("repositories"_L1).toArray().first()["newest"_L1].toString().isEmpty());
 

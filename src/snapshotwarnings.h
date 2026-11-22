@@ -58,12 +58,12 @@ struct Library {
 };
 
 struct Thresholds {
-    std::chrono::hours snapshotAge{48}; // the newest snapshot older than this (the issue's 48 hours)
-    std::chrono::days checkAge{15};     // no light check gone through for this long (one is due weekly)
-    std::chrono::days dataCheckAge{62}; // nor one that read the data (due monthly)
-    double fullBelow = 0.05;            // nearly full below this share of the disk free...
-    qint64 fullFloor = qint64{1} << 30; // ...or below this many bytes, whichever is more
-    std::chrono::days remindAfter{7};   // told again while it stands, this long after it was told
+    std::chrono::hours snapshotAge{48};            // the newest snapshot older than this (the issue's 48 hours)
+    std::chrono::days checkAge{15};                // no light check gone through for this long (one is due weekly)
+    std::chrono::days dataCheckAge{62};            // nor one that read the data (due monthly)
+    double fullBelow = 0.05;                       // nearly full below this share of the disk free...
+    qint64 fullFloor = qint64{1024} * 1024 * 1024; // ...or below this many bytes, whichever is more
+    std::chrono::days remindAfter{7};              // told again while it stands, this long after it was told
 };
 
 enum class Kind : std::uint8_t {

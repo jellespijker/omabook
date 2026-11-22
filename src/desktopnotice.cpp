@@ -15,7 +15,7 @@ constexpr int answerWithin = 2000;
 } // namespace
 
 bool DesktopNotice::show(const QString &title, const QString &body) {
-    QDBusConnection bus = QDBusConnection::sessionBus();
+    const QDBusConnection bus = QDBusConnection::sessionBus();
     if (!bus.isConnected())
         return false;
     QDBusMessage notify = QDBusMessage::createMethodCall(u"org.freedesktop.Notifications"_s, u"/org/freedesktop/Notifications"_s,

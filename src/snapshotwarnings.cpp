@@ -64,8 +64,8 @@ void snapshotsOf(const Repository &repository, const QList<SnapshotWarnings::Lib
 }
 
 struct Checked {
-    const SnapshotWarnings::Outcome &last;
-    const QDateTime &through;
+    SnapshotWarnings::Outcome last;
+    QDateTime through;
     std::chrono::days age;
     Kind failed, overdue;
     Failure::Code failedCode, overdueCode;

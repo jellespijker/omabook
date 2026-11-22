@@ -44,7 +44,8 @@ public:
         Data,  // and its data read back (monthly): all of a disk's, a twelfth of a place away's each month
     };
 
-    explicit SnapshotHealth(const Snapshots &snapshots, Targets destinations = {});
+    // It keeps its own copy of `snapshots`: what they are kept in, not what they hold.
+    explicit SnapshotHealth(Snapshots snapshots, Targets destinations = {});
 
     // Whether there is anything to look after: snapshots chosen a place here.
     [[nodiscard]] bool chosen() const;
@@ -82,7 +83,7 @@ private:
     [[nodiscard]] QJsonObject read() const;
     void write(const QJsonObject &record) const;
 
-    const Snapshots &m_snapshots;
+    Snapshots m_snapshots;
     Targets m_destinations;
     QString m_file;
 };

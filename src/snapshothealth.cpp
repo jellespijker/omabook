@@ -115,8 +115,8 @@ void roomOf(const QString &location, QJsonObject &repository) {
 
 } // namespace
 
-SnapshotHealth::SnapshotHealth(const Snapshots &snapshots, Targets destinations)
-    : m_snapshots(snapshots), m_destinations(std::move(destinations)), m_file(snapshots.place().state + u"/health.json"_s) {}
+SnapshotHealth::SnapshotHealth(Snapshots snapshots, Targets destinations)
+    : m_snapshots(std::move(snapshots)), m_destinations(std::move(destinations)), m_file(m_snapshots.place().state + u"/health.json"_s) {}
 
 bool SnapshotHealth::chosen() const { return !m_snapshots.place().repository.location.isEmpty(); }
 
