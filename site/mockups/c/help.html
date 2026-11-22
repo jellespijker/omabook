@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Help: Omabook</title>
+<meta name="description" content="Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="style.css">
+</head>
+<body class="dir-c">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="index.html" aria-label="Omabook, home"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="index.html">Product</a><a href="docs.html">Docs</a><a href="help.html" aria-current=page>Help</a><a href="plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav></header>
+<main id="main"><div class="help"><article class="prose"><h1>Help</h1>
+<p>Press <kbd>?</kbd> or <kbd>F1</kbd> in Omabook for the same keys as they are bound on your computer. Every key can be changed in <code>keys.json</code>.</p>
+<h2>Shortcuts</h2><table class="keys"><thead><tr><th scope=col>Key</th><th scope=col>What it does</th></tr></thead><tbody><tr><th scope=row><kbd>Space</kbd></th><td>Read the selected book</td></tr><tr><th scope=row><kbd>/</kbd></th><td>Search the shelf, or find in a book</td></tr><tr><th scope=row><kbd>1–5</kbd></th><td>Covers, spines, carousel, list, stacks</td></tr><tr><th scope=row><kbd>6</kbd></th><td>The library as a graph</td></tr><tr><th scope=row><kbd>T</kbd></th><td>Timelines</td></tr><tr><th scope=row><kbd>A</kbd></th><td>Ask the AI about what you are reading</td></tr><tr><th scope=row><kbd>C</kbd></th><td>Catch me up</td></tr><tr><th scope=row><kbd>W</kbd></th><td>Who is who so far</td></tr><tr><th scope=row><kbd>M</kbd></th><td>The map of the book so far</td></tr><tr><th scope=row><kbd>Y</kbd></th><td>Sync with another computer</td></tr><tr><th scope=row><kbd>P</kbd></th><td>Plugins</td></tr><tr><th scope=row><kbd>Ctrl+K</kbd></th><td>Change Omabook, anywhere</td></tr><tr><th scope=row><kbd>?</kbd></th><td>Help: every key as bound now</td></tr><tr><th scope=row><kbd>Ctrl+M</kbd></th><td>Dictate, or say a command</td></tr></tbody></table>
+<h2>Troubleshooting</h2><details><summary>The AI page says a model is missing</summary><p>Press Test on the row. Omabook looks at what the server has and offers one that can do the job, or a small known one to download with one press.</p></details><details><summary>A Kindle or Word file opens slowly the first time</summary><p>Omabook converts it to EPUB once, with Calibre’s ebook-convert. The original stays beside the result.</p></details><details><summary>Nothing happens when I dictate</summary><p>Dictation listens only after you press it, and not at all with AI off. Check the Speech to text row’s Test.</p></details><details><summary>The graph is empty</summary><p>It grows as you finish chapters. Set it to “only when you ask” and run omabook graph build, or check that AI is on.</p></details>
+<h2>Questions</h2><details><summary>Does it change my files?</summary><p>No. Added books are copied into the library; the file you added is never touched.</p></details><details><summary>Does my reading leave the computer?</summary><p>Only to the AI you chose, and only what the question needs. Hosted providers are used only where you allowed them.</p></details><details><summary>Does the page track me?</summary><p>No. This site is static: no cookies, no analytics, no third-party scripts.</p></details>
+<p>In a terminal: <code>omabook help</code>, <code>omabook help keys</code>, <code>omabook help new</code>.</p></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="docs.html">Docs</a> · <a href="help.html">Help</a></p>
+<p class="mock">Mockup C. Pictures are Omabook’s own demo library of made-up books.</p></footer>
+</body></html>
