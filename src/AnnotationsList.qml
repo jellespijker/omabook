@@ -109,8 +109,11 @@ Item {
                             width: Math.min(implicitWidth, list.width - 44)
                             elide: Text.ElideRight
                             font.pixelSize: 12
-                            text: chip.modelData === "" ? qsTr("All %1").arg(reader.highlights.list.length.toLocaleString(Qt.locale(), 'f', 0))
-                                                        : "%1 %2".arg(words.name(chip.modelData)).arg(list.count(chip.modelData).toLocaleString(Qt.locale(), 'f', 0))
+                            // The reader's highlights can be gone for a moment while a book is closed or
+                            // swapped; the chip then counts none rather than failing (#161).
+                            readonly property int all: reader.highlights && reader.highlights.list ? reader.highlights.list.length : 0
+                            text: chip.modelData === "" ? qsTr("All %1").arg(all.toLocaleString(Qt.locale(), 'f', 0))
+                                                        : "%1 %2".arg(words.name(chip.modelData)).arg(Number(list.count(chip.modelData) || 0).toLocaleString(Qt.locale(), 'f', 0))
                         }
                     }
                     TapHandler { onTapped: list.only = chip.modelData }
