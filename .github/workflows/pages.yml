@@ -1,0 +1,50 @@
+name: pages
+
+# Publishes site/ to GitHub Pages. The plugins page is rebuilt from the registry
+# (share/omabook/plugins.json) and from GitHub repositories with the topic
+# omabook-plugin, so it also runs every day.
+on:
+  push:
+    branches: [main]
+    paths: ['site/**', 'share/omabook/plugins.json', '.github/workflows/pages.yml']
+  schedule:
+    - cron: '17 4 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the pages
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 site/build/build.py
+      - name: Collect what is published
+        run: |
+          mkdir _site
+          rsync -a --exclude build --exclude __pycache__ site/ _site/
+          touch _site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Getting started: Omabook docs</title>
+<meta name="description" content="Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/omabook.svg" type="image/svg+xml">
+<script src="../theme.js" defer></script>
+</head>
+<body class="dir-b">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="../">Product</a><a href="../docs/" aria-current=page>Docs</a><a href="../help/">Help</a><a href="../plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav>
+<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend><label><input type="radio" name="t" value="auto" checked><span>System</span></label><label><input type="radio" name="t" value="tokyo"><span>Tokyo Night</span></label><label><input type="radio" name="t" value="gruvbox"><span>Gruvbox</span></label><label><input type="radio" name="t" value="latte"><span>Catppuccin Latte</span></label><label><input type="radio" name="t" value="forest"><span>Everforest</span></label></fieldset></form></header>
+<main id="main"><div class="docs"><nav class="toc" aria-label="Documentation"><p class="toc-h">Documentation</p><ol><li><a href="getting-started.html" aria-current=page>Getting started</a></li><li><a href="library.html">The library</a></li><li><a href="knowledge-graph.html">The knowledge graph</a></li><li><a href="ai.html">AI setup, per capability</a></li><li><a href="plugins.html">Plugins</a></li><li><a href="calibre.html">Calibre</a></li><li><a href="phones-and-e-readers.html">Phones and e-readers</a></li><li><a href="sync.html">Sync and sharing</a></li></ol></nav><article class="prose"><p class="crumb"><a href="./">Documentation</a> / Getting started</p><h1>Getting started</h1>
+<p>Omabook is an ebook library and reader for Omarchy. It runs on Arch and Omarchy (x86_64) and needs Qt 6.</p>
+<h2>Install</h2>
+<p>Each release has a ready-built package for Arch and Omarchy. Download the newest from the <a href="https://github.com/jellespijker/omabook/releases">releases page</a>, check its SHA-256 against the one listed there, and install it with pacman. The package is downloaded first because pacman asks for a signature file next to a package it fetches from a link, and these packages are not signed.</p>
+<pre><code>sha256sum omabook-*.pkg.tar.zst
+sudo pacman -U omabook-*.pkg.tar.zst</code></pre>
+<p>Open it from the launcher, or run <code>omabook open</code>.</p>
+<h2>Add books</h2>
+<p>Press <kbd>A</kbd> to add books, <kbd>Shift+A</kbd> to add a folder, or drop files on the window. Books are copied into <code>~/Books</code> under <code>Author/Title (id)/</code> with their cover beside them and one SQLite file for the rest. The file you added is never touched.</p>
+<p>If you have Calibre, Omabook finds its libraries and offers to import them. See <a href="calibre.html">Calibre</a>.</p>
+<h2>Read</h2>
+<p>Press <kbd>Space</kbd> on a book. EPUB, FictionBook, Markdown, HTML and plain text flow in your own font and the desktop’s colors. PDF and comics are shown page by page. Kindle, Word, OpenDocument, RTF, DjVu and the other formats Calibre knows are converted to EPUB the first time you open them, which needs Calibre’s <code>ebook-convert</code>.</p>
+<figure class="win"><img src="../assets/shots/covers.webp" alt="The shelf as covers with a book&#x27;s details beside it." width="1600" height="1000" loading="lazy"><figcaption>The shelf.</figcaption></figure>
+<h2>Learn the keys</h2>
+<p>Press <kbd>?</kbd> for every key as it is bound now, and for short pages on how things work. The tour is a walk through the real window and is always under <kbd>?</kbd>. In a terminal: <code>omabook help</code>.</p>
+<div class="pager"><span></span><a href="library.html">The library →</a></div></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="../docs/">Docs</a> ·
+<a href="../help/">Help</a> · <a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
+with nothing private shown.</p></footer>
+</body></html>

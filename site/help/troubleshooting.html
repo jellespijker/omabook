@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Troubleshooting: Omabook help</title>
+<meta name="description" content="Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/omabook.svg" type="image/svg+xml">
+<script src="../theme.js" defer></script>
+</head>
+<body class="dir-b">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="../">Product</a><a href="../docs/">Docs</a><a href="../help/" aria-current=page>Help</a><a href="../plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav>
+<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend><label><input type="radio" name="t" value="auto" checked><span>System</span></label><label><input type="radio" name="t" value="tokyo"><span>Tokyo Night</span></label><label><input type="radio" name="t" value="gruvbox"><span>Gruvbox</span></label><label><input type="radio" name="t" value="latte"><span>Catppuccin Latte</span></label><label><input type="radio" name="t" value="forest"><span>Everforest</span></label></fieldset></form></header>
+<main id="main"><div class="docs"><nav class="toc" aria-label="Help"><p class="toc-h">Help</p><ol><li><a href="shortcuts.html">Shortcuts</a></li><li><a href="troubleshooting.html" aria-current=page>Troubleshooting</a></li><li><a href="faq.html">Questions</a></li></ol></nav><article class="prose"><h1>Troubleshooting</h1><details><summary>The AI page says a model is missing</summary><p>Press Test on the row. Omabook looks at what the server has and offers one that can do the job, or a small known one to download with one press.</p></details><details><summary>A Kindle or Word file opens slowly the first time</summary><p>Omabook converts it to EPUB once, with Calibre’s ebook-convert. The original stays beside the result.</p></details><details><summary>Nothing happens when I dictate</summary><p>Dictation listens only after you press it, and not at all with AI off. Check the Speech to text row’s Test.</p></details><details><summary>The graph is empty</summary><p>It grows as you finish chapters. Set it to “only when you ask” and run omabook graph build, or check that AI is on.</p></details><p>Still stuck? <a href="https://github.com/jellespijker/omabook/issues">Open an issue</a>. Failures are shown with a code and worded where you see them.</p>
+<div class="pager"><a href="shortcuts.html">← Shortcuts</a><a href="faq.html">Questions →</a></div></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="../docs/">Docs</a> ·
+<a href="../help/">Help</a> · <a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
+with nothing private shown.</p></footer>
+</body></html>

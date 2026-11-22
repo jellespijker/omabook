@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AI setup, per capability: Omabook docs</title>
+<meta name="description" content="Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/omabook.svg" type="image/svg+xml">
+<script src="../theme.js" defer></script>
+</head>
+<body class="dir-b">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="../">Product</a><a href="../docs/" aria-current=page>Docs</a><a href="../help/">Help</a><a href="../plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav>
+<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend><label><input type="radio" name="t" value="auto" checked><span>System</span></label><label><input type="radio" name="t" value="tokyo"><span>Tokyo Night</span></label><label><input type="radio" name="t" value="gruvbox"><span>Gruvbox</span></label><label><input type="radio" name="t" value="latte"><span>Catppuccin Latte</span></label><label><input type="radio" name="t" value="forest"><span>Everforest</span></label></fieldset></form></header>
+<main id="main"><div class="docs"><nav class="toc" aria-label="Documentation"><p class="toc-h">Documentation</p><ol><li><a href="getting-started.html">Getting started</a></li><li><a href="library.html">The library</a></li><li><a href="knowledge-graph.html">The knowledge graph</a></li><li><a href="ai.html" aria-current=page>AI setup, per capability</a></li><li><a href="plugins.html">Plugins</a></li><li><a href="calibre.html">Calibre</a></li><li><a href="phones-and-e-readers.html">Phones and e-readers</a></li><li><a href="sync.html">Sync and sharing</a></li></ol></nav><article class="prose"><p class="crumb"><a href="./">Documentation</a> / AI setup, per capability</p><h1>AI setup, per capability</h1>
+<p>Omabook asks a model to do six kinds of work. Each has its own provider and model, and its own say on whether a hosted one may be used. Open Settings with <kbd>,</kbd> and go to the AI page.</p>
+<table><thead><tr><th scope=col>Capability</th><th scope=col>What it does</th></tr></thead><tbody><tr><th scope=row>Answers</th><td>The reading companion, catch-ups, who is who, asking about your library.</td></tr><tr><th scope=row>Quick work</th><td>Builds the knowledge graph, tidies the library, judges look-ups, understands voice commands the grammar doesn’t know.</td></tr><tr><th scope=row>Handwriting</th><td>Reads ink in margins and notebooks. A server of its own if you want one.</td></tr><tr><th scope=row>Speech to text</th><td>Dictation and recordings written out. voxtype first, then whisper.cpp, then a server.</td></tr><tr><th scope=row>Text to speech</th><td>Spoken answers and read-aloud, by the voice you choose.</td></tr><tr><th scope=row>Embeddings</th><td>Search by meaning across the library.</td></tr></tbody></table>
+<h2>Start local</h2>
+<p>For a capability that takes a server, pick <strong>Ollama</strong> and leave the address as <code>http://localhost:11434/v1</code>. Ollama on another computer is the same row with another address. Omarchy’s local models, any server that speaks the OpenAI-compatible API, a hosted API (Claude, OpenAI, Gemini), a subscription through its agent (Claude Code, Antigravity) or any command are the other choices. <em>Automatic</em> follows the agent you picked with <code>omarchy default agent</code>.</p>
+<pre><code>Answers          Ollama   llama3.2           localhost:11434
+Quick work       Ollama   qwen2.5:7b         localhost:11434
+Handwriting      Ollama   qwen2.5vl:3b       localhost:11434
+Speech to text   voxtype
+Text to speech   Piper
+Embeddings       Ollama   nomic-embed-text   localhost:11434</code></pre>
+<p class="ph">Example values; your rows name your own.</p>
+<h2>Two models for text</h2>
+<p><em>Answers</em> is for what you read: the companion, catch-ups, who is who, asking about your library. <em>Quick work</em> is for what Omabook reads into structure: growing the graph, tidying, judging look-ups, finding series, understanding voice commands the grammar does not know. That second kind is most of the calls, so a small model is a good fit.</p>
+<h2>Speech and handwriting</h2>
+<p>Speech to text tries voxtype first, then whisper.cpp, then a server. Dictation listens only after you press the microphone (or hold <kbd>Ctrl+M</kbd>) and keeps nothing but the words. Voice commands work in English, German, French, Dutch and Spanish. Handwriting is read by a vision model on your AI server, or on a server of its own set in the Handwriting row. Recordings (MP3, M4B, FLAC and others) become books once written out, and are searchable by what is said.</p>
+<h2>Test each row</h2>
+<p>Every row has a Test button, or <kbd>T</kbd> on the row. It sends one small real request through exactly that row’s provider, server, key and model: a two-word reply, a tiny drawn word read back, a short clip heard. If the model is missing, Omabook finds one that can do the job on the server, or offers a small known one to download with one press. Both are new in 0.4.0.</p>
+<h2>Hosted only where you allow it</h2>
+<p>Each capability has its own switch for hosted providers. Off, nothing for that capability leaves your computer. A key is kept in the desktop’s keyring, never in <code>config.json</code>. With AI turned off nothing is asked and nothing is listened to.</p>
+<p>What is sent: the question, the book’s title and authors, and the text of the part you ask about, to the AI chosen and nowhere else.</p>
+<div class="pager"><a href="knowledge-graph.html">← The knowledge graph</a><a href="plugins.html">Plugins →</a></div></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="../docs/">Docs</a> ·
+<a href="../help/">Help</a> · <a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
+with nothing private shown.</p></footer>
+</body></html>

@@ -1,0 +1,8 @@
+<h1>Phones and e-readers</h1>
+<p>Both are off until you choose them in Settings, under <em>E-readers and phones</em>, which also says where Omabook listens: on this computer, on your tailnet, or (with a warning) on every network.</p>
+<h2>OPDS</h2>
+<p>Omabook serves the library, or one collection, as an OPDS catalog. KOReader, Moon+ Reader, Librera and Thorium browse and download from it. It is read-only, needs its password, and never offers a book a plugin keeps private.</p>
+<h2>KOReader</h2>
+<p>Omabook also serves KOReader’s progress sync, so KOReader keeps its reading place in step with the library’s, matched by the hash KOReader names a file by. Or sync reading places with a KOReader sync server elsewhere: <code>omabook koreader login</code>, <code>omabook koreader sync</code>.</p>
+<h2>Send a book</h2>
+<p>Send a book to an e-reader mounted over USB (Kobo, Kindle, PocketBook), converted with Calibre when needed, or mail it to a Kindle: <code>omabook send</code>. <code>omabook opds</code> browses other OPDS catalogs. <code>omabook serve --reach tailnet</code> serves from the command line.</p>

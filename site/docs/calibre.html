@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calibre: Omabook docs</title>
+<meta name="description" content="Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/omabook.svg" type="image/svg+xml">
+<script src="../theme.js" defer></script>
+</head>
+<body class="dir-b">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="../">Product</a><a href="../docs/" aria-current=page>Docs</a><a href="../help/">Help</a><a href="../plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav>
+<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend><label><input type="radio" name="t" value="auto" checked><span>System</span></label><label><input type="radio" name="t" value="tokyo"><span>Tokyo Night</span></label><label><input type="radio" name="t" value="gruvbox"><span>Gruvbox</span></label><label><input type="radio" name="t" value="latte"><span>Catppuccin Latte</span></label><label><input type="radio" name="t" value="forest"><span>Everforest</span></label></fieldset></form></header>
+<main id="main"><div class="docs"><nav class="toc" aria-label="Documentation"><p class="toc-h">Documentation</p><ol><li><a href="getting-started.html">Getting started</a></li><li><a href="library.html">The library</a></li><li><a href="knowledge-graph.html">The knowledge graph</a></li><li><a href="ai.html">AI setup, per capability</a></li><li><a href="plugins.html">Plugins</a></li><li><a href="calibre.html" aria-current=page>Calibre</a></li><li><a href="phones-and-e-readers.html">Phones and e-readers</a></li><li><a href="sync.html">Sync and sharing</a></li></ol></nav><article class="prose"><p class="crumb"><a href="./">Documentation</a> / Calibre</p><h1>Calibre</h1>
+<p>Everything Omabook does with Calibre is one plugin, <strong>Calibre</strong>, at the top of the plugin list. Switched off, nothing of Calibre’s is run, read or offered.</p>
+<h2>Import</h2>
+<ul><li>Finds your Calibre libraries and offers to import them. Calibre’s folder is only read.</li><li>Every book comes with its curated details, cover and formats, your stars, your place, and the viewer’s highlights and bookmarks.</li><li>Calibre’s metadata plugins are found and used for look-ups. Conversion plugins run through ebook-convert.</li><li>Import again later and it brings things up to date without adding a book twice.</li></ul>
+<p>Omabook reads Calibre’s own settings and looks in <code>~/Calibre Library</code>. A library that was never imported is offered once at the bottom of the shelf: <em>Import</em>, <em>Not now</em> or <em>Never</em>. In a terminal: <code>omabook calibre libraries</code> and <code>omabook calibre import</code>.</p>
+<h2>What comes along</h2>
+<p>The details you curated, the cover, all formats, your stars, how far you read each book (a book read to the end is read), identifiers (Goodreads, ISBN, Amazon), the viewer’s highlights with their notes, and its bookmarks. Columns people add are recognised by name (<code>read</code>, <code>status</code>, <code>date_read</code>, <code>myrating</code>, the Goodreads Sync columns).</p>
+<h2>Calibre’s plugins</h2>
+<p>Metadata sources (Amazon, Goodreads, Kobo and others) are run inside Calibre and can each be switched on or off in the look-up (<kbd>M</kbd>). Conversion plugins run through <code>ebook-convert</code>. Device drivers and file type plugins are listed with the reason they are not used. Sending to an e-reader is covered by Omabook’s own <a href="phones-and-e-readers.html">device support</a>.</p>
+<div class="pager"><a href="plugins.html">← Plugins</a><a href="phones-and-e-readers.html">Phones and e-readers →</a></div></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="../docs/">Docs</a> ·
+<a href="../help/">Help</a> · <a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
+with nothing private shown.</p></footer>
+</body></html>

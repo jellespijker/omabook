@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The knowledge graph: Omabook docs</title>
+<meta name="description" content="Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read.">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/omabook.svg" type="image/svg+xml">
+<script src="../theme.js" defer></script>
+</head>
+<body class="dir-b">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="../">Product</a><a href="../docs/" aria-current=page>Docs</a><a href="../help/">Help</a><a href="../plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav>
+<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend><label><input type="radio" name="t" value="auto" checked><span>System</span></label><label><input type="radio" name="t" value="tokyo"><span>Tokyo Night</span></label><label><input type="radio" name="t" value="gruvbox"><span>Gruvbox</span></label><label><input type="radio" name="t" value="latte"><span>Catppuccin Latte</span></label><label><input type="radio" name="t" value="forest"><span>Everforest</span></label></fieldset></form></header>
+<main id="main"><div class="docs"><nav class="toc" aria-label="Documentation"><p class="toc-h">Documentation</p><ol><li><a href="getting-started.html">Getting started</a></li><li><a href="library.html">The library</a></li><li><a href="knowledge-graph.html" aria-current=page>The knowledge graph</a></li><li><a href="ai.html">AI setup, per capability</a></li><li><a href="plugins.html">Plugins</a></li><li><a href="calibre.html">Calibre</a></li><li><a href="phones-and-e-readers.html">Phones and e-readers</a></li><li><a href="sync.html">Sync and sharing</a></li></ol></nav><article class="prose"><p class="crumb"><a href="./">Documentation</a> / The knowledge graph</p><h1>The knowledge graph</h1>
+<p>Omabook keeps a graph of what you read, in the library’s own database: the characters, places, groups, concepts, items, events, plot threads and themes of each book; the topics beyond the book that it touches; and the books, authors, series and tags themselves.</p>
+<figure class="win"><img src="../assets/demo/graph.webp" alt="The graph of a library: books, authors and tags on the left, the people, places and ideas of a story on the right." width="1180" height="780" loading="lazy"><figcaption>Press 6 for the library as a graph. (demo library of made-up books)</figcaption></figure>
+<h2>It grows as you read</h2>
+<p>When you finish a chapter, the model is sent the pages read since last time, with the names of what the graph already holds, and answers with things and relations. A marker with the book says how far that got, so no page is sent twice. It costs AI calls, so it is a setting: <em>grows as you read</em> (the default), <em>only when you ask for it</em> (<code>omabook graph build &lt;book&gt;</code>) or <em>off</em>.</p>
+<h2>Never past your page</h2>
+<p>Anything past the furthest you have read in a book is a spoiler. It is not shown, searched or sent to the AI. The details keep a count, <em>Later in the book (n)</em>, and opening it asks first.</p>
+<figure class="win"><img src="../assets/shots/reader-map.webp" alt="A novel with its characters marked and the map of the book so far beside the page." width="1600" height="1000" loading="lazy"><figcaption>Press M while reading for the map so far.</figcaption></figure>
+<h2>Across books</h2>
+<p>A character of one series is never merged with one of the same name in another, but a theme or a real-world topic is one node shared by every book that touches it. That is what links your reading together. Once per build of a book, a small request puts its most telling things beside those of other books you read, and notes what connects them: echoes, contrasts with, and the like. They show as dashed lines.</p>
+<h2>Timelines</h2>
+<p>The chronology puts events in the order they <em>happen</em>, not the order you read them. <kbd>T</kbd> on the shelf shows the selected book’s chronology; <kbd>Shift+T</kbd> while reading shows the open book’s. One lane per timeline on a ruler: the book’s own, its series’, a world several books share, or real history. A real date puts an event on real history, which is how books with nothing else in common meet. Events with no time are listed apart, and contradictions are ringed with where each side was said.</p>
+<h2>By hand and by command</h2>
+<p><kbd>N</kbd> adds a thing, <kbd>E</kbd> edits it, <kbd>Shift+M</kbd> folds two into one. What you put in is marked as yours and wins. Export with <code>omabook graph export 12 --format graphml</code> (also json, dot, cypher).</p>
+<pre><code>omabook graph find tide --kind concept
+omabook graph node 31 --timeline --book 12 --upto 5
+omabook chronology --collection Novels --timeline &quot;Real history&quot; --from 1940 --to 1942</code></pre>
+<div class="pager"><a href="library.html">← The library</a><a href="ai.html">AI setup, per capability →</a></div></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="../docs/">Docs</a> ·
+<a href="../help/">Help</a> · <a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
+with nothing private shown.</p></footer>
+</body></html>
