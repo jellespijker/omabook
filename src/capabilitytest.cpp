@@ -77,6 +77,7 @@ constexpr auto worded = std::to_array<Worded>({
     {Code::GeminiRefusedKey, "refused-key"_L1},
     {Code::RecognizerRefusedKey, "refused-key"_L1},
     {Code::VoiceOpenAiNoKey, "refused-key"_L1},
+    {Code::VoiceKeyRefused, "refused-key"_L1},
     {Code::AiNoModel, "no-model"_L1},
     {Code::AiNoModelSaid, "no-model"_L1},
     {Code::AiModelRefused, "no-model"_L1},
