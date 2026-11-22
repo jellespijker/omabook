@@ -120,6 +120,10 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"reader.read_aloud_stop", {"Shift+R"}, tr("Stop reading aloud")},
     {"reader.sentence_back", {"["}, tr("While reading aloud, go a sentence back")},
     {"reader.sentence_next", {"]"}, tr("While reading aloud, go a sentence on")},
+    {"reader.voice",
+     {"Ctrl+M"},
+     tr("Say what to do, such as “next chapter” or “go to chapter 5”: hold it while you speak, or press it once to start and again to "
+        "stop")},
     {"reader.note", {"Shift+N"}, tr("Write a margin note on the selected words or part of the page, or select them first")},
     {"reader.notes", {"E"}, tr("Go through the margin notes on the page: Enter edits one, Delete removes it")},
     {"reader.ink", {"D"}, tr("Write and draw, with the pen or the mouse, on the pages or in the margins and between the lines, and stop")},

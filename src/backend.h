@@ -15,6 +15,7 @@
 #include "booklistmodel.h"
 #include "dictation.h"
 #include "spokenanswer.h"
+#include "voicecommands.h"
 #include "filepicker.h"
 #include "folio.h"
 #include "library.h"
@@ -67,6 +68,8 @@ class Backend : public QObject {
     Q_PROPERTY(SpokenAnswer *spokenAnswer READ spokenAnswer CONSTANT)
     // Writing out the library's recordings (#151).
     Q_PROPERTY(TranscriptDesk *transcripts READ transcripts CONSTANT)
+    // What is said while reading, understood as a command (#150).
+    Q_PROPERTY(VoiceCommands *voiceCommands READ voiceCommands CONSTANT)
     // The plugin manager: every plugin sorted by what it does, what needs
     // attention, and installing, removing, ordering and trying them.
     Q_PROPERTY(PluginManager *pluginManager READ pluginManager CONSTANT)
@@ -182,6 +185,7 @@ public:
     Dictation *dictation() noexcept { return &m_dictation; }
     SpokenAnswer *spokenAnswer() noexcept { return &m_spokenAnswer; }
     TranscriptDesk *transcripts() noexcept { return &m_transcripts; }
+    VoiceCommands *voiceCommands() noexcept { return &m_voiceCommands; }
     PluginManager *pluginManager() noexcept { return m_pluginManager.get(); }
     GraphJobs *graphJobs() noexcept { return m_graphJobs; }
     SpaceDesk *spaces() noexcept { return &m_spaces; }
@@ -360,6 +364,8 @@ private:
     SpokenAnswer m_spokenAnswer{m_settings, &m_audio};
     // Before the plugins too, which write their recordings out through it.
     TranscriptDesk m_transcripts{m_settings, [this] { return m_library.get(); }};
+    // The model it falls back on is the one every other answer comes from.
+    VoiceCommands m_voiceCommands{m_aiFactory};
     // Files the person picks for a plugin, and the clipboard (#131).
     PluginDesk m_pluginDesk{m_picker};
     std::unique_ptr<ScriptPlugins> m_scripts;

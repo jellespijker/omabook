@@ -19,7 +19,7 @@ modules = [
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
-  "deviceoptions", "threadclock", "pdfsketch", "aicapability", "inklines",
+  "deviceoptions", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",
 ]
 
 [layers.formats]
@@ -64,7 +64,7 @@ modules = [
   "spacetransport", "thinkingfilter", "tour", "whatsnew", "scriptpluginbooks", "scriptmanifest",
   "recognition", "recognizers", "whisperlocal", "voxtypelocal", "localspeech", "recognitionroute", "recognitionstore", "recognitionqueue",
   "scriptai", "bookinkwords", "audioports", "audiodevices", "audiorecorder", "audioplayer", "scriptaudio",
-  "dictation", "dictationclip", "voxtypedictation", "spokenanswer",
+  "dictation", "dictationclip", "voxtypedictation", "spokenanswer", "voicecommands",
   "annotationcontext", "aifailures", "embeddings", "scriptdesk", "scriptfiles", "pluginprivacy", "scriptreading", "testaudio",
   "opdsfeed", "opdscatalog", "kosyncclient", "smtpmail", "voice", "localvoices", "servervoice", "voices",
   "narration", "voiceinstall", "aiprivacy", "airegistry", "aicapabilityrows", "voicepreview", "gemini", "geminiprovider", "geminirecognizers", "geminivoice", "recordingpieces", "transcriber",
@@ -96,7 +96,7 @@ modules = [
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
-  "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys", "transcriptdesk",
+  "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys", "transcriptdesk", "heldkeys",
 ]
 
 [layers.app]

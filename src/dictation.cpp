@@ -41,9 +41,9 @@ Dictation::Dictation(Settings *settings, AudioDevices *devices, RecognitionQueue
 
 Dictation::~Dictation() { cancel(); }
 
-QVariantMap Dictation::status(bool hosted) const {
+QVariantMap Dictation::status(bool hosted, bool typing) const {
     QVariantMap status = AiRegistry::status(*m_settings, Capability::SpeechToText, {.model = {}, .hosted = hosted}).toJson().toVariantMap();
-    const bool voxtype = withVoxtype() && voxtypeFound() && !m_settings->aiOff();
+    const bool voxtype = typing && withVoxtype() && voxtypeFound() && !m_settings->aiOff();
     status.insert(u"voxtype"_s, voxtype);
     if (voxtype) {
         // voxtype's own dictation is on this computer whatever writes out recordings.
@@ -70,7 +70,19 @@ void Dictation::setWithVoxtype(bool on) {
     m_settings->setRecognition(chosen);
 }
 
-int Dictation::listen(const QString &who, bool hosted) {
+int Dictation::listen(const QString &who, bool hosted) { return start(who, hosted, true); }
+
+// Omabook's own, so a hosted way may write it out where it is allowed, as for a note.
+int Dictation::listenForCommand() {
+    const int field = start({}, true, false);
+    if (m_field == field) {
+        m_forCommand = true;
+        emit changed();
+    }
+    return field;
+}
+
+int Dictation::start(const QString &who, bool hosted, bool typing) {
     const int field = m_next++;
     if (m_field != 0) {
         fail(field, Failure(Failure::Code::DictationBusy).text());
@@ -80,7 +92,7 @@ int Dictation::listen(const QString &who, bool hosted) {
         fail(field, Failure(Failure::Code::AiOff).text());
         return field;
     }
-    if (withVoxtype() && voxtypeFound()) {
+    if (typing && withVoxtype() && voxtypeFound()) {
         m_voxtype.setProgram(RecognitionRoute::voxtypeProgram(*m_settings));
         m_field = field;
         m_voxtypeField = field;
@@ -202,6 +214,7 @@ void Dictation::reset() {
     m_clip.reset();
     m_folder.reset();
     m_byVoxtype = false;
+    m_forCommand = false;
     m_field = 0;
     m_job = 0;
     m_who.clear();

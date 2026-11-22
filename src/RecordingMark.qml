@@ -6,7 +6,8 @@ import QtQuick.Controls
 // loud, and a button that stops it. A plugin can't record without it: the
 // recording is shown here from its first moment to its last. So too while a
 // field is dictated into (#148), by Omabook, a plugin's view or voxtype's own
-// dictation: who listens, and Stop, which writes out what was said.
+// dictation: who listens, and Stop, which writes out what was said; and
+// while a command is said while reading (#150).
 Rectangle {
     id: mark
     objectName: "recordingMark"
@@ -64,6 +65,7 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             elide: Text.ElideRight
             text: !mark.shown ? ""
+                  : mark.dictating && mark.dictation.forCommand ? qsTr("Listening for what to do") + " · " + mark.clock(mark.dictation.elapsed)
                   : mark.dictating && mark.dictation.byVoxtype ? qsTr("voxtype is listening for %1").arg(mark.dictation.who || "Omabook")
                   : mark.dictating ? qsTr("%1 is listening").arg(mark.dictation.who || "Omabook") + " · " + mark.clock(mark.dictation.elapsed)
                   : (mark.devices.paused ? qsTr("%1 paused recording") : qsTr("%1 is recording")).arg(mark.devices.recorder)

@@ -278,6 +278,14 @@ QList<Manual::Section> readAloudSections() {
         {Manual::tr("A plugin reading aloud"),
          Manual::tr("A plugin can read something to you in the same voice. The bar over the page, or over the shelf, says "
                     "which plugin reads, and {reader.read_aloud_stop} or the bar's ✕ stops it.")},
+        // Saying what to do (#150).
+        {Manual::tr("Saying what to do"),
+         Manual::tr("Hold {reader.voice} while you say it, or press it once to start and again to stop (Speak in the bar, with "
+                    "fingers or the pen): “next chapter”, “previous page”, “read aloud”, “stop”, “go to chapter 5”, “highlight "
+                    "this” for the selected words, “what does this word mean” or “what does serendipity mean”, and most of what "
+                    "the keys do, in any of the window's languages. It listens only once you press it, the top of the window "
+                    "says that it listens, and Escape lets go of what was said. What the words don't say plainly is asked of "
+                    "the AI for quick work, sent nothing but those words; nothing listens with the AI off.")},
     };
 }
 

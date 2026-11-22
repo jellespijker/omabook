@@ -339,3 +339,24 @@ Where the code asked for it, #143 differs from the decision above, as follows:
   recording stops the one under way, kept as far as it got.
 - **A plugin's one call** is `omabook.recognize.transcript(file, {language, hosted, again, onProgress,
   onWaiting})`, whose promise has `stop()`; the Notebooks plugin can move onto it from `recognize.audio`.
+
+## As built in #150
+
+- **Voice commands are dictation and a grammar, the model last** (`VoiceGrammar`, `VoiceCommands`): what is
+  said is heard by #148's `Dictation` (`listenForCommand`: Omabook's own, so hosted only as for a note, and
+  never voxtype's own dictation, which would type it), and understood by phrases over the command table in
+  the five languages of the window, its own first; only a transcript no phrase is goes to the model, as quick
+  work through the registry's answerer, sent the words said and the commands it may answer with, nothing of
+  the book. Its answer is a command's id or `none`; anything else is not understood, and said so. No
+  capability was added.
+- **What the table hasn't**: three commands are only said, with what was said beside them:
+  `spoken.chapter` (a chapter by its number: the entry of the contents whose title numbers it, else that
+  place at the top level), `spoken.highlight` (the selected words, in the first colour) and
+  `spoken.meaning` (the selected word, or the one said, asked of the companion, whose answer is read aloud
+  as #149's). Every other phrase runs its command as its key does (`win.run`), and says so where that
+  can't be done now.
+- **The person starts it**: `reader.voice` (Ctrl+M on the page) held is push to talk, a quick press listens
+  until the next; the reading bar's Speak does the same by mouse, finger or pen. A Shortcut is told only of
+  the press, so the key's release is watched on the window (`HeldKeys`). In a note or a question field
+  Ctrl+M stays that field's dictation. While it listens the mark at the top says "Listening for what to do",
+  with Stop; Escape lets go of what was said. With the AI Off nothing listens.

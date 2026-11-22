@@ -44,6 +44,8 @@ class Dictation : public QObject {
     Q_PROPERTY(int field READ field NOTIFY changed)
     // It is voxtype's own dictation that listens, and types the words itself.
     Q_PROPERTY(bool byVoxtype READ byVoxtype NOTIFY changed)
+    // It listens for a command said while reading (#150), not for a field.
+    Q_PROPERTY(bool forCommand READ forCommand NOTIFY changed)
     // How long it has listened, in milliseconds, and how loud it hears, 0 to 1.
     Q_PROPERTY(double elapsed READ elapsed NOTIFY progressed)
     Q_PROPERTY(double level READ level NOTIFY progressed)
@@ -65,12 +67,16 @@ public:
     // Whether a field may be dictated into, `hosted` as the one asking says
     // it: the registry's status of speech to text ({available, hosted,
     // provider, model, why, message}), and `voxtype`, true where voxtype's
-    // own dictation would listen.
-    Q_INVOKABLE QVariantMap status(bool hosted) const;
+    // own dictation would listen. Where the words are wanted back, not
+    // typed (`typing` false, for a command), voxtype's own never listens.
+    Q_INVOKABLE QVariantMap status(bool hosted, bool typing = true) const;
     // Listens for a new field, by `who` (a plugin's name, empty for Omabook),
     // a hosted way only if `hosted`. Its number; failed() says, a moment
     // later, when it couldn't start.
     Q_INVOKABLE int listen(const QString &who, bool hosted);
+    // Listens for a command said while reading (#150): Omabook's own, its
+    // words given back by heard(), never typed by voxtype's own dictation.
+    Q_INVOKABLE int listenForCommand();
     // The person is done speaking: what they said is written out.
     Q_INVOKABLE void stop();
     // Stops listening and writing out, and nothing is put in the field.
@@ -83,6 +89,7 @@ public:
     [[nodiscard]] bool writing() const { return m_job != 0; }
     [[nodiscard]] int field() const { return m_field; }
     [[nodiscard]] bool byVoxtype() const { return m_byVoxtype; }
+    [[nodiscard]] bool forCommand() const { return m_forCommand; }
     [[nodiscard]] double elapsed() const;
     [[nodiscard]] double level() const { return m_clip ? m_clip->level() : 0.0; }
     [[nodiscard]] bool voxtypeFound() const;
@@ -105,6 +112,7 @@ private:
     void ended(const QString &why);
     void writeOut();
     void reset();
+    int start(const QString &who, bool hosted, bool typing);
 
     Settings *m_settings;
     AudioDevices *m_devices;
@@ -117,6 +125,7 @@ private:
     QString m_who;
     bool m_hosted = false;
     bool m_byVoxtype = false;
+    bool m_forCommand = false;
     int m_field = 0;
     int m_job = 0; // the queue's, while what was said is written out
     int m_next = 1;

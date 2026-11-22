@@ -273,7 +273,7 @@ Item {
     }
 
     // The reader's keys, each in the place it belongs to right now.
-    ReaderKeys { host: view; notes: notesLayer; aiPane: companion }
+    ReaderKeys { id: readerKeys; host: view; notes: notesLayer; aiPane: companion }
 
     // The kinds' colors are the graph's, from the theme.
     Binding { target: reader.marks; property: "colors"; value: theme.colors }
@@ -498,7 +498,7 @@ Item {
                 anchors.bottomMargin: win.touch ? 80 : 16
             }
             ReaderBar {
-                host: view
+                host: view; voice: readerKeys.voice
                 room: contentLoader.width
                 visible: view.showBar && reader.open
                 z: 2

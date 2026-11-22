@@ -218,6 +218,11 @@ QList<Manual::Step> speechRelease() {
                     "when you let go, and the answer is shown and read aloud. Asking again, Escape or {reader.read_aloud_stop} "
                     "stops it. {library.ask} takes a spoken question too."),
          "", "reader.ask", "reader", ""},
+        {"voice-commands", "0.3.1", Manual::tr("Say what to do while you read"),
+         Manual::tr("Hold {reader.voice}, or Speak in the bar, and say “next chapter”, “previous page”, “read aloud”, “go to "
+                    "chapter 5”, “highlight this” or “what does this word mean”, in any of the window's languages. It listens "
+                    "only while you ask it to, and the top of the window says so."),
+         "", "reader.voice", "reader", ""},
     };
 }
 

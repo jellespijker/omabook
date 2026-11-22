@@ -2341,5 +2341,21 @@
   "Written out, each word with its moment.": "Uitgeschreven, elk woord met zijn moment.",
   "Go On Writing Out": "Verder uitschrijven",
   "The transcript can't be kept in %1: %2": "Het transcript kan niet in %1 bewaard worden: %2",
-  "Write out the selected recording through speech to text, or stop writing it out": "De gekozen opname uitschrijven met spraak naar tekst, of het uitschrijven stoppen"
+  "Write out the selected recording through speech to text, or stop writing it out": "De gekozen opname uitschrijven met spraak naar tekst, of het uitschrijven stoppen",
+  "Heard “%1”, but that can't be done here now.": "„%1” gehoord, maar dat kan hier nu niet.",
+  "Hold {reader.voice} while you say it, or press it once to start and again to stop (Speak in the bar, with fingers or the pen): “next chapter”, “previous page”, “read aloud”, “stop”, “go to chapter 5”, “highlight this” for the selected words, “what does this word mean” or “what does serendipity mean”, and most of what the keys do, in any of the window's languages. It listens only once you press it, the top of the window says that it listens, and Escape lets go of what was said. What the words don't say plainly is asked of the AI for quick work, sent nothing but those words; nothing listens with the AI off.": "Houd {reader.voice} ingedrukt terwijl je het zegt, of druk één keer om te beginnen en nog eens om te stoppen (Spreek in de balk, met je vinger of de pen): „volgend hoofdstuk”, „vorige pagina”, „voorlezen”, „stop”, „ga naar hoofdstuk 5”, „markeer dit” voor de geselecteerde woorden, „wat betekent dit woord” of „wat betekent gezellig”, en het meeste wat de toetsen doen, in elk van de talen van het venster. Het luistert pas als je het indrukt, bovenaan het venster staat dat het luistert, en Escape laat los wat er gezegd is. Wat de woorden niet duidelijk zeggen, wordt aan de AI voor snel werk gevraagd, die niets dan die woorden krijgt; met de AI uit luistert er niets.",
+  "Hold {reader.voice}, or Speak in the bar, and say “next chapter”, “previous page”, “read aloud”, “go to chapter 5”, “highlight this” or “what does this word mean”, in any of the window's languages. It listens only while you ask it to, and the top of the window says so.": "Houd {reader.voice} ingedrukt, of Spreek in de balk, en zeg „volgend hoofdstuk”, „vorige pagina”, „voorlezen”, „ga naar hoofdstuk 5”, „markeer dit” of „wat betekent dit woord”, in elk van de talen van het venster. Het luistert alleen als je het vraagt, en bovenaan het venster staat dat.",
+  "Listening for what to do": "Luistert wat er moet gebeuren",
+  "Not understood: “%1”. Say, for instance, “next page” or “go to chapter 5”.": "Niet begrepen: „%1”. Zeg bijvoorbeeld „volgende pagina” of „ga naar hoofdstuk 5”.",
+  "Nothing can be heard: speech to text isn't available.": "Er kan niets gehoord worden: spraak naar tekst is niet beschikbaar.",
+  "Nothing was heard.": "Er was niets te horen.",
+  "Say what to do while you read": "Zeg wat er moet gebeuren terwijl je leest",
+  "Say what to do, such as “next chapter” or “go to chapter 5”: hold it while you speak, or press it once to start and again to stop": "Zeg wat er moet gebeuren, zoals „volgend hoofdstuk” of „ga naar hoofdstuk 5”: houd het ingedrukt terwijl je spreekt, of druk één keer om te beginnen en nog eens om te stoppen",
+  "Saying what to do": "Zeggen wat er moet gebeuren",
+  "Select the word first, or say it: “what does serendipity mean”.": "Selecteer eerst het woord, of zeg het: „wat betekent gezellig”.",
+  "Select the words to highlight first: V, the mouse, a finger or the pen.": "Selecteer eerst de woorden om te markeren: V, de muis, een vinger of de pen.",
+  "Speak": "Spreek",
+  "The AI is still answering.": "De AI is nog aan het antwoorden.",
+  "This book has no chapter %1.": "Dit boek heeft geen hoofdstuk %1.",
+  "What does “%1” mean here?": "Wat betekent „%1” hier?"
 }

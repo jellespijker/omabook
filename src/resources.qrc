@@ -13,6 +13,7 @@
         <file alias="PluginViewLayer.qml">PluginViewLayer.qml</file>
         <file alias="PluginSide.qml">PluginSide.qml</file>
         <file alias="ReaderKeys.qml">ReaderKeys.qml</file>
+        <file alias="ReaderVoice.qml">ReaderVoice.qml</file>
         <file alias="ReaderCycles.qml">ReaderCycles.qml</file>
         <file alias="ReadAloudBar.qml">ReadAloudBar.qml</file>
         <file alias="SentenceMark.qml">SentenceMark.qml</file>

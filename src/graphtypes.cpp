@@ -9,6 +9,7 @@
 #include "graphcanvas.h"
 #include "graphmodel.h"
 #include "graphtenants.h"
+#include "heldkeys.h"
 #include "inksurface.h"
 #include "marginnotes.h"
 #include "meaningfinder.h"
@@ -39,6 +40,8 @@ void registerGraphTypes() {
         // Dictating into a field (#148): the window's note fields, and plugins' views.
         qmlRegisterType<DictationKeys>("Omabook", 1, 0, "DictationKeys");
         qmlRegisterType(QUrl(QStringLiteral("qrc:/DictationButton.qml")), "Omabook", 1, 0, "DictationButton");
+        // A key held while a command is said (#150).
+        qmlRegisterType<HeldKeys>("Omabook", 1, 0, "HeldKeys");
         return true;
     }();
 }

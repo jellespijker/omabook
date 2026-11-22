@@ -139,3 +139,7 @@ _Avoid_: Recording (for this), voice input, speech recognition (for the whole of
 **Spoken answer**:
 An AI's answer read aloud, to a question asked by dictation: the companion's or one about the library, read by the voice chosen for text to speech and stopped by asking again (`SpokenAnswer`, #149).
 _Avoid_: Voice mode, voice assistant, reading aloud (that is a book's)
+
+**Voice command**:
+A command said while reading ("next chapter", "go to chapter 5"), heard by dictation and understood by a grammar of the command table in the window's five languages, or by the model for quick work where the grammar doesn't know it (`VoiceGrammar`, `VoiceCommands`, #150). It runs what the command's key runs, or one of the three only said: a chapter by its number, highlighting the selection, and what a word means.
+_Avoid_: Voice control, wake word, speech command

@@ -2341,5 +2341,21 @@
   "Written out, each word with its moment.": "Ausgeschrieben, jedes Wort mit seinem Zeitpunkt.",
   "Go On Writing Out": "Weiter ausschreiben",
   "The transcript can't be kept in %1: %2": "Die Abschrift kann nicht in %1 aufbewahrt werden: %2",
-  "Write out the selected recording through speech to text, or stop writing it out": "Die ausgewählte Aufnahme mit Sprache zu Text ausschreiben, oder das Ausschreiben anhalten"
+  "Write out the selected recording through speech to text, or stop writing it out": "Die ausgewählte Aufnahme mit Sprache zu Text ausschreiben, oder das Ausschreiben anhalten",
+  "Heard “%1”, but that can't be done here now.": "„%1“ verstanden, aber das geht hier gerade nicht.",
+  "Hold {reader.voice} while you say it, or press it once to start and again to stop (Speak in the bar, with fingers or the pen): “next chapter”, “previous page”, “read aloud”, “stop”, “go to chapter 5”, “highlight this” for the selected words, “what does this word mean” or “what does serendipity mean”, and most of what the keys do, in any of the window's languages. It listens only once you press it, the top of the window says that it listens, and Escape lets go of what was said. What the words don't say plainly is asked of the AI for quick work, sent nothing but those words; nothing listens with the AI off.": "Halte {reader.voice} gedrückt, während du es sagst, oder drücke es einmal zum Starten und noch einmal zum Beenden (Sprechen in der Leiste, mit dem Finger oder dem Stift): „nächstes Kapitel“, „vorherige Seite“, „vorlesen“, „stopp“, „geh zu Kapitel 5“, „markiere das“ für die ausgewählten Wörter, „was bedeutet dieses Wort“ oder „was bedeutet Fernweh“, und das meiste, was die Tasten tun, in jeder Sprache des Fensters. Es hört erst zu, wenn du es drückst, oben im Fenster steht, dass es zuhört, und Escape verwirft das Gesagte. Was die Wörter nicht klar sagen, wird die KI für schnelle Arbeit gefragt, der nichts als diese Wörter geschickt wird; mit ausgeschalteter KI hört nichts zu.",
+  "Hold {reader.voice}, or Speak in the bar, and say “next chapter”, “previous page”, “read aloud”, “go to chapter 5”, “highlight this” or “what does this word mean”, in any of the window's languages. It listens only while you ask it to, and the top of the window says so.": "Halte {reader.voice} gedrückt, oder Sprechen in der Leiste, und sag „nächstes Kapitel“, „vorherige Seite“, „vorlesen“, „geh zu Kapitel 5“, „markiere das“ oder „was bedeutet dieses Wort“, in jeder Sprache des Fensters. Es hört nur zu, wenn du es darum bittest, und oben im Fenster steht es.",
+  "Listening for what to do": "Hört zu, was zu tun ist",
+  "Not understood: “%1”. Say, for instance, “next page” or “go to chapter 5”.": "Nicht verstanden: „%1“. Sag zum Beispiel „nächste Seite“ oder „geh zu Kapitel 5“.",
+  "Nothing can be heard: speech to text isn't available.": "Es kann nichts gehört werden: Sprache zu Text ist nicht verfügbar.",
+  "Nothing was heard.": "Es war nichts zu hören.",
+  "Say what to do while you read": "Sag, was zu tun ist, während du liest",
+  "Say what to do, such as “next chapter” or “go to chapter 5”: hold it while you speak, or press it once to start and again to stop": "Sag, was zu tun ist, etwa „nächstes Kapitel“ oder „geh zu Kapitel 5“: halte es gedrückt, während du sprichst, oder drücke es einmal zum Starten und noch einmal zum Beenden",
+  "Saying what to do": "Sagen, was zu tun ist",
+  "Select the word first, or say it: “what does serendipity mean”.": "Wähle das Wort zuerst aus, oder sag es: „was bedeutet Fernweh“.",
+  "Select the words to highlight first: V, the mouse, a finger or the pen.": "Wähle zuerst die Wörter zum Markieren aus: V, die Maus, ein Finger oder der Stift.",
+  "Speak": "Sprechen",
+  "The AI is still answering.": "Die KI antwortet noch.",
+  "This book has no chapter %1.": "Dieses Buch hat kein Kapitel %1.",
+  "What does “%1” mean here?": "Was bedeutet „%1“ hier?"
 }

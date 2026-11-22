@@ -10,7 +10,15 @@ Item {
     required property Item notes
     required property Item aiPane
 
-    Key { command: "reader.back"; when: win.inReader && !keys.host.mapping; onActivated: keys.host.back() }
+    // Commands said (#150); Escape while one is listened for lets it go, rather than closing the book.
+    readonly property alias voice: voice
+    ReaderVoice { id: voice; host: keys.host; aiPane: keys.aiPane }
+    Key {
+        command: "reader.voice"
+        when: win.inReader && !!keys.host.content && !keys.host.mapping && !keys.host.formatting && (!keys.host.popupOpen || keys.host.selecting)
+        onActivated: voice.press()
+    }
+    Key { command: "reader.back"; when: win.inReader && !keys.host.mapping; onActivated: voice.busy ? voice.cancel() : keys.host.back() }
     // Left and Right follow the reading direction: forward is leftwards in
     // a right-to-left language, as a finger's swipe is.
     Key { command: "reader.page_down"; mirrored: win.rightToLeft; when: keys.host.paging; onActivated: keys.host.content.pageDown() }
