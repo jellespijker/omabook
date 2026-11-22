@@ -15,6 +15,7 @@
 
 #include "desk.h"
 #include "dictation.h"
+#include "spokenanswer.h"
 #include "testaudio.h"
 #include "transcriptdesk.h"
 
@@ -72,6 +73,11 @@ class TranscriptViewTests : public QObject {
                       .arg(desk.window->height()));
     }
 
+    // Where an item is in the window.
+    static QRectF sceneRect(const Desk &desk, const QString &name) {
+        QQuickItem *item = desk.item(name);
+        return item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
+    }
     static QString text(const Desk &desk, const QString &name) {
         QObject *found = desk.find(name);
         return found ? found->property("text").toString() : QString();
@@ -188,16 +194,26 @@ private slots:
             for (const QSize &size : dialogSizes()) {
                 QVERIFY(desk.resize(size));
                 QVERIFY(desk.shows("recordingMark") && desk.shows("transcribingMark"));
-                const auto rect = [&desk](const char *name) {
-                    QQuickItem *item = desk.item(name);
-                    return item->mapRectToScene(QRectF(0, 0, item->width(), item->height()));
-                };
-                QVERIFY2(!rect("recordingMark").intersects(rect("transcribingMark")),
+                QVERIFY2(!sceneRect(desk, "recordingMark").intersects(sceneRect(desk, "transcribingMark")),
                          qPrintable(QString("%1x%2").arg(size.width()).arg(size.height())));
                 look(desk, "listening");
             }
             desk.backend->dictation()->cancel();
             QTRY_VERIFY(!desk.shows("recordingMark"));
+            // An answer read aloud (#149) at the same time: its bar over the shelf, and this mark, apart.
+            desk.backend->spokenAnswer()->setVoiceMaker(
+                [] { return std::expected<std::unique_ptr<Voice>, Failure>(std::make_unique<HeldVoice>()); });
+            desk.backend->spokenAnswer()->say(u"Mira waits at the rail, and the ferry comes back."_s, u"The AI"_s, u"en"_s);
+            QTRY_VERIFY(desk.shows("speakingBar"));
+            for (const QSize &size : dialogSizes()) {
+                QVERIFY(desk.resize(size));
+                QVERIFY(desk.shows("speakingBar") && desk.shows("transcribingMark"));
+                QVERIFY2(!sceneRect(desk, "speakingBar").intersects(sceneRect(desk, "transcribingMark")),
+                         qPrintable(QString("%1x%2").arg(size.width()).arg(size.height())));
+                look(desk, "answering");
+            }
+            desk.backend->spokenAnswer()->stop();
+            QTRY_VERIFY(!desk.shows("speakingBar"));
             desk.backend->transcripts()->stop();
             QTRY_VERIFY(!desk.backend->transcripts()->busy());
             for (const QSize &size : dialogSizes()) {
