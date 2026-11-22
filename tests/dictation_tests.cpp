@@ -142,6 +142,12 @@ struct Field {
     }
 };
 
+// Waits until the microphone was heard for `ms` (more than the shortest
+// written out), however late a busy computer hears it.
+[[nodiscard]] bool heardFor(const Dictation &dictation, double ms) {
+    return QTest::qWaitFor([&] { return dictation.elapsed() >= ms; }, 10000);
+}
+
 } // namespace
 
 class DictationTests : public QObject {
@@ -154,7 +160,8 @@ private slots:
         AudioDevices devices(*TestAudio::microphone("tone"), [] { return TestAudio::speakers(); });
         auto clip = DictationClip::start(devices.microphone());
         QVERIFY2(clip, qPrintable(Fixtures::whyNot(clip)));
-        QTest::qWait(600);
+        // Waited for as heard, not as the clock goes: a busy computer hears late.
+        QTRY_VERIFY_WITH_TIMEOUT((*clip)->elapsed() >= 500ms, 10000);
         QVERIFY((*clip)->level() > 0.3);
         (*clip)->stop();
         QVERIFY(!(*clip)->listening());
@@ -196,8 +203,7 @@ private slots:
         QCOMPARE(dictation.field(), number);
         QCOMPARE(dictation.who(), u"Notebooks"_s);
         QVERIFY(!dictation.byVoxtype());
-        QTest::qWait(500);
-        QVERIFY(dictation.elapsed() > 200);
+        QVERIFY(heardFor(dictation, 400));
         QVERIFY(dictation.level() > 0.3);
         dictation.stop();
         QVERIFY(!dictation.listening());
@@ -215,9 +221,10 @@ private slots:
         int second = 0;
         Field again(dictation, second);
         second = dictation.listen({}, true);
-        QTest::qWait(400);
+        QVERIFY(heardFor(dictation, 400));
         dictation.stop();
-        QTRY_VERIFY(again.heard.has_value());
+        QTRY_VERIFY(again.heard.has_value() || again.failed.has_value());
+        QVERIFY2(again.heard.has_value(), qPrintable(again.failed.value_or({})));
         QCOMPARE(room.hostedAsked, std::optional<bool>(true));
     }
 
@@ -276,7 +283,7 @@ private slots:
         int number = 0;
         Field field(*room.dictation, number);
         number = room.dictation->listen({}, true);
-        QTest::qWait(500);
+        QVERIFY(heardFor(*room.dictation, 400));
         room.dictation->stop();
         QTRY_VERIFY_WITH_TIMEOUT(field.heard.has_value() || field.failed.has_value(), 10000);
         QVERIFY2(field.heard.has_value(), qPrintable(field.failed.value_or({})));
@@ -313,7 +320,7 @@ private slots:
         QTRY_VERIFY(three.failed.has_value());
         QCOMPARE(*three.failed, Failure(Failure::Code::DictationBusy).text());
         QCOMPARE(dictation.field(), second);
-        QTest::qWait(400);
+        QVERIFY(heardFor(dictation, 400));
         dictation.stop();
         QVERIFY(dictation.writing());
         dictation.forget(third); // not the one written for: nothing changes
@@ -329,7 +336,7 @@ private slots:
         Field four(dictation, fourth);
         const int routedBefore = room.routed;
         fourth = dictation.listen({}, true);
-        QTest::qWait(400);
+        QVERIFY(heardFor(dictation, 400));
         dictation.cancel();
         QVERIFY(!dictation.listening());
         QTest::qWait(200);
