@@ -409,7 +409,7 @@ Where the code asked for it, #143 differs from the decision above, as follows:
 ## As built in #172
 
 - **A missing model is found where the failure shows** (`ModelHelp`, `modelhelp.h`): Find's pane, the AI page's
-  row (looked at when it is opened) and a plugin (`ai.status`'s `remedy`, `ai.remedy`) ask the capability's
+  row (once its Test found the model missing: opening a row asks no server anything) and a plugin (`ai.status`'s `remedy`, `ai.remedy`) ask the capability's
   server what it has (`ModelScout`: Ollama's `/api/tags` and `/api/show`, else the OpenAI-compatible
   `/models`), sending only model names, and nothing with the AI Off. Where the model asked for isn't there, or
   is there and can't do it (a main model that doesn't read pictures, asked to read handwriting), one on the

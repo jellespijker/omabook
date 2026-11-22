@@ -343,6 +343,37 @@ private slots:
         QCOMPARE(settings.recognition().value("ink_url").toString(), inkServer.url());
     }
 
+    // The AI page's handwriting row, on a server of its own (#170): opening it
+    // asks no server anything; its Test finds the model doesn't read pictures,
+    // and only then is that server, never the AI server, asked what it has,
+    // and the model on it that does is offered and chosen.
+    void theRowOffersAModelOnceItsTestFoundNone() {
+        Desk desk("en", {}, false);
+        FakeOllama aiServer, inkServer;
+        aiServer.models = {fitFor(Capability::Handwriting)};
+        inkServer.models = {unfitFor(Capability::Handwriting), fitFor(Capability::Handwriting)};
+        pointAt(*desk.settings, aiServer.url());
+        desk.settings->setRecognition({{"ink_url", inkServer.url()}, {"ink_model", "qwen3.8:27b"}});
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.call("showAiSettings");
+        QVERIFY(desk.waitForPopup());
+        desk.find("aiSettings")->setProperty("current", QString("handwriting"));
+        QTRY_VERIFY(desk.shows("handwritingTest"));
+        QTest::qWait(200);
+        QVERIFY(inkServer.server.received.isEmpty());
+        const qsizetype before = aiServer.server.received.size();
+        QVERIFY(QMetaObject::invokeMethod(desk.find("handwritingTest"), "clicked"));
+        QTRY_VERIFY_WITH_TIMEOUT(desk.shows("handwritingOfferUse"), 10000);
+        QVERIFY2(desk.find("handwritingOfferSays")->property("text").toString().contains("gemma4:e2b"),
+                 qPrintable(desk.find("handwritingOfferSays")->property("text").toString()));
+        QVERIFY(QMetaObject::invokeMethod(desk.find("handwritingOfferUse"), "clicked"));
+        QTRY_COMPARE(desk.settings->recognition().value("ink_model").toString(), QString("gemma4:e2b"));
+        QCOMPARE(desk.settings->recognition().value("ink_url").toString(), inkServer.url());
+        QVERIFY(inkServer.asked().contains("/api/tags"));
+        QVERIFY2(aiServer.server.received.size() == before, qPrintable(aiServer.asked().join(' ')));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     // Speech either way has nothing to download: a server without a model for it says so.
     void aServerWithNothingForSpeechSaysSo() {
         for (const Capability which : {Capability::SpeechToText, Capability::TextToSpeech}) {
@@ -448,7 +479,7 @@ private slots:
     // offered for download onto the Ollama server, and once it is there the
     // book is indexed. In English, German and right to left, walked by the survey.
     void findsPaneSaysWhyAndDownloadsTheModel() {
-        for (const QByteArray language : {QByteArray("en"), QByteArray("de"), QByteArray("ar")}) {
+        for (const QByteArray &language : {QByteArray("en"), QByteArray("de"), QByteArray("ar")}) {
             Desk desk(language, language == "ar" ? lightTheme : QByteArray(), false);
             FakeOllama ollama;
             ollama.models = {fitFor(Capability::Handwriting)};

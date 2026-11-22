@@ -22,14 +22,17 @@ ColumnLayout {
 
     spacing: 8
 
-    // Whether its server has the model asked for, looked at when the row is opened (#172).
+    // A model on its server, or one to download, once its Test found the model
+    // missing (#172): only then is the server asked what it has, and it is
+    // the server the Test went to, nothing else.
     readonly property QtObject windowSettings: settings
     ModelHelp {
         id: modelHelp
         settings: row.windowSettings
         capability: row.capability
     }
-    onOpenChanged: if (open && info.available) modelHelp.look()
+    readonly property string testWhy: info.test && info.test.state === "failed" ? info.test.why || "" : ""
+    onTestWhyChanged: if (testWhy === "no-model") modelHelp.look()
 
     readonly property var titles: ({
         "answers": qsTr("Answers"),
