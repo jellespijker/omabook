@@ -10,6 +10,7 @@
 
 #include "annotationlayers.h"
 #include "inkstroke.h"
+#include "lineink.h"
 
 class InkSurface;
 class Reader;
@@ -23,9 +24,10 @@ class Settings;
 // hiddenAnnotators), which every computer of the reader's keeps for itself.
 //
 // Their book ink (#83) is drawn over the pages of a PDF or a comic, and the
-// ink of a margin note they wrote by hand on its card, each by a read-only
-// ink surface, in their colour, no more strokes of an annotation than
-// AnnotationLayers reads (PluginData::maxItems).
+// ink of a margin note they wrote by hand on its card, and their free ink
+// beside the lines of a flowing book (ReadingLineInk places it), each by a
+// read-only ink surface, in their colour, no more strokes of an annotation
+// than AnnotationLayers reads (PluginData::maxItems).
 //
 // Their words are shown as plain text (UntrustedText::plain), never as
 // markup. A margin note of theirs can be kept as a fact of the graph
@@ -86,6 +88,8 @@ public:
     // each in its person's colour, in the order they were drawn.
     [[nodiscard]] std::vector<Ink::Stroke> inkOn(int page) const;
     [[nodiscard]] std::vector<Ink::Stroke> noteInk(const QString &id) const;
+    // Their free ink beside the lines of a chapter (#152), each line's strokes in its person's colour.
+    [[nodiscard]] QList<LineInk::Line> lineInk(int section) const;
 
     // The same as passagesIn and notesIn, of a text as it is shown, for the tests.
     struct Placed {

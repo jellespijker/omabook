@@ -149,6 +149,11 @@
     "many": "%Ln eventos",
     "other": "%Ln eventos"
   },
+  "%Ln lines with ink": {
+    "one": "%Ln línea con tinta",
+    "many": "%Ln líneas con tinta",
+    "other": "%Ln líneas con tinta"
+  },
   "%Ln more could not be added": {
     "many": "No se pudieron agregar %Ln más",
     "one": "No se pudo agregar %Ln más",
@@ -168,6 +173,11 @@
     "many": "%Ln posiciones de lectura actualizadas",
     "one": "%Ln posición de lectura actualizada",
     "other": "%Ln posiciones de lectura actualizadas"
+  },
+  "%Ln strokes": {
+    "one": "%Ln trazo",
+    "many": "%Ln trazos",
+    "other": "%Ln trazos"
   },
   "%Ln were already in the library": {
     "many": "%Ln ya estaban en la biblioteca",
@@ -365,6 +375,7 @@
   "Earlier": "Antes",
   "Edit": "Editar",
   "Edit the selected book's details": "Editar los datos del libro seleccionado",
+  "Erase the ink in this chapter": "Borrar la tinta de este capítulo",
   "Erase the ink on this page": "Borrar la tinta de esta página",
   "Eraser": "Borrador",
   "Every Calibre library found here was already imported or set aside.": "Todas las bibliotecas de Calibre encontradas aquí ya se importaron o se dejaron de lado.",
@@ -427,6 +438,7 @@
   "Held as": "Lo tengo en",
   "Help you can search": "Ayuda en la que se puede buscar",
   "Hide words": "Ocultar palabras",
+  "Highlighter": "Resaltador",
   "How far through the book you are. Your place is kept when you leave, and {reader.bookmark} keeps a bookmark besides.": "Cuánto lleva del libro. Su lugar se guarda al salir, y {reader.bookmark} pone además un marcador.",
   "How many": "Cuántos",
   "ISBN": "ISBN",
@@ -436,7 +448,7 @@
   "Import from Calibre": "Importar desde Calibre",
   "Importing from Calibre": "Importación desde Calibre",
   "In the order they happen; no dates are known": "En el orden en que ocurren; no se conocen fechas",
-  "Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note.": "La tinta se escribe en las páginas de un PDF o un cómic; aquí selecciona palabras para resaltarlas o escribir una nota.",
+  "Ink beside the lines": "Tinta junto a las líneas",
   "Ink on the pages": "Tinta en las páginas",
   "Ink put away": "Tinta oculta",
   "Ink shown": "Tinta visible",
@@ -448,6 +460,7 @@
   "Its user name": "Su nombre de usuario",
   "KOReader's progress sync: set Omabook's address as KOReader's custom sync server": "La sincronización de progreso de KOReader: pon la dirección de Omabook como servidor de sincronización personalizado de KOReader",
   "Kept in the keyring; type another to replace it": "Guardada en el llavero; escribe otra para reemplazarla",
+  "Lasso": "Lazo",
   "Mail to Kindle": "Enviar al Kindle",
   "Mailed to %1.": "Enviado a %1.",
   "Met in %1": "Apareció en %1",
@@ -607,7 +620,7 @@
   "On %1": "En %1",
   "On my shelf": "En mi librero",
   "On the %1 as %2.": "En el %1 como %2.",
-  "On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen, a finger or the mouse: the bar above the page picks the pen, the eraser and the ink, and whether a finger writes: until a pen is used, always, or never. Two fingers scroll and zoom, and the pen's other end erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; {reader.show_ink} puts it away to read the pages as they were.": "En las páginas de un PDF o un cómic, {reader.ink} te deja escribir y dibujar en la página misma, con una pluma, un dedo o el ratón: la barra sobre la página elige la pluma, el borrador y la tinta, y si un dedo escribe: hasta que se usa una pluma, siempre o nunca. Dos dedos desplazan y hacen zoom, y el otro extremo de la pluma borra. La tinta se queda donde la pusiste con cualquier zoom, va con el libro a tus otras computadoras y aparece en Resaltados ({reader.annotations}). Ctrl+Z y Ctrl+Mayús+Z la deshacen y rehacen una pausa de la pluma a la vez; {reader.show_ink} la oculta para leer las páginas como eran.",
+  "On a PDF's or a comic's pages, and in the margins and between the lines of other books, {reader.ink} writes and draws with a pen, a finger or the mouse: the bar above the page picks the pen, a highlighter, the eraser or a lasso, the ink, and whether a finger writes (until a pen is used, always, never). Two fingers scroll; the pen's other end erases. In other books each stroke stays beside its line however the text is laid out. It goes to your other computers and is under Highlights ({reader.annotations}); Ctrl+Z undoes it, {reader.show_ink} puts it away.": "En las páginas de un PDF o un cómic, y en los márgenes y entre las líneas de otros libros, {reader.ink} escribe y dibuja con un lápiz, un dedo o el ratón: la barra sobre la página elige el lápiz, un resaltador, el borrador o un lazo, la tinta, y si un dedo escribe (hasta que se use un lápiz, siempre, nunca). Dos dedos desplazan; el otro extremo del lápiz borra. En otros libros cada trazo se queda junto a su línea, como sea que se acomode el texto. La tinta va a tus otras computadoras y aparece en Resaltados ({reader.annotations}); Ctrl+Z la deshace, {reader.show_ink} la guarda.",
   "On your to-read list": "En tu lista por leer",
   "One time is followed: what you put in, else the more precise, else the first book's.": "Se sigue un tiempo: el que pusiste tú, si no el más preciso, si no el del primer libro.",
   "Only met in a book": "Solo lo que apareció en un libro",
@@ -941,7 +954,7 @@
   "Words": "Palabras",
   "Working…": "Trabajando…",
   "Write": "Escribir",
-  "Write and draw on the pages of a PDF or a comic with the pen, or the mouse, and stop": "Escribir y dibujar con la pluma, o el ratón, en las páginas de un PDF o un cómic, y parar",
+  "Write and draw, with the pen or the mouse, on the pages or in the margins and between the lines, and stop": "Escribir y dibujar, con el lápiz o el ratón, en las páginas o en los márgenes y entre las líneas, y parar",
   "Writing on the pages: the pen's other end erases": "Escribiendo en las páginas: el otro extremo de la pluma borra",
   "You are here": "Estás aquí",
   "You are reading it": "Lo estás leyendo",

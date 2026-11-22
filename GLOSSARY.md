@@ -5,7 +5,7 @@ An ebook library and reader whose books, reading and knowledge stay one's own.
 ## Annotations
 
 **Annotation**:
-Anything a reader adds to a book at a place in it: a highlight, a margin note or book ink.
+Anything a reader adds to a book at a place in it: a highlight, a margin note, book ink or free ink.
 _Avoid_: Note (alone), markup, comment
 
 **Highlight**:
@@ -35,6 +35,10 @@ _Avoid_: Sidebar, notes pane, gutter (the space between pages)
 **Book ink**:
 Handwriting or drawing directly on a page of a book whose pages don't reflow, such as a PDF or a comic.
 _Avoid_: Drawing, scribble, ink (alone, which is the notebook plugin's)
+
+**Free ink**:
+Handwriting or drawing in the side margins and between the lines of a flowing book, each stroke anchored to the line beside it and drawn beside that line, at its height, however the text is laid out: *margin ink* on the whole line, *line ink* on the words under or over it (`LineInk`, `InkLines`, ADR 0010).
+_Avoid_: Book ink (for this, which is on fixed pages), margin note (which is on words chosen first), drawing
 
 **Page region**:
 A part of a page of a book whose pages don't reflow, measured across and down in the page's width, so it is the same part at any zoom: where book ink lies on its page, and what a highlight or a margin note on a comic's panel is on, which has no words to find it by (`PageRegion`, `Annotation::area`).

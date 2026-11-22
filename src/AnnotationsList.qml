@@ -10,7 +10,9 @@ import QtQuick.Layouts
 // each placed again on words selected on the page, or removed. What is
 // shown is copied as Markdown, to take elsewhere. Under them, on a PDF or a
 // comic, the pages with book ink (#83), each the part of the page its ink
-// covers, going there and taken away as a highlight is; a highlight on a
+// covers, going there and taken away as a highlight is; on a flowing book
+// the chapters with ink in their margins and between their lines (#152), each
+// with the words of its first line; a highlight on a
 // part of a comic's page (#115) shows that part, as small. Above all of them,
 // whose annotations are shown beside one's own (OthersAnnotations, #85).
 //
@@ -28,7 +30,9 @@ Item {
     readonly property var shown: reader.highlights.list.filter(one => only === "" || one.color === only)
     readonly property var found: shown.filter(one => !one.lost)
     readonly property var lost: shown.filter(one => one.lost)
-    readonly property var inked: reader.kind === "pages" && only === "" ? reader.ink.pages.map(one => Object.assign({ ink: true, lost: false, color: "", quote: "" }, one)) : []
+    readonly property var inked: only !== "" ? []
+                               : reader.kind === "pages" ? reader.ink.pages.map(one => Object.assign({ ink: true, lost: false, color: "", quote: "" }, one))
+                               : reader.lineInk.list.map(one => Object.assign({ ink: true, lineInk: true, lost: false, color: "" }, one))
     readonly property var looks: {
         const looks = {}
         for (const color of reader.highlights.colors) looks[color.key] = color
@@ -42,12 +46,14 @@ Item {
     }
     function go(row) {
         if (row.lost) return
+        if (row.lineInk) return reader.goToPlace(row.section, row.fraction)
         if (row.ink) return reader.goToPlace(row.page, row.fraction)
         if (reader.kind === "pages") reader.goToPlace(row.section, row.fraction)
         else reader.marks.goToMoment(row.section, row.fraction, row.quote.slice(0, 120))
     }
     function remove(row) {
-        if (row.ink) reader.ink.erasePage(row.page)
+        if (row.lineInk) reader.lineInk.eraseSection(row.section)
+        else if (row.ink) reader.ink.erasePage(row.page)
         else reader.highlights.remove(row.id)
     }
     function count(color) { return reader.highlights.list.filter(one => one.color === color).length }
@@ -215,7 +221,7 @@ Item {
                     width: parent.width
                     topPadding: 12
                     bottomPadding: 4
-                    text: qsTr("Ink on the pages")
+                    text: reader.kind === "flow" ? qsTr("Ink beside the lines") : qsTr("Ink on the pages")
                     color: theme.colors.muted
                     font.pixelSize: 12
                     wrapMode: Text.Wrap
@@ -251,14 +257,14 @@ Item {
                         spacing: 2
                         // A page's ink, small: the part of the page it covers; or the part a highlight is on (#115).
                         Loader {
-                            active: !!row.modelData.ink || !!row.modelData.region
+                            active: (!!row.modelData.ink && !row.modelData.lineInk) || !!row.modelData.region
                             visible: active
                             Layout.fillWidth: true
                             Layout.preferredHeight: active ? (win.touch ? 72 : 56) : 0
                             sourceComponent: Component { InkThumb { region: row.modelData.region || row.modelData } }
                         }
                         Label {
-                            visible: !row.modelData.ink && !row.modelData.region
+                            visible: (!row.modelData.ink || !!row.modelData.lineInk) && !row.modelData.region
                             Layout.fillWidth: true
                             text: row.modelData.quote || ""
                             color: row.modelData.lost ? theme.colors.muted : theme.foreground
@@ -270,6 +276,8 @@ Item {
                         Label {
                             Layout.fillWidth: true
                             text: {
+                                if (row.modelData.lineInk)
+                                    return qsTr("%Ln lines with ink", "", row.modelData.lines) + " · " + qsTr("%Ln strokes", "", row.modelData.strokes)
                                 if (row.modelData.ink)
                                     return qsTr("Page %1 · %Ln strokes", "", row.modelData.strokes).arg((row.modelData.page + 1).toLocaleString(Qt.locale(), 'f', 0))
                                 const where = row.modelData.page > 0 ? qsTr("Page %1").arg(row.modelData.page.toLocaleString(Qt.locale(), 'f', 0))
@@ -311,7 +319,8 @@ Item {
                             width: side
                             height: side
                             Accessible.role: Accessible.Button
-                            Accessible.name: row.modelData.ink ? qsTr("Erase the ink on this page") : qsTr("Remove the highlight")
+                            Accessible.name: row.modelData.lineInk ? qsTr("Erase the ink in this chapter")
+                                           : row.modelData.ink ? qsTr("Erase the ink on this page") : qsTr("Remove the highlight")
                             Glyph {
                                 anchors.centerIn: parent
                                 name: "cross"

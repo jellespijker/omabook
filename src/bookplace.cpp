@@ -10,6 +10,7 @@
 #include <utility>
 
 #include "booktext.h"
+#include "hyphenation.h"
 #include "passagematch.h"
 
 namespace {
@@ -141,6 +142,20 @@ Passage Passage::at(const BookText &text, const BookPlace &place, qsizetype word
     const auto index = std::distance(all.begin(), first);
     const qsizetype last = qMin(all.size(), index + words) - 1;
     return of(whole, section, first->start, all.at(last).end);
+}
+
+std::optional<FoundPassage> Passage::shownAt(QStringView shown, int section, qsizetype start, qsizetype end, const BookText &text) {
+    if (start >= end)
+        return std::nullopt;
+    const Hyphenation::Plain plain(shown);
+    const Passage near = of(plain.text(), section, plain.toPlain(start), plain.toPlain(end));
+    if (PassageMatch::words(near.quote).isEmpty())
+        return std::nullopt;
+    // The page shows the chapter otherwise than the book's text has it (its
+    // heading, its spacing): there its places are the text's own.
+    if (std::optional<FoundPassage> found = near.findAgain(text))
+        return found;
+    return FoundPassage{.passage = near, .confidence = 0};
 }
 
 std::optional<FoundPassage> Passage::findAgain(const BookText &text) const {

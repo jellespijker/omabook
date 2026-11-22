@@ -6,6 +6,7 @@
 #include "bookink.h"
 #include "document.h"
 #include "highlights.h"
+#include "lineink.h"
 #include "reader.h"
 
 using namespace Qt::StringLiterals;
@@ -18,7 +19,7 @@ constexpr auto notesKey = "notes:"_L1;
 [[nodiscard]] QString kindName(const Annotation &annotation) {
     if (annotation.kind == QLatin1StringView(Highlights::kind))
         return AnnotationFinder::tr("Your highlight");
-    if (annotation.kind == QLatin1StringView(BookInk::kind))
+    if (annotation.kind == QLatin1StringView(BookInk::kind) || LineInk::isKind(annotation.kind))
         return AnnotationFinder::tr("Your ink");
     if (annotation.kind == "bookmark"_L1)
         return AnnotationFinder::tr("Your bookmark");

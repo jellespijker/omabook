@@ -404,10 +404,13 @@ ListView {
                         fingers: reader.ink.fingerUse
                         mouseDraws: reader.ink.inking
                         batchPause: 600
-                        penWidth: 2.4
+                        penWidth: reader.ink.highlighter ? 14 : 2.4
+                        pressure: !reader.ink.highlighter
+                        highlighter: reader.ink.highlighter
                         eraserWidth: 28
                         color: reader.ink.penColor
-                        tool: reader.ink.erasing ? InkSurface.Eraser : InkSurface.Pen
+                        tool: reader.ink.surfaceTool
+                        selection.color: theme.accent
                         containmentMask: QtObject {
                             function contains(point: point): bool { return view.inkReaches(ink, point) }
                         }

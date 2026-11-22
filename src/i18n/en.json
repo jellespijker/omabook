@@ -289,6 +289,10 @@
     "one": "%Ln highlight removed",
     "other": "%Ln highlights removed"
   },
+  "%Ln lines with ink": {
+    "one": "%Ln line with ink",
+    "other": "%Ln lines with ink"
+  },
   "%Ln margin notes lost their place": {
     "one": "%Ln margin note lost its place",
     "other": "%Ln margin notes lost their place"
@@ -360,6 +364,10 @@
   "%Ln steps around": {
     "one": "%Ln step around",
     "other": "%Ln steps around"
+  },
+  "%Ln strokes": {
+    "one": "%Ln stroke",
+    "other": "%Ln strokes"
   },
   "%Ln taken out by hand": {
     "one": "%Ln taken out by hand",
@@ -760,6 +768,7 @@
   "End of the book": "End of the book",
   "End: lines against the side the text ends at": "End: lines against the side the text ends at",
   "Enter asks the AI to find books for this question.": "Enter asks the AI to find books for this question.",
+  "Erase the ink in this chapter": "Erase the ink in this chapter",
   "Erase the ink on this page": "Erase the ink on this page",
   "Eraser": "Eraser",
   "Event": "Event",
@@ -938,6 +947,7 @@
   "Highlight and write margin notes on a PDF's words, and on a part of a comic's page: drag over a panel, or {reader.select}. {reader.find} finds the words of your notes too, and `notes:` searches them in the library.": "Highlight and write margin notes on a PDF's words, and on a part of a comic's page: drag over a panel, or {reader.select}. {reader.find} finds the words of your notes too, and `notes:` searches them in the library.",
   "Highlight in %1": "Highlight in %1",
   "Highlighted in %1": "Highlighted in %1",
+  "Highlighter": "Highlighter",
   "Highlights": "Highlights",
   "Highlights in five colours": "Highlights in five colours",
   "Hosted, and not chosen for this": "Hosted, and not chosen for this",
@@ -969,7 +979,7 @@
   "Index every book by its meaning, not only those I ask for": "Index every book by its meaning, not only those I ask for",
   "Indexes books by what they mean, so a passage is found by its sense, not only its words.": "Indexes books by what they mean, so a passage is found by its sense, not only its words.",
   "Indexing this book by its meaning with %1… %2%": "Indexing this book by its meaning with %1… %2%",
-  "Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note.": "Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note.",
+  "Ink beside the lines": "Ink beside the lines",
   "Ink on the pages": "Ink on the pages",
   "Ink put away": "Ink put away",
   "Ink shown": "Ink shown",
@@ -1063,6 +1073,7 @@
   "Language": "Language",
   "Larger": "Larger",
   "Larger text, or zoom in": "Larger text, or zoom in",
+  "Lasso": "Lasso",
   "Last brought in %1": "Last brought in %1",
   "Later": "Later",
   "Later in the book (%Ln)": {
@@ -1301,11 +1312,11 @@
   "Omarchy's, else Aether's, else Tokyo Night": "Omarchy's, else Aether's, else Tokyo Night",
   "On": "On",
   "On %1": "On %1",
+  "On a PDF's or a comic's pages, and in the margins and between the lines of other books, {reader.ink} writes and draws with a pen, a finger or the mouse: the bar above the page picks the pen, a highlighter, the eraser or a lasso, the ink, and whether a finger writes (until a pen is used, always, never). Two fingers scroll; the pen's other end erases. In other books each stroke stays beside its line however the text is laid out. It goes to your other computers and is under Highlights ({reader.annotations}); Ctrl+Z undoes it, {reader.show_ink} puts it away.": "On a PDF's or a comic's pages, and in the margins and between the lines of other books, {reader.ink} writes and draws with a pen, a finger or the mouse: the bar above the page picks the pen, a highlighter, the eraser or a lasso, the ink, and whether a finger writes (until a pen is used, always, never). Two fingers scroll; the pen's other end erases. In other books each stroke stays beside its line however the text is laid out. It goes to your other computers and is under Highlights ({reader.annotations}); Ctrl+Z undoes it, {reader.show_ink} puts it away.",
   "On a PDF's page, select words as in any book to highlight them or write a margin note on them. A comic's pages are pictures: drag over a panel with the mouse, press and hold it with a finger, or press {reader.select} and move the part with the arrows (Shift makes it larger or smaller), then choose a colour or Write a margin note. A mark on the page opens its note.": "On a PDF's page, select words as in any book to highlight them or write a margin note on them. A comic's pages are pictures: drag over a panel with the mouse, press and hold it with a finger, or press {reader.select} and move the part with the arrows (Shift makes it larger or smaller), then choose a colour or Write a margin note. A mark on the page opens its note.",
   "On all your computers": "On all your computers",
   "On my shelf": "On my shelf",
   "On the %1 as %2.": "On the %1 as %2.",
-  "On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen, a finger or the mouse: the bar above the page picks the pen, the eraser and the ink, and whether a finger writes: until a pen is used, always, or never. Two fingers scroll and zoom, and the pen's other end erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; {reader.show_ink} puts it away to read the pages as they were.": "On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen, a finger or the mouse: the bar above the page picks the pen, the eraser and the ink, and whether a finger writes: until a pen is used, always, or never. Two fingers scroll and zoom, and the pen's other end erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; {reader.show_ink} puts it away to read the pages as they were.",
   "On the shelf": "On the shelf",
   "On your to-read list": "On your to-read list",
   "One column that scrolls on from one chapter into the next": "One column that scrolls on from one chapter into the next",
@@ -2080,7 +2091,7 @@
   "Write a margin note": "Write a margin note",
   "Write a margin note on the selected words or part of the page, or select them first": "Write a margin note on the selected words or part of the page, or select them first",
   "Write a story from the shelf": "Write a story from the shelf",
-  "Write and draw on the pages of a PDF or a comic with the pen, or the mouse, and stop": "Write and draw on the pages of a PDF or a comic with the pen, or the mouse, and stop",
+  "Write and draw, with the pen or the mouse, on the pages or in the margins and between the lines, and stop": "Write and draw, with the pen or the mouse, on the pages or in the margins and between the lines, and stop",
   "Write by hand": "Write by hand",
   "Write the details into the book's EPUB too, for other apps and e-readers": "Write the details into the book's EPUB too, for other apps and e-readers",
   "Write with a finger: automatic": "Write with a finger: automatic",

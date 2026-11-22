@@ -130,6 +130,10 @@
     "one": "%Ln Ereignis",
     "other": "%Ln Ereignisse"
   },
+  "%Ln lines with ink": {
+    "one": "%Ln Zeile mit Tinte",
+    "other": "%Ln Zeilen mit Tinte"
+  },
   "%Ln more could not be added": {
     "one": "%Ln weiteres konnte nicht hinzugefügt werden",
     "other": "%Ln weitere konnten nicht hinzugefügt werden"
@@ -145,6 +149,10 @@
   "%Ln reading places updated": {
     "one": "%Ln Lesestand aktualisiert",
     "other": "%Ln Lesestände aktualisiert"
+  },
+  "%Ln strokes": {
+    "one": "%Ln Strich",
+    "other": "%Ln Striche"
   },
   "%Ln were already in the library": {
     "one": "%Ln war bereits in der Bibliothek",
@@ -338,6 +346,7 @@
   "Earlier": "Früher",
   "Edit": "Bearbeiten",
   "Edit the selected book's details": "Angaben zum ausgewählten Buch bearbeiten",
+  "Erase the ink in this chapter": "Die Tinte in diesem Kapitel löschen",
   "Erase the ink on this page": "Die Tinte auf dieser Seite löschen",
   "Eraser": "Radierer",
   "Every Calibre library found here was already imported or set aside.": "Jede hier gefundene Calibre-Bibliothek wurde bereits importiert oder zurückgestellt.",
@@ -400,6 +409,7 @@
   "Held as": "Vorhanden als",
   "Help you can search": "Hilfe, die du durchsuchen kannst",
   "Hide words": "Wörter ausblenden",
+  "Highlighter": "Textmarker",
   "How far through the book you are. Your place is kept when you leave, and {reader.bookmark} keeps a bookmark besides.": "Wie weit du im Buch bist. Deine Stelle bleibt erhalten, wenn du das Buch verlässt, und {reader.bookmark} setzt zusätzlich ein Lesezeichen.",
   "How many": "Wie viele",
   "ISBN": "ISBN",
@@ -409,7 +419,7 @@
   "Import from Calibre": "Aus Calibre importieren",
   "Importing from Calibre": "Aus Calibre importieren",
   "In the order they happen; no dates are known": "In der Reihenfolge des Geschehens; keine Daten bekannt",
-  "Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note.": "Tinte wird auf die Seiten eines PDF oder Comics geschrieben; markieren Sie hier Wörter, um sie hervorzuheben oder eine Notiz zu schreiben.",
+  "Ink beside the lines": "Tinte neben den Zeilen",
   "Ink on the pages": "Tinte auf den Seiten",
   "Ink put away": "Tinte ausgeblendet",
   "Ink shown": "Tinte eingeblendet",
@@ -421,6 +431,7 @@
   "Its user name": "Sein Benutzername",
   "KOReader's progress sync: set Omabook's address as KOReader's custom sync server": "KOReaders Fortschritts-Sync: Omabooks Adresse als eigenen Sync-Server in KOReader eintragen",
   "Kept in the keyring; type another to replace it": "Im Schlüsselbund aufbewahrt; tippe ein anderes, um es zu ersetzen",
+  "Lasso": "Lasso",
   "Mail to Kindle": "An Kindle mailen",
   "Mailed to %1.": "An %1 gemailt.",
   "Met in %1": "Vorgekommen in %1",
@@ -578,7 +589,7 @@
   "On %1": "Auf %1",
   "On my shelf": "In meinem Regal",
   "On the %1 as %2.": "Auf dem %1 als %2.",
-  "On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen, a finger or the mouse: the bar above the page picks the pen, the eraser and the ink, and whether a finger writes: until a pen is used, always, or never. Two fingers scroll and zoom, and the pen's other end erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; {reader.show_ink} puts it away to read the pages as they were.": "Auf den Seiten eines PDF oder Comics lässt {reader.ink} Sie auf die Seite selbst schreiben und zeichnen, mit einem Stift, einem Finger oder der Maus: Die Leiste über der Seite wählt Stift, Radierer und Tinte und ob ein Finger schreibt: bis ein Stift benutzt wird, immer oder nie. Zwei Finger scrollen und zoomen, und das andere Ende des Stifts radiert. Die Tinte bleibt bei jedem Zoom, wo Sie sie hingesetzt haben, geht mit dem Buch auf Ihre anderen Computer und steht unter Markierungen ({reader.annotations}). Strg+Z und Strg+Umschalt+Z machen sie Stiftpause um Stiftpause rückgängig und wieder; {reader.show_ink} blendet sie aus, um die Seiten zu lesen, wie sie waren.",
+  "On a PDF's or a comic's pages, and in the margins and between the lines of other books, {reader.ink} writes and draws with a pen, a finger or the mouse: the bar above the page picks the pen, a highlighter, the eraser or a lasso, the ink, and whether a finger writes (until a pen is used, always, never). Two fingers scroll; the pen's other end erases. In other books each stroke stays beside its line however the text is laid out. It goes to your other computers and is under Highlights ({reader.annotations}); Ctrl+Z undoes it, {reader.show_ink} puts it away.": "Auf den Seiten eines PDFs oder Comics, und in den Rändern und zwischen den Zeilen anderer Bücher, schreibt und zeichnet {reader.ink} mit einem Stift, einem Finger oder der Maus: Die Leiste über der Seite wählt den Stift, einen Textmarker, den Radierer oder ein Lasso, die Tinte und ob ein Finger schreibt (bis ein Stift benutzt wird, immer, nie). Zwei Finger scrollen; das andere Ende des Stifts radiert. In anderen Büchern bleibt jeder Strich neben seiner Zeile, wie auch immer der Text gesetzt wird. Die Tinte geht auf deine anderen Computer und steht unter Markierungen ({reader.annotations}); Strg+Z macht sie rückgängig, {reader.show_ink} legt sie weg.",
   "On your to-read list": "Auf deiner Leseliste",
   "One time is followed: what you put in, else the more precise, else the first book's.": "Eine Zeit gilt: deine eigene, sonst die genauere, sonst die des ersten Buchs.",
   "Only met in a book": "Nur in einem Buch vorgekommen",
@@ -911,7 +922,7 @@
   "Words": "Wörter",
   "Working…": "In Arbeit…",
   "Write": "Schreiben",
-  "Write and draw on the pages of a PDF or a comic with the pen, or the mouse, and stop": "Mit dem Stift oder der Maus auf die Seiten eines PDF oder Comics schreiben und zeichnen, und aufhören",
+  "Write and draw, with the pen or the mouse, on the pages or in the margins and between the lines, and stop": "Schreiben und zeichnen, mit dem Stift oder der Maus, auf den Seiten oder in den Rändern und zwischen den Zeilen, und aufhören",
   "Writing on the pages: the pen's other end erases": "Auf die Seiten schreiben: Das andere Ende des Stifts radiert",
   "You are here": "Du bist hier",
   "You are reading it": "Du liest es gerade",

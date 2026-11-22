@@ -102,9 +102,10 @@ void registerBookmarks() {
 
 // The tools that read them: listed, and exported.
 void registerReading() {
-    const QJsonObject kind = choice("The kind: highlight, margin-note (words about a passage), bookmark (a place), or ink "
-                                    "(handwriting on a page of a PDF or comic).",
-                                    {"highlight", "margin-note", "bookmark", "ink"});
+    const QJsonObject kind = choice("The kind: highlight, margin-note (words about a passage), bookmark (a place), ink "
+                                    "(handwriting on a page of a PDF or comic), or margin-ink and line-ink (handwriting in the "
+                                    "margins and between the lines of a flowing book, on the line beside it).",
+                                    {"highlight", "margin-note", "bookmark", "ink", "margin-ink", "line-ink"});
     const QJsonObject color = colorArgument();
     registerTool({"annotations_list", "A book's annotations",
                   "The reader's annotations of a book, or of every book that has some when none is given: highlights (a passage in a "

@@ -39,7 +39,13 @@ class ReadingInk : public QObject {
     Q_PROPERTY(bool inking READ inking WRITE setInking NOTIFY modeChanged)
     Q_PROPERTY(bool shown READ shown WRITE setShown NOTIFY modeChanged)
     Q_PROPERTY(bool erasing READ erasing WRITE setErasing NOTIFY modeChanged)
-    // What the pen writes with: one of `colors`, by its key.
+    // What the pen does (#152): "pen", "highlighter" (see-through and as wide
+    // all along, #130), "eraser" or "lasso" (#129, selects strokes to move,
+    // recolour or take away); and that as what an ink surface takes.
+    Q_PROPERTY(QString tool READ tool WRITE setTool NOTIFY modeChanged)
+    Q_PROPERTY(InkSurface::Tool surfaceTool READ surfaceTool NOTIFY modeChanged)
+    Q_PROPERTY(bool highlighter READ highlighter NOTIFY modeChanged)
+    // What the pen writes with: one of `colors`, by its key; as a highlighter, see-through.
     Q_PROPERTY(QString color READ color WRITE setColor NOTIFY modeChanged)
     Q_PROPERTY(QColor penColor READ penColor NOTIFY modeChanged)
     // Whether a finger writes: "auto", "on" or "off", kept in the settings
@@ -64,8 +70,12 @@ public:
     void setInking(bool inking);
     [[nodiscard]] bool shown() const noexcept { return m_shown; }
     void setShown(bool shown);
-    [[nodiscard]] bool erasing() const noexcept { return m_erasing; }
+    [[nodiscard]] bool erasing() const noexcept { return m_tool == u"eraser"; }
     void setErasing(bool erasing);
+    [[nodiscard]] QString tool() const { return m_tool; }
+    void setTool(const QString &tool);
+    [[nodiscard]] InkSurface::Tool surfaceTool() const;
+    [[nodiscard]] bool highlighter() const { return m_tool == u"highlighter"; }
     [[nodiscard]] QString color() const { return m_color; }
     void setColor(const QString &color);
     [[nodiscard]] QColor penColor() const;
@@ -126,7 +136,7 @@ private:
     Settings *m_settings = nullptr;
     bool m_inking = false;
     bool m_shown = true;
-    bool m_erasing = false;
+    QString m_tool = QStringLiteral("pen");
     QString m_color = QStringLiteral("black");
     // The strokes of the pages asked about, as the log has them.
     QHash<int, std::vector<Ink::Stroke>> m_pages;

@@ -1,8 +1,12 @@
 #include "spaceannotations.h"
 
+#include "lineink.h"
+
 using namespace Qt::StringLiterals;
 
-bool SpaceAnnotations::travels(const QString &kind) { return kind == "highlight"_L1 || kind == "margin-note"_L1 || kind == "ink"_L1; }
+bool SpaceAnnotations::travels(const QString &kind) {
+    return kind == "highlight"_L1 || kind == "margin-note"_L1 || kind == "ink"_L1 || LineInk::isKind(kind);
+}
 
 SpaceAnnotations::Chosen SpaceAnnotations::choose(const ReducedState &state, const std::function<bool(const QString &bookGid)> &holds) {
     Chosen chosen;

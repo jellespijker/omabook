@@ -131,7 +131,7 @@ QList<AnnotationLayerView::Placed> AnnotationLayerView::placedIn(const QString &
         if (!isShown(person.person))
             continue;
         for (const AnnotationLayers::Annotation &annotation : person.annotations) {
-            if (annotation.kind == "ink"_L1 || annotation.place.section != section)
+            if (annotation.kind == "ink"_L1 || LineInk::isKind(annotation.kind) || annotation.place.section != section)
                 continue;
             if (const auto span = annotation.passage().spanIn(shown))
                 placed << Placed{.person = &person, .annotation = &annotation, .start = span->first, .end = span->second};
@@ -201,6 +201,22 @@ std::vector<Ink::Stroke> AnnotationLayerView::inkOn(int page) const { return str
 
 std::vector<Ink::Stroke> AnnotationLayerView::noteInk(const QString &id) const {
     return id.isEmpty() ? std::vector<Ink::Stroke>() : strokesOf({.page = -1, .note = id, .surface = {}});
+}
+
+QList<LineInk::Line> AnnotationLayerView::lineInk(int section) const {
+    QList<LineInk::Line> lines;
+    for (const AnnotationLayers::Person &person : m_layers.people) {
+        if (!isShown(person.person))
+            continue;
+        for (const AnnotationLayers::Annotation &annotation : person.annotations) {
+            if (!LineInk::isKind(annotation.kind) || annotation.place.section != section || annotation.strokes.empty())
+                continue;
+            LineInk::Line line{.id = 0, .kind = annotation.kind, .passage = annotation.passage(), .lost = false, .strokes = {}};
+            addTheirs(line.strokes, person, annotation);
+            lines << std::move(line);
+        }
+    }
+    return lines;
 }
 
 void AnnotationLayerView::showInk(QQuickItem *surface, int page) {

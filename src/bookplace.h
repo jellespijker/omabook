@@ -71,6 +71,12 @@ struct Passage {
     // reader's page) its words are right and its places near, and findAgain
     // then places it in the book's text.
     [[nodiscard]] static Passage of(QStringView sectionText, int section, qsizetype start, qsizetype end);
+    // The passage from character `start` to `end` of a text showing a section
+    // (a laid-out chapter's plain text, soft hyphens and all), placed in the
+    // book's own text: how sure that is, 0 when it couldn't be and the places
+    // are only near. None when it holds no words.
+    [[nodiscard]] static std::optional<FoundPassage> shownAt(QStringView shown, int section, qsizetype start, qsizetype end,
+                                                             const BookText &text);
     // The passage of `words` words that starts at a place of a book's text,
     // from the start of the word the place is in (#137): what a plugin refers
     // to when it is given a place and no words. On a page without words (a

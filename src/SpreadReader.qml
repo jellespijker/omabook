@@ -26,6 +26,8 @@ Item {
     property var notes: null
     readonly property real noteRoom: notes && reader.format.noteWidth > 0 ? reader.format.noteWidth + gutter : 0
     property alias marginColumn: margin
+    // What lies over the pages (the ink's bar), where the pen doesn't write on them.
+    property Item covering: null
     // Counts the pages being cut anew or turned, which moves the notes.
     property int cut: 0
     onBreaksChanged: cut++
@@ -361,81 +363,6 @@ Item {
         function onSectionChanged() { spread.placeAt = -1 }
     }
 
-    // One page: a window onto the column, as tall as its page of lines.
-    component Page: Item {
-        id: sheet
-        // Which of the spread's pages it is, counted from the first.
-        property int offset: 0
-        readonly property int index: spread.page + offset
-        readonly property bool shown: offset < spread.columns
-        property alias text: column
-        property alias marks: pageMarks
-        property alias noteMarks: sheetNotes
-        readonly property bool there: shown && index < spread.pages
-        // Every page takes its place in the spread, written on or not; what
-        // shows of the column is cut off after the page's last whole line.
-        visible: shown
-        width: spread.columnWidth
-        height: spread.pageHeight
-
-        Item {
-            width: parent.width
-            // At most a page: what lies between the end of its lines and
-            // the start of the next page's is only space.
-            height: sheet.there ? Math.max(0, Math.min(spread.pageHeight, spread.breaks[sheet.index + 1] - spread.breaks[sheet.index])) : 0
-            clip: true
-
-            TextEdit {
-                id: column
-                y: sheet.there ? -spread.breaks[sheet.index] : 0
-                width: spread.columnWidth
-                visible: sheet.there
-                readOnly: true
-                selectByMouse: !spread.fingerDown
-                persistentSelection: true
-                activeFocusOnPress: false
-                textFormat: TextEdit.RichText
-                wrapMode: TextEdit.Wrap
-                color: theme.foreground
-                selectionColor: theme.accent
-                selectedTextColor: theme.accentForeground
-                font.pixelSize: spread.format.font_size
-                font.family: spread.format.font_family !== "" ? spread.format.font_family : Qt.application.font.family
-                // A page that isn't part of the spread lays nothing out.
-                text: sheet.shown ? reader.format.html : ""
-                onLinkActivated: (link) => { if (!reader.follow(link)) Qt.openUrlExternally(link) }
-                PageHighlights { anchors.fill: parent; z: -1; text: column; visible: sheet.there; others: spread.notes ? spread.notes.others : null }
-                SentenceMark { anchors.fill: parent; z: -1; text: column; visible: sheet.there; onMarked: (r) => { if (sheet.offset === 0) spread.keepInSight(r) } }
-                PageMarks {
-                    id: pageMarks
-                    anchors.fill: parent
-                    text: column
-                    on: spread.marking && sheet.there
-                    onHoveredChanged: spread.pointed(hovered ? Object.assign({}, hovered, { rect: spread.fromText(sheet, hovered.rect) }) : null)
-                    onReleased: spread.selected()
-                }
-                NoteMarks {
-                    id: sheetNotes
-                    anchors.fill: parent
-                    visible: sheet.there
-                    text: column
-                    reading: spread.notes
-                    from: sheet.there ? spread.breaks[sheet.index] : 0
-                    to: sheet.there ? spread.breaks[sheet.index + 1] : 0
-                }
-            }
-        }
-        // The fold before the next page, halfway across the gutter.
-        Rectangle {
-            visible: sheet.offset + 1 < spread.columns
-            x: win.rightToLeft ? -spread.gutter / 2 : sheet.width + spread.gutter / 2
-            width: 1
-            height: spread.pageHeight
-            color: theme.colors.selection
-            opacity: 0.6
-        }
-    }
-
     Row {
         id: sheetsRow
         anchors.horizontalCenter: parent.horizontalCenter
@@ -448,9 +375,9 @@ Item {
         // mirroring turns this round in a right-to-left one.
         layoutDirection: Qt.LeftToRight
 
-        Page { id: page0; objectName: "page0"; offset: 0 }
-        Page { id: page1; objectName: "page1"; offset: 1 }
-        Page { id: page2; objectName: "page2"; offset: 2 }
+        SpreadPage { id: page0; objectName: "page0"; offset: 0; spread: spread }
+        SpreadPage { id: page1; objectName: "page1"; offset: 1; spread: spread }
+        SpreadPage { id: page2; objectName: "page2"; offset: 2; spread: spread }
     }
 
     // The margin notes of the spread's pages, beyond its last, each at the

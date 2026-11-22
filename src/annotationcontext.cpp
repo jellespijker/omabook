@@ -7,6 +7,7 @@
 #include "ai.h"
 #include "aiendpoint.h"
 #include "highlightcolors.h"
+#include "lineink.h"
 #include "recognitionroute.h"
 #include "settings.h"
 
@@ -26,6 +27,8 @@ constexpr qsizetype mostLines = 200;
         return u"bookmark (%1): %2"_s.arg(whereOf(annotation.place), annotation.text.simplified());
     if (annotation.kind == "margin-note")
         return u"margin note (%1) on \"%2\": %3"_s.arg(whereOf(annotation.place), quote, annotation.note.simplified());
+    if (LineInk::isKind(annotation.kind))
+        return u"handwriting (%1) beside \"%2\""_s.arg(whereOf(annotation.place), quote);
     const QString key = HighlightColors::of(annotation.color).key;
     const QString named = colorNames.value(key).toString().trimmed();
     QString line =

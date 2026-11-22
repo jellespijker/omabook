@@ -17,6 +17,8 @@
 #include "reader.h"
 #include "settings.h"
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 struct InkColor {
@@ -26,6 +28,9 @@ struct InkColor {
 
 // Inks that read on a white page, which a PDF's and a comic's are.
 constexpr std::array<InkColor, 4> inks{{{"black", "#1a1a1a"}, {"blue", "#1d4ed8"}, {"red", "#c62828"}, {"green", "#2e7d32"}}};
+
+// How much of a highlighter's colour covers what is under it.
+constexpr float highlighterAlpha = 0.35F;
 
 // A page whose height isn't known yet is taken for a printed book's (A5, A4: the square root of two).
 constexpr double usualAspect = std::numbers::sqrt2;
@@ -98,10 +103,22 @@ void ReadingInk::setShown(bool shown) {
 }
 
 void ReadingInk::setErasing(bool erasing) {
-    if (erasing != m_erasing) {
-        m_erasing = erasing;
+    if (erasing != this->erasing())
+        setTool(erasing ? u"eraser"_s : u"pen"_s);
+}
+
+void ReadingInk::setTool(const QString &tool) {
+    static const QStringList tools{u"pen"_s, u"highlighter"_s, u"eraser"_s, u"lasso"_s};
+    if (tool != m_tool && tools.contains(tool)) {
+        m_tool = tool;
         emit modeChanged();
     }
+}
+
+InkSurface::Tool ReadingInk::surfaceTool() const {
+    if (m_tool == u"eraser")
+        return InkSurface::Tool::Eraser;
+    return m_tool == u"lasso" ? InkSurface::Tool::Lasso : InkSurface::Tool::Pen;
 }
 
 void ReadingInk::setColor(const QString &color) {
@@ -113,7 +130,11 @@ void ReadingInk::setColor(const QString &color) {
 
 QColor ReadingInk::penColor() const {
     const auto *const ink = std::ranges::find_if(inks, [this](const InkColor &one) { return m_color == QLatin1StringView(one.key); });
-    return {QLatin1StringView(ink != inks.end() ? ink->color : inks.front().color)};
+    QColor color{QLatin1StringView(ink != inks.end() ? ink->color : inks.front().color)};
+    // A highlighter's ink lets the words under it show through (#130).
+    if (highlighter())
+        color.setAlphaF(highlighterAlpha);
+    return color;
 }
 
 QString ReadingInk::fingers() const { return m_settings ? m_settings->inkFingers() : QString("auto"); }

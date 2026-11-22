@@ -19,9 +19,10 @@
 #include "readaloud.h"
 #include "readinghighlights.h"
 #include "readingink.h"
-#include "readingselection.h"
+#include "readinglineink.h"
 #include "readinglog.h"
 #include "readingmarks.h"
+#include "readingselection.h"
 
 class Backend;
 
@@ -76,6 +77,8 @@ class Reader : public QObject {
     Q_PROPERTY(ReadingHighlights *highlights READ highlights CONSTANT)
     // The ink on the pages of a PDF or a comic, as they show it and the pen writes it (#83).
     Q_PROPERTY(ReadingInk *ink READ ink CONSTANT)
+    // The free ink in the margins and between the lines of a flowing book (#152), drawn and written with the same pen.
+    Q_PROPERTY(ReadingLineInk *lineInk READ lineInk CONSTANT)
     // The words selected on the page, as the plugins are told of them (#137).
     Q_PROPERTY(ReadingSelection *selection READ selection CONSTANT)
     // How the text is set: the options in force, and the chapter set with them.
@@ -121,6 +124,7 @@ public:
     ReadingMarks *marks() const noexcept { return m_marks; }
     ReadingHighlights *highlights() const noexcept { return m_highlights; }
     ReadingInk *ink() const noexcept { return m_ink; }
+    ReadingLineInk *lineInk() const noexcept { return m_lineInk; }
     ReadAloud *readAloud() const noexcept { return m_readAloud; }
     ReadingSelection *selection() const noexcept { return m_selection; }
     // The opened book itself, none while none is open, and the backend it is read for.
@@ -241,6 +245,7 @@ private:
     // Made last, when the backend it follows is known; a child, gone with the reader.
     ReadingHighlights *m_highlights = new ReadingHighlights(this);
     ReadingInk *m_ink = new ReadingInk(this);
+    ReadingLineInk *m_lineInk = new ReadingLineInk(this, m_ink);
     ReadAloud *m_readAloud = new ReadAloud(this);
     ReadingSelection *m_selection = new ReadingSelection(this);
 };

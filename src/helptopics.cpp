@@ -217,12 +217,12 @@ Manual::Topic readingBasics() {
                             "other end erases, and a click on the note gives undo, the eraser and its words, which your own AI "
                             "server reads from the handwriting so {reader.find} finds them.")},
                 {Manual::tr("Ink on the pages"),
-                 Manual::tr("On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen, a "
-                            "finger or the mouse: the bar above the page picks the pen, the eraser and the ink, and whether a finger "
-                            "writes: until a pen is used, always, or never. Two fingers scroll and zoom, and the pen's other end erases. "
-                            "The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under "
-                            "Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; "
-                            "{reader.show_ink} puts it away to read the pages as they were.")},
+                 Manual::tr("On a PDF's or a comic's pages, and in the margins and between the lines of other books, {reader.ink} "
+                            "writes and draws with a pen, a finger or the mouse: the bar above the page picks the pen, a highlighter, "
+                            "the eraser or a lasso, the ink, and whether a finger writes (until a pen is used, always, never). Two "
+                            "fingers scroll; the pen's other end erases. In other books each stroke stays beside its line however the "
+                            "text is laid out. It goes to your other computers and is under Highlights ({reader.annotations}); Ctrl+Z "
+                            "undoes it, {reader.show_ink} puts it away.")},
                 {Manual::tr("The graph in the text"),
                  Manual::tr("The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors "
                             "they have there, always, unless you switch it off: {reader.marks} marks them only while the map is "

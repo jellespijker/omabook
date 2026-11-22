@@ -6,7 +6,6 @@
 #include "annotationanchors.h"
 #include "annotationink.h"
 #include "booktext.h"
-#include "hyphenation.h"
 #include "inkcodec.h"
 #include "inksurface.h"
 #include "noterecognition.h"
@@ -199,20 +198,13 @@ QVariantList MarginNotes::spans(QQuickTextDocument *chapter) {
 }
 
 std::optional<std::pair<Passage, double>> MarginNotes::passageIn(const QString &shown, qsizetype start, qsizetype end) const {
-    if (!m_reader || start >= end)
+    if (!m_reader)
         return std::nullopt;
-    const Hyphenation::Plain plain(shown);
     const int section = m_reader->section();
-    const Passage near = Passage::of(plain.text(), section, plain.toPlain(start), plain.toPlain(end));
-    if (PassageMatch::words(near.quote).isEmpty())
-        return std::nullopt;
-    // The page shows the chapter otherwise than the book's text has it
-    // (its heading, its spacing): there its places are the text's own.
     const BookText text(m_reader->count(),
                         [reader = m_reader, section](int asked) { return reader && asked == section ? reader->sectionText() : QString(); });
-    if (const std::optional<FoundPassage> found = near.findAgain(text))
-        return std::pair{found->passage, found->confidence};
-    return std::pair{near, 0.0};
+    const std::optional<FoundPassage> found = Passage::shownAt(shown, section, start, end, text);
+    return found ? std::optional(std::pair{found->passage, found->confidence}) : std::nullopt;
 }
 
 std::optional<qint64> MarginNotes::write(const QString &shown, qsizetype start, qsizetype end, const QString &words) {

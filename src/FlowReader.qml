@@ -31,6 +31,8 @@ Flickable {
     property var notes: null
     readonly property real noteRoom: notes && reader.format.noteWidth > 0 ? reader.format.noteWidth + reader.format.gutter : 0
     property alias marginColumn: margin
+    // What lies over the page (the ink's bar), where the pen doesn't write on it.
+    property Item covering: null
     // The thing under the pointer changed (null for none), and a selection
     // was made with the mouse.
     signal pointed(var thing)
@@ -373,6 +375,8 @@ Flickable {
             text: page
             reading: flick.notes
         }
+        // Free ink (#152), across the window: the margins on either side of the text too.
+        LineInkLayer { x: -page.x; width: flick.width; height: page.height; text: page; view: flick; covering: flick.covering; others: flick.notes ? flick.notes.others : null }
     }
     MarginColumn {
         id: margin

@@ -47,6 +47,7 @@
         <file alias="EditDialog.qml">EditDialog.qml</file>
         <file alias="FindPopup.qml">FindPopup.qml</file>
         <file alias="FlowReader.qml">FlowReader.qml</file>
+        <file alias="LineInkLayer.qml">LineInkLayer.qml</file>
         <file alias="HelpOverlay.qml">HelpOverlay.qml</file>
         <file alias="Key.qml">Key.qml</file>
         <file alias="LibrariesPopup.qml">LibrariesPopup.qml</file>
@@ -130,6 +131,7 @@
         <file alias="ThemePicker.qml">ThemePicker.qml</file>
         <file alias="ModelPicker.qml">ModelPicker.qml</file>
         <file alias="SpreadReader.qml">SpreadReader.qml</file>
+        <file alias="SpreadPage.qml">SpreadPage.qml</file>
         <file alias="TidyDialog.qml">TidyDialog.qml</file>
         <file alias="ReadingStatsDialog.qml">ReadingStatsDialog.qml</file>
         <file alias="ShelfCount.qml">ShelfCount.qml</file>

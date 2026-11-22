@@ -12,6 +12,10 @@ moves those lines under its version.
 
 ## [Unreleased]
 
+### Added
+
+- Free ink on flowing books (#152): with D, write and draw anywhere in the side margins and between the lines of an EPUB, a FictionBook, Markdown or a text, with a pen, the mouse or (as chosen in the bar) a finger, as on a PDF's pages. Each stroke stays with the line beside it when the type, the window or the layout changes, drawn at that line's height; ink in a margin stays in the margin, and where the margin is too narrow for it (large type) it is drawn smaller until there is room. It is undone a pause of the pen at a time, listed by chapter under Highlights, synced and carried into spaces. The writing bar now has a highlighter and a lasso too, on a PDF's and a comic's pages as well. The first ink is drawn in the text's own colour, so it reads on a dark theme.
+
 ## [0.3.0] - 2026-11-22
 
 ### Added

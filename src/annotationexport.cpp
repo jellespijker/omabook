@@ -18,6 +18,7 @@
 #include "formats.h"
 #include "highlightcolors.h"
 #include "highlights.h"
+#include "lineink.h"
 
 using namespace Qt::StringLiterals;
 
@@ -114,6 +115,9 @@ struct Entry {
                                     QString()}});
         else if (annotation.kind == BookInk::kind)
             found.append({.place = annotation.place, .lines = {u"- Book ink on this page"_s, QString()}});
+        else if (LineInk::isKind(annotation.kind))
+            found.append(
+                {.place = annotation.place, .lines = {u"- Ink beside “%1”"_s.arg(annotation.passage().quote.simplified()), QString()}});
     }
     std::ranges::stable_sort(found, {}, &Placed::place);
     int section = -1;

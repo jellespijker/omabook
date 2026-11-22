@@ -19,7 +19,7 @@ modules = [
   "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
-  "deviceoptions", "threadclock", "pdfsketch", "aicapability",
+  "deviceoptions", "threadclock", "pdfsketch", "aicapability", "inklines",
 ]
 
 [layers.formats]
@@ -43,7 +43,7 @@ modules = [
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",
   "statements", "graphviews", "graphrows", "graphpicture", "graphnotes", "graphindex", "graphsearch", "plugindata", "pluginfiles", "pluginnews", "highlights", "bookink",
-  "annotationink", "opkinds", "keptops",
+  "annotationink", "lineink", "opkinds", "keptops",
   "booksearch", "annotationwords", "meaningindex", "bookwords",
   "readinglog", "readingstats", "readinggoal",
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
@@ -93,7 +93,7 @@ modules = [
   "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologymodel", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
-  "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "backendplugins", "annotationfinder", "readingselection",
+  "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "backenddetails",
   "readaloud", "linkinbox", "installterminal", "speechinstall",
 ]

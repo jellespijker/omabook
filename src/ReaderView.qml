@@ -410,8 +410,8 @@ Item {
                 readonly property string layout: reader.format.effective.layout || "auto"
                 readonly property bool paged: layout === "pages" || (layout === "auto" && reader.format.columns > 1)
                 sourceComponent: reader.kind === "flow" ? (paged ? spreadPages : flow) : reader.kind === "pages" ? pages : null
-                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: touchArea.fingerDown; holding: handles.holding; notes: notesLayer } }
-                Component { id: spreadPages; SpreadReader { marking: view.marksOn; fingerDown: touchArea.fingerDown; notes: notesLayer } }
+                Component { id: flow; FlowReader { marking: view.marksOn; runsOn: contentLoader.layout === "scroll"; fingerDown: touchArea.fingerDown; holding: handles.holding; notes: notesLayer; covering: pen.covering } }
+                Component { id: spreadPages; SpreadReader { marking: view.marksOn; fingerDown: touchArea.fingerDown; notes: notesLayer; covering: pen.covering } }
                 Component { id: pages; PageReader { layout: contentLoader.layout; covering: pen.covering; holding: handles.holding; notes: notesLayer } }
             }
 

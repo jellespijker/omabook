@@ -2,20 +2,23 @@ import QtQuick
 import QtQuick.Controls
 
 // The pen over the page. Over words, its gestures highlight them (#81,
-// PenGestures). On the pages of a PDF or a comic, while the reader writes on
-// them ({reader.ink}), it writes and draws book ink on the page instead
-// (#83, ReadingInk, an ink surface over each page in PageReader), its other
-// end erasing; this bar above the page then says what it writes with. The
+// PenGestures). While the reader writes ({reader.ink}) it writes and draws
+// ink instead, its other end erasing: on the pages of a PDF or a comic (#83,
+// ReadingInk, an ink surface over each page in PageReader), and on a flowing
+// book in its margins and between its lines (#152, ReadingLineInk, an ink
+// surface over each chapter shown, LineInkLayer); this bar above the page then
+// says what it writes with: the pen, a highlighter, the eraser or a lasso. The
 // ink is put away and shown again for reading ({reader.show_ink}), and undone
-// and done again (Ctrl+Z, Ctrl+Shift+Z) a pause of the pen at a time, on
-// whichever page it was.
+// and done again (Ctrl+Z, Ctrl+Shift+Z) a pause of the pen at a time, wherever it was.
 Item {
     id: pen
     objectName: "readerPen"
     // The reading view: its page (`content`) and its menu.
     property Item host
-    readonly property bool canInk: reader.open && reader.kind === "pages"
+    readonly property bool canInk: reader.open
     readonly property bool inking: canInk && reader.ink.inking
+    // Where what the pen did is kept and undone: a flowing book's lines, or the pages.
+    readonly property var kept: reader.kind === "flow" ? reader.lineInk : reader.ink
     // What lies over the pages, where the pen writes on it and not on them.
     readonly property Item covering: bar
 
@@ -32,13 +35,14 @@ Item {
                   : next === "off" ? qsTr("A finger scrolls; the pen and the mouse write")
                   : qsTr("A finger writes until a pen is used, then scrolls"))
     }
-    function noPages() {
-        backend.say(qsTr("Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note."))
-    }
     function toggleShown() {
         reader.ink.shown = !reader.ink.shown
         backend.say(reader.ink.shown ? qsTr("Ink shown") : qsTr("Ink put away"))
     }
+
+    // A flowing book's inks are drawn to read on the page as the theme colours it.
+    Binding { target: reader.lineInk; property: "foreground"; value: theme.foreground }
+    Binding { target: reader.lineInk; property: "background"; value: theme.background }
 
     PenGestures {
         host: pen.host
@@ -46,18 +50,18 @@ Item {
         enabled: reader.open && !!pen.host && !!pen.host.content && !pen.inking
     }
 
-    Key { command: "reader.ink"; when: reader.open; onActivated: pen.canInk ? pen.toggle() : pen.noPages() }
-    Key { command: "reader.show_ink"; when: reader.open; onActivated: pen.canInk ? pen.toggleShown() : pen.noPages() }
+    Key { command: "reader.ink"; when: pen.canInk; onActivated: pen.toggle() }
+    Key { command: "reader.show_ink"; when: pen.canInk; onActivated: pen.toggleShown() }
     // Undo and redo are the editing keys everywhere (as copying is), not commands of their own.
     Shortcut {
         sequences: ["Ctrl+Z"]
-        enabled: pen.canInk && reader.ink.canUndo && !win.dialogOpen
-        onActivated: reader.ink.undo()
+        enabled: pen.canInk && pen.kept.canUndo && !win.dialogOpen
+        onActivated: pen.kept.undo()
     }
     Shortcut {
         sequences: ["Ctrl+Shift+Z", "Ctrl+Y"]
-        enabled: pen.canInk && reader.ink.canRedo && !win.dialogOpen
-        onActivated: reader.ink.redo()
+        enabled: pen.canInk && pen.kept.canRedo && !win.dialogOpen
+        onActivated: pen.kept.redo()
     }
 
     // What the pen writes with, while it writes: the pen or the eraser,
@@ -71,7 +75,7 @@ Item {
         anchors.topMargin: 8
         anchors.horizontalCenter: parent.horizontalCenter
         // Its tools in a row where there is room, wrapped in a narrow window.
-        width: Math.min(parent.width - 16, win.touch ? 860 : 760)
+        width: Math.min(parent.width - 16, win.touch ? 1040 : 900)
         height: tools.implicitHeight + 12
         radius: theme.radius
         color: theme.background
@@ -89,15 +93,29 @@ Item {
                 objectName: "inkPen"
                 text: qsTr("Pen")
                 focusPolicy: Qt.NoFocus
-                primary: !reader.ink.erasing
-                onClicked: reader.ink.erasing = false
+                primary: reader.ink.tool === "pen"
+                onClicked: reader.ink.tool = "pen"
+            }
+            AppButton {
+                objectName: "inkHighlighter"
+                text: qsTr("Highlighter")
+                focusPolicy: Qt.NoFocus
+                primary: reader.ink.tool === "highlighter"
+                onClicked: reader.ink.tool = "highlighter"
             }
             AppButton {
                 objectName: "inkEraser"
                 text: qsTr("Eraser")
                 focusPolicy: Qt.NoFocus
-                primary: reader.ink.erasing
-                onClicked: reader.ink.erasing = true
+                primary: reader.ink.tool === "eraser"
+                onClicked: reader.ink.tool = "eraser"
+            }
+            AppButton {
+                objectName: "inkLasso"
+                text: qsTr("Lasso")
+                focusPolicy: Qt.NoFocus
+                primary: reader.ink.tool === "lasso"
+                onClicked: reader.ink.tool = "lasso"
             }
             AppButton {
                 objectName: "inkFingers"
@@ -117,6 +135,7 @@ Item {
                 delegate: Item {
                     id: swatch
                     required property var modelData
+                    readonly property bool chosen: reader.ink.color === modelData.key && !reader.ink.erasing && reader.ink.tool !== "lasso"
                     objectName: "ink_" + modelData.key
                     width: tools.side
                     // As tall as the buttons beside it, its disc in their middle.
@@ -131,15 +150,17 @@ Item {
                         width: tools.side - 8
                         height: width
                         radius: width / 2
-                        color: swatch.modelData.color
-                        border.width: reader.ink.color === swatch.modelData.key && !reader.ink.erasing ? 3 : 1
-                        border.color: reader.ink.color === swatch.modelData.key && !reader.ink.erasing ? theme.foreground : theme.colors.selection
+                        // As it is drawn: on a flowing book's page, in the theme's colours.
+                        color: reader.kind === "flow" && reader.lineInk.penColor.valid ? reader.lineInk.shownColor(swatch.modelData.color) : swatch.modelData.color
+                        border.width: swatch.chosen ? 3 : 1
+                        border.color: swatch.chosen ? theme.foreground : theme.colors.selection
                     }
                     HoverHandler { id: swatchHover; cursorShape: Qt.PointingHandCursor }
                     TapHandler {
                         onTapped: {
                             reader.ink.color = swatch.modelData.key
-                            reader.ink.erasing = false
+                            // An ink is to write with: a highlighter stays one, anything else is the pen again.
+                            if (reader.ink.tool !== "highlighter") reader.ink.tool = "pen"
                         }
                     }
                 }
@@ -148,15 +169,15 @@ Item {
                 objectName: "inkUndo"
                 text: qsTr("Undo")
                 focusPolicy: Qt.NoFocus
-                enabled: reader.ink.canUndo
-                onClicked: reader.ink.undo()
+                enabled: pen.kept.canUndo
+                onClicked: pen.kept.undo()
             }
             AppButton {
                 objectName: "inkRedo"
                 text: qsTr("Redo")
                 focusPolicy: Qt.NoFocus
-                enabled: reader.ink.canRedo
-                onClicked: reader.ink.redo()
+                enabled: pen.kept.canRedo
+                onClicked: pen.kept.redo()
             }
             AppButton {
                 objectName: "inkDone"

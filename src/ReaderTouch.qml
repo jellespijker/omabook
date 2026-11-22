@@ -62,14 +62,14 @@ Item {
             area.pressedOwn = !!content && area.ownTap(content, on.x, on.y)
         }
         onLongPressed: {
-            if (reader.ink.touched() || area.onHandle(point.position)) return
+            if (reader.ink.touched() || reader.lineInk.touched() || area.onHandle(point.position)) return
             const at = area.mapToItem(area.handles, point.position.x, point.position.y)
             area.handles.pressAt(at.x, at.y, true)
         }
         onTapped: (point) => {
             win.touchSeen = true
             const content = area.host.content
-            if (!content || reader.ink.touched(point.timestamp) || area.onHandle(point.position)) return
+            if (!content || reader.ink.touched(point.timestamp) || reader.lineInk.touched(point.timestamp) || area.onHandle(point.position)) return
             if (area.host.readingMenu.shown) {
                 area.host.readingMenu.close()
                 return

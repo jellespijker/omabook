@@ -130,6 +130,10 @@
     "one": "%Ln gebeurtenis",
     "other": "%Ln gebeurtenissen"
   },
+  "%Ln lines with ink": {
+    "one": "%Ln regel met inkt",
+    "other": "%Ln regels met inkt"
+  },
   "%Ln more could not be added": {
     "one": "Nog %Ln kon niet worden toegevoegd",
     "other": "Nog %Ln konden niet worden toegevoegd"
@@ -145,6 +149,10 @@
   "%Ln reading places updated": {
     "one": "%Ln leespositie bijgewerkt",
     "other": "%Ln leesposities bijgewerkt"
+  },
+  "%Ln strokes": {
+    "one": "%Ln streek",
+    "other": "%Ln streken"
   },
   "%Ln were already in the library": {
     "one": "%Ln stond al in de bibliotheek",
@@ -338,6 +346,7 @@
   "Earlier": "Eerder",
   "Edit": "Bewerken",
   "Edit the selected book's details": "Gegevens van het geselecteerde boek bewerken",
+  "Erase the ink in this chapter": "De inkt in dit hoofdstuk wissen",
   "Erase the ink on this page": "De inkt op deze pagina wissen",
   "Eraser": "Gum",
   "Every Calibre library found here was already imported or set aside.": "Elke Calibre-bibliotheek die hier is gevonden, is al geïmporteerd of terzijde gelegd.",
@@ -400,6 +409,7 @@
   "Held as": "In bezit als",
   "Help you can search": "Hulp waarin je kunt zoeken",
   "Hide words": "Woorden verbergen",
+  "Highlighter": "Markeerstift",
   "How far through the book you are. Your place is kept when you leave, and {reader.bookmark} keeps a bookmark besides.": "Hoe ver je in het boek bent. Je plek wordt bewaard als je weggaat, en {reader.bookmark} zet er nog een bladwijzer bij.",
   "How many": "Hoeveel",
   "ISBN": "ISBN",
@@ -409,7 +419,7 @@
   "Import from Calibre": "Importeren uit Calibre",
   "Importing from Calibre": "Importeren uit Calibre",
   "In the order they happen; no dates are known": "In de volgorde waarin ze gebeuren; er zijn geen data bekend",
-  "Ink is written on the pages of a PDF or a comic; select words here to highlight them or write a note.": "Inkt schrijf je op de pagina's van een pdf of strip; selecteer hier woorden om ze te markeren of er een notitie bij te schrijven.",
+  "Ink beside the lines": "Inkt naast de regels",
   "Ink on the pages": "Inkt op de pagina's",
   "Ink put away": "Inkt verborgen",
   "Ink shown": "Inkt getoond",
@@ -421,6 +431,7 @@
   "Its user name": "De gebruikersnaam",
   "KOReader's progress sync: set Omabook's address as KOReader's custom sync server": "KOReaders voortgangssynchronisatie: stel het adres van Omabook in als eigen synchronisatieserver van KOReader",
   "Kept in the keyring; type another to replace it": "Bewaard in de sleutelbos; typ een ander om het te vervangen",
+  "Lasso": "Lasso",
   "Mail to Kindle": "Mail naar Kindle",
   "Mailed to %1.": "Gemaild naar %1.",
   "Met in %1": "Voorgekomen in %1",
@@ -578,7 +589,7 @@
   "On %1": "Op %1",
   "On my shelf": "In mijn kast",
   "On the %1 as %2.": "Op de %1 als %2.",
-  "On the pages of a PDF or a comic, {reader.ink} lets you write and draw on the page itself, with a pen, a finger or the mouse: the bar above the page picks the pen, the eraser and the ink, and whether a finger writes: until a pen is used, always, or never. Two fingers scroll and zoom, and the pen's other end erases. The ink stays where you put it at every zoom, goes with the book to your other computers, and is listed under Highlights ({reader.annotations}). Ctrl+Z and Ctrl+Shift+Z undo and redo it a pause of the pen at a time; {reader.show_ink} puts it away to read the pages as they were.": "Op de pagina's van een pdf of strip laat {reader.ink} je op de pagina zelf schrijven en tekenen, met een pen, een vinger of de muis: de balk boven de pagina kiest de pen, de gum en de inkt, en of een vinger schrijft: tot er een pen gebruikt wordt, altijd of nooit. Twee vingers scrollen en zoomen, en het andere eind van de pen gumt. De inkt blijft bij elke zoom waar je hem zette, gaat met het boek mee naar je andere computers en staat onder Markeringen ({reader.annotations}). Ctrl+Z en Ctrl+Shift+Z maken hem pauze voor pauze van de pen ongedaan en opnieuw; {reader.show_ink} verbergt hem om de pagina's te lezen zoals ze waren.",
+  "On a PDF's or a comic's pages, and in the margins and between the lines of other books, {reader.ink} writes and draws with a pen, a finger or the mouse: the bar above the page picks the pen, a highlighter, the eraser or a lasso, the ink, and whether a finger writes (until a pen is used, always, never). Two fingers scroll; the pen's other end erases. In other books each stroke stays beside its line however the text is laid out. It goes to your other computers and is under Highlights ({reader.annotations}); Ctrl+Z undoes it, {reader.show_ink} puts it away.": "Op de pagina's van een pdf of een strip, en in de marges en tussen de regels van andere boeken, schrijft en tekent {reader.ink} met een pen, een vinger of de muis: de balk boven de pagina kiest de pen, een markeerstift, de gum of een lasso, de inkt, en of een vinger schrijft (tot er een pen wordt gebruikt, altijd, nooit). Twee vingers scrollen; het andere eind van de pen gumt. In andere boeken blijft elke streek naast zijn regel, hoe de tekst ook wordt gezet. De inkt gaat mee naar je andere computers en staat onder Markeringen ({reader.annotations}); Ctrl+Z maakt hem ongedaan, {reader.show_ink} legt hem weg.",
   "On your to-read list": "Op je leeslijst",
   "One time is followed: what you put in, else the more precise, else the first book's.": "Eén tijd wordt gevolgd: wat je zelf invoerde, anders de preciezere, anders die van het eerste boek.",
   "Only met in a book": "Alleen in een boek voorgekomen",
@@ -911,7 +922,7 @@
   "Words": "Woorden",
   "Working…": "Bezig…",
   "Write": "Schrijven",
-  "Write and draw on the pages of a PDF or a comic with the pen, or the mouse, and stop": "Met de pen of de muis op de pagina's van een pdf of strip schrijven en tekenen, en stoppen",
+  "Write and draw, with the pen or the mouse, on the pages or in the margins and between the lines, and stop": "Schrijven en tekenen, met de pen of de muis, op de pagina's of in de marges en tussen de regels, en stoppen",
   "Writing on the pages: the pen's other end erases": "Schrijven op de pagina's: het andere eind van de pen gumt",
   "You are here": "Je bent hier",
   "You are reading it": "Je bent het aan het lezen",
