@@ -44,7 +44,7 @@
     "src/sitedesk.cpp": 585,
     "src/themechoice.cpp": 601,
     "tests/graph_tests.cpp": 1736,
-    "tests/layout_tests.cpp": 1292,
+    "tests/layout_tests.cpp": 1144,
     "tests/library_tests.cpp": 2114,
     "tests/pluginmanager_tests.cpp": 1627,
     "tests/readingsites_tests.cpp": 2405,
