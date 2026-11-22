@@ -11,6 +11,7 @@
 #include <memory>
 #include <print>
 
+#include "hubremote.h"
 #include "library.h"
 #include "librarymigrations.h"
 #include "pluginfiles.h"
@@ -289,7 +290,8 @@ int runSyncCli(const QStringList &arguments) {
                      "id when that names one book on each side and the titles agree. Omabook must be installed on both.");
     parser.addPositionalArgument("computer",
                                  "The other computer as ssh knows it (a Tailscale name works), optionally "
-                                 "with its library folder: laptop or laptop:Books.",
+                                 "with its library folder: laptop or laptop:Books. A hub this computer is linked to "
+                                 "(omabook hub add) is synced with through its session, and :Books names one of its libraries.",
                                  "<computer[:folder]>");
     parser.addOption({"status", "Only say whether syncing is set up, and with which computer."});
     parser.addOption({"details",
@@ -343,8 +345,9 @@ int runSyncCli(const QStringList &arguments) {
     if (computer.isEmpty())
         return failLine("Name the computer to sync with, or set one in the settings.");
     const bool json = parser.isSet("json");
-    const SyncSummary summary = syncLibrary(
-        **library, Remote(computer),
+    // A hub this computer is linked to is synced with through its session (#188).
+    const SyncSummary summary = HubRemote::syncWith(
+        **library, computer,
         [json](const QString &title) {
             if (!json)
                 printLine(stderr, title);

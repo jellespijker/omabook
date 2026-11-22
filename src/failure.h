@@ -205,6 +205,23 @@ public:
         HubKeyUnmade,       // {file, the system's reason}
         HubUnreachable,     // {host, what ssh said}
         HubNotLinked,       // {host}
+        // A computer's sync with its hub (#188, ADR 0011).
+        HubSessionEnded,    // {host}: ssh didn't start, or the session ended before it answered
+        HubSyncHubOlder,    // {library, its format there, this computer's}: Omabook on the hub is to be updated
+        HubSyncHubNewer,    // {library, its format there, this computer's}: Omabook on this computer is to be updated
+        HubSyncNotBegun,    // {}: no sync of this computer's is under way on the hub
+        HubSyncNoComputer,  // {}: asked by no computer's key
+        HubSyncRefused,     // {what was asked}
+        HubSyncNotGiven,    // {file}: not a file of the library's books
+        HubSyncNoPlace,     // {where}: not in the sync's own folders
+        HubSyncDryRun,      // {}: a dry run writes nothing
+        // What `omabook set` was given, for a computer or a hub (BookSetting, #188).
+        DetailsUnreadable,  // {file}
+        DetailsNotAnObject, // {file}
+        PictureUnreadable,  // {file}
+        StatusUnknown,      // {}
+        DetailsAtNotATime,  // {}
+        IdentifierUnformed, // {what was given}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,                   // {}: set to Off in the settings, so nothing is asked of any model or server (#133)

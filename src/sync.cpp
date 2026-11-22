@@ -256,7 +256,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     QString folderThere;
     const auto dropFolder = qScopeGuard([&] {
         if (!folderThere.isEmpty())
-            remote.run("rm -rf " + Remote::quote(folderThere));
+            remote.dropFolder(folderThere);
     });
     const OlderPeer::Sync olderPeer{library, remote, scratch, folderThere, counter, options, summary, current};
 
@@ -399,13 +399,13 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (progress)
             progress(book.meta.title);
 
-        const QString folder = QString::fromUtf8(remote.run("mktemp -d").output).trimmed();
+        const QString folder = remote.makeFolder();
         if (folder.isEmpty()) {
             summary.problems << "No room to receive books on " + remote.host() + ".";
             break;
         }
         // Whatever happens next, the other computer's scratch folder goes.
-        const auto cleanup = qScopeGuard([&] { remote.run("rm -rf " + Remote::quote(folder)); });
+        const auto cleanup = qScopeGuard([&] { remote.dropFolder(folder); });
 
         QStringList sentFiles;
         QString why;

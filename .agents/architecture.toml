@@ -91,6 +91,7 @@ modules = [
   "kosyncroutes", "opdsroutes", "deviceserver", "deviceserving", "serveservice", "koreadersync", "sendbook",
   "hubkeeper", "hubrequests", "hubdaemon", "hubschedule", "hubsnapshots",
   "hubsession", "hublinks",
+  "hubremote", "hubsync", "hubsyncsteps", "booksetting",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

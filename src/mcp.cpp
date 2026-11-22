@@ -25,13 +25,13 @@
 #include "catalog.h"
 #include "customization.h"
 #include "formats.h"
+#include "hubremote.h"
 #include "importer.h"
 #include "interfacechange.h"
 #include "library.h"
 #include "log.h"
 #include "plugins.h"
 #include "settings.h"
-#include "sync.h"
 
 namespace {
 
@@ -990,7 +990,7 @@ QList<Tool> coreTools() {
                       options.details = details == "mine"     ? SyncOptions::Details::Mine
                                         : details == "theirs" ? SyncOptions::Details::Theirs
                                                               : SyncOptions::Details::Undecided;
-                      const SyncSummary summary = syncLibrary(*at.library, Remote(target), {}, options);
+                      const SyncSummary summary = HubRemote::syncWith(*at.library, target, {}, options);
                       if (!summary.error.isEmpty())
                           return Result::fail(summary.error);
                       return Result::ok(summary.toJson());

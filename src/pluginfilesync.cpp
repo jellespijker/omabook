@@ -109,10 +109,10 @@ void exchangeOf(Exchange &exchange, const QString &id) {
 // Sends the files there lacks, and has it take them and remove what was
 // removed, and remember where the on-demand ones it lacks are here.
 void send(const Remote &remote, const QList<Sending> &sending, const QList<Offered> &offered, SyncSummary &summary) {
-    const QString folder = QString::fromUtf8(remote.run(u"mktemp -d"_s).output).trimmed();
+    const QString folder = remote.makeFolder();
     if (folder.isEmpty())
         return;
-    const auto cleanup = qScopeGuard([&] { remote.run(u"rm -rf "_s + Remote::quote(folder)); });
+    const auto cleanup = qScopeGuard([&] { remote.dropFolder(folder); });
     QJsonArray files;
     for (const Sending &file : sending) {
         const QString target = folder + u'/' + QString::number(files.size());

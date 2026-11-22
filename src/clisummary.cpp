@@ -56,6 +56,7 @@ QString cliSummary() {
            "  spaces [create|invite|join|sync|remove]  The spaces you are in; shared ones several people write\n"
            "  hub run|session|status          Be a hub: keep libraries without a window, always on, as their one writer\n"
            "  hub add|remove|computers <host> Link this computer to your hub, over ssh, by a key that opens only Omabook\n"
+           "  hub sync [<host>] [--dry-run]   Sync this library with your hub, as with another computer\n"
            "  help [topic]                    Print the help the window shows: getting started, reading, keys, ...\n"
            "  skill [install]                 Print the skill for coding agents, or install it\n"
            "  mcp [install [agent]]           Run as an MCP server for agents, or register it with one\n\n"

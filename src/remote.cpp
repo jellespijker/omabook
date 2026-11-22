@@ -53,6 +53,10 @@ Remote::Result Remote::omabook(const QStringList &arguments, const QString &inpu
     return run(command, inputFile);
 }
 
+QString Remote::makeFolder() const { return QString::fromUtf8(run("mktemp -d").output).trimmed(); }
+
+void Remote::dropFolder(const QString &folder) const { run("rm -rf " + quote(folder)); }
+
 bool Remote::fetch(const QString &remoteFile, const QString &localFile) const {
     return run("cat " + quote(remoteFile), {}, localFile).ok();
 }
@@ -77,10 +81,10 @@ std::expected<QJsonObject, QString> Remote::exchange(const QJsonDocument &docume
     if (!here.isValid() || !file.open(QIODevice::WriteOnly) || file.write(document.toJson(QJsonDocument::Compact)) <= 0)
         return std::unexpected(QString("it can't be written here"));
     file.close();
-    const QString folder = QString::fromUtf8(run("mktemp -d").output).trimmed();
+    const QString folder = makeFolder();
     if (folder.isEmpty())
         return std::unexpected("there is no room for it on " + m_host);
-    const auto cleanup = qScopeGuard([&] { run("rm -rf " + quote(folder)); });
+    const auto cleanup = qScopeGuard([&] { dropFolder(folder); });
     if (const auto sent = send(file.fileName(), folder + "/given.json"); !sent)
         return std::unexpected(sent.error());
     const Result taken = omabook(arguments + QStringList{folder + "/given.json"});

@@ -112,7 +112,7 @@ struct Taking {
 // This side's cover, given to them with the time the details settled at.
 void giveCover(const Taking &taking, const Book &mine, const QJsonObject &listed, qint64 settled) {
     const QString cover = taking.library.coverPath(mine.id);
-    const QString folder = QString::fromUtf8(taking.peer.remote->run("mktemp -d").output).trimmed();
+    const QString folder = taking.peer.remote->makeFolder();
     if (cover.isEmpty() || folder.isEmpty())
         return;
     const QString there = folder + u"/cover.jpg"_s;
@@ -122,7 +122,7 @@ void giveCover(const Taking &taking, const Book &mine, const QJsonObject &listed
                     {"set", QString::number(listed.value("id").toInteger()), "--cover", there, "--details-at", QString::number(settled)})
                 .ok())
         taking.summary.problems << mine.meta.title + ": its cover could not be given to " + taking.peer.remote->host() + ".";
-    taking.peer.remote->run("rm -rf " + Remote::quote(folder));
+    taking.peer.remote->dropFolder(folder);
 }
 
 // The time a book's details keep: the later of the two books' own details

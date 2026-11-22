@@ -27,6 +27,7 @@
 #include "bookfilecommands.h"
 #include "bookmarkcommands.h"
 #include "bookops.h"
+#include "booksetting.h"
 #include "calibreplugin.h"
 #include "catalog.h"
 #include "chronologycommands.h"
@@ -609,110 +610,22 @@ int remove(const QStringList &arguments) {
     return 0;
 }
 
-// The book's details kept, and written into its EPUB too where the setting
-// says so (#74), which is said and no failure when it can't be.
-[[nodiscard]] std::expected<void, QString> savedDetails(Library &library, qint64 id, const BookMeta &meta, std::optional<qint64> at) {
-    QString error;
-    if (!library.setMeta(id, meta, &error, at))
-        return std::unexpected(error);
-    if (const auto written = BookOps::writeDetailsWhenAsked(library, id, Settings().writeDetails()); !written)
-        print(stderr, written.error().text());
-    return {};
-}
-
 int set(const QStringList &arguments) {
     Command command("set", "Change a book's details. Only the options given are changed.");
     command.parser.addPositionalArgument("id", "The book's number.");
-    const QStringList fields{"title", "authors", "series", "series-index", "publisher", "language", "isbn", "published",
-                             "description", "tags"};
-    for (const QString &field : fields)
-        command.parser.addOption({field, field == "authors" ? "Separate several with \" & \"."
-                                         : field == "tags"  ? "Separate several with commas."
-                                                            : "Set the " + field + ".", "text"});
-    command.parser.addOption({"cover", "Use this picture as the cover.", "file"});
-    command.parser.addOption({"status", "Where the book stands: to-read, reading, read, or none to go by how far it was "
-                                        "read here.", "status"});
-    command.parser.addOption({"rating", "Your stars for it, 1 to 5, or 0 for none.", "stars"});
-    command.parser.addOption({"finished", "The day you finished it, as 2026-03-01.", "date"});
-    command.parser.addOption({"paper", "Whether there is a copy on a real shelf: yes or no.", "yes|no"});
-    command.parser.addOption({"identifier", "What the book is called elsewhere, as scheme=value (goodreads=4671); scheme= "
-                                            "with nothing after it forgets it. Give it once per scheme.", "scheme=value"});
-    command.parser.addOption({"meta", "Take the details this JSON file names (as omabook show --json prints them), leaving "
-                                      "the rest as they are; the options above still win over it.", "file"});
-    command.parser.addOption({"details-at", "Stamp the details with this time, in seconds since 1970, instead of now: what "
-                                            "omabook sync gives a book, so the details keep the time they had where they "
-                                            "came from.", "seconds"});
+    BookSetting::addOptions(command.parser);
     if (!command.parse(arguments, 1, 1))
         return 1;
-    std::optional<qint64> detailsAt;
-    if (command.parser.isSet("details-at")) {
-        bool number = false;
-        detailsAt = command.parser.value("details-at").toLongLong(&number);
-        if (!number || *detailsAt < 0)
-            return fail("--details-at is a time in seconds since 1970, such as 1767225600.");
-    }
-    QList<QPair<QString, QString>> identifiers;
-    for (const QString &given : command.parser.values("identifier")) {
-        if (!given.contains('='))
-            return fail("An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: " + given);
-        identifiers.append({given.section('=', 0, 0), given.section('=', 1)});
-    }
     QString error;
     const auto library = command.library(&error);
     if (!library)
         return fail(error);
-    const qint64 id = command.argument(0).toLongLong();
-    const auto book = library->book(id);
-    if (!book)
-        return fail("There is no book " + command.argument(0) + " in the library.");
-    BookMeta meta = book->meta;
-    const QCommandLineParser &options = command.parser;
-    if (options.isSet("meta")) {
-        QFile details(options.value("meta"));
-        if (!details.open(QIODevice::ReadOnly))
-            return fail("The details can't be read: " + options.value("meta"));
-        const QJsonDocument read = QJsonDocument::fromJson(details.readAll());
-        if (!read.isObject())
-            return fail("The details aren't a JSON object: " + options.value("meta"));
-        meta.applyJson(read.object());
-    }
-    if (options.isSet("title")) meta.title = options.value("title").simplified();
-    if (options.isSet("authors")) meta.authors = BookMeta::splitAuthors(options.value("authors"));
-    if (options.isSet("series")) meta.series = options.value("series").simplified();
-    if (options.isSet("series-index")) meta.seriesIndex = options.value("series-index").toDouble();
-    if (options.isSet("publisher")) meta.publisher = options.value("publisher").simplified();
-    if (options.isSet("language")) meta.language = options.value("language").simplified();
-    if (options.isSet("isbn")) meta.isbn = options.value("isbn").simplified();
-    if (options.isSet("published")) meta.published = options.value("published").simplified();
-    if (options.isSet("description")) meta.description = options.value("description").trimmed();
-    if (options.isSet("tags")) meta.tags = BookMeta::splitTags(options.value("tags"));
-    if (options.isSet("cover")) {
-        QImageReader reader(options.value("cover"));
-        reader.setAutoTransform(true);
-        meta.cover = reader.read();
-        if (meta.cover.isNull())
-            return fail("That picture can't be read: " + options.value("cover"));
-    }
-    if (meta.title.isEmpty())
-        return fail("A book needs a title.");
-    // First, since they are all or nothing: a scheme refused changes nothing.
-    if (const auto res = BookOps::setIdentifiers(*library, id, identifiers, detailsAt); !res)
-        return fail(res.error());
-    if (const auto saved = savedDetails(*library, id, meta, detailsAt); !saved)
-        return fail(saved.error());
-    if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {
-        const QString status = options.isSet("status") ? options.value("status").toLower() : book->shelf;
-        if (!library->setReading(id, status == "none" ? QString() : status,
-                                 options.isSet("rating") ? options.value("rating").toInt() : book->rating,
-                                 options.isSet("finished") ? options.value("finished").simplified() : book->finished))
-            return fail("A status is one of to-read, reading, read or none.");
-    }
-    if (options.isSet("paper"))
-        library->setPaper(id, options.value("paper").toLower() == "yes");
-    // The book's node in the knowledge graph says the same as the library.
-    Graph(*library).bookNode(id);
+    const auto set = BookSetting::apply(*library, command.argument(0).toLongLong(), command.parser,
+                                        [](const QString &said) { print(stderr, said); });
+    if (!set)
+        return fail(set.error().text());
     if (command.json())
-        printJson(library->book(id)->toJson());
+        printJson(set->toJson());
     return 0;
 }
 

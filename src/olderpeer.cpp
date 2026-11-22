@@ -30,7 +30,7 @@ void note(int &count, QStringList &titles, const QString &title) {
 
 QString remoteDir(const OlderPeer::Sync &sync) {
     if (sync.folderThere.isEmpty())
-        sync.folderThere = QString::fromUtf8(sync.remote.run("mktemp -d").output).trimmed();
+        sync.folderThere = sync.remote.makeFolder();
     return sync.folderThere;
 }
 

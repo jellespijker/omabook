@@ -357,6 +357,23 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubKeyUnmade, tr("This computer's key for its hubs can't be kept in %1: %2")},
     {Failure::Code::HubUnreachable, tr("The hub at %1 can't be reached, or has no Omabook: %2")},
     {Failure::Code::HubNotLinked, tr("This computer isn't linked to the hub at %1. Link it: omabook hub add %1")},
+    {Failure::Code::HubSessionEnded, tr("The session with the hub at %1 ended before it answered.")},
+    {Failure::Code::HubSyncHubOlder,
+     tr("The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.")},
+    {Failure::Code::HubSyncHubNewer,
+     tr("The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.")},
+    {Failure::Code::HubSyncNotBegun, tr("No sync of this computer's is under way on the hub: begin it again.")},
+    {Failure::Code::HubSyncNoComputer, tr("Only a computer linked to the hub syncs with it.")},
+    {Failure::Code::HubSyncRefused, tr("In a sync, the hub takes no %1.")},
+    {Failure::Code::HubSyncNotGiven, tr("In a sync, the hub gives only its books and their covers, never %1.")},
+    {Failure::Code::HubSyncNoPlace, tr("In a sync, the hub keeps what it is sent only in that sync's own folders, never at %1.")},
+    {Failure::Code::HubSyncDryRun, tr("A dry run changes nothing on the hub.")},
+    {Failure::Code::DetailsUnreadable, tr("The details can't be read: %1")},
+    {Failure::Code::DetailsNotAnObject, tr("The details aren't a JSON object: %1")},
+    {Failure::Code::PictureUnreadable, tr("That picture can't be read: %1")},
+    {Failure::Code::StatusUnknown, tr("A status is one of to-read, reading, read or none.")},
+    {Failure::Code::DetailsAtNotATime, tr("--details-at is a time in seconds since 1970, such as 1767225600.")},
+    {Failure::Code::IdentifierUnformed, tr("An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: %1")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

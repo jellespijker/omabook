@@ -2794,5 +2794,20 @@
   "Snapshots are set up in %1.": "Snapshots zijn ingesteld in %1.",
   "Snapshots aren't set up on this computer yet. Each keeps the library as it was at one moment, encrypted and read-only, to go back to; each stores only what changed since the last.": "Snapshots zijn op deze computer nog niet ingesteld. Elke bewaart de bibliotheek zoals ze op één moment was, versleuteld en alleen-lezen, om naar terug te gaan; elke slaat alleen op wat er sinds de vorige is veranderd.",
   "The snapshots are copied to %1 too, every night.": "De snapshots worden elke nacht ook naar %1 gekopieerd.",
-  "The snapshots are only on this computer yet. Add a second disk, and a place away from home, for three copies on two kinds of medium with one away from home.": "De snapshots staan nog alleen op deze computer. Voeg een tweede schijf en een plek buitenshuis toe voor drie kopieën op twee soorten media, waarvan één buitenshuis."
+  "The snapshots are only on this computer yet. Add a second disk, and a place away from home, for three copies on two kinds of medium with one away from home.": "De snapshots staan nog alleen op deze computer. Voeg een tweede schijf en een plek buitenshuis toe voor drie kopieën op twee soorten media, waarvan één buitenshuis.",
+  "A dry run changes nothing on the hub.": "Een proefrun verandert niets op de hub.",
+  "In a sync, the hub gives only its books and their covers, never %1.": "Bij een synchronisatie geeft de hub alleen zijn boeken en hun omslagen, nooit %1.",
+  "In a sync, the hub keeps what it is sent only in that sync's own folders, never at %1.": "Bij een synchronisatie bewaart de hub wat hij krijgt alleen in de eigen mappen van die synchronisatie, nooit in %1.",
+  "In a sync, the hub takes no %1.": "Bij een synchronisatie neemt de hub geen %1 aan.",
+  "No sync of this computer's is under way on the hub: begin it again.": "Er loopt op de hub geen synchronisatie van deze computer: begin opnieuw.",
+  "Only a computer linked to the hub syncs with it.": "Alleen een computer die aan de hub gekoppeld is synchroniseert ermee.",
+  "The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.": "De bibliotheek %1 van de hub heeft een nieuwere indeling (%2) dan die van deze computer (%3): werk Omabook op deze computer bij en synchroniseer opnieuw.",
+  "The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.": "De bibliotheek %1 van de hub heeft een oudere indeling (%2) dan die van deze computer (%3): werk Omabook op de hub bij en synchroniseer opnieuw.",
+  "--details-at is a time in seconds since 1970, such as 1767225600.": "--details-at is een tijd in seconden sinds 1970, zoals 1767225600.",
+  "A status is one of to-read, reading, read or none.": "Een status is to-read, reading, read of none.",
+  "An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: %1": "Een identificatie wordt gegeven als schema=waarde, zoals goodreads=4671, of schema= om hem te vergeten: %1",
+  "That picture can't be read: %1": "Die afbeelding kan niet gelezen worden: %1",
+  "The details aren't a JSON object: %1": "De gegevens zijn geen JSON-object: %1",
+  "The details can't be read: %1": "De gegevens kunnen niet gelezen worden: %1",
+  "The session with the hub at %1 ended before it answered.": "De sessie met de hub op %1 eindigde voordat hij antwoordde."
 }

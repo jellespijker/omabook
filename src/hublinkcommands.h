@@ -14,3 +14,6 @@ class QCommandLineParser;
 // `what` is the word after `hub`; `words` what follows it.
 [[nodiscard]] bool isHubLinkCommand(const QString &what);
 int runHubLink(const QString &what, const QStringList &words, const QCommandLineParser &parser);
+// `omabook hub sync [<host>] ...`: `omabook sync <host> ...` with a hub this
+// computer is linked to (#188), its only one when it names none.
+int runHubSync(const QStringList &arguments);

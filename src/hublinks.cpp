@@ -5,6 +5,7 @@
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QProcess>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -80,6 +81,33 @@ std::expected<void, Failure> HubLinks::keep(const QList<Hub> &hubs) const {
     return {};
 }
 
+bool HubLinks::isLinked(const QString &host) const {
+    return std::ranges::any_of(hubs(), [&host](const Hub &hub) { return hub.host == host; });
+}
+
+HubLinks::Session::Session(std::unique_ptr<QProcess> ssh) : m_ssh(std::move(ssh)) {}
+
+HubLinks::Session::~Session() {
+    m_ssh->closeWriteChannel();
+    if (!m_ssh->waitForFinished(5000)) {
+        m_ssh->kill();
+        m_ssh->waitForFinished(2000);
+    }
+}
+
+QByteArray HubLinks::Session::ask(const QByteArray &line) {
+    if (m_ssh->state() != QProcess::Running)
+        return {};
+    m_ssh->write(line + '\n');
+    // A step may take a while (a large change log taken in); an hour is a hung link.
+    while (!m_ssh->canReadLine())
+        if (!m_ssh->waitForReadyRead(3600 * 1000))
+            return m_ssh->canReadLine() ? m_ssh->readLine().trimmed() : QByteArray();
+    return m_ssh->readLine().trimmed();
+}
+
+QString HubLinks::Session::said() const { return QString::fromUtf8(m_ssh->readAllStandardError()).trimmed().section('\n', -1); }
+
 std::expected<HubLinks::Hub, Failure> HubLinks::add(const QString &host, const QString &computer, const Person &person) {
     if (!HubComputers::isName(computer))
         return std::unexpected(Failure(Failure::Code::HubBadComputerName, {computer}));
@@ -141,33 +169,40 @@ std::expected<QJsonObject, Failure> HubLinks::ask(const QString &host, const QJs
     return answer;
 }
 
-std::expected<QList<QJsonObject>, Failure> HubLinks::exchange(const QString &host, const QList<QJsonObject> &requests) const {
-    if (std::ranges::none_of(hubs(), [&host](const Hub &hub) { return hub.host == host; }))
+std::expected<std::unique_ptr<HubLinks::Session>, Failure> HubLinks::open(const QString &host) const {
+    if (!isLinked(host))
         return std::unexpected(Failure(Failure::Code::HubNotLinked, {host}));
-    const QTemporaryDir here;
-    QFile input(here.filePath(u"requests"_s));
-    QByteArray lines = compact(HubSession::hello()) + '\n';
-    for (const QJsonObject &request : requests)
-        lines += compact(request) + '\n';
-    if (!here.isValid() || !input.open(QIODevice::WriteOnly) || input.write(lines) < 0)
-        return std::unexpected(Failure(Failure::Code::HubUnreachable, {host, input.errorString()}));
-    input.close();
+    auto ssh = std::make_unique<QProcess>();
     // This key alone: never another of the person's, which may open a shell there.
-    const QStringList ssh = m_ssh + QStringList{u"-i"_s, keyFile(), u"-o"_s, u"IdentitiesOnly=yes"_s};
-    const Remote::Result result = Remote(host, ssh).run(u"omabook hub session"_s, input.fileName());
-    QList<QJsonObject> answers;
-    for (const QByteArray &line : result.output.split('\n'))
-        if (!line.trimmed().isEmpty())
-            answers << QJsonDocument::fromJson(line).object();
-    // sshd turned the key away: the hub has taken it off (omabook hub forget).
-    if (answers.isEmpty() && result.error.contains(u"Permission denied (publickey"_s))
-        return std::unexpected(Failure(Failure::Code::HubNotLinked, {host}));
-    if (answers.isEmpty())
-        return std::unexpected(Failure(Failure::Code::HubUnreachable, {host, lastSaid(result)}));
-    const QJsonObject greeting = answers.takeFirst();
+    // "--" ends ssh's own options, so a host can never be read as one.
+    ssh->start(m_ssh.first(), m_ssh.mid(1) + QStringList{u"-i"_s, keyFile(), u"-o"_s, u"IdentitiesOnly=yes"_s, u"--"_s, host,
+                                                          u"omabook hub session"_s});
+    if (!ssh->waitForStarted(5000))
+        return std::unexpected(Failure(Failure::Code::HubSessionEnded, {host}));
+    auto session = std::make_unique<Session>(std::move(ssh));
+    const QByteArray answered = session->ask(compact(HubSession::hello()));
+    const QJsonObject greeting = QJsonDocument::fromJson(answered).object();
+    if (greeting.isEmpty()) {
+        const QString said = session->said();
+        // sshd turned the key away: the hub has taken it off (omabook hub forget).
+        if (said.contains(u"Permission denied (publickey"_s))
+            return std::unexpected(Failure(Failure::Code::HubNotLinked, {host}));
+        return std::unexpected(said.isEmpty() ? Failure(Failure::Code::HubSessionEnded, {host})
+                                              : Failure(Failure::Code::HubUnreachable, {host, said}));
+    }
     if (greeting.contains("linked"_L1) && !greeting.value("linked"_L1).toBool())
         return std::unexpected(Failure(Failure::Code::HubNotLinked, {host}));
     if (!greeting.value("ok"_L1).toBool())
         return std::unexpected(Failure::said(greeting.value("error"_L1).toString()));
+    return session;
+}
+
+std::expected<QList<QJsonObject>, Failure> HubLinks::exchange(const QString &host, const QList<QJsonObject> &requests) const {
+    const auto session = open(host);
+    if (!session)
+        return std::unexpected(session.error());
+    QList<QJsonObject> answers;
+    for (const QJsonObject &request : requests)
+        answers << QJsonDocument::fromJson((*session)->ask(compact(request))).object();
     return answers;
 }

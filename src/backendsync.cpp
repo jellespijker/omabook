@@ -9,7 +9,7 @@
 #include <QPointer>
 #include <QThreadPool>
 
-#include "remote.h"
+#include "hubremote.h"
 #include "sync.h"
 
 namespace {
@@ -49,7 +49,8 @@ QStringList syncStatusLines(const SyncSummary &summary) {
 } // namespace
 
 // Syncing talks to another computer for as long as its books take to cross,
-// so it runs on a worker with its own connection to the library.
+// so it runs on a worker with its own connection to the library. A hub this
+// computer is linked to is synced with through its session (#188).
 void Backend::sync() {
     const QString target = m_settings->syncTarget();
     if (!m_library || busy())
@@ -70,7 +71,7 @@ void Backend::sync() {
         if (!library.open(&summary.error))
             summary.problems.clear();
         else
-            summary = syncLibrary(library, Remote(target, ssh), [self](const QString &title) {
+            summary = HubRemote::syncWith(library, target, [self](const QString &title) {
                 QMetaObject::invokeMethod(
                     qApp,
                     [self, title] {
@@ -78,7 +79,7 @@ void Backend::sync() {
                             self->setStatus(title);
                     },
                     Qt::QueuedConnection);
-            });
+            }, {}, ssh);
         QMetaObject::invokeMethod(
             qApp,
             [self, summary] {

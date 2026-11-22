@@ -2908,5 +2908,20 @@
   "Snapshots are set up in %1.": "Las instantáneas están configuradas en %1.",
   "Snapshots aren't set up on this computer yet. Each keeps the library as it was at one moment, encrypted and read-only, to go back to; each stores only what changed since the last.": "Las instantáneas todavía no están configuradas en esta computadora. Cada una guarda la biblioteca como estaba en un momento, cifrada y de solo lectura, para poder volver a ella; cada una guarda solo lo que cambió desde la anterior.",
   "The snapshots are copied to %1 too, every night.": "Las instantáneas también se copian a %1 cada noche.",
-  "The snapshots are only on this computer yet. Add a second disk, and a place away from home, for three copies on two kinds of medium with one away from home.": "Las instantáneas solo están en esta computadora por ahora. Agrega un segundo disco y un lugar fuera de casa, para tener tres copias en dos tipos de medio, una de ellas fuera de casa."
+  "The snapshots are only on this computer yet. Add a second disk, and a place away from home, for three copies on two kinds of medium with one away from home.": "Las instantáneas solo están en esta computadora por ahora. Agrega un segundo disco y un lugar fuera de casa, para tener tres copias en dos tipos de medio, una de ellas fuera de casa.",
+  "A dry run changes nothing on the hub.": "Una prueba no cambia nada en el hub.",
+  "In a sync, the hub gives only its books and their covers, never %1.": "En una sincronización, el hub solo da sus libros y sus portadas, nunca %1.",
+  "In a sync, the hub keeps what it is sent only in that sync's own folders, never at %1.": "En una sincronización, el hub guarda lo que recibe solo en las carpetas propias de esa sincronización, nunca en %1.",
+  "In a sync, the hub takes no %1.": "En una sincronización, el hub no acepta %1.",
+  "No sync of this computer's is under way on the hub: begin it again.": "No hay ninguna sincronización de esta computadora en curso en el hub: vuelve a empezarla.",
+  "Only a computer linked to the hub syncs with it.": "Solo una computadora enlazada al hub se sincroniza con él.",
+  "The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.": "La biblioteca %1 del hub está en un formato más nuevo (%2) que la de esta computadora (%3): actualiza Omabook en esta computadora y vuelve a sincronizar.",
+  "The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.": "La biblioteca %1 del hub está en un formato más antiguo (%2) que la de esta computadora (%3): actualiza Omabook en el hub y vuelve a sincronizar.",
+  "--details-at is a time in seconds since 1970, such as 1767225600.": "--details-at es una hora en segundos desde 1970, como 1767225600.",
+  "A status is one of to-read, reading, read or none.": "Un estado es to-read, reading, read o none.",
+  "An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: %1": "Un identificador se da como esquema=valor, como goodreads=4671, o esquema= para olvidarlo: %1",
+  "That picture can't be read: %1": "Esa imagen no se puede leer: %1",
+  "The details aren't a JSON object: %1": "Los detalles no son un objeto JSON: %1",
+  "The details can't be read: %1": "Los detalles no se pueden leer: %1",
+  "The session with the hub at %1 ended before it answered.": "La sesión con el hub en %1 terminó antes de que respondiera."
 }

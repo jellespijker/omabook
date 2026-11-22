@@ -6,10 +6,12 @@
 #include <QString>
 #include <QStringList>
 #include <expected>
+#include <memory>
 
 #include "failure.h"
 
 class Person;
+class QProcess;
 
 // This computer's links to its person's hubs (#180, ADR 0012), what both the
 // command line (`omabook hub add|remove|computers|status <host>`) and the
@@ -24,6 +26,26 @@ class Person;
 // protocol (HubSession): ask() says hello, then the request.
 class HubLinks {
 public:
+    // A session with a hub, held open for one request after another: a sync's
+    // many. It ends when this goes.
+    class Session {
+    public:
+        explicit Session(std::unique_ptr<QProcess> ssh);
+        ~Session();
+        Session(const Session &) = delete;
+        Session &operator=(const Session &) = delete;
+        Session(Session &&) = delete;
+        Session &operator=(Session &&) = delete;
+
+        // The hub's answer to one line, as one line; empty once the session ended.
+        [[nodiscard]] QByteArray ask(const QByteArray &line);
+        // What ssh said last on its standard error.
+        [[nodiscard]] QString said() const;
+
+    private:
+        std::unique_ptr<QProcess> m_ssh;
+    };
+
     struct Hub {
         QString host;        // as ssh reaches it: "hub", "omabook@hub"
         QString computer;    // this computer's name there
@@ -40,6 +62,8 @@ public:
     [[nodiscard]] QString keyFile() const;
 
     [[nodiscard]] QList<Hub> hubs() const;
+    // Whether this computer is linked to a hub at `host`.
+    [[nodiscard]] bool isLinked(const QString &host) const;
 
     // Links this computer, as `computer`, to the hub at `host`: checks that
     // Omabook runs there, installs the key, and opens a session with it.
@@ -51,6 +75,9 @@ public:
     // The hub's answer to `request`, through this computer's key; refused
     // when the hub turns it down, or this computer isn't linked to it.
     [[nodiscard]] std::expected<QJsonObject, Failure> ask(const QString &host, const QJsonObject &request) const;
+    // A session with the hub at `host` through this computer's key, its hello
+    // said and answered; refused as ask() is.
+    [[nodiscard]] std::expected<std::unique_ptr<Session>, Failure> open(const QString &host) const;
 
 private:
     // The answers to hello and then `requests`, after the hello's answer was checked.

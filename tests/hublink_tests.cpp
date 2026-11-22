@@ -20,6 +20,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QStandardPaths>
 #include <QTcpServer>
 #include <QTemporaryDir>
@@ -30,7 +31,10 @@
 #include "crypto.h"
 #include "fixtures.h"
 #include "hubcomputers.h"
+#include "hublinks.h"
+#include "hubremote.h"
 #include "hubsession.h"
+#include "library.h"
 #include "log.h"
 #include "person.h"
 #include "sshkey.h"
@@ -166,6 +170,47 @@ struct InProcess {
     std::expected<Person, QString> person = Person::generate();
     std::expected<SshKey::Public, Failure> key = SshKey::generate(dir.filePath(u"key"_s), u"laptop"_s);
 };
+
+// A hub's daemon, `omabook hub run`, started with its home at `home` and
+// keeping a library of one book's file (`title`, none when empty) called
+// home; why not, when it doesn't answer.
+[[nodiscard]] QString startDaemon(QProcess &daemon, const QString &home, const QString &title = {}) {
+    const QString folder = home + u"/libraries"_s;
+    {
+        Library library(folder + u"/home"_s);
+        if (!library.open())
+            return u"no library made for the hub"_s;
+        if (!title.isEmpty() && (!Fixtures::epub(home + u"/"_s + title + u".epub"_s, title) || library.add(home + u"/"_s + title + u".epub"_s).id <= 0))
+            return u"no book in the hub's library"_s;
+    }
+    daemon.setProcessChannelMode(QProcess::MergedChannels);
+    daemon.setProcessEnvironment(homeAt(home, qEnvironmentVariable("PATH")));
+    daemon.start(QString::fromLatin1(OMABOOK_BINARY), {u"hub"_s, u"run"_s, u"--libraries"_s, folder});
+    QByteArray said;
+    if (QTest::qWaitFor(
+            [&] {
+                said += daemon.readAll();
+                return said.contains("takes requests at") || daemon.state() == QProcess::NotRunning;
+            },
+            30000)
+        && daemon.state() == QProcess::Running)
+        return {};
+    return u"the hub's daemon didn't start: "_s + QString::fromUtf8(said);
+}
+
+void stop(QProcess &daemon) {
+    daemon.terminate();
+    if (!daemon.waitForFinished(10000))
+        daemon.kill();
+    daemon.waitForFinished(5000);
+}
+
+// A computer's library in `folder` with one book's file, `title`.
+[[nodiscard]] bool libraryWith(const QString &folder, const QString &title) {
+    Library library(folder);
+    return library.open() && Fixtures::epub(folder + u"/../"_s + title + u".epub"_s, title)
+           && library.add(folder + u"/../"_s + title + u".epub"_s).id > 0;
+}
 
 // A port nothing listens at now.
 [[nodiscard]] quint16 freePort() {
@@ -448,7 +493,7 @@ private slots:
         QVERIFY(greeted.value("ok").toBool());
         QCOMPARE(greeted.value("computer").toString(), u"laptop"_s);
         QCOMPARE(greeted.value("requests").toArray().toVariantList(),
-                 (QVariantList{u"computers"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"unlink"_s}));
+                 (QVariantList{u"computers"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"sync"_s, u"unlink"_s}));
         // The computer is the key's, never what a request says it is.
         QVERIFY(answer(session, R"({"request": "status", "computer": "desktop"})").value("ok").toBool());
         QCOMPARE(QJsonDocument::fromJson(relayed.value(0)).object().value("computer").toString(), u"laptop"_s);
@@ -589,6 +634,80 @@ private slots:
         QVERIFY2(hub.logged(u"said it was desktop"_s), qPrintable(hub.logLines()));
         const auto [gone, turnedAway] = hub.client(u"laptop"_s, {}, u"omabook hub session"_s, hello);
         QVERIFY2(gone != 0 && turnedAway.contains(u"Permission denied"_s), qPrintable(turnedAway));
+    }
+
+    void aComputerSyncsWithItsHubByHand() {
+        const Computers computers;
+        const auto [added, said] = computers.omabook(u"here"_s, {u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"laptop"_s});
+        QVERIFY2(added == 0, qPrintable(said));
+        QProcess daemon;
+        const QString started = startDaemon(daemon, computers.hubHome(), u"Omega"_s);
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        const auto stopping = qScopeGuard([&daemon] { stop(daemon); });
+        const QString library = computers.home(u"here"_s) + u"/library"_s;
+        QVERIFY(libraryWith(library, u"Alpha"_s));
+        const auto [dry, dryRun] = computers.omabook(u"here"_s, {u"sync"_s, u"hub"_s, u"--dry-run"_s, u"--library"_s, library});
+        QVERIFY2(dry == 0 && dryRun.contains(u"A dry run"_s), qPrintable(dryRun));
+        QVERIFY2(dryRun.contains(u"Sent to hub (1):\n  Alpha"_s) && dryRun.contains(u"Received here (1):\n  Omega"_s), qPrintable(dryRun));
+        // The hub it is linked to, named or not.
+        const auto [synced, sync] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"--library"_s, library});
+        QVERIFY2(synced == 0 && sync.contains(u"1 received, 1 sent"_s), qPrintable(sync));
+        const auto [status, there] = computers.omabook(u"here"_s, {u"hub"_s, u"status"_s, u"hub"_s, u"--json"_s});
+        QVERIFY2(status == 0, qPrintable(there));
+        QCOMPARE(QJsonDocument::fromJson(there.toUtf8()).object().value("libraries").toArray().at(0).toObject().value("books").toInt(), 2);
+        const auto [again, inStep] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"hub"_s, u"--library"_s, library, u"--dry-run"_s});
+        QVERIFY2(again == 0 && inStep.contains(u"both libraries are in step"_s), qPrintable(inStep));
+        const auto [elsewhere, notLinked] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"elsewhere"_s, u"--library"_s, library});
+        QVERIFY2(elsewhere != 0 && notLinked.contains(u"isn't linked to the hub at elsewhere"_s), qPrintable(notLinked));
+    }
+
+    void aComputerSyncsThroughARealSshd() {
+        RealHub hub;
+        if (!hub.found())
+            QSKIP("No sshd, ssh and ssh-agent on this computer to start a hub's sshd of the test's own.");
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        QProcess daemon;
+        const QString running = startDaemon(daemon, hub.home);
+        QVERIFY2(running.isEmpty(), qPrintable(running));
+        const auto stopping = qScopeGuard([&daemon] { stop(daemon); });
+        // The laptop's side: its key for its hubs, and the one hub it is linked to.
+        const QString links = hub.dir.filePath(u"laptop-hubs"_s);
+        const QString host = u"hubtest@127.0.0.1"_s;
+        QVERIFY(QDir().mkpath(links) && QFile::copy(hub.dir.filePath(u"laptop"_s), links + u"/key"_s));
+        QVERIFY(QFile::setPermissions(links + u"/key"_s, QFile::ReadOwner | QFile::WriteOwner));
+        QVERIFY(Fixtures::write(links + u"/hubs.json"_s,
+                                QJsonDocument(QJsonArray{QJsonObject{{"host", host}, {"computer", "laptop"},
+                                                                     {"fingerprint", hub.fingerprint(u"laptop"_s)}, {"linked", "2026-11-23T00:00:00Z"}}})
+                                    .toJson()));
+        const HubLinks linked(links, {hub.env, u"LD_PRELOAD="_s + QString::fromLatin1(HUBLINK_PASSWD), u"HUBLINK_PASSWD_NAME=hubtest"_s,
+                                      u"HUBLINK_PASSWD_HOME="_s + hub.home, hub.ssh, u"-F"_s, u"/dev/null"_s, u"-p"_s,
+                                      QString::number(hub.port), u"-o"_s, u"BatchMode=yes"_s, u"-o"_s, u"StrictHostKeyChecking=no"_s,
+                                      u"-o"_s, u"UserKnownHostsFile=/dev/null"_s, u"-o"_s, u"GlobalKnownHostsFile=/dev/null"_s, u"-o"_s,
+                                      u"IdentityAgent=none"_s, u"-o"_s, u"LogLevel=ERROR"_s});
+        const QString folder = hub.dir.filePath(u"laptop-library/library"_s);
+        QVERIFY(libraryWith(folder, u"Alpha"_s));
+        Library library(folder);
+        QVERIFY(library.open());
+        for (const bool dryRun : {true, false}) {
+            const auto session = linked.open(host);
+            QVERIFY2(session, qPrintable(whyNot(session)));
+            const SyncSummary summary = HubRemote::sync(
+                library, host, [&session](const QByteArray &line) { return (*session)->ask(line); }, {}, [dryRun] {
+                    SyncOptions options;
+                    options.dryRun = dryRun;
+                    return options;
+                }());
+            QVERIFY2(summary.error.isEmpty() && summary.problems.isEmpty(),
+                     qPrintable(summary.error + summary.problems.join(u'\n') + hub.logLines()));
+            QCOMPARE(summary.sent, 1);
+            QCOMPARE(summary.dryRun, dryRun);
+        }
+        const auto status = linked.ask(host, {{"request", "status"}});
+        QVERIFY2(status, qPrintable(whyNot(status)));
+        QCOMPARE(status->value("libraries").toArray().at(0).toObject().value("books").toInt(), 1);
+        QVERIFY2(hub.logged(u"laptop began a sync of home"_s) && hub.logged(u"laptop began a dry run of a sync of home"_s),
+                 qPrintable(hub.logLines()));
     }
 };
 

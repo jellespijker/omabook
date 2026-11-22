@@ -17,6 +17,7 @@
 #include "hubrequests.h"
 #include "person.h"
 #include "settings.h"
+#include "synccommands.h"
 
 using namespace Qt::StringLiterals;
 
@@ -122,6 +123,24 @@ int forget(const QString &computer) {
 }
 
 } // namespace
+
+int runHubSync(const QStringList &arguments) {
+    // `omabook hub sync ...` is `omabook sync ...` with a hub, the one this computer is linked to when it names none.
+    QStringList given = arguments;
+    given.removeAt(1);
+    const HubLinks links;
+    const QString named = given.value(2);
+    if (named.isEmpty() || named.startsWith(u'-')) {
+        const QList<HubLinks::Hub> hubs = links.hubs();
+        if (hubs.size() != 1)
+            return failLine(hubs.isEmpty() ? u"This computer is linked to no hub. Link it: omabook hub add <host>"_s
+                                           : u"This computer is linked to more than one hub: name the one to sync with."_s);
+        given.insert(2, hubs.first().host);
+    } else if (const QString host = named.section(u':', 0, 0); !links.isLinked(host)) {
+        return failLine(Failure(Failure::Code::HubNotLinked, {host}).text());
+    }
+    return runSyncCli(given);
+}
 
 bool isHubLinkCommand(const QString &what) {
     return QStringList{u"add"_s, u"remove"_s, u"computers"_s, u"allow"_s, u"forget"_s}.contains(what);
