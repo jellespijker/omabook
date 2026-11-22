@@ -820,7 +820,6 @@
   "The last version that worked is still running.": "De laatste versie die werkte draait nog.",
   "The later revealed is followed, as a flashback corrects what was thought before.": "Wat later werd onthuld wordt gevolgd, zoals een flashback rechtzet wat eerder werd gedacht.",
   "The library can't be written: %1": "Er kan niet naar de bibliotheek worden geschreven: %1",
-  "The library is busy; try again.": "De bibliotheek is bezig; probeer het opnieuw.",
   "The mail server %1 can't be reached: %2": "De mailserver %1 is niet bereikbaar: %2",
   "The mail server %1 turned the book away: %2": "De mailserver %1 weigerde het boek: %2",
   "The microphone could not be opened.": "De microfoon kon niet worden geopend.",
@@ -2426,5 +2425,6 @@
   "Start the server, or check its address on the AI page, then index again.": "Start de server, of controleer zijn adres op de AI-pagina, en indexeer dan opnieuw.",
   "This isn't done by a server's model here, so there is no model to find for it.": "Dit doet hier geen model van een server, dus er is geen model voor te vinden.",
   "Turn on Use AI on the AI page.": "Zet ‘AI gebruiken’ aan op de AI-pagina.",
-  "Use %1": "%1 gebruiken"
+  "Use %1": "%1 gebruiken",
+  "Another program or task has been writing the library for too long; try again once it is done.": "Een ander programma of een andere taak schrijft al te lang in de bibliotheek; probeer het opnieuw als die klaar is."
 }

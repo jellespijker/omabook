@@ -18,6 +18,7 @@
 #include <array>
 #include <functional>
 #include <atomic>
+#include <optional>
 #include <ranges>
 
 #include "booksides.h"
@@ -25,6 +26,7 @@
 #include "formats.h"
 #include "graph.h"
 #include "hlc.h"
+#include "librarybatch.h"
 #include "librarymigrations.h"
 #include "log.h"
 #include "readingformat.h"
@@ -184,19 +186,6 @@ Library::~Library() {
     }
 }
 
-Library::Batch::Batch(const Library &library, Lock lock) : m_library(library) {
-    if (m_library.m_batches++ == 0)
-        m_begun = lock == Lock::AtOnce ? QSqlQuery(QSqlDatabase::database(m_library.m_connection)).exec("BEGIN IMMEDIATE")
-                                       : QSqlDatabase::database(m_library.m_connection).transaction();
-}
-
-Library::Batch::~Batch() {
-    if (m_library.m_batches == 1)
-        ChangeLog::afterWrite(m_library);
-    if (--m_library.m_batches == 0)
-        QSqlDatabase::database(m_library.m_connection).commit();
-}
-
 QString Library::databasePath() const { return databaseIn(m_root); }
 
 QString Library::databaseIn(const QString &root) { return root + "/omabook.db"; }
@@ -209,6 +198,10 @@ int Library::formatVersion() const {
 }
 
 bool Library::exec(const QString &sql, const QVariantList &values) const {
+    // Outside a batch, a write waits its turn as a batch does (librarybatch.h).
+    std::optional<WriteTurn> turn;
+    if (m_batches == 0 && !turn.emplace(databasePath(), m_connection).had())
+        return false;
     if (!m_statements->run(sql, values))
         return false;
     if (m_batches == 0)
@@ -227,6 +220,9 @@ QSqlQuery Library::query(const QString &sql, const QVariantList &values) const {
 }
 
 std::expected<qint64, QString> Library::insert(const QString &sql, const QVariantList &values) const {
+    std::optional<WriteTurn> turn; // as exec's
+    if (m_batches == 0 && !turn.emplace(databasePath(), m_connection).had())
+        return std::unexpected(Failure(Failure::Code::LibraryBusy).text());
     const auto id = m_statements->run(sql, values);
     if (id && m_batches == 0)
         ChangeLog::afterWrite(*this);
@@ -242,8 +238,9 @@ bool Library::open(QString *error) {
         return fail("The library folder can't be created: " + m_root);
     QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", m_connection);
     database.setDatabaseName(databasePath());
-    // The window and a command can write at once; the later one waits.
-    database.setConnectOptions("QSQLITE_BUSY_TIMEOUT=10000");
+    // The window and a command can write at once; the later one waits, as
+    // long as a batch can take (librarybatch.h), and then says so.
+    database.setConnectOptions(QString("QSQLITE_BUSY_TIMEOUT=%1").arg(WriteTurn::longest.count()));
     if (!database.open())
         return fail("The library can't be opened: " + database.lastError().text());
     const auto setUp = LibraryMigrations::setUp(*this);

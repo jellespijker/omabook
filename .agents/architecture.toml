@@ -38,7 +38,7 @@ modules = [
   "annotationanchors", "annotationschema", "booksides", "catalog", "changelog", "changelogannotations", "chronology", "eventtime", "changelogbaseline",
   "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers",
   "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries", "library",
-  "libraryannotations", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
+  "libraryannotations", "librarybatch", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
   "sharedspace", "signedops", "spacediff", "booklinks", "bookidentity", "bookpairing", "strayidentifiers", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
   "chronicle", "chroniclefilter", "chronologyorder", "eventorder", "spacesnapshot", "spaceworlds", "subscribedspace",
   "textmarks", "worldlayers", "chronologychart", "chronologyread", "tenancy", "tenancyschema", "tenancyleave",

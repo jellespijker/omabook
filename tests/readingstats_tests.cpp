@@ -16,6 +16,7 @@
 #include <QtTest>
 #include <atomic>
 #include <chrono>
+#include <latch>
 #include <thread>
 
 #include "fixtures.h"
@@ -204,33 +205,36 @@ private slots:
         QVERIFY(!ReadingGoal::set(library, {.year = 2026, .kind = ReadingGoal::Kind::Books, .target = -1}));
     }
 
-    // A goal set while another connection writes the library (the window's
-    // statistics are counted on a library of their own): each one is kept,
-    // or said not to be, never lost without a word.
-    void aGoalIsKeptWhileAnotherConnectionWrites() {
+    // A goal set while another connection (the window's statistics are
+    // counted on a library of their own) holds a batch open waits for that
+    // batch, and both are kept (#200), rather than "library busy".
+    void aGoalWaitsForTheBatchOfAnotherConnection() {
         QTemporaryDir dir;
         QVERIFY(Fixtures::epub(dir.filePath("book.epub")));
         Library library(dir.filePath("Library"));
         QVERIFY(library.open());
         const qint64 book = library.add(dir.filePath("book.epub")).id;
-        std::atomic<bool> stop{false};
-        std::atomic<int> written{0};
+        std::latch held(1);
+        std::atomic<bool> theirsDone = false;
         std::jthread other([&] {
             Library own(dir.filePath("Library"));
-            if (!own.open())
+            if (!own.open()) {
+                held.count_down();
                 return;
-            for (int at = 0; !stop.load(); ++at) {
-                ReadingLog::add(own, book, at % 100, at % 100 + 1, 1s, QDate(2026, 1, 1).addDays(at % 300).toString(Qt::ISODate));
-                ++written;
             }
+            const Library::Batch batch(own);
+            ReadingLog::add(own, book, 0, 10, 60s, "2026-01-02");
+            held.count_down();
+            std::this_thread::sleep_for(300ms);
+            theirsDone = true;
         });
-        QTRY_VERIFY(written.load() > 0);
-        for (int target = 1; target <= 40; ++target) {
-            const auto set = ReadingGoal::set(library, {.year = 2026, .kind = ReadingGoal::Kind::Books, .target = target});
-            QVERIFY2(set, qPrintable(Fixtures::whyNot(set)));
-            QCOMPARE(ReadingGoal::of(library, 2026).target, target);
-        }
-        stop = true;
+        held.wait();
+        const auto set = ReadingGoal::set(library, {.year = 2026, .kind = ReadingGoal::Kind::Books, .target = 12});
+        QVERIFY2(set, qPrintable(Fixtures::whyNot(set)));
+        QVERIFY2(theirsDone, "the goal was written while the other's batch was open");
+        other.join();
+        QCOMPARE(ReadingGoal::of(library, 2026).target, 12);
+        QCOMPARE(Graph(library).readingLog(book).size(), 1);
     }
 
     // A goal set on one computer, and the time a day's reading took there,

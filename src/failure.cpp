@@ -64,7 +64,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NoSuchYear, tr("There is no year %1.")},
     {Failure::Code::GoalUnknownKind, tr("A goal is of books or of hours, not of “%1”.")},
     {Failure::Code::GoalOutOfRange, tr("A goal is a number from 1 to 100000.")},
-    {Failure::Code::LibraryBusy, tr("The library is busy; try again.")},
+    {Failure::Code::LibraryBusy, tr("Another program or task has been writing the library for too long; try again once it is done.")},
     {Failure::Code::GoalNotKept, tr("The goal couldn't be kept; try again.")},
     {Failure::Code::NoMicrophone, tr("There is no microphone.")},
     {Failure::Code::MicrophoneStopped, tr("The microphone stopped giving sound.")},

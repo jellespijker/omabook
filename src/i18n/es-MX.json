@@ -852,7 +852,6 @@
   "The last version that worked is still running.": "La última versión que funcionó sigue en marcha.",
   "The later revealed is followed, as a flashback corrects what was thought before.": "Se sigue lo revelado después, como un flashback corrige lo que se pensaba antes.",
   "The library can't be written: %1": "No se puede escribir en la biblioteca: %1",
-  "The library is busy; try again.": "La biblioteca está ocupada; inténtalo de nuevo.",
   "The mail server %1 can't be reached: %2": "No se puede llegar al servidor de correo %1: %2",
   "The mail server %1 turned the book away: %2": "El servidor de correo %1 rechazó el libro: %2",
   "The microphone could not be opened.": "No se pudo abrir el micrófono.",
@@ -2526,5 +2525,6 @@
   "Start the server, or check its address on the AI page, then index again.": "Inicia el servidor, o revisa su dirección en la página de IA, y vuelve a indexar.",
   "This isn't done by a server's model here, so there is no model to find for it.": "Aquí esto no lo hace el modelo de un servidor, así que no hay un modelo que buscar.",
   "Turn on Use AI on the AI page.": "Activa «Usar IA» en la página de IA.",
-  "Use %1": "Usar %1"
+  "Use %1": "Usar %1",
+  "Another program or task has been writing the library for too long; try again once it is done.": "Otro programa o tarea lleva demasiado tiempo escribiendo en la biblioteca; inténtalo de nuevo cuando termine."
 }

@@ -13,7 +13,6 @@
 #include <QStringList>
 #include <algorithm>
 #include <array>
-#include <chrono>
 #include <print>
 #include <ranges>
 #include <tuple>
@@ -22,6 +21,7 @@
 #include "changelog.h"
 #include "keptops.h"
 #include "library.h"
+#include "librarybatch.h"
 #include "libraryschema.h"
 #include "log.h"
 #include "replication.h"
@@ -48,6 +48,7 @@ std::expected<void, QString> Library::backUp(int schema) const {
     {
         QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", connection);
         database.setDatabaseName(databasePath());
+        database.setConnectOptions(QString("QSQLITE_BUSY_TIMEOUT=%1").arg(WriteTurn::longest.count()));
         if (!database.open())
             failed = database.lastError().text();
         else if (QSqlQuery copy(database); !copy.exec(QString("VACUUM INTO '%1'").arg(QString(file).replace('\'', "''"))))
@@ -180,15 +181,9 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
     // Two programs opening a library at once (the window and a command), the
     // first time or the first after an update, would otherwise both see it
     // unready and both take the same steps, copy and baseline (#11). So it is
-    // set up holding the database alone, and the other, waiting the longer
-    // a migration takes, then finds it ready.
-    QSqlQuery wait = library.query("PRAGMA busy_timeout");
-    const int usualWait = wait.next() ? wait.value(0).toInt() : 0;
-    wait.finish();
-    static constexpr std::chrono::milliseconds setUpWait = std::chrono::minutes(2);
-    library.exec(QString("PRAGMA busy_timeout = %1").arg(setUpWait.count()));
+    // set up holding the database alone, and the other, waiting as long as
+    // a migration takes (WriteTurn::longest, as every write), then finds it ready.
     const Library::Batch setUp(library, Library::Batch::Lock::AtOnce);
-    library.exec(QString("PRAGMA busy_timeout = %1").arg(usualWait));
     // When it can't be had (a library that can only be read, or another
     // program at it still after the wait), one that is ready opens as it is,
     // and one that isn't is not changed.

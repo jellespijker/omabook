@@ -19,6 +19,7 @@
 
 class QSqlQuery;
 class Statements;
+class WriteTurn;
 
 struct Book {
     qint64 id = 0;
@@ -458,6 +459,7 @@ public:
     private:
         const Library &m_library;
         bool m_begun = true;
+        std::unique_ptr<WriteTurn> m_turn; // the outermost one's, while it lives (librarybatch.h)
     };
 
 private:
