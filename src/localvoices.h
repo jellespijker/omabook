@@ -8,24 +8,30 @@
 #include <QTemporaryDir>
 #include <memory>
 
+#include "sounddevices.h"
 #include "voice.h"
 
 // A sound file played to the desktop's speakers, once, saying when it ended:
-// how a sentence Piper or a server made is heard. A voice that is given one
-// (RealtimeVoice) may be given a stand-in in the tests, which plays nothing.
+// how a sentence Piper or a server made is heard. It plays to the desktop's
+// default output, and moves to another as the default changes, mid-sentence
+// (#173). A voice that is given one (RealtimeVoice) may be given a stand-in
+// in the tests, which plays nothing.
 class SoundOut : public QObject {
     Q_OBJECT
 
 public:
-    explicit SoundOut(QObject *parent = nullptr);
+    explicit SoundOut(std::unique_ptr<SoundDevices> devices = SoundDevices::system(), QObject *parent = nullptr);
     virtual void play(const QString &file);
     virtual void stop();
+    // The output it plays to, by its id.
+    [[nodiscard]] QByteArray device() const { return m_default.now().id; }
 
 signals:
     void ended();
     void failed(const QString &why);
 
 private:
+    DefaultDevice m_default;
     QAudioOutput m_output;
     QMediaPlayer m_player;
 };
@@ -88,7 +94,10 @@ private:
 
 // speech-dispatcher (#73), the desktop's speech service, through `spd-say`:
 // what reads aloud where Piper isn't installed, in whichever synthesiser it
-// is set up with (espeak-ng unless changed). Its voices are its kinds.
+// is set up with (espeak-ng unless changed). Its voices are its kinds. Its
+// own server plays the sound, not Omabook, as a client of PipeWire's (through
+// its Pulse or PipeWire output) that names no device, so PipeWire keeps it on
+// the default output as that changes (#173).
 class SpeechDispatcherVoice : public Voice {
     Q_OBJECT
 

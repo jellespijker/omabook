@@ -24,6 +24,8 @@ moves those lines under its version.
 ### Fixed
 
 - A sync settles a book's cover whichever computer starts it (#168): of a book with a cover on one computer and none on the other, the one without takes it, whatever the times say, and a dry run from either computer lists the book alike, as one whose details are the same on both lists it from neither. A cover given to the computer asked is now listed among the details it takes.
+- Sound follows the desktop's output and input as they change (#173): switch to headphones, a Bluetooth speaker or a monitor's speakers, or unplug the one in use, and reading aloud, Hear It, spoken answers, voice previews, plugins' sound and recordings played back move to the new default as they play, going on where they were; dictation, voice commands and plugins' recordings go on listening on the new default microphone.
+
 ### Changed
 - OpenAI's voices read on after OpenAI shuts down its speech API on 2027-01-06 (#169): once OpenAI says its model there is gone, the same sentence is read by its successor, gpt-realtime-2.1-mini, over OpenAI's Realtime API, and so is every one after it; a model of the Realtime API (`gpt-realtime-…`) chosen on the AI page reads there at once. Its voices are those the Realtime API has, at up to one and a half times their pace; as before, only where hosted is allowed for text to speech, never with the AI turned off, and "Hear It" and Stop work as they did. Omabook now needs `qt6-websockets`.
 - Two people whose annotations are shown beside yours are never in one colour (#161): their colours, made from who they are, could fall on the same one or two alike, and now stand well apart, the same on every computer.

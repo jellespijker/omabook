@@ -47,8 +47,11 @@ void abandon(QPointer<QProcess> &process) {
 
 } // namespace
 
-SoundOut::SoundOut(QObject *parent) : QObject(parent) {
+SoundOut::SoundOut(std::unique_ptr<SoundDevices> devices, QObject *parent)
+    : QObject(parent), m_default(DefaultDevice::Way::Out, std::move(devices)), m_output(m_default.now().device) {
     m_player.setAudioOutput(&m_output);
+    // Qt's player takes a new device as it plays, and goes on where it was.
+    connect(&m_default, &DefaultDevice::moved, this, [this](const SoundDevice &to) { m_output.setDevice(to.device); });
     connect(&m_player, &QMediaPlayer::mediaStatusChanged, this, [this](QMediaPlayer::MediaStatus status) {
         if (status == QMediaPlayer::EndOfMedia)
             emit ended();

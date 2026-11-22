@@ -4,6 +4,8 @@
 // sound, and a stand-in plugin that records with the person's yes and plays
 // it back. The build machine has no sound card: the microphone and the
 // speakers are stand-ins that the tests feed and drain at their own pace.
+// Nor has it the desktop's devices: a stand-in for them says when the
+// default output or input changes, which what plays and listens follows (#173).
 
 #include <QElapsedTimer>
 #include <QFile>
@@ -21,7 +23,9 @@
 #include "audiodevices.h"
 #include "audioplayer.h"
 #include "audiorecorder.h"
+#include "fakesounddevices.h"
 #include "fixtures.h"
+#include "localvoices.h"
 #include "opusreader.h"
 #include "opuswriter.h"
 #include "scriptapi.h"
@@ -162,6 +166,26 @@ private:
     qint64 m_played = 0;
 };
 
+[[nodiscard]] QList<QByteArray> movedTo(const QSignalSpy &spy) {
+    QList<QByteArray> ids;
+    for (const QList<QVariant> &arguments : spy)
+        ids << arguments.first().value<SoundDevice>().id;
+    return ids;
+}
+
+// A second of silence as a WAV file, as Piper writes a sentence.
+[[nodiscard]] QByteArray wavOfSilence() {
+    const QByteArray samples(48000 * 2, '\0');
+    const auto le = [](quint32 value, int size) {
+        QByteArray bytes;
+        for (int i = 0; i < size; ++i)
+            bytes.append(static_cast<char>((value >> (8U * static_cast<unsigned>(i))) & 0xffU));
+        return bytes;
+    };
+    return "RIFF" + le(36 + samples.size(), 4) + "WAVEfmt " + le(16, 4) + le(1, 2) + le(1, 2) + le(48000, 4) + le(96000, 4) + le(2, 2)
+           + le(16, 2) + "data" + le(samples.size(), 4) + samples;
+}
+
 // Devices whose microphone and speakers are the stand-ins, each kept as it
 // is made so the test can feed and drain it.
 struct Room {
@@ -259,6 +283,64 @@ class AudioTests : public QObject {
     Q_OBJECT
 
 private slots:
+    void playingMovesToANewDefaultOutput() {
+        Desktop desktop;
+        DefaultDevice output(DefaultDevice::Way::Out, std::move(desktop.owned));
+        QSignalSpy moved(&output, &DefaultDevice::moved);
+        QCOMPARE(output.now().id, "speakers"_ba);
+
+        desktop.devices->setOutput("headphones");
+        QCOMPARE(movedTo(moved), QList<QByteArray>{"headphones"});
+        QCOMPARE(output.now().id, "headphones"_ba);
+        // Another device came, or an input changed: the default is the same, nothing moves.
+        desktop.devices->setOutput("headphones");
+        desktop.devices->setInput("headset");
+        QCOMPARE(moved.size(), 1);
+    }
+
+    void aDeviceGoneFallsBackToTheNewDefault() {
+        Desktop desktop;
+        desktop.devices->setOutput("bluetooth");
+        DefaultDevice output(DefaultDevice::Way::Out, std::move(desktop.owned));
+        QSignalSpy moved(&output, &DefaultDevice::moved);
+
+        // The headphones are switched off: the desktop's default is the speakers again.
+        desktop.devices->setOutput("speakers");
+        // None left at all: what plays stays, and goes on once there is one.
+        desktop.devices->setOutput({});
+        QCOMPARE(output.now().id, QByteArray());
+        desktop.devices->setOutput("monitor");
+        QCOMPARE(movedTo(moved), (QList<QByteArray>{"speakers", "monitor"}));
+    }
+
+    void listeningMovesToANewDefaultInput() {
+        Desktop desktop;
+        DefaultDevice input(DefaultDevice::Way::In, std::move(desktop.owned));
+        QSignalSpy moved(&input, &DefaultDevice::moved);
+        QCOMPARE(input.now().id, "built-in"_ba);
+
+        desktop.devices->setOutput("headphones");
+        desktop.devices->setInput("headset");
+        desktop.devices->setInput("built-in");
+        QCOMPARE(movedTo(moved), (QList<QByteArray>{"headset", "built-in"}));
+    }
+
+    void aSentenceHeardMovesToTheNewDefault() {
+        QTemporaryDir dir;
+        const QString wav = dir.filePath("sentence.wav");
+        QVERIFY(Fixtures::write(wav, wavOfSilence()));
+        Desktop desktop;
+        SoundOut sound(std::move(desktop.owned));
+        QCOMPARE(sound.device(), "speakers"_ba);
+
+        sound.play(wav);
+        desktop.devices->setOutput("headphones");
+        QCOMPARE(sound.device(), "headphones"_ba);
+        desktop.devices->setOutput("speakers");
+        QCOMPARE(sound.device(), "speakers"_ba);
+        sound.stop();
+    }
+
     void aRecordingIsReadBackAsItWasWritten() {
         QTemporaryDir dir;
         const QString path = dir.filePath("three.opus");

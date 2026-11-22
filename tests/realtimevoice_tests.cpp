@@ -21,6 +21,7 @@
 #include "airegistry.h"
 #include "fakeaiserver.h"
 #include "fakerealtimeserver.h"
+#include "fakesounddevices.h"
 #include "fixtures.h"
 #include "localvoices.h"
 #include "openaivoice.h"
@@ -42,7 +43,8 @@ namespace {
 // Plays nothing: keeps what it was given and ends at once, as a sound would.
 class FakeSoundOut : public SoundOut {
 public:
-    explicit FakeSoundOut(QList<QByteArray> &played) : m_played(played) {}
+    explicit FakeSoundOut(QList<QByteArray> &played, std::unique_ptr<SoundDevices> devices = std::make_unique<FakeDevices>("speakers", ""))
+        : SoundOut(std::move(devices)), m_played(played) {}
     void play(const QString &file) override {
         QFile sound(file);
         m_played.append(sound.open(QIODevice::ReadOnly) ? sound.readAll() : QByteArray());
@@ -142,6 +144,25 @@ private slots:
                      .value("voice")
                      .toString(),
                  QString::fromLatin1(RealtimeVoice::defaultVoice));
+    }
+
+    // What it reads is heard on the desktop's default output, and moves to
+    // another as that changes (#173).
+    void itsSoundFollowsTheDefaultOutput() {
+        FakeRealtimeServer server;
+        QList<QByteArray> played;
+        Desktop desktop;
+        auto made = std::make_unique<FakeSoundOut>(played, std::move(desktop.owned));
+        const SoundOut *sound = made.get();
+        RealtimeVoice voice(openAi(u"https://api.openai.com/v1"_s), QUrl(server.url()), {}, std::move(made));
+        QSignalSpy spoken(&voice, &Voice::spoken);
+        QCOMPARE(sound->device(), "speakers"_ba);
+        voice.say(u"Call me Ishmael."_s, {.rate = 1.0, .voice = u"marin"_s, .language = u"en"_s});
+        desktop.devices->setOutput("headphones");
+        QTRY_COMPARE(spoken.size(), 1);
+        QCOMPARE(sound->device(), "headphones"_ba);
+        desktop.devices->setOutput("speakers");
+        QCOMPARE(sound->device(), "speakers"_ba);
     }
 
     // The next sentence in the same voice and pace goes over the same
