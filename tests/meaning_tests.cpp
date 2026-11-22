@@ -16,6 +16,7 @@
 #include <QtTest>
 #include <algorithm>
 
+#include "aifallback.h"
 #include "booktext.h"
 #include "embeddings.h"
 #include "fakeaiserver.h"
@@ -216,7 +217,9 @@ private slots:
         settings.setRecognition({{"own", QJsonArray{"embeddings.example.com"}}});
         QVERIFY(Embeddings::route(settings));
         QVERIFY(!Embeddings::route(settings)->hosted);
-        // Allowed, it may be sent, and it is said to be hosted, which the user is told.
+        // Allowed, it may be sent, and it is said to be hosted, which the user is told; with no
+        // fallback (#174), as this address answers nothing here and this computer would stand in.
+        AiFallback::choose(settings, Capability::Embeddings, {{QStringLiteral("to"), QStringLiteral("none")}});
         settings.setRecognition({});
         settings.setMeaningHosted(true);
         route = Embeddings::route(settings);
