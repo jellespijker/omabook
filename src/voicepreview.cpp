@@ -23,6 +23,8 @@ void VoicePreview::play(const QString &text, const QString &language) {
     m_voice = *std::move(voice);
     connect(m_voice.get(), &Voice::spoken, this, [this] { ended({}); });
     connect(m_voice.get(), &Voice::failed, this, [this](const Failure &why) { ended(why.text()); });
+    // A model OpenAI retired is kept, so the AI page's row says so (#162).
+    connect(m_voice.get(), &Voice::modelRetired, this, [this](const QString &model) { Voices::retire(*m_settings, model); });
     m_why.clear();
     emit changed();
     m_voice->say(text, Voices::speech(*m_settings, language));

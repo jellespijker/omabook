@@ -33,7 +33,8 @@ class AiCapabilityRows : public QObject {
     //   and for speech to text, timed (whether its words have their moments);
 //   for text to speech, where it may read, voices (the engine's), voice,
 //   rate and paced (whether it takes a pace: Gemini's doesn't), each kept
-//   per engine (#147)
+//   per engine (#147), and modelRetired, the model chosen for OpenAI's
+//   voices when OpenAI has retired it (#162)
     Q_PROPERTY(QVariantList rows READ rows NOTIFY changed)
     // Off stops every model (#133): `ai_provider` "off".
     Q_PROPERTY(bool aiOn READ aiOn NOTIFY changed)

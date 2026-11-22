@@ -28,6 +28,10 @@ moves those lines under its version.
 
 - Bringing a library up to date, and a sync, no longer remove a book's own identifiers as another's (#166): an ISBN equal to the book's own, and a Goodreads id or Calibre uuid first recorded on a book of its title, stay with it, whichever book an older Omabook gave them to first. One whose book can't be told is kept and named. And `--unlink` finds a link by the title a book has on this computer, also when this computer's log still has the wrong title an older Omabook gave it.
 
+### Changed
+
+- OpenAI's voices keep reading when OpenAI retires the model chosen for them (#162): a model OpenAI answers is retired or unknown gives way to the default, gpt-4o-mini-tts, from the same sentence, and the AI page's Text to speech row says OpenAI retired it, until another is chosen. Should OpenAI retire the default too (it shuts down every model of its speech API on 2027-01-06, and its successor, gpt-realtime-2.1-mini, is only on its Realtime API), reading aloud stops saying that OpenAI retired the model, rather than with an HTTP status.
+
 ## [0.3.1] - 2026-11-22
 
 ### Fixed

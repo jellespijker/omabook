@@ -16,6 +16,7 @@
 #include <QtTest>
 #include <memory>
 
+#include "aicapabilityrows.h"
 #include "aiendpoint.h"
 #include "airegistry.h"
 #include "fakeaiserver.h"
@@ -56,6 +57,25 @@ namespace {
     };
     wav += le32(36 + pcm.size()) + "WAVEfmt " + le32(16) + le16(1) + le16(1) + le32(16000) + le32(32000) + le16(2) + le16(16);
     return wav + "data" + le32(pcm.size()) + pcm;
+}
+
+// OpenAI's answer for a model it never had ("model_not_found"), and one for
+// a model it has shut down (#162), for which its error codes name none: in
+// its words, with no code.
+[[nodiscard]] FakeServer::Reply retired(const QString &model) {
+    const QJsonObject error{
+        {"message", u"The model `%1` has been retired. Learn more: https://platform.openai.com/docs/deprecations"_s.arg(model)},
+        {"type", "invalid_request_error"},
+        {"param", QJsonValue::Null},
+        {"code", QJsonValue::Null}};
+    return {.status = "400 Bad Request", .body = QJsonDocument(QJsonObject{{"error", error}}).toJson(QJsonDocument::Compact)};
+}
+[[nodiscard]] FakeServer::Reply notFound(const QString &model) {
+    const QJsonObject error{{"message", u"The model `%1` does not exist or you do not have access to it."_s.arg(model)},
+                            {"type", "invalid_request_error"},
+                            {"param", QJsonValue::Null},
+                            {"code", "model_not_found"}};
+    return {.status = "404 Not Found", .body = QJsonDocument(QJsonObject{{"error", error}}).toJson(QJsonDocument::Compact)};
 }
 
 // Says a sentence and waits for it to be asked of the server.
@@ -187,6 +207,99 @@ private slots:
         QCOMPARE(Voices::engine(*chosen).error().code(), Failure::Code::VoiceAiOff);
         QCOMPARE(AiRegistry::status(*chosen, Capability::TextToSpeech).why, CapabilityLack::AiOff);
         QVERIFY(AiEndpoints::keepKey(server.url(), {}, m_secrets));
+    }
+    // A model chosen for OpenAI's voices that OpenAI has retired, or doesn't
+    // have, gives way to the default (#162): the sentence is asked again with
+    // it, the model is kept as retired so the AI page's row says so, and the
+    // next sentence goes to the default at once. Chosen again, it is tried again.
+    void aRetiredModelFallsBackToTheDefault_data() {
+        QTest::addColumn<QString>("model");
+        QTest::addColumn<bool>("retiredNotMissing");
+        QTest::newRow("retired") << u"tts-1-hd"_s << true;
+        QTest::newRow("not found") << u"gpt-9-tts"_s << false;
+    }
+    void aRetiredModelFallsBackToTheDefault() {
+        QFETCH(QString, model);
+        QFETCH(bool, retiredNotMissing);
+        FakeServer server;
+        server.answering = [&](const FakeServer::Request &asked) {
+            if (asked.json().value("model").toString() != model)
+                return FakeServer::Reply{.status = "200 OK", .body = silence()};
+            return retiredNotMissing ? retired(model) : notFound(model);
+        };
+        QVERIFY(AiEndpoints::keepKey(server.url(), "sk-voices", m_secrets));
+        const auto chosen = settings({{"engine", "openai"}, {"openai_url", server.url()}, {"openai_model", model}}, true);
+        QCOMPARE(AiRegistry::status(*chosen, Capability::TextToSpeech).model, model);
+        VoicePreview preview(chosen.get());
+        preview.play("This is how your books will be read aloud.", "en");
+        QTRY_COMPARE(server.received.size(), 2);
+        QTest::qWait(50);
+        // Read with the default (whether this computer can play it is no matter here).
+        QVERIFY2(!preview.why().contains(model), qPrintable(preview.why()));
+        preview.stop();
+        QCOMPARE(server.received.at(0).json().value("model").toString(), model);
+        QCOMPARE(server.received.at(1).json().value("model").toString(), QString(ServerVoice::openAiModel));
+        QCOMPARE(server.received.at(1).json().value("input").toString(), QString("This is how your books will be read aloud."));
+        QCOMPARE(Voices::retiredChoice(*chosen), model);
+        QVERIFY(AiRegistry::status(*chosen, Capability::TextToSpeech).model.isEmpty()); // the default
+        AiCapabilityRows rows(chosen.get());
+        rows.watch(true);
+        const auto row = [&rows] {
+            for (const QVariant &each : rows.rows())
+                if (each.toMap().value("capability") == "text-to-speech")
+                    return each.toMap();
+            return QVariantMap();
+        };
+        QCOMPARE(row().value("modelRetired").toString(), model);
+        auto voice = AiRegistry::voice(*chosen);
+        QVERIFY2(voice, qPrintable(Fixtures::whyNot(voice)));
+        (*voice)->say(u"Call me Ishmael."_s, Voices::speech(*chosen, "en"));
+        QTRY_COMPARE(server.received.size(), 3);
+        (*voice)->stop();
+        QCOMPARE(server.received.at(2).json().value("model").toString(), QString(ServerVoice::openAiModel));
+        // Chosen again, it is given another try, and the row no longer says it is retired.
+        rows.setModel("text-to-speech", model);
+        QVERIFY(Voices::retiredChoice(*chosen).isEmpty());
+        QVERIFY(row().value("modelRetired").toString().isEmpty());
+        QVERIFY(AiEndpoints::keepKey(server.url(), {}, m_secrets));
+    }
+    // With the default retired too, there is nothing to fall back to: it says
+    // so, once, by the model's name (not a status); and any other failure is
+    // no reason to change models.
+    void withTheDefaultRetiredItSaysSo() {
+        FakeServer server;
+        server.answering = [](const FakeServer::Request &asked) { return retired(asked.json().value("model").toString()); };
+        QVERIFY(AiEndpoints::keepKey(server.url(), "sk-voices", m_secrets));
+        const auto chosen = settings({{"engine", "openai"}, {"openai_url", server.url()}}, true);
+        VoicePreview preview(chosen.get());
+        preview.play("Hi.", "en");
+        QTRY_VERIFY(!preview.playing());
+        QCOMPARE(preview.why(), Failure(Failure::Code::VoiceModelRetired, {"OpenAI", ServerVoice::openAiModel}).text());
+        QCOMPARE(server.received.size(), 1);
+        QVERIFY(Voices::retiredChoice(*chosen).isEmpty());
+
+        FakeServer failing;
+        failing.answering = [](const FakeServer::Request &) {
+            return FakeServer::Reply{.status = "500 Internal Server Error", .body = "{}"};
+        };
+        QVERIFY(AiEndpoints::keepKey(failing.url(), "sk-voices", m_secrets));
+        const auto other = settings({{"engine", "openai"}, {"openai_url", failing.url()}, {"openai_model", "tts-1-hd"}}, true);
+        VoicePreview again(other.get());
+        again.play("Hi.", "en");
+        QTRY_VERIFY(!again.playing());
+        QCOMPARE(again.why(), Failure(Failure::Code::VoiceServerFailed, {"OpenAI", "500"}).text());
+        QCOMPARE(failing.received.size(), 1);
+        QVERIFY(Voices::retiredChoice(*other).isEmpty());
+        QVERIFY(AiEndpoints::keepKey(server.url(), {}, m_secrets));
+        QVERIFY(AiEndpoints::keepKey(failing.url(), {}, m_secrets));
+    }
+    // What says a model is gone, and what doesn't: a 404 of a wrong address isn't.
+    void whatSaysAModelIsGone() {
+        QVERIFY(ServerVoice::modelGone(400, retired("tts-1").body));
+        QVERIFY(ServerVoice::modelGone(404, notFound("tts-1").body));
+        QVERIFY(!ServerVoice::modelGone(404, "<html>Not Found</html>"));
+        QVERIFY(!ServerVoice::modelGone(500, notFound("tts-1").body));
+        QVERIFY(!ServerVoice::modelGone(400, R"({"error":{"message":"Input is too long.","code":null}})"));
     }
     // Gemini's voices by the same rule; they take no pace.
     void geminisVoicesReadOnlyWhereAllowed() {

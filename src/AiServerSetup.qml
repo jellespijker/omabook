@@ -96,4 +96,13 @@ ColumnLayout {
             onEditingFinished: if (text.trim() !== (setup.info.modelChoice || "")) setup.desk.setModel(setup.capability, text)
         }
     }
+    // OpenAI's voices, with a model OpenAI has retired: they read with the default (#162).
+    Label {
+        objectName: setup.capability + "ModelRetired"
+        Layout.fillWidth: true
+        visible: !!setup.info.modelRetired
+        wrapMode: Text.Wrap
+        text: visible ? qsTr("OpenAI has retired %1, so its voices read with the default (%2). Choose another model, or leave it empty.")
+                        .arg(setup.info.modelRetired).arg(setup.info.modelDefault) : ""
+    }
 }

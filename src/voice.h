@@ -40,4 +40,7 @@ public:
 signals:
     void spoken();
     void failed(const Failure &why);
+    // The server retired `model` (or never had it), and its default reads
+    // instead (ServerVoice, #162): kept by whoever reads for the person.
+    void modelRetired(const QString &model);
 };

@@ -20,6 +20,8 @@
 #include "fakeaiserver.h"
 #include "fixtures.h"
 #include "secretstore.h"
+#include "servervoice.h"
+#include "voices.h"
 
 using namespace Qt::StringLiterals;
 
@@ -445,6 +447,18 @@ private slots:
         QVERIFY(!desk.settings->readAloud().contains("model"));
         QTRY_VERIFY(text(desk, "text-to-speechSummary").contains("tts-1-hd"));
         desk.shot("ai-page-voice-openai");
+        // OpenAI says it retired that model (#162): the row says its voices read with the default.
+        QVERIFY(!desk.shows("text-to-speechModelRetired"));
+        Voices::retire(*desk.settings, "tts-1-hd");
+        QTRY_VERIFY(desk.shows("text-to-speechModelRetired"));
+        QCOMPARE(text(desk, "text-to-speechModelRetired"),
+                 QString("OpenAI has retired tts-1-hd, so its voices read with the default (%1). Choose another model, or leave it empty.")
+                     .arg(ServerVoice::openAiModel));
+        QTRY_VERIFY(!text(desk, "text-to-speechSummary").contains("tts-1-hd"));
+        desk.shot("ai-page-voice-openai-retired");
+        // Another model chosen, the row has nothing to say of it.
+        type(desk, "text-to-speechModel", "gpt-4o-mini-tts-2025-12-15");
+        QTRY_VERIFY(!desk.shows("text-to-speechModelRetired"));
         // Back to speech-dispatcher: its voice and pace come back.
         pick(desk, "text-to-speechProvider", 2);
         QTRY_COMPARE(value(desk, "voiceChoice", "currentIndex").toInt(), 2);

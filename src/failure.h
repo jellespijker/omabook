@@ -127,6 +127,7 @@ public:
         VoiceStopped,       // {name, what it said}
         VoiceUnplayed,      // {the player's reason}
         VoiceOpenAiNoKey,   // {}: OpenAI's voices, and no key for it (#147)
+        VoiceModelRetired,  // {where, model}: the server retired the model, and there is none to fall back to (#162)
         NothingToReadAloud, // {}: pages of pictures
         // Spaces and others' annotations (library, operations; #85).
         NoSuchSpace,            // {the name or id asked for}

@@ -105,8 +105,13 @@ void ReadAloud::rechoose() {
         return;
     }
     m_reading = reading;
+    heed(**voice);
     m_narration->setVoice(*std::move(voice));
     refresh();
+}
+
+void ReadAloud::heed(const Voice &voice) {
+    connect(&voice, &Voice::modelRetired, this, [this](const QString &model) { Voices::retire(*m_reader->backend()->settings(), model); });
 }
 
 void ReadAloud::refresh() {
@@ -211,6 +216,7 @@ void ReadAloud::start(const QString &atTop) {
             failed(voice.error());
         return;
     }
+    heed(**voice);
     const int section = m_reader->section();
     qsizetype offset = 0;
     if (document->kind() == Document::Flow) {

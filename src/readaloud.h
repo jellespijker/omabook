@@ -127,6 +127,8 @@ private:
     void choose(const QString &key, const QJsonValue &value);
     // The settings changed while it reads: the voice, its pace, or what reads.
     void rechoose();
+    // Keeps a model OpenAI says it retired, so the AI page says so (#162).
+    void heed(const Voice &voice);
     // Asks whether to install a voice, to read from `atTop` of `book` once there is one (0: only to have one).
     void offer(qint64 book, const QString &atTop);
     void installed();

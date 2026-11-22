@@ -117,9 +117,26 @@ namespace {
         .preset = u"openai"_s, .name = u"OpenAI"_s, .baseUrl = Voices::openAiUrl(settings), .key = key, .keyFile = {}, .model = {}};
 }
 
+[[nodiscard]] QStringList retiredModels(const Settings &settings) {
+    QStringList models;
+    for (const QJsonValue model : settings.readAloud().value("openai_retired"_L1).toArray())
+        models.append(model.toString());
+    return models;
+}
+
+void keepRetired(Settings &settings, const QStringList &models) {
+    QJsonObject setUp = settings.readAloud();
+    if (models.isEmpty())
+        setUp.remove("openai_retired"_L1);
+    else
+        setUp.insert(u"openai_retired"_s, QJsonArray::fromStringList(models));
+    settings.setReadAloud(setUp);
+}
+
+// The model chosen, unless OpenAI has retired it: then its default.
 [[nodiscard]] QString openAiModel(const Settings &settings) {
     const QString model = chosen(settings, "openai_model"_L1);
-    return model.isEmpty() ? QString::fromLatin1(ServerVoice::openAiModel) : model;
+    return model.isEmpty() || retiredModels(settings).contains(model) ? QString::fromLatin1(ServerVoice::openAiModel) : model;
 }
 
 // The engine whose voice and pace are kept: the one in use, else the one chosen.
@@ -187,7 +204,7 @@ std::expected<std::unique_ptr<Voice>, Failure> Voices::choose(const Settings &se
         auto reachable = openAi(settings, asked);
         if (!reachable)
             return std::unexpected(reachable.error());
-        return std::make_unique<ServerVoice>(*std::move(reachable), openAiModel(settings));
+        return std::make_unique<ServerVoice>(*std::move(reachable), openAiModel(settings), QString::fromLatin1(ServerVoice::openAiModel));
     }
     if (*which == "server"_L1) {
         auto reachable = server(settings, asked);
@@ -249,7 +266,8 @@ QString Voices::reader(const Settings &settings) {
     if (!which)
         return {};
     QJsonObject setUp = settings.readAloud();
-    for (const auto *field : {"voice", "rate", "voices", "hosted"})
+    // What OpenAI retired is learnt while it reads, which reads on with the default.
+    for (const auto *field : {"voice", "rate", "voices", "hosted", "openai_retired"})
         setUp.remove(QLatin1StringView(field));
     if (*which == "gemini"_L1)
         setUp.insert(u"gemini"_s, settings.gemini());
@@ -266,6 +284,25 @@ QString Voices::openAiUrl(const Settings &settings) {
 }
 
 bool Voices::openAiHasKey(const Settings &settings) { return !openAiKey(settings).isEmpty(); }
+
+QString Voices::retiredChoice(const Settings &settings) {
+    const QString model = chosen(settings, "openai_model"_L1);
+    return !model.isEmpty() && retiredModels(settings).contains(model) ? model : QString();
+}
+
+void Voices::retire(Settings &settings, const QString &model) {
+    QStringList models = retiredModels(settings);
+    if (model.isEmpty() || models.contains(model))
+        return;
+    models.append(model);
+    keepRetired(settings, models);
+}
+
+void Voices::forget(Settings &settings, const QString &model) {
+    QStringList models = retiredModels(settings);
+    if (models.removeAll(model.trimmed()) > 0)
+        keepRetired(settings, models);
+}
 
 QString Voices::nameOf(const QString &engine) {
     if (engine == "piper"_L1)

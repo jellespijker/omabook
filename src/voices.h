@@ -27,6 +27,8 @@ class Settings;
 //                    aloud (else the AI server), and its model ("tts-1")
 //   "openai_model"   OpenAI's model ("gpt-4o-mini-tts"), and "openai_url" for a
 //   "openai_url"     proxy or a test; the key is the one OpenAI answers with
+//   "openai_retired" the models OpenAI said it has retired (#162): one
+//                    chosen of them reads with the default instead
 //   "hosted"         whether a hosted server may be sent the book's text
 // Nothing goes to a server unless the person chose one for it: automatic
 // never does. As with recognition, a server is one's own (this computer,
@@ -54,6 +56,13 @@ void keep(Settings &settings, const QString &field, const QJsonValue &value);
 // whether there is a key for it.
 [[nodiscard]] QString openAiUrl(const Settings &settings);
 [[nodiscard]] bool openAiHasKey(const Settings &settings);
+// OpenAI's model chosen for its voices when OpenAI has retired it (it reads
+// with the default instead), else empty.
+[[nodiscard]] QString retiredChoice(const Settings &settings);
+// Keeps that OpenAI retired `model`; forget() gives it another try, as when
+// it is chosen again.
+void retire(Settings &settings, const QString &model);
+void forget(Settings &settings, const QString &model);
 // What to call an engine: "Piper", "speech-dispatcher", "OpenAI", "Gemini"; a server by its id.
 [[nodiscard]] QString nameOf(const QString &engine);
 // Whether the engine in use reads at the pace it is asked (Gemini's doesn't).

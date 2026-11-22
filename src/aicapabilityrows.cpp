@@ -216,6 +216,9 @@ QVariantMap AiCapabilityRows::row(Capability capability) const {
         modelChoice = Gemini::modelChosen(*m_settings, capability);
     row.insert(u"modelChoice"_s, modelChoice);
     row.insert(u"modelDefault"_s, modelDefaultOf(*m_settings, capability, chosen));
+    // A model OpenAI retired reads with the default, and the row says so (#162).
+    if (openAiVoice(capability, chosen))
+        row.insert(u"modelRetired"_s, Voices::retiredChoice(*m_settings));
     // Whether what writes out speech gives each word its moment (#146): voxtype doesn't.
     if (capability == Capability::SpeechToText && status.available) {
         const auto ways = AiRegistry::recognizers(*m_settings, Recognition::Kind::Audio, true);
@@ -327,6 +330,9 @@ void AiCapabilityRows::setModel(const QString &capability, const QString &model)
     if (!which || setUpOf(*which).model.isEmpty())
         return;
     if (const QString chosen = chosenOf(*m_settings, *which); chosen != "gemini"_L1) {
+        // One OpenAI retired, chosen again, is given another try.
+        if (openAiVoice(*which, chosen))
+            Voices::forget(*m_settings, model);
         setUp(*which, modelField(*which, chosen), model);
         return;
     }

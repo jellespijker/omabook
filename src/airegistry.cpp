@@ -168,8 +168,8 @@ private:
     QString model;
     if (*engine == "server"_L1)
         model = settings.readAloud().value("model"_L1).toString();
-    else if (*engine == "openai"_L1)
-        model = settings.readAloud().value("openai_model"_L1).toString();
+    else if (*engine == "openai"_L1 && Voices::retiredChoice(settings).isEmpty())
+        model = settings.readAloud().value("openai_model"_L1).toString(); // else it reads with the default (#162)
     else if (*engine == "gemini"_L1)
         model = Gemini::modelFor(settings, Capability::TextToSpeech);
     return {.capability = Capability::TextToSpeech,
