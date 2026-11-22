@@ -1,0 +1,44 @@
+id: hub-writes-through-the-keeper
+language: cpp
+severity: error
+message: A library is opened in the hub outside its keeper; ask the HubKeeper for it (write, whole), the hub's one writer (ADR 0013).
+note: |
+  On a hub only the daemon writes its libraries, and within the daemon only
+  the keeper (hubkeeper.cpp) holds and opens them, so that every write, job
+  and snapshot takes its turn through the keeper's lock (#179). Another part
+  of the hub that opened a library itself would write beside that lock, as
+  every process did before (#161). Elsewhere a program that isn't the daemon
+  is refused at run time too, by the hold (libraryhold.h).
+files:
+  - "src/hub*.cpp"
+  - "src/hub*.h"
+ignores:
+  # The keeper itself.
+  - "src/hubkeeper.cpp"
+rule:
+  any:
+    # Library library(root); Library library{root}; in a function, which the
+    # parser takes for a function's declaration or an initialised one; never a
+    # reference or a pointer to one.
+    - kind: declaration
+      inside:
+        kind: compound_statement
+        stopBy: end
+      all:
+        - has:
+            field: type
+            regex: '^Library$'
+        - has:
+            field: declarator
+            any:
+              - kind: function_declarator
+              - kind: init_declarator
+                has:
+                  field: declarator
+                  kind: identifier
+    - pattern: std::make_unique<Library>($$$ARGS)
+    - pattern: std::make_shared<Library>($$$ARGS)
+    - kind: call_expression
+      has:
+        field: function
+        regex: '^LibraryHold::take$'

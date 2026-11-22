@@ -28,6 +28,7 @@ Q_DECLARE_LOGGING_CATEGORY(lcGraph)
 Q_DECLARE_LOGGING_CATEGORY(lcPlugins)
 Q_DECLARE_LOGGING_CATEGORY(lcSites)
 Q_DECLARE_LOGGING_CATEGORY(lcSync)
+Q_DECLARE_LOGGING_CATEGORY(lcHub)
 
 namespace Log {
 
@@ -41,8 +42,8 @@ QString path(const QString &folder = {});
 struct Entry {
     QDateTime when;
     QString level;      // debug, info, warning, critical
-    QString program;    // window, cli, mcp
-    QString category;   // the part of Omabook: ai, library, graph, plugins, sites, sync, app, qml
+    QString program;    // window, cli, mcp, hub
+    QString category;   // the part of Omabook: ai, library, graph, plugins, sites, sync, hub, app, qml
     QString message;
     QJsonObject toJson() const;
 };

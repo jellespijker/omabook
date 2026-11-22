@@ -15,6 +15,7 @@ Q_LOGGING_CATEGORY(lcGraph, "omabook.graph", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcPlugins, "omabook.plugins", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcSites, "omabook.sites", QtInfoMsg)
 Q_LOGGING_CATEGORY(lcSync, "omabook.sync", QtInfoMsg)
+Q_LOGGING_CATEGORY(lcHub, "omabook.hub", QtInfoMsg)
 
 namespace {
 

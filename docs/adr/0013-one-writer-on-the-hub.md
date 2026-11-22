@@ -26,6 +26,11 @@ later fails at once when another wrote between (#161 found this as "database is 
   (a systemd unit that restarts it).
 - No lock fights or torn reads on a hub, and a snapshot always sees a whole library.
 - On a person's computer, nothing changes: the window is its one writer, as today.
+- Opening a library may write (bringing it up to date, the change log), so on a hub another program is refused
+  the libraries the daemon keeps altogether, reads too, for as long as it runs (#179: a hold in each library's
+  folder, `.omabook-hub.lock`). What it needs to read, it asks the daemon too.
+- The session runs as the daemon's user, as its socket is that user's alone: with the system unit, a computer's
+  key is installed for the hub's own user (`omabook`).
 
 ## Alternatives considered
 

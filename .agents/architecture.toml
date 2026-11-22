@@ -20,6 +20,7 @@ modules = [
   "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
   "deviceoptions", "qrcode", "portholder", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",
+  "hubplace",
 ]
 
 [layers.formats]
@@ -50,6 +51,7 @@ modules = [
   "privatebooks", "koreaderbooks", "bookspaces",
   "fileschema",
   "libraryfiles", "booklink",
+  "libraryhold",
 ]
 
 [layers.services]
@@ -83,6 +85,7 @@ modules = [
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synccopies", "syncrenames", "synctake", "synctakeannotations", "synctakecollections", "synctakegraph",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
   "kosyncroutes", "opdsroutes", "deviceserver", "deviceserving", "serveservice", "koreadersync", "sendbook",
+  "hubkeeper", "hubrequests", "hubdaemon", "hubschedule",
 ]
 
 # The two front ends are peers: neither includes the other. What both need
@@ -90,7 +93,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

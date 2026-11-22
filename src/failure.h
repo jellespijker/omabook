@@ -180,6 +180,18 @@ public:
         ServiceRefused,      // {what systemctl said}
         NoSystemd,           // {}
         ServiceNotAnswering, // {address}
+        // The hub (#179): the libraries it keeps, alone, and the requests it takes over its socket.
+        LibraryKeptByHub,    // {folder, the daemon's process}
+        HubNotRunning,       // {socket}
+        HubRunning,          // {socket}
+        HubCantListen,       // {socket, the system's reason}
+        HubNoLibraries,      // {}: no folder chosen for its libraries yet
+        HubNoSuchLibrary,    // {name}
+        HubLibraryUnnamed,   // {}: it keeps more than one, and the request named none
+        HubUnknownRequest,   // {request}
+        HubBadRequest,       // {}
+        HubSecretOpen,       // {file}: others may read it
+        HubSecretUnreadable, // {file, the system's reason}
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,               // {}: set to Off in the settings, so nothing is asked of any model or server (#133)

@@ -36,7 +36,7 @@
 #include "devicecommands.h"
 #include "findcommands.h"
 #include "folio.h"
-#include "libraries.h"
+#include "librariescommands.h"
 #include "logcommands.h"
 #include "readingcommands.h"
 #include "formats.h"
@@ -44,6 +44,7 @@
 #include "graph.h"
 #include "graphcontext.h"
 #include "graphtools.h"
+#include "hubcommands.h"
 #include "identitycommands.h"
 #include "importer.h"
 #include "interfacechange.h"
@@ -1092,42 +1093,6 @@ int notes(const QStringList &arguments) {
     return 0;
 }
 
-int libraries(const QStringList &arguments) {
-    Command command("libraries", "List the libraries Omabook knows, or make another the one in use.");
-    command.parser.addOption({"use", "Make the library in this folder the one in use.", "folder"});
-    command.parser.addOption({"create", "With --use: start a new library in a folder that isn't one yet."});
-    command.parser.addOption({"forget", "Take the library in this folder off the list; the folder stays.", "folder"});
-    command.parser.addOption({"trash", "Take it off the list and move its folder, books and all, to the trash.", "folder"});
-    if (!command.parse(arguments, 0, 0))
-        return 1;
-    Settings settings;
-    QString problem;
-    if (command.parser.isSet("forget") && !Libraries::forget(settings, command.parser.value("forget"), &problem))
-        return fail(problem);
-    if (command.parser.isSet("trash") && !Libraries::trash(settings, command.parser.value("trash"), &problem))
-        return fail(problem);
-    if (command.parser.isSet("use")) {
-        const QString folder = QDir(command.parser.value("use")).absolutePath();
-        if (!QFileInfo::exists(folder + "/omabook.db") && !command.parser.isSet("create"))
-            return fail("There is no library in " + folder + ". Add --create to start one there.");
-        Library opened(folder);
-        QString error;
-        if (!opened.open(&error))
-            return fail(error);
-        settings.setLibraryPath(folder);
-    }
-    QJsonArray array;
-    for (const QString &folder : settings.libraries()) {
-        const bool current = folder == settings.libraryPath(), exists = QFileInfo::exists(folder + "/omabook.db");
-        array << QJsonObject{{"folder", folder}, {"current", current}, {"exists", exists}};
-        if (!command.json())
-            print(stdout, QString("%1 %2%3").arg(current ? "*" : " ", folder, exists ? "" : "  (not there)"));
-    }
-    if (command.json())
-        printJson(QJsonObject{{"current", settings.libraryPath()}, {"libraries", array}});
-    return 0;
-}
-
 int tidy(const QStringList &arguments) {
     Command command("tidy", "Look the whole library over and list what would tidy it: the same book twice, an author "
                             "spelled several ways and, with --ai, books that belong to a series. Nothing changes without --apply.");
@@ -1959,7 +1924,7 @@ constexpr std::array cliCommands{
     CliCommand{"annotations"_L1, runAnnotationsCli},
     CliCommand{"logs"_L1, runLogsCli},
     CliCommand{"notes"_L1, notes},
-    CliCommand{"libraries"_L1, libraries},
+    CliCommand{"libraries"_L1, runLibrariesCli},
     CliCommand{"remove"_L1, remove},
     CliCommand{"set"_L1, set},
     CliCommand{"info"_L1, info},
@@ -1985,6 +1950,7 @@ constexpr std::array cliCommands{
     CliCommand{"opds"_L1, runOpdsCli},
     CliCommand{"manifest"_L1, runManifestCli},
     CliCommand{"identity"_L1, runIdentityCli},
+    CliCommand{"hub"_L1, runHubCli},
     CliCommand{"spaces"_L1, runSpacesCli},
     CliCommand{"plugins"_L1, plugins},
     CliCommand{"plugin"_L1, runPluginCli},

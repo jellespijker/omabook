@@ -10,7 +10,6 @@
 #include <QJsonDocument>
 #include <QRegularExpression>
 #include <QSqlDatabase>
-#include <QSqlError>
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVariant>
@@ -227,24 +226,6 @@ std::expected<qint64, QString> Library::insert(const QString &sql, const QVarian
     if (id && m_batches == 0)
         ChangeLog::afterWrite(*this);
     return id;
-}
-
-bool Library::open(QString *error) {
-    const auto fail = [this, error](const QString &why) {
-        qCWarning(lcLibrary).noquote() << m_root << "can't be opened:" << why;
-        return failed(error, why);
-    };
-    if (!QDir().mkpath(m_root))
-        return fail("The library folder can't be created: " + m_root);
-    QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", m_connection);
-    database.setDatabaseName(databasePath());
-    // The window and a command can write at once; the later one waits, as
-    // long as a batch can take (librarybatch.h), and then says so.
-    database.setConnectOptions(QString("QSQLITE_BUSY_TIMEOUT=%1").arg(WriteTurn::longest.count()));
-    if (!database.open())
-        return fail("The library can't be opened: " + database.lastError().text());
-    const auto setUp = LibraryMigrations::setUp(*this);
-    return setUp ? true : fail(setUp.error());
 }
 
 QString Library::bookFolder(qint64 id) const {

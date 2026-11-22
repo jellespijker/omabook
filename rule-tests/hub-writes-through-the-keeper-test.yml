@@ -1,0 +1,11 @@
+id: hub-writes-through-the-keeper
+valid:
+  - "void status(HubKeeper &keeper) { std::ignore = keeper.whole([](std::span<Library *const> kept) { return std::expected<void, Failure>{}; }); }"
+  - "Library *find(const QString &name);"
+  - "void count(const Library &library) { const auto books = library.books(); }"
+  - "void count(Library &kept) { Library &library = kept; const Library *other = &kept; }"
+invalid:
+  - "void status(const QString &root) { Library library(root); library.open(); }"
+  - "void status(const QString &root) { Library library{root}; }"
+  - "void status(const QString &root) { auto library = std::make_unique<Library>(root); }"
+  - "void status(const QString &root) { auto hold = LibraryHold::take(root); }"

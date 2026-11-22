@@ -1,0 +1,39 @@
+# The hub (#179): Omabook without a window, always on, as the one writer to
+# the libraries it keeps (ADR 0013). This variant runs as a user of its own,
+# omabook, whose ssh keys are the person's computers' (ADR 0012):
+#
+#   useradd --system --create-home --home-dir /var/lib/omabook-hub omabook
+#   sudo -u omabook omabook hub run --libraries /srv/omabook     once, to choose the folder (Ctrl+C after)
+#   systemctl enable --now omabook-hub
+#
+# Its state is in /var/lib/omabook-hub, its socket in /run/omabook-hub, and
+# what it says in the journal (journalctl -u omabook-hub). Its secrets are
+# systemd credentials named omabook-hub.<name> in /etc/credstore.encrypted
+# (systemd-creds encrypt), or 0600 files in its state's secrets folder; never
+# a keyring.
+[Unit]
+Description=Omabook hub: libraries kept without a window, always on
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=exec
+User=omabook
+Group=omabook
+ExecStart="@omabook_installed@" hub run
+# Back whenever it stops, unless it isn't set up (no folder for its libraries).
+Restart=always
+RestartSec=5
+RestartPreventExitStatus=78
+StateDirectory=omabook-hub
+StateDirectoryMode=0700
+RuntimeDirectory=omabook-hub
+RuntimeDirectoryMode=0700
+ImportCredential=omabook-hub.*
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=full
+
+[Install]
+WantedBy=multi-user.target

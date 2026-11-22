@@ -263,6 +263,18 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NoSystemd, tr("There is no systemd here (systemctl) to run Omabook's background service.")},
     {Failure::Code::ServiceNotAnswering,
      tr("Omabook's background service isn't answering at %1. Its log: journalctl --user -u omabook-serve")},
+    {Failure::Code::LibraryKeptByHub,
+     tr("The library in %1 is kept by the hub (omabook hub run, process %2), which alone writes it. Ask the hub, or stop it first.")},
+    {Failure::Code::HubNotRunning, tr("No hub is running here: nothing answers at %1. Start it with systemctl, or with omabook hub run.")},
+    {Failure::Code::HubRunning, tr("A hub is running here already, answering at %1.")},
+    {Failure::Code::HubCantListen, tr("The hub can't take requests at %1: %2")},
+    {Failure::Code::HubNoLibraries, tr("The hub has no folder for its libraries yet. Choose one: omabook hub run --libraries <folder>")},
+    {Failure::Code::HubNoSuchLibrary, tr("The hub keeps no library called %1.")},
+    {Failure::Code::HubLibraryUnnamed, tr("The hub keeps more than one library, so say which one.")},
+    {Failure::Code::HubUnknownRequest, tr("The hub takes no request called %1.")},
+    {Failure::Code::HubBadRequest, tr("The hub takes each request as one line of JSON: an object that names its request.")},
+    {Failure::Code::HubSecretOpen, tr("The secret %1 can be read by others; only the hub's own user may (chmod 600 it).")},
+    {Failure::Code::HubSecretUnreadable, tr("The hub can't read the secret %1: %2")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

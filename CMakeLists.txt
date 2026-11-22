@@ -100,3 +100,10 @@ install(DIRECTORY share/folio/ DESTINATION ${CMAKE_INSTALL_DATADIR}/folio/plugin
 # .mdz, a zipped Markdown book, as a type of its own.
 install(FILES share/omabook-mime.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages RENAME omabook.xml)
 install(FILES share/omabook/calibre_bridge.py DESTINATION ${CMAKE_INSTALL_DATADIR}/omabook)
+# The hub's systemd units (#179), a user and a system variant, running the
+# installed omabook hub run.
+set(omabook_installed "${CMAKE_INSTALL_FULL_BINDIR}/omabook")
+foreach(variant user system)
+  configure_file(share/systemd/${variant}/omabook-hub.service.in systemd/${variant}/omabook-hub.service @ONLY)
+  install(FILES ${CMAKE_BINARY_DIR}/systemd/${variant}/omabook-hub.service DESTINATION lib/systemd/${variant})
+endforeach()
