@@ -10,6 +10,8 @@
 #include "spaces.h"
 #include "statements.h"
 
+using namespace Qt::StringLiterals;
+
 ChangeLogFields::Map ChangeLogFields::logged(const Library &library, const QString &entity, const QString &globalId) {
     Map map;
     const QString me = Spaces::deviceId(library);
@@ -45,14 +47,18 @@ namespace {
 void ChangeLogFields::write(Context &context, const QString &field, const QString &value, qint64 rowHlc) {
     const auto it = context.existing.constFind(field);
     const Logged *logged = it != context.existing.cend() ? &*it : nullptr;
-    if (logged && logged->own == value)
+    // Of a book, what another device wrote is written by this one too, the
+    // first time its row holds it: a sync reads what a computer holds of a
+    // book from its device's operations alone, and without them the book
+    // there had no title, description or ISBN, or wasn't there (#210). Of
+    // the rest (the graph, collections, bookmarks), nothing reads it so, and
+    // what was taken is not written again.
+    const bool echoes = context.entity == "book"_L1;
+    if (logged && (logged->own == value || (!echoes && !logged->own && logged->value == value)))
         return;
     // A value this device took from another's operation keeps that one's
     // stamp: an echo of it stamped now could beat a newer edit made there
-    // meanwhile. At the same stamp and value it changes no outcome. It is
-    // written all the same, though the log has it: else this device's
-    // operations lack a field its row holds, and to another computer the
-    // book there has no title, description or ISBN, or isn't there (#210).
+    // meanwhile. At the same stamp and value it changes no outcome.
     const qint64 useHlc = logged && logged->value == value ? logged->hlc : newStamp(context, logged, rowHlc);
     ChangeLog::append(*context.library, {context.space, context.entity, context.gid, field, value, useHlc});
     context.existing.insert(field, {useHlc, Spaces::deviceId(*context.library), value, value});
