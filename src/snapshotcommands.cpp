@@ -16,6 +16,7 @@
 #include "hubplace.h"
 #include "library.h"
 #include "librarymigrations.h"
+#include "momentsnapshot.h"
 #include "settings.h"
 #include "snapshotdestinations.h"
 #include "snapshothealthcommands.h"
@@ -56,6 +57,8 @@ constexpr std::array risky{
     Risky{.command = "goodreads"_L1, .word = "sync"_L1, .option = {}, .reason = SnapshotReason::Import},
     Risky{.command = "openlibrary"_L1, .word = "sync"_L1, .option = {}, .reason = SnapshotReason::Import},
     Risky{.command = "opds"_L1, .word = {}, .option = "--add"_L1, .reason = SnapshotReason::Import},
+    Risky{.command = "collections"_L1, .word = "sort"_L1, .option = "--apply"_L1, .reason = SnapshotReason::BulkChange},
+    Risky{.command = "collections"_L1, .word = "sort"_L1, .option = "--pick"_L1, .reason = SnapshotReason::BulkChange},
 };
 
 // Options that only look, and change nothing.
@@ -71,16 +74,31 @@ constexpr std::array valued{"--library"_L1, "--model"_L1,     "--user"_L1,
                                [option](const QString &word) { return word == option || word.startsWith(QString(option) + u'='); });
 }
 
-// The first word after the command's name that is no option, nor an option's value.
-[[nodiscard]] QString firstWord(const QStringList &arguments) {
+// The words after the command's name that are no options, nor an option's values.
+[[nodiscard]] QStringList words(const QStringList &arguments) {
+    QStringList found;
     for (qsizetype i = 2; i < arguments.size(); ++i) {
         const QString &word = arguments.at(i);
         if (std::ranges::contains(valued, word))
             ++i;
         else if (!word.startsWith(u'-'))
-            return word;
+            found << word;
     }
-    return {};
+    return found;
+}
+
+[[nodiscard]] QString firstWord(const QStringList &arguments) { return words(arguments).value(0); }
+
+// A command that changes many books at once, as an agent runs it (#208): more
+// than MomentSnapshot::bulkBooks put in a collection, taken out or left to its
+// rule again, or given their details in their EPUBs (or all of them).
+[[nodiscard]] bool bulk(const QStringList &arguments) {
+    const QStringList named = words(arguments);
+    if (arguments.value(1) == "collections"_L1 && QStringList{u"include"_s, u"exclude"_s, u"follow"_s}.contains(named.value(0)))
+        return MomentSnapshot::isBulk(named.size() - 2);
+    if (arguments.value(1) == "embed"_L1)
+        return given(arguments, "--all"_L1) || MomentSnapshot::isBulk(named.size());
+    return false;
 }
 
 // The library a command works on: --library's, or the one in use.
@@ -248,7 +266,9 @@ std::optional<SnapshotReason> riskyMoment(const QStringList &arguments) {
     const auto *const found = std::ranges::find_if(risky, [&](const Risky &one) {
         return command == one.command && (one.word.isEmpty() || word == one.word) && (one.option.isEmpty() || given(arguments, one.option));
     });
-    return found == risky.end() ? std::nullopt : std::optional(found->reason);
+    if (found != risky.end())
+        return found->reason;
+    return bulk(arguments) ? std::optional(SnapshotReason::BulkChange) : std::nullopt;
 }
 
 void snapshotBeforeRisky(const QStringList &arguments) {

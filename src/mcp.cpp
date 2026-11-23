@@ -819,39 +819,6 @@ QList<Tool> coreTools() {
                       return Result::ok({{"proposals", proposals}});
                   }};
 
-    tools << Tool{"tidy_apply", "Apply chosen tidy-ups",
-                  "Makes the changes of the proposals given, which are objects as tidy_propose returned them. A "
-                  "\"duplicate\" folds one book into another and moves what is left of it to the trash, so ask the "
-                  "user first.",
-                  schema({{"proposals", list("The proposals to apply.", object("One proposal from tidy_propose."))}}, {"proposals"}),
-                  Destructive, [](const QJsonObject &arguments) {
-                      const Shelf at = shelf(arguments, false);
-                      if (!at)
-                          return Result::fail(at.error);
-                      QList<Proposal> proposals;
-                      for (const QJsonValue &given : arguments.value("proposals").toArray()) {
-                          const Proposal proposal = BookOps::proposalFromJson(given.toObject());
-                          if (!QStringList{"duplicate", "author", "series"}.contains(proposal.kind) || proposal.bookId <= 0)
-                              return Result::fail("Each proposal needs a \"kind\" (duplicate, author or series) and the book's \"id\", "
-                                                  "as tidy_propose returns them.");
-                          proposals << proposal;
-                      }
-                      // Merges last: they take books away that other proposals may name.
-                      std::ranges::stable_sort(proposals, [](const Proposal &a, const Proposal &b) {
-                          return a.kind != "duplicate" && b.kind == "duplicate";
-                      });
-                      int applied = 0;
-                      QStringList problems;
-                      for (const Proposal &proposal : std::as_const(proposals)) {
-                          QString error;
-                          if (Curation::apply(*at.library, proposal, &error))
-                              ++applied;
-                          else
-                              problems << error;
-                      }
-                      return Result::ok({{"applied", applied}, {"problems", QJsonArray::fromStringList(problems)}});
-                  }};
-
     // --- Omabook's own AI -----------------------------------------------------
 
     tools << Tool{"ask_book", "Ask Omabook's AI about a book",

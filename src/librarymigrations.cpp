@@ -13,9 +13,11 @@
 #include <QStringList>
 #include <algorithm>
 #include <array>
+#include <mutex>
 #include <print>
 #include <ranges>
 #include <tuple>
+#include <utility>
 
 #include "booklinks.h"
 #include "changelog.h"
@@ -30,6 +32,27 @@
 #include "tenancy.h"
 
 int LibraryMigrations::currentFormat() noexcept { return static_cast<int>(LibrarySchema::steps().size()); }
+
+namespace {
+
+// What the program does before each upgrade, set once as it starts (and by a
+// hub's keeper while it opens), read by whichever thread opens a library.
+struct Upgrading {
+    std::mutex lock;
+    LibraryMigrations::BeforeUpgrade before;
+};
+
+[[nodiscard]] Upgrading &upgrading() {
+    static Upgrading kept;
+    return kept;
+}
+
+} // namespace
+
+LibraryMigrations::BeforeUpgrade LibraryMigrations::beforeUpgrading(BeforeUpgrade before) {
+    const std::scoped_lock held(upgrading().lock);
+    return std::exchange(upgrading().before, std::move(before));
+}
 
 std::expected<void, QString> Library::backUp(int schema) const {
     const QString folder = backupFolder();
@@ -71,7 +94,22 @@ std::expected<void, QString> Library::copyInto(const QString &file) const {
     return {};
 }
 
-std::expected<void, QString> LibraryMigrations::migrate(const Library &library) {
+std::expected<void, QString> LibraryMigrations::beforeUpgrade(Library &library) {
+    const BeforeUpgrade before = [] {
+        const std::scoped_lock held(upgrading().lock);
+        return upgrading().before;
+    }();
+    if (!before)
+        return {};
+    const auto first = before(library);
+    if (!first)
+        return std::unexpected(first.error().text());
+    if (!first->isEmpty() && library.m_bringingUpToDate)
+        library.m_bringingUpToDate(*first);
+    return {};
+}
+
+std::expected<void, QString> LibraryMigrations::migrate(Library &library) {
     // Asked and done with before anything changes: a statement left open
     // would keep a migration from dropping a table.
     const int schema = library.formatVersion();
@@ -88,8 +126,11 @@ std::expected<void, QString> LibraryMigrations::migrate(const Library &library) 
                                    .arg(library.backupFolder()));
     // A library about to be changed to a newer format is copied first, so a
     // step that goes wrong, or a wish to go back to an older Omabook, never
-    // costs the library. One that can't be copied is left as it is.
+    // costs the library. One that can't be copied is left as it is; so is one
+    // whose moment snapshot can't be taken first (#208), where there are any.
     if (schema > 0 && schema < steps.size()) {
+        if (const auto first = beforeUpgrade(library); !first)
+            return first;
         if (const auto kept = library.backUp(schema); !kept)
             return std::unexpected("The library needs bringing up to date, but a copy of it couldn't be kept first, so it was left alone: "
                                    + kept.error());

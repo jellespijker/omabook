@@ -10,7 +10,8 @@
 int runSnapshotCli(const QStringList &arguments);
 
 // The moment a command is about to change much at once (a sync, an import,
-// a tidy that changes something), as runCli is given it; none for the rest,
+// a tidy that changes something, a change to many books, #208), as runCli is
+// given it; none for the rest,
 // and for a look that changes nothing (--dry-run, --status, a tidy's list).
 [[nodiscard]] std::optional<SnapshotReason> riskyMoment(const QStringList &arguments);
 

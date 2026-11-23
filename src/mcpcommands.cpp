@@ -1,4 +1,5 @@
 #include "mcp.h"
+#include "mcpbulk.h"
 
 // Tools that are one of Omabook's commands and nothing more: the command
 // already does the work and prints JSON, so the tool only names it. A feature
@@ -278,18 +279,19 @@ const bool registered = [] {
 
     registerTool({"collection_put", "Put books in a collection or take them out",
                   "Puts books in a collection by hand (\"include\"), takes them out (\"exclude\"), whatever its "
-                  "rule says, or lets the rule decide for them again (\"rule\"). The books stay in the library either way.",
+                  "rule says, or lets the rule decide for them again (\"rule\"). The books stay in the library either way. "
+                  "A change to many books takes a moment snapshot first, and says it as \"undo\".",
                   schema({{"name", string("The collection's name, or its number.")},
                           {"books", list("The books, by their ids from books_search.", integer("A book's id.", 1))},
                           {"how", choice("Put in, take out, or follow the rule again.", {"include", "exclude", "rule"})}},
                          {"name", "books", "how"}),
-                  Changes, [](const QJsonObject &arguments) {
+                  Changes, McpBulk::snapshotFirst(McpBulk::listed("books"), [](const QJsonObject &arguments) {
                       const QString how = arguments.value("how").toString();
                       QStringList asked{"collections", how == "rule" ? u"follow"_s : how, arguments.value("name").toString()};
                       for (const QJsonValue &book : arguments.value("books").toArray())
                           asked << QString::number(book.toInteger());
                       return command(asked);
-                  }});
+                  })});
 
     registerTool({"collection_remove", "Remove a collection",
                   "Takes a collection away. Its books stay in the library and in any other collection; only the "
@@ -407,18 +409,24 @@ const bool registered = [] {
 
     registerTool({"collections_sort_apply", "Apply picked collection proposals",
                   "Applies proposals from the list collections_sort last gave, by their numbers; a proposal can be "
-                  "given another path (a new collection is made for it). The model is not asked again.",
+                  "given another path (a new collection is made for it). The model is not asked again. A change to many "
+                  "books takes a moment snapshot first, and says it as \"undo\".",
                   schema({{"pick", list("The proposals, as their numbers, or \"3=Some/Path\" for another path.", string("A number."))},
                           {"all", boolean("Apply every proposal on the list.")}}),
-                  Changes, [](const QJsonObject &arguments) {
-                      QStringList picked;
-                      for (const QJsonValue &value : arguments.value("pick").toArray())
-                          picked << (value.isDouble() ? QString::number(value.toInteger()) : value.toString());
-                      if (picked.isEmpty() && !arguments.value("all").toBool())
-                          return Result::fail("Pick proposals by their numbers, or give all.");
-                      return command(picked.isEmpty() ? QStringList{"collections", "sort", "--apply"}
-                                                      : QStringList{"collections", "sort", "--pick", picked.join(',')});
-                  }});
+                  Changes,
+                  McpBulk::snapshotFirst(
+                      [](const QJsonObject &arguments) {
+                          return arguments.value("all").toBool() ? McpBulk::many : arguments.value("pick").toArray().size();
+                      },
+                      [](const QJsonObject &arguments) {
+                          QStringList picked;
+                          for (const QJsonValue &value : arguments.value("pick").toArray())
+                              picked << (value.isDouble() ? QString::number(value.toInteger()) : value.toString());
+                          if (picked.isEmpty() && !arguments.value("all").toBool())
+                              return Result::fail("Pick proposals by their numbers, or give all.");
+                          return command(picked.isEmpty() ? QStringList{"collections", "sort", "--apply"}
+                                                          : QStringList{"collections", "sort", "--pick", picked.join(',')});
+                      })});
 
     registerTool({"collection_import", "Subscribe to a shared collection",
                   "Imports a collection someone shared, from its .omabook-space file, by subscribing to its space: the "

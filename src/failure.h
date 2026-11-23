@@ -304,6 +304,8 @@ public:
         RestoreThingAmbiguous, // {title}
         SyncDeviceOurs,        // {computer}: it has this library's device id
         SyncDeviceTaken,       // {computer, the computer known here by that id}
+        // A library left in its older format without its moment snapshot (#208).
+        UpgradeNotSnapshot, // {why the snapshot couldn't be taken}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

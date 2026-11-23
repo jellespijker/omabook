@@ -52,7 +52,7 @@ modules = [
   "privatebooks", "koreaderbooks", "bookspaces",
   "fileschema",
   "libraryfiles", "booklink",
-  "libraryhold",
+  "libraryhold", "syncidentity", "pluginrestore",
 ]
 
 [layers.services]
@@ -77,7 +77,7 @@ modules = [
   "ollamaprovider",
   "aitopic",
   "restic", "snapshotretention", "snapshots", "snapshotrestore", "snapshotdestinations",
-  "snapshotwarnings", "snapshothealth", "desktopnotice",
+  "snapshotwarnings", "snapshothealth", "desktopnotice", "momentsnapshot",
 ]
 
 [layers.operations]
@@ -97,7 +97,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands", "snapshotrestorecommands", "destinationcommands", "snapshothealthcommands"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands", "snapshotrestorecommands", "destinationcommands", "snapshothealthcommands", "mcpbulk", "tidytools"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

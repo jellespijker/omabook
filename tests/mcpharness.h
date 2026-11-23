@@ -36,6 +36,8 @@ struct Machine {
         environment.insert("HOME", dir.filePath("home"));
         environment.insert("XDG_CONFIG_HOME", dir.filePath("home/.config"));
         environment.insert("XDG_CACHE_HOME", dir.filePath("home/.cache"));
+        // Its own snapshots (none until set up), not those of the other suites' machines.
+        environment.insert("XDG_STATE_HOME", dir.filePath("state"));
         environment.insert("PATH", dir.filePath("bin") + ":" + environment.value("PATH"));
         environment.insert("QT_QPA_PLATFORM", "offscreen");
         for (const char *unset : {"DISPLAY", "WAYLAND_DISPLAY", "ANTHROPIC_API_KEY"})

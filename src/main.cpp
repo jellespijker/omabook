@@ -34,10 +34,12 @@
 #include "importer.h"
 #include "interface.h"
 #include "librarian.h"
+#include "librarymigrations.h"
 #include "libraryupgrade.h"
 #include "linkinbox.h"
 #include "log.h"
 #include "manual.h"
+#include "momentsnapshot.h"
 #include "pluginformats.h"
 #include "portalfilepicker.h"
 #include "reader.h"
@@ -183,6 +185,20 @@ void expose(const QQmlEngine &engine, std::initializer_list<std::pair<const char
         engine.rootContext()->setContextProperty(name, object);
 }
 
+// What the window and every command set up first.
+void startUp(bool command) {
+    // What happens is written to the log (omabook logs), from the window and
+    // from every command alike.
+    Log::install(command ? "cli" : "window");
+    // A book in the format of a plugin that isn't installed here is kept, and
+    // says which plugin reads it.
+    PluginFormats::know();
+    // A library brought up to date takes a moment snapshot first, where snapshots are set up (#208).
+    LibraryMigrations::beforeUpgrading(MomentSnapshot::beforeUpgradeHere);
+    if (!command)
+        qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -219,14 +235,7 @@ int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
     app.setApplicationName("omabook");
     app.setApplicationVersion(OMABOOK_VERSION);
-    // What happens is written to the log (omabook logs), from the window and
-    // from every command alike.
-    Log::install(command ? "cli" : "window");
-    // A book in the format of a plugin that isn't installed here is kept, and
-    // says which plugin reads it.
-    PluginFormats::know();
-    if (!command)
-        qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
+    startUp(command);
     if (command)
         return runCommand(commandFirst(QCoreApplication::arguments()));
 

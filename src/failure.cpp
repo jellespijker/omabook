@@ -283,6 +283,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::SyncDeviceTaken,
      tr("The library on %1 has the device id of %2, another of your computers: one is a copy of the other, and the two would write as "
         "one computer. Nothing was synced. Give the copy a device id of its own, on it: omabook identity --new-device")},
+    {Failure::Code::UpgradeNotSnapshot,
+     tr("The library needs bringing up to date, but no moment snapshot of it could be taken first, so it was left alone: %1")},
     {Failure::Code::NoSuchSpace, tr("This library shares or publishes no space called %1 (omabook spaces lists them).")},
     {Failure::Code::SpaceNameTaken, tr("More than one space goes by %1; name one by its id (omabook spaces lists them).")},
     {Failure::Code::PartNotSwitched, tr("%1 is no part of a space that is switched on and off: %2.")},

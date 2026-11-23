@@ -2,6 +2,9 @@
 
 #include <QString>
 #include <expected>
+#include <functional>
+
+#include "failure.h"
 
 class Library;
 
@@ -10,7 +13,16 @@ class Library;
 // up first.
 class LibraryMigrations {
 public:
+    // What is done just before a library is brought from an older format up
+    // to date: a moment snapshot (#208). It answers a line to say (none when
+    // empty), or why not, and then the library is left as it was.
+    using BeforeUpgrade = std::function<std::expected<QString, Failure>(Library &library)>;
+
     [[nodiscard]] static int currentFormat() noexcept;
+    // Sets what this program does before every upgrade of a library it opens
+    // (a computer's moment snapshot, set by main(); a hub's, while its keeper
+    // opens its libraries), and answers what was set before.
+    static BeforeUpgrade beforeUpgrading(BeforeUpgrade before);
     // Makes a library that was just opened ready: brought to the newest
     // format and its change log up to date, and what the log kept of a kind
     // this Omabook now knows taken in (KeptOps), by one program at a time.
@@ -26,7 +38,9 @@ private:
     // How the connection writes: the journal the folder's file system can
     // keep, how often it waits for the disk, and the foreign keys kept.
     static void configure(const Library &library);
-    [[nodiscard]] static std::expected<void, QString> migrate(const Library &library);
+    [[nodiscard]] static std::expected<void, QString> migrate(Library &library);
+    // What the program does before an upgrade (beforeUpgrading), its line said.
+    [[nodiscard]] static std::expected<void, QString> beforeUpgrade(Library &library);
     static void sayBringingUpToDate(const Library &library, int schema);
     // The repair of format 43 (#158): the links that are not of one book,
     // each recorded as such once (BookLinks::record), and said.

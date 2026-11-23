@@ -2,6 +2,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QScopeGuard>
 #include <algorithm>
 #include <array>
 #include <iterator>
@@ -10,6 +11,7 @@
 
 #include "library.h"
 #include "libraryhold.h"
+#include "librarymigrations.h"
 #include "log.h"
 
 using namespace Qt::StringLiterals;
@@ -66,6 +68,16 @@ std::expected<void, Failure> HubKeeper::open() {
     const Turn turn(*this);
     if (!turn.had())
         return std::unexpected(Failure(Failure::Code::LibraryBusy));
+    // A library in an older format is brought up to date as it opens: a
+    // write that changes much, so what comes before such a write comes first,
+    // and refusing it leaves the library as it was, and the hub unopened (#208).
+    const auto previous = LibraryMigrations::beforeUpgrading([this](Library &opening) -> std::expected<QString, Failure> {
+        for (const Before &before : std::as_const(m_before))
+            if (const auto done = before(opening, Moment::Upgrade); !done)
+                return std::unexpected(Failure(Failure::Code::UpgradeNotSnapshot, {done.error().text()}));
+        return QString();
+    });
+    const auto restore = qScopeGuard([&previous] { LibraryMigrations::beforeUpgrading(previous); });
     const QDir folder(m_folder);
     for (const QString &name : folder.entryList(QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
         const QString root = folder.filePath(name);
@@ -75,18 +87,12 @@ std::expected<void, Failure> HubKeeper::open() {
         if (!hold)
             return std::unexpected(hold.error());
         auto library = std::make_unique<Library>(root);
-        // A library in an older format is brought up to date as it opens: a
-        // write that changes much, so what comes before such a write comes
-        // first. It can't be refused there; opening makes its own copy too.
-        library->onBringingUpToDate([this, opening = library.get()](const QString &said) {
-            qCInfo(lcHub).noquote() << said;
-            for (const Before &before : std::as_const(m_before))
-                if (const auto done = before(*opening, Moment::Upgrade); !done)
-                    qCWarning(lcHub).noquote() << "Before bringing" << opening->root() << "up to date:" << done.error().english();
-        });
+        library->onBringingUpToDate([](const QString &said) { qCInfo(lcHub).noquote() << said; });
         QString error;
-        if (!library->open(&error))
+        if (!library->open(&error)) {
+            qCWarning(lcHub).noquote() << "The library in" << root << "can't be kept:" << error;
             return std::unexpected(Failure::said(error));
+        }
         qCInfo(lcHub).noquote() << "Keeping the library" << name << "in" << root;
         m_kept.push_back(std::make_unique<Kept>(Kept{.name = name, .hold = std::move(*hold), .library = std::move(library)}));
     }
