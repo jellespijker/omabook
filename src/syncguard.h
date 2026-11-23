@@ -83,6 +83,6 @@ struct Sides {
 // breaks a rule of a book not in `options.accept` or is a dry run, runs it and
 // compares both sides with what was announced: the summary says the breaches
 // (`breaches`, and `error` when it was refused) and what differs (`unannounced`).
-[[nodiscard]] SyncSummary guarded(Library &library, const Sides &sides, const SyncOptions &options);
+[[nodiscard]] SyncSummary guarded(const Library &library, const Sides &sides, const SyncOptions &options);
 
 } // namespace SyncGuard

@@ -235,7 +235,7 @@ QString SyncGuard::worded(const Breach &breach, const QString &where) {
     return QString("%1 (%2): %3").arg(breach.title, where, what);
 }
 
-SyncSummary SyncGuard::guarded(Library &library, const Sides &sides, const SyncOptions &options) {
+SyncSummary SyncGuard::guarded(const Library &library, const Sides &sides, const SyncOptions &options) {
     const SyncPlan::States hereBefore = SyncPlan::states(library);
     const std::optional<SyncPlan::States> thereBefore = sides.theirStates();
     SyncOptions dry = options;
