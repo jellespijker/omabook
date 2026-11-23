@@ -2925,7 +2925,7 @@ private slots:
             desk.shot(look.shot);
             // Every page fits too, read with the same keys.
             const int count = desk.value("help", "pages").toList().size();
-            QCOMPARE(count, 12);
+            QCOMPARE(count, 13);
             for (int i = 1; i < count; ++i) {
                 desk.key(Qt::Key_Tab);
                 QVERIFY(fits());

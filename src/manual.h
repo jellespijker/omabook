@@ -142,6 +142,8 @@ private:
     static QList<Panel> libraryPanels();
     // The help's page on the AI (aitopic.cpp).
     static Topic aiTopic();
+    // The help's page on the hub and the snapshots (hubtopic.cpp).
+    static Topic hubTopic();
 
     Settings *m_settings;
     Customization *m_custom;

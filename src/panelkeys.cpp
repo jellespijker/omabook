@@ -133,5 +133,10 @@ QList<Manual::Panel> Manual::libraryPanels() {
         {"sites", tr("Reading sites"),
          {{"Up  Down  J  K", tr("Move through the sites")},
           {"Enter", tr("Show the selected site")}}},
+        {"snapshots", tr("The snapshots"),
+         {{"Down", tr("From the filter into the snapshots")},
+          {"Up  Down", tr("Move through the snapshots")},
+          {"Enter", tr("Show what changed since the selected snapshot")},
+          {"Escape", tr("Close")}}},
     };
 }

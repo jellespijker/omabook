@@ -1,7 +1,8 @@
 #include "manual.h"
 
-// The help's pages, but for the AI's (aitopic.cpp). Their text lives only
-// here and there: the window (?) and `omabook help <topic>` both show it.
+// The help's pages, but for the AI's (aitopic.cpp) and the hub's
+// (hubtopic.cpp). Their text lives only here and there: the window (?) and
+// `omabook help <topic>` both show it.
 //
 // A command is named in braces, {library.add}, and shown as whichever key
 // it has now; never write a key itself. What is in `backticks` is something
@@ -30,6 +31,11 @@ Manual::Topic computersTopic() {
                             "side, and changes nothing. Books from before Omabook kept when their details changed can't say "
                             "whose are newer: where they differ, `--details mine` keeps this computer's and `--details "
                             "theirs` takes the other's.")},
+                {Manual::tr("Checked before it writes"),
+                 Manual::tr("A sync is planned on both computers first, and refused, with nothing changed on either, when it "
+                            "would lose a book the other still has, empty a detail that had a value, or take a reading place "
+                            "back to an earlier one. It names the books and why; `omabook sync laptop --accept \"<title>\"` "
+                            "lets one book's change through.")},
                 {Manual::tr("One person on every computer"),
                  Manual::tr("The first sync between two computers pairs them: from then on both sign what they write as you, "
                             "and a change that isn't as it was signed is refused. `omabook identity` shows your id and the "
@@ -308,6 +314,27 @@ QList<Manual::Section> readAloudSections() {
     };
 }
 
+// The command line, the MCP server, the skill and the interface as files.
+Manual::Topic agentsTopic() {
+    return {"agents", Manual::tr("For agents"), Manual::tr("The command line, the MCP server, and the interface as files."),
+            {
+                {Manual::tr("The command line"),
+                 Manual::tr("Everything the window does with the library is a command that needs no display: `omabook list`, "
+                            "`omabook add`, `omabook text`, `omabook lookup` and the rest. Each takes `--json` and exits 0 or 1. "
+                            "`omabook --help` lists them, and `omabook help <topic>` prints these pages.")},
+                {Manual::tr("The MCP server"),
+                 Manual::tr("`omabook mcp install` connects a coding agent to the library as tools: search, read, fix details, "
+                            "track reading, tidy up. `omabook mcp --tools` lists them.")},
+                {Manual::tr("The skill"),
+                 Manual::tr("`omabook skill install` teaches your coding agents the commands.")},
+                {Manual::tr("Keys, colors and views of your own"),
+                 Manual::tr("The interface is files in `~/.config/omabook/`, followed while Omabook runs: `keys.json` for any key, "
+                            "`style.json` for colors and corners, `ui/` for views of your own and `mods/` for panels. "
+                            "`omabook customize` writes a guide to all of it there. A file with a mistake never takes the window "
+                            "down: the last version that worked stays in use.")},
+            }};
+}
+
 Manual::Topic readingTopic() {
     Manual::Topic topic = readingBasics();
     topic.sections << pageNoteSections() << readAloudSections();
@@ -443,24 +470,9 @@ QList<Manual::Topic> Manual::topicList() {
          }},
         chronologyTopic(),
         computersTopic(),
+        hubTopic(),
         sharingTopic(),
         themesTopic(),
-        {"agents", tr("For agents"), tr("The command line, the MCP server, and the interface as files."),
-         {
-             {tr("The command line"),
-              tr("Everything the window does with the library is a command that needs no display: `omabook list`, "
-                 "`omabook add`, `omabook text`, `omabook lookup` and the rest. Each takes `--json` and exits 0 or 1. "
-                 "`omabook --help` lists them, and `omabook help <topic>` prints these pages.")},
-             {tr("The MCP server"),
-              tr("`omabook mcp install` connects a coding agent to the library as tools: search, read, fix details, "
-                 "track reading, tidy up. `omabook mcp --tools` lists them.")},
-             {tr("The skill"),
-              tr("`omabook skill install` teaches your coding agents the commands.")},
-             {tr("Keys, colors and views of your own"),
-              tr("The interface is files in `~/.config/omabook/`, followed while Omabook runs: `keys.json` for any key, "
-                 "`style.json` for colors and corners, `ui/` for views of your own and `mods/` for panels. "
-                 "`omabook customize` writes a guide to all of it there. A file with a mistake never takes the window "
-                 "down: the last version that worked stays in use.")},
-         }},
+        agentsTopic(),
     };
 }

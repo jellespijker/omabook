@@ -76,7 +76,7 @@ modules = [
   "serverreach", "aifallback",
   "modeldiscovery", "modelsearch",
   "ollamaprovider",
-  "aitopic",
+  "aitopic", "hubtopic",
   "restic", "snapshotretention", "snapshots", "snapshotrestore", "snapshotdestinations",
   "snapshotwarnings", "snapshothealth", "desktopnotice", "momentsnapshot",
 ]

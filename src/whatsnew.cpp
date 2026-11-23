@@ -281,6 +281,38 @@ QList<Manual::Step> branchesRelease() {
     };
 }
 
+// The 0.5.0 release's entries: the hub (#179, #180, #188, #189), snapshots and what changed since one (#181, #183,
+// #185), destinations and their warnings (#182, #184), the upgrade's repair behind a moment snapshot (#208, #213), and
+// a sync checked before it writes (#187, #209).
+QList<Manual::Step> hubRelease() {
+    return {
+        {"hub", "0.5.0", Manual::tr("A hub that is always on"),
+         Manual::tr("A computer that stays on can keep your libraries without a window: `omabook hub run` there, and "
+                    "{library.hubs} here links this computer to it over your ssh, by a key that opens nothing but Omabook. "
+                    "{library.sync} then syncs with the hub as with another computer."),
+         "", "library.hubs", "library", ""},
+        {"snapshots", "0.5.0", Manual::tr("Snapshots to go back to"),
+         Manual::tr("{library.snapshots} keeps encrypted snapshots of the library, and takes one by itself just before a "
+                    "sync, an import or a tidy changes something. It shows what changed since any of them, and puts a book's "
+                    "details or notes back as they were, after asking."),
+         "", "library.snapshots", "library", ""},
+        {"destinations", "0.5.0", Manual::tr("A second disk, and one away from home"),
+         Manual::tr("Under Destinations, {library.snapshots} copies the snapshots to another disk and to a place away from "
+                    "home. When the newest is old, a check failed or a disk is missing, it says so in red, with what to do."),
+         "", "library.snapshots", "library", ""},
+        {"upgrade-repair", "0.5.0", Manual::tr("Books synced earlier, set right"),
+         Manual::tr("This upgrade takes a moment snapshot first, where snapshots are set up, and then sets right, once, the "
+                    "books a computer got by a sync with an earlier Omabook: a change made to one reaches your other "
+                    "computers again, with all its details. Nothing else changes."),
+         "", "", "", ""},
+        {"sync-guard", "0.5.0", Manual::tr("A sync checked before it writes"),
+         Manual::tr("A sync is planned on both computers first, and refused, with nothing changed on either, when it would "
+                    "lose a book or empty a detail. It names the books and why, and a shelf, stars or a finished day changed "
+                    "on one computer now reach the other."),
+         "", "library.sync", "library", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -360,5 +392,5 @@ QList<Manual::Step> Manual::features() {
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
     } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
-           + speechRelease() + branchesRelease();
+           + speechRelease() + branchesRelease() + hubRelease();
 }
