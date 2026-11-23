@@ -38,7 +38,7 @@ optdepends=(
   'calibre: import Calibre libraries, use its metadata plugins, and read Kindle and other converted formats'
   'gnome-keyring: keep reading-site tokens in the keyring'
   'folio: Omabook libraries, what is being read and "Add to Library" in the file manager'
-  'openssh: sync a library with another computer'
+  'openssh: sync a library with another computer or a hub, link this computer to its hub, and keep snapshots over sftp'
   'hyphen-en: hyphenate English books'
   'hyphen-de: hyphenate German books'
   'hyphen-nl: hyphenate Dutch books'
@@ -46,6 +46,7 @@ optdepends=(
   'piper-tts: read books aloud in a natural voice, with a piper-voices-* voice (both from the AUR)'
   'voxtype-bin: write out recordings on this computer, with the speech to text Omarchy ships (from the omarchy repository)'
   'tailscale: the address for phones and e-readers by the name of this computer on the tailnet'
+  'rclone: keep snapshots in a place rclone reaches (an rclone: destination)'
 )
 makedepends=('cmake' 'gcc' 'make' 'pkgconf')
 # The window tests measure text, so they need a font; the CLI tests make zips;
@@ -64,6 +65,9 @@ check() {
   QT_QPA_PLATFORM=offscreen dbus-run-session -- ctest --test-dir build --output-on-failure
 }
 
+# The hub's systemd units come with it (#179): /usr/lib/systemd/user/omabook-hub.service,
+# for a person's own user, and /usr/lib/systemd/system/omabook-hub.service, for a user
+# of its own named omabook; each says in its comments how it is set up.
 package() {
   cd "$srcdir/$pkgname-$pkgver"
   DESTDIR="$pkgdir" cmake --install build --prefix /usr
