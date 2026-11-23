@@ -1,7 +1,6 @@
 #include "changelog.h"
 
 #include <QHash>
-#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
@@ -36,18 +35,6 @@ int &activeScopes() noexcept {
 
 [[nodiscard]] QString compactJson(const QJsonObject &object) {
     return QString::fromUtf8(QJsonDocument(object).toJson(QJsonDocument::Compact));
-}
-
-[[nodiscard]] QString formatsJson(const Library &library, qint64 bookId) {
-    QJsonArray array;
-    ChangeLog::statements(library).each("SELECT format, file, size, hash FROM formats WHERE book_id = ? ORDER BY format", {bookId},
-                                        [&array](const QSqlQuery &query) {
-                                            array << QJsonObject{{"format", query.value(0).toString()},
-                                                                 {"file", query.value(1).toString()},
-                                                                 {"size", query.value(2).toLongLong()},
-                                                                 {"hash", query.value(3).toString()}};
-                                        });
-    return QString::fromUtf8(QJsonDocument(array).toJson(QJsonDocument::Compact));
 }
 
 [[nodiscard]] QString progressJson(const Progress &progress) {
@@ -125,10 +112,8 @@ void writeProgress(EntityContext &ctx, const Progress &prog, bool explicitHlc) {
 void syncBookReading(EntityContext &ctx, const Book &book) {
     if (hasReadingFields(ctx, book)) {
         const qint64 readingHlc = Hlc::normalize(book.readingAt);
-        ChangeLogFields::write(ctx, u"shelf"_s, book.shelf, readingHlc);
-        ChangeLogFields::write(ctx, u"rating"_s, QString::number(book.rating), readingHlc);
-        ChangeLogFields::write(ctx, u"finished"_s, book.finished, readingHlc);
-        ChangeLogFields::write(ctx, u"paper"_s, book.paper ? u"1"_s : u"0"_s, readingHlc);
+        for (const auto &[field, value] : ChangeLogFields::bookReading(book))
+            ChangeLogFields::write(ctx, field, value, readingHlc);
         const qint64 loggedReadingHlc = SpaceReducer::readingHlc(reducedFrom(ctx.existing));
         stampAtIfNeeded(ctx, u"reading_at"_s, readingHlc, Hlc::seconds(loggedReadingHlc) != Hlc::seconds(book.readingAt));
     }
@@ -145,24 +130,7 @@ void syncBookToLog(const Library &library, const Book &book, bool baseline, std:
         return;
     EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, ChangeLogFields::logged(library, u"book"_s, gid), baseline};
     const qint64 detailsHlc = explicitDetailsHlc ? Hlc::normalize(*explicitDetailsHlc) : Hlc::normalize(book.detailsAt);
-    const QString coverPath = library.coverPath(book.id);
-    const QList<std::pair<QString, QString>> details{{u"title"_s, book.meta.title},
-                                                     {u"authors"_s, book.meta.authorText()},
-                                                     {u"series"_s, book.meta.series},
-                                                     {u"series_index"_s, QString::number(book.meta.seriesIndex, 'g', 12)},
-                                                     {u"publisher"_s, book.meta.publisher},
-                                                     {u"language"_s, book.meta.language},
-                                                     {u"isbn"_s, book.meta.isbn},
-                                                     {u"published"_s, book.meta.published},
-                                                     {u"description"_s, book.meta.description},
-                                                     {u"tags"_s, book.meta.tags.join(", "_L1)},
-                                                     {u"identifiers"_s, compactJson(book.identifiers)},
-                                                     {u"added"_s, QString::number(book.added)},
-                                                     {u"has_cover"_s, book.hasCover ? u"1"_s : u"0"_s},
-                                                     {u"cover_hash"_s, coverPath.isEmpty() ? QString() : Library::hashFile(coverPath)},
-                                                     {u"path"_s, book.path},
-                                                     {u"formats"_s, formatsJson(library, book.id)}};
-    for (const auto &[field, value] : details)
+    for (const auto &[field, value] : ChangeLogFields::bookDetails(library, book))
         ChangeLogFields::write(ctx, field, value, detailsHlc);
     const qint64 loggedDetailsHlc = SpaceReducer::detailsHlc(reducedFrom(ctx.existing));
     const bool detailsMismatch =
@@ -235,8 +203,8 @@ void detectDeletedBooks(const Library &library) {
     // after the copy of this library that was put back) was never removed
     // here, and the next sync brings it (#61).
     QStringList lost;
-    for (QSqlQuery query = ChangeLog::query(
-             library, "SELECT global_id FROM global_ids WHERE entity = 'book' AND local_id NOT IN (SELECT id FROM books)");
+    for (QSqlQuery query =
+             ChangeLog::query(library, "SELECT global_id FROM global_ids WHERE entity = 'book' AND local_id NOT IN (SELECT id FROM books)");
          query.next();)
         lost << query.value(0).toString();
     for (const QString &gid : std::as_const(lost))

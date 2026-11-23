@@ -4,6 +4,7 @@
 
 #include "booklinks.h"
 #include "changelog.h"
+#include "changelogfields.h"
 #include "library.h"
 #include "log.h"
 #include "replication.h"
@@ -18,6 +19,9 @@ const QList<QStringList> repairs{
     {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('judge_links', '1')"},
     // A book's identifiers of one kept apart (#164, format 44): removed once.
     {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('unstray_identifiers', '1')"},
+    // The details of books got by a sync before #210, which this computer
+    // never wrote as its own (#213, format 45): written once.
+    {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('echo_taken_books', '1')"},
 };
 // NOLINTEND(bugprone-throwing-static-initialization,cert-err58-cpp)
 
@@ -65,6 +69,16 @@ void unstrayIdentifiers(Library &library, const std::function<void(const QString
                 .arg(count(doubtful.size()), doubtful.join("; ")));
 }
 
+// The repair of format 45 (#213): what this computer took of its books from
+// another and never wrote as its own, written once (ChangeLogFields::echoTaken).
+// Nothing a person would see changes, so nothing is said.
+void echoTakenBooks(const Library &library) {
+    if (!takeDue(library, "echo_taken_books"))
+        return;
+    if (const qsizetype books = ChangeLogFields::echoTaken(library); books > 0)
+        qCInfo(lcLibrary).noquote() << "the details of" << books << "books got by a sync were written as this computer's own";
+}
+
 } // namespace
 
 const QList<QStringList> &LibraryRepairs::steps() { return repairs; }
@@ -72,4 +86,5 @@ const QList<QStringList> &LibraryRepairs::steps() { return repairs; }
 void LibraryRepairs::run(Library &library, const std::function<void(const QString &)> &say) {
     judgeLinks(library, say);
     unstrayIdentifiers(library, say);
+    echoTakenBooks(library);
 }
