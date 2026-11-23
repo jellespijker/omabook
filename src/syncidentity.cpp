@@ -10,6 +10,16 @@
 
 using namespace Qt::StringLiterals;
 
+QStringList SyncIdentity::machineColumn() {
+    return {u"DROP TABLE IF EXISTS space_members_next"_s,
+            u"CREATE TABLE space_members_next (space TEXT NOT NULL REFERENCES spaces(id) ON DELETE CASCADE, person TEXT NOT NULL, "
+            "role TEXT NOT NULL DEFAULT 'writer', name TEXT NOT NULL DEFAULT '', added INTEGER NOT NULL DEFAULT 0, "
+            "machine TEXT NOT NULL DEFAULT '', PRIMARY KEY (space, person))"_s,
+            u"INSERT INTO space_members_next (space, person, role, name, added) SELECT space, person, role, name, added "
+            "FROM space_members"_s,
+            u"DROP TABLE space_members"_s, u"ALTER TABLE space_members_next RENAME TO space_members"_s};
+}
+
 std::expected<void, Failure> SyncIdentity::check(const Library &library, const QJsonObject &theirs, const QString &computer) {
     const QString device = theirs.value("device"_L1).toString();
     if (device.isEmpty())

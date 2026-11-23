@@ -13,7 +13,8 @@ class Library;
 // up to date (run()), in the transaction of the upgrade, after its copy.
 namespace LibraryRepairs {
 
-// The steps of formats 43 on, each marking its repair due.
+// The steps of formats 43 on, each marking its repair due (and 47's, a
+// column a sync needs, #215).
 [[nodiscard]] const QList<QStringList> &steps();
 // Each repair that is due, done and said (`say` may be empty).
 void run(Library &library, const std::function<void(const QString &)> &say);

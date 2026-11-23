@@ -2,6 +2,7 @@
 
 #include <QJsonObject>
 #include <QString>
+#include <QStringList>
 #include <expected>
 
 #include "failure.h"
@@ -17,6 +18,11 @@ class Library;
 // another computer known here; and a library restored or copied is given an
 // id of its own.
 namespace SyncIdentity {
+
+// The step that gives the computers of the personal space the machine each
+// says it runs on (format 47), by which a sync knows one renamed; empty until
+// it says one. Made anew, so a library given the step again takes it as well.
+[[nodiscard]] QStringList machineColumn();
 
 // Whether this library may sync with the one `theirs` introduces (a sync's
 // manifest or request: its "device" and "name"), on `computer`. Refused when

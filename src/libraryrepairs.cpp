@@ -9,6 +9,7 @@
 #include "log.h"
 #include "replication.h"
 #include "strayidentifiers.h"
+#include "syncidentity.h"
 
 namespace {
 
@@ -25,6 +26,9 @@ const QList<QStringList> repairs{
     // The same again (#216, format 46): of a computer that joined another's
     // space, 0.5.0's repair read its own operations out of order, and missed some.
     {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('echo_taken_books', '1')"},
+    // Not a repair but a column, in the order of the formats (#215, format
+    // 47): the machine each of one's own computers says it runs on.
+    SyncIdentity::machineColumn(),
 };
 // NOLINTEND(bugprone-throwing-static-initialization,cert-err58-cpp)
 
