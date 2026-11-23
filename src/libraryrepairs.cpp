@@ -22,6 +22,9 @@ const QList<QStringList> repairs{
     // The details of books got by a sync before #210, which this computer
     // never wrote as its own (#213, format 45): written once.
     {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('echo_taken_books', '1')"},
+    // The same again (#216, format 46): of a computer that joined another's
+    // space, 0.5.0's repair read its own operations out of order, and missed some.
+    {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('echo_taken_books', '1')"},
 };
 // NOLINTEND(bugprone-throwing-static-initialization,cert-err58-cpp)
 
@@ -69,7 +72,7 @@ void unstrayIdentifiers(Library &library, const std::function<void(const QString
                 .arg(count(doubtful.size()), doubtful.join("; ")));
 }
 
-// The repair of format 45 (#213): what this computer took of its books from
+// The repair of format 45 (#213), and again of 46 (#216): what this computer took of its books from
 // another and never wrote as its own, written once (ChangeLogFields::echoTaken).
 // Nothing a person would see changes, so nothing is said.
 void echoTakenBooks(const Library &library) {
