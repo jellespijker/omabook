@@ -29,15 +29,19 @@ public:
     // Each knows the other's, and both keep the one with the smaller id
     // (personalSpace), the two devices members of both. The operations
     // already written in the other space stay where they are (the log is
-    // append-only) and travel and merge with the rest.
-    static void pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName = {});
+    // append-only) and travel and merge with the rest. The name and machine
+    // the other says (SyncIdentity::machine) are recorded, each that it says.
+    static void pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName = {},
+                     const QString &theirMachine = {});
     // Whether `device` is one of one's own computers: a member of the personal space.
     [[nodiscard]] static bool isOwnComputer(const Library &library, const QString &device);
     // One's own computers, paired into the personal space: each device's id
-    // and the name it goes by (as it said when paired; empty when unknown).
+    // the name it goes by and the machine it runs on (as it said when it last
+    // synced; empty when unknown).
     struct Computer {
         QString device;
         QString name;
+        QString machine;
     };
     [[nodiscard]] static QList<Computer> computers(const Library &library);
     // The space a graph scope belongs to: the personal space for "", and a

@@ -23,7 +23,8 @@
 namespace Pairing {
 
 // What a side says of itself in its manifest and in a replication request:
-// that it signs ("signs": 1), its person's id, and the computer's name.
+// that it signs ("signs": 1), its person's id, the computer's name, and its
+// machine (SyncIdentity::machine; none on a machine without an id).
 [[nodiscard]] QJsonObject introduction(const Library &library);
 
 // The person's key for the other side (`theirs`, its introduction), when its

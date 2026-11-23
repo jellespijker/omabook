@@ -92,16 +92,28 @@ void logSyncSummary(const SyncSummary &summary, const QString &host) {
 
 // Why the two libraries may not sync, as each side knows the other (#209):
 // before anything is written on either. Their manifest is checked here; this
-// library's device and name there, where an Omabook from before that check
-// can't answer, and isn't refused for it.
-[[nodiscard]] QString identityRefused(const Library &library, const Remote &remote, const QJsonObject &manifest) {
+// library's device, name and machine there, where an Omabook from before that
+// check can't answer, and isn't refused for it. A computer renamed since the
+// last sync, on either side, is said to be, in `summary` (#215).
+[[nodiscard]] QString identityRefused(const Library &library, const Remote &remote, const QJsonObject &manifest, SyncSummary &summary) {
     if (manifest.value("log").toInt() < 1)
         return {};
-    if (const auto here = SyncIdentity::check(library, manifest, remote.host()); !here)
+    const auto here = SyncIdentity::check(library, manifest, remote.host());
+    if (!here)
         return here.error().text();
-    const QJsonObject mine{{"device", Spaces::deviceId(library)}, {"name", QSysInfo::machineHostName()}};
+    const QString name = QSysInfo::machineHostName();
+    if (!here->renamedFrom.isEmpty())
+        summary.computersRenamed << QString("%1 went by %2 here: it is the same computer, renamed, and goes by %3 from this sync on.")
+                                        .arg(remote.host(), here->renamedFrom, manifest.value("name").toString());
+    QJsonObject mine{{"device", Spaces::deviceId(library)}, {"name", name}};
+    if (const QString machine = SyncIdentity::machine(Spaces::deviceId(library)); !machine.isEmpty())
+        mine.insert("machine", machine);
     const auto there = remote.exchange(QJsonDocument(mine), {"sync", "--identity"});
     const QString refused = there ? there->value("refused").toString() : QString();
+    if (const QString was = there ? there->value("renamed").toString() : QString(); refused.isEmpty() && !was.isEmpty())
+        summary.computersRenamed << QString("This computer went by %1 on %2: it is the same computer, renamed, and goes by %3 there "
+                                            "from this sync on.")
+                                        .arg(was, remote.host(), name);
     return refused.isEmpty() ? refused : remote.host() + " refuses to sync with this computer: " + refused;
 }
 
@@ -130,7 +142,7 @@ std::optional<QJsonObject> theirManifest(const Library &library, const Remote &r
         return std::nullopt;
     }
     // Who they are, before anything is written on either side (#209).
-    if (summary.error = identityRefused(library, remote, manifest); !summary.error.isEmpty())
+    if (summary.error = identityRefused(library, remote, manifest, summary); !summary.error.isEmpty())
         return std::nullopt;
     return manifest;
 }

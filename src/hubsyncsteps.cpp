@@ -169,8 +169,7 @@ namespace {
     const auto theirs = sent(named, resolve);
     if (!theirs)
         return std::unexpected(theirs.error());
-    const auto checked = SyncIdentity::check(library, theirs->object(), theirs->object().value("name"_L1).toString());
-    return checked ? QJsonObject() : QJsonObject{{"refused", checked.error().text()}};
+    return SyncIdentity::answer(library, theirs->object());
 }
 
 // The plugins' files the computer sent (#212), from the sync's folders, taken in for every plugin;

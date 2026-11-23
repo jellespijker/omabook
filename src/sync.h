@@ -146,6 +146,9 @@ struct SyncSummary {
     // guard: what the sync does there was not checked (#211). A hub that makes
     // none is refused.
     bool uncheckedThere = false;
+    // The computers that went by another name at the last sync, on the same
+    // machine: known by the name they have now, each said in a line (#215).
+    QStringList computersRenamed;
 
     // The counts as `omabook sync --json` and the MCP server give them, with
     // the titles of a dry run, and of the books whose details are undecided.

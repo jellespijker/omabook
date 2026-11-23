@@ -53,6 +53,7 @@ QStringList Backend::syncLines(const SyncSummary &summary) {
     if (lines.isEmpty() && summary.problems.isEmpty())
         lines << tr("Both libraries were already in step.");
     lines << uncheckedThere(summary);
+    lines << summary.computersRenamed;
     lines << summary.problems.mid(0, 3);
     return lines;
 }

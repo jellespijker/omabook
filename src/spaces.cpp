@@ -65,7 +65,8 @@ QString Spaces::personalSpace(const Library &library) {
     return found ? found->toString() : (u"personal:"_s + deviceId(library));
 }
 
-void Spaces::pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName) {
+void Spaces::pair(const Library &library, const QString &theirSpace, const QString &theirDevice, const QString &theirName,
+                  const QString &theirMachine) {
     if (!theirSpace.startsWith("personal:"_L1) || theirDevice.isEmpty())
         return;
     const qint64 created = lastHlc(library);
@@ -80,6 +81,9 @@ void Spaces::pair(const Library &library, const QString &theirSpace, const QStri
     if (!theirName.isEmpty())
         library.exec("UPDATE space_members SET name = ? WHERE person = ? AND space IN (SELECT id FROM spaces WHERE kind = 'personal')",
                      {theirName, theirDevice});
+    if (!theirMachine.isEmpty())
+        library.exec("UPDATE space_members SET machine = ? WHERE person = ? AND space IN (SELECT id FROM spaces WHERE kind = 'personal')",
+                     {theirMachine, theirDevice});
 }
 
 bool Spaces::isOwnComputer(const Library &library, const QString &device) {
@@ -96,10 +100,11 @@ bool Spaces::isOwnComputer(const Library &library, const QString &device) {
 
 QList<Spaces::Computer> Spaces::computers(const Library &library) {
     QList<Computer> paired;
-    for (QSqlQuery query = library.query("SELECT m.person, MAX(m.name) FROM space_members AS m JOIN spaces AS s ON s.id = m.space "
+    for (QSqlQuery query = library.query("SELECT m.person, MAX(m.name), MAX(m.machine) FROM space_members AS m "
+                                         "JOIN spaces AS s ON s.id = m.space "
                                          "WHERE s.kind = 'personal' GROUP BY m.person ORDER BY MIN(m.added), m.person");
          query.next();)
-        paired << Computer{.device = query.value(0).toString(), .name = query.value(1).toString()};
+        paired << Computer{.device = query.value(0).toString(), .name = query.value(1).toString(), .machine = query.value(2).toString()};
     return paired;
 }
 

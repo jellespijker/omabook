@@ -1,7 +1,9 @@
 // A library's device id is its own (#209, ADR 0001): a sync with a library
 // of the same device id, or of the id of another computer known here by
 // another name, is refused before anything is written on either side, and
-// says what to do; a library given a device id of its own then syncs. Libraries of the test's own, over the
+// says what to do; a library given a device id of its own then syncs. A
+// computer is known by its machine where it says one (#215): renamed, it
+// syncs on under its new name; a copy on another machine is refused. Libraries of the test's own, over the
 // stand-in ssh, never the user's.
 
 #include <QJsonArray>
@@ -104,6 +106,88 @@ private slots:
         QVERIFY2(SyncIdentity::check(library, {{"device", "desktop-device"}, {"name", "desktop"}}, "desktop"), "the desktop itself");
         QVERIFY2(SyncIdentity::check(library, {{"device", "desktop-device"}}, "desktop"), "a name not said");
         QVERIFY2(SyncIdentity::check(library, {{"device", "another-device"}, {"name", "newbox"}}, "newbox"), "a computer not met yet");
+    }
+
+    // A known computer says the machine it runs on (#215): the same machine
+    // under another host name is that computer, renamed, and said to be; a
+    // machine that says none (a container without a machine id) is known by
+    // its name, as is one paired before computers said their machines.
+    void aRenamedComputerIsKnownByItsMachine() {
+        QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const QString machine = SyncIdentity::machineOf("the desktop machine", "desktop-device");
+        QVERIFY(!machine.isEmpty() && !machine.contains("desktop machine"));
+        Spaces::pair(library, "personal:desktop-device", "desktop-device", "desktop", machine);
+        const auto renamed =
+            SyncIdentity::check(library, {{"device", "desktop-device"}, {"name", "newbox"}, {"machine", machine}}, "newbox");
+        QVERIFY2(renamed, qPrintable(whyNot(renamed)));
+        QCOMPARE(renamed->renamedFrom, QString("desktop"));
+        const auto same =
+            SyncIdentity::check(library, {{"device", "desktop-device"}, {"name", "desktop"}, {"machine", machine}}, "desktop");
+        QVERIFY2(same && same->renamedFrom.isEmpty(), "not renamed");
+        QVERIFY2(!SyncIdentity::check(library, {{"device", "desktop-device"}, {"name", "newbox"}}, "newbox"), "no machine said");
+        Spaces::pair(library, "personal:older-device", "older-device", "older");
+        QVERIFY2(!SyncIdentity::check(library, {{"device", "older-device"}, {"name", "newbox"}, {"machine", machine}}, "newbox"),
+                 "paired before machines were said");
+    }
+
+    // The machine is salted with the library's device id: one machine says
+    // another for each library, and no one machine id in clear (#215).
+    void aMachineIsSaidForItsLibraryAlone() {
+        const QString one = SyncIdentity::machineOf("the desktop machine", "desktop-device");
+        QCOMPARE(SyncIdentity::machineOf("the desktop machine\n", "desktop-device"), one);
+        QVERIFY(SyncIdentity::machineOf("the desktop machine", "laptop-device") != one);
+        QVERIFY(SyncIdentity::machineOf("another machine", "desktop-device") != one);
+        QVERIFY2(SyncIdentity::machineOf("", "desktop-device").isEmpty(), "a machine without an id says none");
+    }
+
+    // A copy of another known computer's library on a machine of the same
+    // host name (#215): its machine is another, so it is refused as a copy.
+    void aCopyOnAnotherMachineOfTheSameNameIsRefused() {
+        QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        Spaces::pair(library, "personal:desktop-device", "desktop-device", "desktop",
+                     SyncIdentity::machineOf("the desktop machine", "desktop-device"));
+        const QString another = SyncIdentity::machineOf("another machine", "desktop-device");
+        const auto copy =
+            SyncIdentity::check(library, {{"device", "desktop-device"}, {"name", "desktop"}, {"machine", another}}, "desktop");
+        QVERIFY(!copy);
+        QCOMPARE(copy.error().code(), Failure::Code::SyncDeviceTaken);
+        QVERIFY2(whyNot(copy).contains("omabook identity --new-device"), qPrintable(whyNot(copy)));
+        QVERIFY2(SyncIdentity::check(library, {{"device", "desktop-device"}, {"name", "desktop"}}, "desktop"),
+                 "a machine not said is known by its name");
+    }
+
+    // Both sides of a sync renamed since the last (#215): the sync goes on,
+    // each knows the other by the name it has now, and the sync says so.
+    void aRenamedComputerSyncsAndIsKnownByItsNewName() {
+        Paired two;
+        if (SyncIdentity::machine(Spaces::deviceId(two.here)).isEmpty())
+            QSKIP("this computer has no machine id");
+        const QString host = QSysInfo::machineHostName();
+        const auto known = [](const Library &library, const QString &device) {
+            for (const Spaces::Computer &computer : Spaces::computers(library))
+                if (computer.device == device)
+                    return computer;
+            return Spaces::Computer{};
+        };
+        const QString laptop = Spaces::deviceId(two.laptop);
+        const QString here = Spaces::deviceId(two.here);
+        QCOMPARE(known(two.here, laptop).machine, SyncIdentity::machine(laptop));
+        QCOMPARE(known(two.laptop, here).machine, SyncIdentity::machine(here));
+        for (Library *library : {&two.here, &two.laptop})
+            ChangeLog::exec(*library, "UPDATE space_members SET name = 'oldbox' WHERE person = ?", {library == &two.here ? laptop : here});
+        const SyncSummary synced = syncLibrary(two.here, two.to("laptop", "Laptop"));
+        QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty(), qPrintable(synced.error + synced.problems.join('\n')));
+        QCOMPARE(synced.computersRenamed.size(), 2);
+        for (const QString &line : synced.computersRenamed)
+            QVERIFY2(line.contains("oldbox") && line.contains(host), qPrintable(line));
+        QCOMPARE(known(two.here, laptop).name, host);
+        Library there(two.dir.filePath("Laptop"));
+        QVERIFY(there.open());
+        QCOMPARE(known(there, here).name, host);
     }
 
     // A device id of its own: what it writes from then on is under it, and it

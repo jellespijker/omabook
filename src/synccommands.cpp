@@ -188,6 +188,17 @@ void printKeptApart(const SyncSummary &summary, const QString &host, const QStri
     return none;
 }
 
+// What a sync found of the other side: an Omabook there from before the
+// sync guard, which makes no plan (#211), and a computer renamed (#215).
+void printTheOtherSide(const SyncSummary &summary, const QString &host) {
+    if (summary.uncheckedThere)
+        printLine(stdout, QString("Omabook on %1 is older than the sync guard and says nothing of what a sync changes there, so "
+                                  "what this sync %2 there was not checked. Update Omabook on %1.")
+                              .arg(host, summary.dryRun ? QString("would do") : QString("did")));
+    for (const QString &renamed : summary.computersRenamed)
+        printLine(stdout, renamed);
+}
+
 int printSyncResult(const SyncSummary &summary, const QString &computer, bool json) {
     const QString host = Remote(computer).host();
     if (json)
@@ -210,11 +221,7 @@ int printSyncResult(const SyncSummary &summary, const QString &computer, bool js
                                     : "Accepted, though they break what a sync must never do",
                      summary.breaches);
         printSection("Not as the sync announced", summary.unannounced);
-        // An Omabook there from before the sync guard makes no plan (#211).
-        if (summary.uncheckedThere)
-            printLine(stdout, QString("Omabook on %1 is older than the sync guard and says nothing of what a sync changes there, so "
-                                      "what this sync %2 there was not checked. Update Omabook on %1.")
-                                  .arg(host, summary.dryRun ? QString("would do") : QString("did")));
+        printTheOtherSide(summary, host);
     }
     for (const QString &problem : summary.problems)
         printLine(stderr, problem);
@@ -234,7 +241,8 @@ int answerReplication(const QCommandLineParser &parser) {
 }
 
 // What omabook sync asks of this computer before anything else (#209):
-// whether the library this file introduces may sync with this one; why not, as "refused".
+// whether the library this file introduces may sync with this one; why not, as "refused", and
+// the name it went by here, renamed since, as "renamed" (#215).
 int answerIdentity(const QCommandLineParser &parser) {
     QFile file(parser.value("identity"));
     if (!file.open(QIODevice::ReadOnly))
@@ -243,8 +251,7 @@ int answerIdentity(const QCommandLineParser &parser) {
     const auto library = openCliLibrary(parser);
     if (!library)
         return failLine(library.error());
-    const auto checked = SyncIdentity::check(**library, theirs, theirs.value("name").toString());
-    printJsonObject(checked ? QJsonObject() : QJsonObject{{"refused", checked.error().text()}});
+    printJsonObject(SyncIdentity::answer(**library, theirs));
     return 0;
 }
 

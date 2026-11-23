@@ -10,6 +10,8 @@
 #include "person.h"
 #include "publishedlog.h"
 #include "sharedspace.h"
+#include "spaces.h"
+#include "syncidentity.h"
 
 namespace {
 
@@ -35,6 +37,8 @@ void carryOver(const Library &library, const QString &was, const QString &now) {
 
 QJsonObject Pairing::introduction(const Library &library) {
     QJsonObject introduction{{u"signs"_s, 1}, {u"name"_s, QSysInfo::machineHostName()}};
+    if (const QString machine = SyncIdentity::machine(Spaces::deviceId(library)); !machine.isEmpty())
+        introduction.insert(u"machine"_s, machine);
     if (const Person *person = library.person())
         introduction.insert(u"person"_s, person->id());
     return introduction;

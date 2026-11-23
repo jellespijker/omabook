@@ -125,7 +125,8 @@ namespace {
     summary.titles.apart << paired.apart;
     summary.titles.apart.removeDuplicates();
     if (!summary.dryRun) {
-        Spaces::pair(library, manifest.value("space").toString(), manifest.value("device").toString(), manifest.value("name").toString());
+        Spaces::pair(library, manifest.value("space").toString(), manifest.value("device").toString(), manifest.value("name").toString(),
+                     manifest.value("machine").toString());
         BookPairing::record(library, paired);
     }
     return paired;
@@ -432,7 +433,8 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
         theirGids.insert(gid.toString());
     const BookPairing::Pairs paired = Replication::pairs(library, Replication::booksFrom(request.value("books").toArray()), theirGids);
     if (!dryRun)
-        Spaces::pair(library, request.value("space").toString(), theirDevice, request.value("name").toString());
+        Spaces::pair(library, request.value("space").toString(), theirDevice, request.value("name").toString(),
+                     request.value("machine").toString());
     SyncSummary taken;
     taken.dryRun = dryRun;
     taken.titles.apart << paired.apart;
