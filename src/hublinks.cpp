@@ -175,8 +175,8 @@ std::expected<std::unique_ptr<HubLinks::Session>, Failure> HubLinks::open(const 
     auto ssh = std::make_unique<QProcess>();
     // This key alone: never another of the person's, which may open a shell there.
     // "--" ends ssh's own options, so a host can never be read as one.
-    ssh->start(m_ssh.first(), m_ssh.mid(1) + QStringList{u"-i"_s, keyFile(), u"-o"_s, u"IdentitiesOnly=yes"_s, u"--"_s, host,
-                                                          u"omabook hub session"_s});
+    ssh->start(m_ssh.first(),
+               m_ssh.mid(1) + QStringList{u"-i"_s, keyFile(), u"-o"_s, u"IdentitiesOnly=yes"_s, u"--"_s, host, u"omabook hub session"_s});
     if (!ssh->waitForStarted(5000))
         return std::unexpected(Failure(Failure::Code::HubSessionEnded, {host}));
     auto session = std::make_unique<Session>(std::move(ssh));

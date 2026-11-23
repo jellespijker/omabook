@@ -18,7 +18,7 @@
 //
 //   computer: {"request": "hello", "protocol": 1}
 //   hub:      {"ok": true, "protocol": 1, "computer": "laptop", "version": "0.5.0",
-//              "requests": ["computers", "hello", "status", "sync", "unlink"]}
+//              "requests": ["computers", "hello", "snapshots", "status", "sync", "unlink"]}
 //
 // The first line must be that hello, in the protocol the hub speaks; anything
 // else ends the session with {"ok": false, "error": ..., "protocol": 1}. The

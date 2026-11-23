@@ -258,7 +258,8 @@ int runHubCli(const QStringList &arguments) {
         "one JSON request a line in and one answer a line out, and allow is what add runs there."_s);
     parser.addHelpOption();
     parser.addPositionalArgument(
-        u"what"_s, u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | forget <computer> | session"_s);
+        u"what"_s,
+        u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | forget <computer> | session"_s);
     parser.addOption({u"libraries"_s, u"With run: keep the libraries in this folder, from now on."_s, u"folder"_s});
     parser.addOption({u"json"_s, u"With status or computers: print it as JSON."_s});
     parser.addOption({u"name"_s, u"With add: what the hub calls this computer (its host name otherwise)."_s, u"name"_s});

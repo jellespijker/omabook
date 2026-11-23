@@ -15,6 +15,7 @@
 #include "log.h"
 #include "sync.h"
 #include "synclog.h"
+#include "syncplan.h"
 
 using namespace Qt::StringLiterals;
 
@@ -160,6 +161,12 @@ namespace {
     return book->toJson();
 }
 
+// Whether it is `collections take --json <file>` or `graph take --json <file>`.
+[[nodiscard]] bool takesIn(const QStringList &arguments) {
+    return arguments.size() == 4 && QStringList{u"collections"_s, u"graph"_s}.contains(arguments.at(0)) && arguments.at(1) == u"take"_s
+           && arguments.at(2) == u"--json"_s;
+}
+
 } // namespace
 
 bool HubSyncSteps::writes(const QStringList &arguments, const Resolve &resolve) {
@@ -176,10 +183,12 @@ std::expected<QJsonValue, Failure> HubSyncSteps::run(Library &library, const QSt
     const QString command = arguments.value(0);
     if (arguments == QStringList{u"manifest"_s, u"--log"_s})
         return libraryManifest(library, ManifestFor::LogPeer);
+    // Each book as the sync guard compares it, before and after (#187).
+    if (arguments == QStringList{u"manifest"_s, u"--state"_s})
+        return SyncPlan::toJson(SyncPlan::states(library));
     if (arguments.size() == 3 && command == u"sync"_s && arguments.at(1) == u"--replicate"_s)
         return replicate(library, arguments.at(2), resolve, dryRun);
-    const bool takes = arguments.size() == 4 && (command == u"collections"_s || command == u"graph"_s) && arguments.at(1) == u"take"_s
-                       && arguments.at(2) == u"--json"_s;
+    const bool takes = takesIn(arguments);
     if (!takes && command != u"add"_s && command != u"set"_s)
         return std::unexpected(refused(arguments));
     if (dryRun)

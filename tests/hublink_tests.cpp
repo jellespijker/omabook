@@ -180,7 +180,8 @@ struct InProcess {
         Library library(folder + u"/home"_s);
         if (!library.open())
             return u"no library made for the hub"_s;
-        if (!title.isEmpty() && (!Fixtures::epub(home + u"/"_s + title + u".epub"_s, title) || library.add(home + u"/"_s + title + u".epub"_s).id <= 0))
+        if (!title.isEmpty()
+            && (!Fixtures::epub(home + u"/"_s + title + u".epub"_s, title) || library.add(home + u"/"_s + title + u".epub"_s).id <= 0))
             return u"no book in the hub's library"_s;
     }
     daemon.setProcessChannelMode(QProcess::MergedChannels);
@@ -676,15 +677,32 @@ private slots:
         const QString host = u"hubtest@127.0.0.1"_s;
         QVERIFY(QDir().mkpath(links) && QFile::copy(hub.dir.filePath(u"laptop"_s), links + u"/key"_s));
         QVERIFY(QFile::setPermissions(links + u"/key"_s, QFile::ReadOwner | QFile::WriteOwner));
-        QVERIFY(Fixtures::write(links + u"/hubs.json"_s,
-                                QJsonDocument(QJsonArray{QJsonObject{{"host", host}, {"computer", "laptop"},
-                                                                     {"fingerprint", hub.fingerprint(u"laptop"_s)}, {"linked", "2026-11-23T00:00:00Z"}}})
-                                    .toJson()));
-        const HubLinks linked(links, {hub.env, u"LD_PRELOAD="_s + QString::fromLatin1(HUBLINK_PASSWD), u"HUBLINK_PASSWD_NAME=hubtest"_s,
-                                      u"HUBLINK_PASSWD_HOME="_s + hub.home, hub.ssh, u"-F"_s, u"/dev/null"_s, u"-p"_s,
-                                      QString::number(hub.port), u"-o"_s, u"BatchMode=yes"_s, u"-o"_s, u"StrictHostKeyChecking=no"_s,
-                                      u"-o"_s, u"UserKnownHostsFile=/dev/null"_s, u"-o"_s, u"GlobalKnownHostsFile=/dev/null"_s, u"-o"_s,
-                                      u"IdentityAgent=none"_s, u"-o"_s, u"LogLevel=ERROR"_s});
+        QVERIFY(Fixtures::write(links + u"/hubs.json"_s, QJsonDocument(QJsonArray{QJsonObject{{"host", host},
+                                                                                              {"computer", "laptop"},
+                                                                                              {"fingerprint", hub.fingerprint(u"laptop"_s)},
+                                                                                              {"linked", "2026-11-23T00:00:00Z"}}})
+                                                             .toJson()));
+        const HubLinks linked(links, {hub.env,
+                                      u"LD_PRELOAD="_s + QString::fromLatin1(HUBLINK_PASSWD),
+                                      u"HUBLINK_PASSWD_NAME=hubtest"_s,
+                                      u"HUBLINK_PASSWD_HOME="_s + hub.home,
+                                      hub.ssh,
+                                      u"-F"_s,
+                                      u"/dev/null"_s,
+                                      u"-p"_s,
+                                      QString::number(hub.port),
+                                      u"-o"_s,
+                                      u"BatchMode=yes"_s,
+                                      u"-o"_s,
+                                      u"StrictHostKeyChecking=no"_s,
+                                      u"-o"_s,
+                                      u"UserKnownHostsFile=/dev/null"_s,
+                                      u"-o"_s,
+                                      u"GlobalKnownHostsFile=/dev/null"_s,
+                                      u"-o"_s,
+                                      u"IdentityAgent=none"_s,
+                                      u"-o"_s,
+                                      u"LogLevel=ERROR"_s});
         const QString folder = hub.dir.filePath(u"laptop-library/library"_s);
         QVERIFY(libraryWith(folder, u"Alpha"_s));
         Library library(folder);
@@ -693,7 +711,8 @@ private slots:
             const auto session = linked.open(host);
             QVERIFY2(session, qPrintable(whyNot(session)));
             const SyncSummary summary = HubRemote::sync(
-                library, host, [&session](const QByteArray &line) { return (*session)->ask(line); }, {}, [dryRun] {
+                library, host, [&session](const QByteArray &line) { return (*session)->ask(line); }, {},
+                [dryRun] {
                     SyncOptions options;
                     options.dryRun = dryRun;
                     return options;

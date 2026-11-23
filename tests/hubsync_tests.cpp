@@ -12,19 +12,26 @@
 // keeper, its computers' keys and the session's pipe, all in this process.
 // The same over a real sshd is in hublink_tests.
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlRecord>
 #include <QTemporaryDir>
+#include <QUuid>
 #include <QtTest>
 #include <algorithm>
 #include <memory>
 
 #include "crypto.h"
 #include "fixtures.h"
+#include "hlc.h"
 #include "hubcomputers.h"
 #include "hubkeeper.h"
 #include "hubremote.h"
@@ -158,6 +165,37 @@ struct Hub {
         return std::ranges::count_if(moments, [](const auto &moment) { return moment.first == HubKeeper::Moment::Sync; });
     }
 };
+
+// Every row of every table of a library's database, in a stable order (as #187's tests read it).
+[[nodiscard]] QMap<QString, QStringList> rowsOf(const QString &file) {
+    const QString connection = u"rows-"_s + QUuid::createUuid().toString(QUuid::Id128);
+    QMap<QString, QStringList> tables;
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(u"QSQLITE"_s, connection);
+        database.setDatabaseName(file);
+        database.setConnectOptions(u"QSQLITE_OPEN_READONLY"_s);
+        if (database.open()) {
+            QSqlQuery names(database);
+            names.exec(u"SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"_s);
+            while (names.next())
+                tables.insert(names.value(0).toString(), {});
+            for (auto table = tables.begin(); table != tables.end(); ++table) {
+                QSqlQuery rows(database);
+                rows.exec(u"SELECT * FROM \""_s + table.key() + u"\""_s);
+                while (rows.next()) {
+                    QStringList values;
+                    for (int column = 0; column < rows.record().count(); ++column)
+                        values << QString::fromLatin1(rows.value(column).toByteArray().toBase64());
+                    *table << values.join(u'|');
+                }
+                std::ranges::sort(*table);
+            }
+        }
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(connection);
+    return tables;
+}
 
 [[nodiscard]] QString problems(const SyncSummary &summary) { return summary.error + summary.problems.join(u'\n'); }
 
@@ -330,6 +368,77 @@ private slots:
         const SyncSummary refused = hub.syncWith(u"desktop"_s, desktop.library);
         QVERIFY2(problems(refused).contains(u"no room for the snapshot"_s), qPrintable(problems(refused)));
         QCOMPARE(hub.held().size(), 1);
+    }
+
+    // The sync guard (#187) checks a hub sync as any other: a plan that would
+    // empty a book's publisher, cleared later on the other side, is refused
+    // before either side writes, whichever side it would happen on; the
+    // computer's library and the hub's are as they were, and the hub took no
+    // snapshot. Accepted for that book, it goes through, as announced.
+    void aSyncTheGuardRefusesWritesNothingOnEitherSide_data() {
+        QTest::addColumn<bool>("clearedOnHub");
+        QTest::addColumn<QString>("side");
+        QTest::newRow("cleared on the hub") << true << u"Kindred (here)"_s;
+        QTest::newRow("cleared on the computer") << false << u"Kindred (on hub)"_s;
+    }
+
+    void aSyncTheGuardRefusesWritesNothingOnEitherSide() {
+        QFETCH(bool, clearedOnHub);
+        QFETCH(QString, side);
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        const qint64 kindred = laptop.add(u"Kindred"_s);
+        QVERIFY(kindred > 0);
+        const QString publisher = laptop.library.book(kindred)->meta.publisher;
+        QVERIFY(!publisher.isEmpty());
+        // The hub has the same book of its own, as two computers each with it do in #187's test.
+        qint64 held = 0;
+        std::ignore = hub.keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+            held = libraries.front()->add(laptop.dir.filePath(u"Kindred.epub"_s)).id;
+            return {};
+        });
+        QVERIFY(held > 0);
+        const SyncSummary first = hub.syncWith(u"laptop"_s, laptop.library);
+        QVERIFY2(first.error.isEmpty() && first.problems.isEmpty() && first.unannounced.isEmpty(),
+                 qPrintable(problems(first) + first.unannounced.join(u'\n')));
+        const auto clear = [](Library &library) {
+            const Book book = library.books(u"Kindred"_s).value(0);
+            BookMeta cleared = book.meta;
+            cleared.publisher.clear();
+            // A minute on, as a sync's details are timed to the second.
+            return library.setMeta(book.id, cleared, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0));
+        };
+        bool cleared = false;
+        if (clearedOnHub)
+            std::ignore = hub.keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+                cleared = clear(*libraries.front());
+                return {};
+            });
+        else
+            cleared = clear(laptop.library);
+        QVERIFY(cleared);
+        hub.moments.clear();
+        const QString hubDatabase = Library::databaseIn(hub.dir.filePath(u"libraries/home"_s));
+        const QString laptopDatabase = Library::databaseIn(laptop.library.root());
+        const auto hubRows = rowsOf(hubDatabase);
+        const auto laptopRows = rowsOf(laptopDatabase);
+        QVERIFY(!hubRows.isEmpty() && !laptopRows.isEmpty());
+        const SyncSummary refused = hub.syncWith(u"laptop"_s, laptop.library);
+        QVERIFY2(refused.error.contains(u"Kindred"_s) && refused.error.contains(publisher), qPrintable(refused.error));
+        QVERIFY2(refused.breaches.join(u'\n').contains(side), qPrintable(refused.breaches.join(u'\n')));
+        QCOMPARE(rowsOf(hubDatabase), hubRows);
+        QCOMPARE(rowsOf(laptopDatabase), laptopRows);
+        QCOMPARE(hub.syncMoments(), 0);
+        SyncOptions accepted;
+        accepted.accept = {u"kindred"_s};
+        const SyncSummary through = hub.syncWith(u"laptop"_s, laptop.library, accepted);
+        QVERIFY2(through.error.isEmpty() && through.problems.isEmpty() && through.unannounced.isEmpty(),
+                 qPrintable(problems(through) + through.unannounced.join(u'\n')));
+        QCOMPARE(through.breaches, refused.breaches);
+        QCOMPARE(laptop.library.book(kindred)->meta.publisher, QString());
+        QCOMPARE(hub.syncMoments(), 1);
     }
 
     void aLibraryOfAnotherFormatIsRefused() {

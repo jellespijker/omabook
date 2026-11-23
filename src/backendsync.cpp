@@ -71,15 +71,18 @@ void Backend::sync() {
         if (!library.open(&summary.error))
             summary.problems.clear();
         else
-            summary = HubRemote::syncWith(library, target, [self](const QString &title) {
-                QMetaObject::invokeMethod(
-                    qApp,
-                    [self, title] {
-                        if (self)
-                            self->setStatus(title);
-                    },
-                    Qt::QueuedConnection);
-            }, {}, ssh);
+            summary = HubRemote::syncWith(
+                library, target,
+                [self](const QString &title) {
+                    QMetaObject::invokeMethod(
+                        qApp,
+                        [self, title] {
+                            if (self)
+                                self->setStatus(title);
+                        },
+                        Qt::QueuedConnection);
+                },
+                {}, ssh);
         QMetaObject::invokeMethod(
             qApp,
             [self, summary] {

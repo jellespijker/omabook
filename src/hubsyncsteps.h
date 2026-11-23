@@ -17,6 +17,7 @@ class Library;
 // Anything else is refused, and so is everything that writes in a dry run.
 //
 //   manifest --log                      what the library holds (libraryManifest)
+//   manifest --state                    each book as the sync guard compares it (SyncPlan, #187)
 //   sync --replicate <file>             the change log both ways (SyncLog::answer)
 //   add <file> --meta <file> [--cover <file>] --json
 //   add --paper|--wish --meta <file> [--cover <file>] --json
