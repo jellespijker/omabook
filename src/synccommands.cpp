@@ -19,6 +19,7 @@
 #include "settings.h"
 #include "sync.h"
 #include "synclog.h"
+#include "syncplan.h"
 
 namespace {
 
@@ -71,6 +72,7 @@ bool parseArguments(QCommandLineParser &parser, const QString &name, const QStri
     options.dryRun = parser.isSet("dry-run");
     options.acceptRenames = parser.isSet("accept-renames");
     options.unlink = parser.values("unlink");
+    options.accept = parser.values("accept");
     const QString details = parser.value("details").toLower();
     if (details == "mine")
         options.details = SyncOptions::Details::Mine;
@@ -200,9 +202,15 @@ int printSyncResult(const SyncSummary &summary, const QString &computer, bool js
                       .arg(host, computer));
     if (!json)
         printKeptApart(summary, host, computer);
+    if (!json) {
+        printSection(summary.dryRun ? "A sync would be refused for these, unless accepted (--accept \"<title>\")"
+                                    : "Accepted, though they break what a sync must never do",
+                     summary.breaches);
+        printSection("Not as the sync announced", summary.unannounced);
+    }
     for (const QString &problem : summary.problems)
         printLine(stderr, problem);
-    return summary.problems.isEmpty() ? 0 : 1;
+    return summary.problems.isEmpty() && summary.unannounced.isEmpty() ? 0 : 1;
 }
 
 int answerReplication(const QCommandLineParser &parser) {
@@ -242,12 +250,16 @@ int runManifestCli(const QStringList &arguments) {
                              "hashes, cover and reading place. This is what omabook sync reads from the other computer.");
     parser.addOption({"log", "For an Omabook that speaks the change log: say so, and leave out what the log carries "
                              "(all but what names each book, and its files and cover)."});
+    parser.addOption({"state", "Only each book as the sync guard compares it before and after a sync, by its id."});
     if (!parseArguments(parser, "manifest", arguments, 0))
         return 1;
     const auto library = openCliLibrary(parser);
     if (!library)
         return failLine(library.error());
-    printJsonObject(libraryManifest(**library, parser.isSet("log") ? ManifestFor::LogPeer : ManifestFor::OlderPeer));
+    if (parser.isSet("state"))
+        printJsonObject(SyncPlan::toJson(SyncPlan::states(**library)));
+    else
+        printJsonObject(libraryManifest(**library, parser.isSet("log") ? ManifestFor::LogPeer : ManifestFor::OlderPeer));
     return 0;
 }
 
@@ -276,8 +288,14 @@ int runSyncCli(const QStringList &arguments) {
                       "Keep apart from now on a book of this title and the book of another title it is paired with, on "
                       "either computer: for two different books an older Omabook took for one. May be given more than once.",
                       "title"});
-    parser.addOption(
-        {"dry-run", "Change nothing on either side; list what would be received, sent, updated, renamed and removed on each."});
+    parser.addOption({"accept",
+                      "Let a sync through that would break what a sync must never do for a book of this title (lose a field, "
+                      "an identifier, a book, take another book's name, move a reading place back), as its dry run shows it. "
+                      "May be given more than once.",
+                      "title"});
+    parser.addOption({"dry-run",
+                      "Change nothing on either side; list what would be received, sent, updated, renamed and removed on each, and "
+                      "what of it a sync would be refused for."});
     parser.addOption({"replicate",
                       "What omabook sync asks of this computer from the other one: take in the change log's operations in "
                       "this file, and print the ones the other computer lacks.",

@@ -58,10 +58,16 @@ struct Row {
                   == std::tie(log.to, log.quote, log.before, log.after, log.anchored, log.confidence, log.lost, log.color, log.area);
 }
 
+// Whether one on the book `here` would go to the book `gid` names, which is another (#187).
+[[nodiscard]] bool movesBook(const Library &library, qint64 here, const QString &gid, const QHash<QString, QString> &same) {
+    const QString was = Spaces::bookId(library, here);
+    return same.value(was, was) != same.value(gid, gid);
+}
+
 } // namespace
 
 int SyncTakeAnnotations::take(Library &library, const QMap<QString, ReducedAnnotation> &merged, const QHash<QString, qint64> &books,
-                              const QHash<QString, QString> &same, bool dryRun) {
+                              const QHash<QString, QString> &same, bool dryRun, QStringList &moved) {
     const QHash<QString, Row> rows = rowsHere(library, books);
     // One write: what it brings goes into the log by the id it has (below), never one made of its content here.
     const Library::Batch batch(library);
@@ -82,6 +88,8 @@ int SyncTakeAnnotations::take(Library &library, const QMap<QString, ReducedAnnot
         if (book <= 0 || log.kind.isEmpty() || (row != rows.cend() && unchanged(*row, book, log)))
             continue;
         ++taken;
+        if (row != rows.cend() && movesBook(library, row->book, bookGid, same))
+            moved << library.book(book).value_or(Book()).meta.title;
         if (dryRun)
             continue;
         if (const std::optional<qint64> stored = library.storeAnnotation(book, log); stored && row == rows.cend())

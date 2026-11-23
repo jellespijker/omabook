@@ -80,8 +80,9 @@ struct Names {
 // Takes in what the other side says of a book's reading where this side says
 // nothing: an empty shelf, no stars, no finished day; a paper copy either side
 // has is had; and the names elsewhere this one lacks, as `names` says.
-// Whether that changes anything; with `dryRun` only that.
-bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names = {});
+// Whether that changes anything; with `dryRun` only that. What it changes
+// goes into `plan`, when there is one (the sync guard's, #187).
+bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names = {}, SyncPlan *plan = nullptr);
 
 // `omabook set` arguments that give the other side a book's reading and,
 // with `names`, its names elsewhere, with `detailsAt` (for an Omabook there

@@ -32,13 +32,18 @@ namespace {
     return titles;
 }
 
-// The books whose place taking `incoming` changes, or with `dryRun` would.
-[[nodiscard]] QList<qint64> takePlaces(Library &library, const QList<SpaceOperation> &incoming, bool dryRun) {
+// The books whose place taking `incoming` changes, or with `dryRun` would,
+// each place a dry run would move in `plan`, with when it was read and when here's was (#187).
+[[nodiscard]] QList<qint64> takePlaces(Library &library, const QList<SpaceOperation> &incoming, bool dryRun, SyncPlan &plan) {
     if (!dryRun)
         return SpaceReplay::takePlaces(library, incoming);
     QList<qint64> books;
-    for (const Replication::PlaceChange &change : Replication::placeChanges(library, incoming))
+    for (const Replication::PlaceChange &change : Replication::placeChanges(library, incoming)) {
         books << change.book;
+        plan.places << SyncPlan::Place{.title = titlesOf(library, {change.book}).value(0),
+                                       .before = library.progress(change.book).updated,
+                                       .after = change.place.updated};
+    }
     return books;
 }
 
@@ -367,7 +372,7 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
         Compaction::rememberSeen(library, theirDevice,
                                  joined(Replication::vectorFrom(manifest.value("vector").toObject()),
                                         Replication::vectorFrom(request.value("vector").toObject())));
-    const QList<qint64> taken = takePlaces(library, incoming, dryRun);
+    const QList<qint64> taken = takePlaces(library, incoming, dryRun, summary.plans.here);
     summary.placesTaken += static_cast<int>(taken.size());
     summary.titles.placesTaken << titlesOf(library, taken);
     summary.placesSent += answer->value("changed").toInt();
@@ -390,6 +395,8 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
                                                 .books = books,
                                                 .held = SyncTake::heldBy(books)},
                                                summary);
+    if (dryRun) // what the other side's dry run would change of its books, for the guard to check (#187)
+        summary.plans.there = SyncPlan::fromJson(answer->value("plan").toObject());
     QJsonObject there = answer->value("taken").toObject();
     there.insert("named", answer->value("named"));
     countThere(summary, there);
@@ -443,7 +450,7 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
         Spaces::observeHlc(library, afterAll(library, incoming));
         BookPairing::record(library, paired);
     }
-    const QList<qint64> changed = takePlaces(library, incoming, dryRun);
+    const QList<qint64> changed = takePlaces(library, incoming, dryRun, taken.plans.here);
     if (dryRun)
         incoming << wouldLink(library, paired, request.value("would_link").toArray(), incoming);
     keepApart(library, incoming, dryRun, taken);
@@ -472,6 +479,7 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
          {"titles", QJsonArray::fromStringList(titlesOf(library, changed))},
          {"taken", taken.toJson()},
          {"would_link", dryRun ? linksJson(paired) : QJsonArray()},
+         {"plan", dryRun ? taken.plans.here.toJson() : QJsonObject()},
          {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
                                {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
                                {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)},

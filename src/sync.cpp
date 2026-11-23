@@ -23,6 +23,7 @@
 #include "pluginfilesync.h"
 #include "replication.h"
 #include "spaces.h"
+#include "syncguard.h"
 #include "synclog.h"
 #include "syncmanifest.h"
 #include "synctake.h"
@@ -153,6 +154,40 @@ struct Named {
     return added;
 }
 
+// Books without a file are known by their entry keys (Library::entryKeys): every book here by its keys.
+[[nodiscard]] QHash<QString, qint64> keysHere(const Library &library) {
+    QHash<QString, qint64> keys;
+    for (const Book &book : library.books())
+        for (const QString &key : Library::entryKeys(book))
+            keys.insert(key, book.id);
+    return keys;
+}
+
+// A book's details, in a file of `scratch` to send; empty when it can't be written.
+[[nodiscard]] QString writeDetails(const QTemporaryDir &scratch, int &counter, const QJsonDocument &document) {
+    const QString file = scratch.filePath(QString("details-%1.json").arg(++counter));
+    QFile json(file);
+    return json.open(QIODevice::WriteOnly) && json.write(document.toJson()) > 0 ? file : QString();
+}
+
+// The two sides of a sync, for the guard to plan, check and run it (#187):
+// this sync once planned, and the other side's books as it says them.
+[[nodiscard]] SyncGuard::Sides guardedSides(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress) {
+    return {.host = remote.host(),
+            .run =
+                [&library, &remote, progress](SyncOptions options) {
+                    options.planned = true;
+                    return syncLibrary(library, remote, progress, options);
+                },
+            .theirStates = [&remote] -> std::optional<SyncPlan::States> {
+                const Remote::Result said = remote.omabook({"manifest", "--state"});
+                const QJsonDocument states = QJsonDocument::fromJson(said.output);
+                if (!said.ok() || !states.isObject())
+                    return std::nullopt;
+                return SyncPlan::statesFrom(states.object());
+            }};
+}
+
 // Whether the other side has this file: by its hash, or by the one it came in with (#74).
 [[nodiscard]] bool knownThere(const FormatFile &file, const QSet<QString> &theirHashes) {
     return theirHashes.contains(file.hash) || (!file.original.isEmpty() && theirHashes.contains(file.original));
@@ -162,6 +197,8 @@ struct Named {
 
 SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
                         const SyncOptions &options) {
+    if (!options.planned)
+        return SyncGuard::guarded(library, guardedSides(library, remote, progress), options);
     SyncSummary summary;
     summary.dryRun = options.dryRun;
     const bool dryRun = options.dryRun;
@@ -191,12 +228,8 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     QTemporaryDir scratch;
     int counter = 0;
     QSet<QString> theirHashes;
-    // Books without a file are known by their entry keys (Library::entryKeys):
-    // every book here by its keys, and every key there.
-    QHash<QString, qint64> myKeys;
-    for (const Book &book : library.books())
-        for (const QString &key : Library::entryKeys(book))
-            myKeys.insert(key, book.id);
+    // Books without a file are known by their entry keys: every book here by its keys, and every key there.
+    QHash<QString, qint64> myKeys = keysHere(library);
     QSet<QString> theirKeys;
 
     // One folder there for the details and covers sent, made when first needed.
@@ -205,11 +238,6 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (!folderThere.isEmpty())
             remote.run("rm -rf " + Remote::quote(folderThere));
     });
-    const auto writeJson = [&](const QJsonDocument &document) -> QString {
-        const QString file = scratch.filePath(QString("details-%1.json").arg(++counter));
-        QFile json(file);
-        return json.open(QIODevice::WriteOnly) && json.write(document.toJson()) > 0 ? file : QString();
-    };
     const OlderPeer::Sync olderPeer{library, remote, scratch, folderThere, counter, options, summary, current};
 
     // What they have: fetch the books this library lacks, and for the ones
@@ -368,7 +396,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                     why = file.format.toUpper() + ": " + sent.error();
             sentFiles << target;
         }
-        const QString details = why.isEmpty() ? writeJson(QJsonDocument(book.meta.toJson())) : QString();
+        const QString details = why.isEmpty() ? writeDetails(scratch, counter, QJsonDocument(book.meta.toJson())) : QString();
         if (why.isEmpty() && details.isEmpty())
             why = "its details can't be written here";
         if (why.isEmpty())

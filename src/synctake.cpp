@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <compare>
 #include <functional>
+#include <tuple>
 
 #include "bookidentity.h"
 #include "booklinks.h"
@@ -37,16 +38,27 @@ bool travels(const QString &scheme) { return scheme.compare(QStringLiteral("gene
 // The names elsewhere they have of a book and this side lacks, but the stray
 // ones. Names that came by sync keep the details' time, so they are no reason
 // to send the details back.
-bool fillNames(Library &library, const Book &mine, const QJsonObject &identifiers, const QSet<QString> &stray, bool dryRun) {
+bool fillNames(Library &library, const Book &mine, const QJsonObject &identifiers, const QSet<QString> &stray, bool dryRun,
+               SyncPlan *plan) {
     bool changed = false;
     for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
         if (travels(it.key()) && !mine.identifiers.contains(it.key())
             && !StrayIdentifiers::isStray(stray, it.key(), it.value().toVariant().toString())) {
             changed = true;
+            if (plan != nullptr)
+                plan->identifier(library, mine, it.key(), it.value().toVariant().toString());
             if (!dryRun)
                 library.setIdentifier(mine.id, it.key(), it.value().toVariant().toString(), SyncManifest::myDetailsHlc(library, mine));
         }
     return changed;
+}
+
+// What is said of a book's reading once what the other side says fills in where this side says nothing.
+[[nodiscard]] Book readingFilled(const Book &mine, const QJsonObject &theirs) {
+    return {.paper = mine.paper || theirs.value("paper").toBool(),
+            .shelf = mine.shelf.isEmpty() ? theirs.value("shelf").toString() : mine.shelf,
+            .rating = mine.rating > 0 ? mine.rating : theirs.value("rating").toInt(),
+            .finished = mine.finished.isEmpty() ? theirs.value("finished").toString() : mine.finished};
 }
 
 void note(int &count, QStringList &titles, const QString &title) {
@@ -122,6 +134,11 @@ void giveCover(const Taking &taking, const Book &mine, const QJsonObject &listed
     return settled;
 }
 
+// Whether the book `gid` stands for is paired on less than its global id (#158).
+[[nodiscard]] bool pairedWeakly(const Taking &taking, const QString &gid) {
+    return taking.weak.contains(gid) || !BookIdentity::strongId(gid);
+}
+
 // Gives the copies here the details decided, as `behind` says which: every
 // copy what comes from there; and, of two, the one whose words the log says
 // otherwise (the other copy's are newer) the book's as the log says them,
@@ -134,7 +151,10 @@ bool giveCopies(Taking &taking, const QList<Book> &copies, const SyncManifest::M
     BookMeta meta = merged.meta;
     if (merged.takeCover && !taking.peer.dryRun && taking.peer.remote != nullptr)
         meta.cover = fetchCover(taking, listed);
+    const bool weak = pairedWeakly(taking, taking.standsFor(Spaces::bookId(taking.library, copies.first().id)));
     for (const Book &copy : copies) {
+        if (behind(copy))
+            taking.summary.plans.here.details(taking.library, copy, merged.meta, merged.takeCover, weak);
         // Without a cover to write and with its words, a copy is given nothing:
         // on the side asked, the cover comes from the side that reaches it (#168).
         const bool writes = behind(copy) && (!meta.cover.isNull() || !SyncCopies::sameWords(copy.meta, meta));
@@ -158,11 +178,6 @@ void preferACover(SyncManifest::MergedBookDetails &merged, bool mine, bool their
     merged.sendCover = mine;
     merged.takeFields = merged.takeFields || theirs;
     merged.sendFields = merged.sendFields || mine;
-}
-
-// Whether the book `gid` stands for is paired on less than its global id (#158).
-[[nodiscard]] bool pairedWeakly(const Taking &taking, const QString &gid) {
-    return taking.weak.contains(gid) || !BookIdentity::strongId(gid);
 }
 
 // Whether the copies here of the book `gid` stands for are given its details
@@ -239,6 +254,7 @@ void takeRemovals(Taking &taking, const QList<Book> &books) {
         taking.gone.insert(here.id);
         if (!std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(taking.library, here), *when)))
             continue;
+        taking.summary.plans.here.removal(taking.library, here);
         const auto removed = taking.peer.dryRun ? std::expected<void, QString>() : taking.library.remove(here.id, Hlc::seconds(*when));
         if (removed)
             note(taking.summary.removedHere, taking.summary.titles.removedHere, here.meta.title);
@@ -264,9 +280,10 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
     const bool details = takeDetails(taking, copies, *theirs, taking.listed.value(gid));
     bool reading = false;
     for (const Book &copy : copies)
-        reading = SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun,
-                                        {.take = !pairedWeakly(taking, gid), .stray = strayIn(taking, copy, gid)})
-                  || reading;
+        reading =
+            SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun,
+                                  {.take = !pairedWeakly(taking, gid), .stray = strayIn(taking, copy, gid)}, &taking.summary.plans.here)
+            || reading;
     if (reading)
         note(taking.summary.readingTaken, taking.summary.titles.readingTaken, here.meta.title);
     // The book's node in the knowledge graph says the same as the library.
@@ -330,6 +347,7 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
 } // namespace
 
 SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary) {
+    summary.plans.here.said = true;
     QList<SpaceOperation> ops = Replication::operations(library);
     if (peer.dryRun)
         ops.append(QList<SpaceOperation>(incoming.begin(), incoming.end()));
@@ -365,8 +383,8 @@ SyncTake::Taken SyncTake::take(Library &library, std::span<const SpaceOperation>
     }
     summary.collectionsTaken +=
         SyncTakeCollections::take(library, taking.merged.collections, booksHere(taking), taking.canonical, peer.dryRun);
-    summary.annotationsTaken +=
-        SyncTakeAnnotations::take(library, taking.merged.annotations, booksHere(taking), taking.canonical, peer.dryRun);
+    summary.annotationsTaken += SyncTakeAnnotations::take(library, taking.merged.annotations, booksHere(taking), taking.canonical,
+                                                          peer.dryRun, summary.plans.here.annotationsMoved);
     // A dry run leaves the graph be, as it always did.
     if (!peer.dryRun)
         summary.graphTaken += SyncTakeGraph::take(
@@ -413,25 +431,20 @@ QSet<QString> SyncTake::heldBy(const QJsonArray &books) {
     return held;
 }
 
-bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names) {
+bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names, SyncPlan *plan) {
     const std::optional<Book> mine = library.book(id);
     if (!mine)
         return false;
-    bool changed = false;
-    const QString shelf = mine->shelf.isEmpty() ? theirs.value("shelf").toString() : mine->shelf;
-    const int rating = mine->rating > 0 ? mine->rating : theirs.value("rating").toInt();
-    const QString finished = mine->finished.isEmpty() ? theirs.value("finished").toString() : mine->finished;
-    if (shelf != mine->shelf || rating != mine->rating || finished != mine->finished) {
-        changed = true;
-        if (!dryRun)
-            library.setReading(id, shelf, rating, finished);
-    }
-    if (!mine->paper && theirs.value("paper").toBool()) {
-        changed = true;
-        if (!dryRun)
-            library.setPaper(id, true);
-    }
-    return (names.take && fillNames(library, *mine, theirs.value("identifiers").toObject(), names.stray, dryRun)) || changed;
+    const Book filled = readingFilled(*mine, theirs);
+    const bool reading = std::tie(filled.shelf, filled.rating, filled.finished) != std::tie(mine->shelf, mine->rating, mine->finished);
+    if (reading && !dryRun)
+        library.setReading(id, filled.shelf, filled.rating, filled.finished);
+    if (filled.paper != mine->paper && !dryRun)
+        library.setPaper(id, true);
+    const bool changed = reading || filled.paper != mine->paper;
+    if (changed && plan != nullptr)
+        plan->reading(library, *mine, filled);
+    return (names.take && fillNames(library, *mine, theirs.value("identifiers").toObject(), names.stray, dryRun, plan)) || changed;
 }
 
 QStringList SyncTake::readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names) {

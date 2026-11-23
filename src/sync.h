@@ -8,6 +8,7 @@
 
 #include "library.h"
 #include "remote.h"
+#include "syncplan.h"
 
 // Keeping the libraries of several computers in step.
 //
@@ -68,8 +69,14 @@ struct SyncOptions {
     // book of another title, to keep apart from now on (BookLinks::unlink,
     // #160): the way out of a wrong link the titles of its time can't show.
     QStringList unlink;
+    // The titles of books whose breaches of the sync guard's rules the person
+    // accepts (syncguard.h, #187): a sync with only those goes through.
+    QStringList accept;
     // Changes nothing on either side, and says what a sync would do.
     bool dryRun = false;
+    // Whether the sync guard planned and checked this sync already, and runs
+    // it (SyncGuard::guarded): set by the guard alone.
+    bool planned = false;
     // The plugins whose data/ files travel (PluginFileSync); the person's when empty.
     QString plugins;
 };
@@ -119,6 +126,15 @@ struct SyncSummary {
     } titles;
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all
+    // What the sync guard (syncguard.h, #187) found: each side's plan, as its
+    // dry run recorded it; the rules the plans break, each as "<title> (here):
+    // <what>", which refuse the sync but for the books accepted; and what the
+    // two sides were after the write that the plans didn't announce.
+    struct Plans {
+        SyncPlan here, there;
+    } plans;
+    QStringList breaches;
+    QStringList unannounced;
 
     // The counts as `omabook sync --json` and the MCP server give them, with
     // the titles of a dry run, and of the books whose details are undecided.

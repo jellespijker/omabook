@@ -3,6 +3,7 @@
 #include <QHash>
 #include <QMap>
 #include <QString>
+#include <QStringList>
 
 #include "library.h"
 #include "spacereducer.h"
@@ -22,8 +23,9 @@ namespace SyncTakeAnnotations {
 // `merged` is both sides' operations reduced, `books` this side's books by the
 // id they stand for, `same` the id each book's id stands for
 // (SpaceReducer::sameAs). Answers how many were made, changed or removed
-// here; with `dryRun`, how many would be.
+// here; with `dryRun`, how many would be. The titles of the books one would
+// move to from another book go into `moved`, for the sync guard (#187).
 int take(Library &library, const QMap<QString, ReducedAnnotation> &merged, const QHash<QString, qint64> &books,
-         const QHash<QString, QString> &same, bool dryRun);
+         const QHash<QString, QString> &same, bool dryRun, QStringList &moved);
 
 } // namespace SyncTakeAnnotations
