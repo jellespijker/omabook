@@ -36,6 +36,11 @@ Manual::Topic computersTopic() {
                             "would lose a book the other still has, empty a detail that had a value, or take a reading place "
                             "back to an earlier one. It names the books and why; `omabook sync laptop --accept \"<title>\"` "
                             "lets one book's change through.")},
+                {Manual::tr("Clocks, names and older Omabooks"),
+                 Manual::tr("Reading places are ordered as they were read, whatever the computers' clocks say. A computer is "
+                            "known by the machine it runs on, so one given a new name syncs on, and a copy of its library on "
+                            "another machine is refused. An Omabook from before this check leaves its side unchecked, and the "
+                            "sync says so; a hub syncs with none.")},
                 {Manual::tr("One person on every computer"),
                  Manual::tr("The first sync between two computers pairs them: from then on both sign what they write as you, "
                             "and a change that isn't as it was signed is refused. `omabook identity` shows your id and the "

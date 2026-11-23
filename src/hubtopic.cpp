@@ -6,8 +6,9 @@
 // helptopics.cpp, which has the other pages and no room for one this size; the
 // same rules hold ({commands} as keys, `backticks` typed).
 
-// The hub (#179), a computer linked to it (#180, #189) and synced with it (#188); snapshots (#181, #185), their
-// destinations (#182), what changed and going back (#183, #209), and the warnings (#184).
+// The hub (#179), a computer linked to it (#180, #189) and synced with it (#188), its library paired (#214, #217),
+// the plugins' files (#212); snapshots (#181, #185), their destinations (#182), what changed and going back (#183,
+// #209), and the warnings (#184).
 Manual::Topic Manual::hubTopic() {
     return {"hub",
             Manual::tr("The hub and snapshots"),
@@ -30,6 +31,15 @@ Manual::Topic Manual::hubTopic() {
                             "first what it would do, changing nothing; so does {library.sync} with the hub named as the other "
                             "computer in the settings ({global.settings}), and `omabook hub sync` in a terminal. The hub takes a "
                             "moment snapshot before it writes. Computers still sync with each other directly too.")},
+                {Manual::tr("One library, paired once"),
+                 Manual::tr("A library on the hub syncs only with the library it is paired with; one new on the hub is paired "
+                            "by its first sync. Another is refused before anything is read or written, and Pair in "
+                            "{library.hubs}, or `omabook hub sync <hub>:<library> --pair`, pairs the two after asking: only "
+                            "when they are one library.")},
+                {Manual::tr("The plugins' files"),
+                 Manual::tr("A sync with the hub carries the plugins' files too, such as Notebooks' recordings and "
+                            "Storyteller's stories. The hub keeps every plugin's, installed there or not, and gives them only "
+                            "to your own computers. A file with something in it is never emptied by a sync.")},
                 {Manual::tr("Snapshots"),
                  Manual::tr("{library.snapshots}, or `omabook snapshot setup`, sets up encrypted snapshots of the library, "
                             "made with restic: the books, their details and notes, the settings and the plugins' data, each "

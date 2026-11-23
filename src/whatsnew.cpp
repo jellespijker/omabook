@@ -313,6 +313,25 @@ QList<Manual::Step> hubRelease() {
     };
 }
 
+// The 0.5.1 release's entries: the plugins' files through a hub (#212), a hub's library paired once (#214, #217),
+// and a sync that no longer refuses for a clock behind or a new name (#211, #215).
+QList<Manual::Step> hubSyncRelease() {
+    return {
+        {"hub-plugin-files", "0.5.1", Manual::tr("Notebooks through the hub too"),
+         Manual::tr("A sync with the hub now carries the plugins' files as well, such as Notebooks' recordings and "
+                    "Storyteller's stories, and gives them only to your own computers."),
+         "", "library.hubs", "library", ""},
+        {"hub-pair", "0.5.1", Manual::tr("A hub's library, paired once"),
+         Manual::tr("A library on the hub syncs only with the one it is paired with. Where a sync was refused for that, Pair "
+                    "in {library.hubs} asks first, then pairs the two and syncs them."),
+         "", "library.hubs", "library", ""},
+        {"sync-clocks-names", "0.5.1", Manual::tr("Fewer refusals for nothing"),
+         Manual::tr("A computer whose clock is behind, or that was given a new name, now syncs on: reading places go in the "
+                    "order they were read, and a computer is known by the machine it runs on."),
+         "", "library.sync", "library", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -392,5 +411,5 @@ QList<Manual::Step> Manual::features() {
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
     } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
-           + speechRelease() + branchesRelease() + hubRelease();
+           + speechRelease() + branchesRelease() + hubRelease() + hubSyncRelease();
 }
