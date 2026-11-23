@@ -18,6 +18,7 @@
 #include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <algorithm>
 
 #include "changelog.h"
 #include "changelogfields.h"
@@ -26,6 +27,8 @@
 #include "library.h"
 #include "librarymigrations.h"
 #include "remote.h"
+#include "replication.h"
+#include "spacereducer.h"
 #include "spaces.h"
 #include "sync.h"
 #include "syncplan.h"
@@ -100,6 +103,13 @@ const QString bookFields = QStringLiteral("('title', 'authors', 'series', 'serie
     json.insert(field, value);
     meta.applyJson(json);
     return library.setMeta(id, meta, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0));
+}
+
+// The book titled `title` of a library, or 0.
+[[nodiscard]] qint64 titled(const Library &library) {
+    const QList<Book> books = library.books();
+    const auto found = std::ranges::find_if(books, [](const Book &book) { return book.meta.title == title; });
+    return found == books.cend() ? 0 : found->id;
 }
 
 [[nodiscard]] QString said(const SyncSummary &summary) {
@@ -187,6 +197,88 @@ private slots:
         QCOMPARE(SyncPlan::stateOf(a, *a.book(mine)).value(field), after);
         // C had what B cleared: it is refused there too, until accepted.
         cGetsItWhole(options);
+    }
+
+    // A computer that joined another's space (#51) numbers its operations
+    // there from 1 again, after those of its own space, so of one field its
+    // last is its latest by stamp, not by number (#216). B, the one that
+    // joined, once wrote the book's ISBN in its own space; it took A's clear
+    // of it, and then A's ISBN again: B writes that as its own, so a third
+    // computer gets the book with its ISBN, and a sync with A plans nothing
+    // of it on B.
+    void aComputerThatJoinedAnothersSpaceWritesWhatItTakes() {
+        QTemporaryDir dir;
+        const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
+        QStringList roots{dir.filePath("X"), dir.filePath("Y")};
+        QStringList devices;
+        for (const QString &root : roots) {
+            Library library(root);
+            QVERIFY(library.open());
+            devices << Spaces::deviceId(library);
+        }
+        // B is the one whose space sorts later: it writes in A's once they are paired.
+        if (devices.first() > devices.last()) {
+            std::ranges::reverse(roots);
+            std::ranges::reverse(devices);
+        }
+        Library a(roots.first());
+        Library b(roots.last());
+        Library c(dir.filePath("C"));
+        QVERIFY(a.open() && b.open() && c.open());
+        const QString ownSpace = "personal:" + devices.last();
+        for (int n = 0; n < 4; ++n) { // what B had of its own, numbered in its own space: other books
+            BookMeta other = details(QString("Clanbook %1").arg(n));
+            other.isbn.clear();
+            QVERIFY(b.addEntry(other, true).id > 0);
+        }
+        const qint64 mine = made(a, true, dir.path());
+        QVERIFY(mine > 0);
+        const Remote toB("laptop:" + roots.last(), {ssh});
+        const SyncSummary first = syncLibrary(a, toB);
+        QVERIFY2(clean(first), qPrintable(said(first)));
+        const qint64 theirs = titled(b);
+        QVERIFY(theirs > 0);
+        const QString gid = Spaces::bookId(b, theirs);
+        // The ISBN as B wrote it in its own space before it joined A's: a higher number, an older stamp.
+        ChangeLog::append(b, {.space = ownSpace,
+                              .entity = "book",
+                              .id = gid,
+                              .field = "isbn",
+                              .value = details().isbn,
+                              .hlc = Hlc::pack(QDateTime::currentSecsSinceEpoch() - 86400, 0)});
+
+        QVERIFY(change(a, mine, "isbn", ""));
+        SyncOptions accepted;
+        accepted.accept = {title};
+        const SyncSummary cleared = syncLibrary(a, toB, {}, accepted);
+        QVERIFY2(clean(cleared), qPrintable(said(cleared)));
+        QCOMPARE(b.book(theirs)->meta.isbn, QString());
+        QVERIFY(change(a, mine, "isbn", details().isbn));
+        const SyncSummary again = syncLibrary(a, toB);
+        QVERIFY2(clean(again), qPrintable(said(again)));
+        QCOMPARE(b.book(theirs)->meta.isbn, details().isbn);
+        // B's last number in its own space, and in A's (`comparison`).
+        const auto lastIn = [&](const char *comparison) {
+            return answer(
+                b,
+                QString("SELECT MAX(o.seq) FROM ops AS o JOIN log_ids AS s ON s.id = o.space JOIN log_ids AS d ON d.id = o.device "
+                        "WHERE s.name %1 ? AND d.name = ?")
+                    .arg(QLatin1StringView(comparison)),
+                {ownSpace, devices.last()});
+        };
+        QVERIFY(lastIn("=") > lastIn("<>"));
+
+        // What B holds as its device's operations say, as every sync reads it.
+        const ReducedState held = SpaceReducer::reduce(Replication::operations(b), devices.last());
+        QCOMPARE(Replication::bookView(held.books.value(gid)).value("isbn").toString(), details().isbn);
+        SyncOptions dry;
+        dry.dryRun = true;
+        const SyncSummary planned = syncLibrary(a, toB, {}, dry);
+        QVERIFY2(clean(planned) && planned.breaches.isEmpty(), qPrintable(said(planned) + planned.breaches.join('\n')));
+        QVERIFY(!planned.plans.there.books.contains(gid));
+        const SyncSummary third = syncLibrary(c, toB);
+        QVERIFY2(clean(third), qPrintable(said(third)));
+        QCOMPARE(c.book(titled(c))->meta.isbn, details().isbn);
     }
 
     // Of 1,500 books with covers got by a sync (all their operations

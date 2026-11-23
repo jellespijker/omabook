@@ -293,6 +293,10 @@ QHash<QString, QString> SpaceReducer::sameAs(std::span<const SpaceOperation> ops
     return canonical;
 }
 
+bool SpaceReducer::writtenAfter(const Written &op, const Written &before) {
+    return op.space == before.space ? op.seq > before.seq : op.hlc > before.hlc;
+}
+
 bool SpaceReducer::grows(const QString &field) {
     return field.startsWith("seen:"_L1) || field.startsWith("set:"_L1) || field == "revealed"_L1 || field == "link"_L1
            || field == "range"_L1 || field == "same_as"_L1 || field == "not_same_as"_L1;
@@ -353,9 +357,8 @@ namespace {
             written << op;
             continue;
         }
-        // In the order it wrote them: by sequence in one space, else by stamp.
-        const SpaceOperation &before = written.at(*at);
-        if (op.space == before.space ? op.seq > before.seq : op.hlc > before.hlc)
+        if (const SpaceOperation &before = written.at(*at);
+            SpaceReducer::writtenAfter({op.space, op.seq, op.hlc}, {before.space, before.seq, before.hlc}))
             written[*at] = op;
     }
     return written;

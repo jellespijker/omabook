@@ -136,6 +136,16 @@ void foldBook(ReducedBook &book, const SpaceOperation &op);
 // met where, what was learned, how things relate, the days read, the
 // links that line up ids, and the changes of a plugin's sets (PluginData).
 [[nodiscard]] bool grows(const QString &field);
+// Where a device wrote an operation: its space, its sequence there, its stamp.
+struct Written {
+    QString space;
+    qint64 seq = 0;
+    qint64 hlc = 0;
+};
+// Whether a device wrote `op` after `before`, of one field: by sequence in
+// one space, else by stamp, as a device that joined another's space (#51)
+// numbers its operations there from 1 again, after those of its own (#216).
+[[nodiscard]] bool writtenAfter(const Written &op, const Written &before);
 // Where two computers name one book by different ids, a same-as operation
 // (entity "book", field "same_as", the one id and the other as its value)
 // links them. Links only ever grow, so every id of a linked group stands
