@@ -32,7 +32,7 @@ inline constexpr qsizetype bulkBooks = 10;
 [[nodiscard]] std::expected<QString, Failure> beforeUpgrade(const Snapshots &snapshots, const Library &library);
 // The same with this computer's snapshots: what main() sets for every library
 // this program opens (LibraryMigrations::beforeUpgrading).
-[[nodiscard]] std::expected<QString, Failure> beforeUpgradeHere(Library &library);
+[[nodiscard]] std::expected<QString, Failure> beforeUpgradeHere(const Library &library);
 
 // What came of the moment snapshot before a bulk change.
 struct Bulk {

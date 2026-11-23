@@ -22,7 +22,7 @@ using namespace Mcp;
 // The books the proposals change: each one's book, and a duplicate's other.
 qsizetype booksProposed(const QJsonObject &arguments) {
     QSet<qint64> books;
-    for (const QJsonValue &given : arguments.value("proposals").toArray()) {
+    for (const auto &given : arguments.value("proposals").toArray()) {
         const Proposal proposal = BookOps::proposalFromJson(given.toObject());
         for (const qint64 id : {proposal.bookId, proposal.otherId})
             if (id > 0)
@@ -37,7 +37,7 @@ Result apply(const QJsonObject &arguments) {
     if (!library)
         return Result::fail(error);
     QList<Proposal> proposals;
-    for (const QJsonValue &given : arguments.value("proposals").toArray()) {
+    for (const auto &given : arguments.value("proposals").toArray()) {
         const Proposal proposal = BookOps::proposalFromJson(given.toObject());
         if (!QStringList{"duplicate", "author", "series"}.contains(proposal.kind) || proposal.bookId <= 0)
             return Result::fail("Each proposal needs a \"kind\" (duplicate, author or series) and the book's \"id\", "

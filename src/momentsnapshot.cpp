@@ -43,7 +43,7 @@ std::expected<QString, Failure> MomentSnapshot::beforeUpgrade(const Snapshots &s
     return saidOf(*first);
 }
 
-std::expected<QString, Failure> MomentSnapshot::beforeUpgradeHere(Library &library) {
+std::expected<QString, Failure> MomentSnapshot::beforeUpgradeHere(const Library &library) {
     return beforeUpgrade(Snapshots(SnapshotPlace::here()), library);
 }
 

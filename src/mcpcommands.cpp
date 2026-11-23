@@ -420,7 +420,7 @@ const bool registered = [] {
                       },
                       [](const QJsonObject &arguments) {
                           QStringList picked;
-                          for (const QJsonValue &value : arguments.value("pick").toArray())
+                          for (const auto &value : arguments.value("pick").toArray())
                               picked << (value.isDouble() ? QString::number(value.toInteger()) : value.toString());
                           if (picked.isEmpty() && !arguments.value("all").toBool())
                               return Result::fail("Pick proposals by their numbers, or give all.");
