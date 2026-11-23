@@ -12,6 +12,12 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.0.1] - 2026-11-23
+
+### Fixed
+
+- A sync no longer plans to clear a detail both computers have, such as an ISBN, and refuses for it, nor lists a book as differing with no time to say which details are newer, after the upgrade to 0.5.0. A computer that joined another's library had its own changes of a book read in the wrong order, so it didn't write as its own what it took of the book; it does now, and the library is brought up to date once more to write what it missed (#216).
+
 ## [0.5.0] - 2026-11-23
 
 Omabook gets a hub: a computer that is always on keeps your libraries without a window, linked to your other computers over your own ssh by a key that opens nothing but Omabook, and synced with them from the Hubs panel. The library has snapshots to go back to, made with restic: every night on a hub and just before anything that changes much, copied to a second disk and to a place away from home, each showing what changed since, with a book, a notebook or the whole library put back; a backup that is old, failed or missing warns. This upgrade takes a moment snapshot first, where snapshots are set up, and then repairs, once, the books a computer got by a sync with an earlier Omabook, so a change made to them, and their details, reach your other computers again; a sync is now checked on both computers before it writes. The package now needs `restic`, suggests `rclone`, and brings the hub's systemd units.
