@@ -2736,17 +2736,20 @@
   "%1 has no snapshot in %2 yet. Take one: omabook snapshot now": "%1 n'a pas encore d'instantané dans %2. Prenez-en un : omabook snapshot now",
   "The newest snapshot of %1 in %2 is %n hours old. See why none was taken since (omabook snapshot status, and the log), then take one: omabook snapshot now": {
     "one": "L'instantané le plus récent de %1 dans %2 date de %n heure. Voyez pourquoi aucun n'a été pris depuis (omabook snapshot status, et le journal), puis prenez-en un : omabook snapshot now",
-    "other": "L'instantané le plus récent de %1 dans %2 date de %n heures. Voyez pourquoi aucun n'a été pris depuis (omabook snapshot status, et le journal), puis prenez-en un : omabook snapshot now"
+    "other": "L'instantané le plus récent de %1 dans %2 date de %n heures. Voyez pourquoi aucun n'a été pris depuis (omabook snapshot status, et le journal), puis prenez-en un : omabook snapshot now",
+    "many": "L'instantané le plus récent de %1 dans %2 date de %n heures. Voyez pourquoi aucun n'a été pris depuis (omabook snapshot status, et le journal), puis prenez-en un : omabook snapshot now"
   },
   "restic's check of the snapshots in %1 failed: %2. Check them again: omabook snapshot check. Should it fail again, they may be damaged: take a snapshot elsewhere before trusting them.": "La vérification par restic des instantanés de %1 a échoué : %2. Vérifiez-les à nouveau : omabook snapshot check. Si elle échoue encore, ils sont peut-être abîmés : prenez un instantané ailleurs avant de vous y fier.",
   "The snapshots in %1 haven't been checked for %n days. Check them: omabook snapshot check": {
     "one": "Les instantanés de %1 n'ont pas été vérifiés depuis %n jour. Vérifiez-les : omabook snapshot check",
-    "other": "Les instantanés de %1 n'ont pas été vérifiés depuis %n jours. Vérifiez-les : omabook snapshot check"
+    "other": "Les instantanés de %1 n'ont pas été vérifiés depuis %n jours. Vérifiez-les : omabook snapshot check",
+    "many": "Les instantanés de %1 n'ont pas été vérifiés depuis %n jours. Vérifiez-les : omabook snapshot check"
   },
   "Reading back the snapshots in %1 failed: %2. Read them back again: omabook snapshot check --read-data. Should it fail again, they are damaged: take a snapshot elsewhere before trusting them.": "La relecture des instantanés de %1 a échoué : %2. Relisez-les à nouveau : omabook snapshot check --read-data. Si elle échoue encore, ils sont abîmés : prenez un instantané ailleurs avant de vous y fier.",
   "The snapshots in %1 haven't been read back for %n days. Read them back: omabook snapshot check --read-data": {
     "one": "Les instantanés de %1 n'ont pas été relus depuis %n jour. Relisez-les : omabook snapshot check --read-data",
-    "other": "Les instantanés de %1 n'ont pas été relus depuis %n jours. Relisez-les : omabook snapshot check --read-data"
+    "other": "Les instantanés de %1 n'ont pas été relus depuis %n jours. Relisez-les : omabook snapshot check --read-data",
+    "many": "Les instantanés de %1 n'ont pas été relus depuis %n jours. Relisez-les : omabook snapshot check --read-data"
   },
   "The disk of the snapshots in %1 is nearly full: %2 left. Make room, or move them to a bigger disk, before a snapshot fails.": "Le disque des instantanés de %1 est presque plein : il reste %2. Faites de la place, ou déplacez-les sur un disque plus grand, avant qu'un instantané échoue.",
   "The libraries are no longer kept three times: no second disk holds their snapshots as it should. Mend what is said of it, or add one: omabook snapshot destination add": "Les bibliothèques ne sont plus gardées en trois exemplaires : aucun second disque ne garde leurs instantanés comme il le devrait. Réparez ce qui en est dit, ou ajoutez-en un : omabook snapshot destination add",
