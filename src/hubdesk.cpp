@@ -108,6 +108,9 @@ QVariantMap HubDesk::standing(const Hubs &hubs, const QString &host) {
                       {u"libraries"_s, status->value("libraries"_L1).toArray().toVariantList()}};
     if (const auto computers = hubs.ask(host, {{"request", "computers"}}); computers)
         shown.insert(u"computers"_s, computers->value("computers"_L1).toArray().toVariantList());
+    // Its background work (#192), which a hub of before it doesn't do.
+    if (const auto work = hubs.ask(host, {{"request", "work"}}); work)
+        shown.insert(u"work"_s, work->toVariantMap());
     // A hub of before #184 has no word of its snapshots: nothing is shown of them.
     if (const auto snapshots = hubs.ask(host, {{"request", "snapshots"}}); snapshots) {
         shown.insert(u"snapshots"_s, snapshots->value("set_up"_L1).toBool());
@@ -212,6 +215,21 @@ void HubDesk::forget(const QString &host, const QString &computer) {
                         .states = {},
                         .synced = {},
                         .unpaired = {}};
+        outcome.states.insert(host, standing(*hubs, host));
+        return outcome;
+    });
+}
+
+void HubDesk::cancelWork(const QString &host) {
+    work(u"cancel"_s, host, [hubs = m_hubs.get(), host] {
+        const auto cancelled = hubs->ask(host, {{"request", "work-cancel"}});
+        Outcome outcome{.said = {}, .failed = !cancelled, .states = {}, .synced = {}, .unpaired = {}};
+        if (!cancelled)
+            outcome.said = cancelled.error().text();
+        else if (cancelled->value("cancelled"_L1).toBool())
+            outcome.said = tr("The work under way on the hub at %1 is stopped; nothing of it is kept.").arg(host);
+        else
+            outcome.said = tr("The hub at %1 has no work under way.").arg(host);
         outcome.states.insert(host, standing(*hubs, host));
         return outcome;
     });

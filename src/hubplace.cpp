@@ -89,6 +89,8 @@ HubPlace HubPlace::usual() {
 
 QString HubPlace::socket() const { return QDir(m_folders.runtime).filePath(u"hub.sock"_s); }
 
+QString HubPlace::settings() const { return QDir(m_folders.state).filePath(u"config.json"_s); }
+
 QString HubPlace::choicesFile() const { return QDir(m_folders.state).filePath(u"hub.json"_s); }
 
 QString HubPlace::libraries() const {

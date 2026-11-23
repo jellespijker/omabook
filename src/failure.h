@@ -219,6 +219,10 @@ public:
         HubSyncDryRun,      // {}: a dry run writes nothing
         HubSyncNotYours,    // {}: plugins' files, for a library not one of the hub library's own computers (#212)
         HubSyncNotPaired,   // {library}: the computer's library isn't paired with the hub's, nor asked to pair (#214)
+        HubWorkCancelled,   // {}: the hub's background work (#192) stopped before it ended, so nothing of it was kept
+        HubWorkChanged,     // {title}: the book's graph changed while the hub worked on it, so it is done again
+        HubWorkNoFolder,    // {folder}: where the hub works on a copy of a library can't be made
+        HubWorkUnfinished,  // {title}: the graph of the book wasn't built to its end
         // What `omabook set` was given, for a computer or a hub (BookSetting, #188).
         DetailsUnreadable,  // {file}
         DetailsNotAnObject, // {file}

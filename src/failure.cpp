@@ -385,6 +385,10 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubSyncNotPaired,
      tr("The hub's library %1 isn't paired with this computer's library, so nothing was synced, either way: no books, details, change "
         "log or plugins' files. If the two are one library, pair them once: omabook hub sync <hub>:%1 --pair")},
+    {Failure::Code::HubWorkCancelled, tr("Stopped before it was done, so nothing of it was kept.")},
+    {Failure::Code::HubWorkNoFolder, tr("The hub can't make the folder %1 to work in.")},
+    {Failure::Code::HubWorkUnfinished, tr("The graph of %1 wasn't built to its end, so nothing of it was kept.")},
+    {Failure::Code::HubWorkChanged, tr("The graph of %1 changed while the hub worked on it, so nothing was kept; it is done again.")},
     {Failure::Code::DetailsUnreadable, tr("The details can't be read: %1")},
     {Failure::Code::DetailsNotAnObject, tr("The details aren't a JSON object: %1")},
     {Failure::Code::PictureUnreadable, tr("That picture can't be read: %1")},

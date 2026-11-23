@@ -35,3 +35,14 @@ later fails at once when another wrote between (#161 found this as "database is 
 ## Alternatives considered
 
 - **Every process writes, SQLite's lock sorts it out**: the failure #161 met, multiplied by every computer and job.
+
+## As built in #192
+
+- **Background work asks its model beside the lock, and writes inside it** (`HubWork`): a job (one book's graph,
+  built whole by the quick model of the hub's own settings, `HubPlace::settings`) works on a copy of the library
+  (`HubKeeper::copy`, its database copied in the keeper's lock) on a thread of its own, so the daemon goes on
+  answering sessions and syncs while the model is asked. Its answers are then laid into the library the same way,
+  in the keeper's lock after a moment snapshot (`Moment::Bulk`), in one turn; a job cancelled, failed, or whose
+  book's graph a sync changed meanwhile leaves nothing in the library.
+- One job at a time, on the schedule (every ten minutes, and on to the next book as one ends), keyed by the book's
+  global id, its file's hash, the capability and the model, kept in the state folder's `work.json`.

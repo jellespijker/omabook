@@ -27,6 +27,7 @@
 #include "hubsession.h"
 #include "hubsnapshots.h"
 #include "hubsync.h"
+#include "hubwork.h"
 #include "log.h"
 #include "snapshotdestinations.h"
 #include "snapshothealth.h"
@@ -109,6 +110,10 @@ int run(const QCommandLineParser &parser) {
     schedule.every(u"check-data"_s, std::chrono::days(30), HubSnapshots::check(health, SnapshotHealth::Depth::Data));
     schedule.every(u"warnings"_s, std::chrono::hours(1), HubSnapshots::warn(health));
     requests.add(u"snapshots"_s, HubSnapshots::status(health));
+    // The libraries' long work, by the hub's own AI, a job at a time beside the requests (#192).
+    HubWork work(keeper, place.state(), place.settings());
+    work.addTo(requests);
+    schedule.every(u"work"_s, std::chrono::minutes(10), work.job());
     if (const auto opened = keeper.open(); !opened)
         return failLine(opened.error().text());
     HubDaemon daemon(keeper, requests);
@@ -208,6 +213,25 @@ void printSnapshots(const QJsonObject &snapshots) {
         printLine(stdout, u"  - "_s + warning["text"_L1].toString());
 }
 
+// What the hub's background work is doing (#192): the job under way and how far it got, what waits, or why nothing can be done.
+void printWork(const QJsonObject &work) {
+    if (work.isEmpty())
+        return;
+    const int waiting = work.value("waiting"_L1).toInt();
+    const QString more = waiting > 0 ? u", and %1 more waiting"_s.arg(waiting) : QString();
+    if (const QJsonObject running = work.value("running"_L1).toObject(); !running.isEmpty())
+        printLine(stdout, u"Work: building the graph of %1 (%2 of %3 requests, by %4)%5. omabook hub cancel stops it."_s.arg(
+                              running["title"_L1].toString(), QString::number(running["done"_L1].toInt()),
+                              QString::number(running["total"_L1].toInt()), running["model"_L1].toString(), more));
+    else if (const QJsonObject lacking = work.value("unavailable"_L1).toObject(); !lacking.isEmpty())
+        printLine(stdout, u"Work: none, as the hub has no model for quick work: %1"_s.arg(lacking["message"_L1].toString()));
+    else
+        printLine(stdout, u"Work: nothing under way%1."_s.arg(more));
+    for (const auto &done : work.value("last"_L1).toArray())
+        if (const QString outcome = done["outcome"_L1].toString(); outcome == "failed"_L1)
+            printLine(stdout, u"  - The graph of %1 failed: %2"_s.arg(done["title"_L1].toString(), done["said"_L1].toString()));
+}
+
 int status(const QCommandLineParser &parser, const QStringList &words) {
     QJsonObject answer;
     if (!words.isEmpty()) {
@@ -218,6 +242,8 @@ int status(const QCommandLineParser &parser, const QStringList &words) {
         answer = *asked;
         if (const auto kept = HubLinks().ask(words.first(), {{"request", "snapshots"}}); kept && kept->value("ok"_L1).toBool())
             answer.insert("snapshots"_L1, *kept);
+        if (const auto work = HubLinks().ask(words.first(), {{"request", "work"}}); work && work->value("ok"_L1).toBool())
+            answer.insert("work"_L1, *work);
     } else {
         Asking daemon(HubPlace::usual().socket());
         if (!daemon.connected())
@@ -226,6 +252,9 @@ int status(const QCommandLineParser &parser, const QStringList &words) {
         const QJsonObject kept = QJsonDocument::fromJson(daemon.ask(compact({{"request", "snapshots"}}))).object();
         if (answer.value("ok"_L1).toBool() && kept.value("ok"_L1).toBool())
             answer.insert("snapshots"_L1, kept);
+        if (const QJsonObject work = QJsonDocument::fromJson(daemon.ask(compact({{"request", "work"}}))).object();
+            work.value("ok"_L1).toBool())
+            answer.insert("work"_L1, work);
     }
     if (parser.isSet(u"json"_s))
         printLine(stdout, QString::fromUtf8(QJsonDocument(answer).toJson(QJsonDocument::Indented)).trimmed());
@@ -238,6 +267,28 @@ int status(const QCommandLineParser &parser, const QStringList &words) {
     for (const auto &library : answer.value("libraries"_L1).toArray())
         printLine(stdout, u"  %1  %2 books"_s.arg(library["name"_L1].toString(), QString::number(library["books"_L1].toInt())));
     printSnapshots(answer.value("snapshots"_L1).toObject());
+    printWork(answer.value("work"_L1).toObject());
+    return 0;
+}
+
+// The job under way on the hub stopped (#192), on this hub or the one at <host>.
+int cancel(const QStringList &words) {
+    QJsonObject answer;
+    if (!words.isEmpty()) {
+        const auto asked = HubLinks().ask(words.first(), {{"request", "work-cancel"}});
+        if (!asked)
+            return failLine(asked.error().text());
+        answer = *asked;
+    } else {
+        Asking daemon(HubPlace::usual().socket());
+        if (!daemon.connected())
+            return failLine(Failure(Failure::Code::HubNotRunning, {HubPlace::usual().socket()}).text());
+        answer = QJsonDocument::fromJson(daemon.ask(compact({{"request", "work-cancel"}}))).object();
+    }
+    if (!answer.value("ok"_L1).toBool())
+        return failLine(answer.value("error"_L1).toString());
+    printLine(stdout, answer.value("cancelled"_L1).toBool() ? u"The hub's work under way is stopped; nothing of it is kept."_s
+                                                            : u"The hub has no work under way."_s);
     return 0;
 }
 
@@ -254,13 +305,15 @@ int runHubCli(const QStringList &arguments) {
         "computer, add <host> links it to its person's hub over ssh: a key of its own, installed there to run nothing but "
         "the hub's session; remove <host> takes it off again, computers <host> lists the hub's computers, and forget <host> "
         "<computer> takes another of them off. On the hub, computers lists them and forget <computer> takes one's key away; "
+        "cancel [<host>] stops the hub's background work under way (status says what it is doing), keeping nothing of it; "
         "sync [<host>] syncs this library with the hub, as omabook sync <host> does (--dry-run first, to see what it would "
         "do; --pair, once, for a library the hub's isn't paired with yet); session is what a computer's key runs there, one JSON request a "
         "line in and one answer a line out, and allow "
         "is what add runs there."_s);
     parser.addHelpOption();
-    parser.addPositionalArgument(u"what"_s, u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | "
-                                            "forget [<host>] <computer> | session"_s);
+    parser.addPositionalArgument(
+        u"what"_s, u"run | status [<host>] | cancel [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | "
+                   "forget [<host>] <computer> | session"_s);
     parser.addOption({u"libraries"_s, u"With run: keep the libraries in this folder, from now on."_s, u"folder"_s});
     parser.addOption({u"json"_s, u"With status or computers: print it as JSON."_s});
     parser.addOption({u"name"_s, u"With add: what the hub calls this computer (its host name otherwise)."_s, u"name"_s});
@@ -278,6 +331,8 @@ int runHubCli(const QStringList &arguments) {
         return runHubLink(what, words, parser);
     if (what == u"status"_s && words.size() <= 1)
         return status(parser, words);
+    if (what == u"cancel"_s && words.size() <= 1)
+        return cancel(words);
     if (!words.isEmpty() || !QStringList{u"run"_s, u"session"_s}.contains(what))
         return failLine(parser.helpText().trimmed());
     if (what == u"run"_s)

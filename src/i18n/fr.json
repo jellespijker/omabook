@@ -3034,5 +3034,21 @@
   "Preview Paired": "Aperçu associées",
   "Pair the hub's library %1 with this computer's library %2, and sync them? Only if the two are one library: from then on each sync brings books, details and the change log both ways.": "Associer la bibliothèque %1 du hub à la bibliothèque %2 de cet ordinateur, et les synchroniser ? Seulement si les deux sont une seule bibliothèque : dès lors chaque synchronisation apporte livres, détails et journal des modifications dans les deux sens.",
   "See what a sync would do with the hub's library %1 paired with this computer's library %2? Nothing changes yet, and they stay unpaired until a sync pairs them.": "Voir ce que ferait une synchronisation avec la bibliothèque %1 du hub associée à la bibliothèque %2 de cet ordinateur ? Rien ne change encore, et elles restent non associées jusqu'à ce qu'une synchronisation les associe.",
-  "Pair this computer's library with the hub's, where a sync was refused for it (asks first)": "Associer la bibliothèque de cet ordinateur à celle du hub, là où une synchronisation a été refusée pour cela (demande d'abord)"
+  "Pair this computer's library with the hub's, where a sync was refused for it (asks first)": "Associer la bibliothèque de cet ordinateur à celle du hub, là où une synchronisation a été refusée pour cela (demande d'abord)",
+  "%Ln books wait for their graph.": {
+    "one": "%Ln livre attend son graphe.",
+    "many": "%Ln de livres attendent leur graphe.",
+    "other": "%Ln livres attendent leur graphe."
+  },
+  "Building the graph of %1: %2 of %3 requests.": "Construction du graphe de %1 : %2 requêtes sur %3.",
+  "Cancel Work": "Arrêter le travail",
+  "No background work under way.": "Aucun travail en arrière-plan en cours.",
+  "No background work: the hub has no model for quick work. %1": "Aucun travail en arrière-plan : le hub n'a pas de modèle pour le travail rapide. %1",
+  "Stopped before it was done, so nothing of it was kept.": "Arrêté avant la fin, donc rien n'en a été gardé.",
+  "Stopping the work under way on %1…": "Arrêt du travail en cours sur %1…",
+  "The graph of %1 changed while the hub worked on it, so nothing was kept; it is done again.": "Le graphe de %1 a changé pendant que le hub y travaillait, donc rien n'a été gardé ; il est refait.",
+  "The hub at %1 has no work under way.": "Le hub sur %1 n'a aucun travail en cours.",
+  "The work under way on the hub at %1 is stopped; nothing of it is kept.": "Le travail en cours sur le hub sur %1 est arrêté ; rien n'en est gardé.",
+  "The hub can't make the folder %1 to work in.": "Le hub ne peut pas créer le dossier %1 où travailler.",
+  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "Le graphe de %1 n'a pas été construit jusqu'au bout, donc rien n'en a été gardé."
 }

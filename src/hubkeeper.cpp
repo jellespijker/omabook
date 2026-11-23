@@ -144,6 +144,20 @@ std::expected<void, Failure> HubKeeper::whole(const Whole &work) {
     return work(libraries);
 }
 
+std::expected<std::unique_ptr<Library>, Failure> HubKeeper::copy(const QString &name, const QString &folder) {
+    const Turn turn(*this);
+    if (!turn.had())
+        return std::unexpected(Failure(Failure::Code::LibraryBusy));
+    const auto library = find(name);
+    if (!library)
+        return std::unexpected(library.error());
+    if (QDir place(folder); !place.removeRecursively() || !QDir().mkpath(folder))
+        return std::unexpected(Failure(Failure::Code::HubWorkNoFolder, {folder}));
+    if (const auto copied = (*library)->copyInto(Library::databaseIn(folder)); !copied)
+        return std::unexpected(Failure::said(copied.error()));
+    return std::make_unique<Library>(folder);
+}
+
 bool HubKeeper::busy() const {
     const std::scoped_lock holding(m_holding);
     return m_holder != std::thread::id{};

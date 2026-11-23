@@ -145,6 +145,7 @@ AppPopup {
                 : hubsDesk.doing === "forget" ? qsTr("Taking the computer's key off %1…").arg(hubsDesk.doingHost)
                 : hubsDesk.doing === "sync" ? qsTr("Syncing with %1…").arg(hubsDesk.doingHost)
                 : hubsDesk.doing === "preview" ? qsTr("Seeing what a sync with %1 would do…").arg(hubsDesk.doingHost)
+                : hubsDesk.doing === "cancel" ? qsTr("Stopping the work under way on %1…").arg(hubsDesk.doingHost)
                 : qsTr("Asking the hubs…")
         }
         Label {
@@ -231,6 +232,7 @@ AppPopup {
                 onUnlinkWanted: dialog.unlinking = modelData.host
                 onUnlinkLeft: dialog.unlinking = ""
                 onUnlinkSure: dialog.sure()
+                onCancelWanted: hubsDesk.cancelWork(modelData.host)
             }
         }
 

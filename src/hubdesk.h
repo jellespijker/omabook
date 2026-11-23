@@ -30,11 +30,12 @@ class HubDesk : public QObject {
     // "fingerprint", "linked", "state" ("" before it was asked, "reachable", "unreachable",
     // "unlinked": the hub took the key away), "why" (when it isn't reachable), "version",
     // "libraries": [{"name", "books", "format"}], "computers": [{"name", "fingerprint", "linked", "this"}],
-    // "snapshots" (whether they are set up there), "warnings": [the snapshots', each saying what to do]}.
+    // "snapshots" (whether they are set up there), "warnings": [the snapshots', each saying what to do],
+    // "work": its background work, as the request "work" answers (HubWork::status, #192)}.
     Q_PROPERTY(QVariantList hubs READ hubs NOTIFY changed)
     // What the hub calls this computer unless told otherwise: its host name, as a word.
     Q_PROPERTY(QString thisComputer READ thisComputer CONSTANT)
-    // What is being done ("status", "link", "unlink", "forget", "sync", "preview"), and with which hub; empty when nothing is.
+    // What is being done ("status", "link", "unlink", "forget", "sync", "preview", "cancel"), and with which hub; empty when nothing is.
     Q_PROPERTY(QString doing READ doing NOTIFY changed)
     Q_PROPERTY(QString doingHost READ doingHost NOTIFY changed)
     // How the last of them went.
@@ -101,6 +102,8 @@ public:
     // libraries, as `omabook hub sync <hub>:<library> --pair` does (#217). A preview
     // pairs nothing: it shows what the sync that pairs them would do.
     Q_INVOKABLE void pair();
+    // Stops the background work under way on the hub at `host` (#192), keeping nothing of it.
+    Q_INVOKABLE void cancelWork(const QString &host);
     // What was said is said no more.
     Q_INVOKABLE void clear();
 

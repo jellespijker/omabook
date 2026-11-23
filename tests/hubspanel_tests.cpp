@@ -16,6 +16,7 @@
 #include <QDir>
 #include <QFile>
 #include <QGuiApplication>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QMutex>
 #include <QPointingDevice>
@@ -79,6 +80,8 @@ public:
     std::optional<Person> person;
     mutable QObject home; // on the window's thread
     bool reachable = true;
+    // Its background work (#192): a book's graph under way, until it is cancelled.
+    bool working = true;
 
     // The hub's library paired with another computer's library and not this one's (#214).
     [[nodiscard]] bool pairedElsewhere() {
@@ -118,6 +121,15 @@ public:
         syncs.addTo(requests);
         health.emplace(snapshots);
         requests.add(u"snapshots"_s, HubSnapshots::status(*health));
+        requests.add(u"work"_s, [this](const QJsonObject &, HubKeeper &) -> std::expected<QJsonObject, Failure> {
+            if (!working)
+                return QJsonObject{{"waiting", 0}, {"last", QJsonArray{}}};
+            return QJsonObject{{"waiting", 0}, {"running", QJsonObject{{"title", "Moss"}, {"kind", "graph"}, {"done", 1}, {"total", 3}}}};
+        });
+        requests.add(u"work-cancel"_s, [this](const QJsonObject &, HubKeeper &) -> std::expected<QJsonObject, Failure> {
+            const bool was = std::exchange(working, false);
+            return QJsonObject{{"cancelled", was}};
+        });
         auto generated = Person::generate();
         if (!generated)
             return generated.error();
@@ -544,6 +556,25 @@ private slots:
         QCOMPARE(hub->here(), 2);
         // The hub asked again: its library as the sync left it.
         QTRY_COMPARE(text(desk, "hubLibraries"), QString("home: 2 books"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // The hub's background work (#192): the book whose graph it builds and how
+    // far it got, then stopped with Cancel Work.
+    void theHubsWorkShowsAndIsCancelled() {
+        Desk desk("en", {}, false);
+        HubHere *hub = served(desk);
+        QVERIFY(hub);
+        QVERIFY(desk.show());
+        QVERIFY(linked(desk));
+        QVERIFY(open(desk));
+        QTRY_COMPARE(text(desk, "hubWork"), QString("Building the graph of Moss: 1 of 3 requests."));
+        click(desk, "hubCancelWork");
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.hubsDesk->failed(), qPrintable(desk.hubsDesk->status()));
+        QVERIFY(!hub->working);
+        QTRY_COMPARE(text(desk, "hubWork"), QString("No background work under way."));
+        QVERIFY(!shown(desk, "hubCancelWork"));
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

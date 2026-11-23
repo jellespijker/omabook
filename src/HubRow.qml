@@ -5,8 +5,9 @@ import QtQuick.Layouts
 // One linked hub in the Hubs panel (#189): where it is and what it calls this
 // computer, how it stands (reachable with its Omabook, or why not), its
 // libraries and computers, and what is wrong with its snapshots, in red, each
-// saying what to do. Its buttons beside it where there is room, under it
-// where there isn't; unlinking asks first.
+// saying what to do; and its background work (#192): the book whose graph it
+// builds and how far it got, with Cancel. Its buttons beside it where there is
+// room, under it where there isn't; unlinking asks first.
 Rectangle {
     id: row
     required property var modelData
@@ -20,11 +21,14 @@ Rectangle {
     signal unlinkWanted()
     signal unlinkLeft()
     signal unlinkSure()
+    signal cancelWanted()
 
     readonly property var hub: modelData
     readonly property var libraries: hub.libraries || []
     readonly property var computers: hub.computers || []
     readonly property var warnings: hub.warnings || []
+    // The job under way on the hub, when there is one.
+    readonly property var working: hub.work && hub.work.running ? hub.work.running : null
     // The last sync with this hub, or its preview, when there was one.
     readonly property var synced: hubsDesk.synced.host === hub.host ? hubsDesk.synced : null
 
@@ -91,6 +95,14 @@ Rectangle {
                                         : qsTr("Snapshots aren't set up on this hub, so nothing is kept to go back to.")
                 color: row.hub.snapshots ? theme.colors.muted : theme.colors.orange
             }
+            Detail {
+                objectName: "hubWork"
+                visible: row.hub.state === "reachable" && row.hub.work !== undefined
+                text: row.working ? qsTr("Building the graph of %1: %2 of %3 requests.").arg(row.working.title).arg(row.working.done).arg(row.working.total)
+                    : row.hub.work && row.hub.work.unavailable ? qsTr("No background work: the hub has no model for quick work. %1").arg(row.hub.work.unavailable.message)
+                    : row.hub.work && row.hub.work.waiting > 0 ? qsTr("%Ln books wait for their graph.", "", row.hub.work.waiting)
+                    : qsTr("No background work under way.")
+            }
             Repeater {
                 model: row.hub.state === "reachable" ? row.warnings : []
                 Label {
@@ -149,6 +161,13 @@ Rectangle {
             }
             Row {
                 spacing: 6
+                AppButton {
+                    objectName: "hubCancelWork"
+                    visible: !row.unlinking && row.hub.state === "reachable" && row.working !== null
+                    enabled: !row.busy
+                    text: qsTr("Cancel Work")
+                    onClicked: row.cancelWanted()
+                }
                 AppButton {
                     objectName: "hubShowComputers"
                     visible: !row.unlinking && row.hub.state === "reachable"

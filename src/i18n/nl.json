@@ -2918,5 +2918,20 @@
   "Preview Paired": "Gekoppeld bekijken",
   "Pair the hub's library %1 with this computer's library %2, and sync them? Only if the two are one library: from then on each sync brings books, details and the change log both ways.": "De bibliotheek %1 van de hub koppelen aan de bibliotheek %2 van deze computer, en ze synchroniseren? Alleen als de twee één bibliotheek zijn: vanaf dan brengt elke synchronisatie boeken, gegevens en het wijzigingslogboek beide kanten op.",
   "See what a sync would do with the hub's library %1 paired with this computer's library %2? Nothing changes yet, and they stay unpaired until a sync pairs them.": "Zien wat synchroniseren zou doen met de bibliotheek %1 van de hub gekoppeld aan de bibliotheek %2 van deze computer? Er verandert nog niets, en ze blijven ongekoppeld tot een synchronisatie ze koppelt.",
-  "Pair this computer's library with the hub's, where a sync was refused for it (asks first)": "De bibliotheek van deze computer koppelen aan die van de hub, waar een synchronisatie daarom werd geweigerd (vraagt eerst)"
+  "Pair this computer's library with the hub's, where a sync was refused for it (asks first)": "De bibliotheek van deze computer koppelen aan die van de hub, waar een synchronisatie daarom werd geweigerd (vraagt eerst)",
+  "%Ln books wait for their graph.": {
+    "one": "%Ln boek wacht op zijn graaf.",
+    "other": "%Ln boeken wachten op hun graaf."
+  },
+  "Building the graph of %1: %2 of %3 requests.": "Bezig met de graaf van %1: %2 van %3 verzoeken.",
+  "Cancel Work": "Werk stoppen",
+  "No background work under way.": "Er loopt geen werk op de achtergrond.",
+  "No background work: the hub has no model for quick work. %1": "Geen werk op de achtergrond: de hub heeft geen model voor snel werk. %1",
+  "Stopped before it was done, so nothing of it was kept.": "Gestopt voor het klaar was, dus er is niets van bewaard.",
+  "Stopping the work under way on %1…": "Het lopende werk op %1 wordt gestopt…",
+  "The graph of %1 changed while the hub worked on it, so nothing was kept; it is done again.": "De graaf van %1 veranderde terwijl de hub eraan werkte, dus er is niets bewaard; het wordt opnieuw gedaan.",
+  "The hub at %1 has no work under way.": "De hub op %1 heeft geen lopend werk.",
+  "The work under way on the hub at %1 is stopped; nothing of it is kept.": "Het lopende werk op de hub op %1 is gestopt; er wordt niets van bewaard.",
+  "The hub can't make the folder %1 to work in.": "De hub kan de map %1 om in te werken niet maken.",
+  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "De graaf van %1 is niet tot het einde gebouwd, dus er is niets van bewaard."
 }

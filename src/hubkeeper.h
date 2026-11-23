@@ -69,6 +69,11 @@ public:
     // `work` with every library, alone: what has to see all of them as they
     // stand at one moment (the nightly snapshot, the hub's status).
     [[nodiscard]] std::expected<void, Failure> whole(const Whole &work);
+    // A copy of the library called `name` as it stands now, its database at
+    // `folder` (made anew), to work on beside it while the others write: the
+    // hub's background work (#192) runs there, then hands its result back
+    // through write(). Not opened, so that the thread working on it opens it.
+    [[nodiscard]] std::expected<std::unique_ptr<Library>, Failure> copy(const QString &name, const QString &folder);
     // Whether something has the libraries now; while it does, the others wait.
     [[nodiscard]] bool busy() const;
 

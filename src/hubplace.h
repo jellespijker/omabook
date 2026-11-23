@@ -35,6 +35,12 @@ public:
     // The socket the daemon listens at, and `omabook hub session` asks at.
     [[nodiscard]] QString socket() const;
 
+    // The hub's own settings (#192): a config.json as a computer's is, of
+    // which its background work reads the AI's (each capability's provider,
+    // model and whether it may be hosted). Never the person's; one without
+    // `capabilities` starts local, as a new computer's does (ADR 0008).
+    [[nodiscard]] QString settings() const;
+
     // The folder of the libraries it keeps, as chosen at setup; empty before.
     [[nodiscard]] QString libraries() const;
     [[nodiscard]] std::expected<void, Failure> chooseLibraries(const QString &folder) const;
