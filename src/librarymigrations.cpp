@@ -19,16 +19,14 @@
 #include <tuple>
 #include <utility>
 
-#include "booklinks.h"
 #include "changelog.h"
 #include "keptops.h"
 #include "library.h"
 #include "librarybatch.h"
+#include "libraryrepairs.h"
 #include "libraryschema.h"
 #include "log.h"
-#include "replication.h"
 #include "statements.h"
-#include "strayidentifiers.h"
 #include "tenancy.h"
 
 int LibraryMigrations::currentFormat() noexcept { return static_cast<int>(LibrarySchema::steps().size()); }
@@ -244,8 +242,7 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
         // now that it does: after the copy an upgrade keeps, in the same
         // transaction as the upgrade.
         KeptOps::takeKnown(library);
-        judgeLinks(library);
-        unstrayIdentifiers(library);
+        LibraryRepairs::run(library, library.m_bringingUpToDate);
         // The books' tenants as the collections and the user's choice say
         // now: the first time after the step that adds tenants, the whole
         // graph's (#94); after that, what changed while it was closed.
@@ -277,43 +274,4 @@ void LibraryMigrations::sayBringingUpToDate(const Library &library, int schema) 
                                        .arg(currentFormat()));
 }
 
-void LibraryMigrations::judgeLinks(const Library &library) {
-    QSqlQuery due = library.query("SELECT 1 FROM library_state WHERE key = 'judge_links'");
-    const bool judge = due.next();
-    due.finish();
-    if (!judge)
-        return;
-    const QStringList apart = BookLinks::record(library, Replication::operations(library));
-    library.exec("DELETE FROM library_state WHERE key = 'judge_links'");
-    if (apart.isEmpty())
-        return;
-    qCInfo(lcLibrary).noquote() << apart.size() << "links an older Omabook made between books that are not one book were dropped";
-    if (library.m_bringingUpToDate)
-        library.m_bringingUpToDate(
-            QString("An older Omabook took %1 for one book; a sync keeps them apart now: %2.")
-                .arg(apart.size() == 1 ? QString("1 pair of books") : QString("%1 pairs of books").arg(apart.size()), apart.join("; ")));
-}
-
 void LibraryMigrations::sayOnStandardError(const QString &said) { std::println(stderr, "{}", said.toStdString()); }
-
-void LibraryMigrations::unstrayIdentifiers(Library &library) {
-    QSqlQuery due = library.query("SELECT 1 FROM library_state WHERE key = 'unstray_identifiers'");
-    const bool repair = due.next();
-    due.finish();
-    if (!repair)
-        return;
-    const auto [removed, doubtful] = StrayIdentifiers::remove(library, Replication::operations(library), false);
-    library.exec("DELETE FROM library_state WHERE key = 'unstray_identifiers'");
-    const auto count = [](qsizetype n) { return n == 1 ? QString("1 identifier") : QString("%1 identifiers").arg(n); };
-    if (!removed.isEmpty())
-        qCInfo(lcLibrary).noquote() << removed.size() << "identifiers books had of a book kept apart from them were removed";
-    if (!library.m_bringingUpToDate)
-        return;
-    if (!removed.isEmpty())
-        library.m_bringingUpToDate(QString("Removed %1 that a book had of another an older Omabook took it for: %2.")
-                                       .arg(count(removed.size()), removed.join("; ")));
-    if (!doubtful.isEmpty())
-        library.m_bringingUpToDate(QString("Kept %1 that a book shares with another an older Omabook took it for, as whose they "
-                                           "are can't be told: %2.")
-                                       .arg(count(doubtful.size()), doubtful.join("; ")));
-}

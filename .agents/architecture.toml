@@ -53,6 +53,7 @@ modules = [
   "fileschema",
   "libraryfiles", "booklink",
   "libraryhold", "syncidentity", "pluginrestore",
+  "libraryrepairs",
 ]
 
 [layers.services]

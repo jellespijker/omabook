@@ -4,6 +4,7 @@
 #include "bookwords.h"
 #include "fileschema.h"
 #include "graphindex.h"
+#include "libraryrepairs.h"
 #include "meaningindex.h"
 #include "readinglog.h"
 #include "tenancyschema.h"
@@ -486,15 +487,13 @@ const QList<QStringList> migrations{
     // A plugin's own books found by their words (#136, format 42): what its
     // format says they hold, read here from each file and never logged.
     BookWords::step(),
-    // The same-as links an older Omabook made between books that are not one
-    // book (#158, format 43): judged once, as the library is brought up to
-    // date, and kept apart from then on (LibraryMigrations::judgeLinks).
-    {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('judge_links', '1')"},
-    // A book's identifiers of one kept apart (#164, format 44): removed once (LibraryMigrations::unstrayIdentifiers).
-    {"INSERT OR REPLACE INTO library_state (key, value) VALUES ('unstray_identifiers', '1')"},
 };
 // NOLINTEND(bugprone-suspicious-missing-comma,bugprone-throwing-static-initialization,cert-err58-cpp)
 
 } // namespace
 
-const QList<QStringList> &LibrarySchema::steps() { return migrations; }
+// The tables' steps, then the one-off repairs' (formats 43 on).
+const QList<QStringList> &LibrarySchema::steps() {
+    static const QList<QStringList> all = migrations + LibraryRepairs::steps();
+    return all;
+}
