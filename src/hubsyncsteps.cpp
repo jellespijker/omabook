@@ -14,6 +14,7 @@
 #include "library.h"
 #include "log.h"
 #include "sync.h"
+#include "syncidentity.h"
 #include "synclog.h"
 #include "syncplan.h"
 
@@ -161,6 +162,16 @@ namespace {
     return book->toJson();
 }
 
+// Whether the computer's library may sync with this one (#209): not this one, nor a copy of another known here.
+[[nodiscard]] std::expected<QJsonValue, Failure> identity(const Library &library, const QString &named,
+                                                          const HubSyncSteps::Resolve &resolve) {
+    const auto theirs = sent(named, resolve);
+    if (!theirs)
+        return std::unexpected(theirs.error());
+    const auto checked = SyncIdentity::check(library, theirs->object(), theirs->object().value("name"_L1).toString());
+    return checked ? QJsonObject() : QJsonObject{{"refused", checked.error().text()}};
+}
+
 // Whether it is `collections take --json <file>` or `graph take --json <file>`.
 [[nodiscard]] bool takesIn(const QStringList &arguments) {
     return arguments.size() == 4 && QStringList{u"collections"_s, u"graph"_s}.contains(arguments.at(0)) && arguments.at(1) == u"take"_s
@@ -170,13 +181,13 @@ namespace {
 } // namespace
 
 bool HubSyncSteps::writes(const QStringList &arguments, const Resolve &resolve) {
-    if (arguments.value(0) == u"manifest"_s)
-        return false;
+    // Only what writes takes a moment snapshot first: never a step that only reads,
+    // nor one the hub refuses, which then writes nothing either.
     if (arguments.size() == 3 && arguments.at(0) == u"sync"_s && arguments.at(1) == u"--replicate"_s) {
         const auto request = sent(arguments.at(2), resolve);
         return request && !request->object().value("dry_run"_L1).toBool();
     }
-    return true;
+    return takesIn(arguments) || arguments.value(0) == u"add"_s || arguments.value(0) == u"set"_s;
 }
 
 std::expected<QJsonValue, Failure> HubSyncSteps::run(Library &library, const QStringList &arguments, const Resolve &resolve, bool dryRun) {
@@ -188,6 +199,8 @@ std::expected<QJsonValue, Failure> HubSyncSteps::run(Library &library, const QSt
         return SyncPlan::toJson(SyncPlan::states(library));
     if (arguments.size() == 3 && command == u"sync"_s && arguments.at(1) == u"--replicate"_s)
         return replicate(library, arguments.at(2), resolve, dryRun);
+    if (arguments.size() == 3 && command == u"sync"_s && arguments.at(1) == u"--identity"_s)
+        return identity(library, arguments.at(2), resolve);
     const bool takes = takesIn(arguments);
     if (!takes && command != u"add"_s && command != u"set"_s)
         return std::unexpected(refused(arguments));
