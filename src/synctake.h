@@ -71,15 +71,19 @@ struct Taken {
 // Which of the other side's names elsewhere for a book this one takes: only
 // within one book (#164). None of a book paired on less than its global id,
 // which may be another's (#158); and never one `stray` names, that it has of
-// a book kept apart from it (StrayIdentifiers).
+// a book kept apart from it (StrayIdentifiers). And the fields of its reading
+// ("shelf", "rating", "finished") their device wrote later than this
+// one's, of a book paired by its global id, but empty ones: each taken (ADR 0009, #213).
 struct Names {
     bool take = true;
     QSet<QString> stray;
+    QSet<QString> newerReading;
 };
 
-// Takes in what the other side says of a book's reading where this side says
-// nothing: an empty shelf, no stars, no finished day; a paper copy either side
-// has is had; and the names elsewhere this one lacks, as `names` says.
+// Takes in what the other side says of a book's reading: each field `names`
+// says is newer there, and where this side says nothing (an empty shelf, no
+// stars, no finished day; a paper copy either side has is had); and the
+// names elsewhere this one lacks, as `names` says.
 // Whether that changes anything; with `dryRun` only that. What it changes
 // goes into `plan`, when there is one (the sync guard's, #187).
 bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names = {}, SyncPlan *plan = nullptr);

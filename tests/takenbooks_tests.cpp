@@ -120,7 +120,7 @@ private slots:
         QTest::addColumn<bool>("paper");
         QTest::addColumn<QString>("field");
         QTest::addColumn<QString>("value");
-        const QList<std::pair<QString, QString>> changes{{"description", "Lords of the night."}, {"description", ""}};
+        const QList<std::pair<QString, QString>> changes{{"description", "Lords of the night."}, {"description", ""}, {"rating", "5"}};
         for (const bool paper : {true, false})
             for (const auto &[field, value] : changes)
                 QTest::addRow("%s, the %s %s", paper ? "on paper" : "a file", qPrintable(field), value.isEmpty() ? "cleared" : "changed")
@@ -129,7 +129,8 @@ private slots:
 
     // A has the book and B got it by a sync, before #210. Once both are
     // upgraded, C, syncing with B, gets the book whole, and a change of it
-    // made on B reaches A and C, each sync as its plan said.
+    // made on B reaches A and C, each sync as its plan said: a detail, changed
+    // or cleared, or its stars changed, which the newer wins (ADR 0009).
     void aBookGotBeforeTravelsOnOnceUpgraded() {
         QFETCH(const bool, paper);
         QFETCH(const QString, field);

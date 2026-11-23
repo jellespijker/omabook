@@ -53,12 +53,14 @@ bool fillNames(Library &library, const Book &mine, const QJsonObject &identifier
     return changed;
 }
 
-// What is said of a book's reading once what the other side says fills in where this side says nothing.
-[[nodiscard]] Book readingFilled(const Book &mine, const QJsonObject &theirs) {
+// What is said of a book's reading once what the other side says fills in
+// where this side says nothing, and of each field `newer` there.
+[[nodiscard]] Book readingFilled(const Book &mine, const QJsonObject &theirs, const QSet<QString> &newer) {
+    const auto at = [&](const char *field, bool lacking) { return lacking || newer.contains(QLatin1StringView(field)); };
     return {.paper = mine.paper || theirs.value("paper").toBool(),
-            .shelf = mine.shelf.isEmpty() ? theirs.value("shelf").toString() : mine.shelf,
-            .rating = mine.rating > 0 ? mine.rating : theirs.value("rating").toInt(),
-            .finished = mine.finished.isEmpty() ? theirs.value("finished").toString() : mine.finished};
+            .shelf = at("shelf", mine.shelf.isEmpty()) ? theirs.value("shelf").toString() : mine.shelf,
+            .rating = at("rating", mine.rating == 0) ? theirs.value("rating").toInt() : mine.rating,
+            .finished = at("finished", mine.finished.isEmpty()) ? theirs.value("finished").toString() : mine.finished};
 }
 
 void note(int &count, QStringList &titles, const QString &title) {
@@ -270,6 +272,22 @@ void takeRemovals(Taking &taking, const QList<Book> &books) {
     return taking.stray.of(copy, gid, standsFor) | taking.stray.doubtful(copy, gid, standsFor);
 }
 
+// The fields of a book's reading their device said later than this one's,
+// of a book paired by its global id: a field's latest wins (ADR 0001), of one
+// book (ADR 0009, #213). Never an empty one: no stars are written whenever a
+// shelf is, so a clear can't be told from saying nothing.
+[[nodiscard]] QSet<QString> newerReading(const Taking &taking, const QString &gid) {
+    QSet<QString> newer;
+    const ReducedBook mine = taking.mine.books.value(gid);
+    const ReducedBook theirs = taking.theirs.books.value(gid);
+    for (const QString &field : {u"shelf"_s, u"rating"_s, u"finished"_s})
+        if (const QString said = theirs.fields.value(field).value;
+            !pairedWeakly(taking, gid) && said != ""_L1 && said != "0"_L1
+            && SpaceReducer::fieldHlc(theirs, field) > SpaceReducer::fieldHlc(mine, field))
+            newer.insert(field);
+    return newer;
+}
+
 // One book both sides hold, decided once for all its copies here, and counted once.
 void takeBook(Taking &taking, const QList<Book> &copies) {
     const Book &here = copies.first();
@@ -278,12 +296,13 @@ void takeBook(Taking &taking, const QList<Book> &copies) {
     if (!theirs)
         return;
     const bool details = takeDetails(taking, copies, *theirs, taking.listed.value(gid));
+    const QSet<QString> newer = newerReading(taking, gid);
     bool reading = false;
     for (const Book &copy : copies)
-        reading =
-            SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun,
-                                  {.take = !pairedWeakly(taking, gid), .stray = strayIn(taking, copy, gid)}, &taking.summary.plans.here)
-            || reading;
+        reading = SyncTake::fillReading(taking.library, copy.id, *theirs, taking.peer.dryRun,
+                                        {.take = !pairedWeakly(taking, gid), .stray = strayIn(taking, copy, gid), .newerReading = newer},
+                                        &taking.summary.plans.here)
+                  || reading;
     if (reading)
         note(taking.summary.readingTaken, taking.summary.titles.readingTaken, here.meta.title);
     // The book's node in the knowledge graph says the same as the library.
@@ -435,7 +454,7 @@ bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &their
     const std::optional<Book> mine = library.book(id);
     if (!mine)
         return false;
-    const Book filled = readingFilled(*mine, theirs);
+    const Book filled = readingFilled(*mine, theirs, names.newerReading);
     const bool reading = std::tie(filled.shelf, filled.rating, filled.finished) != std::tie(mine->shelf, mine->rating, mine->finished);
     if (reading && !dryRun)
         library.setReading(id, filled.shelf, filled.rating, filled.finished);

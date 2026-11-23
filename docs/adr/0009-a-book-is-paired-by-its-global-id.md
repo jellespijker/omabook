@@ -70,6 +70,17 @@ rewrites what a book is.
   sync takes no stray identifier, nor one in doubt, removes the stray ones here (after `--unlink`, before
   anything else of that sync, and once what came in is stored, before it is taken in) and names them; the
   one-off repair of format 44 does the same at upgrade.
+- **Of one book, a changed reading travels; a clear of it, and of an identifier, does not** (#213). A book paired
+  by its global id takes each of the other's shelf, stars and finished day that the other computer's device said
+  later than this one's did: a field's latest wins, as ADR 0001 has it, where only filling in what one side lacked
+  kept a new rating from ever travelling. An empty one is not taken, and what one side lacks is still filled in
+  from the other: the log can't tell a clear from saying nothing, since a book's reading is written whole (no
+  stars, whenever its shelf is set). So a cleared rating, shelf or finished day comes back from a computer that
+  still has it, until it is cleared there too; a paper copy either side has is had. A book paired on less than its
+  global id still only fills in its reading. Its identifiers are only gathered, never replaced, of a book paired
+  by its id too: the log holds them as one field, so the newer set would drop every key the other computer added
+  meanwhile (a Calibre uuid here, a Goodreads id there), and they are what pairs a book at its first meeting. An
+  identifier cleared by hand comes back the same way; a stray one is removed on each computer by the rule above.
 - **A new book without a file is given an id of a strong key, else its title and authors**, never one
   another book here has; one received from another computer keeps the id it has there.
 
@@ -86,5 +97,8 @@ rewrites what a book is.
   nothing.
 - An Omabook before 0.2.2 is sent no entry keys to pair by, and its own are not read; its books without a
   file are paired by their id alone. It keeps a `not_same_as` it doesn't know, and passes it on (KeptOps).
+- A rating, shelf or finished day changed on one computer now reaches the other, where before it stayed when the
+  other had one; two computers that had set different ones take the newer at their next sync, which its plan
+  announces. A clear travels as a change would only once the log stamps a clear apart from saying nothing.
 - Titles a wrong link already wrote stay as they are: the repair stops further damage, and the person puts a
   wrong title right once, on one computer.
