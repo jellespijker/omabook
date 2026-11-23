@@ -11,6 +11,7 @@
 #include "hublinks.h"
 #include "hubsync.h"
 #include "library.h"
+#include "spaces.h"
 
 using namespace Qt::StringLiterals;
 
@@ -33,7 +34,11 @@ std::expected<QJsonObject, Failure> HubRemote::step(QJsonObject request) const {
 }
 
 std::expected<void, Failure> HubRemote::begin(const Library &library, bool dryRun) {
-    const auto begun = step({{"step", "begin"}, {"library", m_library}, {"format", library.formatVersion()}, {"dry_run", dryRun}});
+    const auto begun = step({{"step", "begin"},
+                             {"library", m_library},
+                             {"format", library.formatVersion()},
+                             {"dry_run", dryRun},
+                             {"device", Spaces::deviceId(library)}});
     if (!begun)
         return std::unexpected(begun.error());
     m_visit = begun->value("visit"_L1).toString();
@@ -48,9 +53,6 @@ void HubRemote::end() {
 }
 
 Remote::Result HubRemote::omabook(const QStringList &arguments, [[maybe_unused]] const QString &inputFile) const {
-    // Plugins' files don't travel through a hub yet (HubSyncSteps): not asked, so the hub has nothing to refuse.
-    if (arguments == QStringList{u"sync"_s, u"--plugin-files"_s})
-        return {.code = 1, .output = {}, .error = Failure(Failure::Code::HubSyncRefused, {arguments.join(u' ')}).text()};
     const auto answered = step({{"step", "omabook"}, {"arguments", QJsonArray::fromStringList(arguments)}});
     if (!answered)
         return {.code = 1, .output = {}, .error = answered.error().text()};

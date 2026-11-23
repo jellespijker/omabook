@@ -19,7 +19,8 @@ class HubRequests;
 // over ssh, the computer asks here through its session (HubRemote), as the
 // request `sync`, a step at a time; the session sets "computer" to its key's.
 //
-//   {"step": "begin", "library": <name, or none for the hub's one>, "format": <the computer's library's>, "dry_run": false}
+//   {"step": "begin", "library": <name, or none for the hub's one>, "format": <the computer's library's>, "dry_run": false,
+//    "device": <the computer's library's>}
 //     → {"visit": <id>, "library": <name>, "format": <the hub's>}
 //   {"step": "omabook", "visit": <id>, "arguments": [...]}  → {"answer": <what it printed>} (HubSyncSteps)
 //   {"step": "folder", "visit": <id>}                       → {"folder": <its name>}
@@ -29,7 +30,8 @@ class HubRequests;
 //
 // A visit is one computer's, never another's; what it is sent stays in its own
 // folders and goes with it; it fetches only the files of the library's books
-// and their covers. Every step is done through the keeper (ADR 0013), and a
+// and their covers, and the plugins' files the hub keeps for it (#212), when
+// its device is one of the hub library's own computers. Every step is done through the keeper (ADR 0013), and a
 // sync takes its moment snapshot (#181) once, just before its first write. A library of another format than the computer's doesn't sync:
 // both sides say which Omabook to update. A dry run writes nothing at all.
 class HubSync {

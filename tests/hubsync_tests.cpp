@@ -493,7 +493,7 @@ private slots:
         // Only the commands a sync runs there.
         for (const QJsonArray &arguments :
              {QJsonArray{u"remove"_s, u"1"_s}, QJsonArray{u"hub"_s, u"forget"_s, u"desktop"_s}, QJsonArray{u"manifest"_s},
-              QJsonArray{u"sync"_s, u"--plugin-files"_s}, QJsonArray{u"add"_s, u"/etc/passwd"_s, u"--json"_s},
+              QJsonArray{u"sync"_s, u"--take-plugin-files"_s, u"/etc/passwd"_s}, QJsonArray{u"add"_s, u"/etc/passwd"_s, u"--json"_s},
               QJsonArray{u"set"_s, u"1"_s, u"--cover=/etc/passwd"_s}, QJsonArray{u"set"_s, u"1"_s, u"--cover"_s, u"../../x.jpg"_s}}) {
             const QJsonObject refused = step(*session, {{"step", "omabook"}, {"arguments", arguments}});
             QVERIFY2(!refused.value("ok").toBool(), qPrintable(QString::fromUtf8(QJsonDocument(arguments).toJson())));

@@ -13,6 +13,7 @@
 #include "graphsync.h"
 #include "library.h"
 #include "log.h"
+#include "pluginfilesync.h"
 #include "sync.h"
 #include "syncidentity.h"
 #include "synclog.h"
@@ -172,6 +173,51 @@ namespace {
     return checked ? QJsonObject() : QJsonObject{{"refused", checked.error().text()}};
 }
 
+// The plugins' files the computer sent (#212), from the sync's folders, taken in for every plugin;
+// refused unless the library is one of the hub library's own computers.
+[[nodiscard]] std::expected<QJsonValue, Failure> takePluginFiles(const Library &library, const QString &named,
+                                                                 const HubSyncSteps::Visit &visit) {
+    const auto request = sent(named, visit.resolve);
+    if (!request)
+        return std::unexpected(request.error());
+    QJsonArray files;
+    for (const auto &value : request->object().value("files"_L1).toArray()) {
+        QJsonObject file = value.toObject();
+        const auto where = visit.resolve(file.value("file"_L1).toString());
+        if (!where)
+            return std::unexpected(where.error());
+        file.insert("file"_L1, *where);
+        files << file;
+    }
+    // The device is the sync's, whatever the request says; nothing is left elsewhere for a hub.
+    QJsonObject taken = PluginFileSync::take(library, {{"files", files}, {"device", visit.device}}, HubSyncSteps::pluginsOf(library.root()),
+                                             PluginFileSync::Keeping::Every);
+    if (taken.value("refused"_L1).toBool())
+        return std::unexpected(Failure(Failure::Code::HubSyncNotYours));
+    return taken;
+}
+
+// `sync --<what> [<file>]`: the log, the identity check, and the plugins' files.
+[[nodiscard]] std::expected<QJsonValue, Failure> syncStep(Library &library, const QStringList &arguments,
+                                                          const HubSyncSteps::Visit &visit) {
+    const QString what = arguments.value(1);
+    const bool files =
+        (arguments.size() == 2 && what == u"--plugin-files"_s) || (arguments.size() == 3 && what == u"--take-plugin-files"_s);
+    if (files && visit.dryRun)
+        return std::unexpected(Failure(Failure::Code::HubSyncDryRun));
+    if (arguments.size() == 2 && files)
+        return PluginFileSync::survey(library, HubSyncSteps::pluginsOf(library.root()), PluginFileSync::Keeping::Every);
+    if (arguments.size() != 3)
+        return std::unexpected(refused(arguments));
+    if (what == u"--replicate"_s)
+        return replicate(library, arguments.at(2), visit.resolve, visit.dryRun);
+    if (what == u"--identity"_s)
+        return identity(library, arguments.at(2), visit.resolve);
+    if (!files)
+        return std::unexpected(refused(arguments));
+    return takePluginFiles(library, arguments.at(2), visit);
+}
+
 // Whether it is `collections take --json <file>` or `graph take --json <file>`.
 [[nodiscard]] bool takesIn(const QStringList &arguments) {
     return arguments.size() == 4 && QStringList{u"collections"_s, u"graph"_s}.contains(arguments.at(0)) && arguments.at(1) == u"take"_s
@@ -180,6 +226,8 @@ namespace {
 
 } // namespace
 
+QString HubSyncSteps::pluginsOf(const QString &libraryRoot) { return libraryRoot + u"/.plugins"_s; }
+
 bool HubSyncSteps::writes(const QStringList &arguments, const Resolve &resolve) {
     // Only what writes takes a moment snapshot first: never a step that only reads,
     // nor one the hub refuses, which then writes nothing either.
@@ -187,26 +235,29 @@ bool HubSyncSteps::writes(const QStringList &arguments, const Resolve &resolve) 
         const auto request = sent(arguments.at(2), resolve);
         return request && !request->object().value("dry_run"_L1).toBool();
     }
+    // The plugins' files: the survey records what the hub holds of them in the log (#212).
+    if (arguments.value(0) == u"sync"_s
+        && ((arguments.size() == 2 && arguments.at(1) == u"--plugin-files"_s)
+            || (arguments.size() == 3 && arguments.at(1) == u"--take-plugin-files"_s)))
+        return true;
     return takesIn(arguments) || arguments.value(0) == u"add"_s || arguments.value(0) == u"set"_s;
 }
 
-std::expected<QJsonValue, Failure> HubSyncSteps::run(Library &library, const QStringList &arguments, const Resolve &resolve, bool dryRun) {
+std::expected<QJsonValue, Failure> HubSyncSteps::run(Library &library, const QStringList &arguments, const Visit &visit) {
     const QString command = arguments.value(0);
     if (arguments == QStringList{u"manifest"_s, u"--log"_s})
         return libraryManifest(library, ManifestFor::LogPeer);
     // Each book as the sync guard compares it, before and after (#187).
     if (arguments == QStringList{u"manifest"_s, u"--state"_s})
         return SyncPlan::toJson(SyncPlan::states(library));
-    if (arguments.size() == 3 && command == u"sync"_s && arguments.at(1) == u"--replicate"_s)
-        return replicate(library, arguments.at(2), resolve, dryRun);
-    if (arguments.size() == 3 && command == u"sync"_s && arguments.at(1) == u"--identity"_s)
-        return identity(library, arguments.at(2), resolve);
+    if (command == u"sync"_s)
+        return syncStep(library, arguments, visit);
     const bool takes = takesIn(arguments);
     if (!takes && command != u"add"_s && command != u"set"_s)
         return std::unexpected(refused(arguments));
-    if (dryRun)
+    if (visit.dryRun)
         return std::unexpected(Failure(Failure::Code::HubSyncDryRun));
     if (takes)
-        return take(library, arguments, resolve);
-    return command == u"add"_s ? add(library, arguments, resolve) : set(library, arguments, resolve);
+        return take(library, arguments, visit.resolve);
+    return command == u"add"_s ? add(library, arguments, visit.resolve) : set(library, arguments, visit.resolve);
 }

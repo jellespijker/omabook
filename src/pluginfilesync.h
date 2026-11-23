@@ -19,16 +19,34 @@
 // never in a dry run. A file the plugin marked to travel on demand (#135)
 // goes neither way: the side that lacks it remembers where it is, and
 // fetches it once the plugin asks for it (fetch).
+//
+// A hub (#212) keeps every plugin's files, installed there or not, for the
+// person's computers to take: it is sent them all, those on demand too, and
+// gives them whole. Like the plugins' records in the log, the files go only
+// to one's own computers: a side whose device isn't one of this library's
+// (Spaces::isOwnComputer, once the log went) is given none and asked for none.
+// And as the sync guard keeps a book's fields (#187), a sync never empties a
+// file that has something in it: the log may say a file holds nothing, but
+// the side that holds more keeps it, and says so, until it goes the other way.
 namespace PluginFileSync {
+
+// Whose files a side keeps: those of the plugins installed in its folder (a
+// computer's), or of every plugin, each in a folder by its id (a hub's).
+enum class Keeping : std::uint8_t { Installed, Every };
 
 // This computer's side, `omabook sync --plugin-files`: records what each
 // plugin installed in `plugins` (the person's folder when empty) holds, and
-// answers it: {"folder", "plugins": {id: {path: {hash, size}}}, "held"}.
-[[nodiscard]] QJsonObject survey(const Library &library, const QString &plugins = {});
+// answers it: {"folder", "plugins": {id: {path: {hash, size}}}, "held",
+// "device"}, with "every": true when it keeps every plugin's.
+[[nodiscard]] QJsonObject survey(const Library &library, const QString &plugins = {}, Keeping keeping = Keeping::Installed);
 // `omabook sync --take-plugin-files <request>`: puts each file the request
-// names ({"files": [{plugin, path, file}]}) where it goes, as PluginFiles::take
-// does, and removes what the log says was removed: {"taken", "removed"}.
-[[nodiscard]] QJsonObject take(const Library &library, const QJsonObject &request, const QString &plugins = {});
+// names ({"files": [{plugin, path, file}], "device"}) where it goes, as
+// PluginFiles::take does, and removes what the log says was removed:
+// {"taken", "removed"}. A request from a device not one of this library's own
+// is refused ({"refused": true}), and so is one that names none to a side that
+// keeps every plugin's.
+[[nodiscard]] QJsonObject take(const Library &library, const QJsonObject &request, const QString &plugins = {},
+                               Keeping keeping = Keeping::Installed);
 
 // What each side holds, as survey() answers it.
 struct Sides {

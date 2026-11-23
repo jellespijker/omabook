@@ -16,18 +16,22 @@
 #include "hubsyncsteps.h"
 #include "library.h"
 #include "log.h"
+#include "pluginfiles.h"
+#include "scripttools.h"
+#include "spaces.h"
 
 using namespace Qt::StringLiterals;
 
 struct HubSync::Visit {
     QString computer;
     QString library; // its name, as the keeper knows it
+    QString device;  // of the computer's library, as it said (#212)
     bool dryRun = false;
     QTemporaryDir scratch;
     int folders = 0;
     bool snapshotted = false; // its moment snapshot taken, before its first write
-    // The files it may fetch: the library's books' and their covers', once asked.
-    std::optional<QSet<QString>> given;
+    // The library's books' files and their covers', once asked: files it may fetch.
+    std::optional<QSet<QString>> books;
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
 
     explicit Visit(const QString &in) : scratch(QDir(in).filePath(u"omabook-hub-sync-XXXXXX"_s)) {}
@@ -43,6 +47,8 @@ struct HubSync::Visit {
     [[nodiscard]] std::expected<QJsonObject, Failure> folder();
     [[nodiscard]] std::expected<QJsonObject, Failure> put(const QJsonObject &asked) const;
     [[nodiscard]] std::expected<QJsonObject, Failure> fetch(const QJsonObject &asked, HubKeeper &keeper);
+    // `asking`, when it is a file the hub gives this sync; empty when not.
+    [[nodiscard]] std::expected<QString, Failure> given(const QString &asking, HubKeeper &keeper);
     [[nodiscard]] std::expected<QJsonObject, Failure> omabook(const QJsonObject &asked, HubKeeper &keeper);
 };
 
@@ -60,6 +66,17 @@ namespace {
     }
     files.remove(QString());
     return files;
+}
+
+// Whether `file` (a canonical path) is a plugin's file the hub keeps for the library (#212), and the
+// library of `device` is one of its own computers, to which alone they go.
+[[nodiscard]] bool pluginFileOf(const Library &library, const QString &device, const QString &file) {
+    const QString kept = canonical(HubSyncSteps::pluginsOf(library.root()));
+    if (kept.isEmpty() || !file.startsWith(kept + u'/') || !Spaces::isOwnComputer(library, device))
+        return false;
+    const QString under = file.mid(kept.size() + 1); // <plugin>/data/<path>
+    return ScriptTools::validName(under.section(u'/', 0, 0)) && under.section(u'/', 1, 1) == u"data"_s
+           && PluginFiles::travels(under.section(u'/', 2));
 }
 
 } // namespace
@@ -108,6 +125,7 @@ std::expected<QJsonObject, Failure> HubSync::begin(const QJsonObject &asked, Hub
     auto visit = std::make_unique<Visit>(m_scratch);
     visit->computer = computer;
     visit->dryRun = asked.value("dry_run"_L1).toBool();
+    visit->device = asked.value("device"_L1).toString();
     int format = 0;
     const auto checked = keeper.write(
         asked.value("library"_L1).toString(), HubKeeper::Moment::None, [&](Library &library) -> std::expected<QJsonObject, Failure> {
@@ -180,15 +198,10 @@ std::expected<QJsonObject, Failure> HubSync::Visit::fetch(const QJsonObject &ask
     const auto inScratch = resolve(asking);
     QString file = inScratch && QFileInfo(*inScratch).isFile() ? *inScratch : QString();
     if (file.isEmpty()) {
-        const auto known = keeper.write(library, HubKeeper::Moment::None, [this](Library &kept) -> std::expected<QJsonObject, Failure> {
-            if (!given)
-                given = filesOf(kept);
-            return QJsonObject();
-        });
+        const auto known = given(asking, keeper);
         if (!known)
             return std::unexpected(known.error());
-        if (const QString found = canonical(asking); !found.isEmpty() && given && given->contains(found))
-            file = found;
+        file = *known;
     }
     QFile read(file);
     if (file.isEmpty() || !read.open(QIODevice::ReadOnly)) {
@@ -200,17 +213,31 @@ std::expected<QJsonObject, Failure> HubSync::Visit::fetch(const QJsonObject &ask
     return QJsonObject{{"data", QString::fromLatin1(read.read(piece).toBase64())}, {"size", read.size()}};
 }
 
+std::expected<QString, Failure> HubSync::Visit::given(const QString &asking, HubKeeper &keeper) {
+    QString file;
+    const auto known = keeper.write(library, HubKeeper::Moment::None, [&](Library &kept) -> std::expected<QJsonObject, Failure> {
+        if (!books)
+            books = filesOf(kept);
+        if (const QString found = canonical(asking); !found.isEmpty() && (books->contains(found) || pluginFileOf(kept, device, found)))
+            file = found;
+        return QJsonObject();
+    });
+    if (!known)
+        return std::unexpected(known.error());
+    return file;
+}
+
 std::expected<QJsonObject, Failure> HubSync::Visit::omabook(const QJsonObject &asked, HubKeeper &keeper) {
     QStringList arguments;
     for (const auto &argument : asked.value("arguments"_L1).toArray())
         arguments << argument.toString();
-    const HubSyncSteps::Resolve resolving = [this](const QString &named) { return resolve(named); };
+    const HubSyncSteps::Visit visit{.resolve = [this](const QString &named) { return resolve(named); }, .dryRun = dryRun, .device = device};
     // Its first step that writes takes the moment snapshot first, in the same lock (#181): none
     // for a sync the guard refuses (#187), or a dry run, which write nothing.
-    const bool first = !dryRun && !snapshotted && HubSyncSteps::writes(arguments, resolving);
+    const bool first = !dryRun && !snapshotted && HubSyncSteps::writes(arguments, visit.resolve);
     const auto answered = keeper.write(
         library, first ? HubKeeper::Moment::Sync : HubKeeper::Moment::None, [&](Library &kept) -> std::expected<QJsonObject, Failure> {
-            const auto done = HubSyncSteps::run(kept, arguments, resolving, dryRun);
+            const auto done = HubSyncSteps::run(kept, arguments, visit);
             if (!done) {
                 qCWarning(lcHub).noquote() << computer + u"'s sync of "_s + library << "was refused a step:" << done.error().english();
                 return std::unexpected(done.error());

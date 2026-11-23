@@ -212,9 +212,10 @@ public:
         HubSyncNotBegun,    // {}: no sync of this computer's is under way on the hub
         HubSyncNoComputer,  // {}: asked by no computer's key
         HubSyncRefused,     // {what was asked}
-        HubSyncNotGiven,    // {file}: not a file of the library's books
+        HubSyncNotGiven,    // {file}: not a file of the library's books, nor a plugin's file kept for it
         HubSyncNoPlace,     // {where}: not in the sync's own folders
         HubSyncDryRun,      // {}: a dry run writes nothing
+        HubSyncNotYours,    // {}: plugins' files, for a library not one of the hub library's own computers (#212)
         // What `omabook set` was given, for a computer or a hub (BookSetting, #188).
         DetailsUnreadable,  // {file}
         DetailsNotAnObject, // {file}
@@ -321,6 +322,10 @@ public:
         RestoreThingAmbiguous, // {title}
         SyncDeviceOurs,        // {computer}: it has this library's device id
         SyncDeviceTaken,       // {computer, the computer known here by that id}
+        // Plugins' files at a sync, with a hub too (#212).
+        PluginFilesNotOwn,         // {computer}: not one of one's own computers, to which alone they go
+        PluginFileNotEmptiedHere,  // {path, plugin}: the log says it holds nothing, and here it holds something
+        PluginFileNotEmptiedThere, // {path, plugin, computer}: the same there
         // A library left in its older format without its moment snapshot (#208).
         UpgradeNotSnapshot, // {why the snapshot couldn't be taken}
     };
