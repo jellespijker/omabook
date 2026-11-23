@@ -12,6 +12,14 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.0.2] - 2026-11-23
+
+0.5.0.1 as it was meant to be: its package was never built, because one of its tests failed now and then on a fast machine.
+
+### Fixed
+
+- A test of the repair 0.5.0.1 brings no longer fails when two of its changes fall in the same second; Omabook itself is unchanged (#218).
+
 ## [0.5.0.1] - 2026-11-23
 
 ### Fixed
