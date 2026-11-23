@@ -94,15 +94,19 @@ const QString bookFields = QStringLiteral("('title', 'authors', 'series', 'serie
 }
 
 // Changes `field` of a book to `value` (empty: clears it), a
-// detail a minute on, as a sync's details are timed to the second.
+// detail a minute on, as a sync's details are timed to the second: a minute
+// after now, and after the book's details as they were. Two changes in one
+// second stated at one time would be one moment, which no sync can order (#218).
 [[nodiscard]] bool change(Library &library, qint64 id, const QString &field, const QString &value) {
+    const Book book = *library.book(id);
     if (field == "rating")
-        return library.setReading(id, library.book(id)->shelf, value.toInt(), library.book(id)->finished);
-    BookMeta meta = library.book(id)->meta;
+        return library.setReading(id, book.shelf, value.toInt(), book.finished);
+    BookMeta meta = book.meta;
     QJsonObject json = meta.toJson();
     json.insert(field, value);
     meta.applyJson(json);
-    return library.setMeta(id, meta, nullptr, Hlc::pack(QDateTime::currentSecsSinceEpoch() + 60, 0));
+    const qint64 at = std::max(QDateTime::currentSecsSinceEpoch(), Hlc::seconds(book.detailsAt)) + 60;
+    return library.setMeta(id, meta, nullptr, Hlc::pack(at, 0));
 }
 
 // The book titled `title` of a library, or 0.
