@@ -101,9 +101,13 @@ install(DIRECTORY share/folio/ DESTINATION ${CMAKE_INSTALL_DATADIR}/folio/plugin
 install(FILES share/omabook-mime.xml DESTINATION ${CMAKE_INSTALL_DATADIR}/mime/packages RENAME omabook.xml)
 install(FILES share/omabook/calibre_bridge.py DESTINATION ${CMAKE_INSTALL_DATADIR}/omabook)
 # The hub's systemd units (#179), a user and a system variant, running the
-# installed omabook hub run.
-set(omabook_installed "${CMAKE_INSTALL_FULL_BINDIR}/omabook")
+# installed omabook hub run. Written when installing, so ExecStart names the
+# prefix installed to (`cmake --install build --prefix /usr`, as the package
+# does), not the one the build was configured with (#186).
 foreach(variant user system)
-  configure_file(share/systemd/${variant}/omabook-hub.service.in systemd/${variant}/omabook-hub.service @ONLY)
+  install(CODE "
+    set(omabook_installed \"\${CMAKE_INSTALL_PREFIX}/${CMAKE_INSTALL_BINDIR}/omabook\")
+    configure_file(\"${CMAKE_SOURCE_DIR}/share/systemd/${variant}/omabook-hub.service.in\"
+                   \"${CMAKE_BINARY_DIR}/systemd/${variant}/omabook-hub.service\" @ONLY)")
   install(FILES ${CMAKE_BINARY_DIR}/systemd/${variant}/omabook-hub.service DESTINATION lib/systemd/${variant})
 endforeach()
