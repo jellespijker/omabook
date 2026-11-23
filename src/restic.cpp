@@ -204,7 +204,7 @@ std::expected<void, Failure> Restic::check(const ResticRepository &repository, c
     else if (!readData.isEmpty())
         arguments << u"--read-data-subset="_s + readData;
     // 1 is a repository with errors, said on standard output; the rest stopped it.
-    const auto ran = run(repository, arguments, 1);
+    const auto ran = run(repository, arguments, {.allowed = 1, .from = {}, .within = std::nullopt});
     if (!ran)
         return std::unexpected(ran.error());
     if (ran->code == 0)

@@ -16,7 +16,7 @@
 // new code is a row there and in the five catalogs.
 class Failure {
 public:
-    enum class Code : std::uint8_t {
+    enum class Code : std::uint16_t {
         // Words from elsewhere (a plugin, a server, a program), passed on as they were said: {words}.
         Said,
         // Opening a book (formats).
