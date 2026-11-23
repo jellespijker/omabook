@@ -183,7 +183,7 @@ The password an app gives the catalog, made once and kept in the keyring, also p
 _Avoid_: API key, PIN
 
 **Background service**:
-The person's own systemd user service, `omabook-serve.service`, that serves with the window closed, from login on; while it is chosen the window leaves serving to it. Which Omabook serves (the window, the background service, or `omabook serve` in a terminal) each says when asked from this computer (`DeviceServing`).
+The person's own systemd user service, `omabook-serve.service`, that serves with the window closed, from login on; while it is chosen the window leaves serving to it. Which Omabook serves (the window, the background service, or `omabook serve` in a terminal) each says when asked from this computer (`DeviceServing`). Automatic sync has one of its own, `omabook-hubsync.service`, allowed apart.
 _Avoid_: Daemon (the hub's), server, system service
 
 ## Hub and backups
@@ -191,6 +191,10 @@ _Avoid_: Daemon (the hub's), server, system service
 **Hub**:
 An Omabook without a window that is always on and belongs to one person: it keeps their libraries for their computers to sync with, serves them to phones and e-readers, does their background work (the knowledge graph, the meaning index, writing out recordings) and backs them up. Managed only from that person's own computers.
 _Avoid_: Server (an own server is an AI's), headless Omabook, NAS, cloud
+
+**Automatic sync**:
+A computer syncing its library with a hub by itself, off until switched on for that hub: a little after a change once the window is left alone, on a timer, and when the hub is back in reach; never on battery or a metered connection, nor while another sync runs. A sync that is refused stops it, said once, until the person sees to it (`HubAutoSync`).
+_Avoid_: Background sync, live sync, continuous sync
 
 **Snapshot**:
 A library as it stood at one moment, kept so it can be gone back to: encrypted, read-only, and one of a series. Only snapshots count as copies of a library; a synced library does not, since a sync carries a mistake to every computer.

@@ -1,6 +1,7 @@
 // omabook — an ebook library and reader for Omarchy.
 
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QDir>
 #include <QEventLoop>
 #include <QFileInfo>
@@ -8,9 +9,11 @@
 #include <QIcon>
 #include <QInputDevice>
 #include <algorithm>
+#include <chrono>
 #include <memory>
 #include <optional>
 #include <print>
+#include <tuple>
 #include <utility>
 #include <QQmlComponent>
 #include <QQmlEngine>
@@ -29,9 +32,11 @@
 #include "cli.h"
 #include "converter.h"
 #include "customization.h"
+#include "desktopnotice.h"
 #include "devicedesk.h"
 #include "folio.h"
 #include "hubdesk.h"
+#include "hublinks.h"
 #include "importer.h"
 #include "interface.h"
 #include "librarian.h"
@@ -46,8 +51,10 @@
 #include "reader.h"
 #include "readingpassages.h"
 #include "secretstore.h"
+#include "serveservice.h"
 #include "settings.h"
 #include "snapshotdesk.h"
+#include "syncwait.h"
 #include "theme.h"
 #include "themechoice.h"
 #include "translator.h"
@@ -112,6 +119,28 @@ void setUpReader(Reader &reader, const Backend &backend, const CalibrePlugin &ca
     QObject::connect(passages, &ReadingPassages::anchored, reader.highlights(), &ReadingHighlights::refresh);
     QObject::connect(&backend, &Backend::pluginsChanged, &reader,
                      [&reader, &calibre] { reader.setConverter(calibre.converter(), calibre.switchedOff()); });
+}
+
+// Automatic sync with the hubs (#191), as the window does it: its state beside the links, the
+// desktop asked whether to wait and told of a refusal, and the background service the person's own.
+HubDesk::Automatic automaticSync() {
+    return {.folder = HubLinks::usualFolder(),
+            .now = [] { return QDateTime::currentDateTimeUtc(); },
+            .wait = SyncWait::now,
+            .notify = [](const QString &title,
+                         const QString &body) { std::ignore = DesktopNotice::show(title, body); }, // Shown in the panel too.
+            .service = ServeService::usual(),
+            .every = std::chrono::seconds(30),
+            .times = {}};
+}
+
+// The hubs' syncs bring books in; the library's changes, the person at work in the window
+// and the network coming back are what automatic sync waits for (#191).
+void followHubs(HubDesk &hubDesk, const Backend &backend, QGuiApplication &app) {
+    QObject::connect(&hubDesk, &HubDesk::booksChanged, &backend, &Backend::reload);
+    QObject::connect(&backend, &Backend::revisionChanged, &hubDesk, &HubDesk::libraryChanged);
+    app.installEventFilter(&hubDesk);
+    SyncWait::whenOnline(&hubDesk, [&hubDesk] { hubDesk.cameIntoReach(); });
 }
 
 // A command says what went wrong in English, which scripts can rely on;
@@ -344,9 +373,9 @@ int main(int argc, char *argv[]) {
     // The library's snapshots (#185): taken, compared, gone back to, and where else they are kept.
     SnapshotDesk snapshotDesk(SnapshotPlace::here(), SnapshotContents::here(), [&backend] { return backend.libraryPath(); });
     QObject::connect(&snapshotDesk, &SnapshotDesk::booksChanged, &backend, &Backend::reload);
-    // The hubs this computer is linked to (#189), through their sessions.
-    HubDesk hubDesk(HubDesk::linkedHere([&backend] { return backend.libraryPath(); }));
-    QObject::connect(&hubDesk, &HubDesk::booksChanged, &backend, &Backend::reload);
+    // The hubs this computer is linked to (#189), through their sessions, synced with by themselves where switched on (#191).
+    HubDesk hubDesk(HubDesk::linkedHere([&backend] { return backend.libraryPath(); }), automaticSync());
+    followHubs(hubDesk, backend, app);
     // What script plugins add to the keyboard and the window joins the
     // interface's own, and follows the plugins as they are edited.
     const auto followPlugins = [&custom, &backend] { custom.setPlugins(backend.scripts()->commands(), backend.scripts()->panels()); };

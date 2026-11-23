@@ -133,6 +133,9 @@ struct SyncSummary {
     } titles;
     QStringList problems;       // books that could not be carried, and why
     QString error;              // why the sync could not happen at all
+    // Whether that was the other side out of reach, or gone before the end: no
+    // refusal, nothing to see to but to try again (automatic sync, #191).
+    bool unreached = false;
     // What the sync guard (syncguard.h, #187) found: each side's plan, as its
     // dry run recorded it; the rules the plans break, each as "<title> (here):
     // <what>", which refuse the sync but for the books accepted; and what the

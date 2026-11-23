@@ -7,7 +7,9 @@ import QtQuick.Layouts
 // libraries and computers, and what is wrong with its snapshots, in red, each
 // saying what to do; and its background work (#192): the book whose graph it
 // builds and how far it got, with Cancel. Its buttons beside it where there is
-// room, under it where there isn't; unlinking asks first.
+// room, under it where there isn't; unlinking asks first. And automatic sync
+// with it (#191): switched on here, and how it stands, a sync it was refused
+// in red with what to do.
 Rectangle {
     id: row
     required property var modelData
@@ -31,6 +33,8 @@ Rectangle {
     readonly property var working: hub.work && hub.work.running ? hub.work.running : null
     // The last sync with this hub, or its preview, when there was one.
     readonly property var synced: hubsDesk.synced.host === hub.host ? hubsDesk.synced : null
+    readonly property bool refused: !!hub.autoRefused
+    readonly property date autoLast: hub.autoLast || new Date(NaN)
 
     height: parts.implicitHeight + 16
     radius: Math.min(4, theme.radius)
@@ -126,6 +130,30 @@ Rectangle {
                 text: row.synced === null ? ""
                     : (row.synced.dryRun ? qsTr("A sync now would do this, and nothing has changed yet:") : qsTr("Synced:"))
                       + "\n" + row.synced.lines.join("\n")
+            }
+            CheckBox {
+                objectName: "hubAuto"
+                visible: hubsDesk.automatic && !row.unlinking && row.hub.state !== "unlinked"
+                Layout.fillWidth: true
+                text: qsTr("Sync by itself")
+                checked: row.hub.auto === true
+                onToggled: hubsDesk.setAutomatic(row.hub.host, checked)
+            }
+            Label {
+                objectName: "hubAutoState"
+                visible: row.hub.auto === true && !row.unlinking
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                color: row.refused ? theme.colors.red : theme.colors.muted
+                font.bold: row.refused
+                font.pixelSize: row.refused ? Qt.application.font.pixelSize : 12
+                text: row.refused ? qsTr("Automatic sync has stopped, as the hub or the sync guard refused it: %1\nIt starts again once a sync by hand goes through, or when switched off and on.").arg(row.hub.autoRefused)
+                    : row.hub.autoWaiting === "battery" ? qsTr("It waits to sync by itself until this computer is plugged in.")
+                    : row.hub.autoWaiting === "metered" ? qsTr("It waits to sync by itself until the connection isn't metered.")
+                    : row.hub.autoUnreached ? qsTr("It syncs by itself once the hub is back in reach.")
+                    : !isNaN(row.autoLast.getTime()) ? qsTr("It syncs by itself a little after a change, and every quarter of an hour; last %1.").arg(row.autoLast.toLocaleString(Qt.locale(), Locale.ShortFormat))
+                    : qsTr("It syncs by itself a little after a change, and every quarter of an hour.")
             }
             Label {
                 objectName: "hubUnlinkQuestion"

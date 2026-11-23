@@ -13,6 +13,10 @@
 // after a failure (as when the tailnet isn't up yet). The window then
 // leaves serving to it. Each call waits for systemctl, so it is made off the
 // window's thread.
+//
+// Automatic sync with the hubs (#191) has one of its own beside it, the
+// same way: `omabook-hubsync.service`, running `omabook hub sync --service`
+// once the person allows it to sync with the window closed (hubSync()).
 class ServeService {
 public:
     struct Where {
@@ -21,11 +25,20 @@ public:
         QString omabook;   // the program the service runs
     };
     static constexpr auto unit = "omabook-serve.service";
+    // A service of Omabook's: its unit's name, what it is, and what it runs `omabook` with.
+    struct Unit {
+        QString name;
+        QString description;
+        QString arguments;
+    };
+    // Serving e-readers and phones; syncing with the hubs.
+    [[nodiscard]] static Unit serving();
+    [[nodiscard]] static Unit hubSync();
 
     // This person's, with systemctl on the path and this very program.
     [[nodiscard]] static Where usual();
 
-    explicit ServeService(Where where) : m_where(std::move(where)) {}
+    explicit ServeService(Where where, Unit unit = serving()) : m_where(std::move(where)), m_unit(std::move(unit)) {}
 
     [[nodiscard]] QString unitPath() const;
     [[nodiscard]] QString unitText() const;
@@ -41,4 +54,5 @@ private:
     [[nodiscard]] std::expected<void, Failure> run(const QStringList &arguments) const;
 
     Where m_where;
+    Unit m_unit;
 };

@@ -1,14 +1,18 @@
 #include "hublinkcommands.h"
 
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <cstdio>
 #include <print>
 #include <tuple>
 
+#include "hubautocommands.h"
+#include "hubautosync.h"
 #include "hubcomputers.h"
 #include "hublinks.h"
 #include "hubplace.h"
@@ -128,6 +132,9 @@ int runHubSync(const QStringList &arguments) {
     // `omabook hub sync ...` is `omabook sync ...` with a hub, the one this computer is linked to when it names none.
     QStringList given = arguments;
     given.removeAt(1);
+    // Automatic sync's switches (#191), the background service's among them, which names no hub.
+    if (isHubAutoCommand(given) && !hubAutoNamesAHub(given))
+        return runHubAuto(given);
     const HubLinks links;
     const QString named = given.value(2);
     if (named.isEmpty() || named.startsWith(u'-')) {
@@ -139,7 +146,17 @@ int runHubSync(const QStringList &arguments) {
     } else if (const QString host = named.section(u':', 0, 0); !links.isLinked(host)) {
         return failLine(Failure(Failure::Code::HubNotLinked, {host}).text());
     }
-    return runSyncCli(given);
+    if (isHubAutoCommand(given))
+        return runHubAuto(given);
+    // By hand, after the background service's sync when it is running one; once
+    // through, automatic sync goes on from it, a refusal seen to (#191).
+    HubAutoSync automatic(HubLinks::usualFolder());
+    const auto held = automatic.hold(true);
+    const QDateTime began = QDateTime::currentDateTimeUtc();
+    const int synced = runSyncCli(given);
+    if (synced == 0 && !given.contains(u"--dry-run"_s))
+        automatic.byHand(given.value(2).section(u':', 0, 0), began);
+    return synced;
 }
 
 bool isHubLinkCommand(const QString &what) {

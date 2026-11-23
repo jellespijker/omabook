@@ -3050,5 +3050,20 @@
   "The hub at %1 has no work under way.": "El hub en %1 no tiene trabajo en curso.",
   "The work under way on the hub at %1 is stopped; nothing of it is kept.": "El trabajo en curso en el hub en %1 se detuvo; no se guarda nada.",
   "The hub can't make the folder %1 to work in.": "El hub no puede crear la carpeta %1 para trabajar.",
-  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "El grafo de %1 no se construyó hasta el final, así que no se guardó nada."
+  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "El grafo de %1 no se construyó hasta el final, así que no se guardó nada.",
+  "%1\nIt syncs by itself again once a sync by hand goes through, or automatic sync is switched off and on in the Hubs panel.": "%1\nVolverá a sincronizar por sí solo en cuanto una sincronización a mano se complete, o cuando apagues y vuelvas a encender la sincronización automática en el panel de hubs.",
+  "Also while the window is closed, from login on": "También con la ventana cerrada, desde que inicias sesión",
+  "Asking systemd for the background service…": "Pidiendo a systemd el servicio en segundo plano…",
+  "Automatic sync has stopped, as the hub or the sync guard refused it: %1\nIt starts again once a sync by hand goes through, or when switched off and on.": "La sincronización automática se detuvo porque el hub o la protección de sincronización la rechazó: %1\nSe reanuda en cuanto una sincronización a mano se complete, o al apagarla y volver a encenderla.",
+  "It syncs by itself a little after a change, and every quarter of an hour.": "Se sincroniza por sí solo poco después de un cambio, y cada cuarto de hora.",
+  "It syncs by itself a little after a change, and every quarter of an hour; last %1.": "Se sincroniza por sí solo poco después de un cambio, y cada cuarto de hora; la última vez, %1.",
+  "It syncs by itself once the hub is back in reach.": "Se sincronizará por sí solo cuando el hub vuelva a estar a tu alcance.",
+  "It waits to sync by itself until the connection isn't metered.": "Espera para sincronizar por sí solo hasta que la conexión no sea de uso medido.",
+  "It waits to sync by itself until this computer is plugged in.": "Espera para sincronizar por sí solo hasta que esta computadora esté conectada a la corriente.",
+  "Omabook stopped syncing with %1 by itself": "Omabook dejó de sincronizarse por sí solo con %1",
+  "Switch automatic sync with the selected hub on or off": "Encender o apagar la sincronización automática con el hub seleccionado",
+  "Sync by itself": "Sincronizar por sí solo",
+  "Syncing with %1 by itself…": "Sincronizando por sí solo con %1…",
+  "The hubs switched on sync by themselves with the window closed too, from login on.": "Los hubs con sincronización automática se sincronizan por sí solos también con la ventana cerrada, desde que inicias sesión.",
+  "The hubs sync by themselves only while the window is open.": "Los hubs se sincronizan por sí solos solo mientras la ventana está abierta."
 }

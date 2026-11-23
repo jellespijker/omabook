@@ -124,6 +124,7 @@ QList<Manual::Panel> Manual::libraryPanels() {
           {"S", tr("Sync the library with the selected hub")},
           {"P", tr("See what a sync with the selected hub would do, changing nothing")},
           {"A", tr("Pair this computer's library with the hub's, where a sync was refused for it (asks first)")},
+          {"O", tr("Switch automatic sync with the selected hub on or off")},
           {"D  Delete", tr("Unlink the selected hub, or forget the selected computer (asks first)")},
           {"Escape", tr("Back a step, then close")}}},
         {"edit", tr("A book's details, by hand"),

@@ -10,7 +10,9 @@ import QtQuick.Layouts
 // seeing first what a sync would do; and, where a sync was refused for the
 // hub's library not being paired with this computer's (#214), pairing them
 // after asking (#217). All of it through the hub's session, as
-// `omabook hub` asks it. The keys are the panel's "hubs" (panelkeys.cpp).
+// `omabook hub` asks it. Automatic sync is switched on per hub (#191), and
+// allowed with the window closed too. The keys are the panel's "hubs"
+// (panelkeys.cpp).
 AppPopup {
     id: dialog
     objectName: "hubs"
@@ -111,6 +113,8 @@ AppPopup {
             else if ((event.key === Qt.Key_S || event.key === Qt.Key_P) && plain && dialog.idle && dialog.picked
                      && dialog.picked.state === "reachable")
                 hubsDesk.syncNow(dialog.picked.host, event.key === Qt.Key_P)
+            else if (event.key === Qt.Key_O && plain && dialog.picked && hubsDesk.automatic && dialog.picked.state !== "unlinked")
+                hubsDesk.setAutomatic(dialog.picked.host, dialog.picked.auto !== true)
             else if ((event.key === Qt.Key_Delete || (event.key === Qt.Key_D && plain)) && dialog.picked && dialog.idle)
                 dialog.unlinking = dialog.picked.host
             else taken = false
@@ -146,6 +150,8 @@ AppPopup {
                 : hubsDesk.doing === "sync" ? qsTr("Syncing with %1…").arg(hubsDesk.doingHost)
                 : hubsDesk.doing === "preview" ? qsTr("Seeing what a sync with %1 would do…").arg(hubsDesk.doingHost)
                 : hubsDesk.doing === "cancel" ? qsTr("Stopping the work under way on %1…").arg(hubsDesk.doingHost)
+                : hubsDesk.doing === "auto" ? qsTr("Syncing with %1 by itself…").arg(hubsDesk.doingHost)
+                : hubsDesk.doing === "background" ? qsTr("Asking systemd for the background service…")
                 : qsTr("Asking the hubs…")
         }
         Label {
@@ -234,6 +240,17 @@ AppPopup {
                 onUnlinkSure: dialog.sure()
                 onCancelWanted: hubsDesk.cancelWork(modelData.host)
             }
+        }
+
+        // With the window closed too: the background service, once any hub syncs by itself.
+        CheckBox {
+            objectName: "hubsBackground"
+            Layout.fillWidth: true
+            visible: dialog.page === "list" && hubsDesk.automatic && hubsDesk.hubs.some(hub => hub.auto === true)
+            enabled: dialog.idle
+            text: qsTr("Also while the window is closed, from login on")
+            checked: hubsDesk.background
+            onToggled: hubsDesk.setBackground(checked)
         }
 
         HubComputersPage {

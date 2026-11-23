@@ -307,7 +307,8 @@ int runHubCli(const QStringList &arguments) {
         "<computer> takes another of them off. On the hub, computers lists them and forget <computer> takes one's key away; "
         "cancel [<host>] stops the hub's background work under way (status says what it is doing), keeping nothing of it; "
         "sync [<host>] syncs this library with the hub, as omabook sync <host> does (--dry-run first, to see what it would "
-        "do; --pair, once, for a library the hub's isn't paired with yet); session is what a computer's key runs there, one JSON request a "
+        "do; --pair, once, for a library the hub's isn't paired with yet; --auto on|off to sync with it by itself, and --background on|off "
+        "to do so with the window closed too); session is what a computer's key runs there, one JSON request a "
         "line in and one answer a line out, and allow "
         "is what add runs there."_s);
     parser.addHelpOption();

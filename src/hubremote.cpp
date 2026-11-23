@@ -116,7 +116,13 @@ void HubRemote::dropFolder(const QString &folder) const {
 }
 
 SyncSummary HubRemote::sync(Library &library, const QString &target, const Ask &ask, const Progress &progress, const SyncOptions &options) {
-    HubRemote hub(target, ask);
+    // A session that ended before the sync did is a hub gone out of reach, not one that refused.
+    bool ended = false;
+    HubRemote hub(target, [&ask, &ended](const QByteArray &line) {
+        QByteArray answer = ask(line);
+        ended = ended || answer.isEmpty();
+        return answer;
+    });
     if (const auto begun = hub.begin(library, options.dryRun, options.pair); !begun) {
         SyncSummary refused;
         refused.dryRun = options.dryRun;
@@ -125,10 +131,12 @@ SyncSummary HubRemote::sync(Library &library, const QString &target, const Ask &
             refused.unpairedThere = begun.error().arguments().value(0);
             refused.unpairedHere = QFileInfo(library.root()).fileName();
         }
+        refused.unreached = ended;
         return refused;
     }
     SyncSummary summary = syncLibrary(library, hub, progress, options);
     hub.end();
+    summary.unreached = ended && !summary.error.isEmpty();
     return summary;
 }
 
@@ -143,6 +151,7 @@ SyncSummary HubRemote::syncWith(Library &library, const QString &target, const P
         SyncSummary unreached;
         unreached.dryRun = options.dryRun;
         unreached.error = session.error().text();
+        unreached.unreached = session.error().code() != Failure::Code::HubNotLinked;
         return unreached;
     }
     return sync(library, target, [&session](const QByteArray &line) { return (*session)->ask(line); }, progress, options);

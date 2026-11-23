@@ -79,6 +79,7 @@ modules = [
   "aitopic", "hubtopic",
   "restic", "snapshotretention", "snapshots", "snapshotrestore", "snapshotdestinations",
   "snapshotwarnings", "snapshothealth", "desktopnotice", "momentsnapshot",
+  "syncwait",
 ]
 
 [layers.operations]
@@ -93,6 +94,7 @@ modules = [
   "hubsession", "hublinks",
   "hubremote", "hubsync", "hubsyncsteps", "booksetting",
   "hubwork",
+  "hubautosync", "hubautorun",
 ]
 
 # The two front ends are peers: neither includes the other. What both need
@@ -100,7 +102,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands", "snapshotrestorecommands", "destinationcommands", "snapshothealthcommands", "mcpbulk", "tidytools"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands", "snapshotrestorecommands", "destinationcommands", "snapshothealthcommands", "mcpbulk", "tidytools", "hubautocommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

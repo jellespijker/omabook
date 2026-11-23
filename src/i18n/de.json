@@ -2933,5 +2933,20 @@
   "The hub at %1 has no work under way.": "Der Hub unter %1 hat keine laufende Arbeit.",
   "The work under way on the hub at %1 is stopped; nothing of it is kept.": "Die laufende Arbeit auf dem Hub unter %1 ist angehalten; nichts davon wird behalten.",
   "The hub can't make the folder %1 to work in.": "Der Hub kann den Ordner %1 zum Arbeiten nicht anlegen.",
-  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "Der Graph von %1 wurde nicht bis zum Ende erstellt, daher wurde nichts davon behalten."
+  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "Der Graph von %1 wurde nicht bis zum Ende erstellt, daher wurde nichts davon behalten.",
+  "%1\nIt syncs by itself again once a sync by hand goes through, or automatic sync is switched off and on in the Hubs panel.": "%1\nEs gleicht wieder von selbst ab, sobald ein Abgleich von Hand durchgeht oder der automatische Abgleich in den Hubs aus- und wieder eingeschaltet wird.",
+  "Also while the window is closed, from login on": "Auch bei geschlossenem Fenster, ab der Anmeldung",
+  "Asking systemd for the background service…": "systemd wird nach dem Hintergrunddienst gefragt…",
+  "Automatic sync has stopped, as the hub or the sync guard refused it: %1\nIt starts again once a sync by hand goes through, or when switched off and on.": "Der automatische Abgleich ist angehalten, weil der Hub oder der Abgleichschutz ihn abgelehnt hat: %1\nEr beginnt wieder, sobald ein Abgleich von Hand durchgeht oder er aus- und wieder eingeschaltet wird.",
+  "It syncs by itself a little after a change, and every quarter of an hour.": "Es gleicht von selbst ab, kurz nach einer Änderung und jede Viertelstunde.",
+  "It syncs by itself a little after a change, and every quarter of an hour; last %1.": "Es gleicht von selbst ab, kurz nach einer Änderung und jede Viertelstunde; zuletzt %1.",
+  "It syncs by itself once the hub is back in reach.": "Es gleicht von selbst ab, sobald der Hub wieder erreichbar ist.",
+  "It waits to sync by itself until the connection isn't metered.": "Es wartet mit dem Abgleich, bis die Verbindung nicht mehr getaktet ist.",
+  "It waits to sync by itself until this computer is plugged in.": "Es wartet mit dem Abgleich, bis dieser Computer am Strom hängt.",
+  "Omabook stopped syncing with %1 by itself": "Omabook gleicht nicht mehr von selbst mit %1 ab",
+  "Switch automatic sync with the selected hub on or off": "Den automatischen Abgleich mit dem gewählten Hub ein- oder ausschalten",
+  "Sync by itself": "Von selbst abgleichen",
+  "Syncing with %1 by itself…": "Gleicht von selbst mit %1 ab…",
+  "The hubs switched on sync by themselves with the window closed too, from login on.": "Die eingeschalteten Hubs gleichen ab der Anmeldung auch bei geschlossenem Fenster von selbst ab.",
+  "The hubs sync by themselves only while the window is open.": "Die Hubs gleichen nur von selbst ab, solange das Fenster offen ist."
 }

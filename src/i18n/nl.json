@@ -2933,5 +2933,20 @@
   "The hub at %1 has no work under way.": "De hub op %1 heeft geen lopend werk.",
   "The work under way on the hub at %1 is stopped; nothing of it is kept.": "Het lopende werk op de hub op %1 is gestopt; er wordt niets van bewaard.",
   "The hub can't make the folder %1 to work in.": "De hub kan de map %1 om in te werken niet maken.",
-  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "De graaf van %1 is niet tot het einde gebouwd, dus er is niets van bewaard."
+  "The graph of %1 wasn't built to its end, so nothing of it was kept.": "De graaf van %1 is niet tot het einde gebouwd, dus er is niets van bewaard.",
+  "%1\nIt syncs by itself again once a sync by hand goes through, or automatic sync is switched off and on in the Hubs panel.": "%1\nHet synchroniseert weer vanzelf zodra een synchronisatie met de hand lukt, of als automatisch synchroniseren in het paneel Hubs uit en weer aan wordt gezet.",
+  "Also while the window is closed, from login on": "Ook als het venster dicht is, vanaf het inloggen",
+  "Asking systemd for the background service…": "systemd wordt om de achtergronddienst gevraagd…",
+  "Automatic sync has stopped, as the hub or the sync guard refused it: %1\nIt starts again once a sync by hand goes through, or when switched off and on.": "Automatisch synchroniseren is gestopt, omdat de hub of de synchronisatiebewaking het weigerde: %1\nHet begint weer zodra een synchronisatie met de hand lukt, of als het uit en weer aan wordt gezet.",
+  "It syncs by itself a little after a change, and every quarter of an hour.": "Het synchroniseert vanzelf, kort na een wijziging en elk kwartier.",
+  "It syncs by itself a little after a change, and every quarter of an hour; last %1.": "Het synchroniseert vanzelf, kort na een wijziging en elk kwartier; laatst %1.",
+  "It syncs by itself once the hub is back in reach.": "Het synchroniseert vanzelf zodra de hub weer bereikbaar is.",
+  "It waits to sync by itself until the connection isn't metered.": "Het wacht met synchroniseren tot de verbinding niet meer met een datalimiet is.",
+  "It waits to sync by itself until this computer is plugged in.": "Het wacht met synchroniseren tot deze computer aan de stroom hangt.",
+  "Omabook stopped syncing with %1 by itself": "Omabook synchroniseert niet meer vanzelf met %1",
+  "Switch automatic sync with the selected hub on or off": "Automatisch synchroniseren met de gekozen hub aan- of uitzetten",
+  "Sync by itself": "Vanzelf synchroniseren",
+  "Syncing with %1 by itself…": "Synchroniseert vanzelf met %1…",
+  "The hubs switched on sync by themselves with the window closed too, from login on.": "De hubs die aanstaan synchroniseren vanzelf, ook als het venster dicht is, vanaf het inloggen.",
+  "The hubs sync by themselves only while the window is open.": "De hubs synchroniseren alleen vanzelf zolang het venster open is."
 }
