@@ -368,6 +368,12 @@ constexpr auto wordings = std::to_array<Wording>({
      tr("The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.")},
     {Failure::Code::HubSyncHubNewer,
      tr("The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.")},
+    {Failure::Code::HubSyncUnguarded,
+     tr("Omabook on this computer is older than the sync guard, which checks a sync before it writes anything: update Omabook "
+        "on this computer, then sync again.")},
+    {Failure::Code::HubSyncHubNoPlan,
+     tr("Omabook on the hub at %1 is older than the sync guard, and says nothing of what a sync would change there, so nothing "
+        "was changed, here or on the hub: update Omabook on the hub, then sync again.")},
     {Failure::Code::HubSyncNotBegun, tr("No sync of this computer's is under way on the hub: begin it again.")},
     {Failure::Code::HubSyncNoComputer, tr("Only a computer linked to the hub syncs with it.")},
     {Failure::Code::HubSyncRefused, tr("In a sync, the hub takes no %1.")},

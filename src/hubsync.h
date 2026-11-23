@@ -33,7 +33,10 @@ class HubRequests;
 // and their covers, and the plugins' files the hub keeps for it (#212), when
 // its device is one of the hub library's own computers. Every step is done through the keeper (ADR 0013), and a
 // sync takes its moment snapshot (#181) once, just before its first write. A library of another format than the computer's doesn't sync:
-// both sides say which Omabook to update. A dry run writes nothing at all.
+// both sides say which Omabook to update; nor does a computer whose Omabook
+// is from before the sync guard (#187): one that would write before it asked
+// `manifest --state`, as the guard does first, checks no plan, and is to be
+// updated (#211). A dry run writes nothing at all.
 class HubSync {
 public:
     // How long a sync may stand without a step before the hub lets it go.

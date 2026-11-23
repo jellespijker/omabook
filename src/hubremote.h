@@ -41,6 +41,7 @@ public:
     // Lets the hub know it is over: what was sent for it goes there.
     void end();
 
+    [[nodiscard]] bool hub() const override { return true; }
     Result omabook(const QStringList &arguments, const QString &inputFile = {}) const override;
     Result run(const QString &command, const QString &inputFile = {}, const QString &outputFile = {}) const override;
     bool fetch(const QString &remoteFile, const QString &localFile) const override;

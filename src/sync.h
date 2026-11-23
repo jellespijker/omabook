@@ -135,6 +135,10 @@ struct SyncSummary {
     } plans;
     QStringList breaches;
     QStringList unannounced;
+    // Whether the other side made no plan, being an Omabook from before the
+    // guard: what the sync does there was not checked (#211). A hub that makes
+    // none is refused.
+    bool uncheckedThere = false;
 
     // The counts as `omabook sync --json` and the MCP server give them, with
     // the titles of a dry run, and of the books whose details are undecided.

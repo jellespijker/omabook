@@ -40,10 +40,14 @@ public:
     // keys no other book here has, and its title.
     using BookNames = BookPairing::Names;
 
-    // A book whose reading place the log says otherwise than its row.
+    // A book whose reading place the log says otherwise than its row: the
+    // place, and where in the log's order (its stamps) the one it takes and
+    // the one the log here alone has are (#211); 0 for none.
     struct PlaceChange {
         qint64 book = 0;
         Progress place;
+        qint64 stamp = 0;
+        qint64 was = 0;
     };
 
     [[nodiscard]] static bool travels(const SpaceOperation &op);
@@ -106,6 +110,7 @@ public:
     static int link(const Library &library, const QList<BookNames> &theirs, const QSet<QString> &theirGids = {});
 
     // What taking `incoming` (with the log already here) would make of the
-    // reading places of the books here: the books whose place would change.
+    // reading places of the books here: the books whose place would change,
+    // and, with `incoming`, the stamp of each one's place in the log here alone.
     [[nodiscard]] static QList<PlaceChange> placeChanges(const Library &library, std::span<const SpaceOperation> incoming = {});
 };

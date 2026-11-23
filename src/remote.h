@@ -25,6 +25,8 @@ public:
     Remote &operator=(Remote &&) noexcept = default;
 
     QString host() const { return m_host; }
+    // Whether it is a hub (HubRemote, #188): a sync with one is refused unless the sync guard checks its side (#211).
+    [[nodiscard]] virtual bool hub() const { return false; }
     // As it was given: "computer" or "computer:library folder".
     [[nodiscard]] QString target() const { return m_folder.isEmpty() ? m_host : m_host + ':' + m_folder; }
 

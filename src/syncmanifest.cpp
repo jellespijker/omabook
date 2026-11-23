@@ -231,7 +231,8 @@ QJsonObject SyncSummary::toJson() const {
                        {"dry_run", dryRun},
                        {"problems", list(problems)},
                        {"breaches", list(breaches)},
-                       {"unannounced", list(unannounced)}};
+                       {"unannounced", list(unannounced)},
+                       {"unchecked_there", uncheckedThere}};
     // The renames and the books kept apart are named whatever the run (#158).
     QJsonObject named{{"details_undecided", list(titles.detailsUndecided)},
                       {"renamed_here", list(titles.renamedHere)},

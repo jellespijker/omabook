@@ -425,7 +425,9 @@ QList<qint64> SpaceReplay::takePlaces(Library &library, std::span<const SpaceOpe
     const Library::Batch batch(library);
     storeOperations(library, ops);
     QList<qint64> changed;
-    for (const auto &[book, read] : Replication::placeChanges(library)) {
+    for (const Replication::PlaceChange &change : Replication::placeChanges(library)) {
+        const qint64 book = change.book;
+        const Progress &read = change.place;
         ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
                         {book, read.place.section, read.place.fraction, read.percent, read.updated});
         // The place is the log's already, so it is no write for the log to take in.

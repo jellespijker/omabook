@@ -22,6 +22,7 @@
 #include "hlc.h"
 #include "library.h"
 #include "remote.h"
+#include "spaces.h"
 #include "sync.h"
 #include "syncguard.h"
 #include "syncplan.h"
@@ -320,6 +321,96 @@ private slots:
         QCOMPARE(through.detailsTaken, 1);
         QVERIFY2(through.unannounced.isEmpty(), qPrintable(through.unannounced.join('\n')));
         QCOMPARE(a.book(mine)->meta.publisher, QString());
+    }
+
+    // #211: a place read later on a computer whose clock is an hour behind the
+    // other's has an earlier time, but comes later in the change log: it moves
+    // forward, whichever computer asks, and is no breach.
+    void aPlaceReadLaterWhereTheClockIsBehindMovesForward_data() {
+        QTest::addColumn<bool>("askedByTheOneBehind");
+        QTest::newRow("asked by the computer whose clock is right") << false;
+        QTest::newRow("asked by the one whose clock is behind") << true;
+    }
+
+    void aPlaceReadLaterWhereTheClockIsBehindMovesForward() {
+        QFETCH(bool, askedByTheOneBehind);
+        QTemporaryDir dir;
+        const QString rootA = dir.filePath("A");
+        const QString rootB = dir.filePath("B");
+        const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
+        QVERIFY(Fixtures::epub(dir.filePath("kindred.epub"), "Kindred"));
+        Library a(rootA);
+        Library b(rootB);
+        QVERIFY(a.open() && b.open());
+        const qint64 mine = a.add(dir.filePath("kindred.epub")).id;
+        const qint64 theirs = b.add(dir.filePath("kindred.epub")).id;
+        QVERIFY(mine > 0 && theirs > 0);
+        constexpr qint64 behind = 3600;
+        Spaces::setClockOffset(b, -behind);
+        a.setProgress(mine, {.place = {.section = 2, .fraction = 0}, .percent = 20, .updated = 0});
+        const Remote toB("laptop:" + rootB, {ssh});
+        const Remote toA("laptop:" + rootA, {ssh});
+        const SyncSummary first = syncLibrary(a, toB);
+        QVERIFY2(first.error.isEmpty() && first.breaches.isEmpty(), qPrintable(first.error + first.breaches.join('\n')));
+        QCOMPARE(b.progress(theirs).place.section, 2);
+
+        // Later, on B, read on to section 5: at B's time, an hour behind A's.
+        b.setProgress(theirs,
+                      {.place = {.section = 5, .fraction = 0}, .percent = 50, .updated = QDateTime::currentSecsSinceEpoch() - behind});
+        const SyncSummary dry = askedByTheOneBehind ? syncLibrary(b, toA, {}, SyncOptions{.dryRun = true})
+                                                    : syncLibrary(a, toB, {}, SyncOptions{.dryRun = true});
+        QVERIFY2(dry.error.isEmpty() && dry.breaches.isEmpty(), qPrintable(dry.error + dry.breaches.join('\n')));
+        const SyncSummary later = askedByTheOneBehind ? syncLibrary(b, toA) : syncLibrary(a, toB);
+        QVERIFY2(later.error.isEmpty() && later.breaches.isEmpty() && later.unannounced.isEmpty(),
+                 qPrintable(later.error + later.breaches.join('\n') + later.unannounced.join('\n')));
+        QCOMPARE(later.placesTaken + later.placesSent, 1);
+        QCOMPARE(a.progress(mine).place.section, 5);
+        QCOMPARE(b.progress(theirs).place.section, 5);
+        // And a place the log has later still never goes back to it.
+        SyncPlan plan;
+        plan.said = true;
+        plan.places << SyncPlan::Place{.title = "Kindred", .before = Hlc::pack(2000, 3), .after = Hlc::pack(2000, 1)};
+        QVERIFY(breaks(checked(plan), Rule::PlaceBack, "Kindred"));
+    }
+
+    // #211: an Omabook from before the guard (#187) sends no plan, so its side
+    // can't be checked: a sync with such a computer goes through, and says so,
+    // in its summary and in what --json prints; a computer that sends one isn't
+    // said to be so.
+    void anOmabookThatSendsNoPlanIsSaidToGoUnchecked() {
+        QTemporaryDir dir;
+        const QString rootA = dir.filePath("A");
+        const QString rootB = dir.filePath("B");
+        const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
+        QVERIFY(Fixtures::epub(dir.filePath("kindred.epub"), "Kindred"));
+        Library a(rootA);
+        Library b(rootB);
+        QVERIFY(a.open() && b.open());
+        QVERIFY(a.add(dir.filePath("kindred.epub")).id > 0);
+        const Remote toB("laptop:" + rootB, {ssh});
+        const SyncSummary current = syncLibrary(a, toB, {}, SyncOptions{.dryRun = true});
+        QVERIFY2(current.error.isEmpty(), qPrintable(current.error));
+        QVERIFY(!current.uncheckedThere);
+        QCOMPARE(current.toJson().value("unchecked_there").toBool(true), false);
+
+        // An older Omabook there answers as this one does, but with no plan, and can't say its books' state.
+        const SyncGuard::Sides older{.host = "laptop",
+                                     .hub = false,
+                                     .run =
+                                         [&a, &toB](SyncOptions options) {
+                                             options.planned = true;
+                                             SyncSummary summary = syncLibrary(a, toB, {}, options);
+                                             summary.plans.there = SyncPlan();
+                                             return summary;
+                                         },
+                                     .theirStates = [] { return std::optional<SyncPlan::States>(); }};
+        const SyncSummary dry = SyncGuard::guarded(a, older, SyncOptions{.dryRun = true});
+        QVERIFY2(dry.error.isEmpty() && dry.uncheckedThere, qPrintable(dry.error));
+        const SyncSummary synced = SyncGuard::guarded(a, older, {});
+        QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty(), qPrintable(synced.error + synced.problems.join('\n')));
+        QVERIFY(synced.uncheckedThere);
+        QCOMPARE(synced.sent, 1);
+        QCOMPARE(synced.toJson().value("unchecked_there").toBool(), true);
     }
 };
 

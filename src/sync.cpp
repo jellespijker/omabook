@@ -194,6 +194,7 @@ struct Named {
 // this sync once planned, and the other side's books as it says them.
 [[nodiscard]] SyncGuard::Sides guardedSides(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress) {
     return {.host = remote.host(),
+            .hub = remote.hub(),
             .run =
                 [&library, &remote, progress](SyncOptions options) {
                     options.planned = true;

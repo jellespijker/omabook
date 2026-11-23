@@ -3,9 +3,12 @@
 #include <QJsonArray>
 #include <QSet>
 #include <algorithm>
+#include <compare>
 #include <utility>
 
 #include "bookidentity.h"
+#include "failure.h"
+#include "hlc.h"
 #include "log.h"
 
 using namespace Qt::StringLiterals;
@@ -169,6 +172,46 @@ void add(Found &found, const QList<Breach> &breaches, const QString &where, cons
         .arg(host, refusing.join(u"\n  "_s));
 }
 
+// The breaches of both sides' plans, each with where it is (`where`, of there), of each side's books
+// before the sync (`there` is none when the Omabook there can't say them).
+[[nodiscard]] Found foundIn(const SyncSummary &planned, const SyncPlan::States &here, const std::optional<SyncPlan::States> &there,
+                            const SyncOptions &options, const QString &where) {
+    const bool consent = options.acceptRenames || options.details != SyncOptions::Details::Undecided;
+    const QStringList removed = planned.titles.identifiersRemoved;
+    Found found;
+    if (planned.plans.here.said)
+        add(found,
+            SyncGuard::check(
+                planned.plans.here,
+                {.mine = here, .other = there.value_or(SyncPlan::States()), .consent = consent, .identifiersRemoved = removed}),
+            u"here"_s, options.accept);
+    if (planned.plans.there.said && there)
+        add(found,
+            SyncGuard::check(planned.plans.there, {.mine = *there, .other = here, .consent = consent, .identifiersRemoved = removed}),
+            where, options.accept);
+    return found;
+}
+
+// Whether the other side made no plan, an Omabook there from before the guard: its side goes unchecked,
+// and is said to; a hub's is refused (#211).
+[[nodiscard]] bool unchecked(const SyncPlan &there, const SyncGuard::Sides &sides) {
+    if (!there.said)
+        qCWarning(lcSync).noquote() << sides.host << "made no plan for the sync guard, being an older Omabook:"
+                                    << (sides.hub ? "a hub, refused" : "its side goes unchecked");
+    return !there.said;
+}
+
+// A sync refused before anything was written (a dry run's, with `dryRun`): what its plan found, and why.
+[[nodiscard]] SyncSummary refused(SyncSummary planned, const QString &why, bool dryRun) {
+    SyncSummary summary;
+    summary.dryRun = dryRun;
+    summary.breaches = std::move(planned.breaches);
+    summary.plans = std::move(planned.plans);
+    summary.uncheckedThere = planned.uncheckedThere;
+    summary.error = why;
+    return summary;
+}
+
 } // namespace
 
 QList<Breach> SyncGuard::check(const SyncPlan &plan, const Given &given) {
@@ -180,7 +223,7 @@ QList<Breach> SyncGuard::check(const SyncPlan &plan, const Given &given) {
     ownRemoved(given, breaches);
     lost(plan, given.other, breaches);
     for (const SyncPlan::Place &place : plan.places)
-        if (place.after < place.before)
+        if (std::is_lt(Hlc::compare(place.after, place.before)))
             breaches << Breach{.title = place.title, .rule = Rule::PlaceBack, .detail = {}};
     for (const QString &title : plan.annotationsMoved)
         breaches << Breach{.title = title, .rule = Rule::AnnotationMoved, .detail = {}};
@@ -243,33 +286,21 @@ SyncSummary SyncGuard::guarded(const Library &library, const Sides &sides, const
     SyncSummary planned = sides.run(dry);
     if (!planned.error.isEmpty())
         return planned;
-    const bool consent = options.acceptRenames || options.details != SyncOptions::Details::Undecided;
     const QStringList removed = planned.titles.identifiersRemoved;
-    const QString there = u"on "_s + sides.host;
-    Found found;
-    if (planned.plans.here.said)
-        add(found,
-            check(
-                planned.plans.here,
-                {.mine = hereBefore, .other = thereBefore.value_or(SyncPlan::States()), .consent = consent, .identifiersRemoved = removed}),
-            u"here"_s, options.accept);
-    if (planned.plans.there.said && thereBefore)
-        add(found,
-            check(planned.plans.there, {.mine = *thereBefore, .other = hereBefore, .consent = consent, .identifiersRemoved = removed}),
-            there, options.accept);
+    const Found found = foundIn(planned, hereBefore, thereBefore, options, u"on "_s + sides.host);
     planned.breaches = found.said;
+    planned.uncheckedThere = unchecked(planned.plans.there, sides);
+    if (planned.uncheckedThere && sides.hub)
+        return refused(std::move(planned), Failure(Failure::Code::HubSyncHubNoPlan, {sides.host}).text(), options.dryRun);
     if (options.dryRun)
         return planned;
     if (!found.refusing.isEmpty()) {
         qCWarning(lcSync).noquote() << "a sync with" << sides.host << "refused:" << found.refusing.size() << "breaches of the guard";
-        SyncSummary refused;
-        refused.breaches = found.said;
-        refused.plans = std::move(planned.plans);
-        refused.error = refusal(sides.host, found.refusing);
-        return refused;
+        return refused(std::move(planned), refusal(sides.host, found.refusing), false);
     }
     SyncSummary done = sides.run(options);
     done.breaches = found.said;
+    done.uncheckedThere = planned.uncheckedThere;
     if (!done.error.isEmpty())
         return done;
     for (const QString &line : differences(hereBefore, SyncPlan::states(library),

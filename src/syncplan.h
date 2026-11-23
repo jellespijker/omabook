@@ -28,7 +28,9 @@ struct SyncPlan {
         State after;
         bool weak = false; // paired on less than its global id (BookLinks::weaklyPaired, #158)
     };
-    // When the place a book is read to was read there, and when the one it would take was.
+    // Where the place a book is read to there, and the one it would take, are
+    // in the change log's order: their stamps (Hlc), which order them as they
+    // were read whatever the computers' clocks say (#211).
     struct Place {
         QString title;
         qint64 before = 0;

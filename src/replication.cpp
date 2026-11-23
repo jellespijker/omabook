@@ -127,6 +127,21 @@ constexpr auto namesJoined =
             {"cover", std::max(at("has_cover"_L1), at("cover_hash"_L1))}};
 }
 
+// Where in a log's order each book's reading place is: the stamp of the operation that set it.
+class PlaceStamps {
+public:
+    explicit PlaceStamps(const QList<SpaceOperation> &ops) : m_state(SpaceReducer::reduce(ops)), m_canonical(SpaceReducer::sameAs(ops)) {}
+
+    [[nodiscard]] qint64 of(const QString &gid) const {
+        const auto book = m_state.books.constFind(m_canonical.value(gid, gid));
+        return book == m_state.books.cend() ? 0 : std::max(qint64{0}, book->fields.value(u"progress"_s).hlc);
+    }
+
+private:
+    ReducedState m_state;
+    QHash<QString, QString> m_canonical;
+};
+
 [[nodiscard]] Progress placeOf(const ReducedBook &book) {
     const QJsonObject value = QJsonDocument::fromJson(book.fields.value(u"progress"_s).value.toUtf8()).object();
     return {.place = BookPlace::fromJson(value),
@@ -393,6 +408,8 @@ int Replication::link(const Library &library, const QList<BookNames> &theirs, co
 
 QList<Replication::PlaceChange> Replication::placeChanges(const Library &library, std::span<const SpaceOperation> incoming) {
     QList<SpaceOperation> ops = operations(library);
+    // The log here alone, to say where in its order the place each book has here is (#211).
+    const PlaceStamps here(incoming.empty() ? QList<SpaceOperation>() : BookLinks::trusted(ops));
     ops.append(QList<SpaceOperation>(incoming.begin(), incoming.end()));
     ops = BookLinks::trusted(ops);
     const ReducedState state = SpaceReducer::reduce(ops);
@@ -410,7 +427,10 @@ QList<Replication::PlaceChange> Replication::placeChanges(const Library &library
         const auto row =
             std::tuple{query.value(2).toInt(), query.value(3).toDouble(), query.value(4).toDouble(), query.value(5).toLongLong()};
         if (query.value(2).isNull() || row != std::tuple{read.place.section, read.place.fraction, read.percent, read.updated})
-            changes << PlaceChange{.book = query.value(0).toLongLong(), .place = read};
+            changes << PlaceChange{.book = query.value(0).toLongLong(),
+                                   .place = read,
+                                   .stamp = std::max(qint64{0}, book->fields.value(u"progress"_s).hlc),
+                                   .was = here.of(query.value(1).toString())};
     }
     return changes;
 }

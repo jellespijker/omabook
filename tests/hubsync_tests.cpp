@@ -490,6 +490,8 @@ private slots:
             step(*desktop, {{"step", "omabook"}, {"computer", "laptop"}, {"arguments", QJsonArray{u"manifest"_s, u"--log"_s}}});
         QCOMPARE(claimed.value("error").toString(), u"No sync of this computer's is under way on the hub: begin it again."_s);
         QVERIFY(step(*session, {{"step", "omabook"}, {"arguments", QJsonArray{u"manifest"_s, u"--log"_s}}}).value("ok").toBool());
+        // As the sync guard asks first (#187, #211).
+        QVERIFY(step(*session, {{"step", "omabook"}, {"arguments", QJsonArray{u"manifest"_s, u"--state"_s}}}).value("ok").toBool());
         // Only the commands a sync runs there.
         for (const QJsonArray &arguments :
              {QJsonArray{u"remove"_s, u"1"_s}, QJsonArray{u"hub"_s, u"forget"_s, u"desktop"_s}, QJsonArray{u"manifest"_s},
@@ -527,6 +529,74 @@ private slots:
         // Asked by no computer's key (the hub's own `omabook hub session`), there is no sync.
         QCOMPARE(hub.requests.answer({{"request", "sync"}, {"step", "begin"}, {"format", 1}}, hub.keeper).value("error").toString(),
                  u"Only a computer linked to the hub syncs with it."_s);
+    }
+
+    // #211: an Omabook from before the sync guard (#187) checks no plan, so it
+    // never asks the books' state the guard compares first: a hub refuses a
+    // step that would write in such a computer's sync, before writing anything
+    // or taking a snapshot, saying to update it. Asked first, it goes through.
+    void aComputerWhoseOmabookHasNoGuardIsRefused() {
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        QVERIFY(laptop.add(u"Alpha"_s) > 0);
+        QVERIFY(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty());
+        const QStringList held = hub.held();
+        const auto session = hub.session(u"laptop"_s);
+        const QJsonObject begun = asked(*session, {{"request", "sync"}, {"step", "begin"}, {"format", laptop.library.formatVersion()}});
+        QVERIFY2(begun.value("ok").toBool(), qPrintable(begun.value("error").toString()));
+        const auto omabook = [&](const QJsonArray &arguments) {
+            return asked(*session, {{"request", "sync"}, {"visit", begun.value("visit")}, {"step", "omabook"}, {"arguments", arguments}});
+        };
+        const QJsonArray rate{u"set"_s, u"1"_s, u"--rating"_s, u"4"_s};
+        hub.moments.clear();
+        const QJsonObject older = omabook(rate);
+        QVERIFY(!older.value("ok").toBool());
+        QCOMPARE(older.value("error").toString(),
+                 u"Omabook on this computer is older than the sync guard, which checks a sync before it writes anything: "
+                 "update Omabook on this computer, then sync again."_s);
+        // The plugins' files' steps write too (#212): the same.
+        QCOMPARE(omabook({u"sync"_s, u"--plugin-files"_s}).value("error").toString(), older.value("error").toString());
+        QCOMPARE(hub.syncMoments(), 0);
+        QCOMPARE(hub.held(), held);
+        QVERIFY(omabook({u"manifest"_s, u"--state"_s}).value("ok").toBool());
+        const QJsonObject current = omabook(rate);
+        QVERIFY2(current.value("ok").toBool(), qPrintable(current.value("error").toString()));
+        QCOMPARE(hub.syncMoments(), 1);
+    }
+
+    // #211: and a hub that sends no plan (an Omabook there from before #187's
+    // hub sync) is refused by the computer, before either side writes, saying
+    // to update it.
+    void aHubThatSendsNoPlanIsRefused() {
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        QVERIFY(laptop.add(u"Alpha"_s) > 0);
+        const QString hubDatabase = Library::databaseIn(hub.dir.filePath(u"libraries/home"_s));
+        const QString laptopDatabase = Library::databaseIn(laptop.library.root());
+        const auto hubRows = rowsOf(hubDatabase);
+        const auto laptopRows = rowsOf(laptopDatabase);
+        const auto opened = hub.session(u"laptop"_s);
+        // What that hub answers: this one's, with no plan.
+        const auto older = [&opened](const QByteArray &line) {
+            QJsonObject answer = QJsonDocument::fromJson(opened->answer(line)).object();
+            QJsonObject said = answer.value("answer").toObject();
+            if (said.contains("plan")) {
+                said.remove("plan");
+                answer.insert("answer", said);
+            }
+            return compact(answer);
+        };
+        const SyncSummary refused = HubRemote::sync(laptop.library, u"hub"_s, older);
+        QVERIFY2(refused.error.contains(u"update Omabook on the hub"_s), qPrintable(problems(refused)));
+        QVERIFY(refused.uncheckedThere);
+        QCOMPARE(refused.sent, 0);
+        QCOMPARE(rowsOf(hubDatabase), hubRows);
+        QCOMPARE(rowsOf(laptopDatabase), laptopRows);
+        QCOMPARE(hub.syncMoments(), 0);
     }
 };
 

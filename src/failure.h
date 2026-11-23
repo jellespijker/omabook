@@ -209,6 +209,8 @@ public:
         HubSessionEnded,    // {host}: ssh didn't start, or the session ended before it answered
         HubSyncHubOlder,    // {library, its format there, this computer's}: Omabook on the hub is to be updated
         HubSyncHubNewer,    // {library, its format there, this computer's}: Omabook on this computer is to be updated
+        HubSyncUnguarded,   // {}: Omabook on the computer is from before the sync guard (#187, #211)
+        HubSyncHubNoPlan,   // {host}: Omabook on the hub sends no plan for the sync guard (#211)
         HubSyncNotBegun,    // {}: no sync of this computer's is under way on the hub
         HubSyncNoComputer,  // {}: asked by no computer's key
         HubSyncRefused,     // {what was asked}

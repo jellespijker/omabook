@@ -12,6 +12,18 @@
 #include "hubremote.h"
 #include "sync.h"
 
+namespace {
+
+// An Omabook there from before the sync guard makes no plan, so its side went unchecked (#211).
+QStringList uncheckedThere(const SyncSummary &summary) {
+    if (!summary.uncheckedThere || !summary.error.isEmpty())
+        return {};
+    return {Backend::tr("Omabook on the other computer is older than the sync guard, so what the sync did there was not "
+                        "checked: update Omabook there.")};
+}
+
+} // namespace
+
 QStringList Backend::syncLines(const SyncSummary &summary) {
     QStringList lines;
     if (!summary.error.isEmpty())
@@ -40,6 +52,7 @@ QStringList Backend::syncLines(const SyncSummary &summary) {
                              "", summary.detailsUndecided);
     if (lines.isEmpty() && summary.problems.isEmpty())
         lines << tr("Both libraries were already in step.");
+    lines << uncheckedThere(summary);
     lines << summary.problems.mid(0, 3);
     return lines;
 }

@@ -70,11 +70,13 @@ struct Announced {
 // A breach as a person reads it, of the side `where` ("here", "on laptop").
 [[nodiscard]] QString worded(const Breach &breach, const QString &where);
 
-// One sync's two sides, for the guard to plan, check and run it: `run` syncs
-// as the options say (a dry run or not), and `theirStates` asks the other side
-// for its books (none from an Omabook that can't say them).
+// One sync's two sides, for the guard to plan, check and run it: `hub`, whether
+// the other side is a hub (HubRemote); `run` syncs as the options say (a dry
+// run or not), and `theirStates` asks the other side for its books (none from
+// an Omabook that can't say them).
 struct Sides {
     QString host;
+    bool hub = false;
     std::function<SyncSummary(const SyncOptions &)> run;
     std::function<std::optional<SyncPlan::States>()> theirStates;
 };
@@ -83,6 +85,9 @@ struct Sides {
 // breaks a rule of a book not in `options.accept` or is a dry run, runs it and
 // compares both sides with what was announced: the summary says the breaches
 // (`breaches`, and `error` when it was refused) and what differs (`unannounced`).
+// An Omabook there from before the guard makes no plan: its side goes unchecked,
+// and the summary says so (`uncheckedThere`); a hub that makes none is refused,
+// saying to update it (#211).
 [[nodiscard]] SyncSummary guarded(const Library &library, const Sides &sides, const SyncOptions &options);
 
 } // namespace SyncGuard

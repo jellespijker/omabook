@@ -33,16 +33,16 @@ namespace {
 }
 
 // The books whose place taking `incoming` changes, or with `dryRun` would,
-// each place a dry run would move in `plan`, with when it was read and when here's was (#187).
+// each place a dry run would move in `plan` (#187), with where in the log's
+// order it and here's are: never by their wall-clock times, which a computer
+// whose clock is behind gives a place read later (#211).
 [[nodiscard]] QList<qint64> takePlaces(Library &library, const QList<SpaceOperation> &incoming, bool dryRun, SyncPlan &plan) {
     if (!dryRun)
         return SpaceReplay::takePlaces(library, incoming);
     QList<qint64> books;
     for (const Replication::PlaceChange &change : Replication::placeChanges(library, incoming)) {
         books << change.book;
-        plan.places << SyncPlan::Place{.title = titlesOf(library, {change.book}).value(0),
-                                       .before = library.progress(change.book).updated,
-                                       .after = change.place.updated};
+        plan.places << SyncPlan::Place{.title = titlesOf(library, {change.book}).value(0), .before = change.was, .after = change.stamp};
     }
     return books;
 }

@@ -30,6 +30,7 @@ struct HubSync::Visit {
     QTemporaryDir scratch;
     int folders = 0;
     bool snapshotted = false; // its moment snapshot taken, before its first write
+    bool planned = false;     // asked for the books' state the sync guard compares (#187), as before its first write
     // The library's books' files and their covers', once asked: files it may fetch.
     std::optional<QSet<QString>> books;
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
@@ -234,7 +235,17 @@ std::expected<QJsonObject, Failure> HubSync::Visit::omabook(const QJsonObject &a
     const HubSyncSteps::Visit visit{.resolve = [this](const QString &named) { return resolve(named); }, .dryRun = dryRun, .device = device};
     // Its first step that writes takes the moment snapshot first, in the same lock (#181): none
     // for a sync the guard refuses (#187), or a dry run, which write nothing.
-    const bool first = !dryRun && !snapshotted && HubSyncSteps::writes(arguments, visit.resolve);
+    // The plugins' files' steps write too (#212), and are checked the same.
+    const bool writes = !dryRun && HubSyncSteps::writes(arguments, visit.resolve);
+    // The sync guard asks the books' state before anything is written: a computer that writes without
+    // it checks no plan, an Omabook from before the guard, and is to be updated first (#211).
+    planned = planned || arguments == QStringList{u"manifest"_s, u"--state"_s};
+    if (writes && !planned) {
+        qCWarning(lcHub).noquote() << computer << "writes with no sync guard, an older Omabook: its sync of" << library
+                                   << "is refused until it is updated.";
+        return std::unexpected(Failure(Failure::Code::HubSyncUnguarded));
+    }
+    const bool first = writes && !snapshotted;
     const auto answered = keeper.write(
         library, first ? HubKeeper::Moment::Sync : HubKeeper::Moment::None, [&](Library &kept) -> std::expected<QJsonObject, Failure> {
             const auto done = HubSyncSteps::run(kept, arguments, visit);

@@ -209,6 +209,11 @@ int printSyncResult(const SyncSummary &summary, const QString &computer, bool js
                                     : "Accepted, though they break what a sync must never do",
                      summary.breaches);
         printSection("Not as the sync announced", summary.unannounced);
+        // An Omabook there from before the sync guard makes no plan (#211).
+        if (summary.uncheckedThere)
+            printLine(stdout, QString("Omabook on %1 is older than the sync guard and says nothing of what a sync changes there, so "
+                                      "what this sync %2 there was not checked. Update Omabook on %1.")
+                                  .arg(host, summary.dryRun ? QString("would do") : QString("did")));
     }
     for (const QString &problem : summary.problems)
         printLine(stderr, problem);

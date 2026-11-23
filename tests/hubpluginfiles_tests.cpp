@@ -26,6 +26,7 @@
 #include <memory>
 
 #include "crypto.h"
+#include "failure.h"
 #include "fixtures.h"
 #include "hubcomputers.h"
 #include "hubkeeper.h"
@@ -399,9 +400,12 @@ private slots:
                      {{"step", "put"}, {"file", folder + u"/given.json"_s}, {"at", 0}, {"data", QString::fromLatin1(request.toBase64())}})
                     .value("ok")
                     .toBool());
+        // Asked as the sync guard asks first (#211), so what refuses it is whose library it is.
+        QVERIFY(step(stranger, {{"step", "omabook"}, {"arguments", QJsonArray{u"manifest"_s, u"--state"_s}}}).value("ok").toBool());
         const QJsonObject took = step(
             stranger, {{"step", "omabook"}, {"arguments", QJsonArray{u"sync"_s, u"--take-plugin-files"_s, folder + u"/given.json"_s}}});
-        QVERIFY2(!took.value("ok").toBool(), qPrintable(QString::fromUtf8(compact(took))));
+        QVERIFY2(!took.value("ok").toBool() && took.value("error").toString() != Failure(Failure::Code::HubSyncUnguarded).text(),
+                 qPrintable(QString::fromUtf8(compact(took))));
         // The laptop's, paired at its sync, is.
         const QJsonValue own = visit(Spaces::deviceId(laptop.library));
         QVERIFY(step(own, {{"step", "fetch"}, {"file", kept}, {"at", 0}}).value("ok").toBool());
