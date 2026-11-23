@@ -229,8 +229,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::SnapshotBookNotFound, tr("The snapshot holds no book %1.")},
     {Failure::Code::SnapshotBookAmbiguous,
      tr("More than one book is called %1: name it by its global id (omabook snapshot diff --json shows them).")},
-    {Failure::Code::RestoreBookGone,
-     tr("%1 is no longer in this library, so nothing of it can be put back into it: restore the whole library into a new folder to have it back.")},
+    {Failure::Code::RestoreBookGone, tr("%1 is no longer in this library, so nothing of it can be put back into it: restore the whole "
+                                        "library into a new folder to have it back.")},
     {Failure::Code::RestoreFolderTaken,
      tr("A library is restored only into a new or empty folder, never over the library or inside it: %1 isn't one.")},
     {Failure::Code::RestoreNothingAsked, tr("Say what to put back of the book: its details, its annotations, or both.")},

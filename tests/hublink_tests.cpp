@@ -447,7 +447,8 @@ private slots:
         const QJsonObject greeted = answer(session, hello);
         QVERIFY(greeted.value("ok").toBool());
         QCOMPARE(greeted.value("computer").toString(), u"laptop"_s);
-        QCOMPARE(greeted.value("requests").toArray().toVariantList(), (QVariantList{u"computers"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"unlink"_s}));
+        QCOMPARE(greeted.value("requests").toArray().toVariantList(),
+                 (QVariantList{u"computers"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"unlink"_s}));
         // The computer is the key's, never what a request says it is.
         QVERIFY(answer(session, R"({"request": "status", "computer": "desktop"})").value("ok").toBool());
         QCOMPARE(QJsonDocument::fromJson(relayed.value(0)).object().value("computer").toString(), u"laptop"_s);
