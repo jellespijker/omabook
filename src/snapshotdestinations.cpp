@@ -146,6 +146,24 @@ bool SnapshotDestinations::write(const QList<SnapshotDestination> &destinations)
     return writeJson(configOf(m_place.state), {{u"destinations"_s, array}});
 }
 
+QJsonObject SnapshotDestinations::json(const SnapshotDestination &destination) const {
+    const std::optional<DestinationState> state = stateOf(destination.name);
+    QJsonObject json{{u"name"_s, destination.name},
+                     {u"location"_s, destination.location},
+                     {u"kind"_s, SnapshotDestination::kindName(destination.kind())},
+                     {u"credentials"_s, QJsonArray::fromStringList(destination.credentials)},
+                     {u"copied"_s, state && state->done}};
+    if (state)
+        json.insert(u"last"_s, QJsonObject{{u"tried"_s, state->tried.toString(Qt::ISODate)},
+                                           {u"copied"_s, state->copied.toString(Qt::ISODate)},
+                                           {u"absent"_s, state->absent},
+                                           {u"said"_s, state->said},
+                                           {u"latest_id"_s, state->latestId},
+                                           {u"latest"_s, state->latest.toString(Qt::ISODate)},
+                                           {u"size"_s, state->size}});
+    return json;
+}
+
 void SnapshotDestinations::keepState(const QString &name, const DestinationState &state) const {
     QJsonObject states = readJson(statesOf(m_place.state));
     states.insert(name, jsonOf(state));

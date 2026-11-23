@@ -2,6 +2,7 @@
 
 #include <QByteArray>
 #include <QDateTime>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -59,6 +60,10 @@ public:
     [[nodiscard]] QList<SnapshotDestination> list() const;
     [[nodiscard]] std::optional<SnapshotDestination> find(const QString &name) const;
     [[nodiscard]] std::optional<DestinationState> stateOf(const QString &name) const;
+    // As `snapshot destination list --json` and the window show it: {"name", "location", "kind",
+    // "credentials", "copied", "last": {"tried", "copied", "absent", "said", "latest_id", "latest", "size"}},
+    // "last" only once a copy was tried.
+    [[nodiscard]] QJsonObject json(const SnapshotDestination &destination) const;
 
     // Makes the destination's repository, cut into chunks as the computer's
     // is so copies stay deduplicated, keeps its password and `credentials`

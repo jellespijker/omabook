@@ -2,8 +2,6 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QLocalServer>
-#include <QLocalSocket>
 #include <QPainter>
 #include <QPointingDevice>
 #include <QQmlEngine>
@@ -46,6 +44,7 @@
 #include "secretstore.h"
 #include "settings.h"
 #include "sitedesk.h"
+#include "snapshotdesk.h"
 #include "theme.h"
 #include "themechoice.h"
 #include "threadclock.h"
@@ -66,19 +65,6 @@ constexpr double referenceCharacterWidth = 9.04;
 bool write(const QString &path, const QByteArray &contents) {
     QFile file(path);
     return file.open(QIODevice::WriteOnly) && file.write(contents) == contents.size();
-}
-
-int lines(const QString &path) {
-    QFile file(path);
-    return file.open(QIODevice::ReadOnly) ? file.readAll().count('\n') : 0;
-}
-
-// A hyprctl that answers with response.json beside it, then counts the call: a call counted has its answer.
-QString fakeHyprctl(const QString &directory) {
-    const QString command = directory + "/hyprctl";
-    write(command, "#!/bin/bash\ncat '" + directory.toUtf8() + "/response.json'\necho >> '" + directory.toUtf8() + "/calls'\n");
-    QFile::setPermissions(command, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
-    return command;
 }
 
 QJsonObject readCatalog(const QString &path) {
@@ -266,6 +252,7 @@ struct Desk {
     std::optional<Manual> manual;
     SessionSecrets deviceSecrets;
     std::optional<DeviceDesk> devices;
+    std::optional<SnapshotDesk> snapshotDesk;
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -309,6 +296,10 @@ struct Desk {
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
         devices.emplace(&*settings, deviceSecrets, [this] { return backend->libraryPath(); });
+        // Snapshots of its own, never this computer's.
+        snapshotDesk.emplace(SnapshotPlace::in(dir.filePath("snapshots")),
+                             SnapshotContents{.settingsFile = dir.filePath("config.json"), .pluginsFolder = dir.filePath("plugins")},
+                             [this] { return backend->libraryPath(); });
         // What script plugins add joins the interface, as in main.cpp.
         const auto followPlugins = [this] { custom->setPlugins(backend->scripts()->commands(), backend->scripts()->panels()); };
         QObject::connect(backend->scripts(), &ScriptPlugins::changed, &*custom, followPlugins);
@@ -335,9 +326,9 @@ struct Desk {
         });
         engine->addImageProvider("book", reader->imageProvider());
         const std::initializer_list<std::pair<const char *, QObject *>> objects{
-            {"translator", &*translator}, {"theme", &*look}, {"custom", &*custom}, {"librarian", &*librarian}, {"manual", &*manual},
-            {"devices", &*devices}, {"settings", &*settings}, {"backend", &*backend}, {"reader", &*reader}, {"assistant", &*assistant},
-            {"aiAgent", &*aiAgent}};
+            {"translator", &*translator}, {"theme", &*look},          {"custom", &*custom},     {"librarian", &*librarian},
+            {"manual", &*manual},         {"devices", &*devices},     {"settings", &*settings}, {"backend", &*backend},
+            {"reader", &*reader},         {"assistant", &*assistant}, {"aiAgent", &*aiAgent},   {"snapshotDesk", &*snapshotDesk}};
         for (const auto &[name, object] : objects)
             engine->rootContext()->setContextProperty(name, object);
         engine->rootContext()->setContextProperty("touchscreen", false);
@@ -520,83 +511,12 @@ QList<qint64> stock(Desk &desk) {
 
 // The window itself: the real Main.qml on the real backend, driven with the
 // keyboard, and failing on any warning QML reports. Also the pieces every
-// Omarchy app shares: the theme, the translator and the catalogs.
+// Omarchy app shares: the translator and the catalogs (the theme's are in theme_tests.cpp).
 class UiTests : public QObject {
     Q_OBJECT
 
 private slots:
     void initTestCase() { QQuickStyle::setStyle("Material"); }
-
-    void themeFallsBack() {
-        QTemporaryDir dir;
-        Theme theme(dir.path());
-        QCOMPARE(theme.accent(), QColor("#FFD60A"));
-        QCOMPARE(theme.accentForeground(), QColor("black"));
-        QVERIFY(!theme.light());
-        QCOMPARE(theme.radius(), 0);
-    }
-
-    void themeReadsThePalette() {
-        QTemporaryDir dir;
-        QVERIFY(QDir(dir.path()).mkpath("theme"));
-        QVERIFY(write(dir.path() + "/theme/colors.toml", "mode = \"light\"\n"
-                                                         "theme_type = \"dark\"\n"
-                                                         "accent = \"#112233\"\n"
-                                                         "bg = #fafafa # paper\n"
-                                                         "foreground = '#202020'\n"
-                                                         "color1 = \"#aa0000\"\n"));
-
-        Theme theme(dir.path());
-        QCOMPARE(theme.accent(), QColor("#112233"));
-        QCOMPARE(theme.accentForeground(), QColor("white"));
-        QCOMPARE(theme.background(), QColor("#fafafa"));
-        QCOMPARE(theme.foreground(), QColor("#202020"));
-        QCOMPARE(theme.colors().value("red").value<QColor>(), QColor("#aa0000"));
-        QVERIFY(theme.light());
-    }
-
-    void themeAsksHyprlandAgainOnlyWhenItReloads() {
-        // The fake Hyprland lives outside the theme directory, whose changes
-        // the Theme also follows.
-        QTemporaryDir dir, hypr;
-        const QString command = fakeHyprctl(hypr.path());
-        QVERIFY(write(hypr.filePath("response.json"), "{\"int\":4}"));
-        QLocalServer events;
-        QVERIFY(events.listen(hypr.filePath("events.sock")));
-
-        // Once on start, and once more when the event socket connects.
-        Theme theme(dir.path(), nullptr, command, events.fullServerName());
-        QTRY_VERIFY(events.hasPendingConnections());
-        QLocalSocket *hyprland = events.nextPendingConnection();
-        QTRY_COMPARE(lines(hypr.filePath("calls")), 2);
-        QTRY_COMPARE(theme.radius(), 4);
-
-        QVERIFY(write(hypr.filePath("response.json"), "{\"int\":10}"));
-        QTest::qWait(300);
-        QCOMPARE(lines(hypr.filePath("calls")), 2);
-        // Events arrive in pieces; only a whole configreloaded line counts.
-        hyprland->write("activewindow>>kitty,~\nconfigrel");
-        hyprland->flush();
-        QTest::qWait(100);
-        QCOMPARE(lines(hypr.filePath("calls")), 2);
-        hyprland->write("oaded>>\n");
-        QTRY_COMPARE(theme.radius(), 10);
-        QTRY_COMPARE(lines(hypr.filePath("calls")), 3);
-    }
-
-    void themeReachesHyprlandOnceItListens() {
-        QTemporaryDir dir, hypr;
-        const QString command = fakeHyprctl(hypr.path());
-        QVERIFY(write(hypr.filePath("response.json"), "{\"int\":4}"));
-        Theme theme(dir.path(), nullptr, command, hypr.filePath("events.sock"));
-        QTRY_COMPARE(theme.radius(), 4);
-
-        QVERIFY(write(hypr.filePath("response.json"), "{\"int\":8}"));
-        QLocalServer events;
-        QVERIFY(events.listen(hypr.filePath("events.sock")));
-        QTRY_VERIFY_WITH_TIMEOUT(events.hasPendingConnections(), 5000);
-        QTRY_COMPARE(theme.radius(), 8);
-    }
 
     void translatorFallsBackToEnglish() {
         QTemporaryDir dir;

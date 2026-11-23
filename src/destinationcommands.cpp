@@ -95,23 +95,6 @@ int add(const QCommandLineParser &parser, SnapshotDestinations &destinations) {
     return 0;
 }
 
-[[nodiscard]] QJsonObject jsonOf(const SnapshotDestination &destination, const std::optional<DestinationState> &state) {
-    QJsonObject json{{u"name"_s, destination.name},
-                     {u"location"_s, destination.location},
-                     {u"kind"_s, SnapshotDestination::kindName(destination.kind())},
-                     {u"credentials"_s, QJsonArray::fromStringList(destination.credentials)},
-                     {u"copied"_s, state && state->done}};
-    if (state)
-        json.insert(u"last"_s, QJsonObject{{u"tried"_s, state->tried.toString(Qt::ISODate)},
-                                           {u"copied"_s, state->copied.toString(Qt::ISODate)},
-                                           {u"absent"_s, state->absent},
-                                           {u"said"_s, state->said},
-                                           {u"latest_id"_s, state->latestId},
-                                           {u"latest"_s, state->latest.toString(Qt::ISODate)},
-                                           {u"size"_s, state->size}});
-    return json;
-}
-
 [[nodiscard]] QString howItWent(const std::optional<DestinationState> &state) {
     if (!state)
         return u"not copied to yet"_s;
@@ -130,7 +113,7 @@ int list(const QCommandLineParser &parser, const SnapshotDestinations &destinati
     if (parser.isSet(u"json"_s)) {
         QJsonArray array;
         for (const SnapshotDestination &destination : all)
-            array << jsonOf(destination, destinations.stateOf(destination.name));
+            array << destinations.json(destination);
         printJson({{u"backed_up"_s, backedUp}, {u"destinations"_s, array}});
         return 0;
     }

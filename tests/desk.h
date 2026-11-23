@@ -28,14 +28,15 @@
 #include "customization.h"
 #include "devicedesk.h"
 #include "eventtime.h"
-#include "secretstore.h"
 #include "fixtures.h"
 #include "graph.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
 #include "reader.h"
+#include "secretstore.h"
 #include "settings.h"
+#include "snapshotdesk.h"
 #include "theme.h"
 #include "themechoice.h"
 #include "translator.h"
@@ -113,6 +114,7 @@ struct Desk {
     std::optional<Manual> manual;
     SessionSecrets deviceSecrets;
     std::optional<DeviceDesk> devices;
+    std::optional<SnapshotDesk> snapshotDesk;
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -151,6 +153,10 @@ struct Desk {
         settings->setNewsSeen(OMABOOK_VERSION);
         manual.emplace(&*settings, &*custom);
         devices.emplace(&*settings, deviceSecrets, [this] { return backend->libraryPath(); });
+        // Snapshots of its own, never this computer's.
+        snapshotDesk.emplace(SnapshotPlace::in(dir.filePath("snapshots")),
+                             SnapshotContents{.settingsFile = dir.filePath("config.json"), .pluginsFolder = dir.filePath("plugins")},
+                             [this] { return backend->libraryPath(); });
         const auto followPlugins = [this] { custom->setPlugins(backend->scripts()->commands(), backend->scripts()->panels()); };
         QObject::connect(backend->scripts(), &ScriptPlugins::changed, &*custom, followPlugins);
         followPlugins();
@@ -175,6 +181,7 @@ struct Desk {
         engine->rootContext()->setContextProperty("librarian", &*librarian);
         engine->rootContext()->setContextProperty("manual", &*manual);
         engine->rootContext()->setContextProperty("devices", &*devices);
+        engine->rootContext()->setContextProperty("snapshotDesk", &*snapshotDesk);
         engine->rootContext()->setContextProperty("settings", &*settings);
         engine->rootContext()->setContextProperty("backend", &*backend);
         engine->rootContext()->setContextProperty("reader", &*reader);

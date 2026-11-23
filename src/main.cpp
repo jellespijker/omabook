@@ -46,6 +46,7 @@
 #include "readingpassages.h"
 #include "secretstore.h"
 #include "settings.h"
+#include "snapshotdesk.h"
 #include "theme.h"
 #include "themechoice.h"
 #include "translator.h"
@@ -199,6 +200,22 @@ void startUp(bool command) {
         qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
 }
 
+// The book named on the command line, to open: one the library has, by its
+// id or found by its file's content; else it joins the library first.
+qint64 bookToOpen(const QString &book, const std::optional<Folio::Found> &known, Backend &backend) {
+    bool isNumber = false;
+    const qint64 id = known ? known->id : book.toLongLong(&isNumber);
+    if (book.isEmpty() || isNumber || known || !backend.library())
+        return id;
+    // Through the importer, so a folder that is one book (Markdown
+    // chapters, say) opens like a file does.
+    const ImportSummary added = importBooks(*backend.library(), {QFileInfo(book).absoluteFilePath()});
+    if (!added.problems.isEmpty())
+        backend.say(added.problems.first());
+    backend.reload();
+    return added.lastId;
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -318,25 +335,16 @@ int main(int argc, char *argv[]) {
     QObject::connect(&backend, &Backend::libraryChanged, &deviceDesk, &DeviceDesk::follow);
     QObject::connect(&deviceDesk, &DeviceDesk::booksChanged, &backend, &Backend::reload);
     deviceDesk.follow();
+    // The library's snapshots (#185): taken, compared, gone back to, and where else they are kept.
+    SnapshotDesk snapshotDesk(SnapshotPlace::here(), SnapshotContents::here(), [&backend] { return backend.libraryPath(); });
+    QObject::connect(&snapshotDesk, &SnapshotDesk::booksChanged, &backend, &Backend::reload);
     // What script plugins add to the keyboard and the window joins the
     // interface's own, and follows the plugins as they are edited.
     const auto followPlugins = [&custom, &backend] { custom.setPlugins(backend.scripts()->commands(), backend.scripts()->panels()); };
     QObject::connect(backend.scripts(), &ScriptPlugins::changed, &custom, followPlugins);
     followPlugins();
 
-    // A book named on the command line joins the library (a file already in
-    // it is found by its content) and opens.
-    bool isNumber = false;
-    qint64 opening = known ? known->id : book.toLongLong(&isNumber);
-    if (!book.isEmpty() && !isNumber && !known && backend.library()) {
-        // Through the importer, so a folder that is one book (Markdown
-        // chapters, say) opens like a file does.
-        const ImportSummary added = importBooks(*backend.library(), {QFileInfo(book).absoluteFilePath()});
-        opening = added.lastId;
-        if (!added.problems.isEmpty())
-            backend.say(added.problems.first());
-        backend.reload();
-    }
+    const qint64 opening = bookToOpen(book, known, backend);
 
     QQmlEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit, &app, &QCoreApplication::quit);
@@ -344,7 +352,8 @@ int main(int argc, char *argv[]) {
     engine.addImageProvider("book", reader.imageProvider());
     expose(engine, {{"translator", &translator}, {"theme", &theme},         {"settings", &settings}, {"backend", &backend},
                     {"reader", &reader},         {"assistant", &assistant}, {"aiAgent", &aiAgent},   {"custom", &custom},
-                    {"librarian", &librarian},   {"manual", &manual},       {"devices", &deviceDesk}});
+                    {"librarian", &librarian},   {"manual", &manual},       {"devices", &deviceDesk},
+                    {"snapshotDesk", &snapshotDesk}});
     // Where there is a touchscreen, what the keys do is also on screen.
     const auto devices = QInputDevice::devices();
     const bool touchscreen = std::ranges::contains(devices, QInputDevice::DeviceType::TouchScreen, &QInputDevice::type);

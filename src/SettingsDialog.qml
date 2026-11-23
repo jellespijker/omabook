@@ -10,7 +10,11 @@ AppPopup {
     id: dialog
     objectName: "settings"
     widest: 560
-    onAboutToShow: backend.fileManager.checkOpensEbooks()
+    onAboutToShow: {
+        backend.fileManager.checkOpensEbooks()
+        if (snapshotDesk.ready)
+            snapshotDesk.refresh()
+    }
 
     // In a short window the settings scroll rather than run off its edge.
     contentItem: ScrollView {
@@ -211,6 +215,22 @@ AppPopup {
                 onClicked: {
                     dialog.close()
                     win.showPhones()
+                }
+            }
+        }
+
+        // Snapshots have a panel of their own (#185): here, how they stand.
+        Label { text: qsTr("Snapshots"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            SnapshotsSummary { objectName: "snapshotsSummary" }
+            AppButton {
+                objectName: "openSnapshots"
+                text: qsTr("Snapshots")
+                onClicked: {
+                    dialog.close()
+                    win.showSnapshots()
                 }
             }
         }

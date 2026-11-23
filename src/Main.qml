@@ -73,7 +73,7 @@ ApplicationWindow {
     readonly property bool touch: touchscreen || touchSeen
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened || aiSettings.opened
-                                       || tidyUp.opened || readingStats.opened || readingSites.opened || phones.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
+                                       || tidyUp.opened || readingStats.opened || readingSites.opened || phones.opened || snapshotsPanel.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
                                        || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
@@ -223,6 +223,7 @@ ApplicationWindow {
     function showSubscribe() { subscribing.show() }
     function showReadingSites() { readingSites.open() }
     function showPhones() { phones.open() }
+    function showSnapshots() { snapshotsPanel.open() }
     function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
     function showAskLibrary() { askLibrary.open() }
@@ -456,6 +457,8 @@ ApplicationWindow {
     ReadingSitesDialog { id: readingSites }
     PhonesDialog { id: phones }
     Key { command: "library.devices"; when: library.visible; onActivated: phones.open() }
+    SnapshotsDialog { id: snapshotsPanel }
+    Key { command: "library.snapshots"; when: library.visible; onActivated: snapshotsPanel.open() }
     AiSettingsDialog { id: aiSettings }
     ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }
@@ -480,17 +483,7 @@ ApplicationWindow {
         id: aiSearch
         objectName: "aiSearch"
     }
-    AskDialog {
-        id: changeIt
-        objectName: "changeIt"
-        heading: qsTr("Change Omabook")
-        placeholder: qsTr("Make it warmer, bigger covers, Space for the next chapter…")
-        reply: librarian.changeNote
-        working: librarian.changing
-        undoable: librarian.canUndo
-        onAsked: (words) => librarian.change(words)
-        onUndo: librarian.undoChange()
-    }
+    ChangeItDialog { id: changeIt }
 
     RemovalDialog { id: removal }
     VoiceInstallDialog {}
