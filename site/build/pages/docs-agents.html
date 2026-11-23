@@ -1,0 +1,35 @@
+<h1>For agents</h1>
+<p>Everything the Omabook window does with a library is also a command and a tool, so an AI agent can find, read, fix and organise books without a display. Your books stay on your computer; the agent works on the same library the window has open.</p>
+<h2>The command line</h2>
+<p>Every command takes <code>--json</code>, prints errors to standard error, and can work on one library with <code>--library &lt;folder&gt;</code>.</p>
+<pre><code>omabook list "status:reading" --json
+omabook search "control theory" --json
+omabook show 12 --json
+omabook text 12 --section 3
+omabook graph find tide --kind concept --json
+omabook chronology 12 --upto 5 --json
+omabook help agents</code></pre>
+<p>A search finds books by what you know of them too, but only as far as you have read, so an agent is never ahead of the reader.</p>
+<h2>The MCP server</h2>
+<p><code>omabook mcp</code> runs Omabook as a <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server on standard input and output. It needs no display. Register it with an agent:</p>
+<pre><code>omabook mcp install            # Omarchy's default agent
+omabook mcp install codex      # or claude, grok, pi, opencode, agy
+omabook mcp install --print    # change nothing; show what to add by hand
+omabook mcp --tools            # list the tools</code></pre>
+<p>Any other MCP client takes <code>{"mcpServers": {"omabook": {"command": "omabook", "args": ["mcp"]}}}</code>.</p>
+<h3>What the tools do</h3>
+<ul>
+<li>Find and read: <code>books_search</code>, <code>books_find</code>, <code>book_get</code>, <code>book_contents</code>, <code>book_text</code>, <code>book_find</code>.</li>
+<li>Look after the library: <code>book_add</code>, <code>book_set_details</code>, <code>book_set_reading</code>, <code>lookup_candidates</code>, <code>tidy_propose</code>, <code>tidy_apply</code>, <code>catalog_export</code>, <code>book_convert</code>.</li>
+<li>Reading and notes: <code>progress_get</code>, <code>bookmarks_list</code>, <code>annotations_list</code>, <code>annotations_export</code>.</li>
+<li>Knowledge graph and timelines: <code>graph_find</code>, <code>graph_node</code>, <code>graph_book</code>, <code>graph_build</code>, <code>graph_export</code>, <code>chronology</code>.</li>
+<li>Ask Omabook's own AI: <code>ask_book</code>, <code>ask_library</code>, <code>suggest_reading</code>.</li>
+<li>Sync, plugins and look: <code>sync_run</code>, <code>plugins_list</code>, <code>plugin_add</code>, <code>customize_set</code>.</li>
+</ul>
+<p>Every tool says in its annotations whether it only reads, changes something or takes something away, so a client can ask before it acts. <code>omabook mcp --tools</code> lists what your build has.</p>
+<h2>A skill for coding agents</h2>
+<p><code>omabook skill install</code> teaches your coding agents the commands, so they can use the command line without the MCP server.</p>
+<h2>The interface is files</h2>
+<p>Keys, colors, views and panels are files in <code>~/.config/omabook/</code>, followed while the app runs. <code>omabook customize</code> prints the folder and writes a guide there for agents to follow. Changes made through <code>customize_set</code> get the same checks as a file edited by hand and can be undone.</p>
+<h2>What stays yours</h2>
+<p>Omabook asks no account. An agent reads your books through your own computer, and what reaches any AI is chosen in <a href="ai.html">the AI settings</a>, capability by capability.</p>

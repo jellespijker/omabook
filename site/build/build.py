@@ -10,6 +10,7 @@ unless --offline, from GitHub. Nothing runs in the visitor's browser but theme.j
 the theme preview in that browser and sends nothing anywhere.
 """
 
+import datetime
 import html
 import json
 import os
@@ -17,10 +18,15 @@ import sys
 import urllib.error
 import urllib.request
 
+import seo
+from markdown import to_markdown
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SITE = os.path.dirname(HERE)
 ROOT = os.path.dirname(SITE)
+VERSION = seo.project_version(ROOT)
 E = html.escape
+PAGES = []
 
 NAVS = [("", "Product"), ("docs/", "Docs"), ("help/", "Help"), ("plugins.html", "Plugins")]
 DOCS = [
@@ -32,6 +38,8 @@ DOCS = [
     ("calibre", "Calibre"),
     ("phones-and-e-readers", "Phones and e-readers"),
     ("sync", "Sync and sharing"),
+    ("agents", "For agents"),
+    ("omabook-vs-calibre", "Omabook and Calibre"),
 ]
 HELPS = [("shortcuts", "Shortcuts"), ("troubleshooting", "Troubleshooting"), ("faq", "Questions")]
 THEMES = [
@@ -41,7 +49,29 @@ THEMES = [
     ("latte", "Catppuccin Latte"),
     ("forest", "Everforest"),
 ]
-DESCRIPTION = "Omabook is the ebook library and reader for Omarchy, with a knowledge graph of everything you read."
+DESCRIPTION = "Omabook is a free ebook reader and library for Linux and Omarchy, with a knowledge graph of everything you read."
+DESCS = {
+    "docs/getting-started.html": "Install Omabook on Arch or Omarchy, add your books, and read them. "
+    "Free ebook reader and library for Linux.",
+    "docs/library.html": "Omabook's library: five views, filters, search, nested collections, and a reader that sets text your way.",
+    "docs/knowledge-graph.html": "How Omabook builds a knowledge graph and timelines of the books you read, never past your page.",
+    "docs/ai.html": "Set up AI in Omabook per capability: local Ollama first, hosted only "
+    "where you allow it, and a Test button on every row.",
+    "docs/plugins.html": "Omabook plugins: how to find, install and write them. Storyteller writes books; Notebooks keeps pages and ink.",
+    "docs/calibre.html": "Import a Calibre library into Omabook with your stars, reading places, highlights and metadata plugins.",
+    "docs/phones-and-e-readers.html": "Serve your Omabook library to phones and e-readers over OPDS, and "
+    "keep KOReader's reading place in step.",
+    "docs/sync.html": "Sync Omabook between your own computers over ssh, share collections, and spaces for a household or book club.",
+    "docs/agents.html": "Use Omabook from AI agents: a command line with JSON output, an MCP server, and a skill for coding agents.",
+    "docs/omabook-vs-calibre.html": "Omabook and Calibre compared: what each does well, what Omabook takes "
+    "over, and what it leaves to Calibre.",
+    "help/shortcuts.html": "Every Omabook keyboard shortcut for the library, the reader, the graph and the timelines.",
+    "help/troubleshooting.html": "Fixes for common Omabook problems: a missing AI model, slow first opens, dictation, and an empty graph.",
+    "help/faq.html": "Omabook questions: does it change my files, does my reading leave the computer, does the site track me.",
+    "plugins.html": "Plugins for Omabook, found from its registry and from GitHub, with what each asks to be allowed.",
+    "whats-new.html": "What each Omabook release brought, newest first.",
+}
+OG_IMAGE = "assets/og.png"
 THEME_JS = """(function () {
   // Remembers the theme preview in this browser only. Nothing is sent anywhere.
   var key = "omabook-theme", form = document.querySelector(".themes");
@@ -59,7 +89,7 @@ THEME_JS = """(function () {
 
 def fragment(name):
     with open(os.path.join(HERE, "pages", name), encoding="utf-8") as f:
-        return f.read()
+        return f.read().replace("{{version}}", VERSION)
 
 
 def write(path, text):
@@ -85,14 +115,34 @@ def themes_html():
     return f'<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend>{radios}</fieldset></form>'
 
 
-def frame(depth, here, title, body):
+def head_meta(depth, title, meta):
+    path = meta["path"]
+    desc = meta.get("desc") or DESCS.get(path) or DESCRIPTION
+    url = seo.SITE_URL + path
+    PAGES.append({"path": path, "title": title, "desc": desc, "md": meta.get("md")})
+    tags = [
+        f'<meta name="description" content="{E(desc)}">',
+        f'<link rel="canonical" href="{url}">',
+        '<meta property="og:type" content="website"><meta property="og:site_name" content="Omabook">',
+        f'<meta property="og:title" content="{E(title)}"><meta property="og:description" content="{E(desc)}">',
+        f'<meta property="og:url" content="{url}"><meta property="og:image" content="{seo.SITE_URL}{OG_IMAGE}">',
+        '<meta name="twitter:card" content="summary_large_image">',
+        f'<link rel="alternate" type="application/atom+xml" title="Omabook releases" href="{depth}releases.xml">',
+    ]
+    if meta.get("md"):
+        tags.append(f'<link rel="alternate" type="text/markdown" href="{depth}{meta["md"]}">')
+    tags += meta.get("ld", [])
+    return "\n".join(tags)
+
+
+def frame(depth, here, title, body, meta):
     return f"""<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{E(title)}</title>
-<meta name="description" content="{E(DESCRIPTION)}">
+{head_meta(depth, title, meta)}
 <meta name="color-scheme" content="light dark">
 <link rel="stylesheet" href="{depth}style.css">
 <link rel="icon" href="{depth}assets/omabook.svg" type="image/svg+xml">
@@ -106,7 +156,8 @@ def frame(depth, here, title, body):
 <main id="main">{body}</main>
 <footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
 <p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="{depth}docs/">Docs</a> ·
-<a href="{depth}help/">Help</a> · <a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<a href="{depth}help/">Help</a> · <a href="{depth}whats-new.html">What's new</a> ·
+<a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
 <p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
 with nothing private shown.</p></footer>
 </body></html>"""
@@ -124,16 +175,27 @@ def pager(items, current):
     return f'<div class="pager">{before}{after}</div>'
 
 
+def write_markdown(path, title, fragment_html):
+    """A page's words as Markdown, next to the page, for agents."""
+    url = seo.SITE_URL + path.replace(".md", ".html")
+    write(path, f"<!-- {title}: {url} -->\n\n" + to_markdown(fragment_html))
+
+
 def section_pages(kind, items, label):
     for key, title in items:
         crumb = f'<p class="crumb"><a href="./">{label}</a> / {E(title)}</p>' if kind == "docs" else ""
-        article = f'<article class="prose">{crumb}{fragment(f"{kind}-{key}.html")}{pager(items, key)}</article>'
-        page = frame("../", f"{kind}/", f"{title}: Omabook {kind}", f'<div class="docs">{side(items, key, label)}{article}</div>')
-        write(f"{kind}/{key}.html", page)
+        words = fragment(f"{kind}-{key}.html")
+        article = f'<article class="prose">{crumb}{words}{pager(items, key)}</article>'
+        meta = {"path": f"{kind}/{key}.html", "md": f"{kind}/{key}.md"}
+        if key == "faq":
+            meta["ld"] = [seo.ld_script(seo.faq_data(words))]
+        body = f'<div class="docs">{side(items, key, label)}{article}</div>'
+        write(f"{kind}/{key}.html", frame("../", f"{kind}/", f"{title}: Omabook {kind}", body, meta))
+        write_markdown(f"{kind}/{key}.md", title, words)
     index = "".join(f'<li><a href="{key}.html">{E(title)}</a></li>' for key, title in items)
-    intro = fragment(f"{kind}-index.html")
-    article = f'<article class="prose">{intro}<ol class="idx">{index}</ol></article>'
-    write(f"{kind}/index.html", frame("../", f"{kind}/", f"{label}: Omabook", f'<div class="docs">{side(items, "", label)}{article}</div>'))
+    article = f'<article class="prose">{fragment(f"{kind}-index.html")}<ol class="idx">{index}</ol></article>'
+    body = f'<div class="docs">{side(items, "", label)}{article}</div>'
+    write(f"{kind}/index.html", frame("../", f"{kind}/", f"{label}: Omabook", body, {"path": f"{kind}/", "desc": f"{label} for Omabook."}))
 
 
 def registry():
@@ -236,17 +298,45 @@ def plugins_page(offline):
         '<p class="note">Write your own: press <kbd>N</kbd> in the plugin manager, then add the topic <code>omabook-plugin</code> '
         "to your repository to be listed here.</p></section></div>"
     )
-    write("plugins.html", frame("", "plugins.html", "Plugins: Omabook", body))
+    write("plugins.html", frame("", "plugins.html", "Plugins: Omabook", body, {"path": "plugins.html"}))
+
+
+def product_page():
+    words = fragment("product.html")
+    meta = {"path": "", "md": "index.md", "desc": DESCRIPTION}
+    shots = ["assets/shots/covers.webp", "assets/shots/spines.webp", "assets/demo/graph.webp", "assets/shots/notebook.webp"]
+    meta["ld"] = [seo.ld_script(seo.app_data(VERSION, shots))]
+    page = frame("", "", "Omabook: a free ebook reader for Linux, with a knowledge graph", words, meta)
+    write("index.html", page.replace('<body class="dir-b">', '<body class="dir-b home">'))
+    write_markdown("index.md", "Omabook", words)
+
+
+def whats_new_page():
+    entries = seo.releases(ROOT)
+    body = f'<div class="docs"><article class="prose">{seo.whats_new_fragment(entries)}</article></div>'
+    write("whats-new.html", frame("", "whats-new.html", "What's new: Omabook", body, {"path": "whats-new.html"}))
+    write("releases.xml", seo.releases_feed(entries))
+
+
+def machine_files():
+    """Sitemap, robots, llms.txt: written last, from the pages that were made."""
+    today = datetime.date.today().isoformat()
+    paths = sorted({p["path"] for p in PAGES} | {p["md"] for p in PAGES if p["md"]})
+    write("sitemap.xml", seo.sitemap([p for p in paths if not p.endswith(".md")], today))
+    write("robots.txt", seo.robots())
+    docs = [(p["title"], p["md"], p["desc"]) for p in PAGES if p["md"] and p["path"].startswith(("docs/", "help/"))]
+    write("llms.txt", seo.llms_txt([("Omabook", "index.md", DESCRIPTION)] + docs))
 
 
 def main():
-    page = frame("", "", "Omabook: your books, and what connects them", fragment("product.html"))
-    write("index.html", page.replace('<body class="dir-b">', '<body class="dir-b home">'))
+    product_page()
     section_pages("docs", DOCS, "Documentation")
     section_pages("help", HELPS, "Help")
     plugins_page("--offline" in sys.argv)
+    whats_new_page()
+    machine_files()
     write("theme.js", THEME_JS)
-    print("built")
+    print("built", len(PAGES), "pages")
 
 
 if __name__ == "__main__":

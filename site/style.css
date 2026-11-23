@@ -198,3 +198,6 @@ body.home{overflow-x:clip}
   .home .hero>.win{grid-column:2;grid-row:1/span 4;margin-top:0;position:sticky;top:5rem}
   .home .hero h1{max-width:none}
 }
+.plain{max-width:36rem;color:var(--dim);margin:.5rem 0 .8rem}
+.facts{font-size:.85rem;color:var(--dim);margin:0 0 1.5rem}
+.rel{border-top:1px solid var(--line);padding:1rem 0}.rel h2{font-size:1.2rem;margin:0}.rel small{color:var(--dim);font-weight:400}

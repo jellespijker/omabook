@@ -1,0 +1,28 @@
+# Omabook
+
+> Omabook is a free ebook reader and library for Linux (Arch and Omarchy). It reads EPUB, PDF, FictionBook, comics and more, imports a Calibre library, and keeps a knowledge graph of the people, places, ideas and events of the books you read, never past the page you are on. AI is optional and per capability, local first. Every library action is a command with JSON output and a tool of its MCP server.
+
+Source: https://github.com/jellespijker/omabook
+Site: https://jellespijker.github.io/omabook/
+
+## Docs
+
+- [Omabook](https://jellespijker.github.io/omabook/index.md): Omabook is a free ebook reader and library for Linux and Omarchy, with a knowledge graph of everything you read.
+- [Getting started: Omabook docs](https://jellespijker.github.io/omabook/docs/getting-started.md): Install Omabook on Arch or Omarchy, add your books, and read them. Free ebook reader and library for Linux.
+- [The library: Omabook docs](https://jellespijker.github.io/omabook/docs/library.md): Omabook's library: five views, filters, search, nested collections, and a reader that sets text your way.
+- [The knowledge graph: Omabook docs](https://jellespijker.github.io/omabook/docs/knowledge-graph.md): How Omabook builds a knowledge graph and timelines of the books you read, never past your page.
+- [AI setup, per capability: Omabook docs](https://jellespijker.github.io/omabook/docs/ai.md): Set up AI in Omabook per capability: local Ollama first, hosted only where you allow it, and a Test button on every row.
+- [Plugins: Omabook docs](https://jellespijker.github.io/omabook/docs/plugins.md): Omabook plugins: how to find, install and write them. Storyteller writes books; Notebooks keeps pages and ink.
+- [Calibre: Omabook docs](https://jellespijker.github.io/omabook/docs/calibre.md): Import a Calibre library into Omabook with your stars, reading places, highlights and metadata plugins.
+- [Phones and e-readers: Omabook docs](https://jellespijker.github.io/omabook/docs/phones-and-e-readers.md): Serve your Omabook library to phones and e-readers over OPDS, and keep KOReader's reading place in step.
+- [Sync and sharing: Omabook docs](https://jellespijker.github.io/omabook/docs/sync.md): Sync Omabook between your own computers over ssh, share collections, and spaces for a household or book club.
+- [For agents: Omabook docs](https://jellespijker.github.io/omabook/docs/agents.md): Use Omabook from AI agents: a command line with JSON output, an MCP server, and a skill for coding agents.
+- [Omabook and Calibre: Omabook docs](https://jellespijker.github.io/omabook/docs/omabook-vs-calibre.md): Omabook and Calibre compared: what each does well, what Omabook takes over, and what it leaves to Calibre.
+- [Shortcuts: Omabook help](https://jellespijker.github.io/omabook/help/shortcuts.md): Every Omabook keyboard shortcut for the library, the reader, the graph and the timelines.
+- [Troubleshooting: Omabook help](https://jellespijker.github.io/omabook/help/troubleshooting.md): Fixes for common Omabook problems: a missing AI model, slow first opens, dictation, and an empty graph.
+- [Questions: Omabook help](https://jellespijker.github.io/omabook/help/faq.md): Omabook questions: does it change my files, does my reading leave the computer, does the site track me.
+
+## Optional
+
+- [Releases feed](https://jellespijker.github.io/omabook/releases.xml)
+- [Source and issues](https://github.com/jellespijker/omabook)

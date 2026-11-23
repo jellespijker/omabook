@@ -1,0 +1,20 @@
+<h1>Omabook and Calibre</h1>
+<p>Calibre is the long-standing ebook manager, and Omabook is built to take over from it for reading and keeping a library, not to replace everything it does. The two work side by side: Omabook only reads Calibre’s folder.</p>
+<h2>What Omabook is built around</h2>
+<ul>
+<li>A knowledge graph and timelines of the people, places, ideas and events of what you read, never past your page.</li>
+<li>A reader that sets the page for comfortable reading, with two or three pages side by side where the window has room.</li>
+<li>AI per capability (answers, quick work, handwriting, speech to text, text to speech, embeddings), local first, with a Test button on every row.</li>
+<li>Voice questions and commands while reading, dictated notes, and handwriting in the margins.</li>
+<li>Following the Omarchy theme and language live, and a keyboard way of working.</li>
+<li>A command line with JSON output and an MCP server, so agents can use the library.</li>
+</ul>
+<h2>What comes across from Calibre</h2>
+<p>Your curated details, covers, all formats, stars, how far you read, identifiers (Goodreads, ISBN, Amazon), the viewer’s highlights and bookmarks, and the columns people add (read, status, date read). Calibre’s metadata source plugins run inside Calibre for look-ups, and its conversion plugins run through <code>ebook-convert</code>. See <a href="calibre.html">Calibre</a>.</p>
+<h2>What Omabook leaves to Calibre</h2>
+<ul>
+<li>Conversion tuning and the Calibre-only formats: Omabook converts through Calibre’s <code>ebook-convert</code> when it needs to.</li>
+<li>Calibre’s device drivers and store plugins, and the pieces that are part of Calibre’s own window. Omabook sends books to e-readers in its own way: see <a href="phones-and-e-readers.html">phones and e-readers</a>.</li>
+</ul>
+<h2>Trying it safely</h2>
+<p>Importing reads Calibre’s folder and never changes it. Import again later and Omabook brings its copy up to date without adding a book twice. You can keep using Calibre as before.</p>

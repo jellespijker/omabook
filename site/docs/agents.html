@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>For agents: Omabook docs</title>
+<meta name="description" content="Use Omabook from AI agents: a command line with JSON output, an MCP server, and a skill for coding agents.">
+<link rel="canonical" href="https://jellespijker.github.io/omabook/docs/agents.html">
+<meta property="og:type" content="website"><meta property="og:site_name" content="Omabook">
+<meta property="og:title" content="For agents: Omabook docs"><meta property="og:description" content="Use Omabook from AI agents: a command line with JSON output, an MCP server, and a skill for coding agents.">
+<meta property="og:url" content="https://jellespijker.github.io/omabook/docs/agents.html"><meta property="og:image" content="https://jellespijker.github.io/omabook/assets/og.png">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="alternate" type="application/atom+xml" title="Omabook releases" href="../releases.xml">
+<link rel="alternate" type="text/markdown" href="../docs/agents.md">
+<meta name="color-scheme" content="light dark">
+<link rel="stylesheet" href="../style.css">
+<link rel="icon" href="../assets/omabook.svg" type="image/svg+xml">
+<script src="../theme.js" defer></script>
+</head>
+<body class="dir-b">
+<a class="skip" href="#main">Skip to content</a>
+<header class="top"><a class="brand" href="../index.html"><span class="mark" aria-hidden="true"></span>Omabook</a>
+<nav aria-label="Main"><a href="../">Product</a><a href="../docs/" aria-current=page>Docs</a><a href="../help/">Help</a><a href="../plugins.html">Plugins</a><a class="gh" href="https://github.com/jellespijker/omabook">GitHub</a></nav>
+<form class="themes" aria-label="Preview a theme"><fieldset><legend>Theme</legend><label><input type="radio" name="t" value="auto" checked><span>System</span></label><label><input type="radio" name="t" value="tokyo"><span>Tokyo Night</span></label><label><input type="radio" name="t" value="gruvbox"><span>Gruvbox</span></label><label><input type="radio" name="t" value="latte"><span>Catppuccin Latte</span></label><label><input type="radio" name="t" value="forest"><span>Everforest</span></label></fieldset></form></header>
+<main id="main"><div class="docs"><nav class="toc" aria-label="Documentation"><p class="toc-h">Documentation</p><ol><li><a href="getting-started.html">Getting started</a></li><li><a href="library.html">The library</a></li><li><a href="knowledge-graph.html">The knowledge graph</a></li><li><a href="ai.html">AI setup, per capability</a></li><li><a href="plugins.html">Plugins</a></li><li><a href="calibre.html">Calibre</a></li><li><a href="phones-and-e-readers.html">Phones and e-readers</a></li><li><a href="sync.html">Sync and sharing</a></li><li><a href="agents.html" aria-current=page>For agents</a></li><li><a href="omabook-vs-calibre.html">Omabook and Calibre</a></li></ol></nav><article class="prose"><p class="crumb"><a href="./">Documentation</a> / For agents</p><h1>For agents</h1>
+<p>Everything the Omabook window does with a library is also a command and a tool, so an AI agent can find, read, fix and organise books without a display. Your books stay on your computer; the agent works on the same library the window has open.</p>
+<h2>The command line</h2>
+<p>Every command takes <code>--json</code>, prints errors to standard error, and can work on one library with <code>--library &lt;folder&gt;</code>.</p>
+<pre><code>omabook list "status:reading" --json
+omabook search "control theory" --json
+omabook show 12 --json
+omabook text 12 --section 3
+omabook graph find tide --kind concept --json
+omabook chronology 12 --upto 5 --json
+omabook help agents</code></pre>
+<p>A search finds books by what you know of them too, but only as far as you have read, so an agent is never ahead of the reader.</p>
+<h2>The MCP server</h2>
+<p><code>omabook mcp</code> runs Omabook as a <a href="https://modelcontextprotocol.io">Model Context Protocol</a> server on standard input and output. It needs no display. Register it with an agent:</p>
+<pre><code>omabook mcp install            # Omarchy's default agent
+omabook mcp install codex      # or claude, grok, pi, opencode, agy
+omabook mcp install --print    # change nothing; show what to add by hand
+omabook mcp --tools            # list the tools</code></pre>
+<p>Any other MCP client takes <code>{"mcpServers": {"omabook": {"command": "omabook", "args": ["mcp"]}}}</code>.</p>
+<h3>What the tools do</h3>
+<ul>
+<li>Find and read: <code>books_search</code>, <code>books_find</code>, <code>book_get</code>, <code>book_contents</code>, <code>book_text</code>, <code>book_find</code>.</li>
+<li>Look after the library: <code>book_add</code>, <code>book_set_details</code>, <code>book_set_reading</code>, <code>lookup_candidates</code>, <code>tidy_propose</code>, <code>tidy_apply</code>, <code>catalog_export</code>, <code>book_convert</code>.</li>
+<li>Reading and notes: <code>progress_get</code>, <code>bookmarks_list</code>, <code>annotations_list</code>, <code>annotations_export</code>.</li>
+<li>Knowledge graph and timelines: <code>graph_find</code>, <code>graph_node</code>, <code>graph_book</code>, <code>graph_build</code>, <code>graph_export</code>, <code>chronology</code>.</li>
+<li>Ask Omabook's own AI: <code>ask_book</code>, <code>ask_library</code>, <code>suggest_reading</code>.</li>
+<li>Sync, plugins and look: <code>sync_run</code>, <code>plugins_list</code>, <code>plugin_add</code>, <code>customize_set</code>.</li>
+</ul>
+<p>Every tool says in its annotations whether it only reads, changes something or takes something away, so a client can ask before it acts. <code>omabook mcp --tools</code> lists what your build has.</p>
+<h2>A skill for coding agents</h2>
+<p><code>omabook skill install</code> teaches your coding agents the commands, so they can use the command line without the MCP server.</p>
+<h2>The interface is files</h2>
+<p>Keys, colors, views and panels are files in <code>~/.config/omabook/</code>, followed while the app runs. <code>omabook customize</code> prints the folder and writes a guide there for agents to follow. Changes made through <code>customize_set</code> get the same checks as a file edited by hand and can be undone.</p>
+<h2>What stays yours</h2>
+<p>Omabook asks no account. An agent reads your books through your own computer, and what reaches any AI is chosen in <a href="ai.html">the AI settings</a>, capability by capability.</p>
+<div class="pager"><a href="sync.html">← Sync and sharing</a><a href="omabook-vs-calibre.html">Omabook and Calibre →</a></div></article></div></main>
+<footer class="foot"><p>Omabook is free software. This site is static: no cookies, no analytics, no scripts from elsewhere.</p>
+<p><a href="https://github.com/jellespijker/omabook">Source</a> · <a href="../docs/">Docs</a> ·
+<a href="../help/">Help</a> · <a href="../whats-new.html">What's new</a> ·
+<a href="https://github.com/jellespijker/omabook/blob/main/CHANGELOG.md">Changelog</a></p>
+<p>Pictures marked demo are Omabook's own library of made-up books. The others are a copy of a real library
+with nothing private shown.</p></footer>
+</body></html>
