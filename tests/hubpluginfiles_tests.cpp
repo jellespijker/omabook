@@ -194,6 +194,13 @@ struct Hub {
     }
 };
 
+// A sync that pairs the library with the hub's (#214): another computer's, the first time.
+[[nodiscard]] SyncOptions pairing() {
+    SyncOptions options;
+    options.pair = true;
+    return options;
+}
+
 [[nodiscard]] QString problems(const SyncSummary &summary) {
     return summary.error + summary.problems.join(u'\n') + summary.unannounced.join(u'\n');
 }
@@ -238,7 +245,7 @@ private slots:
         QCOMPARE(contents(hub.file(u"sketches"_s, u"one.svg"_s)), QByteArray("<svg/>"));
         QVERIFY(!QFileInfo::exists(hub.file(u"notebooks"_s, u"settings.json"_s)));
 
-        const SyncSummary second = hub.syncWith(u"desktop"_s, desktop);
+        const SyncSummary second = hub.syncWith(u"desktop"_s, desktop, pairing());
         QVERIFY(clean(second));
         QCOMPARE(second.pluginFilesTaken, 2);
         QCOMPARE(contents(desktop.file(u"notebooks"_s, u"recordings/r1.opus"_s)), sound);
@@ -319,7 +326,7 @@ private slots:
         laptop.notebookWithARecording(sound);
         laptop.story("Once.");
         QVERIFY(clean(hub.syncWith(u"laptop"_s, laptop)));
-        QVERIFY(clean(hub.syncWith(u"desktop"_s, desktop)));
+        QVERIFY(clean(hub.syncWith(u"desktop"_s, desktop, pairing())));
         const QByteArray whole = contents(laptop.file(u"storyteller"_s, u"stories/s1.story"_s));
         QCOMPARE(contents(desktop.file(u"storyteller"_s, u"stories/s1.story"_s)), whole);
 
@@ -378,36 +385,42 @@ private slots:
         const QString kept = hub.file(u"notebooks"_s, u"recordings/r1.opus"_s);
         QVERIFY(QFileInfo::exists(kept));
 
-        // The desktop's library, never synced yet, is none of the hub library's own.
+        // The desktop's library, never synced yet, is none of the hub library's own (#214): its sync
+        // is refused as it begins, so the hub's recording doesn't reach it, nor its own the hub.
         Computer desktop;
+        desktop.story("Elsewhere.");
+        const SyncSummary refused = hub.syncWith(u"desktop"_s, desktop);
+        QVERIFY2(refused.error.contains(u"--pair"_s), qPrintable(problems(refused)));
+        QCOMPARE(refused.pluginFilesSent + refused.pluginFilesTaken, 0);
+        QVERIFY(!QFileInfo::exists(desktop.file(u"notebooks"_s, u"recordings/r1.opus"_s)));
+        QVERIFY(!QFileInfo::exists(hub.file(u"storyteller"_s, u"stories/s1.story"_s)));
+        // Over the session pipe: no visit, so no file is fetched, nor any taken.
         const auto session = hub.session(u"desktop"_s);
         const auto visit = [&](const QString &device) {
             return asked(*session,
-                         {{"request", "sync"}, {"step", "begin"}, {"format", desktop.library.formatVersion()}, {"device", device}})
-                .value("visit");
+                         {{"request", "sync"}, {"step", "begin"}, {"format", desktop.library.formatVersion()}, {"device", device}});
         };
         const auto step = [&](const QJsonValue &begun, QJsonObject request) {
             request.insert("request", "sync");
             request.insert("visit", begun);
             return asked(*session, request);
         };
-        const QJsonValue stranger = visit(Spaces::deviceId(desktop.library));
-        QVERIFY(!step(stranger, {{"step", "fetch"}, {"file", kept}, {"at", 0}}).value("ok").toBool());
-        const QString folder = step(stranger, {{"step", "folder"}}).value("folder").toString();
-        QVERIFY(!folder.isEmpty());
-        const QByteArray request = compact({{"files", QJsonArray{}}, {"device", Spaces::deviceId(desktop.library)}});
-        QVERIFY(step(stranger,
-                     {{"step", "put"}, {"file", folder + u"/given.json"_s}, {"at", 0}, {"data", QString::fromLatin1(request.toBase64())}})
-                    .value("ok")
-                    .toBool());
-        // Asked as the sync guard asks first (#211), so what refuses it is whose library it is.
-        QVERIFY(step(stranger, {{"step", "omabook"}, {"arguments", QJsonArray{u"manifest"_s, u"--state"_s}}}).value("ok").toBool());
-        const QJsonObject took = step(
-            stranger, {{"step", "omabook"}, {"arguments", QJsonArray{u"sync"_s, u"--take-plugin-files"_s, folder + u"/given.json"_s}}});
-        QVERIFY2(!took.value("ok").toBool() && took.value("error").toString() != Failure(Failure::Code::HubSyncUnguarded).text(),
-                 qPrintable(QString::fromUtf8(compact(took))));
+        const QJsonObject stranger = visit(Spaces::deviceId(desktop.library));
+        QVERIFY2(!stranger.value("ok").toBool() && stranger.value("error").toString().contains(u"--pair"_s),
+                 qPrintable(QString::fromUtf8(compact(stranger))));
+        QVERIFY(!step(stranger.value("visit"), {{"step", "fetch"}, {"file", kept}, {"at", 0}}).value("ok").toBool());
+        QVERIFY(!step(stranger.value("visit"), {{"step", "folder"}}).value("ok").toBool());
+        const QJsonObject took =
+            step(stranger.value("visit"),
+                 {{"step", "omabook"}, {"arguments", QJsonArray{u"sync"_s, u"--take-plugin-files"_s, u"f1/given.json"_s}}});
+        QVERIFY2(!took.value("ok").toBool(), qPrintable(QString::fromUtf8(compact(took))));
+        // Paired once asked, the files go both ways.
+        const SyncSummary paired = hub.syncWith(u"desktop"_s, desktop, pairing());
+        QVERIFY(clean(paired));
+        QCOMPARE(contents(desktop.file(u"notebooks"_s, u"recordings/r1.opus"_s)), contents(kept));
+        QVERIFY(contents(hub.file(u"storyteller"_s, u"stories/s1.story"_s)).contains("Elsewhere"));
         // The laptop's, paired at its sync, is.
-        const QJsonValue own = visit(Spaces::deviceId(laptop.library));
+        const QJsonValue own = visit(Spaces::deviceId(laptop.library)).value("visit");
         QVERIFY(step(own, {{"step", "fetch"}, {"file", kept}, {"at", 0}}).value("ok").toBool());
 
         // A library that isn't one of the laptop's own is given none and asked for none.

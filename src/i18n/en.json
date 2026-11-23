@@ -2300,6 +2300,7 @@
   "The hub takes no request called %1.": "The hub takes no request called %1.",
   "The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.": "The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.",
   "The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.": "The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.",
+  "The hub's library %1 isn't paired with this computer's library, so nothing was synced, either way: no books, details, change log or plugins' files. If the two are one library, pair them once: omabook hub sync <hub>:%1 --pair": "The hub's library %1 isn't paired with this computer's library, so nothing was synced, either way: no books, details, change log or plugins' files. If the two are one library, pair them once: omabook hub sync <hub>:%1 --pair",
   "The hubs": "The hubs",
   "The indexing was cancelled.": "The indexing was cancelled.",
   "The ink on page %1 could not be kept.": "The ink on page %1 could not be kept.",

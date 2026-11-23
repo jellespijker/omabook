@@ -21,7 +21,8 @@ class QJsonObject;
 //
 // Begun, a sync names the hub's library (the target's folder, else its one)
 // and this one's format, and the hub refuses a library of another format,
-// saying which Omabook to update; a dry run writes nothing there.
+// saying which Omabook to update; a dry run writes nothing there. A library
+// the hub's isn't paired with is refused too, saying how to pair (#214).
 class HubRemote : public Remote {
 public:
     // Asks the hub one line and answers with its answer, one line; empty
@@ -37,7 +38,8 @@ public:
     HubRemote(HubRemote &&) = delete;
     HubRemote &operator=(HubRemote &&) = delete;
 
-    [[nodiscard]] std::expected<void, Failure> begin(const Library &library, bool dryRun);
+    // A library the hub's isn't paired with is refused here, before anything else, unless `pair` (#214).
+    [[nodiscard]] std::expected<void, Failure> begin(const Library &library, bool dryRun, bool pair = false);
     // Lets the hub know it is over: what was sent for it goes there.
     void end();
 

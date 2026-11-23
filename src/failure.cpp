@@ -382,6 +382,9 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubSyncDryRun, tr("A dry run changes nothing on the hub.")},
     {Failure::Code::HubSyncNotYours,
      tr("In a sync, the hub gives and takes plugins' files only for a library paired with its own: one of your own computers.")},
+    {Failure::Code::HubSyncNotPaired,
+     tr("The hub's library %1 isn't paired with this computer's library, so nothing was synced, either way: no books, details, change "
+        "log or plugins' files. If the two are one library, pair them once: omabook hub sync <hub>:%1 --pair")},
     {Failure::Code::DetailsUnreadable, tr("The details can't be read: %1")},
     {Failure::Code::DetailsNotAnObject, tr("The details aren't a JSON object: %1")},
     {Failure::Code::PictureUnreadable, tr("That picture can't be read: %1")},

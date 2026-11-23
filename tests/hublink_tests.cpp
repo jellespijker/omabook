@@ -701,6 +701,15 @@ private slots:
         QVERIFY2(again == 0 && inStep.contains(u"both libraries are in step"_s), qPrintable(inStep));
         const auto [elsewhere, notLinked] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"elsewhere"_s, u"--library"_s, library});
         QVERIFY2(elsewhere != 0 && notLinked.contains(u"isn't linked to the hub at elsewhere"_s), qPrintable(notLinked));
+        // Another library, not paired with the hub's (#214): refused, saying how to pair, as JSON too; then paired.
+        const QString other = computers.home(u"here"_s) + u"/other/library"_s;
+        QVERIFY(QDir().mkpath(other) && libraryWith(other, u"Beta"_s));
+        const auto [unpaired, howTo] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"--library"_s, other, u"--json"_s});
+        QVERIFY2(unpaired != 0 && howTo.startsWith(u'{') && howTo.contains(u"\"error\": \"The hub's library home isn't paired"_s)
+                     && howTo.contains(u"omabook hub sync <hub>:home --pair"_s),
+                 qPrintable(howTo));
+        const auto [paired, pairedSync] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"--library"_s, other, u"--pair"_s});
+        QVERIFY2(paired == 0 && pairedSync.contains(u"2 received, 1 sent"_s), qPrintable(pairedSync));
     }
 
     void aComputerSyncsThroughARealSshd() {

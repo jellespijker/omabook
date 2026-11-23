@@ -72,6 +72,7 @@ bool parseArguments(QCommandLineParser &parser, const QString &name, const QStri
 [[nodiscard]] std::expected<SyncOptions, QString> parseSyncOptions(const QCommandLineParser &parser) {
     SyncOptions options;
     options.dryRun = parser.isSet("dry-run");
+    options.pair = parser.isSet("pair");
     options.acceptRenames = parser.isSet("accept-renames");
     options.unlink = parser.values("unlink");
     options.accept = parser.values("accept");
@@ -264,6 +265,31 @@ int answerPluginFiles(const QCommandLineParser &parser) {
     return 0;
 }
 
+// What the other side of a sync is asked (`omabook sync --replicate` and the
+// rest), and --pair for a library a hub's isn't paired with yet (#214).
+void addAskedOptions(QCommandLineParser &parser) {
+    parser.addOption({"pair",
+                      "With a hub: pair this library with the hub's library, which other computers' libraries are paired with "
+                      "and this one isn't yet, and sync them. Once is enough; a library new on the hub is paired by its first sync."});
+    parser.addOption({"replicate",
+                      "What omabook sync asks of this computer from the other one: take in the change log's operations in "
+                      "this file, and print the ones the other computer lacks.",
+                      "file"});
+    parser.addOption({"identity",
+                      "What omabook sync asks of this computer first: whether the library this file introduces may sync with this one.",
+                      "file"});
+    parser.addOption({"plugin-files", "What omabook sync asks of this computer: record what plugins' data/ folders hold, and print it."});
+    parser.addOption({"take-plugin-files",
+                      "What omabook sync asks of this computer: take in the files of plugins' data/ folders this file names.", "file"});
+}
+
+// Why a sync didn't begin, and with --json as JSON too (#214).
+int failSync(const QString &why, bool json) {
+    if (json)
+        printJsonObject({{"error", why}});
+    return failLine(why);
+}
+
 } // namespace
 
 int runManifestCli(const QStringList &arguments) {
@@ -319,16 +345,7 @@ int runSyncCli(const QStringList &arguments) {
     parser.addOption({"dry-run",
                       "Change nothing on either side; list what would be received, sent, updated, renamed and removed on each, and "
                       "what of it a sync would be refused for."});
-    parser.addOption({"replicate",
-                      "What omabook sync asks of this computer from the other one: take in the change log's operations in "
-                      "this file, and print the ones the other computer lacks.",
-                      "file"});
-    parser.addOption({"identity",
-                      "What omabook sync asks of this computer first: whether the library this file introduces may sync with this one.",
-                      "file"});
-    parser.addOption({"plugin-files", "What omabook sync asks of this computer: record what plugins' data/ folders hold, and print it."});
-    parser.addOption({"take-plugin-files",
-                      "What omabook sync asks of this computer: take in the files of plugins' data/ folders this file names.", "file"});
+    addAskedOptions(parser);
     if (!parseArguments(parser, "sync", arguments, 1))
         return 1;
     if (parser.isSet("replicate"))
@@ -359,7 +376,7 @@ int runSyncCli(const QStringList &arguments) {
         },
         *options);
     if (!summary.error.isEmpty())
-        return failLine(summary.error);
+        return failSync(summary.error, json);
     const QStringList nothing = unlinkedNothing(*options, summary);
     for (const QString &title : nothing)
         printLine(stderr, QString("No book titled \"%1\" is linked to a book of another title, so nothing was unlinked.").arg(title));

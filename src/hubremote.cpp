@@ -33,12 +33,13 @@ std::expected<QJsonObject, Failure> HubRemote::step(QJsonObject request) const {
     return answer;
 }
 
-std::expected<void, Failure> HubRemote::begin(const Library &library, bool dryRun) {
+std::expected<void, Failure> HubRemote::begin(const Library &library, bool dryRun, bool pair) {
     const auto begun = step({{"step", "begin"},
                              {"library", m_library},
                              {"format", library.formatVersion()},
                              {"dry_run", dryRun},
-                             {"device", Spaces::deviceId(library)}});
+                             {"device", Spaces::deviceId(library)},
+                             {"pair", pair}});
     if (!begun)
         return std::unexpected(begun.error());
     m_visit = begun->value("visit"_L1).toString();
@@ -113,7 +114,7 @@ void HubRemote::dropFolder(const QString &folder) const {
 
 SyncSummary HubRemote::sync(Library &library, const QString &target, const Ask &ask, const Progress &progress, const SyncOptions &options) {
     HubRemote hub(target, ask);
-    if (const auto begun = hub.begin(library, options.dryRun); !begun) {
+    if (const auto begun = hub.begin(library, options.dryRun, options.pair); !begun) {
         SyncSummary refused;
         refused.dryRun = options.dryRun;
         refused.error = begun.error().text();

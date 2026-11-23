@@ -74,6 +74,10 @@ struct SyncOptions {
     QStringList accept;
     // Changes nothing on either side, and says what a sync would do.
     bool dryRun = false;
+    // With a hub (#214): pairs this library with the hub's library, when
+    // other computers' libraries are paired with that one and this one isn't.
+    // Without it, such a sync is refused before anything goes either way.
+    bool pair = false;
     // Whether the sync guard planned and checked this sync already, and runs
     // it (SyncGuard::guarded): set by the guard alone.
     bool planned = false;

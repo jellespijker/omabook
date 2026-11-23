@@ -255,7 +255,8 @@ int runHubCli(const QStringList &arguments) {
         "the hub's session; remove <host> takes it off again, computers <host> lists the hub's computers, and forget <host> "
         "<computer> takes another of them off. On the hub, computers lists them and forget <computer> takes one's key away; "
         "sync [<host>] syncs this library with the hub, as omabook sync <host> does (--dry-run first, to see what it would "
-        "do); session is what a computer's key runs there, one JSON request a line in and one answer a line out, and allow "
+        "do; --pair, once, for a library the hub's isn't paired with yet); session is what a computer's key runs there, one JSON request a "
+        "line in and one answer a line out, and allow "
         "is what add runs there."_s);
     parser.addHelpOption();
     parser.addPositionalArgument(u"what"_s, u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | "

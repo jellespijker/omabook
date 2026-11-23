@@ -8,6 +8,7 @@
 #include <QSet>
 #include <QTemporaryDir>
 #include <QUuid>
+#include <algorithm>
 #include <optional>
 #include <utility>
 
@@ -80,6 +81,18 @@ namespace {
            && PluginFiles::travels(under.section(u'/', 2));
 }
 
+// Whether the library of `device` may sync with `library` (#214): one paired with it, as its own
+// computers' are (the same as its plugins' files go to, #212); or one that asks to pair (`asked`),
+// or any while `library` is new on the hub, paired with no computer's library yet, as a first sync
+// between two computers pairs them.
+[[nodiscard]] bool mayPair(const Library &library, const QString &device, bool asked) {
+    if (Spaces::isOwnComputer(library, device))
+        return true;
+    const QString own = Spaces::deviceId(library);
+    const bool alone = std::ranges::all_of(Spaces::computers(library), [&own](const Spaces::Computer &one) { return one.device == own; });
+    return alone || (asked && !device.isEmpty());
+}
+
 } // namespace
 
 HubSync::HubSync(QString scratch) : m_scratch(scratch.isEmpty() ? QDir::tempPath() : std::move(scratch)) {}
@@ -132,13 +145,20 @@ std::expected<QJsonObject, Failure> HubSync::begin(const QJsonObject &asked, Hub
         asked.value("library"_L1).toString(), HubKeeper::Moment::None, [&](Library &library) -> std::expected<QJsonObject, Failure> {
             visit->library = QFileInfo(library.root()).fileName();
             format = library.formatVersion();
-            if (format == theirs)
-                return QJsonObject();
-            const QStringList words{visit->library, QString::number(format), QString::number(theirs)};
-            qCWarning(lcHub).noquote() << computer << u"(a library of format "_s + QString::number(theirs) + u")"_s << "can't sync with"
-                                       << visit->library << u"(format "_s + QString::number(format) + u"):"_s << "update Omabook on"
-                                       << (format < theirs ? u"the hub."_s : computer + u"."_s);
-            return std::unexpected(Failure(format < theirs ? Failure::Code::HubSyncHubOlder : Failure::Code::HubSyncHubNewer, words));
+            if (format != theirs) {
+                const QStringList words{visit->library, QString::number(format), QString::number(theirs)};
+                qCWarning(lcHub).noquote() << computer << u"(a library of format "_s + QString::number(theirs) + u")"_s << "can't sync with"
+                                           << visit->library << u"(format "_s + QString::number(format) + u"):"_s << "update Omabook on"
+                                           << (format < theirs ? u"the hub."_s : computer + u"."_s);
+                return std::unexpected(Failure(format < theirs ? Failure::Code::HubSyncHubOlder : Failure::Code::HubSyncHubNewer, words));
+            }
+            // Nothing goes either way for a library not paired with this one (#214), before anything is read.
+            if (!mayPair(library, visit->device, asked.value("pair"_L1).toBool())) {
+                qCWarning(lcHub).noquote() << computer + u"'s library isn't paired with "_s + visit->library
+                                           << "and didn't ask to pair: refused.";
+                return std::unexpected(Failure(Failure::Code::HubSyncNotPaired, {visit->library}));
+            }
+            return QJsonObject();
         });
     if (!checked)
         return std::unexpected(checked.error());

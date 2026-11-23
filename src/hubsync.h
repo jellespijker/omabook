@@ -20,7 +20,7 @@ class HubRequests;
 // request `sync`, a step at a time; the session sets "computer" to its key's.
 //
 //   {"step": "begin", "library": <name, or none for the hub's one>, "format": <the computer's library's>, "dry_run": false,
-//    "device": <the computer's library's>}
+//    "device": <the computer's library's>, "pair": false}
 //     → {"visit": <id>, "library": <name>, "format": <the hub's>}
 //   {"step": "omabook", "visit": <id>, "arguments": [...]}  → {"answer": <what it printed>} (HubSyncSteps)
 //   {"step": "folder", "visit": <id>}                       → {"folder": <its name>}
@@ -37,6 +37,13 @@ class HubRequests;
 // is from before the sync guard (#187): one that would write before it asked
 // `manifest --state`, as the guard does first, checks no plan, and is to be
 // updated (#211). A dry run writes nothing at all.
+//
+// Nor does a library the hub's isn't paired with (#214): one that isn't of
+// its own computers (Spaces::isOwnComputer, as for its plugins' files) is
+// refused as it begins, before anything is read or written either way,
+// unless it asks to pair ("pair", omabook hub sync --pair) or the hub's
+// library is new, paired with no computer's yet, as two computers pair at
+// their first sync. Its log step pairs them, as between two computers.
 class HubSync {
 public:
     // How long a sync may stand without a step before the hub lets it go.

@@ -21,6 +21,7 @@
 #include <QStandardPaths>
 #include <QStyleHints>
 #include <QThread>
+#include <QUuid>
 #include <QtTest>
 #include <memory>
 #include <span>
@@ -41,6 +42,7 @@
 #include "person.h"
 #include "snapshothealth.h"
 #include "snapshots.h"
+#include "spaces.h"
 #include "sshkey.h"
 #include "sync.h"
 
@@ -519,6 +521,39 @@ private slots:
         QCOMPARE(hub->here(), 2);
         // The hub asked again: its library as the sync left it.
         QTRY_COMPARE(text(desk, "hubLibraries"), QString("home: 2 books"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A library the hub's isn't paired with, as another computer's library is
+    // (#214), is refused at Sync Now and at its preview, the panel saying how
+    // to pair; neither side changes.
+    void aLibraryNotPairedWithTheHubsSaysHowToPair() {
+        Desk desk("en", {}, false);
+        HubHere *hub = served(desk);
+        QVERIFY(hub);
+        const QString other = QUuid::createUuid().toString(QUuid::Id128);
+        QVERIFY(hub->keeper
+                    .whole([&other](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+                        Spaces::pair(*libraries.front(), u"personal:"_s + other, other, u"desktop"_s);
+                        return {};
+                    })
+                    .has_value());
+        QVERIFY(desk.show());
+        QVERIFY(linked(desk));
+        QVERIFY(open(desk));
+        QTRY_VERIFY(shown(desk, "hubSyncNow"));
+        for (const bool preview : {true, false}) {
+            if (preview)
+                key(desk, Qt::Key_P);
+            else
+                click(desk, "hubSyncNow");
+            QVERIFY(idle(desk));
+            QVERIFY(desk.hubsDesk->failed());
+            QTRY_VERIFY(text(desk, "hubsStatus").contains("isn't paired with this computer's library"));
+            QVERIFY2(text(desk, "hubsStatus").contains("omabook hub sync <hub>:home --pair"), qPrintable(text(desk, "hubsStatus")));
+            QCOMPARE(hub->onHub(), 1);
+            QCOMPARE(hub->here(), 1);
+        }
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 

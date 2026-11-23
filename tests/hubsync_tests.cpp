@@ -5,8 +5,10 @@
 // hub end with the same libraries in whatever order they sync, and the same
 // as two computers that sync with each other without it; a dry run changes
 // nothing on either side; a library of another format is refused, saying
-// which Omabook to update; and a sync is the key's computer's alone, reaching
-// nothing on the hub but its own folders and the library's books.
+// which Omabook to update; a sync is the key's computer's alone, reaching
+// nothing on the hub but its own folders and the library's books; and a
+// library not paired with the hub's gives it nothing and is given nothing,
+// until the person pairs the two (#214).
 //
 // Everything here is in temporary folders: two libraries, and a hub with its
 // keeper, its computers' keys and the session's pipe, all in this process.
@@ -204,6 +206,13 @@ struct Hub {
 }
 
 // Two computers' first books, each made the same on every computer.
+// A sync that pairs the library with the hub's (#214): one of another computer's, the first time.
+[[nodiscard]] SyncOptions pairing() {
+    SyncOptions options;
+    options.pair = true;
+    return options;
+}
+
 void stockUp(Computer &laptop, Computer &desktop) {
     QVERIFY(laptop.add(u"Alpha"_s) > 0);
     QVERIFY(laptop.library.setReading(1, u"reading"_s, 4, {}));
@@ -228,7 +237,7 @@ private slots:
         QVERIFY2(first.error.isEmpty() && first.problems.isEmpty(), qPrintable(problems(first)));
         QCOMPARE(first.sent, 1);
         QCOMPARE(hub.held(), contents(laptop.library));
-        const SyncSummary second = hub.syncWith(u"desktop"_s, desktop.library);
+        const SyncSummary second = hub.syncWith(u"desktop"_s, desktop.library, pairing());
         QVERIFY2(second.problems.isEmpty(), qPrintable(problems(second)));
         QCOMPARE(second.received, 1);
         QCOMPARE(second.sent, 2);
@@ -296,7 +305,9 @@ private slots:
             Computer desktop;
             stockUp(laptop, desktop);
             for (const QString &computer : order) {
-                const SyncSummary synced = hub.syncWith(computer, computer == u"laptop"_s ? laptop.library : desktop.library);
+                // The second library pairs with the hub's at its first sync (#214), as it does with the computer in its place.
+                const SyncSummary synced = hub.syncWith(computer, computer == u"laptop"_s ? laptop.library : desktop.library,
+                                                        computer != order.first() ? pairing() : SyncOptions());
                 QVERIFY2(synced.problems.isEmpty() && synced.error.isEmpty(), qPrintable(order.join(u' ') + u": "_s + problems(synced)));
             }
             QCOMPARE(contents(laptop.library), contents(here.library));
@@ -320,7 +331,7 @@ private slots:
         const QStringList here = contents(laptop.library);
         const qsizetype snapshots = hub.syncMoments();
         const SyncSummary dry = hub.syncWith(u"laptop"_s, laptop.library, [] {
-            SyncOptions options;
+            SyncOptions options = pairing();
             options.dryRun = true;
             return options;
         }());
@@ -334,8 +345,12 @@ private slots:
         QCOMPARE(hub.syncMoments(), snapshots);
         // And a step that would write, asked in a dry run, is refused.
         const auto session = hub.session(u"laptop"_s);
-        const QJsonObject begun =
-            asked(*session, {{"request", "sync"}, {"step", "begin"}, {"format", laptop.library.formatVersion()}, {"dry_run", true}});
+        const QJsonObject begun = asked(*session, {{"request", "sync"},
+                                                   {"step", "begin"},
+                                                   {"format", laptop.library.formatVersion()},
+                                                   {"dry_run", true},
+                                                   {"device", Spaces::deviceId(laptop.library)},
+                                                   {"pair", true}});
         QVERIFY2(begun.value("ok").toBool(), qPrintable(begun.value("error").toString()));
         const QJsonObject refused = asked(*session, {{"request", "sync"},
                                                      {"visit", begun.value("visit")},
@@ -365,7 +380,7 @@ private slots:
                 return std::unexpected(Failure::said(u"no room for the snapshot"_s));
             return {};
         });
-        const SyncSummary refused = hub.syncWith(u"desktop"_s, desktop.library);
+        const SyncSummary refused = hub.syncWith(u"desktop"_s, desktop.library, pairing());
         QVERIFY2(problems(refused).contains(u"no room for the snapshot"_s), qPrintable(problems(refused)));
         QCOMPARE(hub.held().size(), 1);
     }
@@ -476,7 +491,10 @@ private slots:
         QVERIFY(laptop.add(u"Alpha"_s) > 0);
         QVERIFY(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty());
         const auto session = hub.session(u"laptop"_s);
-        const QJsonObject begun = asked(*session, {{"request", "sync"}, {"step", "begin"}, {"format", laptop.library.formatVersion()}});
+        const QJsonObject begun = asked(*session, {{"request", "sync"},
+                                                   {"step", "begin"},
+                                                   {"format", laptop.library.formatVersion()},
+                                                   {"device", Spaces::deviceId(laptop.library)}});
         QVERIFY2(begun.value("ok").toBool(), qPrintable(begun.value("error").toString()));
         const QJsonValue visit = begun.value("visit");
         const auto step = [&visit](HubSession &by, QJsonObject request) {
@@ -544,7 +562,10 @@ private slots:
         QVERIFY(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty());
         const QStringList held = hub.held();
         const auto session = hub.session(u"laptop"_s);
-        const QJsonObject begun = asked(*session, {{"request", "sync"}, {"step", "begin"}, {"format", laptop.library.formatVersion()}});
+        const QJsonObject begun = asked(*session, {{"request", "sync"},
+                                                   {"step", "begin"},
+                                                   {"format", laptop.library.formatVersion()},
+                                                   {"device", Spaces::deviceId(laptop.library)}});
         QVERIFY2(begun.value("ok").toBool(), qPrintable(begun.value("error").toString()));
         const auto omabook = [&](const QJsonArray &arguments) {
             return asked(*session, {{"request", "sync"}, {"visit", begun.value("visit")}, {"step", "omabook"}, {"arguments", arguments}});
@@ -597,6 +618,73 @@ private slots:
         QCOMPARE(rowsOf(hubDatabase), hubRows);
         QCOMPARE(rowsOf(laptopDatabase), laptopRows);
         QCOMPARE(hub.syncMoments(), 0);
+    }
+
+    // A library not paired with the hub's (#214), which other computers'
+    // libraries are paired with already, gives it nothing and is given nothing:
+    // no change log, no details, no book, no file, either way. Its sync is
+    // refused as it begins, saying how to pair the two, and nothing is read or
+    // written on either side; asked to pair, it syncs, and from then on as any.
+    void aLibraryNotPairedWithTheHubsSyncsNothingUntilPaired() {
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        Computer desktop;
+        stockUp(laptop, desktop);
+        // A library new on the hub is paired by its first sync, as two computers are.
+        const SyncSummary first = hub.syncWith(u"laptop"_s, laptop.library);
+        QVERIFY2(first.error.isEmpty() && first.problems.isEmpty(), qPrintable(problems(first)));
+        QCOMPARE(hub.held().size(), 1);
+        const QString hubDatabase = Library::databaseIn(hub.dir.filePath(u"libraries/home"_s));
+        const QString desktopDatabase = Library::databaseIn(desktop.library.root());
+        const auto hubRows = rowsOf(hubDatabase);
+        const auto desktopRows = rowsOf(desktopDatabase);
+        hub.moments.clear();
+        for (const bool dryRun : {true, false}) {
+            SyncOptions options;
+            options.dryRun = dryRun;
+            const SyncSummary refused = hub.syncWith(u"desktop"_s, desktop.library, options);
+            QVERIFY2(refused.error.contains(u"isn't paired with this computer's library"_s)
+                         && refused.error.contains(u"omabook hub sync <hub>:home --pair"_s),
+                     qPrintable(problems(refused)));
+            QCOMPARE(refused.received + refused.sent + refused.detailsTaken + refused.detailsSent, 0);
+        }
+        QCOMPARE(rowsOf(hubDatabase), hubRows);
+        QCOMPARE(rowsOf(desktopDatabase), desktopRows);
+        QVERIFY(hub.moments.isEmpty());
+
+        // Over the session pipe: the begin is refused, no visit is made, and with none nothing is asked or put.
+        const auto session = hub.session(u"desktop"_s);
+        const QJsonObject begun = asked(*session, {{"request", "sync"},
+                                                   {"step", "begin"},
+                                                   {"format", desktop.library.formatVersion()},
+                                                   {"device", Spaces::deviceId(desktop.library)}});
+        QVERIFY(!begun.value("ok").toBool());
+        QVERIFY(!begun.contains("visit"));
+        QVERIFY2(begun.value("error").toString().contains(u"--pair"_s), qPrintable(begun.value("error").toString()));
+        const auto step = [&session](QJsonObject request) {
+            request.insert("request", "sync");
+            request.insert("visit", "");
+            return asked(*session, request);
+        };
+        QVERIFY(!step({{"step", "omabook"}, {"arguments", QJsonArray{u"manifest"_s, u"--log"_s}}}).value("ok").toBool());
+        QVERIFY(!step({{"step", "folder"}}).value("ok").toBool());
+        QCOMPARE(rowsOf(hubDatabase), hubRows);
+
+        // Paired once asked, it syncs both ways; and then as any library paired with the hub's.
+        const SyncSummary paired = hub.syncWith(u"desktop"_s, desktop.library, pairing());
+        QVERIFY2(paired.error.isEmpty() && paired.problems.isEmpty(), qPrintable(problems(paired)));
+        QCOMPARE(paired.received, 1);
+        QCOMPARE(paired.sent, 2);
+        QVERIFY(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty());
+        QVERIFY(desktop.library.setReading(desktop.library.books(u"Alpha"_s).value(0).id, u"read"_s, 2, u"2026-11-01"_s));
+        const SyncSummary again = hub.syncWith(u"desktop"_s, desktop.library);
+        QVERIFY2(again.error.isEmpty() && again.problems.isEmpty(), qPrintable(problems(again)));
+        QVERIFY(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty());
+        QCOMPARE(contents(laptop.library), contents(desktop.library));
+        QCOMPARE(hub.held(), contents(laptop.library));
+        QCOMPARE(hub.held().size(), 3);
     }
 };
 
