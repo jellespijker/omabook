@@ -112,6 +112,9 @@ struct SyncSummary {
     int pluginFilesHeld = 0;    // the same, kept where they are, over what a plugin may keep (PluginFiles)
     int pluginFilesOnDemand = 0; // the same, left where they are until a plugin opens them (#135)
     bool dryRun = false;        // nothing was changed; the counts are what would be
+    // A sync with a hub refused for the hub's library not being paired with
+    // this one (#214): the hub's library, and this one, to offer pairing (#217).
+    QString unpairedThere, unpairedHere;
     // The titles each count is of, for showing on a terminal (never logged).
     struct Titles {
         QStringList received, sent, placesTaken, placesSent, detailsTaken, detailsSent, readingTaken, readingSent, removedHere,

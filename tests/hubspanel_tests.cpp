@@ -3,8 +3,9 @@
 // then shown as it stands (reachable, its Omabook, its libraries, the
 // computers linked to it, its snapshots' warnings in red); another computer
 // taken off it after asking; the hub unlinked, by a key and by the mouse;
-// and a hub that took the key away, or can't be reached, said so. Surveyed in
-// German, under fingers and right to left.
+// and a hub that took the key away, or can't be reached, said so; a library
+// the hub's isn't paired with paired after asking (#217). Surveyed in German,
+// under fingers and right to left.
 //
 // The hub is in this process, in temporary folders: its keeper of one
 // library, its requests with the snapshots' among them, its computers' keys,
@@ -17,6 +18,7 @@
 #include <QGuiApplication>
 #include <QJsonDocument>
 #include <QMutex>
+#include <QPointingDevice>
 #include <QQuickStyle>
 #include <QStandardPaths>
 #include <QStyleHints>
@@ -77,6 +79,17 @@ public:
     std::optional<Person> person;
     mutable QObject home; // on the window's thread
     bool reachable = true;
+
+    // The hub's library paired with another computer's library and not this one's (#214).
+    [[nodiscard]] bool pairedElsewhere() {
+        const QString other = QUuid::createUuid().toString(QUuid::Id128);
+        return keeper
+            .whole([&other](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+                Spaces::pair(*libraries.front(), u"personal:"_s + other, other, u"desktop"_s);
+                return {};
+            })
+            .has_value();
+    }
 
     // The hub with a library of one book, its snapshots set up and their
     // password gone, and the person's desktop linked to it already; and this
@@ -266,6 +279,16 @@ class HubsPanelTests : public QObject {
         QTest::qWait(QGuiApplication::styleHints()->mouseDoubleClickInterval() + 50);
         QQuickItem *item = onScreen(desk, name, true);
         QTest::mouseClick(desk.window, Qt::LeftButton, {}, item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint());
+    }
+    // Tapped with a finger, where it is on screen.
+    static void tap(const Desk &desk, const QString &name) {
+        static QPointingDevice *const finger = QTest::createTouchDevice();
+        QVERIFY2(QTest::qWaitFor([&] { return onScreen(desk, name, true) != nullptr; }, 5000), qPrintable(name));
+        QTest::qWait(QGuiApplication::styleHints()->mouseDoubleClickInterval() + 50);
+        QQuickItem *item = onScreen(desk, name, true);
+        const QPoint at = item->mapToScene(QPointF(item->width() / 2, item->height() / 2)).toPoint();
+        QTest::touchEvent(desk.window, finger).press(0, at, desk.window);
+        QTest::touchEvent(desk.window, finger).release(0, at, desk.window);
     }
     // A button out of sight in a dialog that scrolls, pressed.
     static void press(const Desk &desk, const QString &name) {
@@ -531,13 +554,7 @@ private slots:
         Desk desk("en", {}, false);
         HubHere *hub = served(desk);
         QVERIFY(hub);
-        const QString other = QUuid::createUuid().toString(QUuid::Id128);
-        QVERIFY(hub->keeper
-                    .whole([&other](std::span<Library *const> libraries) -> std::expected<void, Failure> {
-                        Spaces::pair(*libraries.front(), u"personal:"_s + other, other, u"desktop"_s);
-                        return {};
-                    })
-                    .has_value());
+        QVERIFY(hub->pairedElsewhere());
         QVERIFY(desk.show());
         QVERIFY(linked(desk));
         QVERIFY(open(desk));
@@ -554,6 +571,85 @@ private slots:
             QCOMPARE(hub->onHub(), 1);
             QCOMPARE(hub->here(), 1);
         }
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // Where the sync was refused for that, Pair asks first, naming both libraries (#217): A, Escape and
+    // Keep Apart leave them unpaired; a yes to the preview's pairs nothing and shows what the sync would
+    // do; a yes to the sync's, tapped, pairs them through --pair and syncs, and the next sync goes through.
+    void aLibraryNotPairedIsPairedAfterAYes() {
+        Desk desk("en", {}, false);
+        HubHere *hub = served(desk);
+        QVERIFY(hub);
+        QVERIFY(hub->pairedElsewhere());
+        QVERIFY(desk.show());
+        QVERIFY(linked(desk));
+        QVERIFY(open(desk));
+        QTRY_VERIFY(shown(desk, "hubSyncNow"));
+        QVERIFY(!shown(desk, "hubPair"));
+        key(desk, Qt::Key_A); // nothing to pair yet
+        QVERIFY(!shown(desk, "hubPairQuestion"));
+
+        key(desk, Qt::Key_P);
+        QVERIFY(idle(desk));
+        QVERIFY(desk.hubsDesk->failed());
+        QTRY_VERIFY(shown(desk, "hubPair"));
+        QVERIFY(!shown(desk, "hubPairQuestion"));
+        key(desk, Qt::Key_A);
+        QTRY_VERIFY(shown(desk, "hubPairQuestion"));
+        QVERIFY2(text(desk, "hubPairQuestion")
+                     .startsWith("See what a sync would do with the hub's library home paired with this computer's library laptop?"),
+                 qPrintable(text(desk, "hubPairQuestion")));
+        key(desk, Qt::Key_Escape);
+        QTRY_VERIFY(!shown(desk, "hubPairQuestion"));
+        QVERIFY(value(desk, "hubs", "opened").toBool());
+        click(desk, "hubPair");
+        QTRY_VERIFY(shown(desk, "hubPairQuestion"));
+        click(desk, "hubPairNo");
+        QTRY_VERIFY(!shown(desk, "hubPairQuestion"));
+        QVERIFY(shown(desk, "hubPair"));
+        QCOMPARE(hub->onHub(), 1);
+        QCOMPARE(hub->here(), 1);
+
+        // The preview's yes, by Enter: what the sync would do, and nothing changed or paired.
+        key(desk, Qt::Key_A);
+        QTRY_VERIFY(shown(desk, "hubPairQuestion"));
+        key(desk, Qt::Key_Return);
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.hubsDesk->failed(), qPrintable(desk.hubsDesk->status()));
+        QTRY_VERIFY(shown(desk, "hubSynced"));
+        QVERIFY2(text(desk, "hubSynced").startsWith("A sync now would do this") && text(desk, "hubSynced").contains("1 book received"),
+                 qPrintable(text(desk, "hubSynced")));
+        QVERIFY(!shown(desk, "hubPair"));
+        QCOMPARE(hub->onHub(), 1);
+        QCOMPARE(hub->here(), 1);
+
+        // Sync Now is still refused, and its Pair, tapped, pairs and syncs.
+        click(desk, "hubSyncNow");
+        QVERIFY(idle(desk));
+        QVERIFY(desk.hubsDesk->failed());
+        QTRY_VERIFY(text(desk, "hubsStatus").contains("isn't paired with this computer's library"));
+        tap(desk, "hubPair");
+        QTRY_VERIFY(shown(desk, "hubPairQuestion"));
+        QVERIFY2(
+            text(desk, "hubPairQuestion").startsWith("Pair the hub's library home with this computer's library laptop, and sync them?"),
+            qPrintable(text(desk, "hubPairQuestion")));
+        QCOMPARE(text(desk, "hubPairYes"), QString("Pair and Sync"));
+        tap(desk, "hubPairYes");
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.hubsDesk->failed(), qPrintable(desk.hubsDesk->status()));
+        QTRY_VERIFY(text(desk, "hubSynced").startsWith("Synced:"));
+        QCOMPARE(hub->onHub(), 2);
+        QCOMPARE(hub->here(), 2);
+        QVERIFY(!shown(desk, "hubPair"));
+
+        // Paired: the next sync goes through, asking nothing.
+        key(desk, Qt::Key_S);
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.hubsDesk->failed(), qPrintable(desk.hubsDesk->status()));
+        QVERIFY(desk.hubsDesk->unpaired().isEmpty());
+        QTRY_VERIFY(text(desk, "hubSynced").startsWith("Synced:"));
+        QVERIFY(!shown(desk, "hubPair"));
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
@@ -579,18 +675,27 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
-    // The panel with a hub and its warnings, its computers, and linking's yes: at every size, in a
+    // The panel with a hub and its warnings, the question before pairing, its computers, and linking's yes: at every size, in a
     // long language, under fingers and right to left.
     void thePanelAtEverySize() {
         for (const auto &[language, touch] : {std::pair{QByteArray("de"), false}, {QByteArray("de"), true}, {QByteArray("ar"), false}}) {
             Desk desk(language, touch ? QByteArray() : lightTheme, touch);
-            QVERIFY(served(desk));
+            HubHere *hub = served(desk);
+            QVERIFY(hub);
+            QVERIFY(hub->pairedElsewhere());
             QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
             QVERIFY(linked(desk));
             QVERIFY(open(desk));
             QTRY_VERIFY(shown(desk, "hubWarning"));
             desk.quicken();
-            for (const QString &page : {u"list"_s, u"computers"_s, u"consent"_s}) {
+            for (const QString &page : {u"list"_s, u"pair"_s, u"computers"_s, u"consent"_s}) {
+                if (page == u"pair"_s) {
+                    press(desk, "hubSyncNow");
+                    QVERIFY(idle(desk));
+                    QTRY_VERIFY(desk.find("hubPair") && value(desk, "hubPair", "visible").toBool());
+                    press(desk, "hubPair");
+                    QTRY_VERIFY(shown(desk, "hubPairQuestion"));
+                }
                 if (page == u"computers"_s)
                     click(desk, "hubShowComputers");
                 if (page == u"consent"_s) {

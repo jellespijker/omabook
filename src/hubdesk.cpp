@@ -123,6 +123,7 @@ void HubDesk::work(const QString &doing, const QString &host, std::function<Outc
     m_doingHost = host;
     m_status.clear();
     m_failed = false;
+    m_unpaired.clear();
     emit changed();
     m_job = QtConcurrent::run([this, job = std::move(job)] {
         const Outcome outcome = job();
@@ -138,6 +139,7 @@ void HubDesk::work(const QString &doing, const QString &host, std::function<Outc
                     m_states.remove(host);
             m_status = outcome.said;
             m_failed = outcome.failed;
+            m_unpaired = outcome.unpaired;
             const bool wrote = !outcome.synced.isEmpty() && !outcome.synced.value(u"dryRun"_s).toBool();
             if (!outcome.synced.isEmpty())
                 m_synced = outcome.synced;
@@ -177,13 +179,14 @@ void HubDesk::link(const QString &host, const QString &computer) {
     work(u"link"_s, reached, [hubs = m_hubs.get(), reached, name] {
         const auto linked = hubs->add(reached, name);
         if (!linked)
-            return Outcome{.said = linked.error().text(), .failed = true, .states = {}, .synced = {}};
+            return Outcome{.said = linked.error().text(), .failed = true, .states = {}, .synced = {}, .unpaired = {}};
         return Outcome{.said =
                            tr("This computer is linked to the hub at %1 as %2. Its key there opens only the hub's session, never a shell.")
                                .arg(reached, linked->computer),
                        .failed = false,
                        .states = {{reached, standing(*hubs, reached)}},
-                       .synced = {}};
+                       .synced = {},
+                       .unpaired = {}};
     });
 }
 
@@ -191,11 +194,12 @@ void HubDesk::unlink(const QString &host) {
     work(u"unlink"_s, host, [hubs = m_hubs.get(), host] {
         const auto removed = hubs->remove(host);
         if (!removed)
-            return Outcome{.said = removed.error().text(), .failed = true, .states = {}, .synced = {}};
+            return Outcome{.said = removed.error().text(), .failed = true, .states = {}, .synced = {}, .unpaired = {}};
         return Outcome{.said = tr("This computer is no longer linked to the hub at %1: its key there is gone.").arg(host),
                        .failed = false,
                        .states = {},
-                       .synced = {}};
+                       .synced = {},
+                       .unpaired = {}};
     });
 }
 
@@ -206,21 +210,33 @@ void HubDesk::forget(const QString &host, const QString &computer) {
                                           : forgotten.error().text(),
                         .failed = !forgotten,
                         .states = {},
-                        .synced = {}};
+                        .synced = {},
+                        .unpaired = {}};
         outcome.states.insert(host, standing(*hubs, host));
         return outcome;
     });
 }
 
-void HubDesk::syncNow(const QString &host, bool dryRun) {
-    work(dryRun ? u"preview"_s : u"sync"_s, host, [hubs = m_hubs.get(), host, dryRun] {
+void HubDesk::syncNow(const QString &host, bool dryRun) { sync(host, dryRun, false); }
+
+void HubDesk::pair() {
+    if (!m_unpaired.isEmpty() && m_doing.isEmpty())
+        sync(m_unpaired.value(u"host"_s).toString(), m_unpaired.value(u"dryRun"_s).toBool(), true);
+}
+
+void HubDesk::sync(const QString &host, bool dryRun, bool pair) {
+    work(dryRun ? u"preview"_s : u"sync"_s, host, [hubs = m_hubs.get(), host, dryRun, pair] {
         SyncOptions options;
         options.dryRun = dryRun;
+        options.pair = pair;
         const SyncSummary summary = hubs->sync(host, options);
         const bool failed = !summary.error.isEmpty();
-        Outcome outcome{.said = failed ? summary.error : QString(), .failed = failed, .states = {}, .synced = {}};
+        Outcome outcome{.said = failed ? summary.error : QString(), .failed = failed, .states = {}, .synced = {}, .unpaired = {}};
         if (!failed)
             outcome.synced = {{u"host"_s, host}, {u"dryRun"_s, dryRun}, {u"lines"_s, Backend::syncLines(summary)}};
+        if (!summary.unpairedThere.isEmpty())
+            outcome.unpaired = {
+                {u"host"_s, host}, {u"there"_s, summary.unpairedThere}, {u"here"_s, summary.unpairedHere}, {u"dryRun"_s, dryRun}};
         // The hub's libraries as the sync left them.
         if (!dryRun)
             outcome.states.insert(host, standing(*hubs, host));
@@ -229,10 +245,11 @@ void HubDesk::syncNow(const QString &host, bool dryRun) {
 }
 
 void HubDesk::clear() {
-    if (m_status.isEmpty() && m_synced.isEmpty())
+    if (m_status.isEmpty() && m_synced.isEmpty() && m_unpaired.isEmpty())
         return;
     m_status.clear();
     m_synced.clear();
+    m_unpaired.clear();
     m_failed = false;
     emit changed();
 }

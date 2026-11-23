@@ -28,6 +28,9 @@ std::expected<QJsonObject, Failure> HubRemote::step(QJsonObject request) const {
     QJsonObject answer = QJsonDocument::fromJson(answered).object();
     if (answer.isEmpty())
         return std::unexpected(Failure(Failure::Code::HubSessionEnded, {host()}));
+    // A library not paired with the hub's is said as here (#217): worded in the window's language, and pairable.
+    if (answer.contains("unpaired"_L1))
+        return std::unexpected(Failure(Failure::Code::HubSyncNotPaired, {answer.value("unpaired"_L1).toString()}));
     if (!answer.value("ok"_L1).toBool())
         return std::unexpected(Failure::said(answer.value("error"_L1).toString()));
     return answer;
@@ -118,6 +121,10 @@ SyncSummary HubRemote::sync(Library &library, const QString &target, const Ask &
         SyncSummary refused;
         refused.dryRun = options.dryRun;
         refused.error = begun.error().text();
+        if (begun.error().code() == Failure::Code::HubSyncNotPaired) {
+            refused.unpairedThere = begun.error().arguments().value(0);
+            refused.unpairedHere = QFileInfo(library.root()).fileName();
+        }
         return refused;
     }
     SyncSummary summary = syncLibrary(library, hub, progress, options);

@@ -43,7 +43,12 @@ QStringList HubRequests::names() const {
     return names;
 }
 
-QJsonObject HubRequests::refusal(const Failure &why) { return {{"ok", false}, {"error", why.english()}}; }
+QJsonObject HubRequests::refusal(const Failure &why) {
+    QJsonObject refused{{"ok", false}, {"error", why.english()}};
+    if (why.code() == Failure::Code::HubSyncNotPaired)
+        refused.insert("unpaired"_L1, why.arguments().value(0));
+    return refused;
+}
 
 QJsonObject HubRequests::answer(const QJsonObject &asked, HubKeeper &keeper) const {
     const QString name = asked.value("request"_L1).toString();

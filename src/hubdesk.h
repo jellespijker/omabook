@@ -42,6 +42,10 @@ class HubDesk : public QObject {
     Q_PROPERTY(bool failed READ failed NOTIFY changed)
     // The last sync with a hub, or its preview: {"host", "dryRun", "lines": [what it did, or would do]}; empty before one.
     Q_PROPERTY(QVariantMap synced READ synced NOTIFY changed)
+    // The last sync or preview, when the hub refused it for its library not being paired with
+    // this computer's (#214): {"host", "there" (the hub's library), "here" (this computer's),
+    // "dryRun"}, for pair() to pair them (#217); empty otherwise.
+    Q_PROPERTY(QVariantMap unpaired READ unpaired NOTIFY changed)
 
 public:
     // The hubs as this computer reaches them: HubLinks, or a test's hub.
@@ -80,6 +84,7 @@ public:
     [[nodiscard]] QString status() const { return m_status; }
     [[nodiscard]] bool failed() const noexcept { return m_failed; }
     [[nodiscard]] QVariantMap synced() const { return m_synced; }
+    [[nodiscard]] QVariantMap unpaired() const { return m_unpaired; }
 
     // Each hub asked again how it stands.
     Q_INVOKABLE void refresh();
@@ -92,6 +97,10 @@ public:
     // Syncs the library in use with the hub at `host`; with `dryRun`, changes
     // nothing on either side and says what a sync would do.
     Q_INVOKABLE void syncNow(const QString &host, bool dryRun);
+    // The sync, or preview, refused as `unpaired` says, asked again pairing the two
+    // libraries, as `omabook hub sync <hub>:<library> --pair` does (#217). A preview
+    // pairs nothing: it shows what the sync that pairs them would do.
+    Q_INVOKABLE void pair();
     // What was said is said no more.
     Q_INVOKABLE void clear();
 
@@ -106,8 +115,10 @@ private:
         QString said;
         bool failed = false;
         QMap<QString, QVariantMap> states;
-        QVariantMap synced; // a sync's, when it was one
+        QVariantMap synced;   // a sync's, when it was one
+        QVariantMap unpaired; // a sync's, refused for the libraries not being paired
     };
+    void sync(const QString &host, bool dryRun, bool pair);
     void work(const QString &doing, const QString &host, std::function<Outcome()> job);
     // How the hub at `host` stands, asked on the worker.
     [[nodiscard]] static QVariantMap standing(const Hubs &hubs, const QString &host);
@@ -116,7 +127,7 @@ private:
     QList<HubLinks::Hub> m_linked;
     QMap<QString, QVariantMap> m_states; // by host
     QFuture<void> m_job;
-    QVariantMap m_synced;
+    QVariantMap m_synced, m_unpaired;
     QString m_doing, m_doingHost, m_status;
     bool m_failed = false;
 };

@@ -7,7 +7,9 @@ import QtQuick.Layouts
 // its Omabook, its libraries, the computers linked to it, what is wrong with
 // its snapshots), linking another, unlinking, and the hub's computers, each
 // of the others to take off it; and syncing the library with it (#188), or
-// seeing first what a sync would do. All of it through the hub's session, as
+// seeing first what a sync would do; and, where a sync was refused for the
+// hub's library not being paired with this computer's (#214), pairing them
+// after asking (#217). All of it through the hub's session, as
 // `omabook hub` asks it. The keys are the panel's "hubs" (panelkeys.cpp).
 AppPopup {
     id: dialog
@@ -22,6 +24,9 @@ AppPopup {
     // The hub whose unlinking, or the computer whose forgetting, waits for a yes.
     property string unlinking: ""
     property string forgetting: ""
+    // Whether pairing the hub's library with this computer's waits for a yes (#217).
+    property bool pairing: false
+    readonly property var unpaired: hubsDesk.unpaired.host !== undefined && page === "list" ? hubsDesk.unpaired : null
     readonly property var current: hubsDesk.hubs.find(hub => hub.host === chosen) || null
     readonly property var picked: at >= 0 && at < hubsDesk.hubs.length ? hubsDesk.hubs[at] : null
     readonly property bool idle: hubsDesk.doing === ""
@@ -29,6 +34,7 @@ AppPopup {
     function show(which, host) {
         unlinking = ""
         forgetting = ""
+        pairing = false
         hubsDesk.clear()
         if (host !== undefined)
             chosen = host
@@ -39,9 +45,10 @@ AppPopup {
             keyboard.forceActiveFocus()
     }
     function back() {
-        if (unlinking !== "" || forgetting !== "") {
+        if (unlinking !== "" || forgetting !== "" || pairing) {
             unlinking = ""
             forgetting = ""
+            pairing = false
         } else if (page === "link" && linking.step > 0) {
             linking.step = 0
         } else if (page !== "list") {
@@ -56,14 +63,18 @@ AppPopup {
         at = Math.max(0, Math.min(hubsDesk.hubs.length - 1, index))
         list.positionViewAtIndex(at, ListView.Contain)
     }
-    // The answer to a question the dialog asked: unlink, or forget.
+    // The answer to a question the dialog asked: unlink, forget, or pair.
     function sure() {
         if (unlinking !== "")
             hubsDesk.unlink(unlinking)
         else if (forgetting !== "")
             hubsDesk.forget(chosen, forgetting)
+        else if (pairing)
+            hubsDesk.pair()
         unlinking = ""
         forgetting = ""
+        pairing = false
+        keyboard.forceActiveFocus()
     }
 
     closePolicy: Popup.CloseOnPressOutside
@@ -72,6 +83,7 @@ AppPopup {
         at = 0
         unlinking = ""
         forgetting = ""
+        pairing = false
         hubsDesk.clear()
         hubsDesk.refresh()
     }
@@ -83,7 +95,7 @@ AppPopup {
         // Every key of the panel. A key a text field took never gets here.
         Keys.onPressed: (event) => {
             const plain = event.modifiers === Qt.NoModifier || event.modifiers === Qt.KeypadModifier
-            const asking = dialog.unlinking !== "" || dialog.forgetting !== ""
+            const asking = dialog.unlinking !== "" || dialog.forgetting !== "" || (dialog.pairing && dialog.unpaired !== null)
             const entered = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
             let taken = true
             if (event.key === Qt.Key_Escape) dialog.back()
@@ -95,6 +107,7 @@ AppPopup {
             else if (entered && dialog.picked) dialog.show("computers", dialog.picked.host)
             else if (event.key === Qt.Key_N && plain && dialog.idle) dialog.show("link")
             else if (event.key === Qt.Key_R && plain && dialog.idle) hubsDesk.refresh()
+            else if (event.key === Qt.Key_A && plain && dialog.idle && dialog.unpaired) dialog.pairing = true
             else if ((event.key === Qt.Key_S || event.key === Qt.Key_P) && plain && dialog.idle && dialog.picked
                      && dialog.picked.state === "reachable")
                 hubsDesk.syncNow(dialog.picked.host, event.key === Qt.Key_P)
@@ -141,6 +154,48 @@ AppPopup {
             wrapMode: Text.Wrap
             color: hubsDesk.failed ? theme.colors.red : theme.foreground
             text: hubsDesk.status
+        }
+        // Where the hub refused a sync for its library not being paired with this computer's: pairing them, asked first.
+        ColumnLayout {
+            Layout.fillWidth: true
+            visible: dialog.unpaired !== null
+            spacing: 6
+            Label {
+                objectName: "hubPairQuestion"
+                visible: dialog.pairing
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                textFormat: Text.PlainText
+                color: theme.colors.orange
+                text: dialog.unpaired === null ? ""
+                    : dialog.unpaired.dryRun
+                      ? qsTr("See what a sync would do with the hub's library %1 paired with this computer's library %2? Nothing changes yet, and they stay unpaired until a sync pairs them.").arg(dialog.unpaired.there).arg(dialog.unpaired.here)
+                      : qsTr("Pair the hub's library %1 with this computer's library %2, and sync them? Only if the two are one library: from then on each sync brings books, details and the change log both ways.").arg(dialog.unpaired.there).arg(dialog.unpaired.here)
+            }
+            Flow {
+                Layout.fillWidth: true
+                spacing: 6
+                AppButton {
+                    objectName: "hubPair"
+                    visible: !dialog.pairing
+                    enabled: dialog.idle
+                    text: qsTr("Pair…")
+                    onClicked: dialog.pairing = true
+                }
+                AppButton {
+                    objectName: "hubPairYes"
+                    visible: dialog.pairing
+                    enabled: dialog.idle
+                    text: dialog.unpaired !== null && dialog.unpaired.dryRun ? qsTr("Preview Paired") : qsTr("Pair and Sync")
+                    onClicked: dialog.sure()
+                }
+                AppButton {
+                    objectName: "hubPairNo"
+                    visible: dialog.pairing
+                    text: qsTr("Keep Apart")
+                    onClicked: dialog.back()
+                }
+            }
         }
 
         // The list of hubs.

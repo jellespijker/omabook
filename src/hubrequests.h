@@ -40,7 +40,9 @@ public:
     // The answer to one line a socket sent, as one line to send back.
     [[nodiscard]] QByteArray answerLine(const QByteArray &line, HubKeeper &keeper) const;
 
-    // An answer that says why not.
+    // An answer that says why not: in English, and for a library that isn't
+    // paired with the hub's, that library's name too, as "unpaired", for the
+    // computer to offer pairing them (#217).
     [[nodiscard]] static QJsonObject refusal(const Failure &why);
 
 private:

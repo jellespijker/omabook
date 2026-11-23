@@ -649,6 +649,9 @@ private slots:
                          && refused.error.contains(u"omabook hub sync <hub>:home --pair"_s),
                      qPrintable(problems(refused)));
             QCOMPARE(refused.received + refused.sent + refused.detailsTaken + refused.detailsSent, 0);
+            // Which two libraries, for the Hubs panel to offer pairing them (#217).
+            QCOMPARE(refused.unpairedThere, u"home"_s);
+            QCOMPARE(refused.unpairedHere, QFileInfo(desktop.library.root()).fileName());
         }
         QCOMPARE(rowsOf(hubDatabase), hubRows);
         QCOMPARE(rowsOf(desktopDatabase), desktopRows);
