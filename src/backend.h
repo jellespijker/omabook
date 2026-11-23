@@ -30,6 +30,8 @@
 #include "speechinstall.h"
 #include "transcriptdesk.h"
 
+struct SyncSummary;
+
 // The library as the window uses it: the shelf, adding and removing books,
 // editing their details, and looking details up online or with AI. It holds
 // no book knowledge of its own; that is Library's and the format readers'.
@@ -233,6 +235,8 @@ public:
 
     // Brings this library and the computer named in the settings in step.
     Q_INVOKABLE void sync();
+    // What a sync did, a line each, as the window says it: with a hub too (#189).
+    [[nodiscard]] static QStringList syncLines(const SyncSummary &summary);
     Q_INVOKABLE void chooseLibrary();
     Q_INVOKABLE void useLibrary(const QString &path);
     // Takes a library off the list; with `trash` its folder goes to the

@@ -31,6 +31,7 @@
 #include "customization.h"
 #include "devicedesk.h"
 #include "folio.h"
+#include "hubdesk.h"
 #include "importer.h"
 #include "interface.h"
 #include "librarian.h"
@@ -216,6 +217,13 @@ qint64 bookToOpen(const QString &book, const std::optional<Folio::Found> &known,
     return added.lastId;
 }
 
+// Whether what was asked draws no window: a command, or the help or the version.
+bool drawsNoWindow(const QStringList &given, bool command) {
+    return command || std::ranges::any_of(given.mid(1), [](const QString &argument) {
+               return argument == "--help" || argument == "-h" || argument == "--version" || argument == "-v";
+           });
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -233,9 +241,7 @@ int main(int argc, char *argv[]) {
         given << QString::fromLocal8Bit(argv[i]);
     given = commandFirst(given);
     const bool command = argc == 1 || isCliCommand(given.value(1));
-    bool windowless = command;
-    for (const QString &argument : std::as_const(given).mid(1))
-        windowless = windowless || argument == "--help" || argument == "-h" || argument == "--version" || argument == "-v";
+    const bool windowless = drawsNoWindow(given, command);
     // What isn't a command is the window's, whose one word is a book. A word
     // that is neither is said to be that, before any window, rather than
     // leaving the window to complain about an option a command would take.
@@ -338,6 +344,9 @@ int main(int argc, char *argv[]) {
     // The library's snapshots (#185): taken, compared, gone back to, and where else they are kept.
     SnapshotDesk snapshotDesk(SnapshotPlace::here(), SnapshotContents::here(), [&backend] { return backend.libraryPath(); });
     QObject::connect(&snapshotDesk, &SnapshotDesk::booksChanged, &backend, &Backend::reload);
+    // The hubs this computer is linked to (#189), through their sessions.
+    HubDesk hubDesk(HubDesk::linkedHere([&backend] { return backend.libraryPath(); }));
+    QObject::connect(&hubDesk, &HubDesk::booksChanged, &backend, &Backend::reload);
     // What script plugins add to the keyboard and the window joins the
     // interface's own, and follows the plugins as they are edited.
     const auto followPlugins = [&custom, &backend] { custom.setPlugins(backend.scripts()->commands(), backend.scripts()->panels()); };
@@ -353,7 +362,7 @@ int main(int argc, char *argv[]) {
     expose(engine, {{"translator", &translator}, {"theme", &theme},         {"settings", &settings}, {"backend", &backend},
                     {"reader", &reader},         {"assistant", &assistant}, {"aiAgent", &aiAgent},   {"custom", &custom},
                     {"librarian", &librarian},   {"manual", &manual},       {"devices", &deviceDesk},
-                    {"snapshotDesk", &snapshotDesk}});
+                    {"snapshotDesk", &snapshotDesk}, {"hubsDesk", &hubDesk}});
     // Where there is a touchscreen, what the keys do is also on screen.
     const auto devices = QInputDevice::devices();
     const bool touchscreen = std::ranges::contains(devices, QInputDevice::DeviceType::TouchScreen, &QInputDevice::type);

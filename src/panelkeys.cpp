@@ -9,7 +9,7 @@
 //
 // The keys are named as the commands table names them ("Shift+Tab",
 // "PgDown"), so they read the same wherever they are shown.
-QList<Manual::Panel> Manual::panelList() { return readingPanels() + toolPanels(); }
+QList<Manual::Panel> Manual::panelList() { return readingPanels() + toolPanels() + libraryPanels(); }
 
 // The page's own: what is selected, the contents, the Aa panel, the margin folded to dots and the ink.
 QList<Manual::Panel> Manual::readingPanels() {
@@ -46,7 +46,7 @@ QList<Manual::Panel> Manual::readingPanels() {
     };
 }
 
-// Asking, dictating, the lists, the library's dialogs, the AI page, the plugins, the tour and the help.
+// Asking, dictating, the lists, the AI page, the plugins, the tour and the help.
 QList<Manual::Panel> Manual::toolPanels() {
     return {
         {"graph_details", tr("A thing's moments, in the graph's details"),
@@ -65,20 +65,6 @@ QList<Manual::Panel> Manual::toolPanels() {
           {"Up  Down", tr("Pick one")},
           {"Enter", tr("Take it")},
           {"Escape", tr("Close")}}},
-        {"tidy", tr("Tidying the library"),
-         {{"Up  Down", tr("Move through what was found")},
-          {"Space", tr("Choose it, or leave it")}}},
-        {"libraries", tr("The libraries"),
-         {{"Enter", tr("Open the selected library")},
-          {"Delete", tr("Forget the selected library")}}},
-        {"edit", tr("A book's details, by hand"),
-         {{"Ctrl+S  Ctrl+Return", tr("Save")}}},
-        {"lookup", tr("Looking a book's details up"),
-         {{"Up  Down", tr("Move through what the sources found")},
-          {"Enter", tr("Use the selected one")}}},
-        {"sites", tr("Reading sites"),
-         {{"Up  Down  J  K", tr("Move through the sites")},
-          {"Enter", tr("Show the selected site")}}},
         {"ai_page", tr("The AI page"),
          {{"Up  Down  J  K", tr("Move through the rows")},
           {"Enter", tr("Open or close the selected row")},
@@ -118,5 +104,34 @@ QList<Manual::Panel> Manual::toolPanels() {
           {"Enter", tr("Run it, or open the page")},
           {"Tab  Shift+Tab", tr("Turn to the next page or the one before")},
           {"Escape", tr("Empty the search, then close")}}},
+    };
+}
+
+// The library's dialogs: tidying, the libraries, the hubs, a book's details and the reading sites.
+QList<Manual::Panel> Manual::libraryPanels() {
+    return {
+        {"tidy", tr("Tidying the library"),
+         {{"Up  Down", tr("Move through what was found")},
+          {"Space", tr("Choose it, or leave it")}}},
+        {"libraries", tr("The libraries"),
+         {{"Enter", tr("Open the selected library")},
+          {"Delete", tr("Forget the selected library")}}},
+        {"hubs", tr("The hubs"),
+         {{"Up  Down  J  K", tr("Move through the hubs, or a hub's computers")},
+          {"Enter", tr("Show the selected hub's computers, or say yes to what was asked")},
+          {"N", tr("Link this computer to another hub")},
+          {"R", tr("Ask the hubs again how they stand")},
+          {"S", tr("Sync the library with the selected hub")},
+          {"P", tr("See what a sync with the selected hub would do, changing nothing")},
+          {"D  Delete", tr("Unlink the selected hub, or forget the selected computer (asks first)")},
+          {"Escape", tr("Back a step, then close")}}},
+        {"edit", tr("A book's details, by hand"),
+         {{"Ctrl+S  Ctrl+Return", tr("Save")}}},
+        {"lookup", tr("Looking a book's details up"),
+         {{"Up  Down", tr("Move through what the sources found")},
+          {"Enter", tr("Use the selected one")}}},
+        {"sites", tr("Reading sites"),
+         {{"Up  Down  J  K", tr("Move through the sites")},
+          {"Enter", tr("Show the selected site")}}},
     };
 }

@@ -218,6 +218,21 @@ AppPopup {
                 }
             }
         }
+        // The hubs have a panel of their own (#189): here, which they are.
+        Label { text: qsTr("Hubs"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            HubsSummary { objectName: "hubsSummary" }
+            AppButton {
+                objectName: "openHubs"
+                text: qsTr("Hubs")
+                onClicked: {
+                    dialog.close()
+                    win.showHubs()
+                }
+            }
+        }
 
         // Snapshots have a panel of their own (#185): here, how they stand.
         Label { text: qsTr("Snapshots"); font.pixelSize: 16; font.bold: true; Layout.topMargin: 8 }

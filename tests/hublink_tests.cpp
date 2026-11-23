@@ -494,7 +494,7 @@ private slots:
         QVERIFY(greeted.value("ok").toBool());
         QCOMPARE(greeted.value("computer").toString(), u"laptop"_s);
         QCOMPARE(greeted.value("requests").toArray().toVariantList(),
-                 (QVariantList{u"computers"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"sync"_s, u"unlink"_s}));
+                 (QVariantList{u"computers"_s, u"forget"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"sync"_s, u"unlink"_s}));
         // The computer is the key's, never what a request says it is.
         QVERIFY(answer(session, R"({"request": "status", "computer": "desktop"})").value("ok").toBool());
         QCOMPARE(QJsonDocument::fromJson(relayed.value(0)).object().value("computer").toString(), u"laptop"_s);
@@ -511,6 +511,47 @@ private slots:
         QVERIFY(HubSession::asksForSession(u""_s) && HubSession::asksForSession(u"omabook hub session"_s)
                 && HubSession::asksForSession(u"/usr/bin/omabook hub session"_s));
         QVERIFY(!HubSession::asksForSession(u"omabook hub session; sh"_s) && !HubSession::asksForSession(u"sh"_s));
+    }
+
+    // From one of the person's computers, another is taken off the hub (#189), by its name alone.
+    void aComputerForgetsAnother() {
+        InProcess hub;
+        QVERIFY2(hub.person && hub.key, "made");
+        const auto desktopKey = SshKey::generate(hub.dir.filePath(u"desktop"_s), u"desktop"_s);
+        QVERIFY2(desktopKey, qPrintable(whyNot(desktopKey)));
+        const auto laptop = hub.computers.link(asking(u"laptop"_s, SshKey::line(*hub.key), *hub.person));
+        const auto desktop = hub.computers.link(asking(u"desktop"_s, SshKey::line(*desktopKey), *hub.person));
+        QVERIFY2(laptop && desktop, "linked");
+        HubSession session(hub.computers, laptop->fingerprint, [](const QByteArray &) { return QByteArray(R"({"ok": true})"); });
+        const auto answer = [&session](const QByteArray &line) { return QJsonDocument::fromJson(session.answer(line)).object(); };
+        QVERIFY(answer(hello.trimmed()).value("ok").toBool());
+        // A fingerprint is no name, and a computer the hub hasn't is said so.
+        for (const QByteArray &refused : {R"({"request": "forget", "name": ")" + desktop->fingerprint.toUtf8() + R"("})",
+                                          QByteArray(R"({"request": "forget", "name": "nobody"})"), QByteArray(R"({"request": "forget"})")})
+            QVERIFY2(!answer(refused).value("ok").toBool() && !session.over(), refused.constData());
+        QCOMPARE(hub.computers.computers().size(), 2);
+        const QJsonObject forgotten = answer(R"({"request": "forget", "name": "desktop"})");
+        QVERIFY(forgotten.value("ok").toBool());
+        QCOMPARE(forgotten.value("computer").toString(), u"desktop"_s);
+        QVERIFY(!session.over());
+        QCOMPARE(hub.computers.computers().size(), 1);
+        QCOMPARE(hub.computers.computers().first().name, u"laptop"_s);
+        // Its own name: as unlink, and the session ends.
+        QVERIFY(answer(R"({"request": "forget", "name": "laptop"})").value("ok").toBool());
+        QVERIFY(session.over());
+        QVERIFY(hub.computers.computers().isEmpty());
+    }
+
+    // The same from the command line, through the key and the hub's session.
+    void forgetNamesTheHubFromAComputer() {
+        const Computers computers;
+        QCOMPARE(computers.omabook(u"here"_s, {u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"laptop"_s}).first, 0);
+        const auto [refused, nobody] = computers.omabook(u"here"_s, {u"hub"_s, u"forget"_s, u"hub"_s, u"nobody"_s});
+        QVERIFY2(refused != 0 && nobody.contains(u"No computer called nobody is linked to the hub."_s), qPrintable(nobody));
+        QCOMPARE(computers.keyLines().size(), 1);
+        const auto [forgot, said] = computers.omabook(u"here"_s, {u"hub"_s, u"forget"_s, u"hub"_s, u"laptop"_s});
+        QVERIFY2(forgot == 0 && said.contains(u"The computer laptop is no longer linked to the hub at hub"_s), qPrintable(said));
+        QVERIFY(computers.keyLines().isEmpty());
     }
 
     void aLinkIsCheckedBeforeAKeyIsWritten() {

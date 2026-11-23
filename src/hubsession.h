@@ -18,7 +18,7 @@
 //
 //   computer: {"request": "hello", "protocol": 1}
 //   hub:      {"ok": true, "protocol": 1, "computer": "laptop", "version": "0.5.0",
-//              "requests": ["computers", "hello", "snapshots", "status", "sync", "unlink"]}
+//              "requests": ["computers", "forget", "hello", "snapshots", "status", "sync", "unlink"]}
 //
 // The first line must be that hello, in the protocol the hub speaks; anything
 // else ends the session with {"ok": false, "error": ..., "protocol": 1}. The
@@ -26,8 +26,9 @@
 // the key's line; a key that isn't linked any more, or a computer that isn't
 // the hub owner's, is told so ("linked": false) and the session ends.
 //
-// Then each line is a request: `computers` and `unlink` (this computer's own
-// key) are answered here; the hub's own requests the session hands on
+// Then each line is a request: `computers`, `unlink` (this computer's own
+// key) and `forget` ({"name": another of the owner's computers}, its key taken
+// away, as `omabook hub forget` does on the hub, #189) are answered here; the hub's own requests the session hands on
 // (relayed(): `status`, `snapshots` and its warnings (#184), and `sync` (HubSync, #188)) go to the daemon (ADR 0013) with
 // "computer" set to this computer's name, whatever the line said. Any other
 // request is refused. Answers are HubRequests' ({"ok": true, ...} or
@@ -62,6 +63,9 @@ private:
     [[nodiscard]] QJsonObject greet(const QJsonObject &asked);
     [[nodiscard]] QJsonObject answerTo(const QJsonObject &asked);
     [[nodiscard]] QJsonObject ending(QJsonObject answer);
+    [[nodiscard]] QJsonObject computers() const;
+    // Takes the key of the computer `named` away, as `asking` asks.
+    [[nodiscard]] QJsonObject forget(const QString &named, const HubComputers::Computer &asking);
     // Logs a request that names a computer other than the key's own.
     void noteClaim(const QJsonObject &asked, const QString &name) const;
 

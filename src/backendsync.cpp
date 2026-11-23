@@ -12,41 +12,37 @@
 #include "hubremote.h"
 #include "sync.h"
 
-namespace {
-
-QStringList syncStatusLines(const SyncSummary &summary) {
+QStringList Backend::syncLines(const SyncSummary &summary) {
     QStringList lines;
     if (!summary.error.isEmpty())
         lines << summary.error;
     if (summary.received > 0)
-        lines << Backend::tr("%Ln books received", "", summary.received);
+        lines << tr("%Ln books received", "", summary.received);
     if (summary.sent > 0)
-        lines << Backend::tr("%Ln books sent", "", summary.sent);
+        lines << tr("%Ln books sent", "", summary.sent);
     if (summary.placesTaken + summary.placesSent > 0)
-        lines << Backend::tr("%Ln reading places updated", "", summary.placesTaken + summary.placesSent);
+        lines << tr("%Ln reading places updated", "", summary.placesTaken + summary.placesSent);
     if (summary.detailsTaken + summary.detailsSent > 0)
-        lines << Backend::tr("%Ln books' details updated", "", summary.detailsTaken + summary.detailsSent);
+        lines << tr("%Ln books' details updated", "", summary.detailsTaken + summary.detailsSent);
     if (summary.removedHere > 0)
-        lines << Backend::tr("%Ln books removed here, to the trash", "", summary.removedHere);
+        lines << tr("%Ln books removed here, to the trash", "", summary.removedHere);
     if (summary.removedThere > 0)
-        lines << Backend::tr("%Ln books removed on the other computer, to the trash", "", summary.removedThere);
+        lines << tr("%Ln books removed on the other computer, to the trash", "", summary.removedThere);
     if (summary.graphTaken > 0)
-        lines << Backend::tr("%Ln graph changes taken", "", summary.graphTaken);
+        lines << tr("%Ln graph changes taken", "", summary.graphTaken);
     if (summary.graphSent > 0)
-        lines << Backend::tr("%Ln graph changes sent", "", summary.graphSent);
+        lines << tr("%Ln graph changes sent", "", summary.graphSent);
     if (summary.annotationsTaken + summary.annotationsSent > 0)
-        lines << Backend::tr("%Ln bookmarks and highlights updated", "", summary.annotationsTaken + summary.annotationsSent);
+        lines << tr("%Ln bookmarks and highlights updated", "", summary.annotationsTaken + summary.annotationsSent);
     if (summary.detailsUndecided > 0)
-        lines << Backend::tr("%Ln books have other details on the other computer, and neither side knows which "
+        lines << tr("%Ln books have other details on the other computer, and neither side knows which "
                              "are newer. omabook sync --details mine or --details theirs settles them.",
                              "", summary.detailsUndecided);
     if (lines.isEmpty() && summary.problems.isEmpty())
-        lines << Backend::tr("Both libraries were already in step.");
+        lines << tr("Both libraries were already in step.");
     lines << summary.problems.mid(0, 3);
     return lines;
 }
-
-} // namespace
 
 // Syncing talks to another computer for as long as its books take to cross,
 // so it runs on a worker with its own connection to the library. A hub this
@@ -91,7 +87,7 @@ void Backend::sync() {
                 --self->m_jobs;
                 self->setStatus({});
                 self->reload();
-                self->say(syncStatusLines(summary).join("\n"));
+                self->say(syncLines(summary).join("\n"));
             },
             Qt::QueuedConnection);
     });

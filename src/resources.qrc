@@ -155,6 +155,12 @@
         <file alias="SnapshotDestinationsPage.qml">SnapshotDestinationsPage.qml</file>
         <file alias="SnapshotsSummary.qml">SnapshotsSummary.qml</file>
         <file alias="ChangeItDialog.qml">ChangeItDialog.qml</file>
+        <file alias="HubsDialog.qml">HubsDialog.qml</file>
+        <file alias="HubRow.qml">HubRow.qml</file>
+        <file alias="HubComputersPage.qml">HubComputersPage.qml</file>
+        <file alias="HubLinkPage.qml">HubLinkPage.qml</file>
+        <file alias="HubsSummary.qml">HubsSummary.qml</file>
+        <file alias="AskLibraryDialog.qml">AskLibraryDialog.qml</file>
         <file alias="ThemePicker.qml">ThemePicker.qml</file>
         <file alias="ModelPicker.qml">ModelPicker.qml</file>
         <file alias="SpreadReader.qml">SpreadReader.qml</file>

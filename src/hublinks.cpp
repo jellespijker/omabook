@@ -6,8 +6,10 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QProcess>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QSysInfo>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <cerrno>
@@ -50,6 +52,12 @@ namespace {
 HubLinks::HubLinks(QString folder, QStringList ssh) : m_folder(std::move(folder)), m_ssh(ssh.isEmpty() ? usualSsh() : std::move(ssh)) {}
 
 QString HubLinks::usualFolder() { return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + u"/omabook/hubs"_s; }
+
+QString HubLinks::thisComputer() {
+    static const QRegularExpression notInAWord(u"[^A-Za-z0-9._-]+"_s);
+    const QString name = QSysInfo::machineHostName().section('.', 0, 0).replace(notInAWord, u"-"_s).left(63);
+    return HubComputers::isName(name) ? name : u"computer"_s;
+}
 
 QString HubLinks::keyFile() const { return QDir(m_folder).filePath(u"key"_s); }
 
@@ -157,6 +165,13 @@ std::expected<HubLinks::Hub, Failure> HubLinks::remove(const QString &host) {
     if (const auto kept = keep(hubs); !kept)
         return std::unexpected(kept.error());
     return hub;
+}
+
+std::expected<QString, Failure> HubLinks::forget(const QString &host, const QString &computer) const {
+    const auto forgotten = ask(host, {{"request", "forget"}, {"name", computer}});
+    if (!forgotten)
+        return std::unexpected(forgotten.error());
+    return forgotten->value("computer"_L1).toString();
 }
 
 std::expected<QJsonObject, Failure> HubLinks::ask(const QString &host, const QJsonObject &request) const {

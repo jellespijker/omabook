@@ -111,6 +111,7 @@ modules = [
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "snapshotdesk", "qrview", "backenddetails",
   "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys", "transcriptdesk", "heldkeys",
+  "hubdesk",
 ]
 
 [layers.app]

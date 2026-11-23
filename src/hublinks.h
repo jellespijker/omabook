@@ -14,7 +14,7 @@ class Person;
 class QProcess;
 
 // This computer's links to its person's hubs (#180, ADR 0012), what both the
-// command line (`omabook hub add|remove|computers|status <host>`) and the
+// command line (`omabook hub add|remove|computers|forget|status <host>`) and the
 // window's Hubs panel (#189) call. A computer has one key for its hubs, made
 // here the first time (SshKey) and kept in its Omabook data folder; linking
 // installs it on the hub, over the person's own ssh, as a key that opens
@@ -60,6 +60,8 @@ public:
     // <data>/omabook/hubs: the person's own, beside their identity.
     [[nodiscard]] static QString usualFolder();
     [[nodiscard]] QString keyFile() const;
+    // What a hub calls this computer unless told: its host name, as a word.
+    [[nodiscard]] static QString thisComputer();
 
     [[nodiscard]] QList<Hub> hubs() const;
     // Whether this computer is linked to a hub at `host`.
@@ -71,6 +73,10 @@ public:
     // Takes this computer's key off the hub, and the hub off the list; also
     // when the hub has taken the key away already.
     [[nodiscard]] std::expected<Hub, Failure> remove(const QString &host);
+
+    // Takes the key of another of the person's computers, `computer` as the
+    // hub calls it, off the hub at `host` (#189): its name, as the hub said it.
+    [[nodiscard]] std::expected<QString, Failure> forget(const QString &host, const QString &computer) const;
 
     // The hub's answer to `request`, through this computer's key; refused
     // when the hub turns it down, or this computer isn't linked to it.

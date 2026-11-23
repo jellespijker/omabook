@@ -14,7 +14,7 @@ namespace {
 
 // Requests the session answers itself, beside the ones it hands on.
 const QStringList &ownRequests() {
-    static const QStringList own{u"computers"_s, u"hello"_s, u"unlink"_s};
+    static const QStringList own{u"computers"_s, u"forget"_s, u"hello"_s, u"unlink"_s};
     return own;
 }
 
@@ -112,15 +112,10 @@ QJsonObject HubSession::answerTo(const QJsonObject &asked) {
     noteClaim(asked, still->name);
     if (name == u"hello"_s)
         return greet(asked);
-    if (name == u"computers"_s) {
-        QJsonArray computers;
-        for (const HubComputers::Computer &computer : m_computers.computers())
-            computers.append(QJsonObject{{"name", computer.name},
-                                         {"fingerprint", computer.fingerprint},
-                                         {"linked", computer.linked.toString(Qt::ISODate)},
-                                         {"this", computer.fingerprint == m_fingerprint}});
-        return succeeded({{"computers", computers}});
-    }
+    if (name == u"computers"_s)
+        return computers();
+    if (name == u"forget"_s)
+        return forget(asked.value("name"_L1).toString(), *still);
     if (name == u"unlink"_s) {
         const auto gone = m_computers.unlink(m_fingerprint);
         if (!gone)
@@ -140,6 +135,29 @@ QJsonObject HubSession::answerTo(const QJsonObject &asked) {
     const QByteArray answered = m_relay(compact(handed));
     const QJsonDocument document = QJsonDocument::fromJson(answered);
     return document.isObject() ? document.object() : HubRequests::refusal(Failure(Failure::Code::HubBadRequest));
+}
+
+QJsonObject HubSession::computers() const {
+    QJsonArray computers;
+    for (const HubComputers::Computer &computer : m_computers.computers())
+        computers.append(QJsonObject{{"name", computer.name},
+                                     {"fingerprint", computer.fingerprint},
+                                     {"linked", computer.linked.toString(Qt::ISODate)},
+                                     {"this", computer.fingerprint == m_fingerprint}});
+    return succeeded({{"computers", computers}});
+}
+
+QJsonObject HubSession::forget(const QString &named, const HubComputers::Computer &asking) {
+    // By its name alone: a fingerprint is no name, and a computer is forgotten as the person sees it listed.
+    if (!HubComputers::isName(named))
+        return HubRequests::refusal(Failure(Failure::Code::HubBadComputerName, {shown(named)}));
+    const auto gone = m_computers.unlink(named);
+    if (!gone)
+        return HubRequests::refusal(gone.error());
+    qCInfo(lcHub).noquote() << asking.name << "took the key of" << gone->name << u"("_s + gone->fingerprint + u") away."_s;
+    // Its own key gone, nothing more is answered: as unlink.
+    const QJsonObject answer = succeeded({{"computer", gone->name}});
+    return gone->fingerprint == m_fingerprint ? ending(answer) : answer;
 }
 
 void HubSession::noteClaim(const QJsonObject &asked, const QString &name) const {

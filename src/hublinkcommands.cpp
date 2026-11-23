@@ -5,8 +5,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QRegularExpression>
-#include <QSysInfo>
 #include <cstdio>
 #include <print>
 #include <tuple>
@@ -36,19 +34,12 @@ int failLine(const QString &why) {
     return 1;
 }
 
-// What the hub calls this computer unless told: its host name, as a word.
-[[nodiscard]] QString thisComputer() {
-    static const QRegularExpression notInAWord(u"[^A-Za-z0-9._-]+"_s);
-    const QString name = QSysInfo::machineHostName().section('.', 0, 0).replace(notInAWord, u"-"_s).left(63);
-    return HubComputers::isName(name) ? name : u"computer"_s;
-}
-
 int add(const QString &host, const QCommandLineParser &parser) {
     PersonFile kept;
     const Person *person = kept.get(Settings().libraryPath());
     if (person == nullptr)
         return failLine(kept.problem());
-    const QString name = parser.isSet(u"name"_s) ? parser.value(u"name"_s) : thisComputer();
+    const QString name = parser.isSet(u"name"_s) ? parser.value(u"name"_s) : HubLinks::thisComputer();
     const auto linked = HubLinks().add(host, name, *person);
     if (!linked)
         return failLine(linked.error().text());
@@ -113,7 +104,16 @@ int allow(const QCommandLineParser &parser) {
     return linked ? 0 : 1;
 }
 
-int forget(const QString &computer) {
+int forget(const QStringList &words) {
+    if (words.size() == 2) {
+        // On a computer: another of the person's, off the hub at the first word.
+        const auto gone = HubLinks().forget(words.first(), words.last());
+        if (!gone)
+            return failLine(gone.error().text());
+        printLine(stdout, u"The computer %1 is no longer linked to the hub at %2: its key is gone."_s.arg(*gone, words.first()));
+        return 0;
+    }
+    const QString &computer = words.first();
     HubComputers computers = HubComputers::usual(HubPlace::usual());
     const auto gone = computers.unlink(computer);
     if (!gone)
@@ -156,7 +156,7 @@ int runHubLink(const QString &what, const QStringList &words, const QCommandLine
         return add(words.first(), parser);
     if (what == u"remove"_s && oneWord)
         return remove(words.first());
-    if (what == u"forget"_s && oneWord)
-        return forget(words.first());
+    if (what == u"forget"_s && (oneWord || words.size() == 2))
+        return forget(words);
     return failLine(parser.helpText().trimmed());
 }

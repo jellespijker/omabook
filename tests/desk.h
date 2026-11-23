@@ -30,6 +30,7 @@
 #include "eventtime.h"
 #include "fixtures.h"
 #include "graph.h"
+#include "hubdesk.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
@@ -115,6 +116,7 @@ struct Desk {
     SessionSecrets deviceSecrets;
     std::optional<DeviceDesk> devices;
     std::optional<SnapshotDesk> snapshotDesk;
+    std::optional<HubDesk> hubsDesk;
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -157,6 +159,8 @@ struct Desk {
         snapshotDesk.emplace(SnapshotPlace::in(dir.filePath("snapshots")),
                              SnapshotContents{.settingsFile = dir.filePath("config.json"), .pluginsFolder = dir.filePath("plugins")},
                              [this] { return backend->libraryPath(); });
+        // Hubs of its own, never this computer's.
+        hubsDesk.emplace(HubDesk::linkedHere([this] { return backend->libraryPath(); }, dir.filePath("hubs")));
         const auto followPlugins = [this] { custom->setPlugins(backend->scripts()->commands(), backend->scripts()->panels()); };
         QObject::connect(backend->scripts(), &ScriptPlugins::changed, &*custom, followPlugins);
         followPlugins();
@@ -182,6 +186,7 @@ struct Desk {
         engine->rootContext()->setContextProperty("manual", &*manual);
         engine->rootContext()->setContextProperty("devices", &*devices);
         engine->rootContext()->setContextProperty("snapshotDesk", &*snapshotDesk);
+        engine->rootContext()->setContextProperty("hubsDesk", &*hubsDesk);
         engine->rootContext()->setContextProperty("settings", &*settings);
         engine->rootContext()->setContextProperty("backend", &*backend);
         engine->rootContext()->setContextProperty("reader", &*reader);

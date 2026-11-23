@@ -25,6 +25,7 @@
 #include "devicedesk.h"
 #include "fixtures.h"
 #include "graph.h"
+#include "hubdesk.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
@@ -89,6 +90,7 @@ struct Desk {
     SessionSecrets deviceSecrets;
     std::optional<DeviceDesk> devices;
     std::optional<SnapshotDesk> snapshotDesk;
+    std::optional<HubDesk> hubsDesk;
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -123,6 +125,8 @@ struct Desk {
         snapshotDesk.emplace(SnapshotPlace::in(dir.filePath("snapshots")),
                              SnapshotContents{.settingsFile = dir.filePath("config.json"), .pluginsFolder = dir.filePath("plugins")},
                              [this] { return backend->libraryPath(); });
+        // Hubs of its own, never this computer's.
+        hubsDesk.emplace(HubDesk::linkedHere([this] { return backend->libraryPath(); }, dir.filePath("hubs")));
     }
     ~Desk() {
         interface.reset();
@@ -140,7 +144,8 @@ struct Desk {
         const QList<std::pair<const char *, QObject *>> objects{
             {"translator", &*translator}, {"theme", &*look},        {"custom", &*custom},   {"librarian", &*librarian},
             {"manual", &*manual},         {"settings", &*settings}, {"backend", &*backend}, {"reader", &*reader},
-            {"assistant", &*assistant},   {"aiAgent", &*aiAgent},   {"devices", &*devices}, {"snapshotDesk", &*snapshotDesk}};
+            {"assistant", &*assistant},   {"aiAgent", &*aiAgent},   {"devices", &*devices}, {"snapshotDesk", &*snapshotDesk},
+            {"hubsDesk", &*hubsDesk}};
         for (const auto &[name, object] : objects)
             engine->rootContext()->setContextProperty(name, object);
         engine->rootContext()->setContextProperty("touchscreen", false);

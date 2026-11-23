@@ -139,6 +139,7 @@ private:
     // The panels' keys, in two lists of a size to read (panelkeys.cpp).
     static QList<Panel> readingPanels();
     static QList<Panel> toolPanels();
+    static QList<Panel> libraryPanels();
     // The help's page on the AI (aitopic.cpp).
     static Topic aiTopic();
 

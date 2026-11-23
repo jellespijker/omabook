@@ -35,6 +35,7 @@
 #include "graphcanvas.h"
 #include "graphjobs.h"
 #include "graphmodel.h"
+#include "hubdesk.h"
 #include "interface.h"
 #include "librarian.h"
 #include "manual.h"
@@ -62,10 +63,7 @@ namespace {
 // counts pages scale by the font's against it, wider or narrower.
 constexpr double referenceCharacterWidth = 9.04;
 
-bool write(const QString &path, const QByteArray &contents) {
-    QFile file(path);
-    return file.open(QIODevice::WriteOnly) && file.write(contents) == contents.size();
-}
+using Fixtures::write;
 
 QJsonObject readCatalog(const QString &path) {
     QFile file(path);
@@ -253,6 +251,7 @@ struct Desk {
     SessionSecrets deviceSecrets;
     std::optional<DeviceDesk> devices;
     std::optional<SnapshotDesk> snapshotDesk;
+    HubDesk hubsDesk{HubDesk::linkedHere([this] { return backend->libraryPath(); }, dir.filePath("hubs"))};
     std::optional<QQmlEngine> engine;
     std::optional<Interface> interface;
     QStringList warnings;
@@ -328,7 +327,8 @@ struct Desk {
         const std::initializer_list<std::pair<const char *, QObject *>> objects{
             {"translator", &*translator}, {"theme", &*look},          {"custom", &*custom},     {"librarian", &*librarian},
             {"manual", &*manual},         {"devices", &*devices},     {"settings", &*settings}, {"backend", &*backend},
-            {"reader", &*reader},         {"assistant", &*assistant}, {"aiAgent", &*aiAgent},   {"snapshotDesk", &*snapshotDesk}};
+            {"reader", &*reader},         {"assistant", &*assistant}, {"aiAgent", &*aiAgent},   {"snapshotDesk", &*snapshotDesk},
+            {"hubsDesk", &hubsDesk}};
         for (const auto &[name, object] : objects)
             engine->rootContext()->setContextProperty(name, object);
         engine->rootContext()->setContextProperty("touchscreen", false);

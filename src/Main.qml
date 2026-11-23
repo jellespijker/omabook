@@ -73,7 +73,7 @@ ApplicationWindow {
     readonly property bool touch: touchscreen || touchSeen
     readonly property bool dialogOpen: library.popupOpen || help.opened || edit.opened || lookup.opened || prefs.opened || removal.opened
                                        || libraries.opened || pluginList.opened || pluginAsk.opened || aiSettings.opened
-                                       || tidyUp.opened || readingStats.opened || readingSites.opened || phones.opened || snapshotsPanel.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
+                                       || tidyUp.opened || readingStats.opened || readingSites.opened || phones.opened || snapshotsPanel.opened || hubs.opened || graphBuild.opened || askLibrary.opened || changeIt.opened
                                        || collectionEditor.opened || commandMenu.opened || publishing.opened || subscribing.opened
                                        || (!!readerLoader.item && readerLoader.item.popupOpen) || tour.running
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
@@ -224,6 +224,7 @@ ApplicationWindow {
     function showReadingSites() { readingSites.open() }
     function showPhones() { phones.open() }
     function showSnapshots() { snapshotsPanel.open() }
+    function showHubs() { hubs.open() }
     function showThemes() { if (theme.themes) themePicker.open() }
     function showGraphBuild(id) { graphBuild.show(id) }
     function showAskLibrary() { askLibrary.open() }
@@ -459,26 +460,12 @@ ApplicationWindow {
     Key { command: "library.devices"; when: library.visible; onActivated: phones.open() }
     SnapshotsDialog { id: snapshotsPanel }
     Key { command: "library.snapshots"; when: library.visible; onActivated: snapshotsPanel.open() }
+    HubsDialog { id: hubs }
+    Key { command: "library.hubs"; when: library.visible; onActivated: hubs.open() }
     AiSettingsDialog { id: aiSettings }
     ThemePicker { id: themePicker }
     GraphBuildDialog { id: graphBuild }
-    AskDialog {
-        id: askLibrary
-        objectName: "askLibrary"
-        voice: true
-        heading: qsTr("Ask about your library")
-        placeholder: qsTr("Which of my books…?")
-        reply: librarian.answer
-        working: librarian.answering
-        offer: qsTr("Suggest what to read next")
-        onAsked: (words) => librarian.ask(words)
-        onOffered: librarian.suggest()
-        onlyName: backend.collection !== 0 ? backend.collectionName : ""
-        only: librarian.onlyCollection
-        onOnlyToggled: (only) => librarian.onlyCollection = only
-        suggestions: librarian.suggestions
-        onWanted: (index) => librarian.wantSuggestion(index)
-    }
+    AskLibraryDialog { id: askLibrary }
     AiSearchDialog {
         id: aiSearch
         objectName: "aiSearch"

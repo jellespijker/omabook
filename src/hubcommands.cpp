@@ -252,14 +252,14 @@ int runHubCli(const QStringList &arguments) {
         u"The hub: an Omabook without a window that is always on. run keeps its libraries, as their one writer, until "
         "stopped (its systemd unit starts it); status asks the running hub what it keeps, or the hub at <host>. On a "
         "computer, add <host> links it to its person's hub over ssh: a key of its own, installed there to run nothing but "
-        "the hub's session; remove <host> takes it off again, and computers <host> lists the hub's computers. On the hub, "
-        "computers lists them and forget <computer> takes one's key away; sync [<host>] syncs this library with the hub, as "
-        "omabook sync <host> does (--dry-run first, to see what it would do); session is what a computer's key runs there, "
-        "one JSON request a line in and one answer a line out, and allow is what add runs there."_s);
+        "the hub's session; remove <host> takes it off again, computers <host> lists the hub's computers, and forget <host> "
+        "<computer> takes another of them off. On the hub, computers lists them and forget <computer> takes one's key away; "
+        "sync [<host>] syncs this library with the hub, as omabook sync <host> does (--dry-run first, to see what it would "
+        "do); session is what a computer's key runs there, one JSON request a line in and one answer a line out, and allow "
+        "is what add runs there."_s);
     parser.addHelpOption();
-    parser.addPositionalArgument(
-        u"what"_s,
-        u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | forget <computer> | session"_s);
+    parser.addPositionalArgument(u"what"_s, u"run | status [<host>] | add <host> | remove <host> | computers [<host>] | sync [<host>] | "
+                                            "forget [<host>] <computer> | session"_s);
     parser.addOption({u"libraries"_s, u"With run: keep the libraries in this folder, from now on."_s, u"folder"_s});
     parser.addOption({u"json"_s, u"With status or computers: print it as JSON."_s});
     parser.addOption({u"name"_s, u"With add: what the hub calls this computer (its host name otherwise)."_s, u"name"_s});

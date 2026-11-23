@@ -86,6 +86,7 @@ inline constexpr auto builtIns = std::to_array<BuiltIn>({
     {"library.sites", {"R"}, tr("Sync with Goodreads and other reading sites")},
     {"library.devices", {"Shift+D"}, tr("Connect a phone or an e-reader: serve the library to it, by a QR code")},
     {"library.snapshots", {"Shift+B"}, tr("Show the library's snapshots: take one, see what changed since one, go back to one")},
+    {"library.hubs", {"Shift+Y"}, tr("Show the hubs this computer is linked to, how each stands, and link another")},
     {"library.stats",
      {"Shift+R"},
      tr("Show what you read, added up: the time, the days in a row, the books finished, and the year's goal")},
