@@ -16,6 +16,7 @@
 #include <QJsonObject>
 #include <QTemporaryDir>
 #include <QtTest>
+#include <tuple>
 
 #include "fixtures.h"
 #include "hlc.h"
@@ -149,39 +150,53 @@ private slots:
         QCOMPARE(fieldOf(b, theirs, field), after);
     }
 
-    // A book that a computer got by a sync goes on to a third whole: A has
-    // it, B syncs with A, and C with B, each the one that asks or the one asked.
+    // A book that a computer got by a sync goes on to a third whole, and so
+    // does a change made later where it came from: A has it, B syncs with A
+    // and C with B, each the one that asks or the one asked.
     void aBookGoesOnToAThirdComputer_data() {
         QTest::addColumn<bool>("paper");
-        QTest::addColumn<bool>("asks");
+        QTest::addColumn<bool>("bAsks");
+        QTest::addColumn<bool>("cAsks");
         for (const bool paper : {true, false})
-            for (const bool asks : {true, false})
-                QTest::addRow("%s, %s", paper ? "on paper" : "a file", asks ? "the next asks" : "the next is asked") << paper << asks;
+            for (const auto &[bAsks, cAsks] :
+                 {std::pair{true, true}, std::pair{true, false}, std::pair{false, true}, std::pair{false, false}})
+                QTest::addRow("%s, B %s, C %s", paper ? "on paper" : "a file", bAsks ? "asks" : "is asked", cAsks ? "asks" : "is asked")
+                    << paper << bAsks << cAsks;
     }
 
     void aBookGoesOnToAThirdComputer() {
         QFETCH(const bool, paper);
-        QFETCH(const bool, asks);
+        QFETCH(const bool, bAsks);
+        QFETCH(const bool, cAsks);
         QTemporaryDir dir;
         const QString ssh = Fixtures::standInSsh(dir.path(), OMABOOK_BINARY);
         Library a(dir.filePath("A"));
         Library b(dir.filePath("B"));
         Library c(dir.filePath("C"));
         QVERIFY(a.open() && b.open() && c.open());
-        QVERIFY(made(a, paper, dir.path()) > 0);
+        const qint64 mine = made(a, paper, dir.path());
+        QVERIFY(mine > 0);
         // From the one that has it to the next, the next asking or asked.
-        const auto onTo = [&](Library &from, Library &to) {
+        const auto onTo = [&](Library &from, Library &to, bool asks) {
             return asks ? syncLibrary(to, Remote("laptop:" + from.root(), {ssh})) : syncLibrary(from, Remote("laptop:" + to.root(), {ssh}));
         };
-        for (const auto &[from, to] : {std::pair{&a, &b}, std::pair{&b, &c}}) {
-            const SyncSummary synced = onTo(*from, *to);
-            QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty() && synced.unannounced.isEmpty(), qPrintable(said(synced)));
-            QCOMPARE(to->books().size(), 1);
-            const Book arrived = to->books().first();
-            QCOMPARE(arrived.meta.title, title);
-            QCOMPARE(arrived.meta.description, details().description);
-            QCOMPARE(arrived.paper, paper);
-        }
+        const auto arrives = [&] {
+            for (const auto &[from, to, asks] : {std::tuple{&a, &b, bAsks}, std::tuple{&b, &c, cAsks}}) {
+                const SyncSummary synced = onTo(*from, *to, asks);
+                QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty() && synced.unannounced.isEmpty(), qPrintable(said(synced)));
+                QCOMPARE(to->books().size(), 1);
+                const SyncPlan::State there = SyncPlan::stateOf(*to, to->books().first());
+                const SyncPlan::State here = SyncPlan::stateOf(a, *a.book(mine));
+                for (const char *field : {"title", "authors", "isbn", "series", "description", "publisher", "tags", "identifiers", "paper"})
+                    QCOMPARE(there.value(QLatin1StringView(field)), here.value(QLatin1StringView(field)));
+            }
+        };
+        arrives();
+        if (QTest::currentTestFailed())
+            return;
+        // Later, on A, a new description: it goes on to C too.
+        QVERIFY(change(a, mine, "description", "Lords of the night."));
+        arrives();
     }
 };
 
