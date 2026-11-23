@@ -26,10 +26,10 @@ Manual::Topic Manual::hubTopic() {
                             "names the hub's owner, and only that person's computers are taken. Unlink, or `omabook hub remove "
                             "<host>`, takes the key off again.")},
                 {Manual::tr("Syncing with the hub"),
-                 Manual::tr("Name the hub as the other computer in the settings ({global.settings}) and {library.sync} syncs "
-                            "with it, as two computers do; `omabook hub sync` does the same from a terminal, and `--dry-run` "
-                            "shows first what it would do. The hub takes a moment snapshot before it writes. Computers still "
-                            "sync with each other directly too.")},
+                 Manual::tr("Sync Now in {library.hubs} syncs the library with the hub, as two computers do, and Preview shows "
+                            "first what it would do, changing nothing; so does {library.sync} with the hub named as the other "
+                            "computer in the settings ({global.settings}), and `omabook hub sync` in a terminal. The hub takes a "
+                            "moment snapshot before it writes. Computers still sync with each other directly too.")},
                 {Manual::tr("Snapshots"),
                  Manual::tr("{library.snapshots}, or `omabook snapshot setup`, sets up encrypted snapshots of the library, "
                             "made with restic: the books, their details and notes, the settings and the plugins' data, each "
