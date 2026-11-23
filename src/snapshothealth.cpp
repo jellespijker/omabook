@@ -11,6 +11,7 @@
 #include <utility>
 
 #include "log.h"
+#include "snapshotdestinations.h"
 
 using namespace Qt::StringLiterals;
 using SnapshotWarnings::Medium;
@@ -113,10 +114,43 @@ void roomOf(const QString &location, QJsonObject &repository) {
             {u"total"_s, repository.total}};
 }
 
+// A destination as the checks reach it (#182). Its disk is absent as the
+// destinations decide it: restic's config isn't there. Its last copy is the
+// one it keeps, but a copy that found the disk away is no failure once it is back.
+[[nodiscard]] SnapshotHealth::Target destinationTarget(const SnapshotDestinations &destinations, const SnapshotDestination &destination) {
+    const bool disk = destination.kind() == SnapshotDestination::Kind::Disk;
+    SnapshotHealth::Target target{.name = destination.name,
+                                  .medium = disk ? Medium::Disk : Medium::Away,
+                                  .location = destination.location,
+                                  .repository = destinations.repositoryOf(destination),
+                                  .passwordAt = {},
+                                  .absent = disk && !QFileInfo::exists(destination.location + u"/config"_s),
+                                  .snapshot = std::nullopt};
+    // Its password's secret unread: where that secret is, which HubPlace names first.
+    if (!target.repository && target.repository.error().code() == Failure::Code::HubSecretUnreadable)
+        target.passwordAt = target.repository.error().arguments().value(0);
+    if (const auto state = destinations.stateOf(destination.name); state && state->tried.isValid() && (!state->absent || target.absent))
+        target.snapshot = Outcome{.ran = state->tried, .done = state->done, .said = state->said};
+    return target;
+}
+
 } // namespace
 
 SnapshotHealth::SnapshotHealth(Snapshots snapshots, Targets destinations)
-    : m_snapshots(std::move(snapshots)), m_destinations(std::move(destinations)), m_file(m_snapshots.place().state + u"/health.json"_s) {}
+    : m_snapshots(std::move(snapshots)), m_destinations(std::move(destinations)), m_file(m_snapshots.place().state + u"/health.json"_s) {
+    if (!m_destinations)
+        m_destinations = destinationsOf(m_snapshots.place());
+}
+
+SnapshotHealth::Targets SnapshotHealth::destinationsOf(const SnapshotPlace &place) {
+    return [place] {
+        const SnapshotDestinations destinations(place);
+        QList<Target> targets;
+        for (const SnapshotDestination &destination : destinations.list())
+            targets << destinationTarget(destinations, destination);
+        return targets;
+    };
+}
 
 bool SnapshotHealth::chosen() const { return !m_snapshots.place().repository.location.isEmpty(); }
 

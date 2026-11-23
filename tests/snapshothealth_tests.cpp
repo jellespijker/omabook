@@ -20,6 +20,7 @@
 #include "fixtures.h"
 #include "library.h"
 #include "restic.h"
+#include "snapshotdestinations.h"
 #include "snapshothealth.h"
 #include "snapshots.h"
 
@@ -221,6 +222,56 @@ private slots:
         QCOMPARE(status.value("repositories"_L1).toArray().size(), 3);
         QCOMPARE(status.value("warnings"_L1).toArray().size(), 2);
         QCOMPARE(status.value("fine"_L1).toBool(true), false);
+    }
+
+    void theDestinationsKeptBesideThemAreLookedAfterToo() {
+        Computer computer;
+        QVERIFY(computer.setUp());
+        const Snapshots snapshots = computer.snapshots();
+        QVERIFY(snapshots.take(computer.library, SnapshotReason::Asked));
+        // A second disk, added as `omabook snapshot destination add` does, with a copy on it.
+        SnapshotDestinations destinations(snapshots.place());
+        const QString disk = computer.dir.filePath(u"usb/omabook"_s);
+        QVERIFY(QDir().mkpath(computer.dir.filePath(u"usb"_s)));
+        const auto added = destinations.add({.name = u"usb"_s, .location = disk, .credentials = {}}, {});
+        QVERIFY2(added, qPrintable(Fixtures::whyNot(added)));
+        const QDateTime now = QDateTime::currentDateTime();
+        const auto copied = destinations.copy(u"usb"_s, now);
+        QVERIFY2(copied, qPrintable(Fixtures::whyNot(copied)));
+
+        // Without being handed them, the health finds them beside the snapshots.
+        const SnapshotHealth health(snapshots);
+        QCOMPARE(health.targets().size(), 2);
+        health.look(now);
+        health.check(SnapshotHealth::Depth::Light, now);
+        health.check(SnapshotHealth::Depth::Data, now);
+        const auto repositories = health.repositories();
+        QCOMPARE(repositories.at(1).name, u"usb"_s);
+        QCOMPARE(repositories.at(1).medium, Medium::Disk);
+        QVERIFY(repositories.at(1).snapshot.done && repositories.at(1).check.done && repositories.at(1).dataCheck.done);
+        QVERIFY(repositories.at(1).newest.contains(Snapshots::libraryTag(computer.library)));
+        // The disk holds; nothing is kept away from home.
+        QCOMPARE(kindsOf(health.warnings(computer.libraries(), now, roomy())), QList{Kind::NoCopyAway});
+
+        // Unplugged: its folder gone. The next copy finds it isn't there, and so do the warnings.
+        QVERIFY(QDir().rename(computer.dir.filePath(u"usb"_s), computer.dir.filePath(u"unplugged"_s)));
+        QVERIFY(!destinations.copy(u"usb"_s, now.addDays(1)));
+        health.look(now.addDays(1));
+        const auto warnings = health.warnings(computer.libraries(), now.addDays(1), roomy());
+        QCOMPARE(kindsOf(warnings), (QList{Kind::DiskAbsent, Kind::NoSecondDisk, Kind::NoCopyAway}));
+        QVERIFY(warnings.first().why.english().contains(disk));
+
+        // Plugged in again: it holds again once copied to.
+        QVERIFY(QDir().rename(computer.dir.filePath(u"unplugged"_s), computer.dir.filePath(u"usb"_s)));
+        QVERIFY(destinations.copy(u"usb"_s, now.addDays(1)));
+        health.look(now.addDays(1));
+        QCOMPARE(kindsOf(health.warnings(computer.libraries(), now.addDays(1), roomy())), QList{Kind::NoCopyAway});
+
+        // Its password gone: said, with where it goes.
+        QVERIFY(QFile::remove(computer.state + u"/secrets/"_s + SnapshotDestinations::passwordSecret(u"usb"_s)));
+        const auto locked = health.warnings(computer.libraries(), now.addDays(1), roomy());
+        QVERIFY(kindsOf(locked).contains(Kind::PasswordMissing));
+        QCOMPARE(locked.first().repository, u"usb"_s);
     }
 
     void eachWarningIsToldOnceThenAgainAWeekOn() {

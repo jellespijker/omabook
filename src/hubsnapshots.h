@@ -46,6 +46,9 @@ void answer(HubRequests &requests, const Snapshots &snapshots);
 // `job` (the nightly one), how it went kept for the warnings, then a look at
 // what each repository holds, and each new warning told.
 [[nodiscard]] HubSchedule::Job noted(const SnapshotHealth &health, HubSchedule::Job job);
+// `job` (the copies to the destinations), then a look at what each
+// repository holds, and each new warning told.
+[[nodiscard]] HubSchedule::Job looked(const SnapshotHealth &health, HubSchedule::Job job);
 // restic's check of each repository (weekly light, monthly reading the data
 // back), then the same. A check that fails is a warning, not a job to try
 // again within the hour.

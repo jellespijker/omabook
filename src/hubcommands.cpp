@@ -98,9 +98,9 @@ int run(const QCommandLineParser &parser) {
     keeper.before(HubSnapshots::before(snapshots));
     HubSnapshots::answer(requests, snapshots); // their diff and restore (#183)
     schedule.daily(u"snapshot"_s, QTime(SnapshotRetention::nightHour, 0), HubSnapshots::noted(health, HubSnapshots::nightly(snapshots)));
-    // Then copied to the second disk and away from home, an hour on (#182).
+    // Then copied to the second disk and away from home, an hour on (#182), then looked at (#184).
     schedule.daily(u"destinations"_s, QTime(SnapshotRetention::nightHour + 1, 0),
-                   HubSnapshots::destinations(destinations));
+                   HubSnapshots::looked(health, HubSnapshots::destinations(destinations)));
     // Their checks, and the warnings told in the journal and asked by the person's computers (#184).
     schedule.every(u"check"_s, std::chrono::days(7), HubSnapshots::check(health, SnapshotHealth::Depth::Light));
     schedule.every(u"check-data"_s, std::chrono::days(30), HubSnapshots::check(health, SnapshotHealth::Depth::Data));

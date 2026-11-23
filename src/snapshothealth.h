@@ -38,13 +38,18 @@ public:
     };
     // The destinations' targets, read afresh each time.
     using Targets = std::function<QList<Target>()>;
+    // Those of the destinations kept beside the snapshots of `place` (#182):
+    // each a second disk or a place away, opened with its own password, absent
+    // when its disk isn't there, with how its last copy went.
+    [[nodiscard]] static Targets destinationsOf(const SnapshotPlace &place);
 
     enum class Depth : std::uint8_t {
         Light, // restic check: the repository's structure (weekly)
         Data,  // and its data read back (monthly): all of a disk's, a twelfth of a place away's each month
     };
 
-    // It keeps its own copy of `snapshots`: what they are kept in, not what they hold.
+    // It keeps its own copy of `snapshots`: what they are kept in, not what
+    // they hold. Their destinations are those kept beside them unless others are given.
     explicit SnapshotHealth(Snapshots snapshots, Targets destinations = {});
 
     // Whether there is anything to look after: snapshots chosen a place here.

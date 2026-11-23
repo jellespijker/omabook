@@ -1,9 +1,9 @@
 #include "hubsnapshots.h"
 
 #include <QDateTime>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QStringList>
-#include <QFileInfo>
 #include <span>
 #include <tuple>
 #include <utility>
@@ -181,6 +181,18 @@ HubSchedule::Job HubSnapshots::noted(const SnapshotHealth &health, HubSchedule::
         health.noteSnapshot(done, now);
         health.look(now);
         tell(health, keeper, now);
+        return done;
+    };
+}
+
+HubSchedule::Job HubSnapshots::looked(const SnapshotHealth &health, HubSchedule::Job job) {
+    return [&health, job = std::move(job)](HubKeeper &keeper) -> std::expected<void, Failure> {
+        const auto done = job(keeper);
+        if (health.chosen()) {
+            const QDateTime now = QDateTime::currentDateTime();
+            health.look(now);
+            tell(health, keeper, now);
+        }
         return done;
     };
 }
