@@ -321,16 +321,15 @@ private slots:
         QCOMPARE(hub.moments.first().first, HubKeeper::Moment::Sync);
         QCOMPARE(hub.moments.first().second, 0);
         QCOMPARE(hub.held().size(), 1);
-        // A snapshot that can't be taken refuses the sync, which then writes nothing there.
+        // A snapshot that can't be taken refuses every write of the sync there: the hub is as it was.
         hub.keeper.before([](Library &, HubKeeper::Moment moment) -> std::expected<void, Failure> {
             if (moment == HubKeeper::Moment::Sync)
                 return std::unexpected(Failure::said(u"no room for the snapshot"_s));
             return {};
         });
         const SyncSummary refused = hub.syncWith(u"desktop"_s, desktop.library);
-        QVERIFY2(refused.error.contains(u"no room for the snapshot"_s), qPrintable(problems(refused)));
+        QVERIFY2(problems(refused).contains(u"no room for the snapshot"_s), qPrintable(problems(refused)));
         QCOMPARE(hub.held().size(), 1);
-        QCOMPARE(contents(desktop.library).size(), 2);
     }
 
     void aLibraryOfAnotherFormatIsRefused() {

@@ -33,6 +33,9 @@ namespace HubSyncSteps {
 
 using Resolve = std::function<std::expected<QString, Failure>(const QString &named)>;
 
+// Whether `omabook <arguments>` writes the library: all but the manifest and a dry run's log.
+[[nodiscard]] bool writes(const QStringList &arguments, const Resolve &resolve);
+
 // What `omabook <arguments>` would have printed, as JSON, or why not.
 [[nodiscard]] std::expected<QJsonValue, Failure> run(Library &library, const QStringList &arguments, const Resolve &resolve, bool dryRun);
 

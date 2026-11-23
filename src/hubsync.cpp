@@ -25,6 +25,7 @@ struct HubSync::Visit {
     bool dryRun = false;
     QTemporaryDir scratch;
     int folders = 0;
+    bool snapshotted = false; // its moment snapshot taken, before its first write
     // The files it may fetch: the library's books' and their covers', once asked.
     std::optional<QSet<QString>> given;
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
@@ -42,7 +43,7 @@ struct HubSync::Visit {
     [[nodiscard]] std::expected<QJsonObject, Failure> folder();
     [[nodiscard]] std::expected<QJsonObject, Failure> put(const QJsonObject &asked) const;
     [[nodiscard]] std::expected<QJsonObject, Failure> fetch(const QJsonObject &asked, HubKeeper &keeper);
-    [[nodiscard]] std::expected<QJsonObject, Failure> omabook(const QJsonObject &asked, HubKeeper &keeper) const;
+    [[nodiscard]] std::expected<QJsonObject, Failure> omabook(const QJsonObject &asked, HubKeeper &keeper);
 };
 
 namespace {
@@ -124,11 +125,6 @@ std::expected<QJsonObject, Failure> HubSync::begin(const QJsonObject &asked, Hub
         return std::unexpected(checked.error());
     if (!visit->scratch.isValid())
         return std::unexpected(Failure(Failure::Code::HubSyncNoPlace, {visit->scratch.path()}));
-    // What it is to write, a moment snapshot first, once, before anything (#181).
-    if (!visit->dryRun)
-        if (const auto snapshotted = keeper.write(visit->library, HubKeeper::Moment::Sync, [](Library &) { return QJsonObject(); });
-            !snapshotted)
-            return std::unexpected(snapshotted.error());
     const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     qCInfo(lcHub).noquote() << computer << (visit->dryRun ? "began a dry run of a sync of" : "began a sync of") << visit->library;
     const QString library = visit->library;
@@ -204,16 +200,23 @@ std::expected<QJsonObject, Failure> HubSync::Visit::fetch(const QJsonObject &ask
     return QJsonObject{{"data", QString::fromLatin1(read.read(piece).toBase64())}, {"size", read.size()}};
 }
 
-std::expected<QJsonObject, Failure> HubSync::Visit::omabook(const QJsonObject &asked, HubKeeper &keeper) const {
+std::expected<QJsonObject, Failure> HubSync::Visit::omabook(const QJsonObject &asked, HubKeeper &keeper) {
     QStringList arguments;
     for (const auto &argument : asked.value("arguments"_L1).toArray())
         arguments << argument.toString();
-    return keeper.write(library, HubKeeper::Moment::None, [&](Library &kept) -> std::expected<QJsonObject, Failure> {
-        const auto done = HubSyncSteps::run(kept, arguments, [this](const QString &named) { return resolve(named); }, dryRun);
-        if (!done) {
-            qCWarning(lcHub).noquote() << computer + u"'s sync of "_s + library << "was refused a step:" << done.error().english();
-            return std::unexpected(done.error());
-        }
-        return QJsonObject{{"answer", *done}};
-    });
+    const HubSyncSteps::Resolve resolving = [this](const QString &named) { return resolve(named); };
+    // Its first step that writes takes the moment snapshot first, in the same lock (#181): none
+    // for a sync the guard refuses (#187), or a dry run, which write nothing.
+    const bool first = !dryRun && !snapshotted && HubSyncSteps::writes(arguments, resolving);
+    const auto answered = keeper.write(
+        library, first ? HubKeeper::Moment::Sync : HubKeeper::Moment::None, [&](Library &kept) -> std::expected<QJsonObject, Failure> {
+            const auto done = HubSyncSteps::run(kept, arguments, resolving, dryRun);
+            if (!done) {
+                qCWarning(lcHub).noquote() << computer + u"'s sync of "_s + library << "was refused a step:" << done.error().english();
+                return std::unexpected(done.error());
+            }
+            return QJsonObject{{"answer", *done}};
+        });
+    snapshotted = snapshotted || (first && answered);
+    return answered;
 }

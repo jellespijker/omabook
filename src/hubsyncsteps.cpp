@@ -162,6 +162,16 @@ namespace {
 
 } // namespace
 
+bool HubSyncSteps::writes(const QStringList &arguments, const Resolve &resolve) {
+    if (arguments.value(0) == u"manifest"_s)
+        return false;
+    if (arguments.size() == 3 && arguments.at(0) == u"sync"_s && arguments.at(1) == u"--replicate"_s) {
+        const auto request = sent(arguments.at(2), resolve);
+        return request && !request->object().value("dry_run"_L1).toBool();
+    }
+    return true;
+}
+
 std::expected<QJsonValue, Failure> HubSyncSteps::run(Library &library, const QStringList &arguments, const Resolve &resolve, bool dryRun) {
     const QString command = arguments.value(0);
     if (arguments == QStringList{u"manifest"_s, u"--log"_s})

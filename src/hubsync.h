@@ -30,9 +30,8 @@ class HubRequests;
 // A visit is one computer's, never another's; what it is sent stays in its own
 // folders and goes with it; it fetches only the files of the library's books
 // and their covers. Every step is done through the keeper (ADR 0013), and a
-// sync that writes takes its moment snapshot (#181) first, once, when it
-// begins. A library of another format than the computer's doesn't sync: both
-// sides say which Omabook to update. A dry run writes nothing at all.
+// sync takes its moment snapshot (#181) once, just before its first write. A library of another format than the computer's doesn't sync:
+// both sides say which Omabook to update. A dry run writes nothing at all.
 class HubSync {
 public:
     // How long a sync may stand without a step before the hub lets it go.
