@@ -18,6 +18,7 @@
 #include "remote.h"
 #include "settings.h"
 #include "sync.h"
+#include "syncidentity.h"
 #include "synclog.h"
 #include "syncplan.h"
 
@@ -225,6 +226,21 @@ int answerReplication(const QCommandLineParser &parser) {
     return 0;
 }
 
+// What omabook sync asks of this computer before anything else (#209):
+// whether the library this file introduces may sync with this one; why not, as "refused".
+int answerIdentity(const QCommandLineParser &parser) {
+    QFile file(parser.value("identity"));
+    if (!file.open(QIODevice::ReadOnly))
+        return failLine(parser.value("identity") + " can't be read.");
+    const QJsonObject theirs = QJsonDocument::fromJson(file.readAll()).object();
+    const auto library = openCliLibrary(parser);
+    if (!library)
+        return failLine(library.error());
+    const auto checked = SyncIdentity::check(**library, theirs, theirs.value("name").toString());
+    printJsonObject(checked ? QJsonObject() : QJsonObject{{"refused", checked.error().text()}});
+    return 0;
+}
+
 // What omabook sync asks of this computer for the files of plugins' data/
 // folders (PluginFileSync): what they hold, or to take those in a request.
 int answerPluginFiles(const QCommandLineParser &parser) {
@@ -300,6 +316,9 @@ int runSyncCli(const QStringList &arguments) {
                       "What omabook sync asks of this computer from the other one: take in the change log's operations in "
                       "this file, and print the ones the other computer lacks.",
                       "file"});
+    parser.addOption({"identity",
+                      "What omabook sync asks of this computer first: whether the library this file introduces may sync with this one.",
+                      "file"});
     parser.addOption({"plugin-files", "What omabook sync asks of this computer: record what plugins' data/ folders hold, and print it."});
     parser.addOption({"take-plugin-files",
                       "What omabook sync asks of this computer: take in the files of plugins' data/ folders this file names.", "file"});
@@ -307,6 +326,8 @@ int runSyncCli(const QStringList &arguments) {
         return 1;
     if (parser.isSet("replicate"))
         return answerReplication(parser);
+    if (parser.isSet("identity"))
+        return answerIdentity(parser);
     if (parser.isSet("plugin-files") || parser.isSet("take-plugin-files"))
         return answerPluginFiles(parser);
     const auto options = parseSyncOptions(parser);

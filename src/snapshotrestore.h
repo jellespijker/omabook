@@ -11,8 +11,10 @@
 #include "failure.h"
 #include "library.h"
 #include "librarydiff.h"
+#include "pluginrestore.h"
 #include "restic.h"
 #include "snapshots.h"
+#include "syncidentity.h"
 
 // Going back to a snapshot (#183, ADR 0014): its library opened beside the
 // live one, to compare (LibraryDiff) or to take a book back from
@@ -61,8 +63,11 @@ struct Compared {
 // The whole library as the snapshot holds it, its books' files with it,
 // restored into `folder`, which must not exist yet or be empty, and must not be
 // the library's own or inside it: a library of its own, opened once to check
-// it. Its settings and plugins' data stay in the snapshot.
-[[nodiscard]] std::expected<void, Failure> whole(const Snapshots &snapshots, const Restic::Snapshot &snapshot, const QString &folder);
+// it and given a device id of its own (#209), never two libraries writing as
+// one computer: its device id then and now. Its settings and plugins' data/
+// folders stay in the snapshot.
+[[nodiscard]] std::expected<SyncIdentity::Renewed, Failure> whole(const Snapshots &snapshots, const Restic::Snapshot &snapshot,
+                                                                  const QString &folder);
 
 // What a book restore did, and the moment snapshot taken just before it, to
 // go back to (its id; the last one's when nothing changed since).
@@ -81,6 +86,22 @@ struct BookRestored {
 // when nothing is asked for, or either side lacks the book.
 [[nodiscard]] std::expected<BookRestored, Failure> book(const Snapshots &snapshots, Library &live, const Copy &from,
                                                         const QString &globalId, BookRestore::Parts parts, bool snapshotFirst = true);
+
+// What a restore of a plugin's things did (PluginRestore), and the moment
+// snapshot taken just before it, as for a book.
+struct ThingsRestored {
+    PluginRestore::Restored restored;
+    QString undo;
+
+    // {"restored": {"things", "items"}, "undo"}.
+    [[nodiscard]] QJsonObject toJson() const;
+};
+
+// A plugin's thing, a notebook or a page, put back in `live` as the plan made
+// of a snapshot's copy says (PluginRestore::plan), after a moment snapshot of
+// `live`, as book() does (#209).
+[[nodiscard]] std::expected<ThingsRestored, Failure> things(const Snapshots &snapshots, const Library &live,
+                                                            const PluginRestore::Plan &plan, bool snapshotFirst = true);
 
 // A snapshot as `snapshot list --json` and the hub's answers show it: {"id", "time", "kind", "reason"}.
 [[nodiscard]] QJsonObject toJson(const Restic::Snapshot &snapshot);

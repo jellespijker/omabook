@@ -22,6 +22,7 @@
 #include "hubrequests.h"
 #include "hubsnapshots.h"
 #include "library.h"
+#include "plugindata.h"
 #include "snapshotrestore.h"
 #include "snapshots.h"
 #include "spaces.h"
@@ -193,6 +194,96 @@ private slots:
             computer.omabook({"snapshot", "restore", snapshot->id, "--to", computer.dir.filePath("Again"), "--library", computer.library});
         QVERIFY2(code == 0, qPrintable(said));
         QVERIFY(QFileInfo::exists(Library::databaseIn(computer.dir.filePath("Again"))));
+    }
+
+    // A restored library is a library of its own, never the one it was a
+    // snapshot of speaking twice (#209): it is given a device id of its own,
+    // and the command says so.
+    void aRestoredLibraryHasADeviceIdOfItsOwn() {
+        const Computer computer;
+        QVERIFY(computer.setUp());
+        const Snapshots snapshots = computer.snapshots();
+        Library library(computer.library);
+        QVERIFY(library.open());
+        QVERIFY(entry(library, "Dune") > 0);
+        const QString was = Spaces::deviceId(library);
+        const auto snapshot = SnapshotRestore::find(snapshots, library, taken(snapshots, library));
+        QVERIFY(snapshot);
+
+        const QString folder = computer.dir.filePath("Restored");
+        const auto restored = SnapshotRestore::whole(snapshots, *snapshot, folder);
+        QVERIFY2(restored, qPrintable(whyNot(restored)));
+        QCOMPARE(restored->was, was);
+        Library back(folder);
+        QVERIFY(back.open());
+        QCOMPARE(Spaces::deviceId(back), restored->now);
+        QVERIFY(restored->now != was);
+        QCOMPARE(Spaces::deviceId(library), was);
+
+        const auto [code, said, out] = computer.omabook(
+            {"snapshot", "restore", snapshot->id, "--to", computer.dir.filePath("Again"), "--library", computer.library, "--json"});
+        QVERIFY2(code == 0, qPrintable(said));
+        const QJsonObject answered = QJsonDocument::fromJson(out.toUtf8()).object();
+        Library again(computer.dir.filePath("Again"));
+        QVERIFY(again.open());
+        QCOMPARE(answered["device"].toString(), Spaces::deviceId(again));
+        QCOMPARE(answered["was"].toString(), was);
+        const auto [textCode, saidText, outText] =
+            computer.omabook({"snapshot", "restore", snapshot->id, "--to", computer.dir.filePath("Third"), "--library", computer.library});
+        QVERIFY2(textCode == 0 && saidText.contains("device id of its own"), qPrintable(saidText));
+    }
+
+    // A notebook of the notebooks plugin, and a page of it, put back by the
+    // command from a snapshot (#209): shown first and asked, a moment
+    // snapshot taken, the notebook's page removed since back, and its title.
+    void aNotebookOrAPageIsPutBackByTheCommand() {
+        const Computer computer;
+        QVERIFY(QDir().mkpath(computer.dir.filePath("home/.config/omabook")));
+        QVERIFY(Fixtures::write(computer.contents.settingsFile, "{\"ai_provider\": \"off\"}"));
+        QVERIFY(computer.setUp());
+        const auto thing = [](const QString &entity, const QString &id) {
+            return PluginData::Thing{.plugin = "notebooks", .entity = entity, .id = id};
+        };
+        QString before;
+        {
+            const Snapshots snapshots = computer.snapshots();
+            Library library(computer.library);
+            QVERIFY(library.open());
+            QVERIFY(PluginData::set(library, thing("notebook", "n1"), {{"title", "Physics"}}));
+            QVERIFY(PluginData::set(library, thing("page", "p1"), {{"notebook", "n1"}, {"order", 1}}));
+            QVERIFY(PluginData::change(library, thing("page", "p1"), "strokes", {.added = {{"s1", "AAA"}}, .removed = {}}));
+            QVERIFY(PluginData::set(library, thing("page", "p2"), {{"notebook", "n1"}, {"order", 2}}));
+            before = taken(snapshots, library);
+            QVERIFY(!before.isEmpty());
+            QVERIFY(PluginData::set(library, thing("notebook", "n1"), {{"title", "Chemistry"}}));
+            QVERIFY(PluginData::remove(library, thing("page", "p2")));
+            QVERIFY(PluginData::change(library, thing("page", "p1"), "strokes", {.added = {}, .removed = {"s1"}}));
+        }
+        const auto now = [&computer, &thing](const QString &entity, const QString &id) {
+            Library library(computer.library);
+            return library.open() ? PluginData::read(library, thing(entity, id)).toObject() : QJsonObject();
+        };
+        const QStringList page{"snapshot", "restore", before.left(8), "--page", "p1", "--yes", "--library", computer.library};
+        const auto [pageCode, saidPage, outPage] = computer.omabook(page);
+        QVERIFY2(pageCode == 0, qPrintable(saidPage));
+        QCOMPARE(now("page", "p1")["sets"].toObject()["strokes"].toObject().keys(), QStringList{"s1"});
+        QCOMPARE(now("notebook", "n1")["fields"].toObject()["title"].toString(), QString("Chemistry"));
+
+        const QStringList notebook{"snapshot", "restore", before.left(8), "--notebook", "Physics", "--library", computer.library};
+        const auto [no, saidNo, outNo] = computer.omabook(notebook, "n\n");
+        QVERIFY2(no != 0 && saidNo.contains("page"), qPrintable(saidNo));
+        QVERIFY(now("page", "p2").isEmpty());
+        const auto [yes, saidYes, outYes] = computer.omabook(notebook + QStringList{"--json"}, "y\n");
+        QVERIFY2(yes == 0, qPrintable(saidYes));
+        QCOMPARE(now("notebook", "n1")["fields"].toObject()["title"].toString(), QString("Physics"));
+        QCOMPARE(now("page", "p2")["fields"].toObject()["notebook"].toString(), QString("n1"));
+        const QJsonObject answered = QJsonDocument::fromJson(outYes.toUtf8()).object();
+        QVERIFY2(!answered["undo"].toString().isEmpty() && answered["undo"].toString() != before, qPrintable(outYes));
+        QVERIFY(answered["restored"]["things"].toInt() >= 2);
+        // A notebook the snapshot doesn't hold.
+        const auto [none, saidNone, outNone] =
+            computer.omabook({"snapshot", "restore", before.left(8), "--notebook", "Poems", "--yes", "--library", computer.library});
+        QVERIFY2(none != 0 && saidNone.contains("Poems"), qPrintable(saidNone));
     }
 
     // The command shows what the restore puts back and asks; said no, or not

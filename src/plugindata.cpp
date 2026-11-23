@@ -244,6 +244,19 @@ QJsonArray PluginData::list(const Library &library, const QString &plugin, const
     return reduce(operationsOf(library, plugin, entity));
 }
 
+QStringList PluginData::entities(const Library &library, const QString &plugin) {
+    QStringList named;
+    const QString prefix = plugin + u':';
+    for (QSqlQuery query = ChangeLog::query(library,
+                                            "SELECT DISTINCT entity FROM space_ops WHERE space = (SELECT id FROM log_ids WHERE name = ?) "
+                                            "ORDER BY entity",
+                                            {spaceOf(plugin)});
+         query.next();)
+        if (const QString entity = query.value(0).toString(); entity.startsWith(prefix))
+            named << entity.mid(prefix.size());
+    return named;
+}
+
 QJsonArray PluginData::reduce(std::span<const SpaceOperation> ops) {
     QMap<QString, Reduced> things;
     for (const SpaceOperation &op : ops)

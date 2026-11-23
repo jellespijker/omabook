@@ -15,6 +15,7 @@
 #include "person.h"
 #include "settings.h"
 #include "spaces.h"
+#include "syncidentity.h"
 
 namespace {
 
@@ -39,6 +40,26 @@ void printLine(FILE *stream, const QString &text) {
     return computers;
 }
 
+// A device id of its own for the library in `root` (#209): for a copy of a
+// library, which a sync refuses while it has the id of the one it came from.
+int newDevice(const QString &root, bool json) {
+    Library library(root);
+    if (QString error; !QFileInfo::exists(library.databasePath()) || !library.open(&error)) {
+        printLine(stderr, error.isEmpty() ? u"There is no library in %1."_s.arg(root) : error);
+        return 1;
+    }
+    const SyncIdentity::Renewed renewed = SyncIdentity::renew(library);
+    if (json)
+        printLine(stdout,
+                  QString::fromUtf8(
+                      QJsonDocument(QJsonObject{{u"device"_s, renewed.now}, {u"was"_s, renewed.was}}).toJson(QJsonDocument::Indented))
+                      .trimmed());
+    else
+        printLine(stdout, u"This library's device id is %1 now, one of its own; it was %2. What it wrote stays under the old one, "
+                          "and from now on it syncs as a computer of its own."_s.arg(renewed.now, renewed.was));
+    return 0;
+}
+
 [[nodiscard]] QString computerLine(const Spaces::Computer &computer, const QString &thisOne) {
     const QString name = computer.name.isEmpty() ? u"(a computer not named yet)"_s : computer.name;
     return u"  %1  %2%3"_s.arg(name, computer.device, computer.device == thisOne ? u"  (this computer)"_s : QString());
@@ -61,6 +82,9 @@ int runIdentityCli(const QStringList &arguments) {
                       u"Use the library in this folder instead of the current one, for this run only "
                       "(omabook libraries --use changes the one in use)."_s,
                       u"folder"_s});
+    parser.addOption({u"new-device"_s,
+                      u"Give the library a device id of its own: for a copy of a library, which a sync refuses while it has the "
+                      "id of the one it came from. A library restored from a snapshot is given one by itself."_s});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = u"omabook identity"_s;
@@ -70,6 +94,8 @@ int runIdentityCli(const QStringList &arguments) {
         return 1;
     }
     const QString root = parser.isSet(u"library"_s) ? parser.value(u"library"_s) : Settings().libraryPath();
+    if (parser.isSet(u"new-device"_s))
+        return newDevice(root, parser.isSet(u"json"_s));
     PersonFile kept;
     const Person *person = kept.get(root);
     if (person == nullptr) {

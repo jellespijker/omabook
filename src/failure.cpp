@@ -275,6 +275,14 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NoCopyAway,
      tr("The libraries are no longer kept away from home: no place away holds their snapshots as it should. Mend what is said "
         "of it, or add one: omabook snapshot destination add")},
+    {Failure::Code::RestoreThingNotFound, tr("The snapshot holds no %1.")},
+    {Failure::Code::RestoreThingAmbiguous, tr("More than one notebook is called %1: name it by its id.")},
+    {Failure::Code::SyncDeviceOurs,
+     tr("The library on %1 has this library's device id: one of the two is a copy of the other, and the two would write as one "
+        "computer. Nothing was synced. Give the copy a device id of its own, there or here: omabook identity --new-device")},
+    {Failure::Code::SyncDeviceTaken,
+     tr("The library on %1 has the device id of %2, another of your computers: one is a copy of the other, and the two would write as "
+        "one computer. Nothing was synced. Give the copy a device id of its own, on it: omabook identity --new-device")},
     {Failure::Code::NoSuchSpace, tr("This library shares or publishes no space called %1 (omabook spaces lists them).")},
     {Failure::Code::SpaceNameTaken, tr("More than one space goes by %1; name one by its id (omabook spaces lists them).")},
     {Failure::Code::PartNotSwitched, tr("%1 is no part of a space that is switched on and off: %2.")},

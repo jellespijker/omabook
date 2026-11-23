@@ -76,6 +76,8 @@ std::expected<void, QString> remove(const Library &library, const Thing &thing);
 [[nodiscard]] QJsonValue read(const Library &library, const Thing &thing);
 // Every thing of an entity there is, ordered by id.
 [[nodiscard]] QJsonArray list(const Library &library, const QString &plugin, const QString &entity);
+// The entities a plugin keeps things of, ordered by name.
+[[nodiscard]] QStringList entities(const Library &library, const QString &plugin);
 
 // The things `ops` (of one plugin's entity) make, as read() answers each.
 [[nodiscard]] QJsonArray reduce(std::span<const SpaceOperation> ops);

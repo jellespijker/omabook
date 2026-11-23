@@ -9,6 +9,7 @@
 #include <QJsonDocument>
 #include <QScopeGuard>
 #include <QSet>
+#include <QSysInfo>
 #include <QTemporaryDir>
 #include <algorithm>
 #include <optional>
@@ -24,6 +25,7 @@
 #include "replication.h"
 #include "spaces.h"
 #include "syncguard.h"
+#include "syncidentity.h"
 #include "synclog.h"
 #include "syncmanifest.h"
 #include "synctake.h"
@@ -88,11 +90,26 @@ void logSyncSummary(const SyncSummary &summary, const QString &host) {
                              << summary.graphSent << "graph sent," << summary.problems.size() << "problems";
 }
 
+// Why the two libraries may not sync, as each side knows the other (#209):
+// before anything is written on either. Their manifest is checked here; this
+// library's device and name there, where an Omabook from before that check
+// can't answer, and isn't refused for it.
+[[nodiscard]] QString identityRefused(const Library &library, const Remote &remote, const QJsonObject &manifest) {
+    if (manifest.value("log").toInt() < 1)
+        return {};
+    if (const auto here = SyncIdentity::check(library, manifest, remote.host()); !here)
+        return here.error().text();
+    const QJsonObject mine{{"device", Spaces::deviceId(library)}, {"name", QSysInfo::machineHostName()}};
+    const auto there = remote.exchange(QJsonDocument(mine), {"sync", "--identity"});
+    const QString refused = there ? there->value("refused").toString() : QString();
+    return refused.isEmpty() ? refused : remote.host() + " refuses to sync with this computer: " + refused;
+}
+
 // What the other side holds, or none, with why in `summary`. An Omabook that
 // speaks the log answers `manifest --log` with a manifest that says so and
 // leaves out what the log carries; one from before refuses the option it
 // doesn't know (exit code 1), and is asked for the manifest it has always given.
-std::optional<QJsonObject> theirManifest(const Remote &remote, SyncSummary &summary) {
+std::optional<QJsonObject> theirManifest(const Library &library, const Remote &remote, SyncSummary &summary) {
     Remote::Result listed = remote.omabook({"manifest", "--log"});
     if (listed.code == 1)
         listed = remote.omabook({"manifest"});
@@ -112,6 +129,9 @@ std::optional<QJsonObject> theirManifest(const Remote &remote, SyncSummary &summ
                             .arg(remote.host(), manifest.value("omabook").toString("unknown"), QStringLiteral(OMABOOK_VERSION));
         return std::nullopt;
     }
+    // Who they are, before anything is written on either side (#209).
+    if (summary.error = identityRefused(library, remote, manifest); !summary.error.isEmpty())
+        return std::nullopt;
     return manifest;
 }
 
@@ -202,7 +222,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
     SyncSummary summary;
     summary.dryRun = options.dryRun;
     const bool dryRun = options.dryRun;
-    std::optional<QJsonObject> listed = theirManifest(remote, summary);
+    std::optional<QJsonObject> listed = theirManifest(library, remote, summary);
     if (!listed)
         return summary;
     QJsonObject manifest = std::move(*listed);

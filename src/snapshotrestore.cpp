@@ -77,6 +77,15 @@ using namespace Qt::StringLiterals;
     return folder;
 }
 
+// The snapshot that undoes a restore about to be written in `live`: one taken
+// now, or, when the caller took it (a hub's keeper), the last one.
+[[nodiscard]] std::expected<QString, Failure> undoPoint(const Snapshots &snapshots, const Library &live, bool snapshotFirst) {
+    if (snapshotFirst)
+        return snapshots.take(live, SnapshotReason::Restore).transform([](const Snapshots::Taken &taken) { return taken.id; });
+    const auto listed = snapshots.list(live);
+    return listed && !listed->isEmpty() ? listed->last().id : QString();
+}
+
 } // namespace
 
 std::expected<Restic::Snapshot, Failure> SnapshotRestore::find(const Snapshots &snapshots, const Library &library, const QString &id) {
@@ -139,7 +148,8 @@ std::expected<SnapshotRestore::Compared, Failure> SnapshotRestore::compare(const
     return Compared{.diff = LibraryDiff::between(before->library(), after->library()), .from = *earlier, .to = *later};
 }
 
-std::expected<void, Failure> SnapshotRestore::whole(const Snapshots &snapshots, const Restic::Snapshot &snapshot, const QString &folder) {
+std::expected<SyncIdentity::Renewed, Failure> SnapshotRestore::whole(const Snapshots &snapshots, const Restic::Snapshot &snapshot,
+                                                                     const QString &folder) {
     const QString target = QDir::cleanPath(QDir(folder).absolutePath());
     // The database and what it was taken of, first, aside: nothing is written where it goes before it may go there.
     const auto aside = folderAside(snapshots, u"whole"_s);
@@ -163,12 +173,14 @@ std::expected<void, Failure> SnapshotRestore::whole(const Snapshots &snapshots, 
     if (const auto files = Restic::restore(snapshots.place().repository, snapshot.id, beside.path(), {library}); !files)
         return std::unexpected(files.error());
     if (const auto placed = putInPlace(beside.path() + library, *staging + u"/omabook.db"_s, target); !placed)
-        return placed;
+        return std::unexpected(placed.error());
     Library restored(target);
     if (QString error; !restored.open(&error))
         return std::unexpected(Failure(Failure::Code::SnapshotNotRestored, {error}));
-    qCInfo(lcLibrary).noquote() << "snapshot" << snapshot.shortId() << "of" << library << "restored into" << target;
-    return {};
+    SyncIdentity::Renewed renewed = SyncIdentity::renew(restored);
+    qCInfo(lcLibrary).noquote() << "snapshot" << snapshot.shortId() << "of" << library << "restored into" << target
+                                << "with a device id of its own," << renewed.now << "(it was" << renewed.was + u')';
+    return renewed;
 }
 
 QJsonObject SnapshotRestore::BookRestored::toJson() const {
@@ -189,14 +201,10 @@ std::expected<SnapshotRestore::BookRestored, Failure> SnapshotRestore::book(cons
     if (const qint64 now = Spaces::localId(live, u"book"_s, globalId); now <= 0 || !live.book(now))
         return std::unexpected(Failure(Failure::Code::RestoreBookGone, {then->meta.title}));
     BookRestored done;
-    if (snapshotFirst) {
-        const auto taken = snapshots.take(live, SnapshotReason::Restore);
-        if (!taken)
-            return std::unexpected(taken.error());
-        done.undo = taken->id;
-    } else if (const auto listed = snapshots.list(live); listed && !listed->isEmpty()) {
-        done.undo = listed->last().id;
-    }
+    const auto undo = undoPoint(snapshots, live, snapshotFirst);
+    if (!undo)
+        return std::unexpected(undo.error());
+    done.undo = *undo;
     const auto restored = BookRestore::restore(live, from.library(), globalId, parts);
     if (!restored)
         return std::unexpected(restored.error());
@@ -204,6 +212,22 @@ std::expected<SnapshotRestore::BookRestored, Failure> SnapshotRestore::book(cons
     qCInfo(lcLibrary).noquote() << "book" << globalId << "put back from snapshot" << from.snapshot().shortId() << "in" << live.root()
                                 << "; undone by" << done.undo.left(8);
     return done;
+}
+
+QJsonObject SnapshotRestore::ThingsRestored::toJson() const {
+    return {{u"restored"_s, QJsonObject{{u"things"_s, restored.things}, {u"items"_s, restored.items}}}, {u"undo"_s, undo}};
+}
+
+std::expected<SnapshotRestore::ThingsRestored, Failure> SnapshotRestore::things(const Snapshots &snapshots, const Library &live,
+                                                                                const PluginRestore::Plan &plan, bool snapshotFirst) {
+    const auto undo = undoPoint(snapshots, live, snapshotFirst);
+    if (!undo)
+        return std::unexpected(undo.error());
+    const auto restored = PluginRestore::apply(live, plan);
+    if (!restored)
+        return std::unexpected(restored.error());
+    qCInfo(lcLibrary).noquote() << restored->things << "things of a plugin put back in" << live.root() << "; undone by" << undo->left(8);
+    return ThingsRestored{.restored = *restored, .undo = *undo};
 }
 
 QJsonObject SnapshotRestore::toJson(const Restic::Snapshot &snapshot) {

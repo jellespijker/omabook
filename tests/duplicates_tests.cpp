@@ -12,6 +12,7 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSysInfo>
 #include <QTemporaryDir>
 #include <QUuid>
 #include <QtTest>
@@ -262,8 +263,9 @@ private slots:
         Library b(dir.filePath("B"));
         QVERIFY(a.open() && b.open());
         const QString spaceA = Spaces::personalSpace(a);
-        Spaces::pair(b, spaceA, Spaces::deviceId(a), "A");
-        Spaces::pair(a, Spaces::personalSpace(b), Spaces::deviceId(b), "B");
+        // Each by the name a sync records, its host's (#209): here both are this computer.
+        Spaces::pair(b, spaceA, Spaces::deviceId(a), QSysInfo::machineHostName());
+        Spaces::pair(a, Spaces::personalSpace(b), Spaces::deviceId(b), QSysInfo::machineHostName());
         // Linked by Calibre's number for the book, as 0.1.6 did; 0.2.2 pairs by no such number (#158),
         // and follows the link it made, of two books of one title.
         const QString kept = Spaces::bookId(a, 11);

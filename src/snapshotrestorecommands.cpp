@@ -4,6 +4,8 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QJsonValue>
+#include <algorithm>
 #include <cstdio>
 #include <print>
 #include <tuple>
@@ -11,6 +13,8 @@
 #include "library.h"
 #include "librarydiff.h"
 #include "librarymigrations.h"
+#include "plugindata.h"
+#include "pluginrestore.h"
 #include "settings.h"
 #include "snapshotrestore.h"
 #include "snapshots.h"
@@ -162,14 +166,20 @@ int restoreWhole(const QCommandLineParser &parser, const Snapshots &snapshots, c
     if (!snapshot)
         return fail(snapshot.error());
     const QString folder = parser.value(u"to"_s);
-    if (const auto restored = SnapshotRestore::whole(snapshots, *snapshot, folder); !restored)
+    const auto restored = SnapshotRestore::whole(snapshots, *snapshot, folder);
+    if (!restored)
         return fail(restored.error());
     if (parser.isSet(u"json"_s)) {
-        printJson({{u"snapshot"_s, SnapshotRestore::toJson(*snapshot)}, {u"library"_s, folder}});
+        printJson({{u"snapshot"_s, SnapshotRestore::toJson(*snapshot)},
+                   {u"library"_s, folder},
+                   {u"device"_s, restored->now},
+                   {u"was"_s, restored->was}});
         return 0;
     }
     printLine(stdout, u"The library as %1 holds it is restored into %2, a library of its own; the one in use is as it was. "
-                      "omabook libraries --use %2 makes it the one in use."_s.arg(named(*snapshot), folder));
+                      "omabook libraries --use %2 makes it the one in use. It has a device id of its own, %3 (the snapshot's "
+                      "library had %4), so it syncs as a computer of its own, never as the one it came from."_s.arg(
+                          named(*snapshot), folder, restored->now, restored->was));
     return 0;
 }
 
@@ -207,6 +217,78 @@ int restoreBook(const QCommandLineParser &parser, const Snapshots &snapshots, Li
     return 0;
 }
 
+// The notebooks plugin's things (#209), as it keeps them in the change log.
+constexpr auto notebooksPlugin = "notebooks"_L1;
+
+// The notebook `given` names: its id, else a title the snapshot's copy has, else one the library has now.
+[[nodiscard]] std::expected<QString, Failure> notebookNamed(const Library &copy, const Library &live, const QString &given) {
+    for (const Library *library : {&copy, &live}) {
+        QStringList found;
+        for (const QJsonValue notebook : PluginData::list(*library, notebooksPlugin, u"notebook"_s)) {
+            QString id = notebook["id"_L1].toString();
+            if (id == given)
+                return id;
+            if (notebook["fields"_L1]["title"_L1].toString().compare(given, Qt::CaseInsensitive) == 0)
+                found << id;
+        }
+        if (found.size() > 1)
+            return std::unexpected(Failure(Failure::Code::RestoreThingAmbiguous, {given}));
+        if (found.size() == 1)
+            return found.first();
+    }
+    return std::unexpected(Failure(Failure::Code::RestoreThingNotFound, {u"notebook "_s + given}));
+}
+
+// What putting a notebook or a page back does, by kind of thing; whether it does anything.
+[[nodiscard]] bool printPutBack(FILE *stream, const PluginRestore::Plan &plan, const QString &what, const Restic::Snapshot &snapshot) {
+    if (plan.empty()) {
+        printLine(stream, u"Nothing to put back: the %1 is as %2 has it."_s.arg(what, named(snapshot)));
+        return false;
+    }
+    printLine(stream, u"Putting back the %1 as %2 has it:"_s.arg(what, named(snapshot)));
+    for (const auto &[entity, count] : plan.comingBack.asKeyValueRange())
+        printLine(stream, u"  %1: %2 to come back"_s.arg(entity).arg(count));
+    for (const auto &[entity, count] : plan.changingBack.asKeyValueRange())
+        printLine(stream, u"  %1: %2 to change back"_s.arg(entity).arg(count));
+    if (plan.items > 0)
+        printLine(stream, u"  and %1 strokes or other items of theirs back; what was made since stays"_s.arg(plan.items));
+    return true;
+}
+
+int restoreThing(const QCommandLineParser &parser, const Snapshots &snapshots, const Library &library, const QString &id) {
+    const auto snapshot = SnapshotRestore::find(snapshots, library, id);
+    if (!snapshot)
+        return fail(snapshot.error());
+    const auto copy = SnapshotRestore::Copy::open(snapshots, *snapshot);
+    if (!copy)
+        return fail(copy.error());
+    const bool page = parser.isSet(u"page"_s);
+    const auto thing = page ? std::expected<QString, Failure>(parser.value(u"page"_s))
+                            : notebookNamed(copy->library(), library, parser.value(u"notebook"_s));
+    if (!thing)
+        return fail(thing.error());
+    const QString entity = page ? u"page"_s : u"notebook"_s;
+    const auto plan = PluginRestore::plan(library, copy->library(), {.plugin = notebooksPlugin, .entity = entity, .id = *thing});
+    if (!plan)
+        return fail(plan.error());
+    FILE *said = parser.isSet(u"json"_s) ? stderr : stdout;
+    if (!printPutBack(said, *plan, entity, *snapshot))
+        return 0;
+    if (!parser.isSet(u"yes"_s) && !confirmed(said)) {
+        printLine(stderr, u"Nothing was put back."_s);
+        return 1;
+    }
+    const auto done = SnapshotRestore::things(snapshots, library, *plan);
+    if (!done)
+        return fail(done.error());
+    if (parser.isSet(u"json"_s)) {
+        printJson(done->toJson());
+        return 0;
+    }
+    printLine(stdout, u"Put back. To undo it: omabook snapshot restore %1 --%2 %3"_s.arg(done->undo.left(8), entity, *thing));
+    return 0;
+}
+
 } // namespace
 
 int runSnapshotRestoreCli(const QStringList &arguments) {
@@ -215,7 +297,8 @@ int runSnapshotRestoreCli(const QStringList &arguments) {
         u"diff tells what changed in the library from a snapshot to another, or to now: the books added, removed and changed, "
         "detail by detail, and how many annotations and things of the knowledge graph. restore goes back to a snapshot: "
         "the whole library into a new folder (--to), never over the one in use, or one book's details and annotations into "
-        "the library (--book), after showing what changes and asking, with a moment snapshot first to undo it with."_s);
+        "the library (--book), or a notebook or a page of one (--notebook, --page), after showing what changes and asking, with a "
+        "moment snapshot first to undo it with. A library restored whole has a device id of its own."_s);
     parser.addHelpOption();
     parser.addPositionalArgument(u"what"_s, u"diff or restore."_s, u"<diff|restore>"_s);
     parser.addPositionalArgument(u"snapshot"_s, u"The snapshot's id, or its first letters (omabook snapshot list)."_s);
@@ -226,7 +309,10 @@ int runSnapshotRestoreCli(const QStringList &arguments) {
     parser.addOption({u"book"_s, u"restore: this book, by its global id or its title."_s, u"book"_s});
     parser.addOption({u"details"_s, u"restore --book: its details (title, authors, ISBN, identifiers...)."_s});
     parser.addOption({u"annotations"_s, u"restore --book: its notes, highlights, bookmarks and ink. Both when neither is given."_s});
-    parser.addOption({u"yes"_s, u"restore --book: put it back without asking."_s});
+    parser.addOption(
+        {u"notebook"_s, u"restore: this notebook of the notebooks plugin, with its pages, by its id or its title."_s, u"notebook"_s});
+    parser.addOption({u"page"_s, u"restore: this page of a notebook, with what is on it, by its id."_s, u"page"_s});
+    parser.addOption({u"yes"_s, u"restore --book, --notebook or --page: put it back without asking."_s});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = u"omabook snapshot"_s;
@@ -234,7 +320,9 @@ int runSnapshotRestoreCli(const QStringList &arguments) {
     const QStringList words = parser.positionalArguments();
     const QString what = words.value(0);
     const bool restoring = what == "restore"_L1;
-    if (words.size() < 2 || words.size() > (restoring ? 2 : 3) || (restoring && parser.isSet(u"to"_s) == parser.isSet(u"book"_s))) {
+    const auto asked = std::ranges::count_if(QStringList{u"to"_s, u"book"_s, u"notebook"_s, u"page"_s},
+                                             [&parser](const QString &option) { return parser.isSet(option); });
+    if (words.size() < 2 || words.size() > (restoring ? 2 : 3) || (restoring && asked != 1)) {
         printLine(stderr, parser.helpText().trimmed());
         return 1;
     }
@@ -251,7 +339,8 @@ int runSnapshotRestoreCli(const QStringList &arguments) {
         return 1;
     }
     if (restoring)
-        return restoreBook(parser, snapshots, library, words.at(1));
+        return parser.isSet(u"book"_s) ? restoreBook(parser, snapshots, library, words.at(1))
+                                       : restoreThing(parser, snapshots, library, words.at(1));
     const auto compared = SnapshotRestore::compare(snapshots, library, words.at(1), words.value(2));
     if (!compared)
         return fail(compared.error());

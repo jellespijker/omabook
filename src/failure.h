@@ -299,6 +299,11 @@ public:
         SnapshotDiskNearlyFull,   // {repository, room left}
         NoSecondDiskCopy,         // {}
         NoCopyAway,               // {}
+        // A plugin's thing put back from a snapshot, and a library's device id its own (#209).
+        RestoreThingNotFound,  // {notebook or page}
+        RestoreThingAmbiguous, // {title}
+        SyncDeviceOurs,        // {computer}: it has this library's device id
+        SyncDeviceTaken,       // {computer, the computer known here by that id}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.
