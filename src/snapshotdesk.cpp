@@ -1,6 +1,7 @@
 #include "snapshotdesk.h"
 
 #include <QDateTime>
+#include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonObject>
 #include <QtConcurrentRun>
@@ -14,6 +15,7 @@
 #include "library.h"
 #include "librarydiff.h"
 #include "snapshotdestinations.h"
+#include "snapshothealth.h"
 #include "snapshotrestore.h"
 
 using namespace Qt::StringLiterals;
@@ -38,6 +40,17 @@ struct SnapshotDesk::Listing {
 
 SnapshotDesk::SnapshotDesk(SnapshotPlace place, SnapshotContents contents, Root root, Warnings warnings, QObject *parent)
     : QObject(parent), m_place(std::move(place)), m_contents(std::move(contents)), m_root(std::move(root)), m_warn(std::move(warnings)) {}
+
+SnapshotDesk::Warnings SnapshotDesk::health() {
+    return [](const Snapshots &snapshots, const Library &library) {
+        QStringList said;
+        const SnapshotHealth health(snapshots);
+        const QList<std::pair<QString, QString>> libraries{{Snapshots::libraryTag(library), QFileInfo(library.root()).fileName()}};
+        for (const SnapshotWarnings::Warning &warning : health.warnings(libraries, QDateTime::currentDateTime()))
+            said << warning.why.text();
+        return said;
+    };
+}
 
 bool SnapshotDesk::ready() const { return made().ready(); }
 

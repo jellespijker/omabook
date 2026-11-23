@@ -14,6 +14,7 @@
 
 #include "bookmeta.h"
 #include "desk.h"
+#include "failure.h"
 #include "library.h"
 #include "snapshotdesk.h"
 
@@ -368,6 +369,26 @@ private slots:
         QVERIFY(idle(desk));
         QTRY_COMPARE(text(desk, "snapshotsSummary"), warning);
         QCOMPARE(value(desk, "snapshotsSummary", "color").value<QColor>(), red);
+    }
+
+    // The warnings of the checks (#184), as `omabook snapshot status` says them: a second disk and no place away.
+    void theChecksWarningsAreShown() {
+        Desk desk("en", {}, false);
+        desk.snapshotDesk.emplace(
+            SnapshotPlace::in(desk.dir.filePath("snapshots")),
+            SnapshotContents{.settingsFile = desk.dir.filePath("config.json"), .pluginsFolder = desk.dir.filePath("plugins")},
+            [&desk] { return desk.backend->libraryPath(); }, SnapshotDesk::health());
+        QVERIFY(entry(*desk.backend->library(), "Moss") > 0);
+        QVERIFY(setUpWithOne(desk));
+        QVERIFY(QDir().mkpath(desk.dir.filePath("second-disk")));
+        desk.snapshotDesk->addDestination("second-disk", desk.dir.filePath("second-disk/snapshots"), {}, {});
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.snapshotDesk->failed(), qPrintable(desk.snapshotDesk->status()));
+        const QString away = Failure(Failure::Code::NoCopyAway).text();
+        QVERIFY2(desk.snapshotDesk->warnings().contains(away), qPrintable(desk.snapshotDesk->warnings().join('\n')));
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        QVERIFY(open(desk));
+        QTRY_VERIFY(shown(desk, "snapshotWarning"));
     }
 
     // The library's menu and its key open it.

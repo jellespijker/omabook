@@ -60,9 +60,13 @@ public:
     using Root = std::function<QString()>;
     // What is wrong with the snapshots of a library, each worded with what to do; run on the worker.
     using Warnings = std::function<QStringList(const Snapshots &snapshots, const Library &library)>;
+    // The warnings as the checks (#184, SnapshotHealth) left them, each worded with what to do: what
+    // `omabook snapshot status` says, worked out from what was last known, without asking restic.
+    [[nodiscard]] static Warnings health();
 
-    // `place` is a computer's (SnapshotPlace::here, or a test's in()): read again from its state folder each time.
-    SnapshotDesk(SnapshotPlace place, SnapshotContents contents, Root root, Warnings warnings = {}, QObject *parent = nullptr);
+    // `place` is a computer's (SnapshotPlace::here, or a test's in()): read again from its state folder each
+    // time. The warnings are the checks' unless others are given.
+    SnapshotDesk(SnapshotPlace place, SnapshotContents contents, Root root, Warnings warnings = health(), QObject *parent = nullptr);
 
     [[nodiscard]] bool ready() const;
     [[nodiscard]] QString repository() const;
