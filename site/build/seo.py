@@ -59,8 +59,8 @@ def releases_feed(entries):
     )
 
 
-def sitemap(paths, date):
-    urls = "".join(f"<url><loc>{SITE_URL}{E(p)}</loc><lastmod>{date}</lastmod></url>" for p in paths)
+def sitemap(entries):
+    urls = "".join(f"<url><loc>{SITE_URL}{E(p)}</loc><lastmod>{date}</lastmod></url>" for p, date in entries)
     return f'<?xml version="1.0" encoding="utf-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">{urls}</urlset>\n'
 
 
@@ -110,6 +110,13 @@ def faq_data(fragment):
         {"@type": "Question", "name": html.unescape(q), "acceptedAnswer": {"@type": "Answer", "text": html.unescape(a)}} for q, a in pairs
     ]
     return {"@context": "https://schema.org", "@type": "FAQPage", "mainEntity": entities}
+
+
+def breadcrumb_data(items):
+    elements = [
+        {"@type": "ListItem", "position": i, "name": name, "item": url} for i, (name, url) in enumerate(items, start=1)
+    ]
+    return {"@context": "https://schema.org", "@type": "BreadcrumbList", "itemListElement": elements}
 
 
 def ld_script(data):

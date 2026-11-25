@@ -14,7 +14,7 @@ Omabook is the ebook library and reader for Omarchy. Its knowledge graph links t
 
 Omabook is a free ebook reader and library for Linux. It runs on Arch and Omarchy, reads EPUB, PDF, FictionBook, Markdown and comics, imports a Calibre library, and keeps a knowledge graph of what you read.
 
-MIT licence · Arch and Omarchy, x86_64 · Qt 6 · version 0.4.0 · [Install](docs/getting-started.html) · [What’s new](whats-new.html)
+MIT licence · Arch and Omarchy, x86_64 · Qt 6 · version 0.5.0 · [Install](docs/getting-started.html) · [What’s new](whats-new.html)
 
 [Get started](docs/getting-started.html)[Releases](https://github.com/jellespijker/omabook/releases)
 

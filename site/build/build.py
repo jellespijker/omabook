@@ -14,6 +14,7 @@ import datetime
 import html
 import json
 import os
+import subprocess
 import sys
 import urllib.error
 import urllib.request
@@ -120,7 +121,7 @@ def head_meta(depth, title, meta):
     path = meta["path"]
     desc = meta.get("desc") or DESCS.get(path) or DESCRIPTION
     url = seo.SITE_URL + path
-    PAGES.append({"path": path, "title": title, "desc": desc, "md": meta.get("md")})
+    PAGES.append({"path": path, "title": title, "desc": desc, "md": meta.get("md"), "src": meta.get("src", [])})
     tags = [
         f'<meta name="description" content="{E(desc)}">',
         f'<link rel="canonical" href="{url}">',
@@ -185,20 +186,33 @@ def write_markdown(path, title, fragment_html):
 
 
 def section_pages(kind, items, label):
+    section_crumbs = [("Omabook", seo.SITE_URL), (label, f"{seo.SITE_URL}{kind}/")]
     for key, title in items:
         crumb = f'<p class="crumb"><a href="./">{label}</a> / {E(title)}</p>' if kind == "docs" else ""
         words = fragment(f"{kind}-{key}.html")
         article = f'<article class="prose">{crumb}{words}{pager(items, key)}</article>'
-        meta = {"path": f"{kind}/{key}.html", "md": f"{kind}/{key}.md"}
+        crumbs = [*section_crumbs, (title, f"{seo.SITE_URL}{kind}/{key}.html")]
+        meta = {
+            "path": f"{kind}/{key}.html",
+            "md": f"{kind}/{key}.md",
+            "src": [f"site/build/pages/{kind}-{key}.html"],
+            "ld": [seo.ld_script(seo.breadcrumb_data(crumbs))],
+        }
         if key == "faq":
-            meta["ld"] = [seo.ld_script(seo.faq_data(words))]
+            meta["ld"].append(seo.ld_script(seo.faq_data(words)))
         body = f'<div class="docs">{side(items, key, label)}{article}</div>'
         write(f"{kind}/{key}.html", frame("../", f"{kind}/", f"{title}: Omabook {kind}", body, meta))
         write_markdown(f"{kind}/{key}.md", title, words)
     index = "".join(f'<li><a href="{key}.html">{E(title)}</a></li>' for key, title in items)
     article = f'<article class="prose">{fragment(f"{kind}-index.html")}<ol class="idx">{index}</ol></article>'
     body = f'<div class="docs">{side(items, "", label)}{article}</div>'
-    write(f"{kind}/index.html", frame("../", f"{kind}/", f"{label}: Omabook", body, {"path": f"{kind}/", "desc": f"{label} for Omabook."}))
+    index_meta = {
+        "path": f"{kind}/",
+        "desc": f"{label} for Omabook.",
+        "src": [f"site/build/pages/{kind}-index.html"],
+        "ld": [seo.ld_script(seo.breadcrumb_data(section_crumbs))],
+    }
+    write(f"{kind}/index.html", frame("../", f"{kind}/", f"{label}: Omabook", body, index_meta))
 
 
 def registry():
@@ -301,12 +315,16 @@ def plugins_page(offline):
         '<p class="note">Write your own: press <kbd>N</kbd> in the plugin manager, then add the topic <code>omabook-plugin</code> '
         "to your repository to be listed here.</p></section></div>"
     )
-    write("plugins.html", frame("", "plugins.html", "Plugins: Omabook", body, {"path": "plugins.html"}))
+    plugins_meta = {
+        "path": "plugins.html",
+        "src": ["site/build/pages/plugins-top.html", "share/omabook/plugins.json"],
+    }
+    write("plugins.html", frame("", "plugins.html", "Plugins: Omabook", body, plugins_meta))
 
 
 def product_page():
     words = fragment("product.html")
-    meta = {"path": "", "md": "index.md", "desc": DESCRIPTION}
+    meta = {"path": "", "md": "index.md", "desc": DESCRIPTION, "src": ["site/build/pages/product.html", "CMakeLists.txt"]}
     shots = ["assets/shots/covers.webp", "assets/shots/spines.webp", "assets/demo/graph.webp", "assets/shots/notebook.webp"]
     meta["ld"] = [seo.ld_script(seo.app_data(VERSION, shots))]
     page = frame("", "", "Omabook: a free ebook reader for Linux, with a knowledge graph", words, meta)
@@ -317,15 +335,22 @@ def product_page():
 def whats_new_page():
     entries = seo.releases(ROOT)
     body = f'<div class="docs"><article class="prose">{seo.whats_new_fragment(entries)}</article></div>'
-    write("whats-new.html", frame("", "whats-new.html", "What's new: Omabook", body, {"path": "whats-new.html"}))
+    write("whats-new.html", frame("", "whats-new.html", "What's new: Omabook", body, {"path": "whats-new.html", "src": ["CHANGELOG.md"]}))
     write("releases.xml", seo.releases_feed(entries))
+
+
+def lastmod_of(rel_paths, fallback):
+    if not rel_paths:
+        return fallback
+    result = subprocess.run(["git", "log", "-1", "--format=%cs", "--", *rel_paths], cwd=ROOT, capture_output=True, text=True)
+    return result.stdout.strip() or fallback
 
 
 def machine_files():
     """Sitemap, robots, llms.txt: written last, from the pages that were made."""
     today = datetime.date.today().isoformat()
-    paths = sorted({p["path"] for p in PAGES} | {p["md"] for p in PAGES if p["md"]})
-    write("sitemap.xml", seo.sitemap([p for p in paths if not p.endswith(".md")], today))
+    entries = [(p["path"], lastmod_of(p.get("src", []), today)) for p in sorted(PAGES, key=lambda item: item["path"])]
+    write("sitemap.xml", seo.sitemap(entries))
     write("robots.txt", seo.robots())
     docs = [(p["title"], p["md"], p["desc"]) for p in PAGES if p["md"] and p["path"].startswith(("docs/", "help/"))]
     write("llms.txt", seo.llms_txt([("Omabook", "index.md", DESCRIPTION)] + docs))
