@@ -14,11 +14,11 @@ The plugin manager. (demo library of made-up books)
 
 ## Storyteller
 
-Writes you a book. Say what you are in the mood for: it builds a world, invents the people, plans a plot with twists seeded before they pay off, and writes chapter one. The next is written while you read the one before. Everything it writes is original by rule. It is also a worked example of a plugin.
+Writes you a book. Say what you are in the mood for: it builds a world, invents the people, plans a plot with twists seeded before they pay off, and writes chapter one. The next is written while you read the one before. Everything it writes is original by rule. It is also a worked example of a plugin. See [Storyteller](storyteller.html).
 
 ## Notebooks
 
-Notebooks of pages on paper: lined, squared, dotted, music staves or Cornell. Write with a pen, type, add pictures and recordings. Handwriting is read, recordings are transcribed, and a page links to the passage you were reading. Export as PDF or Markdown. Notebooks are private books: they stay in your own collections and on your own computers unless you let one go.
+Notebooks of pages on paper: lined, squared, dotted, music staves or Cornell. Write with a pen, type, add pictures and recordings. Handwriting is read, recordings are transcribed, and a page links to the passage you were reading. Export as PDF or Markdown. Notebooks are private books: they stay in your own collections and on your own computers unless you let one go. See [Notebooks](notebooks.html).
 
 ## Write your own
 

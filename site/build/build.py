@@ -36,6 +36,8 @@ DOCS = [
     ("knowledge-graph", "The knowledge graph"),
     ("ai", "AI setup, per capability"),
     ("plugins", "Plugins"),
+    ("storyteller", "Storyteller"),
+    ("notebooks", "Notebooks"),
     ("calibre", "Calibre"),
     ("phones-and-e-readers", "Phones and e-readers"),
     ("sync", "Sync and sharing"),
@@ -59,6 +61,12 @@ DESCS = {
     "docs/ai.html": "Set up AI in Omabook per capability: local Ollama first, hosted only "
     "where you allow it, and a Test button on every row.",
     "docs/plugins.html": "Omabook plugins: how to find, install and write them. Storyteller writes books; Notebooks keeps pages and ink.",
+    "docs/storyteller.html": (
+        "Storyteller plugin for Omabook: writes an original book chapter by chapter as you read it, with branching and steering."
+    ),
+    "docs/notebooks.html": (
+        "Notebooks plugin for Omabook: paper notebooks beside your books with pen ink, recordings, transcription and passage links."
+    ),
     "docs/calibre.html": "Import a Calibre library into Omabook with your stars, reading places, highlights and metadata plugins.",
     "docs/phones-and-e-readers.html": "Serve your Omabook library to phones and e-readers over OPDS, and "
     "keep KOReader's reading place in step.",

@@ -13,6 +13,8 @@ Site: https://jellespijker.github.io/omabook/
 - [The knowledge graph: Omabook docs](https://jellespijker.github.io/omabook/docs/knowledge-graph.md): How Omabook builds a knowledge graph and timelines of the books you read, never past your page.
 - [AI setup, per capability: Omabook docs](https://jellespijker.github.io/omabook/docs/ai.md): Set up AI in Omabook per capability: local Ollama first, hosted only where you allow it, and a Test button on every row.
 - [Plugins: Omabook docs](https://jellespijker.github.io/omabook/docs/plugins.md): Omabook plugins: how to find, install and write them. Storyteller writes books; Notebooks keeps pages and ink.
+- [Storyteller: Omabook docs](https://jellespijker.github.io/omabook/docs/storyteller.md): Storyteller plugin for Omabook: writes an original book chapter by chapter as you read it, with branching and steering.
+- [Notebooks: Omabook docs](https://jellespijker.github.io/omabook/docs/notebooks.md): Notebooks plugin for Omabook: paper notebooks beside your books with pen ink, recordings, transcription and passage links.
 - [Calibre: Omabook docs](https://jellespijker.github.io/omabook/docs/calibre.md): Import a Calibre library into Omabook with your stars, reading places, highlights and metadata plugins.
 - [Phones and e-readers: Omabook docs](https://jellespijker.github.io/omabook/docs/phones-and-e-readers.md): Serve your Omabook library to phones and e-readers over OPDS, and keep KOReader's reading place in step.
 - [Sync and sharing: Omabook docs](https://jellespijker.github.io/omabook/docs/sync.md): Sync Omabook between your own computers over ssh, share collections, and spaces for a household or book club.
