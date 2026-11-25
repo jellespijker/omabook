@@ -28,6 +28,7 @@ jobs:
       - name: Build the pages
         env:
           GITHUB_TOKEN: ${{ github.token }}
+          GOOGLE_SITE_VERIFICATION: ${{ secrets.GOOGLE_SITE_VERIFICATION }}
         run: python3 site/build/build.py
       - name: Collect what is published
         run: |

@@ -72,6 +72,7 @@ DESCS = {
     "whats-new.html": "What each Omabook release brought, newest first.",
 }
 OG_IMAGE = "assets/og.png"
+GOOGLE_SITE_VERIFICATION = os.environ.get("GOOGLE_SITE_VERIFICATION", "").strip()
 THEME_JS = """(function () {
   // Remembers the theme preview in this browser only. Nothing is sent anywhere.
   var key = "omabook-theme", form = document.querySelector(".themes");
@@ -129,6 +130,8 @@ def head_meta(depth, title, meta):
         '<meta name="twitter:card" content="summary_large_image">',
         f'<link rel="alternate" type="application/atom+xml" title="Omabook releases" href="{depth}releases.xml">',
     ]
+    if GOOGLE_SITE_VERIFICATION:
+        tags.insert(1, f'<meta name="google-site-verification" content="{E(GOOGLE_SITE_VERIFICATION)}">')
     if meta.get("md"):
         tags.append(f'<link rel="alternate" type="text/markdown" href="{depth}{meta["md"]}">')
     tags += meta.get("ld", [])
