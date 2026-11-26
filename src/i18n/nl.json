@@ -2975,5 +2975,21 @@
   "Another of your hubs took up the graph of %1 meanwhile, so nothing of this hub's was kept: the graph comes from that one.": "Een andere hub van je heeft de graaf van %1 intussen opgepakt, dus van deze hub is niets bewaard: de graaf komt van die andere.",
   "Another of your hubs, which can't read them": "Een andere hub van je, die ze niet kan lezen",
   "The hub can't keep the snapshots' file %1: %2": "De hub kan het snapshotbestand %1 niet bewaren: %2",
-  "The hub keeps only the files of snapshots it was sent, never %1.": "De hub bewaart alleen de bestanden van snapshots die hij is gestuurd, nooit %1."
+  "The hub keeps only the files of snapshots it was sent, never %1.": "De hub bewaart alleen de bestanden van snapshots die hij is gestuurd, nooit %1.",
+  "Another program on the hub is using port %1. Choose another port.": "Een ander programma op de hub gebruikt poort %1. Kies een andere poort.",
+  "Apply": "Toepassen",
+  "Asking %1 to serve phones and e-readers as chosen…": "%1 wordt gevraagd telefoons en e-readers te bedienen zoals gekozen…",
+  "Careful: anyone on a network the hub is on who has the password can download your books, and they cross it unencrypted. Your tailnet is safer, where the device can join it.": "Let op: iedereen op een netwerk waar de hub op zit die het wachtwoord heeft, kan je boeken downloaden, en ze gaan er onversleuteld overheen. Je tailnet is veiliger, als het apparaat erbij kan.",
+  "Catalog, by the hub's name on your tailnet:": "Catalogus, via de naam van de hub op je tailnet:",
+  "Kept on the hub; type another to replace it": "Bewaard op de hub; typ een ander om het te vervangen",
+  "Not served: phones and e-readers can't reach the hub's books.": "Niet aangeboden: telefoons en e-readers kunnen de boeken van de hub niet bereiken.",
+  "Phones and e-readers through %1": "Telefoons en e-readers via %1",
+  "Phones…": "Telefoons…",
+  "Port:": "Poort:",
+  "Serve to e-readers and phones: on my home network, and every other network the hub is on": "Aanbieden aan e-readers en telefoons: op mijn thuisnetwerk, en elk ander netwerk waar de hub op zit",
+  "Serve to e-readers and phones: on the hub only": "Aanbieden aan e-readers en telefoons: alleen op de hub",
+  "The hub can't serve phones and e-readers with %1 set to %2.": "De hub kan telefoons en e-readers niet bedienen met %1 op %2.",
+  "The hub is serving its library already, at %1.": "De hub biedt zijn bibliotheek al aan, op %1.",
+  "The hub isn't on a tailnet yet. Start Tailscale there, or choose another reach.": "De hub zit nog niet op een tailnet. Start Tailscale daar, of kies een ander bereik.",
+  "The hub serves the library %1 on port %2, with no computer awake.": "De hub biedt de bibliotheek %1 aan op poort %2, zonder dat er een computer wakker is."
 }

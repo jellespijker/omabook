@@ -46,3 +46,12 @@ later fails at once when another wrote between (#161 found this as "database is 
   book's graph a sync changed meanwhile leaves nothing in the library.
 - One job at a time, on the schedule (every ten minutes, and on to the next book as one ends), keyed by the book's
   global id, its file's hash, the capability and the model, kept in the state folder's `work.json`.
+
+## As built in #193
+
+- **Phones and e-readers are answered in the keeper's turn** (`HubDevices`): the server a computer serves them with
+  (`DeviceServer`) is lent the library it serves by the keeper, one request at a time (`HubKeeper::write`), never
+  opening one itself, so a place KOReader sends is written by the one writer, into the change log, and syncs.
+- One library is served, chosen with the rest from a computer (`devices-set` through the session); the reach, the
+  port and what is served are kept in the hub's `config.json` under `devices`, the catalog's token and KOReader's key
+  in its secrets. Nothing listens until a reach is chosen, and never more widely than it (ADR 0012).

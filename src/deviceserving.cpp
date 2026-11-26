@@ -17,6 +17,7 @@ constexpr auto names = std::to_array<std::pair<DeviceServing::By, QLatin1StringV
     {DeviceServing::By::Window, "window"_L1},
     {DeviceServing::By::Service, "service"_L1},
     {DeviceServing::By::Command, "command"_L1},
+    {DeviceServing::By::Hub, "hub"_L1},
 });
 
 [[nodiscard]] QHostAddress plain(const QHostAddress &address) {
@@ -93,6 +94,8 @@ Failure DeviceServing::taken(const QHostAddress &address, quint16 port, const QS
             return {Failure::Code::ServedByService, {shown}};
         case By::Command:
             return {Failure::Code::ServedByCommand, {shown}};
+        case By::Hub:
+            return {Failure::Code::ServedByHub, {shown}};
         }
     }
     const QString where = address.toString();

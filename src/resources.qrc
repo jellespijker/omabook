@@ -158,6 +158,7 @@
         <file alias="HubsDialog.qml">HubsDialog.qml</file>
         <file alias="HubRow.qml">HubRow.qml</file>
         <file alias="HubComputersPage.qml">HubComputersPage.qml</file>
+        <file alias="HubPhonesPage.qml">HubPhonesPage.qml</file>
         <file alias="HubLinkPage.qml">HubLinkPage.qml</file>
         <file alias="HubsSummary.qml">HubsSummary.qml</file>
         <file alias="AskLibraryDialog.qml">AskLibraryDialog.qml</file>

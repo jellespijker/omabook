@@ -9,7 +9,7 @@ import QtQuick.Layouts
 // builds and how far it got, with Cancel. Its buttons beside it where there is
 // room, under it where there isn't; unlinking asks first. And automatic sync
 // with it (#191): switched on here, and how it stands, a sync it was refused
-// in red with what to do.
+// in red with what to do. And its phones and e-readers (#193): set up on a page of their own.
 Rectangle {
     id: row
     required property var modelData
@@ -24,6 +24,7 @@ Rectangle {
     signal unlinkLeft()
     signal unlinkSure()
     signal cancelWanted()
+    signal phonesWanted()
 
     readonly property var hub: modelData
     readonly property var libraries: hub.libraries || []
@@ -171,7 +172,7 @@ Rectangle {
                 text: qsTr("Unlink this computer from %1? Its key there is taken away; the hub keeps its libraries, and this computer keeps its own.").arg(row.hub.host)
             }
         }
-        // Syncing on one line, the hub's computers and unlinking on the next,
+        // Syncing and its phones (#193) on one line, the hub's computers and unlinking on the next,
         // each wrapping when the row is too narrow for it (#242): beside the
         // details as wide as its longer line, under them as wide as the row.
         Column {
@@ -198,6 +199,12 @@ Rectangle {
                     enabled: !row.busy
                     text: qsTr("Preview")
                     onClicked: row.syncWanted(true)
+                }
+                AppButton {
+                    objectName: "hubShowPhones"
+                    visible: !row.unlinking && row.hub.state === "reachable" && row.hub.devices !== undefined
+                    text: qsTr("Phones…")
+                    onClicked: row.phonesWanted()
                 }
             }
             Flow {

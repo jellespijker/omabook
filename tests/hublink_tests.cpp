@@ -494,8 +494,8 @@ private slots:
         QVERIFY(greeted.value("ok").toBool());
         QCOMPARE(greeted.value("computer").toString(), u"laptop"_s);
         QCOMPARE(greeted.value("requests").toArray().toVariantList(),
-                 (QVariantList{u"computers"_s, u"forget"_s, u"hello"_s, u"snapshots"_s, u"status"_s, u"sync"_s, u"unlink"_s, u"work"_s,
-                               u"work-cancel"_s}));
+                 (QVariantList{u"computers"_s, u"devices"_s, u"devices-set"_s, u"forget"_s, u"hello"_s, u"snapshots"_s, u"status"_s,
+                               u"sync"_s, u"unlink"_s, u"work"_s, u"work-cancel"_s}));
         // The computer is the key's, never what a request says it is.
         QVERIFY(answer(session, R"({"request": "status", "computer": "desktop"})").value("ok").toBool());
         QCOMPARE(QJsonDocument::fromJson(relayed.value(0)).object().value("computer").toString(), u"laptop"_s);

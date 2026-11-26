@@ -44,6 +44,8 @@ class HubDesk : public QObject {
     // "libraries": [{"name", "books", "format"}], "computers": [{"name", "fingerprint", "linked", "this"}],
     // "snapshots" (whether they are set up there), "warnings": [the snapshots', each saying what to do],
     // "work": its background work, as the request "work" answers (HubWork::status, #192),
+    // "devices": its phones and e-readers, as the request "devices" answers (HubDevices::status, #193),
+    // with "said": why it can't serve them as chosen, in the window's language,
     // and with automatic sync: "auto" (switched on), "autoLast" (when its last sync began), "autoRefused" (what
     // it was refused with, and what to do), "autoUnreached" (its last try didn't reach the hub), "autoWaiting"
     // ("battery", "metered": why it waits now, SyncWait)}.
@@ -55,7 +57,7 @@ class HubDesk : public QObject {
     // Whether the background service syncs with the window closed.
     Q_PROPERTY(bool background READ background NOTIFY changed)
     // What is being done ("status", "link", "unlink", "forget", "sync", "preview", "cancel", "auto": an
-    // automatic sync, "background"), and with which hub; empty when nothing is.
+    // automatic sync, "background", "devices"), and with which hub; empty when nothing is.
     Q_PROPERTY(QString doing READ doing NOTIFY changed)
     Q_PROPERTY(QString doingHost READ doingHost NOTIFY changed)
     // How the last of them went.
@@ -137,6 +139,9 @@ public:
     // libraries, as `omabook hub sync <hub>:<library> --pair` does (#217). A preview
     // pairs nothing: it shows what the sync that pairs them would do.
     Q_INVOKABLE void pair();
+    // Phones and e-readers on the hub at `host` (#193): the choices in `options` (as the request
+    // devices-set takes them), KOReader's password when one is given, and a new token for the catalog.
+    Q_INVOKABLE void setDevices(const QString &host, const QVariantMap &options, const QString &password, bool newToken);
     // Stops the background work under way on the hub at `host` (#192), keeping nothing of it.
     Q_INVOKABLE void cancelWork(const QString &host);
     // What was said is said no more.

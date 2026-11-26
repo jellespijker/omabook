@@ -82,5 +82,7 @@ inline constexpr auto mailPassword = "devices-mail";               // the mail s
 [[nodiscard]] QString token(SecretStore &secrets);
 // A new token in its place, which every app then needs.
 [[nodiscard]] QString newToken(SecretStore &secrets);
+// A token made anew, kept nowhere yet: a hub keeps its own (HubDevices, #193).
+[[nodiscard]] QString madeToken();
 
 } // namespace DeviceSecrets

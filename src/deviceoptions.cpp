@@ -128,12 +128,17 @@ QString DeviceReach::tailnetName(const QByteArray &status) {
     return name;
 }
 
-QString DeviceSecrets::newToken(SecretStore &secrets) {
+QString DeviceSecrets::madeToken() {
     // Letters and digits that can't be taken for one another when typed into an e-reader.
     constexpr QLatin1StringView alphabet{"ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789"};
     QString token;
     for (int i = 0; i < 24; ++i)
         token += alphabet.at(QRandomGenerator::system()->bounded(static_cast<int>(alphabet.size())));
+    return token;
+}
+
+QString DeviceSecrets::newToken(SecretStore &secrets) {
+    const QString token = madeToken();
     return secrets.put(QString::fromLatin1(opdsToken), token) ? token : QString();
 }
 

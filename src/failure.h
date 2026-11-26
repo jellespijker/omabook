@@ -176,6 +176,7 @@ public:
         ServedByWindow,      // {address}
         ServedByService,     // {address}
         ServedByCommand,     // {address}
+        ServedByHub,         // {address}: the hub's daemon (#193)
         ServiceUnwritable,   // {path, the system's reason}
         ServiceRefused,      // {what systemctl said}
         NoSystemd,           // {}
@@ -226,6 +227,7 @@ public:
         HubWorkClaimed,     // {title}: another of the person's hubs claimed the book's graph meanwhile (#196)
         HubStoreRefused,    // {what was asked}: no file of a restic repository the hub keeps for a computer (#196)
         HubStoreUnwritable, // {file, the system's reason}
+        HubDevicesChoice,   // {what was chosen, as what}: no choice for phones and e-readers on the hub (#193)
         // What `omabook set` was given, for a computer or a hub (BookSetting, #188).
         DetailsUnreadable,  // {file}
         DetailsNotAnObject, // {file}

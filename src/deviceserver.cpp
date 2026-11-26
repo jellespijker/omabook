@@ -14,7 +14,20 @@ using namespace Qt::StringLiterals;
 DeviceServer::DeviceServer(QString libraryRoot, QObject *parent)
     : QObject(parent), m_root(std::move(libraryRoot)), m_http([this](const HttpRequest &request) { return handle(request); }, this) {}
 
+DeviceServer::DeviceServer(Lend lend, QObject *parent)
+    : QObject(parent), m_lend(std::move(lend)), m_http([this](const HttpRequest &request) { return handle(request); }, this) {}
+
 DeviceServer::~DeviceServer() = default;
+
+void DeviceServer::make(Library &library, const Setup &setup) {
+    const DeviceOptions &options = setup.options;
+    m_books = std::make_unique<KoreaderBooks>(library);
+    if (options.opds)
+        m_opds = std::make_unique<OpdsRoutes>(library, setup.opdsToken, options.collection);
+    if (options.koreaderServe)
+        m_kosync = std::make_unique<KosyncRoutes>(library, *m_books, options.koreaderServeUser, setup.koreaderKey,
+                                                  [this](qint64 book) { emit readTo(book); });
+}
 
 std::expected<QString, Failure> DeviceServer::start(const Setup &setup, const QList<QNetworkInterface> &interfaces) {
     stop();
@@ -24,16 +37,20 @@ std::expected<QString, Failure> DeviceServer::start(const Setup &setup, const QL
     const auto address = DeviceReach::address(options.reach, interfaces);
     if (!address)
         return std::unexpected(Failure(Failure::Code::NoTailnet));
-    auto library = std::make_unique<Library>(m_root);
-    if (QString why; !library->open(&why))
-        return std::unexpected(Failure(Failure::Code::LibraryUnwritable, {why}));
-    m_library = std::move(library);
-    m_books = std::make_unique<KoreaderBooks>(*m_library);
-    if (options.opds)
-        m_opds = std::make_unique<OpdsRoutes>(*m_library, setup.opdsToken, options.collection);
-    if (options.koreaderServe)
-        m_kosync = std::make_unique<KosyncRoutes>(*m_library, *m_books, options.koreaderServeUser, setup.koreaderKey,
-                                                  [this](qint64 book) { emit readTo(book); });
+    if (m_lend) {
+        const auto lent = m_lend([this, &setup](Library &library) {
+            make(library, setup);
+            return HttpResponse{};
+        });
+        if (!lent)
+            return std::unexpected(lent.error());
+    } else {
+        auto library = std::make_unique<Library>(m_root);
+        if (QString why; !library->open(&why))
+            return std::unexpected(Failure(Failure::Code::LibraryUnwritable, {why}));
+        m_library = std::move(library);
+        make(*m_library, setup);
+    }
     m_by = setup.by;
     const auto port = m_http.listen(*address, options.port);
     if (!port) {
@@ -66,6 +83,19 @@ HttpResponse DeviceServer::handle(const HttpRequest &request) {
         return {404, "text/plain; charset=utf-8", "Not found", {}, {}};
     }
     m_seen.insert(request.peer.toString(), QDateTime::currentDateTimeUtc());
+    if (!m_lend)
+        return route(request);
+    // In the lender's turn: on a hub, no other write meets this one (ADR 0013).
+    auto answered = m_lend([this, &request](Library &) { return route(request); });
+    if (!answered) {
+        qCWarning(lcSync).noquote() << "Couldn't answer" << request.path << "for" << request.peer.toString() << ":"
+                                    << answered.error().english();
+        return {503, "text/plain; charset=utf-8", "Busy", {}, {}};
+    }
+    return *std::move(answered);
+}
+
+HttpResponse DeviceServer::route(const HttpRequest &request) {
     if (m_opds) {
         if (auto answer = m_opds->answer(request))
             return *std::move(answer);

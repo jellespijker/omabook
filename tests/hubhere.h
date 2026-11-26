@@ -4,7 +4,8 @@
 // of the window's side of the hubs (hubspanel_tests, hubautosync_tests): its
 // keeper of one library, its requests with the snapshots' among them, its
 // computers' keys, and the session's pipe (HubSession), as hubsync_tests has
-// it. Linking does there what `omabook hub allow` does over the person's ssh.
+// it, and its phones and e-readers (#193). Linking does there what `omabook hub
+// allow` does over the person's ssh.
 
 #include <QDir>
 #include <QFile>
@@ -28,6 +29,7 @@
 #include "fixtures.h"
 #include "hubcomputers.h"
 #include "hubdesk.h"
+#include "hubdevices.h"
 #include "hubkeeper.h"
 #include "hubremote.h"
 #include "hubrequests.h"
@@ -67,6 +69,7 @@ public:
     Snapshots snapshots{SnapshotPlace::in(dir.filePath(u"snapshots"_s)),
                         SnapshotContents{.settingsFile = dir.filePath(u"config.json"_s), .pluginsFolder = dir.filePath(u"plugins"_s)}};
     std::optional<SnapshotHealth> health;
+    std::optional<HubDevices> devices; // its server on the window's thread, as the daemon's is on its own
     std::optional<Person> person;
     mutable QObject home; // on the window's thread
     std::atomic<bool> reachable = true;
@@ -122,6 +125,10 @@ public:
             const bool was = std::exchange(working, false);
             return QJsonObject{{"cancelled", was}};
         });
+        devices.emplace(keeper, HubPlace({.state = dir.filePath(u"hub-state"_s), .runtime = dir.filePath(u"hub-run"_s), .credentials = {}}),
+                        HubDevices::Around{.tailscale = {}, .interfaces = [] { return QList<QNetworkInterface>(); }});
+        devices->addTo(requests);
+        devices->follow();
         auto generated = Person::generate();
         if (!generated)
             return generated.error();

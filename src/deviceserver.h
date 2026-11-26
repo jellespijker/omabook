@@ -7,6 +7,7 @@
 #include <QObject>
 #include <QString>
 #include <expected>
+#include <functional>
 #include <memory>
 
 #include "deviceoptions.h"
@@ -23,7 +24,9 @@ class OpdsRoutes;
 // KOReader's progress sync on one port, each when it is switched on, on the
 // address the person allowed and nowhere else (DeviceReach). It opens the
 // library itself, so it can live on a thread of its own: the window starts
-// it on one (DeviceDesk), `omabook serve` on its main thread. It says who it
+// it on one (DeviceDesk), `omabook serve` on its main thread. Or it is lent
+// one, a request at a time: the hub's daemon lends it a library in its
+// keeper's turn (HubDevices, #193), as the one writer there. It says who it
 // is to this computer (DeviceServing), so another Omabook finding its port
 // taken can tell.
 class DeviceServer : public QObject {
@@ -38,7 +41,15 @@ public:
         DeviceServing::By by = DeviceServing::By::Window;
     };
 
+    // How a library is lent to it: `work` done with it, and its answer;
+    // refused when it can't be had. The same library every time.
+    using Work = std::function<HttpResponse(Library &library)>;
+    using Lend = std::function<std::expected<HttpResponse, Failure>(const Work &work)>;
+
+    // Serving the library at `libraryRoot`, opened when it starts.
     explicit DeviceServer(QString libraryRoot, QObject *parent = nullptr);
+    // Serving a library lent to it for each request.
+    explicit DeviceServer(Lend lend, QObject *parent = nullptr);
     ~DeviceServer() override;
     DeviceServer(const DeviceServer &) = delete;
     DeviceServer &operator=(const DeviceServer &) = delete;
@@ -61,9 +72,12 @@ signals:
 
 private:
     [[nodiscard]] HttpResponse handle(const HttpRequest &request);
+    [[nodiscard]] HttpResponse route(const HttpRequest &request);
+    void make(Library &library, const Setup &setup);
 
     QString m_root;
-    std::unique_ptr<Library> m_library;
+    Lend m_lend;
+    std::unique_ptr<Library> m_library; // its own, when none is lent
     std::unique_ptr<KoreaderBooks> m_books;
     std::unique_ptr<OpdsRoutes> m_opds;
     std::unique_ptr<KosyncRoutes> m_kosync;

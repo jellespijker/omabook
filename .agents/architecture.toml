@@ -97,6 +97,7 @@ modules = [
   "hubwork", "hubclaims",
   "hubautosync", "hubautorun",
   "hubstore", "hubstorebridge",
+  "hubdevices",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

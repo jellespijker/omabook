@@ -5,8 +5,9 @@
 // taken off it after asking; the hub unlinked, by a key and by the mouse;
 // and a hub that took the key away, or can't be reached, said so; a library
 // the hub's isn't paired with paired after asking (#217); automatic sync
-// switched on, and a sync it was refused said in red (#191). Surveyed in
-// German, under fingers and right to left.
+// switched on, and a sync it was refused said in red (#191); and the hub's
+// phones and e-readers set up, its address, token and QR codes shown (#193).
+// Surveyed in German, under fingers and right to left.
 //
 // The hub is in this process, in temporary folders (hubhere.h). Linking does
 // there what `omabook hub allow` does over the person's ssh; the same over
@@ -22,6 +23,7 @@
 #include <QQuickStyle>
 #include <QStandardPaths>
 #include <QStyleHints>
+#include <QTcpServer>
 #include <QThread>
 #include <QUuid>
 #include <QtTest>
@@ -33,6 +35,7 @@
 #include "bookmeta.h"
 #include "crypto.h"
 #include "desk.h"
+#include "fakedevice.h"
 #include "hubcomputers.h"
 #include "hubdesk.h"
 #include "hubhere.h"
@@ -60,6 +63,11 @@ namespace {
 constexpr int slow = 30000;
 
 using HubTests::HubHere;
+
+[[nodiscard]] quint16 freePort() {
+    QTcpServer probe;
+    return probe.listen(QHostAddress::LocalHost, 0) ? probe.serverPort() : 0;
+}
 
 } // namespace
 
@@ -408,6 +416,59 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // Phones and e-readers through the hub (#193): off until chosen on its
+    // page, then served by the hub, its address, token and codes shown here.
+    void theHubsPhonesAreSetUpHere() {
+        Desk desk("en", {}, false);
+        HubHere *hub = served(desk);
+        QVERIFY(hub);
+        QVERIFY(desk.show());
+        QVERIFY(linked(desk));
+        QVERIFY(open(desk));
+        click(desk, "hubShowPhones");
+        QTRY_VERIFY(shown(desk, "hubPhonesReach"));
+        QCOMPARE(text(desk, "hubPhonesStatus"), QString("Not served: phones and e-readers can't reach the hub's books."));
+        QVERIFY(!shown(desk, "hubPhonesAddress"));
+
+        QVERIFY(QMetaObject::invokeMethod(desk.find("hubPhonesReach"), "activated", Q_ARG(int, 1)));
+        const quint16 port = freePort();
+        QTRY_VERIFY(shown(desk, "hubPhonesPort"));
+        type(desk, "hubPhonesPort", QString::number(port));
+        QObject *koreader = desk.find("hubPhonesKoreader");
+        QVERIFY(koreader && koreader->setProperty("checked", true));
+        QVERIFY(QMetaObject::invokeMethod(koreader, "toggled"));
+        QTRY_VERIFY(shown(desk, "hubPhonesUser"));
+        type(desk, "hubPhonesUser", "reader");
+        type(desk, "hubPhonesPassword", "secret");
+        click(desk, "hubPhonesApply");
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.hubsDesk->failed(), qPrintable(desk.hubsDesk->status()));
+        const QVariantMap devices = first(desk).value("devices").toMap();
+        const QString address = devices.value("address").toString();
+        const QString token = devices.value("token").toString();
+        QCOMPARE(address, QString("http://127.0.0.1:%1").arg(port));
+        QVERIFY(devices.value("password").toBool());
+        QVERIFY(value(desk, "hubPhonesPassword", "text").toString().isEmpty());
+        QTRY_COMPARE(value(desk, "hubPhonesAddress", "value").toString(), address + "/opds");
+        QCOMPARE(value(desk, "hubPhonesToken", "value").toString(), token);
+        QCOMPARE(value(desk, "hubPhonesCatalogCode", "text").toString(), address + "/opds");
+        QCOMPARE(value(desk, "hubPhonesTokenCode", "text").toString(), address + "/t/" + token + "/opds");
+        QCOMPARE(value(desk, "hubPhonesSyncCode", "text").toString(), address);
+        QVERIFY2(text(desk, "hubPhonesStatus").startsWith(QString("The hub serves the library home on port %1").arg(port)),
+                 qPrintable(text(desk, "hubPhonesStatus")));
+        // What the code holds is what the hub's catalog answers to.
+        QCOMPARE(FakeDevice::ask("GET", QUrl(address + "/t/" + token + "/opds")).status, 200);
+
+        // A new password for the catalog: the old one is refused.
+        press(desk, "hubPhonesRenewToken");
+        QVERIFY(idle(desk));
+        const QString renewed = first(desk).value("devices").toMap().value("token").toString();
+        QVERIFY(!renewed.isEmpty() && renewed != token);
+        QTRY_COMPARE(value(desk, "hubPhonesToken", "value").toString(), renewed);
+        QCOMPARE(FakeDevice::ask("GET", QUrl(address + "/t/" + token + "/opds")).status, 401);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     // A library the hub's isn't paired with, as another computer's library is
     // (#214), is refused at Sync Now and at its preview, the panel saying how
     // to pair; neither side changes.
@@ -605,7 +666,7 @@ private slots:
             QTRY_VERIFY(shown(desk, "hubWarning"));
             QTRY_VERIFY(shown(desk, "hubAutoState"));
             desk.quicken();
-            for (const QString &page : {u"list"_s, u"pair"_s, u"computers"_s, u"consent"_s}) {
+            for (const QString &page : {u"list"_s, u"pair"_s, u"computers"_s, u"phones"_s, u"consent"_s}) {
                 if (page == u"pair"_s) {
                     press(desk, "hubSyncNow");
                     QVERIFY(idle(desk));
@@ -615,6 +676,15 @@ private slots:
                 }
                 if (page == u"computers"_s)
                     click(desk, "hubShowComputers");
+                if (page == u"phones"_s) {
+                    press(desk, "hubsBack");
+                    desk.hubsDesk->setDevices(
+                        "hub", {{"serve", "localhost"}, {"port", freePort()}, {"koreader_serve", true}, {"koreader_serve_user", "reader"}},
+                        "secret", false);
+                    QVERIFY(idle(desk));
+                    click(desk, "hubShowPhones");
+                    QTRY_VERIFY(shown(desk, "hubPhonesSyncCode"));
+                }
                 if (page == u"consent"_s) {
                     QVERIFY(desk.closePopups());
                     QVERIFY(open(desk));

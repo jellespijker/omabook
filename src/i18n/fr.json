@@ -3092,5 +3092,21 @@
   "Another of your hubs took up the graph of %1 meanwhile, so nothing of this hub's was kept: the graph comes from that one.": "Un autre de vos hubs a pris en charge le graphe de %1 entre-temps, donc rien de ce hub n'a été gardé : le graphe vient de l'autre.",
   "Another of your hubs, which can't read them": "Un autre de vos hubs, qui ne peut pas les lire",
   "The hub can't keep the snapshots' file %1: %2": "Le hub ne peut pas garder le fichier d'instantanés %1 : %2",
-  "The hub keeps only the files of snapshots it was sent, never %1.": "Le hub ne garde que les fichiers des instantanés qu'on lui a envoyés, jamais %1."
+  "The hub keeps only the files of snapshots it was sent, never %1.": "Le hub ne garde que les fichiers des instantanés qu'on lui a envoyés, jamais %1.",
+  "Another program on the hub is using port %1. Choose another port.": "Un autre programme du hub utilise le port %1. Choisis-en un autre.",
+  "Apply": "Appliquer",
+  "Asking %1 to serve phones and e-readers as chosen…": "Demande à %1 de servir téléphones et liseuses comme choisi…",
+  "Careful: anyone on a network the hub is on who has the password can download your books, and they cross it unencrypted. Your tailnet is safer, where the device can join it.": "Attention : quiconque sur un réseau où se trouve le hub et qui a le mot de passe peut télécharger tes livres, et ils y passent sans chiffrement. Ton tailnet est plus sûr, si l'appareil peut le rejoindre.",
+  "Catalog, by the hub's name on your tailnet:": "Catalogue, par le nom du hub sur ton tailnet :",
+  "Kept on the hub; type another to replace it": "Gardé sur le hub ; tapes-en un autre pour le remplacer",
+  "Not served: phones and e-readers can't reach the hub's books.": "Non servi : téléphones et liseuses n'atteignent pas les livres du hub.",
+  "Phones and e-readers through %1": "Téléphones et liseuses par %1",
+  "Phones…": "Téléphones…",
+  "Port:": "Port :",
+  "Serve to e-readers and phones: on my home network, and every other network the hub is on": "Servir aux liseuses et téléphones : sur mon réseau domestique, et tout autre réseau où est le hub",
+  "Serve to e-readers and phones: on the hub only": "Servir aux liseuses et téléphones : sur le hub seulement",
+  "The hub can't serve phones and e-readers with %1 set to %2.": "Le hub ne peut pas servir téléphones et liseuses avec %1 réglé sur %2.",
+  "The hub is serving its library already, at %1.": "Le hub sert déjà sa bibliothèque, à %1.",
+  "The hub isn't on a tailnet yet. Start Tailscale there, or choose another reach.": "Le hub n'est pas encore sur un tailnet. Lance Tailscale dessus, ou choisis une autre portée.",
+  "The hub serves the library %1 on port %2, with no computer awake.": "Le hub sert la bibliothèque %1 sur le port %2, sans qu'aucun ordinateur soit allumé."
 }

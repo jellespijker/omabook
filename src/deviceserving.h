@@ -10,13 +10,13 @@
 #include "failure.h"
 
 // Which Omabook serves e-readers and phones on a port (#177): the window, its
-// background service, or `omabook serve` in a terminal. Each answers who it
+// background service, `omabook serve` in a terminal, or the hub's daemon (#193). Each answers who it
 // is at one path, to this computer only, so that another one that finds the
 // port taken can tell "the window is serving already" from another program,
 // and the window can show what its background service is doing.
 namespace DeviceServing {
 
-enum class By : std::uint8_t { Window, Service, Command };
+enum class By : std::uint8_t { Window, Service, Command, Hub };
 
 // What a server says of itself.
 struct Status {

@@ -18,6 +18,7 @@
 
 #include "hubcomputers.h"
 #include "hubdaemon.h"
+#include "hubdevices.h"
 #include "hubkeeper.h"
 #include "hublinkcommands.h"
 #include "hublinks.h"
@@ -115,12 +116,16 @@ int run(const QCommandLineParser &parser) {
     HubWork work(keeper, place.state(), place.settings());
     work.addTo(requests);
     schedule.every(u"work"_s, std::chrono::minutes(10), work.job());
+    // Phones and e-readers, served by the hub itself as a computer chose (#193).
+    HubDevices devices(keeper, place);
+    devices.addTo(requests);
     if (const auto opened = keeper.open(); !opened)
         return failLine(opened.error().text());
     HubDaemon daemon(keeper, requests);
     if (const auto listening = daemon.listen(place.socket()); !listening)
         return failLine(listening.error().text());
     schedule.start();
+    devices.follow();
     qCInfo(lcHub).noquote() << "The hub keeps" << keeper.names().size() << "libraries in" << folder;
     printLine(stdout, u"The hub keeps the libraries in %1 (%2), and takes requests at %3."_s.arg(folder, keeper.names().join(u", "_s),
                                                                                                  place.socket()));

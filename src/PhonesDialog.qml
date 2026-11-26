@@ -120,6 +120,10 @@ AppPopup {
         PhonesConnect {
             Layout.fillWidth: true
             visible: dialog.serving && dialog.options.opds && devices.address !== ""
+            address: devices.address
+            namedAddress: devices.namedAddress
+            token: devices.token
+            onRenewWanted: devices.renewToken()
         }
 
         CheckBox {

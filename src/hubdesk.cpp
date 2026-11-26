@@ -71,6 +71,18 @@ private:
     return said;
 }
 
+// The hub's phones and e-readers as the panel shows them, why it can't serve them said here, in the window's language.
+[[nodiscard]] QVariantMap devicesShown(const QJsonObject &devices) {
+    QVariantMap shown = devices.toVariantMap();
+    const QString problem = devices.value("problem"_L1).toString();
+    const QString port = QString::number(devices.value("options"_L1).toObject().value("port"_L1).toInt());
+    if (problem == u"no-tailnet"_s)
+        shown.insert(u"said"_s, HubDesk::tr("The hub isn't on a tailnet yet. Start Tailscale there, or choose another reach."));
+    else if (problem == u"port-taken"_s)
+        shown.insert(u"said"_s, HubDesk::tr("Another program on the hub is using port %1. Choose another port.").arg(port));
+    return shown;
+}
+
 } // namespace
 
 std::unique_ptr<HubDesk::Hubs> HubDesk::linkedHere(std::function<QString()> root, QString folder) {
@@ -131,6 +143,9 @@ QVariantMap HubDesk::standing(const Hubs &hubs, const QString &host) {
     // Its background work (#192), which a hub of before it doesn't do.
     if (const auto work = hubs.ask(host, {{"request", "work"}}); work)
         shown.insert(u"work"_s, work->toVariantMap());
+    // Its phones and e-readers (#193), which a hub of before it doesn't serve.
+    if (const auto devices = hubs.ask(host, {{"request", "devices"}}); devices)
+        shown.insert(u"devices"_s, devicesShown(*devices));
     // A hub of before #184 has no word of its snapshots: nothing is shown of them.
     if (const auto snapshots = hubs.ask(host, {{"request", "snapshots"}}); snapshots) {
         shown.insert(u"snapshots"_s, snapshots->value("set_up"_L1).toBool());
@@ -278,6 +293,26 @@ void HubDesk::cancelWork(const QString &host) {
             outcome.said = tr("The work under way on the hub at %1 is stopped; nothing of it is kept.").arg(host);
         else
             outcome.said = tr("The hub at %1 has no work under way.").arg(host);
+        outcome.states.insert(host, standing(*hubs, host));
+        return outcome;
+    });
+}
+
+void HubDesk::setDevices(const QString &host, const QVariantMap &options, const QString &password, bool newToken) {
+    QJsonObject asked{{"request", "devices-set"}, {"options", QJsonObject::fromVariantMap(options)}};
+    if (!password.isEmpty())
+        asked.insert("password"_L1, password);
+    if (newToken)
+        asked.insert("new_token"_L1, true);
+    work(u"devices"_s, host, [hubs = m_hubs.get(), host, asked] {
+        const auto set = hubs->ask(host, asked);
+        Outcome outcome{.said = set ? QString() : set.error().text(),
+                        .failed = !set,
+                        .states = {},
+                        .synced = {},
+                        .unpaired = {},
+                        .automatic = {},
+                        .byHand = {}};
         outcome.states.insert(host, standing(*hubs, host));
         return outcome;
     });

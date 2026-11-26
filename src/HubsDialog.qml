@@ -11,14 +11,15 @@ import QtQuick.Layouts
 // hub's library not being paired with this computer's (#214), pairing them
 // after asking (#217). All of it through the hub's session, as
 // `omabook hub` asks it. Automatic sync is switched on per hub (#191), and
-// allowed with the window closed too. The keys are the panel's "hubs"
+// allowed with the window closed too. A hub serves phones and e-readers
+// itself, set up on a page of its own (#193). The keys are the panel's "hubs"
 // (panelkeys.cpp).
 AppPopup {
     id: dialog
     objectName: "hubs"
     widest: 680
 
-    // What is shown: "list", "computers" (of `chosen`, a host) or "link".
+    // What is shown: "list", "computers" or "phones" (of `chosen`, a host), or "link".
     property string page: "list"
     property string chosen: ""
     // The hub in the list the keys act on.
@@ -43,7 +44,9 @@ AppPopup {
         page = which
         if (which === "link")
             linking.begin()
-        else
+        else if (which === "phones")
+            phones.begin()
+        if (which !== "link")
             keyboard.forceActiveFocus()
     }
     function back() {
@@ -101,7 +104,7 @@ AppPopup {
             const entered = event.key === Qt.Key_Return || event.key === Qt.Key_Enter
             let taken = true
             if (event.key === Qt.Key_Escape) dialog.back()
-            else if (dialog.page === "link") taken = false
+            else if (dialog.page === "link" || dialog.page === "phones") taken = false
             else if (asking && entered) dialog.sure()
             else if (dialog.page === "computers") taken = computers.key(event)
             else if (event.key === Qt.Key_Down || (event.key === Qt.Key_J && plain)) dialog.pick(dialog.at + 1)
@@ -137,6 +140,7 @@ AppPopup {
                 Layout.fillWidth: true
                 text: dialog.page === "link" ? qsTr("Link a hub")
                     : dialog.page === "computers" ? qsTr("The computers linked to %1").arg(dialog.chosen)
+                    : dialog.page === "phones" ? qsTr("Phones and e-readers through %1").arg(dialog.chosen)
                     : qsTr("Hubs")
                 font.pixelSize: 16
                 font.bold: true
@@ -155,6 +159,7 @@ AppPopup {
                 : hubsDesk.doing === "cancel" ? qsTr("Stopping the work under way on %1…").arg(hubsDesk.doingHost)
                 : hubsDesk.doing === "auto" ? qsTr("Syncing with %1 by itself…").arg(hubsDesk.doingHost)
                 : hubsDesk.doing === "background" ? qsTr("Asking systemd for the background service…")
+                : hubsDesk.doing === "devices" ? qsTr("Asking %1 to serve phones and e-readers as chosen…").arg(hubsDesk.doingHost)
                 : qsTr("Asking the hubs…")
         }
         Label {
@@ -237,6 +242,7 @@ AppPopup {
                     keyboard.forceActiveFocus()
                 }
                 onComputersWanted: dialog.show("computers", modelData.host)
+                onPhonesWanted: dialog.show("phones", modelData.host)
                 onSyncWanted: (dryRun) => hubsDesk.syncNow(modelData.host, dryRun)
                 onUnlinkWanted: dialog.unlinking = modelData.host
                 onUnlinkLeft: dialog.unlinking = ""
@@ -266,6 +272,14 @@ AppPopup {
             onForgetWanted: (name) => dialog.forgetting = name
             onForgetLeft: dialog.forgetting = ""
             onForgetSure: dialog.sure()
+        }
+
+        HubPhonesPage {
+            id: phones
+            Layout.fillWidth: true
+            visible: dialog.page === "phones"
+            hub: dialog.current
+            busy: !dialog.idle
         }
 
         HubLinkPage {
