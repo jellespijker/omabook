@@ -3123,5 +3123,11 @@
   "%1 can't be read: line %2, %3. It is left as it is, and nothing is written to it.": "Impossible de lire %1 : ligne %2, %3. Le fichier reste tel quel et rien n'y est écrit.",
   "Until it is fixed, Omabook keeps the settings it had and saves no changes to them.": "Tant qu'il n'est pas corrigé, Omabook garde les réglages qu'il avait et n'enregistre aucune modification.",
   "Until it is fixed, Omabook uses its defaults, with AI off, and saves no settings.": "Tant qu'il n'est pas corrigé, Omabook utilise ses réglages par défaut, IA désactivée, et n'enregistre aucun réglage.",
-  "The change was not saved.": "La modification n'a pas été enregistrée."
+  "The change was not saved.": "La modification n'a pas été enregistrée.",
+  "Choose Another": "En choisir une autre",
+  "Start an Empty Library Here": "Créer ici une bibliothèque vide",
+  "There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, or start a new library there with omabook libraries --use \"%1\" --create.": "Il n'y a pas de bibliothèque à %1 pour l'instant : son disque est-il branché, ou son partage monté ? Rien n'y a été créé. Réessayez une fois que c'est fait, ou créez-y une nouvelle bibliothèque avec omabook libraries --use \"%1\" --create.",
+  "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 est introuvable. Son disque est-il branché, ou son partage monté ? Rien n'a été créé à sa place.",
+  "The library isn't there": "La bibliothèque n'est pas là",
+  "The library can't be opened": "La bibliothèque ne peut pas être ouverte"
 }

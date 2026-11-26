@@ -41,6 +41,8 @@ class Backend : public QObject {
     Q_PROPERTY(QString libraryPath READ libraryPath NOTIFY libraryChanged)
     Q_PROPERTY(QString libraryName READ libraryName NOTIFY libraryChanged)
     Q_PROPERTY(QString libraryError READ libraryError NOTIFY libraryChanged)
+    // Whether that is because the library isn't there: retried, or made, on request (#221).
+    Q_PROPERTY(bool libraryMissing READ libraryMissing NOTIFY libraryChanged)
     // Bumped whenever the books change, for bindings that read book().
     Q_PROPERTY(int revision READ revision NOTIFY revisionChanged)
     Q_PROPERTY(bool busy READ busy NOTIFY busyChanged)
@@ -125,6 +127,7 @@ public:
     QString libraryPath() const { return m_library ? m_library->root() : QString(); }
     QString libraryName() const;
     QString libraryError() const noexcept { return m_libraryError; }
+    bool libraryMissing() const noexcept { return m_libraryMissing; }
     int revision() const noexcept { return m_revision; }
     QString view() const noexcept { return m_view; }
     void setView(const QString &view);
@@ -239,6 +242,9 @@ public:
     [[nodiscard]] static QStringList syncLines(const SyncSummary &summary);
     Q_INVOKABLE void chooseLibrary();
     Q_INVOKABLE void useLibrary(const QString &path);
+    // For a library that isn't there: look again, or start a new one in its folder.
+    Q_INVOKABLE void retryLibrary();
+    Q_INVOKABLE void createLibrary();
     // Takes a library off the list; with `trash` its folder goes to the
     // trash too. What went wrong, if anything, is said in the window.
     Q_INVOKABLE void forgetLibrary(const QString &path, bool trash = false);
@@ -273,7 +279,12 @@ signals:
     void readingFilePicked(bool save, const QString &file);
 
 private:
-    void openLibrary(const QString &path);
+    // Opens the library at `path`; `create` makes one where one is expected and isn't (backendlibrary.cpp).
+    void openLibrary(const QString &path, bool create = false);
+    void switchTo(const QString &path, bool create);
+    void showLibrary(std::unique_ptr<Library> library, const QString &error, bool missing);
+    void lookForLibrary();
+    [[nodiscard]] static QString notThere(const QString &path);
     // The script plugins, once there is a library (backendplugins.cpp).
     void startScripts(const QString &pluginFolder);
     // Reads how the library's shelf was left from the settings, and writes it there.
@@ -315,6 +326,8 @@ private:
     QStringList m_ssh;
     std::unique_ptr<Library> m_library;
     QString m_libraryError;
+    bool m_libraryMissing = false;
+    QTimer m_presence;
     BookListModel m_model;
     QString m_view = "covers";
     QString m_group = "series";

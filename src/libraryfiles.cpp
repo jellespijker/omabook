@@ -23,6 +23,7 @@
 #include "formats.h"
 #include "hlc.h"
 #include "library.h"
+#include "librarybatch.h"
 #include "safename.h"
 #include "spaces.h"
 
@@ -195,7 +196,7 @@ std::expected<void, Failure> Library::addFormat(qint64 id, const QString &file, 
     if (const auto why = refusal(id, file, held, same != SameFormat::Refuse))
         return std::unexpected(*why);
     const QString folder = m_root + "/" + book->path;
-    if (!QDir().mkpath(folder))
+    if (!makeBookFolder(databasePath(), folder))
         return std::unexpected(Failure(Failure::Code::FolderUnmade, {folder}));
     const QString name = SafeName::component(book->meta.title, "Untitled")
                          + (book->meta.authors.isEmpty() ? QString() : " - " + SafeName::component(book->meta.authors.first(), "Unknown"))
@@ -231,7 +232,7 @@ QByteArray Library::coverJpeg(const QImage &cover) {
 
 bool Library::setCover(qint64 id, const QImage &cover, std::optional<qint64> at) {
     const QString folder = bookFolder(id);
-    if (folder.isEmpty() || cover.isNull() || !QDir().mkpath(folder))
+    if (folder.isEmpty() || cover.isNull() || !makeBookFolder(databasePath(), folder))
         return false;
     const QByteArray jpeg = coverJpeg(cover);
     const QString file = folder + "/cover.jpg";

@@ -196,7 +196,7 @@ QList<Book> Librarian::askedBooks() const {
 }
 
 void Librarian::askSeries() {
-    const QList<Book> books = m_backend->library()->books();
+    const QList<Book> books = m_backend->library() ? m_backend->library()->books() : QList<Book>();
     if (books.isEmpty()) {
         finishTidy();
         return;
@@ -224,7 +224,7 @@ void Librarian::askSeries() {
 // time, each judged by the AI against the book's own opening pages.
 void Librarian::finishTidy() {
     m_toLookUp.clear();
-    if (m_lookUps && hasAi()) {
+    if (m_lookUps && hasAi() && m_backend->library()) {
         QSet<qint64> folded;
         for (const Entry &entry : std::as_const(m_entries))
             if (entry.proposal.kind == "duplicate")

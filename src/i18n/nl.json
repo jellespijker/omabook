@@ -3006,5 +3006,11 @@
   "%1 can't be read: line %2, %3. It is left as it is, and nothing is written to it.": "%1 kan niet gelezen worden: regel %2, %3. Het blijft zoals het is en er wordt niets in geschreven.",
   "Until it is fixed, Omabook keeps the settings it had and saves no changes to them.": "Tot het is hersteld, houdt Omabook de instellingen die het had en slaat wijzigingen daarin niet op.",
   "Until it is fixed, Omabook uses its defaults, with AI off, and saves no settings.": "Tot het is hersteld, gebruikt Omabook de standaardinstellingen, met AI uit, en slaat het geen instellingen op.",
-  "The change was not saved.": "De wijziging is niet opgeslagen."
+  "The change was not saved.": "De wijziging is niet opgeslagen.",
+  "Choose Another": "Een andere kiezen",
+  "Start an Empty Library Here": "Hier een lege bibliotheek beginnen",
+  "There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, or start a new library there with omabook libraries --use \"%1\" --create.": "Er is nu geen bibliotheek in %1: is de schijf aangesloten, of de share aangekoppeld? Er is daar niets gemaakt. Probeer het daarna opnieuw, of begin daar een nieuwe bibliotheek met omabook libraries --use \"%1\" --create.",
+  "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 is niet te vinden. Is de schijf aangesloten, of de share aangekoppeld? Er is niets voor in de plaats gemaakt.",
+  "The library isn't there": "De bibliotheek is er niet",
+  "The library can't be opened": "De bibliotheek kan niet worden geopend"
 }

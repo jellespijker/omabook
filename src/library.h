@@ -217,8 +217,8 @@ public:
     Library(const Library &) = delete;
     Library &operator=(const Library &) = delete;
 
-    // Creates the folder and the database when they don't exist yet.
     bool open(QString *error = nullptr);
+    Library &createIfMissing(bool make = true) noexcept; // else open() makes no library where one is expected (#221)
     // Opened only as it is: a library in another format than this Omabook's
     // is left alone rather than brought up to date. For upkeep that runs on
     // every library the user named (Folio's folders after each command),
@@ -489,7 +489,7 @@ private:
     [[nodiscard]] std::expected<qint64, QString> insert(const QString &sql, const QVariantList &values) const;
 
     QString m_root;
-    bool m_keepFormat = false;
+    bool m_keepFormat = false, m_mayCreate = false;
     std::function<void(const QString &)> m_bringingUpToDate;
     QString m_connection;
     // Its statements, each prepared once (#104).

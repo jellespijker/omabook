@@ -13,6 +13,7 @@
 #include "library.h"
 #include "librarybatch.h"
 #include "librarymigrations.h"
+#include "librarypresence.h"
 #include "log.h"
 
 using namespace Qt::StringLiterals;
@@ -61,6 +62,11 @@ std::optional<qint64> LibraryHold::heldElsewhere(const QString &root) {
     return pid;
 }
 
+Library &Library::createIfMissing(bool make) noexcept {
+    m_mayCreate = make;
+    return *this;
+}
+
 // Opening is here, beside the hold, as it is what keeps a hub's libraries
 // to the one program that holds them. Its signature is library.h's, as it
 // was before it moved; the callers move to std::expected when touched.
@@ -73,6 +79,9 @@ bool Library::open(QString *error) { // ast-grep-ignore: prefer-expected-over-er
     };
     if (const auto holder = LibraryHold::heldElsewhere(m_root))
         return fail(Failure(Failure::Code::LibraryKeptByHub, {m_root, QString::number(*holder)}).text());
+    // One expected here and gone (a drive unplugged) is not made anew (#221).
+    if (!m_mayCreate && LibraryPresence::missing(m_root))
+        return fail(Failure(Failure::Code::LibraryMissing, {m_root}).text());
     if (!QDir().mkpath(m_root))
         return fail("The library folder can't be created: " + m_root);
     QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", m_connection);
@@ -83,5 +92,8 @@ bool Library::open(QString *error) { // ast-grep-ignore: prefer-expected-over-er
     if (!database.open())
         return fail("The library can't be opened: " + database.lastError().text());
     const auto setUp = LibraryMigrations::setUp(*this);
-    return setUp ? true : fail(setUp.error());
+    if (!setUp)
+        return fail(setUp.error());
+    LibraryPresence::opened(m_root);
+    return true;
 }

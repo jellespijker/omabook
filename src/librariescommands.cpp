@@ -57,7 +57,7 @@ int runLibrariesCli(const QStringList &arguments) {
             return failLine(u"There is no library in %1. Add --create to start one there."_s.arg(folder));
         Library opened(folder);
         QString error;
-        if (!opened.open(&error))
+        if (!opened.createIfMissing(parser.isSet(u"create"_s)).open(&error))
             return failLine(error);
         settings.setLibraryPath(folder);
     }

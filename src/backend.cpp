@@ -68,6 +68,9 @@ Backend::Backend(Settings *settings, FilePicker *picker, QObject *parent, AiFact
     m_reloadSoon.setSingleShot(true);
     m_reloadSoon.setInterval(250);
     connect(&m_reloadSoon, &QTimer::timeout, this, &Backend::reloadIfChanged);
+    // A library that goes away (its drive pulled) may say nothing, so it is also looked for (#221).
+    connect(&m_presence, &QTimer::timeout, this, &Backend::lookForLibrary);
+    m_presence.start(std::chrono::seconds(1));
     connect(&m_watcher, &QFileSystemWatcher::fileChanged, this, [this] { m_reloadSoon.start(); });
     connect(&m_watcher, &QFileSystemWatcher::directoryChanged, this, [this] { m_reloadSoon.start(); });
 
@@ -142,24 +145,6 @@ void Backend::importCalibreLibrary(const QString &path) { addUrls({QUrl::fromLoc
 
 QString Backend::libraryName() const { return QFileInfo(libraryPath()).fileName(); }
 
-void Backend::openLibrary(const QString &path) {
-    auto library = std::make_unique<Library>(path);
-    QString error;
-    if (library->open(&error)) {
-        m_library = std::move(library);
-        m_libraryError.clear();
-    } else {
-        m_library.reset();
-        m_libraryError = error;
-    }
-    emit libraryChanged();
-    m_fileManager.follow(m_library ? m_library->root() : QString());
-    // What was known of the other library's books is no use here.
-    m_model.setKnowledge({});
-    takeShelf();
-    reload();
-}
-
 void Backend::takeShelf() {
     if (m_shelfMoving)
         return;
@@ -216,24 +201,12 @@ void Backend::setGroup(const QString &group) {
     keepShelf();
 }
 
-// The database is replaced or rewritten through its journal, which drops a
-// file from the watch, so the watch is set again after every change.
-void Backend::watchLibrary() {
-    const QStringList watched = m_watcher.files() + m_watcher.directories();
-    if (!watched.isEmpty())
-        m_watcher.removePaths(watched);
-    if (!m_library)
-        return;
-    for (const QString &path : {m_library->root(), m_library->databasePath(), m_library->databasePath() + "-wal"})
-        if (QFileInfo::exists(path))
-            m_watcher.addPath(path);
-}
-
 // The library's files changed on disk: by this window, a command, an agent
 // or a plugin. The database counts what changed, so a write to the knowledge
 // graph (constant while a book is read or a story written) costs a look at
 // two numbers, not a reading of every book.
 void Backend::reloadIfChanged() {
+    lookForLibrary();
     if (!m_library) {
         reload();
         return;
@@ -333,41 +306,8 @@ void Backend::say(const QString &message) {
 
 void Backend::dismissMessage() { say({}); }
 
-void Backend::forgetLibrary(const QString &path, bool trash) {
-    const QString before = libraryPath();
-    QString error;
-    if (!(trash ? Libraries::trash(*m_settings, path, &error) : Libraries::forget(*m_settings, path, &error))) {
-        say(error);
-        return;
-    }
-    // Forgetting the library in use moved on to another, which is opened.
-    if (libraryPath() != before) {
-        m_model.setQuery({});
-        openLibrary(libraryPath());
-        m_scripts->emitEvent("library.switched", {{"path", libraryPath()}, {"name", libraryName()}});
-    }
-}
-
-void Backend::useLibrary(const QString &path) {
-    if (path.isEmpty() || QDir(path).absolutePath() == libraryPath())
-        return;
-    // A Calibre library is Calibre's to keep; its books are brought into the
-    // library in use rather than Omabook moving in beside Calibre.
-    if (m_library && Libraries::isCalibreOnly(path) && m_plugins.calibre().enabled()) {
-        say(tr("%1 is a Calibre library, so its books are being imported into %2 rather than opened there.")
-                .arg(QFileInfo(path).fileName(), libraryName()));
-        importCalibreLibrary(path);
-        return;
-    }
-    m_settings->setLibraryPath(path);
-    m_model.setQuery({});
-    openLibrary(path);
-    if (!m_libraryError.isEmpty())
-        say(m_libraryError);
-    m_scripts->emitEvent("library.switched", {{"path", libraryPath()}, {"name", libraryName()}});
-}
-
 void Backend::addUrls(const QList<QUrl> &urls) {
+    lookForLibrary();
     if (!m_library || urls.isEmpty())
         return;
     QStringList paths;
@@ -474,6 +414,7 @@ QVariantMap Backend::reading(qint64 id) const {
 qint64 Backend::newEntry(const QVariantMap &details) {
     BookMeta meta;
     meta.title = details.value("title").toString().simplified();
+    lookForLibrary();
     if (!m_library || meta.title.isEmpty())
         return 0;
     const Library::Added added = m_library->addEntry(meta, details.value("paper").toBool());

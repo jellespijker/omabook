@@ -1,5 +1,7 @@
 #include "librarybatch.h"
 
+#include <QDir>
+#include <QFileInfo>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
@@ -45,6 +47,14 @@ namespace {
 
 } // namespace
 
+Failure whyNotWritten(const QString &file) {
+    if (QFileInfo::exists(file))
+        return Failure(Failure::Code::LibraryBusy);
+    return Failure(Failure::Code::LibraryMissing, {QFileInfo(file).absolutePath()});
+}
+
+bool makeBookFolder(const QString &database, const QString &folder) { return QFileInfo::exists(database) && QDir().mkpath(folder); }
+
 WriteTurn::WriteTurn(const QString &file, const QString &connection, std::chrono::milliseconds wait) : m_line(lineOf(file)) {
     std::unique_lock lock(m_line->mutex);
     std::list<WriteLine::Writer> &waiting = m_line->waiting;
@@ -83,7 +93,8 @@ Library::Batch::Batch(const Library &library, Lock lock) : m_library(library) {
     if (m_library.m_batches++ > 0)
         return;
     m_turn = std::make_unique<WriteTurn>(m_library.databasePath(), m_library.m_connection);
-    if (!m_turn->had()) {
+    // Nor is one that went away written, by way of the files still open (#221).
+    if (!QFileInfo::exists(m_library.databasePath()) || !m_turn->had()) {
         m_begun = false;
         m_turn.reset();
         return;

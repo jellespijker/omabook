@@ -656,13 +656,14 @@ Item {
                     }
                 }
 
+                LibraryMissing { anchors.fill: parent } // one that can't be opened, or isn't there
                 // An empty shelf says how to fill it; an empty search says so.
                 // In the middle of the shelf's place, and scrolling where a
                 // low window has less room than the words and buttons take.
                 Flickable {
                     id: emptyScroller
                     anchors.fill: parent
-                    visible: backend.books.count === 0
+                    visible: backend.books.count === 0 && backend.libraryError === ""
                     contentHeight: emptyState.height + 32
                     clip: true
                     boundsBehavior: Flickable.StopAtBounds
@@ -682,8 +683,7 @@ Item {
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.Wrap
                             font.pixelSize: 22
-                            text: backend.libraryError !== "" ? backend.libraryError
-                                  : view.emptyCollection ? qsTr("Nothing is in %1 yet").arg(backend.collectionName)
+                            text: view.emptyCollection ? qsTr("Nothing is in %1 yet").arg(backend.collectionName)
                                   : backend.books.total === 0 ? qsTr("No books yet")
                                   : qsTr("No book matches")
                         }

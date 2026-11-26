@@ -54,7 +54,7 @@ modules = [
   "fileschema",
   "libraryfiles", "booklink",
   "libraryhold", "syncidentity", "pluginrestore",
-  "libraryrepairs",
+  "libraryrepairs", "librarypresence",
   "graphbuilt",
 ]
 
@@ -113,7 +113,7 @@ modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcomma
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
-  "assistant", "backend", "backendcollections", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
+  "assistant", "backend", "backendcollections", "backendlibrary", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologyframe", "chronologymodel", "chronologyproposals", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",

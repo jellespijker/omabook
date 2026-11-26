@@ -59,6 +59,7 @@ public:
         BookFileNotCopied, // {the file, where to in the library}
         LibraryNotWritten, // {}
         LibraryUnwritable, // {the database's reason}
+        LibraryMissing,    // {folder}: one is expected there and isn't (#221)
         BookNeedsTitle,    // {}
         NotOneBook,        // {folder or archive name}
         NoBooksInside,     // {archive name}

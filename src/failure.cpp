@@ -349,6 +349,9 @@ constexpr auto wordings = std::to_array<Wording>({
      tr("Omabook's background service isn't answering at %1. Its log: journalctl --user -u omabook-serve")},
     {Failure::Code::LibraryKeptByHub,
      tr("The library in %1 is kept by the hub (omabook hub run, process %2), which alone writes it. Ask the hub, or stop it first.")},
+    {Failure::Code::LibraryMissing,
+     tr("There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, "
+        "or start a new library there with omabook libraries --use \"%1\" --create.")},
     {Failure::Code::HubNotRunning, tr("No hub is running here: nothing answers at %1. Start it with systemctl, or with omabook hub run.")},
     {Failure::Code::HubRunning, tr("A hub is running here already, answering at %1.")},
     {Failure::Code::HubCantListen, tr("The hub can't take requests at %1: %2")},

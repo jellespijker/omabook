@@ -190,7 +190,7 @@ int Library::formatVersion() const {
 bool Library::exec(const QString &sql, const QVariantList &values) const {
     // Outside a batch, a write waits its turn as a batch does (librarybatch.h).
     std::optional<WriteTurn> turn;
-    if (m_batches == 0 && !turn.emplace(databasePath(), m_connection).had())
+    if (!QFileInfo::exists(databasePath()) || (m_batches == 0 && !turn.emplace(databasePath(), m_connection).had()))
         return false;
     if (!m_statements->run(sql, values))
         return false;
@@ -211,8 +211,8 @@ QSqlQuery Library::query(const QString &sql, const QVariantList &values) const {
 
 std::expected<qint64, QString> Library::insert(const QString &sql, const QVariantList &values) const {
     std::optional<WriteTurn> turn; // as exec's
-    if (m_batches == 0 && !turn.emplace(databasePath(), m_connection).had())
-        return std::unexpected(Failure(Failure::Code::LibraryBusy).text());
+    if (!QFileInfo::exists(databasePath()) || (m_batches == 0 && !turn.emplace(databasePath(), m_connection).had()))
+        return std::unexpected(whyNotWritten(databasePath()).text());
     const auto id = m_statements->run(sql, values);
     if (id && m_batches == 0)
         ChangeLog::afterWrite(*this);

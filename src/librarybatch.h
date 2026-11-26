@@ -4,7 +4,16 @@
 #include <chrono>
 #include <memory>
 
+#include "failure.h"
+
 struct WriteLine;
+
+// Why the library whose database is `file` wasn't written: it isn't there any
+// more (#221), or another has been writing it for too long.
+[[nodiscard]] Failure whyNotWritten(const QString &file);
+// Makes a folder for a book's files while that library is there; false when it
+// isn't, so nothing is made at the path it was at.
+[[nodiscard]] bool makeBookFolder(const QString &database, const QString &folder);
 
 // Whose turn it is to write a library, among the connections this program
 // has open on it (#200): the window's, a command's, a sync's worker, the

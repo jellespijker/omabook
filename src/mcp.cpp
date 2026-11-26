@@ -383,7 +383,7 @@ QList<Tool> coreTools() {
                           return Result::fail("There is no library in " + folder + ". Pass create: true to start one there.");
                       Library opened(folder);
                       QString error;
-                      if (!opened.open(&error))
+                      if (!opened.createIfMissing(arguments.value("create").toBool()).open(&error))
                           return Result::fail(error);
                       Settings().setLibraryPath(folder);
                       return Result::ok({{"current", folder}, {"books", opened.books().size()}});
@@ -1468,13 +1468,11 @@ std::shared_ptr<Library> Mcp::library(QString *error) {
     // The settings are read afresh each time, so a library switched in the
     // window, or by library_switch, is the one the next call works on.
     const QString wanted = QDir(server.libraryOverride.isEmpty() ? Settings().libraryPath() : server.libraryOverride).absolutePath();
-    if (server.library && server.library->root() == wanted)
+    if (server.library && server.library->root() == wanted && QFileInfo::exists(server.library->databasePath()))
         return server.library;
     auto opened = std::make_shared<Library>(wanted);
-    if (!opened->open(error))
-        return nullptr;
-    server.library = opened;
-    return opened;
+    server.library = opened->open(error) ? opened : nullptr;
+    return server.library;
 }
 
 qint64 Mcp::bookId(const Library &library, const QJsonObject &arguments, QString *error, const QString &key) {
