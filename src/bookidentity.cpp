@@ -135,3 +135,25 @@ bool BookIdentity::strongId(const QString &gid) {
         return calibreUuid(*uuid).has_value();
     return false;
 }
+
+// What names a book without a file across libraries (declared in library.h).
+QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title, const QStringList &authors) {
+    QStringList keys; // bookkeeping ("goodreads:synced", the same of every book to read; "generated") names no book (#154)
+    for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
+        if (const QString value = it.value().toVariant().toString().trimmed();
+            !value.isEmpty() && !it.key().contains(u':') && it.key().compare("generated"_L1, Qt::CaseInsensitive) != 0)
+            keys << "entry:" + it.key().toLower() + "=" + value.toLower();
+    if (const QString number = folded(isbn); !number.isEmpty())
+        keys << "entry:isbn=" + number;
+    if (const QString name = folded(title); !name.isEmpty()) {
+        QStringList named;
+        for (const QString &author : authors)
+            named << folded(author);
+        named.sort();
+        keys << "entry:title=" + name + "|" + named.join(',');
+    }
+    keys.removeDuplicates();
+    return keys;
+}
+
+QStringList Library::entryKeys(const Book &book) { return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors); }

@@ -19,6 +19,7 @@
 #include <memory>
 #include <system_error>
 
+#include "addinghold.h"
 #include "epubdetails.h"
 #include "formats.h"
 #include "hlc.h"
@@ -189,6 +190,8 @@ std::expected<void, Failure> Library::addFormat(qint64 id, const QString &file, 
     if (!Formats::isBook(file))
         return std::unexpected(Failure(Failure::Code::NotABookFormat, {QFileInfo(file).fileName()}));
     const QString hash = hashFile(file);
+    // Held as `add` holds it, so one adding it meanwhile waits, then finds it here (#228); not got, the format still goes in.
+    const auto holding = AddingHold::files(m_root, {hash});
     // The very file is this book's already: there is nothing to copy.
     const QList<FormatFile> held = formatFiles(id);
     if (std::ranges::any_of(held, [&](const FormatFile &one) { return one.format == format && one.hash == hash; }))

@@ -56,6 +56,7 @@ modules = [
   "libraryhold", "syncidentity", "pluginrestore",
   "libraryrepairs", "librarypresence",
   "graphbuilt",
+  "addinghold",
 ]
 
 [layers.services]

@@ -7,17 +7,18 @@
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QRegularExpression>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QUuid>
 #include <QVariant>
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <ranges>
 
+#include "addinghold.h"
 #include "booksides.h"
 #include "changelog.h"
 #include "formats.h"
@@ -231,6 +232,10 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
     if (!Formats::isBook(file))
         return {.error = Failure(Failure::Code::NotABookFormat, {info.fileName()}).text()};
     const QString hash = hashFile(file);
+    // Held until the book's file is recorded: another adding it waits, then finds it (#228).
+    const auto held = AddingHold::files(m_root, {hash});
+    if (!held)
+        return {.error = held.error().text()};
     if (const qint64 existing = bookWithHash(hash))
         return {.id = existing, .duplicate = true, .error = {}};
     // Added on purpose, so no longer something that was thrown away.
@@ -240,6 +245,10 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
     if (meta.title.isEmpty())
         meta.title = Formats::metaFromFileName(file).title;
     std::optional<ChangeLog::Scope> guard(std::in_place);
+    // The new row is seen by others only once its book is held, so none gives it another file meanwhile.
+    std::optional<Batch> making(std::in_place, *this);
+    if (!making->begun())
+        return {.error = Failure(Failure::Code::LibraryBusy).text()};
     const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
                            "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
@@ -249,6 +258,9 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
         return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
     const QString folder = folderFor(meta, *id);
     exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
+    // Nobody else can be waiting for a row not yet seen; without the hold the add still goes on.
+    const auto filling = AddingHold::book(m_root, *id, std::chrono::seconds(5));
+    making.reset();
     guard.reset();
 
     if (const auto put = addFormat(*id, file); !put) {
@@ -337,31 +349,6 @@ bool Library::setIdentifier(qint64 id, const QString &scheme, const QString &val
     if (at)
         ChangeLog::setDetailsAt(*this, id, *at);
     return true;
-}
-
-QStringList Library::entryKeys(const QJsonObject &identifiers, const QString &isbn, const QString &title, const QStringList &authors) {
-    static const QRegularExpression other(R"([^\p{L}\p{N}]+)");
-    const auto fold = [](QString text) { return text.toCaseFolded().remove(other); };
-    QStringList keys; // bookkeeping ("goodreads:synced", the same of every book to read; "generated") names no book (#154)
-    for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (const QString value = it.value().toVariant().toString().trimmed();
-            !value.isEmpty() && !it.key().contains(u':') && it.key().compare("generated"_L1, Qt::CaseInsensitive) != 0)
-            keys << "entry:" + it.key().toLower() + "=" + value.toLower();
-    if (const QString number = QString(isbn).remove(other).toLower(); !number.isEmpty())
-        keys << "entry:isbn=" + number;
-    if (const QString name = fold(title); !name.isEmpty()) {
-        QStringList folded;
-        for (const QString &author : authors)
-            folded << fold(author);
-        folded.sort();
-        keys << "entry:title=" + name + "|" + folded.join(',');
-    }
-    keys.removeDuplicates();
-    return keys;
-}
-
-QStringList Library::entryKeys(const Book &book) {
-    return entryKeys(book.identifiers, book.meta.isbn, book.meta.title, book.meta.authors);
 }
 
 qint64 Library::bookWithIdentifier(const QString &scheme, const QString &value) const {

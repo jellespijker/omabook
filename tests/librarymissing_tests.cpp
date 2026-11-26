@@ -113,7 +113,8 @@ private slots:
         QVERIFY(id > 0);
         QVERIFY(QDir().rename(root, root + ".away"));
         QVERIFY(!library.addEntry({.title = "Another"}, true).error.isEmpty());
-        QVERIFY(!library.add(book).error.isEmpty());
+        // Said as missing, also where the file is first held (#228).
+        QCOMPARE(library.add(book).error, Failure(Failure::Code::LibraryMissing, {root}).text());
         QImage cover(10, 20, QImage::Format_RGB32);
         cover.fill(Qt::red);
         QVERIFY(!library.setCover(id, cover));

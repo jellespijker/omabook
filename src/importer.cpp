@@ -10,6 +10,7 @@
 #include <array>
 #include <ranges>
 
+#include "addinghold.h"
 #include "bookarchive.h"
 
 #include "calibre.h"
@@ -139,6 +140,50 @@ private:
     details.fillFrom(incoming);
     details.cover = entry->hasCover ? QImage() : incoming.cover;
     return library.setMeta(id, details, error);
+}
+
+// The hashes of a book's files, by their names; none for what is no file to read.
+[[nodiscard]] QHash<QString, QString> hashesOf(const QStringList &files) {
+    QHash<QString, QString> hashes;
+    for (const QString &file : files)
+        if (QFileInfo(file).isFile())
+            hashes.insert(file, Library::hashFile(file));
+    return hashes;
+}
+
+// What became of a book's first file, and whether it joined a book here.
+struct Placed {
+    Library::Added added;
+    bool joined = false;
+};
+
+// The first file makes the book, unless it is a book here without a file. The
+// caller holds the file (AddingHold), so nobody else is bringing it in; the
+// entry it joins is held here, as another file may be joining it.
+[[nodiscard]] Placed place(Library &library, Fileless &fileless, const QString &first, const Incoming &book,
+                           const std::optional<BookMeta> &meta) {
+    const BookMeta described = meta ? *meta : Formats::readMeta(first);
+    const QMap<QString, QString> identifiers = identifiersOf(described, book.calibre);
+    qint64 entry = fileless.entryFor(first, described, identifiers);
+    while (entry != 0) {
+        const auto held = AddingHold::book(library.root(), entry);
+        if (!held)
+            return {.added = {.id = 0, .duplicate = false, .error = held.error().text()}};
+        // Another import may have given it a file, or taken it away, since this one looked.
+        const auto now = library.book(entry);
+        if (!now || !now->formats.isEmpty()) {
+            fileless.joined(entry);
+            entry = fileless.entryFor(first, described, identifiers);
+            continue;
+        }
+        if (const qint64 same = library.bookWithHash(Library::hashFile(first)); same != 0)
+            return {.added = {.id = same, .duplicate = true, .error = {}}};
+        if (QString error; !join(library, entry, first, described, &error))
+            return {.added = {.id = 0, .duplicate = false, .error = error}};
+        fileless.joined(entry);
+        return {.added = {.id = entry, .duplicate = false, .error = {}}, .joined = true};
+    }
+    return {.added = library.add(first, described)};
 }
 
 [[nodiscard]] bool isArchive(const QString &path) {
@@ -339,33 +384,22 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
             meta->cover = cover.read();
         }
         const QString &first = book.files.first();
+        // Its files are held until they are in, so another import that has
+        // one of them waits and then finds it here (#228).
+        const QHash<QString, QString> hashes = hashesOf(book.files);
+        const auto held = AddingHold::files(library.root(), hashes.values());
         // A book any of whose files is here already is that book.
-        QHash<QString, QString> hashes;
         qint64 here = 0;
-        for (const QString &file : book.files.mid(1)) {
-            hashes.insert(file, Library::hashFile(file));
+        for (const QString &file : book.files.mid(1))
             if (here == 0)
                 here = library.bookWithHash(hashes.value(file));
-        }
-        Library::Added added{.id = here, .duplicate = here != 0, .error = {}};
-        bool joined = false;
-        if (here == 0) {
-            // The first file makes the book, unless it is a book here without
-            // a file; the others join it as more formats.
-            const BookMeta described = meta ? *meta : Formats::readMeta(first);
-            const qint64 entry = fileless.entryFor(first, described, identifiersOf(described, book.calibre));
-            if (entry == 0) {
-                added = library.add(first, described);
-            } else if (const qint64 same = library.bookWithHash(Library::hashFile(first)); same != 0) {
-                added = {.id = same, .duplicate = true, .error = {}};
-            } else if (QString error; join(library, entry, first, described, &error)) {
-                added = {.id = entry, .duplicate = false, .error = {}};
-                joined = true;
-                fileless.joined(entry);
-            } else {
-                added = {.id = 0, .duplicate = false, .error = error};
-            }
-        }
+        // The other files join the book the first one makes, as more formats.
+        Placed placed{.added = {.id = here, .duplicate = here != 0, .error = {}}};
+        if (!held)
+            placed.added = {.id = 0, .duplicate = false, .error = held.error().text()};
+        else if (here == 0)
+            placed = place(library, fileless, first, book, meta);
+        const auto [added, joined] = placed;
         summary.items.append({.file = first, .id = added.id, .duplicate = added.duplicate, .joined = joined, .error = added.error});
         if (!added.error.isEmpty()) {
             failed(book, added.error, summary);

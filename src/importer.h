@@ -67,7 +67,8 @@ struct ImportOptions {
 // `progress` is told how many of how many books are in, from the calling thread.
 //
 // A book one of whose files is in the library already is that book: it is
-// counted as already here, and only the formats it lacks are copied in. A
+// counted as already here, and only the formats it lacks are copied in, also
+// when others are adding it at the same time (addinghold.h). A
 // book with none of its files here that is the same as a book here without
 // a file (on a paper shelf, wished for, known from a reading site) gives
 // that book its file instead of becoming a second one: the wishlist entry a
