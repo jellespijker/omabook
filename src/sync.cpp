@@ -226,6 +226,12 @@ struct Named {
     return theirHashes.contains(file.hash) || (!file.original.isEmpty() && theirHashes.contains(file.original));
 }
 
+// `omabook set` arguments that give a book sent there its reading, and the time it keeps there: the time
+// it has here, for an Omabook that takes it ("reading_at"), so it isn't stamped when it arrives (#243).
+[[nodiscard]] QStringList givenReading(qint64 theirId, const Book &book, std::optional<qint64> detailsAt, const QJsonObject &manifest) {
+    return SyncTake::readingArguments(theirId, book, detailsAt, true, manifest.value("reading_at").toInt() >= 1);
+}
+
 } // namespace
 
 SyncSummary syncLibrary(Library &library, const Remote &remote, const std::function<void(const QString &)> &progress,
@@ -463,7 +469,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         // Its details there keep the time they have here.
         const qint64 myBookDetailsAt =
             book.detailsAt == 0 ? 0 : SyncManifest::wireTimestamp(SyncManifest::myDetailsHlc(library, book), peerHasLog);
-        remote.omabook(SyncTake::readingArguments(theirId, book, current ? std::optional<qint64>(myBookDetailsAt) : std::nullopt));
+        remote.omabook(givenReading(theirId, book, current ? std::optional<qint64>(myBookDetailsAt) : std::nullopt, manifest));
         note(summary.sent, summary.titles.sent, book.meta.title);
     }
     // The collections and the knowledge graph, once both sides have every book: theirs taken in

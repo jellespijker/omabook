@@ -90,8 +90,11 @@ bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dr
 
 // `omabook set` arguments that give the other side a book's reading and,
 // with `names`, its names elsewhere, with `detailsAt` (for an Omabook there
-// that keeps it) the time its details are stamped with there.
-[[nodiscard]] QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names = true);
+// that keeps it) the time its details are stamped with there; and with
+// `readingAt` (for one that takes it, "reading_at" in its manifest) the time
+// its reading is, so it keeps the time it had where it was changed (#243).
+[[nodiscard]] QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names = true,
+                                           bool readingAt = false);
 
 // Whose details settle the undecided ones, as the other side sees it.
 [[nodiscard]] QString otherSide(SyncOptions::Details details);

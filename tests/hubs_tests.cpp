@@ -44,6 +44,7 @@
 #include "hubwork.h"
 #include "library.h"
 #include "person.h"
+#include "spacereplay.h"
 #include "spaces.h"
 #include "sshkey.h"
 #include "sync.h"
@@ -70,6 +71,16 @@ namespace {
     }
     books.sort();
     return books;
+}
+
+// Each of `fields` of the book `gid` as the library's change log merges them: "field=stamp".
+[[nodiscard]] QStringList stampsIn(const Library &library, const QString &gid, const QStringList &fields) {
+    const qint64 id = Spaces::localId(library, u"book"_s, gid);
+    const QHash<QString, qint64> stamped = SpaceReplay::bookFieldHlcs(library, id);
+    QStringList said;
+    for (const QString &field : fields)
+        said << field + u"="_s + QString::number(stamped.value(field));
+    return said;
 }
 
 // How many operations a library's change log holds, read beside whoever has it open.
@@ -331,6 +342,129 @@ private slots:
         for (const auto &[name, hub] : hubs.hubs)
             after.emplace(name, opsIn(hub->library()));
         QCOMPARE(after, before);
+    }
+
+    // A change one computer made, passed on by the other through one hub to
+    // another (#243), keeps the time it was made at: a newer change made
+    // meanwhile and given to the second hub holds there, and everywhere once
+    // the syncs go round. The reading place read further holds over an older
+    // one passed on after it.
+    void aChangePassedOnThroughAHubKeepsItsOwnTime() {
+        Hubs hubs;
+        const QString started = hubs.start({u"north"_s, u"south"_s});
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        Computer desktop;
+        QVERIFY(laptop.add(u"Alpha"_s) > 0);
+        const auto syncAll = [&] {
+            for (const QString &hub : {u"north"_s, u"south"_s})
+                for (const auto &[name, library] : {std::pair{u"laptop"_s, &laptop.library}, std::pair{u"desktop"_s, &desktop.library}}) {
+                    const SyncSummary synced = hubs[hub].syncWith(name, *library);
+                    QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty(),
+                             qPrintable(name + u" with "_s + hub + u": "_s + problems(synced)));
+                }
+        };
+        syncAll();
+        const auto alpha = [](const Library &library) { return library.books(u"Alpha"_s).value(0).id; };
+        const qint64 now = QDateTime::currentSecsSinceEpoch();
+        // The desktop was read to a fifth a while ago; the laptop, further, since.
+        desktop.library.setProgress(alpha(desktop.library),
+                                    {.place = {.section = 1, .fraction = 0.2}, .percent = 20, .updated = now - 600});
+        laptop.library.setProgress(alpha(laptop.library), {.place = {.section = 2, .fraction = 0.6}, .percent = 60, .updated = now - 60});
+        // Three stars on the laptop, given to north; then five, given to south.
+        QVERIFY(laptop.library.setReading(alpha(laptop.library), u"reading"_s, 3, {}));
+        QVERIFY(hubs[u"north"_s].syncWith(u"laptop"_s, laptop.library).error.isEmpty());
+        QTest::qWait(1100);
+        QVERIFY(laptop.library.setReading(alpha(laptop.library), u"read"_s, 5, u"2026-11-26"_s));
+        QVERIFY(hubs[u"south"_s].syncWith(u"laptop"_s, laptop.library).error.isEmpty());
+        QTest::qWait(1100);
+        // The desktop takes the three stars and the place from north, later, and passes them on to south.
+        QVERIFY(hubs[u"north"_s].syncWith(u"desktop"_s, desktop.library).error.isEmpty());
+        QCOMPARE(desktop.library.progress(alpha(desktop.library)).percent, 60.0);
+        const SyncSummary passed = hubs[u"south"_s].syncWith(u"desktop"_s, desktop.library);
+        QVERIFY2(passed.error.isEmpty(), qPrintable(problems(passed)));
+        // The five stars, the newer change, hold on south and the desktop; the place read further holds.
+        const auto said = [&](const Library &library) {
+            const Book book = *library.book(alpha(library));
+            return QStringList{book.shelf, QString::number(book.rating), book.finished, QString::number(library.progress(book.id).percent)};
+        };
+        const QStringList newest{u"read"_s, u"5"_s, u"2026-11-26"_s, u"60"_s};
+        QCOMPARE(said(desktop.library), newest);
+        std::ignore = hubs[u"south"_s].keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+            [&] { QCOMPARE(said(*libraries.front()), newest); }();
+            return {};
+        });
+        QVERIFY(!QTest::currentTestFailed());
+        syncAll();
+        syncAll();
+        QCOMPARE(said(laptop.library), newest);
+        QCOMPARE(said(desktop.library), newest);
+        for (const QString &hub : {u"north"_s, u"south"_s})
+            std::ignore = hubs[hub].keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+                [&] { QCOMPARE(said(*libraries.front()), newest); }();
+                return {};
+            });
+    }
+
+    // What is passed on through a hub to another keeps the stamp it was made
+    // with (#243), of every kind that travels: a book's reading place, shelf,
+    // stars and paper copy, its details, a collection and a bookmark; of a book
+    // both hubs had, and of one the second gets from the computer that passed
+    // it on.
+    void whatIsPassedOnKeepsTheStampItWasMadeWith() {
+        Hubs hubs;
+        const QString started = hubs.start({u"north"_s, u"south"_s});
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        Computer desktop;
+        const qint64 alpha = laptop.add(u"Alpha"_s);
+        QVERIFY(alpha > 0);
+        for (const QString &hub : {u"north"_s, u"south"_s})
+            for (const auto &[name, library] : {std::pair{u"laptop"_s, &laptop.library}, std::pair{u"desktop"_s, &desktop.library}})
+                QVERIFY(hubs[hub].syncWith(name, *library).error.isEmpty());
+        laptop.library.setProgress(alpha, {.place = {.section = 2, .fraction = 0.5}, .percent = 60, .updated = 0});
+        QVERIFY(laptop.library.setReading(alpha, u"reading"_s, 4, {}));
+        BookMeta meta = laptop.library.book(alpha)->meta;
+        meta.description = u"Read on the laptop."_s;
+        QVERIFY(laptop.library.setMeta(alpha, meta));
+        const qint64 beta = laptop.add(u"Beta"_s);
+        QVERIFY(beta > 0);
+        laptop.library.setProgress(beta, {.place = {.section = 1, .fraction = 0.25}, .percent = 30, .updated = 0});
+        QVERIFY(laptop.library.setReading(beta, u"reading"_s, 3, {}));
+        QVERIFY(laptop.library.setPaper(beta, true));
+        const auto collection = laptop.library.addCollection(u"Lighthouses"_s);
+        QVERIFY(collection.has_value());
+        QVERIFY(laptop.library.putInCollection(*collection, alpha, true));
+        Annotation mark;
+        mark.kind = u"bookmark"_s;
+        mark.place = {.section = 1, .fraction = 0.1};
+        const qint64 bookmark = laptop.library.addAnnotation(alpha, mark);
+        const QStringList reading{u"progress"_s, u"shelf"_s, u"rating"_s, u"finished"_s, u"paper"_s};
+        const QString alphaGid = Spaces::bookId(laptop.library, alpha);
+        const QString betaGid = Spaces::bookId(laptop.library, beta);
+        const QString collectionGid = Spaces::collectionId(laptop.library, *collection);
+        const QString bookmarkGid = Spaces::annotationId(laptop.library, bookmark);
+        const auto stamped = [&](const Library &library) {
+            return stampsIn(library, alphaGid, reading + QStringList{u"description"_s}) + stampsIn(library, betaGid, reading)
+                   + QStringList{u"collection="_s + QString::number(SpaceReplay::entityHlc(library, u"collection"_s, collectionGid)),
+                                 u"bookmark="_s + QString::number(SpaceReplay::entityHlc(library, u"annotation"_s, bookmarkGid))};
+        };
+        const QStringList made = stamped(laptop.library);
+        // Each a second later, so a stamp made by the sync can't pass for one made on the laptop.
+        QTest::qWait(1100);
+        QVERIFY(hubs[u"north"_s].syncWith(u"laptop"_s, laptop.library).error.isEmpty());
+        QTest::qWait(1100);
+        QVERIFY(hubs[u"north"_s].syncWith(u"desktop"_s, desktop.library).error.isEmpty());
+        QCOMPARE(stamped(desktop.library), made);
+        QTest::qWait(1100);
+        const SyncSummary passed = hubs[u"south"_s].syncWith(u"desktop"_s, desktop.library);
+        QVERIFY2(passed.error.isEmpty() && passed.problems.isEmpty(), qPrintable(problems(passed)));
+        QCOMPARE(passed.sent, 1);
+        QCOMPARE(stamped(desktop.library), made);
+        std::ignore = hubs[u"south"_s].keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+            [&] { QCOMPARE(stamped(*libraries.front()), made); }();
+            return {};
+        });
     }
 
     // What a sync with one hub brought is a change for the other hubs, which

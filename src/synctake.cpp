@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <compare>
 #include <functional>
+#include <optional>
 #include <tuple>
 
 #include "bookidentity.h"
@@ -28,40 +29,6 @@
 using namespace Qt::StringLiterals;
 
 namespace {
-
-// "generated" (which plugin made a book) never travels: only that plugin
-// marks a book as its own, and the mark is what lets it fork and branch a
-// story, which must never reach a book by a human author. A sync neither
-// sends it nor takes it in.
-bool travels(const QString &scheme) { return scheme.compare(QStringLiteral("generated"), Qt::CaseInsensitive) != 0; }
-
-// The names elsewhere they have of a book and this side lacks, but the stray
-// ones. Names that came by sync keep the details' time, so they are no reason
-// to send the details back.
-bool fillNames(Library &library, const Book &mine, const QJsonObject &identifiers, const QSet<QString> &stray, bool dryRun,
-               SyncPlan *plan) {
-    bool changed = false;
-    for (auto it = identifiers.begin(); it != identifiers.end(); ++it)
-        if (travels(it.key()) && !mine.identifiers.contains(it.key())
-            && !StrayIdentifiers::isStray(stray, it.key(), it.value().toVariant().toString())) {
-            changed = true;
-            if (plan != nullptr)
-                plan->identifier(library, mine, it.key(), it.value().toVariant().toString());
-            if (!dryRun)
-                library.setIdentifier(mine.id, it.key(), it.value().toVariant().toString(), SyncManifest::myDetailsHlc(library, mine));
-        }
-    return changed;
-}
-
-// What is said of a book's reading once what the other side says fills in
-// where this side says nothing, and of each field `newer` there.
-[[nodiscard]] Book readingFilled(const Book &mine, const QJsonObject &theirs, const QSet<QString> &newer) {
-    const auto at = [&](const char *field, bool lacking) { return lacking || newer.contains(QLatin1StringView(field)); };
-    return {.paper = mine.paper || theirs.value("paper").toBool(),
-            .shelf = at("shelf", mine.shelf.isEmpty()) ? theirs.value("shelf").toString() : mine.shelf,
-            .rating = at("rating", mine.rating == 0) ? theirs.value("rating").toInt() : mine.rating,
-            .finished = at("finished", mine.finished.isEmpty()) ? theirs.value("finished").toString() : mine.finished};
-}
 
 void note(int &count, QStringList &titles, const QString &title) {
     ++count;
@@ -448,35 +415,6 @@ QSet<QString> SyncTake::heldBy(const QJsonArray &books) {
             held.insert(key.toString());
     }
     return held;
-}
-
-bool SyncTake::fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dryRun, const Names &names, SyncPlan *plan) {
-    const std::optional<Book> mine = library.book(id);
-    if (!mine)
-        return false;
-    const Book filled = readingFilled(*mine, theirs, names.newerReading);
-    const bool reading = std::tie(filled.shelf, filled.rating, filled.finished) != std::tie(mine->shelf, mine->rating, mine->finished);
-    if (reading && !dryRun)
-        library.setReading(id, filled.shelf, filled.rating, filled.finished);
-    if (filled.paper != mine->paper && !dryRun)
-        library.setPaper(id, true);
-    const bool changed = reading || filled.paper != mine->paper;
-    if (changed && plan != nullptr)
-        plan->reading(library, *mine, filled);
-    return (names.take && fillNames(library, *mine, theirs.value("identifiers").toObject(), names.stray, dryRun, plan)) || changed;
-}
-
-QStringList SyncTake::readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names) {
-    QStringList arguments{"set",      QString::number(id),          "--status", book.shelf.isEmpty() ? QStringLiteral("none") : book.shelf,
-                          "--rating", QString::number(book.rating), "--paper",  book.paper ? QStringLiteral("yes") : QStringLiteral("no")};
-    if (!book.finished.isEmpty())
-        arguments << "--finished" << book.finished;
-    for (auto it = book.identifiers.begin(); it != book.identifiers.end() && names; ++it)
-        if (const QString value = it.value().toVariant().toString(); !value.isEmpty() && travels(it.key()))
-            arguments << "--identifier" << it.key() + "=" + value;
-    if (detailsAt)
-        arguments << "--details-at" << QString::number(*detailsAt);
-    return arguments;
 }
 
 QString SyncTake::otherSide(SyncOptions::Details details) {

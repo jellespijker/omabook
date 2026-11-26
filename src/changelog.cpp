@@ -109,8 +109,19 @@ void writeProgress(EntityContext &ctx, const Progress &prog, bool explicitHlc) {
     return prog.updated > 0 || prog.percent > 0 || prog.place.section > 0 || prog.place.fraction > 0;
 }
 
+// Whether the row's reading is from before the log's: a sync stores the
+// operations it takes before it fills in the rows, so a row written meanwhile
+// (its details taken, its file arrived) still has the reading from before. That
+// is no change made here, and written it would be one, stamped now, after the
+// reading it was taken from and any newer one made elsewhere since, once
+// passed on (#243). A change made here is stamped no earlier than the log's
+// latest (Spaces::wallSeconds).
+[[nodiscard]] bool readingBehind(const EntityContext &ctx, const Book &book) {
+    return Hlc::seconds(book.readingAt) < Hlc::seconds(SpaceReducer::readingHlc(reducedFrom(ctx.existing)));
+}
+
 void syncBookReading(EntityContext &ctx, const Book &book) {
-    if (hasReadingFields(ctx, book)) {
+    if (hasReadingFields(ctx, book) && !readingBehind(ctx, book)) {
         const qint64 readingHlc = Hlc::normalize(book.readingAt);
         for (const auto &[field, value] : ChangeLogFields::bookReading(book))
             ChangeLogFields::write(ctx, field, value, readingHlc);

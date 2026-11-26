@@ -58,26 +58,30 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
     return meta;
 }
 
-// Its shelf, stars, finished day and paper copy, as the options say them.
-[[nodiscard]] std::expected<void, Failure> readingOf(Library &library, const Book &book, const QCommandLineParser &options) {
+// Its shelf, stars, finished day and paper copy, as the options say them, stamped `at` (none for now).
+[[nodiscard]] std::expected<void, Failure> readingOf(Library &library, const Book &book, const QCommandLineParser &options,
+                                                     std::optional<qint64> at) {
+    // One write, logged once whole: what a sync gives is taken as one (#243).
+    const Library::Batch batch(library);
     if (options.isSet("status") || options.isSet("rating") || options.isSet("finished")) {
         const QString status = options.isSet("status") ? options.value("status").toLower() : book.shelf;
         if (!library.setReading(book.id, status == "none" ? QString() : status,
                                 options.isSet("rating") ? options.value("rating").toInt() : book.rating,
-                                options.isSet("finished") ? options.value("finished").simplified() : book.finished))
+                                options.isSet("finished") ? options.value("finished").simplified() : book.finished, at))
             return std::unexpected(Failure(Failure::Code::StatusUnknown));
     }
     if (options.isSet("paper"))
-        library.setPaper(book.id, options.value("paper").toLower() == "yes");
+        library.setPaper(book.id, options.value("paper").toLower() == "yes", at);
     return {};
 }
 
-// The time the options stamp the details with, none for now.
-[[nodiscard]] std::expected<std::optional<qint64>, Failure> detailsAtOf(const QCommandLineParser &options) {
-    if (!options.isSet("details-at"))
+// The time the options stamp the details with (`option`, "details-at"), or the reading, none for now.
+[[nodiscard]] std::expected<std::optional<qint64>, Failure> detailsAtOf(const QCommandLineParser &options,
+                                                                        const QString &option = QStringLiteral("details-at")) {
+    if (!options.isSet(option))
         return std::nullopt;
     bool number = false;
-    const qint64 at = options.value("details-at").toLongLong(&number);
+    const qint64 at = options.value(option).toLongLong(&number);
     if (!number || at < 0)
         return std::unexpected(Failure(Failure::Code::DetailsAtNotATime));
     return at;
@@ -130,6 +134,11 @@ void BookSetting::addOptions(QCommandLineParser &parser) {
                       "omabook sync gives a book, so the details keep the time they had where they "
                       "came from.",
                       "seconds"});
+    parser.addOption({"reading-at",
+                      "Stamp a change of the shelf, stars, finished day or paper copy with this time, in "
+                      "seconds since 1970, instead of now: what omabook sync gives a book, so its reading "
+                      "keeps the time it had where it came from.",
+                      "seconds"});
 }
 
 std::expected<Book, Failure> BookSetting::apply(Library &library, qint64 id, const QCommandLineParser &options,
@@ -137,6 +146,9 @@ std::expected<Book, Failure> BookSetting::apply(Library &library, qint64 id, con
     const auto detailsAt = detailsAtOf(options);
     if (!detailsAt)
         return std::unexpected(detailsAt.error());
+    const auto readingAt = detailsAtOf(options, QStringLiteral("reading-at"));
+    if (!readingAt)
+        return std::unexpected(readingAt.error());
     const auto identifiers = identifiersOf(options);
     if (!identifiers)
         return std::unexpected(identifiers.error());
@@ -155,7 +167,7 @@ std::expected<Book, Failure> BookSetting::apply(Library &library, qint64 id, con
         return std::unexpected(Failure::said(error));
     if (const auto written = BookOps::writeDetailsWhenAsked(library, id, Settings().writeDetails()); !written && said)
         said(written.error().text());
-    if (const auto read = readingOf(library, *book, options); !read)
+    if (const auto read = readingOf(library, *book, options, *readingAt); !read)
         return std::unexpected(read.error());
     // The book's node in the knowledge graph says the same as the library.
     Graph(library).bookNode(id);

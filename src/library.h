@@ -281,9 +281,10 @@ public:
     bool setDetailsAt(qint64 id, qint64 at);
     // What is said of the book's reading: its shelf ("" to leave it to how
     // far it was read here), stars and the day it was finished. A change is
-    // stamped with now (Book::readingAt).
-    bool setReading(qint64 id, const QString &shelf, int rating, const QString &finished);
-    bool setPaper(qint64 id, bool paper);
+    // stamped with now (Book::readingAt), or with `at` (a clock's time, Hlc),
+    // the time it had on the computer it was made on, when a sync takes it (#243).
+    bool setReading(qint64 id, const QString &shelf, int rating, const QString &finished, std::optional<qint64> at = std::nullopt);
+    bool setPaper(qint64 id, bool paper, std::optional<qint64> at = std::nullopt);
     // How the book is set on the page where it isn't as the defaults are:
     // only the reading format options it has of its own (readingformat.h),
     // empty when it follows the defaults. Setting an empty object, or one

@@ -342,7 +342,7 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
     return {.id = *id, .duplicate = false, .error = {}};
 }
 
-bool Library::setReading(qint64 id, const QString &shelf, int rating, const QString &finished) {
+bool Library::setReading(qint64 id, const QString &shelf, int rating, const QString &finished, std::optional<qint64> at) {
     static constexpr std::array shelves{""_L1, "to-read"_L1, "reading"_L1, "read"_L1};
     if (!std::ranges::contains(shelves, shelf))
         return false;
@@ -351,12 +351,12 @@ bool Library::setReading(qint64 id, const QString &shelf, int rating, const QStr
     // doesn't make the book look read since.
     return exec("UPDATE books SET shelf = ?, rating = ?, finished = ?, reading_at = CASE WHEN shelf IS ? AND rating = ? "
                 "AND finished IS ? THEN reading_at ELSE ? END WHERE id = ?",
-                {shelf, stars, finished, shelf, stars, finished, Spaces::wallSeconds(*this), id});
+                {shelf, stars, finished, shelf, stars, finished, at ? Hlc::seconds(*at) : Spaces::wallSeconds(*this), id});
 }
 
-bool Library::setPaper(qint64 id, bool paper) {
+bool Library::setPaper(qint64 id, bool paper, std::optional<qint64> at) {
     return exec("UPDATE books SET paper = ?, reading_at = CASE WHEN paper = ? THEN reading_at ELSE ? END WHERE id = ?",
-                {paper, paper, Spaces::wallSeconds(*this), id});
+                {paper, paper, at ? Hlc::seconds(*at) : Spaces::wallSeconds(*this), id});
 }
 
 bool Library::setDetailsAt(qint64 id, qint64 at) { return ChangeLog::setDetailsAt(*this, id, at); }
