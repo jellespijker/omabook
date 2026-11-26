@@ -17,6 +17,8 @@
 
 #include "failure.h"
 #include "graph.h"
+#include "graphbuilt.h"
+#include "hublinks.h"
 #include "hubschedule.h"
 
 class HubKeeper;
@@ -30,7 +32,9 @@ class Library;
 // work. Its results are graph facts in the library's change log, and reach
 // the person's computers by the normal sync with the hub; a book's graph is
 // placed where it was learned, so a reader still sees none of it past their
-// own place.
+// own place. Beside them goes who built it and when (GraphBuilt, #219): the
+// hub begins a job saying it is building the book's graph, so a computer
+// doesn't begin it too, and ends it saying it built it, or stopped.
 //
 // One job at a time, a book each, keyed by the book, its file, the
 // capability and the model: a job done is never done again, one that failed
@@ -63,8 +67,9 @@ public:
     static constexpr std::chrono::hours rest{24};
 
     // Keeps when each job was done in `stateFolder`, works in a folder there,
-    // and reads the hub's AI from `settingsFile`.
-    HubWork(HubKeeper &keeper, QString stateFolder, QString settingsFile);
+    // and reads the hub's AI from `settingsFile`. Each book's graph is said to
+    // be built by `name` (GraphBuilt), the hub as it calls itself.
+    HubWork(HubKeeper &keeper, QString stateFolder, QString settingsFile, QString name = HubLinks::thisComputer());
     ~HubWork();
     HubWork(const HubWork &) = delete;
     HubWork &operator=(const HubWork &) = delete;
@@ -117,11 +122,13 @@ private:
     void finish(const Started &started, const Result &result);
     [[nodiscard]] std::expected<QJsonObject, Failure> lay(const Started &started, const QStringList &answers);
     void note(const Job &job, const QString &outcome, const QString &said = {});
+    // What the library says of the book's graph now: that this hub is building it, built it or stopped.
+    [[nodiscard]] GraphBuilt::Mark says(GraphBuilt::State state) const;
     void read();
     void write() const;
 
     HubKeeper &m_keeper;
-    QString m_file, m_scratch, m_settings;
+    QString m_file, m_scratch, m_settings, m_name;
     std::map<QString, Kept> m_kept;  // by the job's key
     std::unique_ptr<Library> m_copy; // the worker's while it runs
     std::atomic_bool m_stop{false};

@@ -1,6 +1,9 @@
 #include "assistant.h"
 
+#include <QDateTime>
+
 #include "annotationcontext.h"
+#include "graphbuilt.h"
 #include "graphcontext.h"
 #include "prompts.h"
 #include "reader.h"
@@ -284,10 +287,13 @@ void Assistant::growGraph() { grow(true); }
 
 // `asked` is the reader's own request: everything read goes, however
 // little. Left to itself it waits for a few pages and sends a few requests
-// at most, so one long evening's reading is not one long bill.
+// at most, so one long evening's reading is not one long bill; and it leaves
+// a book to the hub that built its graph or is building it (#219).
 void Assistant::grow(bool asked) {
     Library *library = m_reader->library();
     if (!m_provider || !library || !m_reader->isOpen() || m_graph.busy() || graphMode() == "off")
+        return;
+    if (!asked && GraphBuilt::leftToHub(GraphBuilt::of(*library, m_reader->bookId()), QDateTime::currentDateTime()))
         return;
     const auto built = GraphBuild::builtTo(*library, m_reader->bookId());
     if (built && m_reader->place().notAfter(*built))

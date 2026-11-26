@@ -10,6 +10,8 @@
 
 #include "changelog.h"
 #include "graph.h"
+#include "graphbuilder.h"
+#include "graphbuilt.h"
 #include "graphmatch.h"
 #include "spaces.h"
 
@@ -295,6 +297,23 @@ void takeDays(Taking &taking) {
 } // namespace
 
 // NOLINTNEXTLINE(misc-const-correctness): it writes the library, through the Graph it makes of it.
+namespace {
+
+// How far a book's graph was built where it was built whole (a hub's, #219),
+// where that is further than here: what came with it is the graph that far, so
+// none of it is sent to this side's model again.
+void takeBuilt(const Taking &taking) {
+    for (auto book = taking.books.cbegin(); book != taking.books.cend(); ++book) {
+        const auto mark = GraphBuilt::Mark::read(taking.merged.books.value(book.key()).fields.value(u"graph"_s).value);
+        if (!mark || mark->state != GraphBuilt::State::Built || !mark->to)
+            continue;
+        if (const auto here = GraphBuild::builtTo(taking.library, book.value()); !here || here->inBook() < *mark->to)
+            GraphBuild::setBuiltTo(taking.library, book.value(), {book.value(), *mark->to});
+    }
+}
+
+} // namespace
+
 int SyncTakeGraph::take(Library &library, const ReducedState &merged, const QHash<QString, qint64> &books,
                         const QHash<QString, QString> &same, const Things &things) {
     const Library::Batch batch(library);
@@ -314,5 +333,6 @@ int SyncTakeGraph::take(Library &library, const ReducedState &merged, const QHas
     takeEdges(taking);
     takeDays(taking);
     takeNames(taking);
+    takeBuilt(taking);
     return taking.changed;
 }

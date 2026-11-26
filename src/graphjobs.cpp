@@ -1,5 +1,6 @@
 #include "graphjobs.h"
 
+#include <QDateTime>
 #include <QEventLoop>
 #include <QEventLoopLocker>
 #include <QPointer>
@@ -8,6 +9,7 @@
 
 #include "aicall.h"
 #include "backend.h"
+#include "graphbuilt.h"
 
 namespace {
 
@@ -144,3 +146,11 @@ void GraphJobs::start() {
 }
 
 void GraphJobs::stop() { m_stop->store(true); }
+
+QString GraphJobs::builtElsewhere(qint64 bookId) const {
+    const Library *library = m_backend->library();
+    const auto mark = library ? GraphBuilt::of(*library, bookId) : std::nullopt;
+    if (!mark || !GraphBuilt::leftToHub(mark, QDateTime::currentDateTime()))
+        return {};
+    return mark->state == GraphBuilt::State::Built ? tr("built on %1").arg(mark->by) : tr("being built on %1").arg(mark->by);
+}

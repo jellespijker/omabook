@@ -5,7 +5,8 @@ import QtQuick.Controls
 // relations", "12 of 38" when the filters leave some out, and for a picture
 // cut at a limit how many there are in all: "2,000 of 6,965 things · 8,685
 // of 17,192 relations", or "300 of 1,240 connections between books"
-// (GraphBrowser::cut).
+// (GraphBrowser::cut). A book's graph built on one of the person's hubs
+// says so after it: "38 things · 52 relations · built on homehub" (#219).
 Label {
     id: count
     property var browser
@@ -13,7 +14,17 @@ Label {
 
     function number(n) { return n.toLocaleString(Qt.locale(), 'f', 0) }
 
-    text: {
+    // Where the graph of the book shown was built, when not here; not in a
+    // compact pane, where the count alone is said.
+    readonly property string elsewhere: {
+        const graph = count.browser
+        if (!graph || count.compact || graph.showing !== "book" || graph.bookId <= 0 || graph.knownCount === 0) return ""
+        translator.language
+        return backend.graphJobs.builtElsewhere(graph.bookId)
+    }
+
+    text: told + (elsewhere === "" || told === "" ? "" : " · " + elsewhere)
+    readonly property string told: {
         translator.language
         const graph = count.browser
         if (!graph || graph.knownCount === 0) return ""

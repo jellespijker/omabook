@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <ranges>
 #include <span>
+#include <tuple>
 #include <utility>
 
 #include "aicall.h"
@@ -126,9 +127,9 @@ struct Built {
 
 QString HubWork::Job::key() const { return QStringList{id, hash, Capabilities::name(Capability::Quick), model}.join(u'|'); }
 
-HubWork::HubWork(HubKeeper &keeper, QString stateFolder, QString settingsFile)
+HubWork::HubWork(HubKeeper &keeper, QString stateFolder, QString settingsFile, QString name)
     : m_keeper(keeper), m_file(QDir(stateFolder).filePath(u"work.json"_s)), m_scratch(QDir(stateFolder).filePath(u"work"_s)),
-      m_settings(std::move(settingsFile)) {
+      m_settings(std::move(settingsFile)), m_name(std::move(name)) {
     read();
 }
 
@@ -230,6 +231,7 @@ std::optional<HubWork::Started> HubWork::prepare(const Job &job) {
             return QJsonObject();
         }
         started = Started{.job = job, .path = file->first, .before = GraphBuild::builtTo(library, job.book), .total = item.requests};
+        GraphBuilt::mark(library, job.book, says(GraphBuilt::State::Building));
         return QJsonObject();
     });
     if (!planned)
@@ -321,6 +323,10 @@ std::expected<QJsonObject, Failure> HubWork::lay(const Started &started, const Q
         };
         const Library::Batch batch(library);
         const Built built = buildWhole(library, **document, started.job.book, again);
+        GraphBuilt::Mark mark = says(GraphBuilt::State::Built);
+        if (const auto upTo = GraphBuild::builtTo(library, started.job.book))
+            mark.to = upTo->inBook();
+        GraphBuilt::mark(library, started.job.book, mark);
         return QJsonObject{{"requests", built.requests}, {"nodes", built.nodes}, {"edges", built.edges}};
     });
 }
@@ -330,6 +336,7 @@ void HubWork::finish(const Started &started, const Result &result) {
     m_thread.reset();
     QDir(m_scratch).removeRecursively();
     bool goOn = false;
+    bool done = false;
     if (result.cancelled) {
         note(started.job, u"cancelled"_s, Failure(Failure::Code::HubWorkCancelled).english());
     } else if (result.failure) {
@@ -341,8 +348,15 @@ void HubWork::finish(const Started &started, const Result &result) {
         qCInfo(lcHub).noquote() << "The graph of" << started.job.title << "took in" << laid->value("nodes"_L1).toInt() << "things and"
                                 << laid->value("edges"_L1).toInt() << "ties.";
         note(started.job, u"done"_s);
-        goOn = true;
+        goOn = done = true;
     }
+    // Not built here after all: a computer may build it as it is read.
+    if (!done)
+        std::ignore =
+            m_keeper.write(started.job.library, HubKeeper::Moment::None, [&](Library &library) -> std::expected<QJsonObject, Failure> {
+                GraphBuilt::mark(library, started.job.book, says(GraphBuilt::State::Stopped));
+                return QJsonObject();
+            });
     {
         const std::scoped_lock lock(m_lock);
         m_running.reset();
@@ -370,6 +384,10 @@ void HubWork::note(const Job &job, const QString &outcome, const QString &said) 
                                             .said = said,
                                             .at = QDateTime::currentDateTime()});
     write();
+}
+
+GraphBuilt::Mark HubWork::says(GraphBuilt::State state) const {
+    return {.state = state, .by = m_name, .hub = true, .at = QDateTime::currentDateTime(), .to = {}};
 }
 
 QJsonObject HubWork::status() const {

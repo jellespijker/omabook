@@ -31,3 +31,12 @@ library's source of truth, with computers as its clients.
 
 - **The hub as the authority** (clients and a server): simpler conflict rules on paper, but every computer
   then depends on the hub being reachable to write, and a wrong write on the hub is right by definition.
+
+## As built in #219
+
+- **Who built a book's graph travels as a field of the book** (`graph`, `GraphBuilt`), not as a request to the hub: the
+  hub says it is building a book's graph as its job begins, then that it built it (and how far) or stopped, and a
+  computer learns it by the sync like any other field, from the hub or from another computer. So a computer leaves
+  the book to the hub as it is read, takes how far the graph came built for its own, and says "built on <hub>" by
+  the graph's count. Nothing waits on the hub being reachable: a hub that began a book and hasn't got on with it for
+  `GraphBuilt::patience` is waited for no longer, and the person asking builds it here at once.

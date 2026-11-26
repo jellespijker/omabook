@@ -41,6 +41,10 @@ public:
     Q_INVOKABLE void consider(const QString &which, qint64 selectedId, bool whole);
     Q_INVOKABLE void start();
     Q_INVOKABLE void stop();
+    // Where the graph of a book was built, when that was one of the person's
+    // hubs (GraphBuilt, #219): "built on homehub", "being built on homehub",
+    // and nothing for a book whose graph is this computer's to build.
+    Q_INVOKABLE QString builtElsewhere(qint64 bookId) const;
 
 signals:
     void planChanged();

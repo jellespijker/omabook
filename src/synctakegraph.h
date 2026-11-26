@@ -18,6 +18,9 @@
 // operation; from then on the log folds the two ids into one, and it goes by
 // the names it has on either side.
 //
+// How far a book's graph was built whole elsewhere (by a hub, GraphBuilt) is
+// taken for how far it is built here, where that is further (#219).
+//
 // The things a library makes of its own books (a book, its authors, series
 // and tags) are made on each side from the library, as before; relations to
 // them find them here by what they stand for.

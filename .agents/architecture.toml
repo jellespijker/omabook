@@ -54,6 +54,7 @@ modules = [
   "libraryfiles", "booklink",
   "libraryhold", "syncidentity", "pluginrestore",
   "libraryrepairs",
+  "graphbuilt",
 ]
 
 [layers.services]

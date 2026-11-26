@@ -16,7 +16,8 @@ namespace OpKinds {
 
 // A book's fields that travel by the log: its reading place, its details and
 // what is said of its reading, each with the stamp of its time, and the links
-// that line up its ids, and its tags one by one (`tag:…`). Never where its
+// that line up its ids, its tags one by one (`tag:…`), and who built its
+// knowledge graph (`graph`, GraphBuilt). Never where its
 // files are here (`path`, `formats`): those are this computer's own. A
 // book's removal travels as its tombstone.
 [[nodiscard]] std::span<const QLatin1StringView> travellingBookFields();

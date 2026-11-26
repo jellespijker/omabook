@@ -17,7 +17,9 @@ constexpr std::array bookFields{"progress"_L1, "same_as"_L1, "title"_L1, "author
                                 "cover_hash"_L1, "details_at"_L1, "shelf"_L1, "rating"_L1, "finished"_L1, "paper"_L1, "reading_at"_L1,
                                 "removed"_L1, "removed_at"_L1,
                                 // Two ids the log says are not one book, whatever a link says (#158).
-                                "not_same_as"_L1};
+                                "not_same_as"_L1,
+                                // Who built its knowledge graph, and when (#219, GraphBuilt).
+                                "graph"_L1};
 
 // A book's fields this computer keeps to itself, never sent.
 constexpr std::array ownBookFields{"path"_L1, "formats"_L1};
