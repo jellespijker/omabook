@@ -64,6 +64,14 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::ReplacedFileNotTrashed, tr("%1 can't be moved to the trash, so it was not replaced.")},
     {Failure::Code::BookFileNotCopied, tr("%1 can't be copied into the library, to %2")},
     {Failure::Code::LibraryNotWritten, tr("The library can't be written.")},
+    {Failure::Code::LibraryReadOnly,
+     tr("The library in %1 is read-only, and Omabook needs to write to it. Give yourself write permission to the folder and the files in "
+        "it (chmod -R u+w), or check that its drive isn't mounted read-only.")},
+    {Failure::Code::LibraryDamaged,
+     tr("The library's database %1 is damaged (%2). Restore the library from a snapshot (omabook snapshot list, then omabook snapshot "
+        "restore <id> --to <folder>), or put back a copy of the database from %3, where one is kept before an update changes the "
+        "library's format.")},
+    {Failure::Code::LibraryUnopened, tr("The library's database %1 can't be opened: %2")},
     {Failure::Code::LibraryUnwritable, tr("The library can't be written: %1")},
     {Failure::Code::BookNeedsTitle, tr("A book needs a title.")},
     {Failure::Code::NotOneBook, tr("%1 couldn't be made into one book.")},

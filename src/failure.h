@@ -61,6 +61,10 @@ public:
         ReplacedFileNotTrashed,
         BookFileNotCopied, // {the file, where to in the library}
         LibraryNotWritten, // {}
+        // A library that can't be opened, and what to do about it (#227).
+        LibraryReadOnly, // {folder}
+        LibraryDamaged,  // {database, the database's reason, the folder of its copies}
+        LibraryUnopened, // {database, the database's reason}
         LibraryUnwritable, // {the database's reason}
         LibraryMissing,    // {folder}: one is expected there and isn't (#221)
         LibraryUnnamed,    // {}: no folder was given for it (#234)

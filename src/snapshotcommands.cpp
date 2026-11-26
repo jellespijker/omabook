@@ -229,13 +229,15 @@ int takeOrList(const QStringList &arguments) {
     if (!snapshots.ready())
         return fail(Failure(Failure::Code::SnapshotsNotSetUp));
     Library library(parser.isSet(u"library"_s) ? parser.value(u"library"_s) : Settings().libraryPath());
+    // Its folder finds a library's snapshots, so they are listed also when it
+    // can't be opened, which is when one is to be restored (#227).
+    if (what == "list"_L1)
+        return list(parser, snapshots, library);
     library.onBringingUpToDate(LibraryMigrations::sayOnStandardError);
     if (QString error; !library.open(&error)) {
         printLine(stderr, error);
         return 1;
     }
-    if (what == "list"_L1)
-        return list(parser, snapshots, library);
     if (what == "now"_L1) {
         const auto taken = snapshots.take(library, SnapshotReason::Asked);
         return taken ? said(parser, *taken) : fail(taken.error());

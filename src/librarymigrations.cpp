@@ -29,6 +29,8 @@
 #include "statements.h"
 #include "tenancy.h"
 
+using namespace Qt::StringLiterals;
+
 int LibraryMigrations::currentFormat() noexcept { return static_cast<int>(LibrarySchema::steps().size()); }
 
 namespace {
@@ -177,7 +179,47 @@ namespace {
 // The same for every name of the folder: it is there by the time a library is set up.
 [[nodiscard]] QString databaseFile(const QString &root) { return QFileInfo(root).canonicalFilePath() + "/omabook.db"; }
 
+// SQLite's primary result codes that say why a database can't be used.
+constexpr int sqliteBusy = 5, sqliteLocked = 6, sqliteReadOnly = 8, sqliteCorrupt = 11, sqliteNotADatabase = 26;
+
+// What SQLite says when asked to read the database at `connection`.
+struct Said {
+    int code = 0; // the primary result code; 0 when it read it
+    QString words;
+};
+
+[[nodiscard]] Said reading(const QString &connection, const QString &sql) {
+    QSqlQuery read(QSqlDatabase::database(connection));
+    if (read.exec(sql))
+        return {};
+    const QSqlError error = read.lastError();
+    // The extended code, where SQLite gives one, has the primary one in its last byte.
+    return {.code = error.nativeErrorCode().toInt() % 256, .words = error.databaseText()};
+}
+
+constexpr auto readTables = "SELECT count(*) FROM sqlite_master"_L1;
+
 } // namespace
+
+std::optional<Failure> LibraryMigrations::damage(const Library &library) {
+    // The list of what is in it, then the books: a library whose header can be
+    // read may still be damaged further on.
+    for (const QString &sql : {QString(readTables), u"SELECT 1 FROM books LIMIT 1"_s})
+        if (const Said said = reading(library.m_connection, sql); said.code == sqliteCorrupt || said.code == sqliteNotADatabase)
+            return Failure(Failure::Code::LibraryDamaged, {library.databasePath(), said.words, library.backupFolder()});
+    return std::nullopt;
+}
+
+QString LibraryMigrations::whyNotSetUp(const Library &library) {
+    const Said said = reading(library.m_connection, readTables);
+    const QFileInfo folder(library.m_root);
+    const QFileInfo database(library.databasePath());
+    if (said.code == sqliteReadOnly || !folder.isWritable() || (database.exists() && !database.isWritable()))
+        return Failure(Failure::Code::LibraryReadOnly, {library.m_root}).text();
+    if (said.code != 0 && said.code != sqliteBusy && said.code != sqliteLocked)
+        return Failure(Failure::Code::LibraryUnopened, {library.databasePath(), said.words}).text();
+    return u"The library is being set up by another program; try again when it is done."_s;
+}
 
 void LibraryMigrations::configure(const Library &library) {
     // The write-ahead log needs memory shared between processes, which a
@@ -229,11 +271,14 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
     // set up holding the database alone, and the other, waiting as long as
     // a migration takes (WriteTurn::longest, as every write), then finds it ready.
     const Library::Batch setUp(library, Library::Batch::Lock::AtOnce);
+    // A damaged database is said to be that, whether or not it could be had.
+    if (const auto damaged = damage(library))
+        return std::unexpected(damaged->text());
     // When it can't be had (a library that can only be read, or another
     // program at it still after the wait), one that is ready opens as it is,
     // and one that isn't is not changed.
     if (!setUp.begun() && library.formatVersion() != currentFormat())
-        return std::unexpected("The library is being set up by another program; try again when it is done.");
+        return std::unexpected(whyNotSetUp(library));
     if (auto migrated = migrate(library); !migrated)
         return migrated;
     if (!library.m_keepFormat) {

@@ -3,6 +3,7 @@
 #include <QString>
 #include <expected>
 #include <functional>
+#include <optional>
 
 #include "failure.h"
 
@@ -42,4 +43,9 @@ private:
     // What the program does before an upgrade (beforeUpgrading), its line said.
     [[nodiscard]] static std::expected<void, QString> beforeUpgrade(Library &library);
     static void sayBringingUpToDate(const Library &library, int schema);
+    // The database being damaged, as reading it says (#227).
+    [[nodiscard]] static std::optional<Failure> damage(const Library &library);
+    // Why a library that isn't ready couldn't be had to be set up: one that
+    // can only be read, one SQLite can't open, or another program at it.
+    [[nodiscard]] static QString whyNotSetUp(const Library &library);
 };

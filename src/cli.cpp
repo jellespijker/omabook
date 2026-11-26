@@ -172,7 +172,7 @@ std::unique_ptr<Document> openTarget(const Command &command, const QString &word
     const auto library = command.library(&libraryError);
     const Target target = resolve(library.get(), word);
     if (!target.error.isEmpty()) {
-        *error = target.error;
+        *error = library || !target.file.isEmpty() ? target.error : libraryError; // why it can't be opened (#227)
         return nullptr;
     }
     return Formats::open(target.file, error);

@@ -196,6 +196,32 @@ private slots:
         QVERIFY(QFileInfo::exists(Library::databaseIn(computer.dir.filePath("Again"))));
     }
 
+    // A library whose database is damaged lists its snapshots all the same,
+    // and one is restored from there (#227).
+    void aDamagedLibrarysSnapshotsAreListed() {
+        const Computer computer;
+        QVERIFY(computer.setUp());
+        const Snapshots snapshots = computer.snapshots();
+        QString made;
+        {
+            Library library(computer.library);
+            QVERIFY(library.open());
+            QVERIFY(entry(library, "Dune") > 0);
+            made = taken(snapshots, library);
+        }
+        QVERIFY(!made.isEmpty());
+        QVERIFY(Fixtures::write(Library::databaseIn(computer.library), QByteArray(4096, 'x')));
+
+        const auto [code, said, out] = computer.omabook({"snapshot", "list", "--library", computer.library});
+        QVERIFY2(code == 0 && out.contains(made.left(8)), qPrintable(said));
+        const auto [back, saidBack, outBack] = computer.omabook(
+            {"snapshot", "restore", made.left(8), "--to", computer.dir.filePath("Again"), "--library", computer.library});
+        QVERIFY2(back == 0, qPrintable(saidBack));
+        Library again(computer.dir.filePath("Again"));
+        QVERIFY(again.open());
+        QCOMPARE(booksOf(again), QStringList{"Dune"});
+    }
+
     // A restored library is a library of its own, never the one it was a
     // snapshot of speaking twice (#209): it is given a device id of its own,
     // and the command says so.
