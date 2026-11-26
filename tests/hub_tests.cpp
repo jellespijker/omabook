@@ -16,11 +16,13 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QThread>
 #include <QtTest>
 #include <chrono>
 #include <memory>
+#include <unistd.h>
 
 #include "fixtures.h"
 #include "hubdaemon.h"
@@ -216,6 +218,40 @@ private slots:
         QVERIFY2(second != 0 && why.contains(u"running here already"_s), qPrintable(why));
         again.kill();
         QVERIFY(again.waitForFinished(10000));
+    }
+
+    // Over ssh with no XDG_RUNTIME_DIR, a command still finds the hub the user unit runs in /run/user (#251).
+    void aHubOfTheUserUnitIsFoundWithNoRuntimeVariable() {
+        const QString login = u"/run/user/%1"_s.arg(::geteuid());
+        const QString runtime = login + u"/omabook-hub"_s;
+        const QFileInfo loginInfo(login);
+        if (!loginInfo.isDir() || loginInfo.ownerId() != ::geteuid() || QFileInfo::exists(runtime))
+            QSKIP("needs this user's /run/user folder, with no hub of the user unit in it");
+        Home home;
+        const QString folder = home.dir.filePath(u"libraries"_s);
+        QVERIFY(hubFolder(folder));
+        QVERIFY(QDir().mkpath(runtime));
+        const auto removeRuntime = qScopeGuard([&runtime] { QDir(runtime).removeRecursively(); });
+        QProcess daemon;
+        QProcessEnvironment unit = home.environment;
+        unit.insert(u"RUNTIME_DIRECTORY"_s, runtime); // as systemd sets it for the user unit
+        daemon.setProcessEnvironment(unit);
+        daemon.start(QString::fromLatin1(OMABOOK_BINARY), {u"hub"_s, u"run"_s, u"--libraries"_s, folder});
+        QByteArray said;
+        QVERIFY(QTest::qWaitFor([&daemon, &said] { return (said += daemon.readAllStandardOutput()).contains("takes requests at"); }, 30000));
+        QVERIFY2(said.contains(runtime.toUtf8()), said.constData());
+        const auto stopDaemon = qScopeGuard([&daemon] {
+            daemon.terminate();
+            daemon.waitForFinished(10000);
+        });
+        // A command as sshd starts it: no XDG_RUNTIME_DIR.
+        QProcess status;
+        QProcessEnvironment ssh = home.environment;
+        ssh.remove(u"XDG_RUNTIME_DIR"_s);
+        status.setProcessEnvironment(ssh);
+        status.start(QString::fromLatin1(OMABOOK_BINARY), {u"hub"_s, u"status"_s, u"--json"_s});
+        QVERIFY(status.waitForFinished(30000));
+        QVERIFY2(status.exitCode() == 0, status.readAllStandardError().constData());
     }
 
     void theUnitsStartItAgainWheneverItStops() {

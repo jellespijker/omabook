@@ -79,6 +79,13 @@ HubPlace HubPlace::usual() {
         runtime = QString::fromLatin1(systemRuntime);
     if (runtime.isEmpty() && qEnvironmentVariableIsSet("XDG_RUNTIME_DIR"))
         runtime = underXdg("XDG_RUNTIME_DIR", {});
+    // Over ssh with no XDG_RUNTIME_DIR (sshd without pam_systemd), the user unit's runtime folder, when it
+    // is this user's: where `systemctl --user` runs the hub (#251).
+    if (runtime.isEmpty()) {
+        const QString login = QDir(u"/run/user/%1"_s.arg(::geteuid())).filePath(QString::fromLatin1(folderName));
+        if (mine(login))
+            runtime = login;
+    }
     Folders folders{.state = state.isEmpty() ? underXdg("XDG_STATE_HOME", home + u"/.local/state"_s) : state,
                     .runtime = runtime,
                     .credentials = qEnvironmentVariable("CREDENTIALS_DIRECTORY")};
