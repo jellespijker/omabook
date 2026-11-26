@@ -167,7 +167,7 @@ Item {
         return model.write(draft.chapter.textDocument, draft.start, draft.end, words)
     }
     // Done writing or editing a note: the words kept, or none (removed, never written).
-    function finish(id, words) {
+    function finish(id, words, changed) {
         const entry = id ? model.notes.find(note => note.id === id) : null
         if (entry && entry.ink) {
             // Written by hand: its ink is kept as it goes, and its words are what was read of it.
@@ -184,7 +184,7 @@ Item {
                 current = made
                 backend.say(qsTr("Margin note written"))
             }
-        } else if (id) {
+        } else if (id && changed) {
             const removed = words.trim() === ""
             model.change(id, words)
             if (removed) backend.say(qsTr("Margin note removed"))
@@ -380,7 +380,7 @@ Item {
             lines: 0
             current: layer.going && !editing
             fontSize: Math.max(13, reader.format.noteFontSize)
-            onFinished: (words) => layer.finish(card.noteId, words)
+            onFinished: (words, changed) => layer.finish(card.noteId, words, changed)
             onRemoveAsked: layer.removeNote(card.noteId)
         }
     }

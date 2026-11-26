@@ -43,7 +43,11 @@ AppPopup {
             return
         }
         if (what === "edit") {
-            if (!browser.edit(node.id, name.text, summary.text)) {
+            // What wasn't changed here stays as it is by now: a build or an
+            // agent may have written it since (#223).
+            const now = browser.selected === node.id ? browser.details : node
+            if (!browser.edit(node.id, name.text === (node.name || "") ? now.name : name.text,
+                              summary.text === (node.summary || "") ? now.summary || "" : summary.text)) {
                 problem = qsTr("Something else of this kind is already called that. Merge the two instead.")
                 return
             }

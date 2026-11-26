@@ -3,7 +3,8 @@ import QtQuick.Controls
 import QtQuick.Controls.Material
 import QtQuick.Layouts
 
-// A book's details, to correct by hand. Nothing is saved until Save.
+// A book's details, to correct by hand. Nothing is saved until Save, and then
+// only what was changed here (#223).
 AppPopup {
     id: dialog
     objectName: "edit"
@@ -16,25 +17,67 @@ AppPopup {
     // Whether it has an EPUB to write the details into, and whether that file
     // as it came in is kept to put back (#74).
     property var file: ({})
+    // The book's fields as the library had them when they were shown, and as
+    // the dialog's own controls took them: only what the person changed from
+    // the latter is saved, and the former says whether someone else (the
+    // command line, an agent, a sync) changed the same since.
+    property var before: ({})
+    property var shown: ({})
+    // The fields changed both here and elsewhere, and whether the book went.
+    property var clashes: []
+    property bool gone: false
+    readonly property var texts: ({
+        title: title, authors: authors, series: series, seriesIndex: number, tags: tags, publisher: publisher,
+        published: published, language: language, isbn: isbn, description: description, finished: finished
+    })
+    readonly property var fieldNames: ({
+        title: qsTr("Title"), authors: qsTr("Authors"), series: qsTr("Series"), seriesIndex: qsTr("Number"),
+        tags: qsTr("Tags"), publisher: qsTr("Publisher"), published: qsTr("Published"), language: qsTr("Language"),
+        isbn: qsTr("ISBN"), description: qsTr("Description"), shelf: qsTr("Shelf"), rating: qsTr("Rating"),
+        finished: qsTr("Finished"), paper: qsTr("On my shelf")
+    })
 
-    function show(id) {
+    // A book's fields as the library has them now; null when it isn't there.
+    function stored(id) {
         const book = backend.book(id)
         const reading = backend.reading(id)
+        if (reading.shelf === undefined)
+            return null
+        const values = { shelf: reading.shelf, rating: reading.rating, finished: reading.finished, paper: reading.paper }
+        for (const key of ["title", "authors", "series", "tags", "publisher", "published", "language", "isbn", "description"])
+            values[key] = book[key] || ""
+        values.seriesIndex = book.seriesIndex > 0 ? String(book.seriesIndex) : ""
+        return values
+    }
+    // What the controls say, and putting some fields into them.
+    function typed() {
+        const values = { shelf: shelves[shelf.currentIndex], rating: stars.value, paper: paper.checked }
+        for (const key in texts)
+            values[key] = texts[key].text
+        return values
+    }
+    function put(values) {
+        for (const key in values) {
+            if (key === "shelf")
+                shelf.currentIndex = Math.max(0, shelves.indexOf(values[key]))
+            else if (key === "rating")
+                stars.value = values[key]
+            else if (key === "paper")
+                paper.checked = values[key]
+            else
+                texts[key].text = values[key]
+        }
+    }
+    function show(id) {
+        const values = stored(id)
+        if (!values)
+            return
         bookId = id
-        shelf.currentIndex = Math.max(0, shelves.indexOf(reading.shelf))
-        stars.value = reading.rating
-        finished.text = reading.finished
-        paper.checked = reading.paper
-        title.text = book.title || ""
-        authors.text = book.authors || ""
-        series.text = book.series || ""
-        number.text = book.seriesIndex > 0 ? String(book.seriesIndex) : ""
-        tags.text = book.tags || ""
-        publisher.text = book.publisher || ""
-        published.text = book.published || ""
-        language.text = book.language || ""
-        isbn.text = book.isbn || ""
-        description.text = book.description || ""
+        clashes = []
+        gone = false
+        put(values)
+        before = values
+        shown = typed()
         file = backend.fileDetails(id)
         intoFile.checked = settings.writeDetails
         open()
@@ -44,6 +87,8 @@ AppPopup {
     function showNew() {
         bookId = 0
         file = ({})
+        clashes = []
+        gone = false
         for (const field of [title, authors, series, number, tags, publisher, published, language, isbn, description, finished])
             field.text = ""
         shelf.currentIndex = 0
@@ -53,24 +98,59 @@ AppPopup {
         title.forceActiveFocus()
     }
     function save() {
-        const details = {
-            title: title.text, authors: authors.text, series: series.text,
-            seriesIndex: Number(number.text.replace(",", ".")) || 0, tags: tags.text,
-            publisher: publisher.text, published: published.text, language: language.text,
-            isbn: isbn.text, description: description.text,
-            shelf: shelves[shelf.currentIndex], rating: stars.value, finished: finished.text, paper: paper.checked,
-            writeToFile: intoFile.visible && intoFile.checked
-        }
+        const mine = typed()
+        let details = mine
         if (bookId > 0) {
-            backend.saveDetails(bookId, details)
-        } else {
-            if (title.text.trim() === "") {
-                title.forceActiveFocus()
+            const now = stored(bookId)
+            gone = !now
+            if (gone)
+                return
+            details = {}
+            for (const key in mine)
+                if (mine[key] !== shown[key])
+                    details[key] = mine[key]
+            // Changed on both sides, to different things: said first, and
+            // saved over theirs only when asked again.
+            const both = Object.keys(details).filter(key => now[key] !== before[key] && now[key] !== mine[key])
+            if (both.length > 0) {
+                const seen = Object.assign({}, before)
+                for (const key of both)
+                    seen[key] = now[key]
+                before = seen
+                clashes = both
                 return
             }
-            backend.newEntry(details)
+        } else if (title.text.trim() === "") {
+            title.forceActiveFocus()
+            return
         }
+        if (details.seriesIndex !== undefined)
+            details.seriesIndex = Number(details.seriesIndex.replace(",", ".")) || 0
+        details.writeToFile = intoFile.visible && intoFile.checked
+        if (bookId > 0)
+            backend.saveDetails(bookId, details)
+        else
+            backend.newEntry(details)
         close()
+    }
+    // The other side's values for the fields changed on both, into the dialog;
+    // what was changed only here stays.
+    function takeTheirs() {
+        const now = stored(bookId)
+        gone = !now
+        if (gone)
+            return
+        const theirs = {}
+        for (const key of clashes)
+            theirs[key] = now[key]
+        put(theirs)
+        const taken = typed()
+        const loaded = Object.assign({}, shown)
+        for (const key of clashes)
+            loaded[key] = taken[key]
+        shown = loaded
+        before = Object.assign({}, before, theirs)
+        clashes = []
     }
 
     Shortcut { sequence: "Ctrl+S"; enabled: dialog.opened; onActivated: dialog.save() }
@@ -105,7 +185,7 @@ AppPopup {
             columns: win.compact ? 1 : 2
             columnSpacing: 12
             rowSpacing: 12
-            TextField { id: publisher; Layout.fillWidth: true; placeholderText: qsTr("Publisher"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
+            TextField { id: publisher; objectName: "editPublisher"; Layout.fillWidth: true; placeholderText: qsTr("Publisher"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
             TextField { id: published; Layout.fillWidth: win.compact; Layout.preferredWidth: 140; placeholderText: qsTr("Published"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
             TextField { id: isbn; Layout.fillWidth: true; placeholderText: qsTr("ISBN"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
             TextField { id: language; Layout.fillWidth: win.compact; Layout.preferredWidth: 140; placeholderText: qsTr("Language"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
@@ -155,11 +235,31 @@ AppPopup {
             Layout.preferredHeight: 140
             TextArea {
                 id: description
+                objectName: "editDescription"
                 placeholderText: qsTr("Description")
                 wrapMode: TextEdit.Wrap
                 selectByMouse: true
                 Material.roundedScale: theme.radius
             }
+        }
+        // What happened to the book while the dialog was open, when it
+        // stands in the way of saving.
+        Label {
+            objectName: "editChanged"
+            visible: dialog.gone || dialog.clashes.length > 0
+            Layout.fillWidth: true
+            text: dialog.gone ? qsTr("This book was removed from the library meanwhile, so its details can't be saved.")
+                  : qsTr("Changed elsewhere meanwhile: %1. Save again to keep what you entered.")
+                        .arg(dialog.clashes.map(key => dialog.fieldNames[key]).join(", "))
+            color: theme.colors.orange
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
+        }
+        AppButton {
+            objectName: "editTakeTheirs"
+            visible: !dialog.gone && dialog.clashes.length > 0
+            text: qsTr("Take the Other Changes")
+            onClicked: dialog.takeTheirs()
         }
         // The library's copy of the book, never the file it was added from;
         // the settings say whether this is ticked to begin with.
@@ -190,7 +290,7 @@ AppPopup {
                 onClicked: backend.chooseCover(dialog.bookId)
             },
             AppButton { text: qsTr("Cancel"); onClicked: dialog.close() },
-            AppButton { objectName: "editSave"; text: qsTr("Save"); primary: true; onClicked: dialog.save() }
+            AppButton { objectName: "editSave"; text: qsTr("Save"); primary: true; enabled: !dialog.gone; onClicked: dialog.save() }
         ]
     }
 }

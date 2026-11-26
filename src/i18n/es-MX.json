@@ -3108,5 +3108,9 @@
   "The hub can't serve phones and e-readers with %1 set to %2.": "El hub no puede servir a teléfonos y lectores con %1 en %2.",
   "The hub is serving its library already, at %1.": "El hub ya está sirviendo su biblioteca, en %1.",
   "The hub isn't on a tailnet yet. Start Tailscale there, or choose another reach.": "El hub todavía no está en un tailnet. Inicia Tailscale ahí, o elige otro alcance.",
-  "The hub serves the library %1 on port %2, with no computer awake.": "El hub sirve la biblioteca %1 en el puerto %2, sin que ninguna computadora esté despierta."
+  "The hub serves the library %1 on port %2, with no computer awake.": "El hub sirve la biblioteca %1 en el puerto %2, sin que ninguna computadora esté despierta.",
+  "Changed elsewhere meanwhile: %1. Save again to keep what you entered.": "Cambiado en otro lugar mientras tanto: %1. Guarde otra vez para conservar lo que escribió.",
+  "Shelf": "Estante",
+  "Take the Other Changes": "Tomar los otros cambios",
+  "This book was removed from the library meanwhile, so its details can't be saved.": "Este libro se quitó de la biblioteca mientras tanto, así que sus datos no se pueden guardar."
 }

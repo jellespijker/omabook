@@ -9,30 +9,56 @@
 #include <tuple>
 
 #include "graph.h"
+#include "librarybatch.h"
+
+namespace {
+
+// The fields `details` names, laid over the book's; a field it doesn't name
+// stays exactly as it is, not even tidied.
+void applyDetails(BookMeta &meta, const QVariantMap &details) {
+    const auto line = [&details](const QString &key, QString &field) {
+        if (details.contains(key))
+            field = details.value(key).toString().simplified();
+    };
+    line("title", meta.title);
+    line("series", meta.series);
+    line("publisher", meta.publisher);
+    line("language", meta.language);
+    line("isbn", meta.isbn);
+    line("published", meta.published);
+    if (details.contains("authors"))
+        meta.authors = BookMeta::splitAuthors(details.value("authors").toString());
+    if (details.contains("seriesIndex"))
+        meta.seriesIndex = details.value("seriesIndex").toDouble();
+    if (details.contains("description"))
+        meta.description = details.value("description").toString().trimmed();
+    if (details.contains("tags"))
+        meta.tags = BookMeta::splitTags(details.value("tags").toString());
+}
+
+} // namespace
 
 void Backend::saveDetails(qint64 id, const QVariantMap &details) {
-    const auto before = m_library ? m_library->book(id) : std::nullopt;
-    if (!before)
+    if (!m_library)
         return;
-    BookMeta meta = before->meta;
-    meta.title = details.value("title", meta.title).toString().simplified();
-    meta.authors = BookMeta::splitAuthors(details.value("authors", meta.authorText()).toString());
-    meta.series = details.value("series", meta.series).toString().simplified();
-    meta.seriesIndex = details.value("seriesIndex", meta.seriesIndex).toDouble();
-    meta.publisher = details.value("publisher", meta.publisher).toString().simplified();
-    meta.language = details.value("language", meta.language).toString().simplified();
-    meta.isbn = details.value("isbn", meta.isbn).toString().simplified();
-    meta.published = details.value("published", meta.published).toString().simplified();
-    meta.description = details.value("description", meta.description).toString().trimmed();
-    meta.tags = BookMeta::splitTags(details.value("tags", meta.tags.join(", ")).toString());
-    QString error;
-    if (!m_library->setMeta(id, meta, &error))
-        say(error);
-    if (details.contains("shelf"))
-        m_library->setReading(id, details.value("shelf").toString(), details.value("rating", before->rating).toInt(),
-                              details.value("finished", before->finished).toString().simplified());
-    if (details.contains("paper"))
-        m_library->setPaper(id, details.value("paper").toBool());
+    {
+        // Read and written in one batch, so what another program changes
+        // meanwhile isn't written back over (#223).
+        const Library::Batch batch(*m_library);
+        const auto before = m_library->book(id);
+        if (!before)
+            return;
+        BookMeta meta = before->meta;
+        applyDetails(meta, details);
+        QString error;
+        if (!m_library->setMeta(id, meta, &error))
+            say(error);
+        if (details.contains("shelf") || details.contains("rating") || details.contains("finished"))
+            m_library->setReading(id, details.value("shelf", before->shelf).toString(), details.value("rating", before->rating).toInt(),
+                                  details.contains("finished") ? details.value("finished").toString().simplified() : before->finished);
+        if (details.contains("paper"))
+            m_library->setPaper(id, details.value("paper").toBool());
+    }
     // The book's node in the knowledge graph says the same: its status,
     // stars, author, series and tags.
     Graph(*m_library).bookNode(id);

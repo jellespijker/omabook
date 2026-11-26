@@ -28,8 +28,12 @@ FocusScope {
     // How many lines it shows while it isn't edited; 0 for all of them.
     property int lines: 6
     property int fontSize: 13
-    // Done editing, with these words (none: removed, or never written).
-    signal finished(string words)
+    // The words the field was given to edit.
+    property string opened: ""
+    // Done editing, with these words (none: removed, or never written), and
+    // whether they were changed here: words left as they were aren't written
+    // back over what a sync or an agent may have made of the note since (#223).
+    signal finished(string words, bool changed)
     signal removeAsked()
     // Pressed while not being edited.
     signal activated()
@@ -43,6 +47,7 @@ FocusScope {
             card.forceActiveFocus()
             return
         }
+        opened = words
         field.text = words
         field.forceActiveFocus()
         field.cursorPosition = field.length
@@ -50,7 +55,8 @@ FocusScope {
     function finish() {
         if (!editing) return
         editing = false
-        finished(ink ? words : field.text)
+        if (ink) finished(words, false)
+        else finished(field.text, field.text !== opened)
     }
     onEditingChanged: if (editing && !ink && !field.activeFocus) field.forceActiveFocus()
 

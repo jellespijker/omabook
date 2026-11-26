@@ -2991,5 +2991,9 @@
   "The hub can't serve phones and e-readers with %1 set to %2.": "De hub kan telefoons en e-readers niet bedienen met %1 op %2.",
   "The hub is serving its library already, at %1.": "De hub biedt zijn bibliotheek al aan, op %1.",
   "The hub isn't on a tailnet yet. Start Tailscale there, or choose another reach.": "De hub zit nog niet op een tailnet. Start Tailscale daar, of kies een ander bereik.",
-  "The hub serves the library %1 on port %2, with no computer awake.": "De hub biedt de bibliotheek %1 aan op poort %2, zonder dat er een computer wakker is."
+  "The hub serves the library %1 on port %2, with no computer awake.": "De hub biedt de bibliotheek %1 aan op poort %2, zonder dat er een computer wakker is.",
+  "Changed elsewhere meanwhile: %1. Save again to keep what you entered.": "Intussen elders gewijzigd: %1. Sla nogmaals op om te houden wat je hebt ingevuld.",
+  "Shelf": "Plank",
+  "Take the Other Changes": "De andere wijzigingen overnemen",
+  "This book was removed from the library meanwhile, so its details can't be saved.": "Dit boek is intussen uit de bibliotheek verwijderd, dus de gegevens kunnen niet worden opgeslagen."
 }

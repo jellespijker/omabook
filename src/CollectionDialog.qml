@@ -18,6 +18,8 @@ AppPopup {
     // The collection it is inside; 0 for the top.
     property var parentId: 0
     property bool confirming: false
+    // The name, rule and place a collection being changed was shown with.
+    property var before: ({})
     property bool unsubscribing: false
     // What following this collection's link found, when it was looked for.
     readonly property var updates: dialog.editing !== null && backend.spaces.following.space === dialog.editing.space
@@ -59,6 +61,7 @@ AppPopup {
         parentId = editing ? editing.parent : 0
         name.text = editing ? editing.name : ""
         rule.text = editing ? editing.rule : ""
+        before = { name: name.text, rule: rule.text, parent: parentId }
         confirming = false
         open()
         name.forceActiveFocus()
@@ -66,7 +69,10 @@ AppPopup {
     function save() {
         if (!canSave)
             return
-        const id = backend.saveCollection(collectionId, name.text.trim(), rule.text.trim(), parentId)
+        // What wasn't changed here stays as it is by now, whoever changed it (#223).
+        const kept = (key, here) => editing && here === before[key] ? editing[key] : here
+        const id = backend.saveCollection(collectionId, kept("name", name.text).trim(), kept("rule", rule.text).trim(),
+                                          kept("parent", parentId))
         if (id === 0)
             return
         close()

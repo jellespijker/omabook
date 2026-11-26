@@ -140,7 +140,7 @@ Item {
             lines: column.foot < 0 ? 8 : 4
             fontSize: reader.format.noteFontSize
             onImplicitHeightChanged: soon.restart()
-            onFinished: (words) => column.reading.finish(noteId, words)
+            onFinished: (words, changed) => column.reading.finish(noteId, words, changed)
             onRemoveAsked: column.reading.removeNote(noteId)
             onActivated: {
                 column.reading.current = noteId
