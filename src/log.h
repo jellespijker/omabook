@@ -39,6 +39,10 @@ void install(const QString &program, const QString &folder = {});
 // The file the log is written to.
 QString path(const QString &folder = {});
 
+// Writes a warning to the log file alone: for what the program says itself,
+// so it isn't said twice on the terminal. Nothing before install().
+void keep(const QLoggingCategory &category, const QString &message);
+
 struct Entry {
     QDateTime when;
     QString level;      // debug, info, warning, critical

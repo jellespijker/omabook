@@ -3130,5 +3130,26 @@
   "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 est introuvable. Son disque est-il branché, ou son partage monté ? Rien n'a été créé à sa place.",
   "The library isn't there": "La bibliothèque n'est pas là",
   "The library can't be opened": "La bibliothèque ne peut pas être ouverte",
-  "No folder was given for the library.": "Aucun dossier n'a été donné pour la bibliothèque."
+  "No folder was given for the library.": "Aucun dossier n'a été donné pour la bibliothèque.",
+  "%1 has a file in common with %2, so they are one book here, with the reading of %2.": "%1 a un fichier en commun avec %2 : ils ne font ici qu'un seul livre, avec la lecture de %2.",
+  "%1 was not imported: %2": "%1 n'a pas été importé : %2",
+  "%1 was not imported: Calibre has no file for it.": "%1 n'a pas été importé : Calibre n'en a aucun fichier.",
+  "%1 was not imported: none of its files can be taken.": "%1 n'a pas été importé : aucun de ses fichiers ne peut être repris.",
+  "%1: %2 is in a format Omabook doesn't take.": "%1 : %2 est dans un format qu'Omabook ne prend pas.",
+  "%1: %2 was not copied, as the book here has another file of that format.": "%1 : %2 n'a pas été copié, car le livre a déjà ici un autre fichier de ce format.",
+  "%1: its cover can't be read from %2": "%1 : sa couverture ne peut pas être lue depuis %2",
+  "%1: the file %2 can't be read.": "%1 : le fichier %2 ne peut pas être lu.",
+  "%1: there is no file at %2": "%1 : il n'y a aucun fichier à l'emplacement %2",
+  "%Ln books of the Calibre library were not imported": {
+    "many": "%Ln livres de la bibliothèque Calibre n'ont pas été importés",
+    "one": "%Ln livre de la bibliothèque Calibre n'a pas été importé",
+    "other": "%Ln livres de la bibliothèque Calibre n'ont pas été importés"
+  },
+  "%Ln more are named in the log (omabook logs)": {
+    "many": "%Ln autres sont nommés dans le journal (omabook logs)",
+    "one": "%Ln autre est nommé dans le journal (omabook logs)",
+    "other": "%Ln autres sont nommés dans le journal (omabook logs)"
+  },
+  "Not all of the Calibre library can be read: %1": "La bibliothèque Calibre ne peut pas être lue en entier : %1",
+  "The files of the Calibre library can't be read: %1": "Les fichiers de la bibliothèque Calibre ne peuvent pas être lus : %1"
 }

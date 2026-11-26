@@ -1203,7 +1203,7 @@ QJsonObject Folio::add(const Settings &settings, const QString &library, const Q
     // A file that joined a book here without one was added too.
     const int added = summary.added + summary.joined;
     if (added == 0 && summary.duplicates == 0)
-        return {{"error", summary.problems.isEmpty() ? QJsonValue(text("No books were found.")) : QJsonValue(summary.problems.first())}};
+        return {{"error", summary.reasons().isEmpty() ? QJsonValue(text("No books were found.")) : QJsonValue(summary.reasons().first())}};
     const QString name = libraryName(path);
     if (added == 0)
         return {{"notice", text("Already in %1.", {name})}};

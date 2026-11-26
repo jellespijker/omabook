@@ -337,6 +337,18 @@ public:
         SnapshotDiskNearlyFull,   // {repository, room left}
         NoSecondDiskCopy,         // {}
         NoCopyAway,               // {}
+        // What of a Calibre library didn't come across, and why (#224); {book} is its title and author.
+        CalibreBookEmpty,       // {book}
+        CalibreBookUnusable,    // {book}: none of its files can be taken
+        CalibreBookFailed,      // {book, why}
+        CalibreFileMissing,     // {book, path}
+        CalibreFileUnreadable,  // {book, path}
+        CalibreFileUnsupported, // {book, path}
+        CalibreFileNotCopied,   // {book, path}: the book here has another file of that format
+        CalibreCoverUnread,     // {book, path}
+        CalibreSameBook,        // {book, the one it is here as}
+        CalibreFilesUnread,     // {the database's reason}: no list of the books' files
+        CalibreReadPartly,      // {the database's reason}
         // A plugin's thing put back from a snapshot, and a library's device id its own (#209).
         RestoreThingNotFound,  // {notebook or page}
         RestoreThingAmbiguous, // {title}

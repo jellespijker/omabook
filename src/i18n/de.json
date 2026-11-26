@@ -3013,5 +3013,24 @@
   "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 ist nicht zu finden. Ist sein Laufwerk angeschlossen oder seine Freigabe eingehängt? An seiner Stelle wurde nichts angelegt.",
   "The library isn't there": "Die Bibliothek ist nicht da",
   "The library can't be opened": "Die Bibliothek lässt sich nicht öffnen",
-  "No folder was given for the library.": "Für die Bibliothek wurde kein Ordner angegeben."
+  "No folder was given for the library.": "Für die Bibliothek wurde kein Ordner angegeben.",
+  "%1 has a file in common with %2, so they are one book here, with the reading of %2.": "%1 hat eine Datei mit %2 gemeinsam, deshalb sind beide hier ein Buch, mit dem Lesestand von %2.",
+  "%1 was not imported: %2": "%1 wurde nicht importiert: %2",
+  "%1 was not imported: Calibre has no file for it.": "%1 wurde nicht importiert: Calibre hat keine Datei dazu.",
+  "%1 was not imported: none of its files can be taken.": "%1 wurde nicht importiert: Keine seiner Dateien kann übernommen werden.",
+  "%1: %2 is in a format Omabook doesn't take.": "%1: %2 hat ein Format, das Omabook nicht annimmt.",
+  "%1: %2 was not copied, as the book here has another file of that format.": "%1: %2 wurde nicht kopiert, da das Buch hier schon eine andere Datei dieses Formats hat.",
+  "%1: its cover can't be read from %2": "%1: Das Cover kann nicht gelesen werden aus %2",
+  "%1: the file %2 can't be read.": "%1: Die Datei %2 kann nicht gelesen werden.",
+  "%1: there is no file at %2": "%1: Unter %2 liegt keine Datei",
+  "%Ln books of the Calibre library were not imported": {
+    "one": "%Ln Buch der Calibre-Bibliothek wurde nicht importiert",
+    "other": "%Ln Bücher der Calibre-Bibliothek wurden nicht importiert"
+  },
+  "%Ln more are named in the log (omabook logs)": {
+    "one": "%Ln weiteres steht im Protokoll (omabook logs)",
+    "other": "%Ln weitere stehen im Protokoll (omabook logs)"
+  },
+  "Not all of the Calibre library can be read: %1": "Die Calibre-Bibliothek kann nicht vollständig gelesen werden: %1",
+  "The files of the Calibre library can't be read: %1": "Die Dateien der Calibre-Bibliothek können nicht gelesen werden: %1"
 }

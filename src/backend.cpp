@@ -353,10 +353,6 @@ void Backend::setStatus(const QString &status) {
 }
 
 void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) {
-    // A file that joined a book here without one was added, to the window.
-    const int added = summary.added + summary.joined, duplicates = summary.duplicates;
-    const QStringList &problems = summary.problems;
-    const qint64 lastId = summary.lastId;
     --m_jobs;
     setStatus({});
     QList<qint64> came;
@@ -365,29 +361,9 @@ void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) 
             came << item.id;
     putInShownCollection(came);
     reload();
-    QStringList lines;
-    if (added > 0)
-        lines << tr("%Ln books added", "", added);
-    if (duplicates > 0)
-        lines << tr("%Ln were already in the library", "", duplicates);
-    // What Calibre knew of the reading, which came along.
-    if (summary.read > 0)
-        lines << tr("%Ln are read, by Calibre's account", "", summary.read);
-    if (summary.reading > 0)
-        lines << tr("%Ln are being read", "", summary.reading);
-    if (summary.updated > 0)
-        lines << tr("%Ln already here were brought up to date", "", summary.updated);
-    if (calibreLeftOut)
-        lines << tr("The Calibre plugin is switched off, so the Calibre library was added as a plain folder of books.");
-    if (added == 0 && duplicates == 0 && problems.isEmpty())
-        lines << tr("No books were found there.");
-    // The first few reasons say enough; a folder of odd files could give hundreds.
-    lines << problems.mid(0, 3);
-    if (problems.size() > 3)
-        lines << tr("%Ln more could not be added", "", int(problems.size()) - 3);
-    say(lines.join("\n"));
-    if (lastId && added + duplicates == 1)
-        emit bookAdded(lastId);
+    say(importLines(summary, calibreLeftOut).join("\n"));
+    if (summary.lastId && summary.added + summary.joined + summary.duplicates == 1)
+        emit bookAdded(summary.lastId);
     // A Calibre library that came in needs no offering any more.
     if (!summary.calibreLibraries.isEmpty()) {
         for (const QString &library : summary.calibreLibraries)

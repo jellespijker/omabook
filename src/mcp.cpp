@@ -435,7 +435,8 @@ QList<Tool> coreTools() {
     tools << Tool{"book_add", "Add book files",
                   "Copies book files into the library; the files named are left as they are. A folder is searched "
                   "for books, and a Calibre library's folder is taken with Calibre's own details, covers and every "
-                  "format. A file already in the library is reported as a duplicate, with its id.",
+                  "format. A file already in the library is reported as a duplicate, with its id; what of a Calibre "
+                  "library didn't come across is among the problems.",
                   schema({{"paths", list("Book files, folders, or a Calibre library.", string("One absolute path."))}}, {"paths"}),
                   Changes, [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments, false);
@@ -445,12 +446,9 @@ QList<Tool> coreTools() {
                       if (paths.isEmpty())
                           return Result::fail("Name at least one file or folder in \"paths\".");
                       const ImportSummary summary = importBooks(*at.library, paths);
-                      if (summary.items.isEmpty() && summary.problems.isEmpty())
+                      if (summary.foundNothing())
                           return Result::fail("No books were found there.");
-                      QJsonArray items;
-                      for (const ImportSummary::Item &item : summary.items)
-                          items << QJsonObject{{"file", item.file}, {"id", item.id}, {"duplicate", item.duplicate}, {"error", item.error}};
-                      return Result::ok({{"added", items}, {"problems", QJsonArray::fromStringList(summary.problems)}});
+                      return Result::ok({{"added", summary.itemsJson()}, {"problems", QJsonArray::fromStringList(summary.reasons())}});
                   }};
 
     tools << Tool{"book_add_entry", "Add a paper or wishlist book",

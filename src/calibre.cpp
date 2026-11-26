@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 
+#include "failure.h"
 #include "htmlclean.h"
 
 using namespace Qt::StringLiterals;
@@ -306,8 +307,12 @@ Calibre::Books Calibre::read(const QString &folder) {
     const auto comments = linked(calibre, "SELECT book, text FROM comments");
     // "EPUB" and the file's name without its extension.
     QHash<qint64, QList<QPair<QString, QString>>> files;
-    for (QSqlQuery query = calibre.query("SELECT book, format, name FROM data ORDER BY id"); query.next();)
-        files[query.value(0).toLongLong()].append({query.value(1).toString(), query.value(2).toString()});
+    QSqlQuery data = calibre.query("SELECT book, format, name FROM data ORDER BY id");
+    while (data.next())
+        files[data.value(0).toLongLong()].append({data.value(1).toString(), data.value(2).toString()});
+    // Without its list of files every book would seem to have none.
+    if (data.lastError().isValid())
+        return {.books = {}, .error = Failure(Failure::Code::CalibreFilesUnread, {data.lastError().text()}).text()};
 
     QSqlQuery books = calibre.query("SELECT id, title, series_index, pubdate, path, has_cover FROM books ORDER BY id");
     if (books.lastError().isValid())
@@ -336,14 +341,14 @@ Calibre::Books Calibre::read(const QString &folder) {
         const QString published = books.value(3).toString().left(10);
         if (!published.startsWith("0101"))
             book.meta.published = published;
-        for (const auto &[format, name] : files.value(id)) {
-            const QString file = path + "/" + name + "." + format.toLower();
-            if (QFileInfo(file).isFile())
-                book.files << file;
-        }
-        if (books.value(5).toBool() && QFileInfo(path + "/cover.jpg").isFile())
+        for (const auto &[format, name] : files.value(id))
+            book.files << path + "/" + name + "." + format.toLower();
+        if (books.value(5).toBool())
             book.cover = path + "/cover.jpg";
         result.books << book;
     }
+    // A damaged database can stop partway; what was read still comes across.
+    if (books.lastError().isValid())
+        result.error = Failure(Failure::Code::CalibreReadPartly, {books.lastError().text()}).text();
     return result;
 }

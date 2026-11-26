@@ -1,14 +1,9 @@
 #include "importer.h"
 
-#include <QDateTime>
 #include <QDirIterator>
 #include <QFileInfo>
 #include <QHash>
 #include <QImageReader>
-#include <QJsonArray>
-#include <QJsonDocument>
-#include <QJsonObject>
-#include <QSaveFile>
 #include <QSet>
 #include <QTemporaryDir>
 #include <algorithm>
@@ -18,6 +13,7 @@
 #include "bookarchive.h"
 
 #include "calibre.h"
+#include "calibreimport.h"
 #include "curation.h"
 #include "formatprovider.h"
 #include "formats.h"
@@ -39,125 +35,6 @@ struct Incoming {
     // A book that is one file, of which nothing more is known.
     static Incoming file(const QString &path) { return {.files = {path}, .meta = std::nullopt, .cover = {}, .calibre = std::nullopt}; }
 };
-
-// What Calibre said of each book the last time it was imported, kept beside
-// the library so the next import can tell a value Calibre changed from one
-// the user changed here.
-class CalibreMemory {
-public:
-    explicit CalibreMemory(const QString &libraryRoot) : m_file(libraryRoot + "/calibre-import.json") {
-        QFile file(m_file);
-        if (file.open(QIODevice::ReadOnly))
-            m_books = QJsonDocument::fromJson(file.readAll()).object();
-    }
-
-    [[nodiscard]] QJsonObject of(qint64 id) const { return m_books.value(QString::number(id)).toObject(); }
-    void remember(qint64 id, const QJsonObject &said) {
-        if (of(id) == said)
-            return;
-        m_books.insert(QString::number(id), said);
-        m_changed = true;
-    }
-    void save() {
-        if (!m_changed)
-            return;
-        QSaveFile file(m_file);
-        file.setDirectWriteFallback(false);
-        if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(m_books).toJson(QJsonDocument::Compact)) > 0)
-            file.commit();
-        m_changed = false;
-    }
-
-private:
-    QString m_file;
-    QJsonObject m_books;
-    bool m_changed = false;
-};
-
-// Brings what Calibre says of a book's reading into the library. A value is
-// replaced only while it still is what the last import put there (or nothing,
-// for a book never imported from Calibre), so a shelf or a star changed in
-// Omabook since stays as the user left it. True when something changed.
-// A highlight or a note of Calibre's viewer on the passage of its words in
-// its chapter, found by them when the book is first opened or its
-// annotations are listed (ADR 0004); a bookmark is the start of its chapter.
-[[nodiscard]] Annotation annotationOf(const Calibre::Note &note) {
-    // When it was made in Calibre, not when it came across.
-    Annotation annotation{.id = 0,
-                          .kind = note.kind,
-                          .place = {.section = note.section, .fraction = 0},
-                          .text = {},
-                          .note = note.note,
-                          .created = note.created > 0 ? note.created : QDateTime::currentSecsSinceEpoch()};
-    if (note.kind == "bookmark") {
-        annotation.text = note.text;
-        return annotation;
-    }
-    annotation.setPassage({.from = annotation.place, .to = annotation.place, .quote = note.text.trimmed(), .before = {}, .after = {}});
-    annotation.color = note.color;
-    // A margin note is listed by the start of its words, as one made in the reader is.
-    if (note.kind == "margin-note")
-        annotation.text = note.text.simplified().left(200);
-    return annotation;
-}
-
-[[nodiscard]] bool takeReading(Library &library, qint64 id, const Calibre::Book &calibre, CalibreMemory &memory) {
-    const auto now = library.book(id);
-    if (!now)
-        return false;
-    const QJsonObject before = memory.of(id);
-    const Calibre::Reading &said = calibre.reading;
-    bool changed = false;
-
-    const QString shelf = now->shelf == before.value("shelf").toString() ? said.shelf : now->shelf;
-    const int rating = now->rating == before.value("rating").toInt() ? said.rating : now->rating;
-    const QString finished = now->finished == before.value("finished").toString() ? said.finished : now->finished;
-    if (shelf != now->shelf || rating != now->rating || finished != now->finished)
-        changed = library.setReading(id, shelf, rating, finished) || changed;
-
-    QMap<QString, QString> identifiers = calibre.identifiers;
-    identifiers.insert("calibre", calibre.uuid.isEmpty() ? QString::number(calibre.id) : calibre.uuid);
-    const QJsonObject identifiersBefore = before.value("identifiers").toObject();
-    QJsonObject identifiersSaid;
-    for (const auto &[scheme, value] : identifiers.asKeyValueRange()) {
-        identifiersSaid.insert(scheme, value);
-        const QString here = now->identifiers.value(scheme).toString();
-        if (here == identifiersBefore.value(scheme).toString() && here != value)
-            changed = library.setIdentifier(id, scheme, value) || changed;
-    }
-
-    // The place it was read to. Calibre's viewer stamps its places, and the
-    // later reading wins, as it does between two computers. A percentage kept
-    // by hand in a column has no time, so it only stands in while the book
-    // hasn't been read here since.
-    const Progress here = library.progress(id);
-    qint64 placedAt = qint64(before.value("progress_at").toDouble());
-    const bool newer = said.readAt > here.updated;
-    const bool byHand = said.readAt == 0 && said.percent > 0 && said.percent != before.value("percent").toDouble()
-                        && (here.updated == 0 || here.updated == placedAt);
-    if (newer || byHand) {
-        library.setProgress(id, {.place = {.section = said.section, .fraction = 0}, .percent = said.percent, .updated = said.readAt});
-        placedAt = library.progress(id).updated;
-        changed = true;
-    }
-
-    // Each highlight, note and bookmark comes across once, so one removed
-    // here doesn't return with the next import.
-    QJsonArray notes = before.value("notes").toArray();
-    for (const Calibre::Note &note : said.notes) {
-        if (notes.contains(note.id))
-            continue;
-        if (library.storeAnnotation(id, annotationOf(note)).value_or(0) > 0) {
-            notes << note.id;
-            changed = true;
-        }
-    }
-
-    memory.remember(id, QJsonObject{{"shelf", said.shelf}, {"rating", said.rating}, {"finished", said.finished},
-                                     {"identifiers", identifiersSaid}, {"percent", said.percent},
-                                     {"progress_at", double(placedAt)}, {"notes", notes}});
-    return changed;
-}
 
 // An ISBN as it is compared: its digits (and a closing X), whatever the
 // hyphens and spaces.
@@ -334,6 +211,77 @@ void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QLi
     }
 }
 
+// A book of a Calibre library comes in with the files of it that can be
+// taken. What can't is named, and so is a book left with none of them.
+void take(const Calibre::Book &book, QList<Incoming> &incoming, ImportSummary &summary) {
+    const CalibreImport::Sifted sifted = CalibreImport::sift(book);
+    if (sifted.files.isEmpty()) {
+        const auto why = book.files.isEmpty() ? Failure::Code::CalibreBookEmpty : Failure::Code::CalibreBookUnusable;
+        summary.leftOut.insert(summary.skipped++, Failure(why, {CalibreImport::nameOf(book)}));
+    } else {
+        incoming.append({.files = sifted.files, .meta = book.meta, .cover = book.cover, .calibre = book});
+    }
+    summary.leftOut << sifted.leftOut;
+}
+
+// Why a book didn't come in. One of a Calibre library is named, and counted
+// among those that didn't come across.
+void failed(const Incoming &book, const QString &why, ImportSummary &summary) {
+    if (!book.calibre) {
+        summary.problems << why;
+        return;
+    }
+    ++summary.skipped;
+    summary.problems << Failure(Failure::Code::CalibreBookFailed, {CalibreImport::nameOf(*book.calibre), why}).text();
+}
+
+// Copies in the formats a book here lacks. `copied` is the file that has
+// just gone in, when one made the book or joined it.
+void addFormats(Library &library, const Incoming &book, qint64 id, const QString &copied, const QHash<QString, QString> &hashes,
+                ImportSummary &summary) {
+    QStringList have = library.book(id).value_or(Book{}).formats;
+    for (const QString &file : book.files) {
+        const QString format = Formats::extension(file);
+        // A file that is here already, in this book or another, isn't copied
+        // in again.
+        if (file == copied || library.bookWithHash(hashes.contains(file) ? hashes.value(file) : Library::hashFile(file)) != 0)
+            continue;
+        // Nor is one of a format the book has: the file here stays.
+        if (have.contains(format)) {
+            if (book.calibre)
+                summary.leftOut << Failure(Failure::Code::CalibreFileNotCopied, {CalibreImport::nameOf(*book.calibre), file});
+            continue;
+        }
+        if (const auto r = library.addFormat(id, file); r)
+            have << format;
+        else
+            summary.problems << r.error().text();
+    }
+}
+
+// What comes with a book from Calibre besides its files: Calibre's cover,
+// which a new book was to get, and the reading. Calibre can hold the same file
+// under two entries. The first one's reading is taken (`taken`: a book here,
+// the entry it was taken for); the second would only undo it, on every import.
+void takeCalibre(Library &library, const Calibre::Book &calibre, const Library::Added &added, CalibreImport::Memory &memory,
+                 QHash<qint64, QString> &taken, ImportSummary &summary) {
+    const QString name = CalibreImport::nameOf(calibre);
+    if (!calibre.cover.isEmpty() && !added.duplicate && QImageReader(calibre.cover).read().isNull())
+        summary.leftOut << Failure(Failure::Code::CalibreCoverUnread, {name, calibre.cover});
+    if (taken.contains(added.id)) {
+        summary.leftOut << Failure(Failure::Code::CalibreSameBook, {name, taken.value(added.id)});
+        return;
+    }
+    taken.insert(added.id, name);
+    if (CalibreImport::takeReading(library, added.id, calibre, memory) && added.duplicate)
+        ++summary.updated;
+    const QString status = library.book(added.id).value_or(Book{}).status();
+    if (status == "read")
+        ++summary.read;
+    else if (status == "reading")
+        ++summary.reading;
+}
+
 [[nodiscard]] QList<Incoming> collect(const QStringList &paths, const QTemporaryDir &scratch, const ImportOptions &options,
                                       ImportSummary &summary) {
     QStringList &problems = summary.problems;
@@ -363,11 +311,8 @@ void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QLi
             const Calibre::Books calibre = Calibre::read(path);
             if (!calibre.error.isEmpty())
                 problems << calibre.error;
-            for (const Calibre::Book &book : calibre.books) {
-                const QStringList files = book.files | std::views::filter(Formats::isBook) | std::ranges::to<QStringList>();
-                if (!files.isEmpty())
-                    incoming.append({.files = files, .meta = book.meta, .cover = book.cover, .calibre = book});
-            }
+            for (const Calibre::Book &book : calibre.books)
+                take(book, incoming, summary);
         } else {
             walk(path, scratch, unpacked, incoming, problems, seen);
         }
@@ -382,11 +327,9 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
     ImportSummary summary;
     const QTemporaryDir scratch;
     const QList<Incoming> incoming = collect(paths, scratch, options, summary);
-    CalibreMemory memory(library.root());
+    CalibreImport::Memory memory(library.root());
     Fileless fileless(library);
-    // Calibre can hold the same file under two entries. The first one's
-    // reading is taken; the second would only undo it, on every import.
-    QSet<qint64> taken;
+    QHash<qint64, QString> taken; // see takeCalibre
     int done = 0;
     for (const Incoming &book : incoming) {
         std::optional<BookMeta> meta = book.meta;
@@ -425,38 +368,18 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
         }
         summary.items.append({.file = first, .id = added.id, .duplicate = added.duplicate, .joined = joined, .error = added.error});
         if (!added.error.isEmpty()) {
-            summary.problems << added.error;
+            failed(book, added.error, summary);
         } else {
             added.duplicate ? ++summary.duplicates : joined ? ++summary.joined : ++summary.added;
             summary.lastId = added.id;
-            QStringList have = library.book(added.id)->formats;
-            for (const QString &file : book.files) {
-                const QString format = Formats::extension(file);
-                if ((file == first && here == 0) || have.contains(format))
-                    continue;
-                // A file that is here already, in this book or another, isn't
-                // copied in again.
-                if (library.bookWithHash(hashes.contains(file) ? hashes.value(file) : Library::hashFile(file)) != 0)
-                    continue;
-                if (const auto taken = library.addFormat(added.id, file); taken)
-                    have << format;
-                else
-                    summary.problems << taken.error().text();
-            }
-            if (book.calibre && !taken.contains(added.id)) {
-                taken.insert(added.id);
-                if (takeReading(library, added.id, *book.calibre, memory) && added.duplicate)
-                    ++summary.updated;
-                const QString status = library.book(added.id)->status();
-                if (status == "read")
-                    ++summary.read;
-                else if (status == "reading")
-                    ++summary.reading;
-            }
+            addFormats(library, book, added.id, here == 0 ? first : QString(), hashes, summary);
+            if (const auto &calibre = book.calibre)
+                takeCalibre(library, *calibre, added, memory, taken, summary);
         }
         if (progress)
             progress(++done, incoming.size());
     }
     memory.save();
+    summary.keepInLog();
     return summary;
 }

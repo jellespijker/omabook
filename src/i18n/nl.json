@@ -3013,5 +3013,24 @@
   "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 is niet te vinden. Is de schijf aangesloten, of de share aangekoppeld? Er is niets voor in de plaats gemaakt.",
   "The library isn't there": "De bibliotheek is er niet",
   "The library can't be opened": "De bibliotheek kan niet worden geopend",
-  "No folder was given for the library.": "Er is geen map opgegeven voor de bibliotheek."
+  "No folder was given for the library.": "Er is geen map opgegeven voor de bibliotheek.",
+  "%1 has a file in common with %2, so they are one book here, with the reading of %2.": "%1 heeft een bestand gemeen met %2, dus hier zijn ze één boek, met de leesgegevens van %2.",
+  "%1 was not imported: %2": "%1 is niet geïmporteerd: %2",
+  "%1 was not imported: Calibre has no file for it.": "%1 is niet geïmporteerd: Calibre heeft er geen bestand van.",
+  "%1 was not imported: none of its files can be taken.": "%1 is niet geïmporteerd: geen van de bestanden kan worden overgenomen.",
+  "%1: %2 is in a format Omabook doesn't take.": "%1: %2 is in een formaat dat Omabook niet aanneemt.",
+  "%1: %2 was not copied, as the book here has another file of that format.": "%1: %2 is niet gekopieerd, omdat het boek hier al een ander bestand van dat formaat heeft.",
+  "%1: its cover can't be read from %2": "%1: de omslag kan niet worden gelezen uit %2",
+  "%1: the file %2 can't be read.": "%1: het bestand %2 kan niet worden gelezen.",
+  "%1: there is no file at %2": "%1: er is geen bestand op %2",
+  "%Ln books of the Calibre library were not imported": {
+    "one": "%Ln boek uit de Calibre-bibliotheek is niet geïmporteerd",
+    "other": "%Ln boeken uit de Calibre-bibliotheek zijn niet geïmporteerd"
+  },
+  "%Ln more are named in the log (omabook logs)": {
+    "one": "Nog %Ln staat in het logboek (omabook logs)",
+    "other": "Nog %Ln staan in het logboek (omabook logs)"
+  },
+  "Not all of the Calibre library can be read: %1": "Niet de hele Calibre-bibliotheek kan worden gelezen: %1",
+  "The files of the Calibre library can't be read: %1": "De bestanden van de Calibre-bibliotheek kunnen niet worden gelezen: %1"
 }

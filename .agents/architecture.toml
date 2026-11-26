@@ -62,8 +62,8 @@ modules = [
 summary = "What talks to the outside or to a model: AI, metadata sources, reading sites, Calibre, plugins, the help's content."
 uses = ["library", "formats", "foundation"]
 modules = [
-  "ai", "aicall", "aichoice", "aiendpoint", "aisearch", "blurb", "calibre", "calibreplugin", "curation", "folio", "githublink", "goodreads",
-  "graphbuilder", "graphlinks", "graphpassages", "graphtimes", "hardcover", "helptopics", "importer", "interfacechange", "manual",
+  "ai", "aicall", "aichoice", "aiendpoint", "aisearch", "blurb", "calibre", "calibreimport", "calibreplugin", "curation", "folio", "githublink", "goodreads",
+  "graphbuilder", "graphlinks", "graphpassages", "graphtimes", "hardcover", "helptopics", "importer", "importsummary", "interfacechange", "manual",
   "metadatasource", "omarchylocal", "openaiprovider", "openlibrarylog", "panelkeys", "pluginfinder", "pluginformats", "plugins", "pluginsources", "prompts", "remote", "spacefolder",
   "pluginclaims", "readingsite", "scriptmetadatasource", "scriptplugin", "scriptchangelog", "scriptplugins",
   "scriptpluginviews", "scriptpluginlog", "scriptsharing", "scriptgraph", "scriptwatchdog", "scriptwindow", "sitedesk",
@@ -113,7 +113,7 @@ modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcomma
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."
 uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
-  "assistant", "backend", "backendcollections", "backendlibrary", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
+  "assistant", "backend", "backendimport", "backendcollections", "backendlibrary", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologyframe", "chronologymodel", "chronologyproposals", "graphtenants", "graphtypes",
   "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",

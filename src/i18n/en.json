@@ -59,6 +59,7 @@
   "%1 gave no details for this book.": "%1 gave no details for this book.",
   "%1 goes in, as you chose, though %2 keeps its books private.": "%1 goes in, as you chose, though %2 keeps its books private.",
   "%1 h %2 min": "%1 h %2 min",
+  "%1 has a file in common with %2, so they are one book here, with the reading of %2.": "%1 has a file in common with %2, so they are one book here, with the reading of %2.",
   "%1 has an update": "%1 has an update",
   "%1 has an update that asks for %2: review": "%1 has an update that asks for %2: review",
   "%1 has an update that asks for more than the version installed. Review it under Plugins.": "%1 has an update that asks for more than the version installed. Review it under Plugins.",
@@ -162,6 +163,9 @@
   "%1 to %2": "%1 to %2",
   "%1 to download": "%1 to download",
   "%1 was last brought in %2. Bring it in again?": "%1 was last brought in %2. Bring it in again?",
+  "%1 was not imported: %2": "%1 was not imported: %2",
+  "%1 was not imported: Calibre has no file for it.": "%1 was not imported: Calibre has no file for it.",
+  "%1 was not imported: none of its files can be taken.": "%1 was not imported: none of its files can be taken.",
   "%1 was updated from %2 to %3.": "%1 was updated from %2 to %3.",
   "%1 would branch off itself: %2 is %1 or one of its branches.": "%1 would branch off itself: %2 is %1 or one of its branches.",
   "%1 – %2": "%1 – %2",
@@ -191,13 +195,18 @@
   "%1. Its last copy, at %2, didn't go through: %3": "%1. Its last copy, at %2, didn't go through: %3",
   "%1. Newest: %2, copied %3.": "%1. Newest: %2, copied %3.",
   "%1: %2": "%1: %2",
+  "%1: %2 is in a format Omabook doesn't take.": "%1: %2 is in a format Omabook doesn't take.",
+  "%1: %2 was not copied, as the book here has another file of that format.": "%1: %2 was not copied, as the book here has another file of that format.",
   "%1: %2 → %3": "%1: %2 → %3",
   "%1: %Ln books": {
     "one": "%1: %Ln book",
     "other": "%1: %Ln books"
   },
   "%1: failed": "%1: failed",
+  "%1: its cover can't be read from %2": "%1: its cover can't be read from %2",
   "%1: nothing": "%1: nothing",
+  "%1: the file %2 can't be read.": "%1: the file %2 can't be read.",
+  "%1: there is no file at %2": "%1: there is no file at %2",
   "%1×": "%1×",
   "%3 is using port %2 on %1, so Omabook can't serve there. Choose another port, or stop %3.": "%3 is using port %2 on %1, so Omabook can't serve there. Choose another port, or stop %3.",
   "%Ln already here were brought up to date": {
@@ -231,6 +240,10 @@
   "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.": {
     "one": "%Ln book has other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.",
     "other": "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them."
+  },
+  "%Ln books of the Calibre library were not imported": {
+    "one": "%Ln book of the Calibre library was not imported",
+    "other": "%Ln books of the Calibre library were not imported"
   },
   "%Ln books read without the day they were finished.": {
     "one": "%Ln book read without the day it was finished.",
@@ -363,6 +376,10 @@
   "%Ln months ago": {
     "one": "%Ln month ago",
     "other": "%Ln months ago"
+  },
+  "%Ln more are named in the log (omabook logs)": {
+    "one": "%Ln more is named in the log (omabook logs)",
+    "other": "%Ln more are named in the log (omabook logs)"
   },
   "%Ln more could not be added": {
     "one": "%Ln more could not be added",
@@ -1572,6 +1589,7 @@
   "Not This One": "Not This One",
   "Not a PDF, or one too damaged to read.": "Not a PDF, or one too damaged to read.",
   "Not a branch": "Not a branch",
+  "Not all of the Calibre library can be read: %1": "Not all of the Calibre library can be read: %1",
   "Not an EPUB: it has no package document.": "Not an EPUB: it has no package document.",
   "Not an EPUB: the file is not a readable zip archive.": "Not an EPUB: the file is not a readable zip archive.",
   "Not asked yet.": "Not asked yet.",
@@ -2348,6 +2366,7 @@
   "The files go to everyone you give the saved file to, and everyone they pass it to: they are copied into a folder beside it.": "The files go to everyone you give the saved file to, and everyone they pass it to: they are copied into a folder beside it.",
   "The files go to everyone you give the saved file to, and everyone they pass it to: they are copied into a folder beside it. The link carries no files.": "The files go to everyone you give the saved file to, and everyone they pass it to: they are copied into a folder beside it. The link carries no files.",
   "The files it takes": "The files it takes",
+  "The files of the Calibre library can't be read: %1": "The files of the Calibre library can't be read: %1",
   "The first revealed is followed.": "The first revealed is followed.",
   "The first sync between two computers pairs them: from then on both sign what they write as you, and a change that isn't as it was signed is refused. `omabook identity` shows your id and the computers paired.": "The first sync between two computers pairs them: from then on both sign what they write as you, and a change that isn't as it was signed is refused. `omabook identity` shows your id and the computers paired.",
   "The folder for %1 could not be made.": "The folder for %1 could not be made.",

@@ -240,6 +240,8 @@ public:
     Q_INVOKABLE void sync();
     // What a sync did, a line each, as the window says it: with a hub too (#189).
     [[nodiscard]] static QStringList syncLines(const SyncSummary &summary);
+    // What the window says when books have been added (backendimport.cpp).
+    [[nodiscard]] static QStringList importLines(const ImportSummary &summary, bool calibreLeftOut);
     Q_INVOKABLE void chooseLibrary();
     Q_INVOKABLE void useLibrary(const QString &path);
     // For a library that isn't there: look again, or start a new one in its folder.

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QJsonArray>
+#include <QJsonObject>
 #include <QList>
 #include <QString>
 #include <QStringList>
@@ -18,6 +20,7 @@ struct ImportSummary {
         // The file joined a book that was here without one (see importBooks).
         bool joined = false;
         QString error;
+        [[nodiscard]] QJsonObject toJson() const;
     };
     QList<Item> items;
     int added = 0;
@@ -32,6 +35,23 @@ struct ImportSummary {
     int read = 0;
     int reading = 0;
     int updated = 0;
+    // What a Calibre library holds that didn't come across, each with why.
+    // `skipped` of its books didn't at all; those left out for want of a file
+    // are named first, those that failed are among the problems.
+    QList<Failure> leftOut;
+    int skipped = 0;
+
+    [[nodiscard]] bool foundNothing() const;
+    // Something went wrong, or a book stayed behind.
+    [[nodiscard]] bool failed() const;
+    // The problems and what was left out, as sentences to show.
+    [[nodiscard]] QStringList reasons() const;
+    [[nodiscard]] QJsonArray itemsJson() const;
+    // What importing Calibre libraries did, as JSON and as one line in English.
+    [[nodiscard]] QJsonObject calibreJson() const;
+    [[nodiscard]] QString calibreLine() const;
+    // The log names all of it, however little of it is said at once.
+    void keepInLog() const;
 };
 
 struct ImportOptions {
@@ -41,6 +61,9 @@ struct ImportOptions {
     bool calibre = true;
 };
 
+// Nothing of a Calibre library is passed over in silence: a book, a format of
+// one or its cover that doesn't come across is named, in the summary and the log.
+//
 // `progress` is told how many of how many books are in, from the calling thread.
 //
 // A book one of whose files is in the library already is that book: it is

@@ -69,22 +69,25 @@ void rotate(const QString &file) {
     QFile::rename(file, file + ".1");
 }
 
+void append(Sink &to, QtMsgType type, const char *category, const QString &message) {
+    // One line each: what is written can't break the shape of the file.
+    QString text = message;
+    text.replace('\n', " | ").replace('\r', ' ');
+    const QString line = QString("%1 %2 %3 %4 %5\n")
+                             .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs), levelName(type), to.program,
+                                  partOf(category), text);
+    const std::scoped_lock locked(to.lock);
+    if (QFileInfo(to.file).size() > maximumSize)
+        rotate(to.file);
+    QFile file(to.file);
+    if (file.open(QIODevice::Append | QIODevice::Text))
+        file.write(line.toUtf8());
+}
+
 void handle(QtMsgType type, const QMessageLogContext &context, const QString &message) {
     Sink &to = sink();
-    if (type != QtDebugMsg || to.debug) {
-        // One line each: what is written can't break the shape of the file.
-        QString text = message;
-        text.replace('\n', " | ").replace('\r', ' ');
-        const QString line = QString("%1 %2 %3 %4 %5\n")
-                                 .arg(QDateTime::currentDateTime().toString(Qt::ISODateWithMs), levelName(type), to.program,
-                                      partOf(context.category), text);
-        const std::scoped_lock locked(to.lock);
-        if (QFileInfo(to.file).size() > maximumSize)
-            rotate(to.file);
-        QFile file(to.file);
-        if (file.open(QIODevice::Append | QIODevice::Text))
-            file.write(line.toUtf8());
-    }
+    if (type != QtDebugMsg || to.debug)
+        append(to, type, context.category, message);
     if (to.before)
         to.before(type, context, message);
 }
@@ -119,6 +122,11 @@ void Log::install(const QString &program, const QString &folder) {
         to.before = current;
     if (to.debug)
         QLoggingCategory::setFilterRules("omabook.*.debug=true");
+}
+
+void Log::keep(const QLoggingCategory &category, const QString &message) {
+    if (Sink &to = sink(); !to.file.isEmpty())
+        append(to, QtWarningMsg, category.categoryName(), message);
 }
 
 QJsonObject Log::Entry::toJson() const {

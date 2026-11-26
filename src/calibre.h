@@ -45,8 +45,8 @@ struct Reading {
 
 struct Book {
     BookMeta meta;        // without the cover picture
-    QStringList files;    // every format Calibre holds, as absolute paths
-    QString cover;        // the cover file, or empty
+    QStringList files;    // every format Calibre lists, as absolute paths, there or not
+    QString cover;        // the cover file Calibre says there is, or empty
     qint64 id = 0;        // Calibre's number for the book
     QString uuid;         // Calibre's lasting name for it
     // What other sites call it: {"goodreads": "4671", "isbn": "978..."}.
@@ -61,7 +61,7 @@ int bookCount(const QString &folder);
 
 struct Books {
     QList<Book> books;
-    QString error;        // English; empty when the library was read
+    QString error;        // why not; empty when the whole library was read
 };
 Books read(const QString &folder);
 
