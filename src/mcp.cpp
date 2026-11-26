@@ -1096,7 +1096,7 @@ QJsonObject callTool(const Tool &tool, const QJsonObject &arguments) {
         result = Result::fail(problem);
     } else {
         try {
-            result = tool.handler(arguments);
+            result = Mcp::call(tool, arguments);
         } catch (const std::exception &error) {
             result = Result::fail(QString("%1 failed: %2").arg(tool.name, error.what()));
         }

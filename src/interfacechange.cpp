@@ -28,6 +28,13 @@ bool write(const QString &path, const QByteArray &contents) {
 
 QString undoFile(const Customization &custom) { return custom.folder() + "/.before-last-change.json"; }
 
+// Why none of a change can be made; empty when it may be tried.
+QString refusal(const Prompts::InterfaceChange &change, const Settings &settings) {
+    if (!change.valid)
+        return "The answer wasn't a change Omabook can read.";
+    return change.settings.isEmpty() ? QString() : settings.problem();
+}
+
 } // namespace
 
 Prompts::InterfaceState InterfaceChanges::state(const Customization &custom, const Settings &settings, const QVariantMap &colors,
@@ -63,8 +70,8 @@ Prompts::InterfaceState InterfaceChanges::state(const Customization &custom, con
 }
 
 QString InterfaceChanges::apply(Customization &custom, Settings &settings, const Prompts::InterfaceChange &change, Library *library) {
-    if (!change.valid)
-        return "The answer wasn't a change Omabook can read.";
+    if (const QString why = refusal(change, settings); !why.isEmpty())
+        return why;
     if (!QDir().mkpath(custom.folder()))
         return "The folder " + custom.folder() + " can't be written.";
     const QString keysFile = custom.folder() + "/keys.json", styleFile = custom.folder() + "/style.json";

@@ -3117,5 +3117,11 @@
   "%1 can't be moved to the trash, so it was not replaced.": "Impossible de mettre %1 à la corbeille : il n’a pas été remplacé.",
   "%1 is empty, so it is no file for a book.": "%1 est vide : ce n’est pas un fichier pour un livre.",
   "Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an agent): the one there goes to the trash.": "Le livre %1 a déjà un autre fichier %2, qui est resté tel quel. Pour le remplacer, ajoutez le fichier avec --replace (\"replace\": true pour un agent) : celui qui s’y trouve va à la corbeille.",
-  "The library can't be written.": "Impossible d’écrire dans la bibliothèque."
+  "The library can't be written.": "Impossible d’écrire dans la bibliothèque.",
+  "%1 can't be read: %2. It is left as it is, and nothing is written to it.": "Impossible de lire %1 : %2. Le fichier reste tel quel et rien n'y est écrit.",
+  "%1 can't be read: it isn't a JSON object. It is left as it is, and nothing is written to it.": "Impossible de lire %1 : ce n'est pas un objet JSON. Le fichier reste tel quel et rien n'y est écrit.",
+  "%1 can't be read: line %2, %3. It is left as it is, and nothing is written to it.": "Impossible de lire %1 : ligne %2, %3. Le fichier reste tel quel et rien n'y est écrit.",
+  "Until it is fixed, Omabook keeps the settings it had and saves no changes to them.": "Tant qu'il n'est pas corrigé, Omabook garde les réglages qu'il avait et n'enregistre aucune modification.",
+  "Until it is fixed, Omabook uses its defaults, with AI off, and saves no settings.": "Tant qu'il n'est pas corrigé, Omabook utilise ses réglages par défaut, IA désactivée, et n'enregistre aucun réglage.",
+  "The change was not saved.": "La modification n'a pas été enregistrée."
 }

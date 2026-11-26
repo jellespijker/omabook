@@ -309,7 +309,8 @@ private:
     // A path of the script's as a real one inside the plugin's folder (its
     // data folder, to write), or empty when it leads anywhere else.
     QString inside(const QString &path, bool writing) const;
-    QJsonObject kept() const;
+    // Its settings.json; why, when that file can't be read.
+    [[nodiscard]] std::expected<QJsonObject, Failure> kept() const;
 
     ScriptManifest m_manifest;
     ScriptServices m_services;

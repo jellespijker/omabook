@@ -408,6 +408,10 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::StatusUnknown, tr("A status is one of to-read, reading, read or none.")},
     {Failure::Code::DetailsAtNotATime, tr("--details-at is a time in seconds since 1970, such as 1767225600.")},
     {Failure::Code::IdentifierUnformed, tr("An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: %1")},
+    {Failure::Code::SettingsFileMistaken, tr("%1 can't be read: line %2, %3. It is left as it is, and nothing is written to it.")},
+    {Failure::Code::SettingsFileNotObject,
+     tr("%1 can't be read: it isn't a JSON object. It is left as it is, and nothing is written to it.")},
+    {Failure::Code::SettingsFileUnopened, tr("%1 can't be read: %2. It is left as it is, and nothing is written to it.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

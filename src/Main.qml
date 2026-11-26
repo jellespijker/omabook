@@ -378,6 +378,13 @@ ApplicationWindow {
             onDropped: (drop) => { if (drop.hasUrls) backend.addUrls(backend.spaces.takeSpaces(drop.urls)) }
         }
 
+        // config.json that can't be read, said at the top (SettingsProblem.qml).
+        SettingsProblem {
+            anchors.horizontalCenter: parent.horizontalCenter
+            anchors.top: parent.top
+            anchors.topMargin: 12
+        }
+
         // What just happened, said once at the bottom (Toast.qml).
         Toast {
             id: toast

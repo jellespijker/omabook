@@ -3117,5 +3117,11 @@
   "%1 can't be moved to the trash, so it was not replaced.": "%1 no se puede mover a la papelera, así que no se reemplazó.",
   "%1 is empty, so it is no file for a book.": "%1 está vacío, así que no sirve como archivo de un libro.",
   "Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an agent): the one there goes to the trash.": "El libro %1 ya tiene otro archivo %2 y se dejó como estaba. Para reemplazarlo, agrega el archivo con --replace (\"replace\": true para un agente): el que está se va a la papelera.",
-  "The library can't be written.": "No se puede escribir en la biblioteca."
+  "The library can't be written.": "No se puede escribir en la biblioteca.",
+  "%1 can't be read: %2. It is left as it is, and nothing is written to it.": "No se puede leer %1: %2. El archivo se deja como está y no se escribe nada en él.",
+  "%1 can't be read: it isn't a JSON object. It is left as it is, and nothing is written to it.": "No se puede leer %1: no es un objeto JSON. El archivo se deja como está y no se escribe nada en él.",
+  "%1 can't be read: line %2, %3. It is left as it is, and nothing is written to it.": "No se puede leer %1: línea %2, %3. El archivo se deja como está y no se escribe nada en él.",
+  "Until it is fixed, Omabook keeps the settings it had and saves no changes to them.": "Hasta que se corrija, Omabook conserva los ajustes que tenía y no guarda cambios en ellos.",
+  "Until it is fixed, Omabook uses its defaults, with AI off, and saves no settings.": "Hasta que se corrija, Omabook usa sus valores predeterminados, con la IA desactivada, y no guarda ningún ajuste.",
+  "The change was not saved.": "El cambio no se guardó."
 }

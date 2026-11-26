@@ -2,11 +2,8 @@
 
 #include <QDateTime>
 #include <QDir>
-#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
-#include <QJsonDocument>
-#include <QSaveFile>
 #include <QStandardPaths>
 #include <array>
 #include <utility>
@@ -39,30 +36,6 @@ Settings::Settings(const QString &file, QObject *parent)
 
 QString Settings::defaultFile() {
     return QStandardPaths::writableLocation(QStandardPaths::GenericConfigLocation) + "/omabook/config.json";
-}
-
-void Settings::read() {
-    QFile config(m_file);
-    if (config.open(QIODevice::ReadOnly)) {
-        QJsonParseError error;
-        const QJsonObject read = QJsonDocument::fromJson(config.readAll(), &error).object();
-        // A file caught half-written, or with a typo, changes nothing.
-        const QJsonObject values = error.error == QJsonParseError::NoError ? upgraded(read) : read;
-        if (error.error == QJsonParseError::NoError && values != m_values) {
-            m_values = values;
-            emit changed();
-        }
-    }
-    watch();
-}
-
-// A save replaces the file, which drops it from the watch.
-void Settings::watch() {
-    const QString folder = QFileInfo(m_file).absolutePath();
-    if (QFileInfo::exists(m_file) && !m_watcher.files().contains(m_file))
-        m_watcher.addPath(m_file);
-    if (QFileInfo::exists(folder) && !m_watcher.directories().contains(folder))
-        m_watcher.addPath(folder);
 }
 
 QString Settings::libraryPath() const {
@@ -446,54 +419,4 @@ void Settings::set(const QString &key, const QJsonValue &value) {
     m_values.insert(key, value);
     save();
     emit changed();
-}
-
-// The shape of config.json. It goes up when a key is renamed or restructured;
-// the step that carries an older file forward is added to `upgraded` below,
-// so a setting made in an older Omabook is never silently dropped. Keys that
-// are only added need no step: a missing key reads as its default.
-constexpr int configVersion = 3;
-
-QJsonObject Settings::upgraded(QJsonObject values) {
-    const int from = values.value("config_version").toInt(0);
-    // 2: "justify" (true or false) became "align", which has four choices.
-    if (from < 2 && values.contains("justify")) {
-        if (!values.contains("align"))
-            values.insert("align", values.value("justify").toBool() ? "justify" : "start");
-        values.remove("justify");
-    }
-    // 3: the longest line became a measure in characters ("measure"), from
-    // pixels ("line_width"), and the choice of two pages ("spread": "auto",
-    // "always" or "never") a count of pages ("pages": "auto", 1, 2 or 3).
-    // A width left at the old default is the new default.
-    if (from < 3) {
-        if (values.contains("line_width")) {
-            const int pixels = values.value("line_width").toInt(720);
-            if (!values.contains("measure") && pixels != 720)
-                values.insert("measure", PageLayout::measureFromPixels(pixels, values.value("font_size").toInt(19)));
-            values.remove("line_width");
-        }
-        if (values.contains("spread")) {
-            const QString spread = values.value("spread").toString();
-            if (!values.contains("pages"))
-                values.insert("pages", spread == "always" ? QJsonValue(2) : spread == "never" ? QJsonValue(1) : QJsonValue("auto"));
-            values.remove("spread");
-        }
-    }
-    // A file from a newer Omabook is read as it is: keys this one doesn't
-    // know are kept and written back untouched.
-    if (from < configVersion)
-        values.insert("config_version", configVersion);
-    return values;
-}
-
-void Settings::save() {
-    QDir().mkpath(QFileInfo(m_file).absolutePath());
-    QSaveFile file(m_file);
-    // No rewriting in place: a folder that can't hold the temp file fails the
-    // save instead of risking a truncated config.
-    file.setDirectWriteFallback(false);
-    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(upgraded(m_values)).toJson()) > 0)
-        file.commit();
-    watch();
 }

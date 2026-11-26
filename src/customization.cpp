@@ -396,12 +396,12 @@ here.
 
 Edits apply at once. If a file can't be used, Omabook keeps the last version
 that worked and writes why to `<name>.error` beside it (`keys.error`,
-`style.error`, `ui.error`); the file goes away once the problem is fixed.
+`style.error`, `ui.error`, `config.error`); the file goes away once the problem is fixed.
 Check for it after every edit.
 
 ## config.json: the settings
 
-One flat JSON object, also changed by the Settings dialog. Followed live.
+One flat JSON object, also changed by the Settings dialog. Followed live; a file that can't be read is never written over.
 The reading format keys (`font_size` to `align`) are the defaults: a book
 can have its own, kept in the library (`omabook format <id> --align
 center`, or the reader's "Aa" panel), which win over these.

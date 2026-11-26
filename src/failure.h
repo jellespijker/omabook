@@ -346,6 +346,11 @@ public:
         PluginFileNotEmptiedThere, // {path, plugin, computer}: the same there
         // A library left in its older format without its moment snapshot (#208).
         UpgradeNotSnapshot, // {why the snapshot couldn't be taken}
+        // Settings kept in a file that can't be read, which is left alone (foundation, #222):
+        // {path, line, what is wrong there}, {path}, and {path, the system's reason}.
+        SettingsFileMistaken,
+        SettingsFileNotObject,
+        SettingsFileUnopened,
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

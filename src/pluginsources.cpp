@@ -10,12 +10,12 @@
 #include <QNetworkRequest>
 #include <QPointer>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QTimer>
 #include <QUrl>
 #include <algorithm>
 #include <array>
 
+#include "jsonfile.h"
 #include "mcp.h"
 #include "pluginfinder.h"
 #include "scriptplugins.h"
@@ -197,20 +197,12 @@ PluginSources::~PluginSources() = default;
 
 // --- The registry ---
 
-QJsonObject PluginSources::readAll() const {
-    QFile file(m_folder + "/sources.json");
-    if (!file.open(QIODevice::ReadOnly))
-        return {};
-    return QJsonDocument::fromJson(file.readAll()).object();
-}
+QJsonObject PluginSources::readAll() const { return JsonFile::object(m_folder + "/sources.json").value_or(QJsonObject()); }
 
 bool PluginSources::writeAll(const QJsonObject &all) const {
     QJsonObject whole = all;
     whole.insert("version", 1);
-    QDir().mkpath(m_folder);
-    QSaveFile file(m_folder + "/sources.json");
-    file.setDirectWriteFallback(false);
-    return file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(whole).toJson()) > 0 && file.commit();
+    return JsonFile::write(m_folder + "/sources.json", whole).has_value();
 }
 
 void PluginSources::store(const QString &name, const QJsonObject &entry) const {
@@ -292,7 +284,10 @@ bool PluginSources::anyDue() const {
 }
 
 QJsonObject PluginSources::forget(const QString &name) {
-    QJsonObject all = readAll();
+    const auto kept = JsonFile::object(m_folder + "/sources.json");
+    if (!kept)
+        return problem(kept.error().text());
+    QJsonObject all = *kept;
     QJsonObject sources = all.value("sources").toObject();
     if (!sources.contains(name))
         return problem("No source is remembered for a plugin " + name + ".");
@@ -683,6 +678,11 @@ void PluginSources::fetch(const Entry &entry, const QString &name, const QString
 
 void PluginSources::look(const QString &given, const QString &pin, const QString &givenName, Done done) {
     m_looked.reset();
+    // A source that couldn't be remembered afterwards isn't fetched.
+    if (const auto kept = JsonFile::read(m_folder + "/sources.json"); !kept) {
+        done(problem(kept.error().text()));
+        return;
+    }
     // A plugin of the registry by its name alone: "storyteller".
     QString address = given.trimmed(), name = givenName;
     if (ScriptTools::validName(address)) {

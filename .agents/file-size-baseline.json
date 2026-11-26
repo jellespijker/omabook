@@ -38,7 +38,7 @@
     "src/reader.cpp": 570,
     "src/readingmarks.cpp": 596,
     "src/readingsite.cpp": 817,
-    "src/scriptplugin.cpp": 1250,
+    "src/scriptplugin.cpp": 1245,
     "src/scriptplugins.cpp": 757,
     "src/scripttools.cpp": 885,
     "src/sitedesk.cpp": 585,

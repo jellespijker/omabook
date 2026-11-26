@@ -13,7 +13,6 @@
 #include <QNetworkRequest>
 #include <QProcess>
 #include <QRegularExpression>
-#include <QSaveFile>
 #include <QTextDocument>
 #include <QTimer>
 #include <QUrl>
@@ -22,6 +21,7 @@
 #include "bookwords.h"
 #include "formats.h"
 #include "graphtools.h"
+#include "jsonfile.h"
 #include "library.h"
 #include "scriptai.h"
 #include "scriptapi.h"
@@ -516,16 +516,14 @@ public:
         emit p->formRequested(token, form);
     }
 
-    Q_INVOKABLE QString settings() { return compact(p->kept()); }
+    Q_INVOKABLE QString settings() { return compact(p->kept().value_or(QJsonObject())); }
     Q_INVOKABLE void keep(const QString &key, const QString &json) {
-        QJsonObject kept = p->kept();
-        kept.insert(key, parsed(json));
-        QSaveFile file(p->m_manifest.dataFolder() + "/settings.json");
-        file.setDirectWriteFallback(false);
-        const QByteArray contents = QJsonDocument(kept).toJson(QJsonDocument::Indented);
-        if (!QDir().mkpath(p->m_manifest.dataFolder()) || !file.open(QIODevice::WriteOnly) || file.write(contents) != contents.size()
-            || !file.commit())
-            p->m_engine.throwError("The plugin's settings can't be written to " + file.fileName() + ".");
+        const auto written = p->kept().and_then([&](QJsonObject kept) {
+            kept.insert(key, parsed(json));
+            return JsonFile::write(p->m_manifest.dataFolder() + "/settings.json", kept);
+        });
+        if (!written)
+            p->m_engine.throwError("The plugin's settings can't be written: " + written.error().text());
     }
     Q_INVOKABLE QString options() { return compact(p->m_services.settings ? p->m_services.settings->options() : QJsonObject()); }
     Q_INVOKABLE bool setOption(const QString &key, const QString &json) {
@@ -1242,9 +1240,6 @@ QString ScriptPlugin::inside(const QString &path, bool writing) const {
     return real.startsWith(allowed + "/") ? real : QString();
 }
 
-QJsonObject ScriptPlugin::kept() const {
-    QFile file(m_manifest.dataFolder() + "/settings.json");
-    return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject();
-}
+std::expected<QJsonObject, Failure> ScriptPlugin::kept() const { return JsonFile::object(m_manifest.dataFolder() + "/settings.json"); }
 
 #include "scriptplugin.moc"

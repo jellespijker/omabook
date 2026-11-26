@@ -8,13 +8,21 @@
 #include <QVariantMap>
 #include <algorithm>
 #include <initializer_list>
+#include <optional>
 
 #include "aicapability.h"
+#include "failure.h"
 
 // The user's choices, kept in ~/.config/omabook/config.json and written
 // atomically on every change. Tests pass their own file.
+//
+// A file that can't be read (a typo made by hand) is never written over. The
+// settings stay as they were, or where there was nothing read yet, the
+// defaults with AI off; changes made meanwhile are not saved.
 class Settings : public QObject {
     Q_OBJECT
+    // Why config.json can't be read and what is done meanwhile; empty while it can.
+    Q_PROPERTY(QString problem READ problem NOTIFY problemChanged)
     Q_PROPERTY(QString libraryPath READ libraryPath WRITE setLibraryPath NOTIFY changed)
     Q_PROPERTY(QStringList libraries READ libraries NOTIFY changed)
     Q_PROPERTY(int fontSize READ fontSize WRITE setFontSize NOTIFY changed)
@@ -60,6 +68,11 @@ public:
     static QString defaultFile();
     // The config.json these are.
     [[nodiscard]] QString file() const { return m_file; }
+    [[nodiscard]] QString problem() const;
+    // How many changes went unsaved because config.json couldn't be read, in
+    // every Settings of this process: a command that raised it did not do what
+    // it was asked.
+    [[nodiscard]] static int unsaved();
 
     // The library in use, and every library that has been. Setting it makes
     // it the one in use from now on, for the window, the command line and
@@ -357,6 +370,7 @@ public:
 
 signals:
     void changed();
+    void problemChanged();
 
 private:
     void set(const QString &key, const QJsonValue &value);
@@ -376,5 +390,10 @@ private:
 
     QString m_file;
     QJsonObject m_values;
+    // What is wrong with the file; whether the values stand in for one that
+    // couldn't be read from the start; and whether it was looked at yet.
+    std::optional<Failure> m_mistake;
+    bool m_standingIn = false;
+    bool m_looked = false;
     QString m_sessionLibrary;
 };

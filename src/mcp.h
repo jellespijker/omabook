@@ -83,6 +83,9 @@ bool registerTool(const Tool &tool);
 Result command(const QStringList &arguments, bool json = true);
 // Every registered tool, by name.
 QList<Tool> tools();
+// Runs a tool's handler. A tool whose change config.json couldn't take,
+// because it can't be read, fails and says so.
+Result call(const Tool &tool, const QJsonObject &arguments);
 
 // Building an input schema without writing the JSON out by hand.
 // schema({{"id", integer("The book's number.")}, ...}, {"id"}) is an object

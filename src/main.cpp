@@ -156,7 +156,14 @@ int runCommand(QStringList words) {
         translator.emplace();
         QCoreApplication::installTranslator(&*translator);
     }
-    return runCli(words);
+    if (const QString problem = first.problem(); !problem.isEmpty())
+        std::println(stderr, "omabook: {}", problem.toStdString());
+    const int unsaved = Settings::unsaved();
+    const int result = runCli(words);
+    if (Settings::unsaved() == unsaved)
+        return result;
+    std::println(stderr, "omabook: {}", Settings::tr("The change was not saved.").toStdString());
+    return result == 0 ? 1 : result;
 }
 
 // A link to a place in a book (#138) opens it there, and brings the window forward.
