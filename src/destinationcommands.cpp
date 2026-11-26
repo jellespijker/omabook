@@ -68,6 +68,18 @@ void printJson(const QJsonObject &object) {
     return given;
 }
 
+[[nodiscard]] QString whereOf(SnapshotDestination::Kind kind) {
+    switch (kind) {
+    case SnapshotDestination::Kind::Disk:
+        return u"on a second disk, in"_s;
+    case SnapshotDestination::Kind::Hub:
+        return u"on another of your hubs, which keeps them and can't read them,"_s;
+    case SnapshotDestination::Kind::Away:
+        break;
+    }
+    return u"away from home, at"_s;
+}
+
 int add(const QCommandLineParser &parser, SnapshotDestinations &destinations) {
     const QStringList words = parser.positionalArguments();
     if (words.size() != 3) {
@@ -87,11 +99,11 @@ int add(const QCommandLineParser &parser, SnapshotDestinations &destinations) {
                    {u"recovery_key"_s, *key}});
         return 0;
     }
-    const bool disk = added.kind() == SnapshotDestination::Kind::Disk;
+    const QString where = whereOf(added.kind());
     printLine(stdout, u"The snapshots go to %1 too, %2 %3. They are copied there every night, or now with "
                       "omabook snapshot destination copy.\n\nIts recovery key, shown this once:\n\n    %4\n\n"
                       "Keep it as you keep the other one, away from this computer: without it nothing kept there can be restored."_s.arg(
-                          added.name, disk ? u"on a second disk, in"_s : u"away from home, at"_s, added.location, *key));
+                          added.name, where, added.location, *key));
     return 0;
 }
 
@@ -166,8 +178,10 @@ int copy(const SnapshotDestinations &destinations, const QString &name) {
 int runSnapshotDestinationCli(const QStringList &arguments) {
     QCommandLineParser parser;
     parser.setApplicationDescription(
-        u"Where else the snapshots are kept: a second disk (a folder on it), or a place away from home that restic reaches "
-        "(sftp:host:/path, rest:https://host/, s3:..., b2:..., rclone:...). Each is a restic repository of its own, with "
+        u"Where else the snapshots are kept: a second disk (a folder on it), a place away from home that restic reaches "
+        "(sftp:host:/path, rest:https://host/, s3:..., b2:..., rclone:...), or another of your hubs (hub:<host>, a hub "
+        "this computer is linked to, omabook hub add), reached over the session with it, which keeps them and can't read them. Each is a "
+        "restic repository of its own, with "
         "its own recovery key, shown once; the snapshots are copied there every night (omabook snapshot nightly, or the "
         "hub's daemon) and thinned as they are here. Three copies on two kinds of medium, one away from home, are backed up.\n\n"
         "add <name> <where> makes it; list says how each last copy went; test opens one; copy [name] copies now; remove "

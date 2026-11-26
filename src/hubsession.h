@@ -31,8 +31,10 @@
 // away, as `omabook hub forget` does on the hub, #189) are answered here; the hub's own requests the session hands on
 // (relayed(): `status`, `snapshots` and its warnings (#184), `sync` (HubSync, #188), and the hub's
 // background work, `work` and `work-cancel` (HubWork, #192)) go to the daemon (ADR 0013) with
-// "computer" set to this computer's name, whatever the line said. Any other
-// request is refused. Answers are HubRequests' ({"ok": true, ...} or
+// "computer" set to this computer's name, whatever the line said. `store`,
+// another computer's or hub's snapshots kept here (HubStore, #196), is
+// answered here too, beside the daemon, where the session was given a place
+// for them. Any other request is refused. Answers are HubRequests' ({"ok": true, ...} or
 // {"ok": false, "error": ...}). Every refusal, a computer that claims another's
 // name, and each session's start leave a line in the hub's log.
 class HubSession {
@@ -42,8 +44,10 @@ public:
     // Hands a request on to the daemon: its answer, one line.
     using Relay = std::function<QByteArray(const QByteArray &request)>;
 
-    HubSession(HubComputers computers, QString fingerprint, Relay relay)
-        : m_computers(std::move(computers)), m_fingerprint(std::move(fingerprint)), m_relay(std::move(relay)) {}
+    // The snapshots it is sent are kept in `stores` (HubStore); none are, when it is empty.
+    HubSession(HubComputers computers, QString fingerprint, Relay relay, QString stores = {})
+        : m_computers(std::move(computers)), m_fingerprint(std::move(fingerprint)), m_relay(std::move(relay)), m_stores(std::move(stores)) {
+    }
 
     // The answer to one line the computer sent, as one line (without its newline).
     [[nodiscard]] QByteArray answer(const QByteArray &line);
@@ -73,6 +77,7 @@ private:
     HubComputers m_computers;
     QString m_fingerprint;
     Relay m_relay;
+    QString m_stores;
     std::optional<HubComputers::Computer> m_computer;
     bool m_over = false;
 };

@@ -123,7 +123,7 @@ ColumnLayout {
         id: location
         objectName: "snapshotDestinationLocation"
         Layout.fillWidth: true
-        placeholderText: qsTr("Where: a folder on a second disk, or sftp:host:/path, s3:…, b2:…, rest:…, rclone:…")
+        placeholderText: qsTr("Where: a folder on a second disk, another of your hubs (hub:<its host>), or sftp:host:/path, s3:…, b2:…, rest:…, rclone:…")
         selectByMouse: true
         Material.roundedScale: theme.radius
     }

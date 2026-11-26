@@ -8,6 +8,7 @@
 #include <QStringList>
 #include <cstdint>
 #include <expected>
+#include <functional>
 #include <optional>
 #include <utility>
 
@@ -17,14 +18,16 @@
 #include "snapshots.h"
 
 // Where else a computer keeps its snapshots (ADR 0014, GLOSSARY: Destination):
-// a second disk of its own, or a place away from home that restic reaches
-// (sftp:, rest:, s3:, b2:, rclone:...). Each is a restic repository of its
+// a second disk of its own, a place away from home that restic reaches
+// (sftp:, rest:, s3:, b2:, rclone:...), or another of the person's hubs
+// (hub:<host>, #196), reached over the hub's session (HubStore), which keeps
+// them and can't read them, and counts as a place away. Each is a restic repository of its
 // own with a password of its own, shown once as its recovery key, and gets the
 // snapshots by `restic copy` from the computer's repository, then is thinned
 // as that one is.
 struct SnapshotDestination {
-    // A folder of this computer's (a second disk), or a place restic reaches over the network.
-    enum class Kind : std::uint8_t { Disk, Away };
+    // A folder of this computer's (a second disk), a place restic reaches over the network, or a hub.
+    enum class Kind : std::uint8_t { Disk, Away, Hub };
 
     QString name;     // lower-case letters, digits and dashes: it names its secrets
     QString location; // restic's --repo
@@ -33,6 +36,8 @@ struct SnapshotDestination {
     QStringList credentials;
 
     [[nodiscard]] Kind kind() const;
+    // The host of the hub it is on, as this computer is linked to it; empty for another kind.
+    [[nodiscard]] QString hub() const;
     [[nodiscard]] static QString kindName(Kind kind);
 };
 
@@ -55,7 +60,16 @@ struct DestinationState {
 // systemd's credential, else a 0600 file under secrets/), on a hub the hub's.
 class SnapshotDestinations {
 public:
+    // How the repository named `name` that a hub at `host` keeps for this
+    // computer is reached (#196): its location, what restic is handed for it,
+    // and what stands between (ResticRepository::through); its password is the
+    // destination's own, added here.
+    using HubReach = std::function<std::expected<ResticRepository, Failure>(const QString &host, const QString &name)>;
+
     explicit SnapshotDestinations(SnapshotPlace place);
+
+    // How every destination on a hub is reached, set once as the program starts (HubStoreBridge::linked).
+    static void reachHubsBy(HubReach reach);
 
     [[nodiscard]] QList<SnapshotDestination> list() const;
     [[nodiscard]] std::optional<SnapshotDestination> find(const QString &name) const;
@@ -106,6 +120,8 @@ public:
 private:
     [[nodiscard]] HubPlace secrets() const;
     [[nodiscard]] std::expected<SnapshotDestination, Failure> checked(SnapshotDestination destination) const;
+    // Where restic finds it, without its password.
+    [[nodiscard]] static std::expected<ResticRepository, Failure> placeOf(const SnapshotDestination &destination);
     [[nodiscard]] bool write(const QList<SnapshotDestination> &destinations) const;
     void keepState(const QString &name, const DestinationState &state) const;
     [[nodiscard]] std::expected<void, Failure> thin(const ResticRepository &repository, const QDateTime &now) const;

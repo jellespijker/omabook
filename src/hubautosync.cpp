@@ -86,25 +86,38 @@ void HubAutoSync::changed(const QDateTime &now) { m_changed = now; }
 
 void HubAutoSync::touched(const QDateTime &now) { m_touched = now; }
 
-void HubAutoSync::cameIntoReach() { m_reachAgain = true; }
+void HubAutoSync::cameIntoReach() {
+    for (const auto &[host, hub] : read())
+        if (hub.unreached)
+            m_reachAgain.insert(host);
+}
 
-bool HubAutoSync::dueOne(const Hub &hub, const QDateTime &now) const {
+std::optional<QDateTime> HubAutoSync::changedFor(const QString &host) const {
+    std::optional<QDateTime> changed = m_changed;
+    for (const auto &[from, at] : m_brought)
+        if (from != host && (!changed || at > *changed))
+            changed = at;
+    return changed;
+}
+
+bool HubAutoSync::dueOne(const QString &host, const Hub &hub, const QDateTime &now) const {
     if (!hub.on || !hub.refused.isEmpty())
         return false;
     if (hub.unreached)
-        return m_reachAgain || !hub.tried.isValid() || now >= hub.tried.addSecs(m_times.again.count());
+        return m_reachAgain.contains(host) || !hub.tried.isValid() || now >= hub.tried.addSecs(m_times.again.count());
     if (!hub.last.isValid() || now >= hub.last.addSecs(m_times.every.count()))
         return true;
-    if (!m_changed || *m_changed < hub.last)
+    const auto changed = changedFor(host);
+    if (!changed || *changed < hub.last)
         return false;
-    const QDateTime quiet = m_touched.isValid() ? std::max(*m_changed, m_touched) : *m_changed;
+    const QDateTime quiet = m_touched.isValid() ? std::max(*changed, m_touched) : *changed;
     return now >= quiet.addSecs(m_times.settle.count());
 }
 
 std::optional<QString> HubAutoSync::due(const QStringList &hosts, const QDateTime &now) const {
     const auto hubs = read();
     for (const QString &host : hosts)
-        if (const auto found = hubs.find(host); found != hubs.end() && dueOne(found->second, now))
+        if (const auto found = hubs.find(host); found != hubs.end() && dueOne(host, found->second, now))
             return host;
     return std::nullopt;
 }
@@ -114,7 +127,7 @@ void HubAutoSync::began(const QDateTime &now) { m_began = now; }
 std::optional<QString> HubAutoSync::done(const QString &host, const SyncSummary &summary, const QDateTime &now) {
     auto hubs = read();
     Hub &hub = hubs[host];
-    m_reachAgain = false;
+    m_reachAgain.erase(host);
     std::optional<QString> tell;
     if (summary.unreached) {
         hub.unreached = true;
@@ -127,12 +140,16 @@ std::optional<QString> HubAutoSync::done(const QString &host, const SyncSummary 
     } else {
         hub.unreached = false;
         hub.last = m_began.isValid() ? m_began : now;
+        if (brought(summary))
+            m_brought[host] = now;
     }
     std::ignore = write(hubs); // Not kept, it is tried again: nothing worse.
     return tell;
 }
 
-void HubAutoSync::byHand(const QString &host, const QDateTime &began) {
+void HubAutoSync::byHand(const QString &host, const QDateTime &began, bool broughtHere) {
+    if (broughtHere)
+        m_brought[host] = began;
     auto hubs = read();
     const auto found = hubs.find(host);
     if (found == hubs.end())
@@ -153,6 +170,12 @@ std::unique_ptr<QLockFile> HubAutoSync::hold(bool wait) const {
     if (wait ? lock->lock() : lock->tryLock(0))
         return lock;
     return nullptr;
+}
+
+bool HubAutoSync::brought(const SyncSummary &summary) {
+    return summary.received + summary.placesTaken + summary.detailsTaken + summary.readingTaken + summary.removedHere + summary.renamedHere
+               + summary.collectionsTaken + summary.graphTaken + summary.annotationsTaken + summary.pluginFilesTaken
+           > 0;
 }
 
 QString HubAutoSync::refusal(const SyncSummary &summary) {

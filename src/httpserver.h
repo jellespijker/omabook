@@ -27,7 +27,8 @@ struct HttpRequest {
 
 // What is answered: a status, the type of what is sent and either a body or
 // a file, which is sent from disk a piece at a time so a big book is never
-// read into memory whole.
+// read into memory whole. A Content-Length among the headers is said in place
+// of the body's: what a GET would send, answering a HEAD.
 struct HttpResponse {
     int status = 200;
     QByteArray contentType = "text/plain; charset=utf-8";
@@ -51,6 +52,9 @@ public:
 
     explicit HttpServer(Handler handler, QObject *parent = nullptr);
 
+    // A body larger than `bytes` is turned away unread (1 MiB unless told).
+    void takeBodiesUpTo(qsizetype bytes) { m_bodyLimit = bytes; }
+
     // Listens on `address` and `port` (0 for any free one); the port it got.
     [[nodiscard]] std::expected<quint16, Failure> listen(const QHostAddress &address, quint16 port);
     void close();
@@ -61,6 +65,7 @@ private:
     void answer(QTcpSocket *socket, const HttpRequest &request);
 
     Handler m_handler;
+    qsizetype m_bodyLimit = qsizetype{1024} * 1024;
     // Its child, so that it goes along when the server is moved to a thread of its own.
     QTcpServer m_server;
 };

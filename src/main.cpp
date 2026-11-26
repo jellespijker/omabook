@@ -37,6 +37,7 @@
 #include "folio.h"
 #include "hubdesk.h"
 #include "hublinks.h"
+#include "hubstorebridge.h"
 #include "importer.h"
 #include "interface.h"
 #include "librarian.h"
@@ -54,6 +55,7 @@
 #include "serveservice.h"
 #include "settings.h"
 #include "snapshotdesk.h"
+#include "snapshotdestinations.h"
 #include "syncwait.h"
 #include "theme.h"
 #include "themechoice.h"
@@ -226,6 +228,8 @@ void startUp(bool command) {
     PluginFormats::know();
     // A library brought up to date takes a moment snapshot first, where snapshots are set up (#208).
     LibraryMigrations::beforeUpgrading(MomentSnapshot::beforeUpgradeHere);
+    // A destination of the snapshots on another of the person's hubs is reached over the session with it (#196).
+    SnapshotDestinations::reachHubsBy(HubStoreBridge::linked());
     if (!command)
         qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
 }

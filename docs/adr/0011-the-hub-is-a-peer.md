@@ -40,3 +40,15 @@ library's source of truth, with computers as its clients.
   the book to the hub as it is read, takes how far the graph came built for its own, and says "built on <hub>" by
   the graph's count. Nothing waits on the hub being reachable: a hub that began a book and hasn't got on with it for
   `GraphBuilt::patience` is waited for no longer, and the person asking builds it here at once.
+
+## As built in #196
+
+- **Several hubs are just more peers.** A computer syncs with each in turn, each sync through the guard, and two
+  computers with three hubs end with one library on all five; once they have, a round of syncs moves nothing and
+  grows no change log. Automatic sync (`HubAutoSync`) takes what a sync with one hub brought as a change for the
+  others, never for that one, so a change goes round the hubs once and comes to rest; a hub out of reach waits
+  apart, and every hub that was is tried as the network comes back.
+- **A book's graph is built once** (`HubClaims`): the hub that takes a book up claims it in the library's change log
+  (plugin data under `omabook-hub`), so the claim travels by the syncs; another hub that knows of a claim made
+  within a day leaves the book to it. Two claims made before either hub knew of the other end as the later wherever
+  they meet, and the hub whose claim was overtaken keeps nothing of its work.

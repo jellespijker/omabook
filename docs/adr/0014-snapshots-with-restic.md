@@ -37,3 +37,13 @@ Omabook backs up today only before a library upgrade, on the same disk.
 
 - **borg**: fine, but fewer destinations (no S3 without a mount).
 - **Our own snapshots**: encryption, deduplication and destinations are a product's work, not ours.
+
+## As built in #196
+
+- **Another hub as a destination** is `hub:<host>`, a hub this computer (or hub) is linked to. The repository is
+  kept there in a folder of the sender's own (`<state>/stores/<computer>/<name>`, `HubStore`), laid out as restic lays
+  out a disk's. restic reaches it as its REST backend, served for that run on the loopback here, behind a user and
+  password of its own (`HubStoreBridge`), each request handed over the session as `store`: never a shell, and
+  nothing on that hub but that repository. The session answers `store` itself, beside the daemon, so two hubs
+  that keep each other's snapshots never wait on each other's daemons. The password stays with the sender: the
+  keeping hub can't read what it keeps. It counts as the copy away from home, and the checks of #184 reach it.

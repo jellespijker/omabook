@@ -94,8 +94,9 @@ modules = [
   "hubkeeper", "hubrequests", "hubdaemon", "hubschedule", "hubsnapshots",
   "hubsession", "hublinks",
   "hubremote", "hubsync", "hubsyncsteps", "booksetting",
-  "hubwork",
+  "hubwork", "hubclaims",
   "hubautosync", "hubautorun",
+  "hubstore", "hubstorebridge",
 ]
 
 # The two front ends are peers: neither includes the other. What both need

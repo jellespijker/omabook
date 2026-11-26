@@ -83,6 +83,20 @@ using namespace Qt::StringLiterals;
 // How long a place away from home has to answer before a copy or a test, rather than restic's minutes of trying.
 constexpr std::chrono::seconds answerWithin{30};
 
+// The way to the destinations on hubs, as the program set it.
+[[nodiscard]] SnapshotDestinations::HubReach &hubReach() {
+    static SnapshotDestinations::HubReach reach;
+    return reach;
+}
+
+constexpr auto hubPrefix = "hub:"_L1;
+
+// A host as ssh is given it: no option, no space, nothing that isn't a name.
+[[nodiscard]] bool hostAllowed(const QString &host) {
+    static const QRegularExpression allowed(u"^[A-Za-z0-9_.][A-Za-z0-9_.@-]*$"_s);
+    return allowed.match(host).hasMatch();
+}
+
 // A place away reached first; a disk is there or not.
 [[nodiscard]] std::expected<void, Failure> reached(const SnapshotDestination &destination, const ResticRepository &repository) {
     if (destination.kind() == SnapshotDestination::Kind::Disk)
@@ -95,12 +109,36 @@ constexpr std::chrono::seconds answerWithin{30};
 } // namespace
 
 SnapshotDestination::Kind SnapshotDestination::kind() const {
+    if (location.startsWith(hubPrefix))
+        return Kind::Hub;
     return QDir::isAbsolutePath(location) || !location.contains(u':') ? Kind::Disk : Kind::Away;
 }
 
-QString SnapshotDestination::kindName(Kind kind) { return kind == Kind::Disk ? u"disk"_s : u"away"_s; }
+QString SnapshotDestination::hub() const { return kind() == Kind::Hub ? location.mid(hubPrefix.size()) : QString(); }
+
+QString SnapshotDestination::kindName(Kind kind) {
+    switch (kind) {
+    case Kind::Disk:
+        return u"disk"_s;
+    case Kind::Hub:
+        return u"hub"_s;
+    case Kind::Away:
+        break;
+    }
+    return u"away"_s;
+}
 
 SnapshotDestinations::SnapshotDestinations(SnapshotPlace place) : m_place(std::move(place)) {}
+
+void SnapshotDestinations::reachHubsBy(HubReach reach) { hubReach() = std::move(reach); }
+
+std::expected<ResticRepository, Failure> SnapshotDestinations::placeOf(const SnapshotDestination &destination) {
+    if (destination.kind() != SnapshotDestination::Kind::Hub)
+        return ResticRepository{.location = destination.location};
+    if (!hubReach())
+        return std::unexpected(Failure(Failure::Code::HubNotLinked, {destination.hub()}));
+    return hubReach()(destination.hub(), destination.name);
+}
 
 QString SnapshotDestinations::passwordSecret(const QString &name) { return u"destination-"_s + name; }
 QString SnapshotDestinations::credentialsSecret(const QString &name) { return u"credentials-"_s + name; }
@@ -190,6 +228,8 @@ std::expected<SnapshotDestination, Failure> SnapshotDestinations::checked(Snapsh
             return std::unexpected(Failure(Failure::Code::DestinationAbsent, {destination.name, destination.location}));
     } else if (destination.location == repository) {
         return std::unexpected(Failure(Failure::Code::DestinationIsTheRepository, {repository}));
+    } else if (destination.kind() == SnapshotDestination::Kind::Hub && !hostAllowed(destination.hub())) {
+        return std::unexpected(Failure(Failure::Code::HubNotLinked, {destination.hub()}));
     }
     return destination;
 }
@@ -200,7 +240,11 @@ std::expected<QString, Failure> SnapshotDestinations::add(const SnapshotDestinat
     if (!checkedOne)
         return std::unexpected(checkedOne.error());
     const SnapshotDestination &destination = *checkedOne;
-    ResticRepository made{.location = destination.location, .passwordFile = {}, .password = Snapshots::newRecoveryKey().toLatin1()};
+    auto place = placeOf(destination);
+    if (!place)
+        return std::unexpected(place.error());
+    ResticRepository made = std::move(*place);
+    made.password = Snapshots::newRecoveryKey().toLatin1();
     QJsonObject kept;
     for (const QString &name : destination.credentials) {
         const auto given = std::ranges::find(credentials, name, &std::pair<QString, QByteArray>::first);
@@ -211,11 +255,11 @@ std::expected<QString, Failure> SnapshotDestinations::add(const SnapshotDestinat
     }
     if (const auto initialised = Restic::init(made, m_place.repository); !initialised)
         return std::unexpected(initialised.error());
-    const HubPlace place = secrets();
-    if (const auto password = place.keepSecret(passwordSecret(destination.name), made.password); !password)
+    const HubPlace secret = secrets();
+    if (const auto password = secret.keepSecret(passwordSecret(destination.name), made.password); !password)
         return std::unexpected(unkept(password.error()));
     if (!kept.isEmpty())
-        if (const auto given = place.keepSecret(credentialsSecret(destination.name), QJsonDocument(kept).toJson(QJsonDocument::Compact));
+        if (const auto given = secret.keepSecret(credentialsSecret(destination.name), QJsonDocument(kept).toJson(QJsonDocument::Compact));
             !given)
             return std::unexpected(unkept(given.error()));
     QList<SnapshotDestination> destinations = list();
@@ -246,7 +290,11 @@ std::expected<ResticRepository, Failure> SnapshotDestinations::repositoryOf(cons
     const auto password = place.secret(passwordSecret(destination.name));
     if (!password)
         return std::unexpected(password.error());
-    ResticRepository repository{.location = destination.location, .passwordFile = {}, .password = password->trimmed()};
+    auto reached = placeOf(destination);
+    if (!reached)
+        return std::unexpected(reached.error());
+    ResticRepository repository = std::move(*reached);
+    repository.password = password->trimmed();
     if (destination.credentials.isEmpty())
         return repository;
     const auto given = place.secret(credentialsSecret(destination.name));

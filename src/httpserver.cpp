@@ -11,7 +11,6 @@ using namespace Qt::StringLiterals;
 namespace {
 
 constexpr qsizetype headLimit = qsizetype{64} * 1024;
-constexpr qsizetype bodyLimit = qsizetype{1024} * 1024;
 constexpr qint64 piece = qint64{64} * 1024;
 
 [[nodiscard]] QByteArray reason(int status) {
@@ -20,6 +19,8 @@ constexpr qint64 piece = qint64{64} * 1024;
         return "OK";
     case 201:
         return "Created";
+    case 206:
+        return "Partial Content";
     case 400:
         return "Bad Request";
     case 401:
@@ -34,6 +35,10 @@ constexpr qint64 piece = qint64{64} * 1024;
         return "Method Not Allowed";
     case 413:
         return "Payload Too Large";
+    case 500:
+        return "Internal Server Error";
+    case 503:
+        return "Service Unavailable";
     default:
         return "Error";
     }
@@ -47,7 +52,7 @@ struct Incoming {
 
 // The request in `buffer`, once all of it is there; none while more is to come.
 // `tooLarge` says it never will be one to answer.
-[[nodiscard]] std::optional<HttpRequest> parse(const QByteArray &buffer, bool &tooLarge) {
+[[nodiscard]] std::optional<HttpRequest> parse(const QByteArray &buffer, qsizetype bodyLimit, bool &tooLarge) {
     const qsizetype end = buffer.indexOf("\r\n\r\n");
     if (end < 0) {
         tooLarge = buffer.size() > headLimit;
@@ -107,7 +112,7 @@ void HttpServer::take(QTcpSocket *socket) {
             return;
         incoming->buffer += socket->readAll();
         bool tooLarge = false;
-        const auto request = parse(incoming->buffer, tooLarge);
+        const auto request = parse(incoming->buffer, m_bodyLimit, tooLarge);
         if (!request && !tooLarge)
             return;
         incoming->answered = true;
@@ -129,7 +134,10 @@ void HttpServer::answer(QTcpSocket *socket, const HttpRequest &request) {
         response = {404, "text/plain; charset=utf-8", "Not found", {}, {}};
     const qint64 length = response.file.isEmpty() ? response.body.size() : file->size();
     QByteArray head = "HTTP/1.1 " + QByteArray::number(response.status) + ' ' + reason(response.status) + "\r\n";
-    head += "Content-Type: " + response.contentType + "\r\nContent-Length: " + QByteArray::number(length) + "\r\nConnection: close\r\n";
+    head += "Content-Type: " + response.contentType + "\r\n";
+    if (!response.headers.contains("Content-Length"))
+        head += "Content-Length: " + QByteArray::number(length) + "\r\n";
+    head += "Connection: close\r\n";
     for (auto it = response.headers.cbegin(); it != response.headers.cend(); ++it)
         head += it.key() + ": " + it.value() + "\r\n";
     socket->write(head + "\r\n");

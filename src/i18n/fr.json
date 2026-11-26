@@ -2838,7 +2838,6 @@
   "Reaching the destination…": "Connexion à la destination…",
   "Looking at the book in the snapshot…": "Examen du livre dans l'instantané…",
   "Open It": "Ouvrir",
-  "Where: a folder on a second disk, or sftp:host:/path, s3:…, b2:…, rest:…, rclone:…": "Où : un dossier sur un deuxième disque, ou sftp:host:/path, s3:…, b2:…, rest:…, rclone:…",
   "Backed up: three copies, on two kinds of medium, one away from home.": "Sauvegardé : trois copies, sur deux types de support, dont une hors de chez vous.",
   "Before a change to many books": "Avant une modification de nombreux livres",
   "Before a merge": "Avant une fusion",
@@ -2998,7 +2997,6 @@
   "A whole library is restored into a new folder, never over the one in use, and can be opened from there. It gets a device id of its own, so it syncs as a computer of its own; a sync with a copy of a library refuses, and says what to do.": "Une bibliothèque entière est restaurée dans un nouveau dossier, jamais par-dessus celle en usage, et peut être ouverte de là. Elle reçoit un identifiant d'appareil à elle, et se synchronise donc comme un ordinateur à part ; une synchronisation avec la copie d'une bibliothèque est refusée, et dit quoi faire.",
   "Books synced earlier, set right": "Les livres synchronisés auparavant, remis d'aplomb",
   "Checked before it writes": "Vérifiée avant d'écrire",
-  "Destinations, in {library.snapshots} or `omabook snapshot destination add <name> <where>`, are more places for the snapshots: a folder on another disk, or a place away from home (sftp:, rest:, s3:, b2:, rclone:), each with a recovery key of its own. Each night's snapshots are copied there; a disk that isn't plugged in is named, and the others are copied all the same. The panel says whether three copies, on two kinds of medium, one away from home, hold.": "Les destinations, dans {library.snapshots} ou avec `omabook snapshot destination add <name> <where>`, sont d'autres lieux pour les instantanés : un dossier sur un autre disque, ou un lieu hors de chez vous (sftp:, rest:, s3:, b2:, rclone:), chacun avec sa propre clé de récupération. Les instantanés de chaque nuit y sont copiés ; un disque non branché est signalé, et les autres sont copiés quand même. Le panneau dit si trois copies, sur deux types de support, dont une hors de chez vous, sont bien là.",
   "Every night": "Chaque nuit",
   "From the filter into the snapshots": "Du filtre aux instantanés",
   "Linking a computer to it": "Y lier un ordinateur",
@@ -3088,5 +3086,11 @@
   "Syncing by itself": "Se synchroniser de lui-même",
   "Sync by itself, a switch for each hub in {library.hubs}, or `omabook hub sync <hub> --auto on`, is off until you turn it on. Then the library syncs with the hub a little after a change, every quarter of an hour and once the hub is back in reach, but waits on battery or a metered connection. A sync the hub or the guard refuses stops it, in red with what to do, until a sync by hand goes through. The panel's switch below the hubs, or `omabook hub sync --background on`, keeps it going with the window closed.": "Se synchroniser de lui-même, un interrupteur pour chaque hub dans {library.hubs}, ou `omabook hub sync <hub> --auto on`, reste désactivé tant que vous ne l'activez pas. La bibliothèque se synchronise alors avec le hub peu après un changement, tous les quarts d'heure et dès que le hub est de nouveau joignable, mais attend sur batterie ou sur une connexion limitée. Une synchronisation que le hub ou la vérification refuse l'arrête, en rouge avec ce qu'il faut faire, jusqu'à ce qu'une synchronisation à la main passe. L'interrupteur du panneau sous les hubs, ou `omabook hub sync --background on`, la poursuit fenêtre fermée.",
   "being built on %1": "en cours de création sur %1",
-  "built on %1": "créé sur %1"
+  "built on %1": "créé sur %1",
+  "Where: a folder on a second disk, another of your hubs (hub:<its host>), or sftp:host:/path, s3:…, b2:…, rest:…, rclone:…": "Où : un dossier sur un deuxième disque, un autre de vos hubs (hub:<son hôte>), ou sftp:host:/path, s3:…, b2:…, rest:…, rclone:…",
+  "Destinations, in {library.snapshots} or `omabook snapshot destination add <name> <where>`, are more places for the snapshots: a folder on another disk, a place away from home (sftp:, rest:, s3:, b2:, rclone:), or another of your hubs (hub:<host>), each with a recovery key of its own. Each night's snapshots are copied there; a disk that isn't plugged in is named, and the others are copied all the same. The panel says whether three copies, on two kinds of medium, one away from home, hold.": "Les destinations, dans {library.snapshots} ou avec `omabook snapshot destination add <name> <where>`, sont d'autres lieux pour les instantanés : un dossier sur un autre disque, un lieu hors de chez vous (sftp:, rest:, s3:, b2:, rclone:), ou un autre de vos hubs (hub:<host>), chacun avec sa propre clé de récupération. Les instantanés de chaque nuit y sont copiés ; un disque non branché est signalé, et les autres sont copiés quand même. Le panneau dit si trois copies, sur deux types de support, dont une hors de chez vous, sont bien là.",
+  "Another of your hubs took up the graph of %1 meanwhile, so nothing of this hub's was kept: the graph comes from that one.": "Un autre de vos hubs a pris en charge le graphe de %1 entre-temps, donc rien de ce hub n'a été gardé : le graphe vient de l'autre.",
+  "Another of your hubs, which can't read them": "Un autre de vos hubs, qui ne peut pas les lire",
+  "The hub can't keep the snapshots' file %1: %2": "Le hub ne peut pas garder le fichier d'instantanés %1 : %2",
+  "The hub keeps only the files of snapshots it was sent, never %1.": "Le hub ne garde que les fichiers des instantanés qu'on lui a envoyés, jamais %1."
 }

@@ -23,6 +23,7 @@
 #include "graphbatch.h"
 #include "graphbuilder.h"
 #include "graphlinks.h"
+#include "hubclaims.h"
 #include "hubkeeper.h"
 #include "hubrequests.h"
 #include "library.h"
@@ -222,7 +223,11 @@ std::expected<void, Failure> HubWork::look() {
 
 std::optional<HubWork::Started> HubWork::prepare(const Job &job) {
     std::optional<Started> started;
+    const QDateTime now = QDateTime::currentDateTimeUtc();
     const auto planned = m_keeper.write(job.library, HubKeeper::Moment::None, [&](Library &library) -> std::expected<QJsonObject, Failure> {
+        // Another of the person's hubs builds it (#196): its graph comes by the sync.
+        if (HubClaims::elsewhere(library, job.id, now))
+            return QJsonObject();
         const GraphBatch::Plan plan = GraphBatch::plan(library, {.books = {job.book}, .whole = true, .again = false});
         const GraphBatch::Plan::Item item = plan.items.value(0);
         const auto file = fileOf(library, job.book);
@@ -230,6 +235,8 @@ std::optional<HubWork::Started> HubWork::prepare(const Job &job) {
             note(job, u"skipped"_s, item.skipped);
             return QJsonObject();
         }
+        if (const auto claimed = HubClaims::claim(library, job.id, now); !claimed)
+            return std::unexpected(claimed.error());
         started = Started{.job = job, .path = file->first, .before = GraphBuild::builtTo(library, job.book), .total = item.requests};
         GraphBuilt::mark(library, job.book, says(GraphBuilt::State::Building));
         return QJsonObject();
@@ -306,6 +313,9 @@ HubWork::Result HubWork::run(const Started &started) {
 std::expected<QJsonObject, Failure> HubWork::lay(const Started &started, const QStringList &answers) {
     // After a moment snapshot: a whole book's graph is a change that touches much (#208).
     return m_keeper.write(started.job.library, HubKeeper::Moment::Bulk, [&](Library &library) -> std::expected<QJsonObject, Failure> {
+        // Another hub's later claim came by a sync meanwhile (#196): that one's graph is the one kept.
+        if (HubClaims::elsewhere(library, started.job.id, QDateTime::currentDateTimeUtc()))
+            return std::unexpected(Failure(Failure::Code::HubWorkClaimed, {started.job.title}));
         // A sync brought the same book's graph meanwhile: the answers were to other questions.
         if (GraphBuild::builtTo(library, started.job.book) != started.before)
             return std::unexpected(Failure(Failure::Code::HubWorkChanged, {started.job.title}));
@@ -343,7 +353,7 @@ void HubWork::finish(const Started &started, const Result &result) {
         note(started.job, u"failed"_s, result.failure->english());
     } else if (const auto laid = lay(started, result.answers); !laid) {
         note(started.job, u"failed"_s, laid.error().english());
-        goOn = laid.error().code() == Failure::Code::HubWorkChanged;
+        goOn = laid.error().code() == Failure::Code::HubWorkChanged || laid.error().code() == Failure::Code::HubWorkClaimed;
     } else {
         qCInfo(lcHub).noquote() << "The graph of" << started.job.title << "took in" << laid->value("nodes"_L1).toInt() << "things and"
                                 << laid->value("edges"_L1).toInt() << "ties.";

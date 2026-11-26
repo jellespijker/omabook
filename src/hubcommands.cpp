@@ -26,6 +26,7 @@
 #include "hubschedule.h"
 #include "hubsession.h"
 #include "hubsnapshots.h"
+#include "hubstore.h"
 #include "hubsync.h"
 #include "hubwork.h"
 #include "log.h"
@@ -186,16 +187,19 @@ int keyedSession(const QString &fingerprint) {
     if (qEnvironmentVariableIsSet("SSH_AUTH_SOCK"))
         return refuse(u"a forwarded agent"_s, u"came with a forwarded agent"_s);
     std::optional<Asking> daemon;
-    HubSession session(HubComputers::usual(place), fingerprint, [&daemon, &place](const QByteArray &request) {
-        if (!daemon) {
-            daemon.emplace(place.socket());
-            if (!daemon->connected()) {
-                daemon.reset();
-                return notRunning();
+    HubSession session(
+        HubComputers::usual(place), fingerprint,
+        [&daemon, &place](const QByteArray &request) {
+            if (!daemon) {
+                daemon.emplace(place.socket());
+                if (!daemon->connected()) {
+                    daemon.reset();
+                    return notRunning();
+                }
             }
-        }
-        return daemon->ask(request);
-    });
+            return daemon->ask(request);
+        },
+        HubStore::in(place.state()));
     return eachLine([&session](const QByteArray &line) { return session.answer(line); }, [&session] { return session.over(); });
 }
 

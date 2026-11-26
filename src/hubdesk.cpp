@@ -176,7 +176,7 @@ void HubDesk::finish(const QString &doing, const QString &host, const Outcome &o
             m_synced = outcome.synced;
     }
     if (m_auto && outcome.byHand)
-        m_auto->byHand(host, *outcome.byHand);
+        m_auto->byHand(host, *outcome.byHand, outcome.synced.value(u"brought"_s).toBool()); // a change for the other hubs (#196)
     if (m_auto && outcome.automatic) {
         wrote = outcome.automatic->error.isEmpty();
         if (const auto tell = m_auto->done(host, *outcome.automatic, m_automatic.now()); tell && m_automatic.notify) {
@@ -309,7 +309,10 @@ void HubDesk::sync(const QString &host, bool dryRun, bool pair) {
                         .automatic = {},
                         .byHand = {}};
         if (!failed)
-            outcome.synced = {{u"host"_s, host}, {u"dryRun"_s, dryRun}, {u"lines"_s, Backend::syncLines(summary)}};
+            outcome.synced = {{u"host"_s, host},
+                              {u"dryRun"_s, dryRun},
+                              {u"lines"_s, Backend::syncLines(summary)},
+                              {u"brought"_s, !dryRun && HubAutoSync::brought(summary)}};
         if (!summary.unpairedThere.isEmpty())
             outcome.unpaired = {
                 {u"host"_s, host}, {u"there"_s, summary.unpairedThere}, {u"here"_s, summary.unpairedHere}, {u"dryRun"_s, dryRun}};

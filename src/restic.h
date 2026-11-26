@@ -7,6 +7,7 @@
 #include <QStringList>
 #include <chrono>
 #include <expected>
+#include <memory>
 #include <utility>
 
 #include "failure.h"
@@ -27,6 +28,10 @@ struct ResticRepository {
     // place's credentials (AWS_SECRET_ACCESS_KEY, RESTIC_REST_PASSWORD...),
     // read from secrets, never on its command line.
     QList<std::pair<QString, QByteArray>> environment;
+    // What stands between, when restic reaches the repository through
+    // something of Omabook's (a repository on another hub, served here for
+    // restic over the hub's session, #196): kept going while this is held.
+    std::shared_ptr<const void> through;
 };
 
 namespace Restic {

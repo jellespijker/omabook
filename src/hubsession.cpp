@@ -6,6 +6,7 @@
 #include <QRegularExpression>
 
 #include "hubrequests.h"
+#include "hubstore.h"
 #include "log.h"
 
 using namespace Qt::StringLiterals;
@@ -93,6 +94,8 @@ QJsonObject HubSession::greet(const QJsonObject &asked) {
     noteClaim(asked, computer->name);
     qCInfo(lcHub).noquote() << "A session began for" << computer->name << u"("_s + m_fingerprint + u")."_s;
     QStringList requests = ownRequests() + relayed();
+    if (!m_stores.isEmpty())
+        requests << u"store"_s;
     requests.sort();
     return succeeded({{"protocol", protocol},
                       {"computer", computer->name},
@@ -122,6 +125,10 @@ QJsonObject HubSession::answerTo(const QJsonObject &asked) {
             return HubRequests::refusal(gone.error());
         qCInfo(lcHub).noquote() << gone->name << "unlinked itself: its key is gone.";
         return ending(succeeded({{"computer", gone->name}}));
+    }
+    if (name == u"store"_s && !m_stores.isEmpty()) {
+        const auto stored = HubStore(m_stores).answer(asked, still->name);
+        return stored ? succeeded(*stored) : HubRequests::refusal(stored.error());
     }
     if (!relayed().contains(name)) {
         qCWarning(lcHub).noquote() << still->name << "asked for" << (name.isEmpty() ? u"no request"_s : u"the request "_s + shown(name))

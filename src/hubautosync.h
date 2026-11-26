@@ -8,6 +8,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <set>
 #include <utility>
 
 #include "failure.h"
@@ -20,7 +21,9 @@ struct SyncSummary;
 // Hubs panel). Once on, the library in use syncs with the hub by itself: a
 // little after it changed, once the window has been left alone that long; on
 // a timer, whatever happened; and when the hub comes back into reach after it
-// couldn't be reached. Never while another sync of this computer's with a hub
+// couldn't be reached. With several hubs (#196), what a sync with one brought
+// is a change for the others, never for that one, so a change goes round the
+// hubs once and comes to rest. Never while another sync of this computer's with a hub
 // runs (hold()), and never on battery or a metered connection (SyncWait),
 // which those who drive it ask before each.
 //
@@ -71,7 +74,7 @@ public:
     void changed(const QDateTime &now);
     // The person did something in the window at `now`: a change waits on.
     void touched(const QDateTime &now);
-    // The network is back: a hub that wasn't reached is tried at once.
+    // The network is back: every hub that wasn't reached is tried at once.
     void cameIntoReach();
 
     // Which of `hosts` to sync with at `now`, if any.
@@ -82,13 +85,16 @@ public:
     // refusal to tell the desktop of, the first time it is seen.
     [[nodiscard]] std::optional<QString> done(const QString &host, const SyncSummary &summary, const QDateTime &now);
     // A sync by hand with `host`, begun at `began`, went through: the person
-    // has seen to what was refused, and the timer goes on from then.
-    void byHand(const QString &host, const QDateTime &began);
+    // has seen to what was refused, and the timer goes on from then; what it
+    // brought here is a change for the other hubs.
+    void byHand(const QString &host, const QDateTime &began, bool broughtHere = false);
 
     // Held while a sync of this computer's with a hub runs, by whichever
     // Omabook runs it; null when another holds it, unless `wait`.
     [[nodiscard]] std::unique_ptr<QLockFile> hold(bool wait = false) const;
 
+    // Whether a sync brought anything here: books, details, reading, collections, the graph, marks, plugins' files.
+    [[nodiscard]] static bool brought(const SyncSummary &summary);
     // What a sync was refused with, and what to do, as the person reads it.
     [[nodiscard]] static QString refusal(const SyncSummary &summary);
     // The desktop's notification of a refusal by `host`: its title and its body.
@@ -97,12 +103,15 @@ public:
 private:
     [[nodiscard]] std::map<QString, Hub> read() const;
     [[nodiscard]] std::expected<void, Failure> write(const std::map<QString, Hub> &hubs) const;
-    [[nodiscard]] bool dueOne(const Hub &hub, const QDateTime &now) const;
+    [[nodiscard]] bool dueOne(const QString &host, const Hub &hub, const QDateTime &now) const;
+    // When the library last changed for `host`: by the person, or by what a sync with another hub brought.
+    [[nodiscard]] std::optional<QDateTime> changedFor(const QString &host) const;
 
     QString m_folder;
     Times m_times;
     std::optional<QDateTime> m_changed;
     QDateTime m_touched;
     QDateTime m_began;
-    bool m_reachAgain = false;
+    std::map<QString, QDateTime> m_brought; // when a sync with each hub last brought something
+    std::set<QString> m_reachAgain;         // the hubs out of reach as the network came back
 };

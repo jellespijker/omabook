@@ -66,10 +66,10 @@ Manual::Topic Manual::hubTopic() {
                             "monthly, and one of every year.")},
                 {Manual::tr("A second disk, and one away from home"),
                  Manual::tr("Destinations, in {library.snapshots} or `omabook snapshot destination add <name> <where>`, are "
-                            "more places for the snapshots: a folder on another disk, or a place away from home (sftp:, rest:, "
-                            "s3:, b2:, rclone:), each with a recovery key of its own. Each night's snapshots are copied there; "
-                            "a disk that isn't plugged in is named, and the others are copied all the same. The panel says "
-                            "whether three copies, on two kinds of medium, one away from home, hold.")},
+                            "more places for the snapshots: a folder on another disk, a place away from home (sftp:, rest:, "
+                            "s3:, b2:, rclone:), or another of your hubs (hub:<host>), each with a recovery key of its own. Each "
+                            "night's snapshots are copied there; a disk that isn't plugged in is named, and the others are copied "
+                            "all the same. The panel says whether three copies, on two kinds of medium, one away from home, hold.")},
                 {Manual::tr("What changed, and going back"),
                  Manual::tr("Pick a snapshot in {library.snapshots} to see what changed since: the books added, removed and "
                             "changed, detail by detail, and the notes, highlights and knowledge graph counted. A book's "

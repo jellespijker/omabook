@@ -223,6 +223,9 @@ public:
         HubWorkChanged,     // {title}: the book's graph changed while the hub worked on it, so it is done again
         HubWorkNoFolder,    // {folder}: where the hub works on a copy of a library can't be made
         HubWorkUnfinished,  // {title}: the graph of the book wasn't built to its end
+        HubWorkClaimed,     // {title}: another of the person's hubs claimed the book's graph meanwhile (#196)
+        HubStoreRefused,    // {what was asked}: no file of a restic repository the hub keeps for a computer (#196)
+        HubStoreUnwritable, // {file, the system's reason}
         // What `omabook set` was given, for a computer or a hub (BookSetting, #188).
         DetailsUnreadable,  // {file}
         DetailsNotAnObject, // {file}

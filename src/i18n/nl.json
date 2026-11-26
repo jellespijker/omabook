@@ -2728,7 +2728,6 @@
   "Reaching the destination…": "De bestemming bereiken…",
   "Looking at the book in the snapshot…": "Het boek in de snapshot bekijken…",
   "Open It": "Openen",
-  "Where: a folder on a second disk, or sftp:host:/path, s3:…, b2:…, rest:…, rclone:…": "Waar: een map op een tweede schijf, of sftp:host:/path, s3:…, b2:…, rest:…, rclone:…",
   "Backed up: three copies, on two kinds of medium, one away from home.": "Back-up gemaakt: drie kopieën op twee soorten media, waarvan één buitenshuis.",
   "Before a change to many books": "Voor een wijziging van veel boeken",
   "Before a merge": "Voor een samenvoeging",
@@ -2882,7 +2881,6 @@
   "A whole library is restored into a new folder, never over the one in use, and can be opened from there. It gets a device id of its own, so it syncs as a computer of its own; a sync with a copy of a library refuses, and says what to do.": "Een hele bibliotheek wordt hersteld in een nieuwe map, nooit over die in gebruik, en kan van daaruit geopend worden. Ze krijgt een eigen apparaat-id, zodat ze synchroniseert als een eigen computer; een synchronisatie met een kopie van een bibliotheek wordt geweigerd en zegt wat te doen.",
   "Books synced earlier, set right": "Eerder gesynchroniseerde boeken, rechtgezet",
   "Checked before it writes": "Gecontroleerd voor ze schrijft",
-  "Destinations, in {library.snapshots} or `omabook snapshot destination add <name> <where>`, are more places for the snapshots: a folder on another disk, or a place away from home (sftp:, rest:, s3:, b2:, rclone:), each with a recovery key of its own. Each night's snapshots are copied there; a disk that isn't plugged in is named, and the others are copied all the same. The panel says whether three copies, on two kinds of medium, one away from home, hold.": "Bestemmingen, in {library.snapshots} of met `omabook snapshot destination add <name> <where>`, zijn meer plekken voor de snapshots: een map op een andere schijf, of een plek buitenshuis (sftp:, rest:, s3:, b2:, rclone:), elk met een eigen herstelsleutel. De snapshots van elke nacht worden daarheen gekopieerd; een schijf die niet is aangesloten wordt genoemd, en de andere worden toch gekopieerd. Het paneel zegt of drie kopieën, op twee soorten media, waarvan één buitenshuis, er zijn.",
   "Every night": "Elke nacht",
   "From the filter into the snapshots": "Van het filter naar de snapshots",
   "Linking a computer to it": "Een computer eraan koppelen",
@@ -2971,5 +2969,11 @@
   "Syncing by itself": "Vanzelf synchroniseren",
   "Sync by itself, a switch for each hub in {library.hubs}, or `omabook hub sync <hub> --auto on`, is off until you turn it on. Then the library syncs with the hub a little after a change, every quarter of an hour and once the hub is back in reach, but waits on battery or a metered connection. A sync the hub or the guard refuses stops it, in red with what to do, until a sync by hand goes through. The panel's switch below the hubs, or `omabook hub sync --background on`, keeps it going with the window closed.": "Vanzelf synchroniseren, een schakelaar voor elke hub in {library.hubs}, of `omabook hub sync <hub> --auto on`, staat uit tot je het aanzet. Dan synchroniseert de bibliotheek met de hub kort na een wijziging, elk kwartier en zodra de hub weer bereikbaar is, maar wacht op de accu of op een verbinding met datalimiet. Een synchronisatie die de hub of de controle weigert, stopt het, in rood met wat te doen, tot een synchronisatie met de hand lukt. De schakelaar van het paneel onder de hubs, of `omabook hub sync --background on`, laat het doorgaan met het venster dicht.",
   "being built on %1": "wordt gebouwd op %1",
-  "built on %1": "gebouwd op %1"
+  "built on %1": "gebouwd op %1",
+  "Where: a folder on a second disk, another of your hubs (hub:<its host>), or sftp:host:/path, s3:…, b2:…, rest:…, rclone:…": "Waar: een map op een tweede schijf, een andere hub van je (hub:<zijn host>), of sftp:host:/path, s3:…, b2:…, rest:…, rclone:…",
+  "Destinations, in {library.snapshots} or `omabook snapshot destination add <name> <where>`, are more places for the snapshots: a folder on another disk, a place away from home (sftp:, rest:, s3:, b2:, rclone:), or another of your hubs (hub:<host>), each with a recovery key of its own. Each night's snapshots are copied there; a disk that isn't plugged in is named, and the others are copied all the same. The panel says whether three copies, on two kinds of medium, one away from home, hold.": "Bestemmingen, in {library.snapshots} of met `omabook snapshot destination add <name> <where>`, zijn meer plekken voor de snapshots: een map op een andere schijf, een plek buitenshuis (sftp:, rest:, s3:, b2:, rclone:), of een andere hub van je (hub:<host>), elk met een eigen herstelsleutel. De snapshots van elke nacht worden daarheen gekopieerd; een schijf die niet is aangesloten wordt genoemd, en de andere worden toch gekopieerd. Het paneel zegt of drie kopieën, op twee soorten media, waarvan één buitenshuis, er zijn.",
+  "Another of your hubs took up the graph of %1 meanwhile, so nothing of this hub's was kept: the graph comes from that one.": "Een andere hub van je heeft de graaf van %1 intussen opgepakt, dus van deze hub is niets bewaard: de graaf komt van die andere.",
+  "Another of your hubs, which can't read them": "Een andere hub van je, die ze niet kan lezen",
+  "The hub can't keep the snapshots' file %1: %2": "De hub kan het snapshotbestand %1 niet bewaren: %2",
+  "The hub keeps only the files of snapshots it was sent, never %1.": "De hub bewaart alleen de bestanden van snapshots die hij is gestuurd, nooit %1."
 }

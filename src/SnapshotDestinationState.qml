@@ -2,8 +2,8 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// How a destination stands (#185, #182): a second disk or a place away from
-// home, its newest snapshot as its last copy left it, or why its last copy
+// How a destination stands (#185, #182): a second disk, a place away from
+// home or another of the person's hubs (#196), its newest snapshot as its last copy left it, or why its last copy
 // didn't go through, in red.
 Label {
     id: state
@@ -11,7 +11,9 @@ Label {
     required property SnapshotWords words
     readonly property var last: destination.last
     readonly property bool wrong: !!last && !destination.copied
-    readonly property string where: destination.kind === "disk" ? qsTr("A second disk") : qsTr("Away from home")
+    readonly property string where: destination.kind === "disk" ? qsTr("A second disk")
+        : destination.kind === "hub" ? qsTr("Another of your hubs, which can't read them")
+        : qsTr("Away from home")
     wrapMode: Text.Wrap
     color: wrong ? theme.colors.red : theme.foreground
     text: !last ? qsTr("%1, at %2. Not copied to yet: the snapshots go there every night.").arg(where).arg(destination.location)
