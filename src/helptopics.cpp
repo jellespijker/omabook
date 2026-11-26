@@ -52,7 +52,8 @@ Manual::Topic computersTopic() {
                  Manual::tr("{library.devices} serves the library to KOReader, Librera, Moon+ Reader and other apps that read "
                             "a catalog, on this computer, the home network or the tailnet. Scan its QR code with the phone, or "
                             "copy the address, the user name and the password. Its switch serves on with the window closed, as "
-                            "a service of your own that starts when you log in.")},
+                            "a service of your own that starts when you log in. A hub serves them too, with no computer awake: "
+                            "Phones… in {library.hubs}.")},
                 {Manual::tr("Why not a shared folder"),
                  Manual::tr("A library is a live database, and two computers writing it through a network folder can "
                             "corrupt it. So each computer keeps a whole library of its own, readable offline, and a sync "

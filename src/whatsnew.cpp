@@ -342,6 +342,35 @@ QList<Manual::Step> hubSyncRelease() {
     };
 }
 
+// The 0.5.2 release's entries: phones and e-readers served by the hub (#193), more than one hub and the graph built
+// once among them (#196, #219), another hub as a destination of the snapshots (#196), the hub in a container (#195),
+// and a library or settings that can't be read no longer replaced (#221, #222).
+QList<Manual::Step> hubsRelease() {
+    return {
+        {"hub-phones", "0.5.2", Manual::tr("Phones and e-readers from the hub"),
+         Manual::tr("A hub now serves its library to KOReader and other apps that read a catalog, with no computer awake, "
+                    "and where KOReader says you are reaches your computers by the next sync. Set it up with Phones… in "
+                    "{library.hubs}."),
+         "", "library.hubs", "library", ""},
+        {"hubs-several", "0.5.2", Manual::tr("More than one hub"),
+         Manual::tr("A computer can be linked to several hubs, and they don't fight: the same library ends the same on each, "
+                    "a book's graph is built once among them, and a hub out of reach holds up none of the others."),
+         "", "library.hubs", "library", ""},
+        {"hub-destination", "0.5.2", Manual::tr("Snapshots on another hub"),
+         Manual::tr("Under Destinations, {library.snapshots} can copy the snapshots to another of your hubs (hub:<host>). It "
+                    "keeps them encrypted, can't read them, and counts as the copy away from home."),
+         "", "library.snapshots", "library", ""},
+        {"hub-container", "0.5.2", Manual::tr("The hub in a container"),
+         Manual::tr("For a NAS or a Raspberry Pi, the hub comes as a container image for x86_64 and aarch64, "
+                    "`ghcr.io/jellespijker/omabook-hub`, with a Compose file to start from."),
+         "", "", "", ""},
+        {"library-kept", "0.5.2", Manual::tr("Your library and settings stay"),
+         Manual::tr("A library on a drive that isn't connected is no longer replaced by a new, empty one, and a `config.json` "
+                    "with a mistake in it is no longer reset to the defaults. Omabook says what is wrong, and what you can do."),
+         "", "", "", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -421,5 +450,5 @@ QList<Manual::Step> Manual::features() {
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
     } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
-           + speechRelease() + branchesRelease() + hubRelease() + hubSyncRelease();
+           + speechRelease() + branchesRelease() + hubRelease() + hubSyncRelease() + hubsRelease();
 }
