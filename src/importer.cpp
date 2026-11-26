@@ -293,22 +293,39 @@ private:
     return QDir().mkpath(folder) && source.pack(file) ? file : QString();
 }
 
+// Whether a walk comes to what `entry` leads to for the first time, which is
+// then noted in `seen`. Links are followed, so several names, a link back up
+// among them, can lead to one folder or file; a link to itself leads nowhere.
+[[nodiscard]] bool firstVisit(const QFileInfo &entry, QSet<QString> &seen) {
+    const QString real = entry.canonicalFilePath();
+    if (real.isEmpty() || seen.contains(real))
+        return false;
+    seen.insert(real);
+    return true;
+}
+
 // The books in a folder: its book files, and its folders that are one book
-// each; any other folder is looked into the same way.
-void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QList<Incoming> &incoming, QStringList &problems) {
+// each; any other folder is looked into the same way. The folder itself and
+// what is in it are passed over when they are in `seen` already.
+void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QList<Incoming> &incoming, QStringList &problems,
+          QSet<QString> &seen) {
+    if (!firstVisit(QFileInfo(folder), seen))
+        return;
     const QDir dir(folder);
     for (const QFileInfo &entry : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot, QDir::Name)) {
         if (entry.isFile()) {
-            if (Formats::isBook(entry.filePath()))
+            if (Formats::isBook(entry.filePath()) && firstVisit(entry, seen))
                 incoming.append(Incoming::file(entry.filePath()));
         } else if (const auto provider = Formats::providerFor(entry.filePath())) {
+            if (!firstVisit(entry, seen))
+                continue;
             const QString file = packed(entry.filePath(), *provider, scratch, counter);
             if (file.isEmpty())
                 problems << Failure(Failure::Code::NotOneBook, {entry.fileName()}).text();
             else
                 incoming.append(Incoming::file(file));
         } else {
-            walk(entry.filePath(), scratch, counter, incoming, problems);
+            walk(entry.filePath(), scratch, counter, incoming, problems, seen);
         }
     }
 }
@@ -318,6 +335,7 @@ void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QLi
     QStringList &problems = summary.problems;
     QList<Incoming> incoming;
     int unpacked = 0;
+    QSet<QString> seen; // the folders and files the walks have come to
     for (const QString &path : paths) {
         const bool calibre = options.calibre && QFileInfo(path).isDir() && Calibre::isLibrary(path);
         const auto provider = !calibre && (isArchive(path) || QFileInfo(path).isDir()) ? Formats::providerFor(path) : std::nullopt;
@@ -347,7 +365,7 @@ void walk(const QString &folder, const QTemporaryDir &scratch, int &counter, QLi
                     incoming.append({.files = files, .meta = book.meta, .cover = book.cover, .calibre = book});
             }
         } else {
-            walk(path, scratch, unpacked, incoming, problems);
+            walk(path, scratch, unpacked, incoming, problems, seen);
         }
     }
     return incoming;
