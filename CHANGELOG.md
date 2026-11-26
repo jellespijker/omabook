@@ -12,6 +12,12 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.4.1.1] - 2026-11-26
+
+### Fixed
+
+- Omabook builds again with Qt 6.12.1 (#244).
+
 ## [0.4.1] - 2026-11-22
 
 Timelines branch, for alternate history and the worlds that go another way. Phones and e-readers connect by a QR code, and the library is served with the window closed too. Each use of AI can fall back to a second server when its own can't be reached, and finds a model on Ollama's library or Hugging Face; a book's graph builds again with a model on Ollama. The package suggests `tailscale`, for the address by this computer's name on the tailnet.
