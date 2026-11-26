@@ -40,6 +40,12 @@ Rectangle {
     radius: Math.min(4, theme.radius)
     color: current ? theme.colors.selection : "transparent"
 
+    // How wide a line of buttons is unwrapped: its shown buttons side by side.
+    function lineWidth(line) {
+        const shown = Array.from(line.children).filter(button => button.visible);
+        return shown.reduce((width, button) => width + button.implicitWidth, 0) + Math.max(0, shown.length - 1) * line.spacing;
+    }
+
     component Detail: Label {
         Layout.fillWidth: true
         wrapMode: Text.Wrap
@@ -165,12 +171,19 @@ Rectangle {
                 text: qsTr("Unlink this computer from %1? Its key there is taken away; the hub keeps its libraries, and this computer keeps its own.").arg(row.hub.host)
             }
         }
-        // Syncing on one line, the hub's computers and unlinking on the next: two buttons fit a narrow window.
+        // Syncing on one line, the hub's computers and unlinking on the next,
+        // each wrapping when the row is too narrow for it (#242): beside the
+        // details as wide as its longer line, under them as wide as the row.
         Column {
+            id: actions
             Layout.alignment: Qt.AlignTop
+            Layout.fillWidth: win.compact
+            Layout.preferredWidth: win.compact ? -1 : Math.max(row.lineWidth(syncLine), row.lineWidth(workLine))
             spacing: 6
             z: 1
-            Row {
+            Flow {
+                id: syncLine
+                width: actions.width
                 spacing: 6
                 AppButton {
                     objectName: "hubSyncNow"
@@ -187,7 +200,9 @@ Rectangle {
                     onClicked: row.syncWanted(true)
                 }
             }
-            Row {
+            Flow {
+                id: workLine
+                width: actions.width
                 spacing: 6
                 AppButton {
                     objectName: "hubCancelWork"
