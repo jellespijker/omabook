@@ -2,7 +2,6 @@
 
 #include "log.h"
 
-#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -18,6 +17,7 @@
 #include <QUrl>
 #include <algorithm>
 
+#include "bookadmission.h"
 #include "bookwords.h"
 #include "formats.h"
 #include "graphtools.h"
@@ -304,7 +304,7 @@ public:
         meta.apply(BookMeta::fromJson(given));
         if (given.contains("series_index"))
             meta.seriesIndex = given.value("series_index").toDouble();
-        const Library::Added added = library->add(file, meta);
+        const Library::Added added = BookAdmission::add(*library, file, meta);
         if (!added.error.isEmpty()) {
             p->m_engine.throwError(added.error);
             return "null";
@@ -332,7 +332,7 @@ public:
                                        .arg(book->id).arg(Formats::extension(file), book->formats.join(", ")));
             return "null";
         }
-        if (const auto put = library->addFormat(book->id, file, Library::SameFormat::Overwrite); !put) {
+        if (const auto put = BookAdmission::addFormat(*library, book->id, file, Library::SameFormat::Overwrite); !put) {
             p->m_engine.throwError(put.error().text());
             return "null";
         }

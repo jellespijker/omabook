@@ -202,6 +202,8 @@ int addFromFeed(QNetworkAccessManager &network, const OpdsCatalog::Feed &feed, c
     const ImportSummary added = importBooks(**library, {path});
     if (!added.problems.isEmpty())
         return failLine(added.problems.first());
+    for (const Failure &note : added.unreadable)
+        printLine(stderr, note.text());
     printLine(stdout, u"Added as book %1."_s.arg(added.lastId));
     return 0;
 }

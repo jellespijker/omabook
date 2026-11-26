@@ -19,7 +19,10 @@ QStringList ImportSummary::reasons() const {
     QStringList reasons;
     for (const Failure &left : leftOut)
         reasons << left.text();
-    return reasons + problems;
+    reasons += problems;
+    for (const Failure &one : unreadable)
+        reasons << one.text();
+    return reasons;
 }
 
 QJsonArray ImportSummary::itemsJson() const {
@@ -57,7 +60,7 @@ QString ImportSummary::calibreLine() const {
 }
 
 void ImportSummary::keepInLog() const {
-    for (const Failure &left : leftOut)
+    for (const Failure &left : leftOut + unreadable)
         Log::keep(lcLibrary(), left.english());
     for (const QString &problem : problems)
         Log::keep(lcLibrary(), problem);

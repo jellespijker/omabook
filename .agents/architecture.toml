@@ -53,6 +53,7 @@ modules = [
   "privatebooks", "koreaderbooks", "bookspaces",
   "fileschema",
   "libraryfiles", "booklink",
+  "bookadmission",
   "libraryhold", "syncidentity", "pluginrestore",
   "libraryrepairs", "librarypresence",
   "graphbuilt",

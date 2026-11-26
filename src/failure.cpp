@@ -55,6 +55,9 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NoReadableFile, tr("There is no readable file at %1")},
     {Failure::Code::NotABookFormat, tr("%1 is not a book format Omabook knows.")},
     {Failure::Code::EmptyBookFile, tr("%1 is empty, so it is no file for a book.")},
+    {Failure::Code::BookRefused, tr("%1 was not added: %2")},
+    {Failure::Code::BookUnreadable, tr("%1 was added, but it can't be read here: %2")},
+    {Failure::Code::FileCutShort, tr("The file is cut short: part of it is missing.")},
     {Failure::Code::BookHasFormat,
      tr("Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an "
         "agent): the one there goes to the trash.")},

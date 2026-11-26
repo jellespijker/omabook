@@ -13,6 +13,7 @@
 #include <print>
 #include <tuple>
 
+#include "bookadmission.h"
 #include "formats.h"
 #include "library.h"
 #include "settings.h"
@@ -119,8 +120,11 @@ int runAddFormats(Library &library, qint64 id, const QStringList &files, bool re
     for (const QString &file : files) {
         const QString format = Formats::extension(file);
         const QString before = Library::hashFile(library.formatPath(id, format));
-        if (const auto added = library.addFormat(id, file, same); !added)
+        const auto added = BookAdmission::addFormat(library, id, file, same);
+        if (!added)
             return failLine(added.error().text());
+        if (*added)
+            printLine(stderr, (*added)->text());
         // Said beside the answer, which an agent is handed too.
         if (!before.isEmpty() && Library::hashFile(library.formatPath(id, format)) != before)
             printLine(stderr, u"Replaced the %1 file of book %2; the one it had is in the trash."_s.arg(Formats::name(format)).arg(id));

@@ -40,11 +40,13 @@ struct ImportSummary {
     // are named first, those that failed are among the problems.
     QList<Failure> leftOut;
     int skipped = 0;
+    // The files that came in and can't be read here, each with why (#226).
+    QList<Failure> unreadable;
 
     [[nodiscard]] bool foundNothing() const;
     // Something went wrong, or a book stayed behind.
     [[nodiscard]] bool failed() const;
-    // The problems and what was left out, as sentences to show.
+    // The problems, what was left out and what can't be read, as sentences to show.
     [[nodiscard]] QStringList reasons() const;
     [[nodiscard]] QJsonArray itemsJson() const;
     // What importing Calibre libraries did, as JSON and as one line in English.
@@ -63,6 +65,9 @@ struct ImportOptions {
 
 // Nothing of a Calibre library is passed over in silence: a book, a format of
 // one or its cover that doesn't come across is named, in the summary and the log.
+//
+// A file that is empty or damaged doesn't come in, and one that is protected
+// comes in with a note (BookAdmission).
 //
 // `progress` is told how many of how many books are in, from the calling thread.
 //
@@ -87,3 +92,7 @@ struct ImportOptions {
 // replaces a value that still is what it put there.
 ImportSummary importBooks(Library &library, const QStringList &paths,
                           const std::function<void(int done, int total)> &progress = {}, const ImportOptions &options = {});
+
+// One book, described by whoever is adding it: the one file, looked at as an
+// import looks at it, and the details given.
+ImportSummary importDescribed(Library &library, const QString &file, const BookMeta &meta);

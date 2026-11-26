@@ -415,10 +415,7 @@ int add(const QStringList &arguments) {
             cover.setAutoTransform(true);
             meta->cover = cover.read();
         }
-        const Library::Added added = library->add(paths.first(), meta);
-        summary.items.append({.file = paths.first(), .id = added.id, .duplicate = added.duplicate, .error = added.error});
-        if (!added.error.isEmpty())
-            summary.problems << added.error;
+        summary = importDescribed(*library, paths.first(), *meta);
     } else {
         // Whether a Calibre library is read as one is the Calibre plugin's to say.
         Settings settings;

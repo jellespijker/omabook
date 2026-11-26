@@ -32,7 +32,7 @@ QStringList Backend::importLines(const ImportSummary &summary, bool calibreLeftO
     lines << reasons.mid(0, 3);
     const int more = static_cast<int>(reasons.size()) - 3;
     if (more > 0)
-        lines << (summary.leftOut.isEmpty() ? tr("%Ln more could not be added", "", more)
+        lines << (summary.leftOut.isEmpty() && summary.unreadable.isEmpty() ? tr("%Ln more could not be added", "", more)
                                             : tr("%Ln more are named in the log (omabook logs)", "", more));
     return lines;
 }

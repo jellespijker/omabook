@@ -11,6 +11,7 @@
 #include <ranges>
 
 #include "addinghold.h"
+#include "bookadmission.h"
 #include "bookarchive.h"
 
 #include "calibre.h"
@@ -280,6 +281,42 @@ void failed(const Incoming &book, const QString &why, ImportSummary &summary) {
     summary.problems << Failure(Failure::Code::CalibreBookFailed, {CalibreImport::nameOf(*book.calibre), why}).text();
 }
 
+// The files of a book that may come in (#226), and what is said of each that
+// can't be read; of those that may not, why.
+struct Admitted {
+    QStringList files;
+    QList<std::pair<QString, Failure>> unreadable; // a file, and the note
+    QList<Failure> refused;
+};
+
+[[nodiscard]] Admitted admitted(const Library &library, const QStringList &files, const QHash<QString, QString> &hashes) {
+    Admitted result;
+    for (const QString &file : files) {
+        const auto verdict = BookAdmission::examine(library, file, hashes.value(file));
+        if (!verdict) {
+            result.refused << verdict.error();
+            continue;
+        }
+        result.files << file;
+        if (*verdict)
+            result.unreadable.append({file, **verdict});
+    }
+    return result;
+}
+
+// Notes each of those files that can't be read and is in the library now.
+void sayUnreadable(const Library &library, const Admitted &sound, const QHash<QString, QString> &hashes, ImportSummary &summary) {
+    for (const auto &[file, note] : sound.unreadable)
+        if (library.bookWithHash(hashes.value(file)) != 0)
+            summary.unreadable << note;
+}
+
+// Why none of a book's files may come in, as the first of them was refused.
+void turnAway(const Incoming &book, const Failure &why, ImportSummary &summary) {
+    summary.items.append({.file = book.files.first(), .error = why.text()});
+    failed(book, why.text(), summary);
+}
+
 // Copies in the formats a book here lacks. `copied` is the file that has
 // just gone in, when one made the book or joined it.
 void addFormats(Library &library, const Incoming &book, qint64 id, const QString &copied, const QHash<QString, QString> &hashes,
@@ -376,18 +413,30 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
     Fileless fileless(library);
     QHash<qint64, QString> taken; // see takeCalibre
     int done = 0;
-    for (const Incoming &book : incoming) {
+    const auto next = [&] {
+        if (progress)
+            progress(++done, static_cast<int>(incoming.size()));
+    };
+    for (Incoming book : incoming) {
         std::optional<BookMeta> meta = book.meta;
         if (meta && !book.cover.isEmpty()) {
             QImageReader cover(book.cover);
             cover.setAutoTransform(true);
             meta->cover = cover.read();
         }
-        const QString &first = book.files.first();
         // Its files are held until they are in, so another import that has
         // one of them waits and then finds it here (#228).
         const QHash<QString, QString> hashes = hashesOf(book.files);
         const auto held = AddingHold::files(library.root(), hashes.values());
+        const Admitted sound = admitted(library, book.files, hashes);
+        if (sound.files.isEmpty()) {
+            turnAway(book, sound.refused.first(), summary);
+            next();
+            continue;
+        }
+        summary.leftOut << sound.refused;
+        book.files = sound.files;
+        const QString first = book.files.first();
         // A book any of whose files is here already is that book.
         qint64 here = 0;
         for (const QString &file : book.files.mid(1))
@@ -407,13 +456,27 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
             added.duplicate ? ++summary.duplicates : joined ? ++summary.joined : ++summary.added;
             summary.lastId = added.id;
             addFormats(library, book, added.id, here == 0 ? first : QString(), hashes, summary);
+            sayUnreadable(library, sound, hashes, summary);
             if (const auto &calibre = book.calibre)
                 takeCalibre(library, *calibre, added, memory, taken, summary);
         }
-        if (progress)
-            progress(++done, incoming.size());
+        next();
     }
     memory.save();
+    summary.keepInLog();
+    return summary;
+}
+
+ImportSummary importDescribed(Library &library, const QString &file, const BookMeta &meta) {
+    ImportSummary summary;
+    const auto verdict = BookAdmission::examine(library, file, Library::hashFile(file));
+    const Library::Added added =
+        verdict ? library.add(file, meta) : Library::Added{.error = verdict.error().text()};
+    summary.items.append({.file = file, .id = added.id, .duplicate = added.duplicate, .error = added.error});
+    if (!added.error.isEmpty())
+        summary.problems << added.error;
+    else if (*verdict && !added.duplicate)
+        summary.unreadable << **verdict;
     summary.keepInLog();
     return summary;
 }

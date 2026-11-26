@@ -53,6 +53,9 @@ public:
         NoReadableFile,    // {path}
         NotABookFormat,    // {file name}
         EmptyBookFile,     // {file name}
+        BookRefused,       // {file name, why it is no book} (#226)
+        BookUnreadable,    // {file name, why it can't be read here}: it was added
+        FileCutShort,      // {}
         BookHasFormat,     // {book's number, format name}
         // The file to be replaced stays, as it can't be kept: {path}.
         ReplacedFileNotTrashed,
