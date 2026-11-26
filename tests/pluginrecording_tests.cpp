@@ -268,6 +268,8 @@ private slots:
         ScriptPlugin &plugin = *desk.backend->scripts()->plugin("notes");
         std::ignore = answer(plugin, "tell", {"Recording kept"});
         QTRY_COMPARE(text(desk, "toastText"), QString("Recording kept"));
+        // Long enough to reach its button (#233).
+        QVERIFY(desk.backend->messageLasts() >= 15000);
         QVERIFY(desk.shows("toastAction"));
         QCOMPARE(text(desk, "toastAction"), QString("Play"));
         desk.backend->actOnMessage();

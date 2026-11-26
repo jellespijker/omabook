@@ -14,6 +14,7 @@
 #include <QThreadPool>
 #include <QtConcurrent>
 #include <algorithm>
+#include <chrono>
 
 #include "airegistry.h"
 #include "graphmodel.h"
@@ -297,11 +298,26 @@ QVariantMap Backend::book(qint64 id) const {
     return book ? bookToMap(*book, m_library->root()) : QVariantMap();
 }
 
-void Backend::say(const QString &message) {
+void Backend::say(const QString &message) { sayOutcome(message, false); }
+
+void Backend::sayOutcome(const QString &message, bool wentWrong) {
     if (!message.isEmpty())
         qCInfo(lcApp).noquote() << "said:" << message;
     m_message = message;
+    m_messageStays = wentWrong;
     emit messageChanged();
+}
+
+// Time to notice the line and to read it, and for a notice with a button the
+// time to reach that too.
+int Backend::messageLasts() const {
+    using std::chrono::milliseconds;
+    using namespace std::chrono_literals;
+    if (m_message.isEmpty() || m_messageStays)
+        return 0;
+    const milliseconds least = messageAction().isEmpty() ? milliseconds(4s) : milliseconds(15s);
+    const milliseconds toRead(4s + m_message.size() * 50ms);
+    return static_cast<int>(std::clamp(toRead, least, milliseconds(20s)).count());
 }
 
 void Backend::dismissMessage() { say({}); }
@@ -361,7 +377,7 @@ void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) 
             came << item.id;
     putInShownCollection(came);
     reload();
-    say(importLines(summary, calibreLeftOut).join("\n"));
+    sayOutcome(importLines(summary, calibreLeftOut).join("\n"), !summary.problems.isEmpty());
     if (summary.lastId && summary.added + summary.joined + summary.duplicates == 1)
         emit bookAdded(summary.lastId);
     // A Calibre library that came in needs no offering any more.

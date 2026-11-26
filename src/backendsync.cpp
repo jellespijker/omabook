@@ -101,7 +101,7 @@ void Backend::sync() {
                 --self->m_jobs;
                 self->setStatus({});
                 self->reload();
-                self->say(syncLines(summary).join("\n"));
+                self->sayOutcome(syncLines(summary).join("\n"), !summary.error.isEmpty() || !summary.problems.isEmpty());
             },
             Qt::QueuedConnection);
     });

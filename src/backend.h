@@ -51,6 +51,9 @@ class Backend : public QObject {
     // The words of a button that acts on the message, when a plugin's notice
     // has one (omabook.ui.notify, #135); empty for none.
     Q_PROPERTY(QString messageAction READ messageAction NOTIFY messageChanged)
+    // How long the message is shown before it goes by itself, in milliseconds;
+    // 0 for one that waits for the person to put it away (#233).
+    Q_PROPERTY(int messageLasts READ messageLasts NOTIFY messageChanged)
     Q_PROPERTY(bool searching READ searching NOTIFY candidatesChanged)
     Q_PROPERTY(QVariantList candidates READ candidates NOTIFY candidatesChanged)
     Q_PROPERTY(QString searchProblem READ searchProblem NOTIFY candidatesChanged)
@@ -162,6 +165,7 @@ public:
     QString status() const noexcept { return m_status; }
     QString message() const noexcept { return m_message; }
     QString messageAction() const { return m_message == m_notice.text ? m_notice.action : QString(); }
+    [[nodiscard]] int messageLasts() const;
     bool searching() const noexcept { return m_pendingSources > 0; }
     QVariantList candidates() const;
     QString searchProblem() const noexcept { return m_searchProblem; }
@@ -252,6 +256,9 @@ public:
     Q_INVOKABLE void forgetLibrary(const QString &path, bool trash = false);
     Q_INVOKABLE void dismissMessage();
     Q_INVOKABLE void say(const QString &message);
+    // As say(), for how work beside the window ended: when something went
+    // wrong the message needs the person, and stays until it is put away.
+    void sayOutcome(const QString &message, bool wentWrong);
     // Presses the message's button: its plugin is told, and the message goes.
     Q_INVOKABLE void actOnMessage();
     // Asks for a reading site's export file to read, or where to write
@@ -358,6 +365,7 @@ private:
     int m_jobs = 0;
     QString m_status;
     QString m_message;
+    bool m_messageStays = false;
     // The last notice a plugin gave with a button, while it is the message.
     struct Notice {
         QString text, action, plugin;

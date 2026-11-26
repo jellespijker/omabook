@@ -327,7 +327,7 @@ void Librarian::applyChosen() {
     m_entries.clear();
     emit proposalsChanged();
     m_backend->reload();
-    m_backend->say((QStringList{tr("%Ln changes made", "", applied)} + problems.mid(0, 3)).join("\n"));
+    m_backend->sayOutcome((QStringList{tr("%Ln changes made", "", applied)} + problems.mid(0, 3)).join("\n"), !problems.isEmpty());
 }
 
 void Librarian::stop() {
