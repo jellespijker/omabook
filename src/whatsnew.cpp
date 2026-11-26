@@ -314,7 +314,7 @@ QList<Manual::Step> hubRelease() {
 }
 
 // The 0.5.1 release's entries: the plugins' files through a hub (#212), a hub's library paired once (#214, #217),
-// and a sync that no longer refuses for a clock behind or a new name (#211, #215).
+// the graphs built on the hub (#192), and a sync that no longer refuses for a clock behind or a new name (#211, #215).
 QList<Manual::Step> hubSyncRelease() {
     return {
         {"hub-plugin-files", "0.5.1", Manual::tr("Notebooks through the hub too"),
@@ -324,6 +324,10 @@ QList<Manual::Step> hubSyncRelease() {
         {"hub-pair", "0.5.1", Manual::tr("A hub's library, paired once"),
          Manual::tr("A library on the hub syncs only with the one it is paired with. Where a sync was refused for that, Pair "
                     "in {library.hubs} asks first, then pairs the two and syncs them."),
+         "", "library.hubs", "library", ""},
+        {"hub-work", "0.5.1", Manual::tr("The hub builds the graphs"),
+         Manual::tr("A hub builds the knowledge graph of each new book in the background, with its own quick model, and "
+                    "your computers get it by the next sync. {library.hubs} shows how far it got, and Cancel Work stops it."),
          "", "library.hubs", "library", ""},
         {"sync-clocks-names", "0.5.1", Manual::tr("Fewer refusals for nothing"),
          Manual::tr("A computer whose clock is behind, or that was given a new name, now syncs on: reading places go in the "

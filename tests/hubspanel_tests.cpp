@@ -391,6 +391,23 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // C stops the selected hub's work too, from the keyboard (#190).
+    void theHubsWorkIsCancelledByItsKey() {
+        Desk desk("en", {}, false);
+        HubHere *hub = served(desk);
+        QVERIFY(hub);
+        QVERIFY(desk.show());
+        QVERIFY(linked(desk));
+        QVERIFY(open(desk));
+        QTRY_COMPARE(text(desk, "hubWork"), QString("Building the graph of Moss: 1 of 3 requests."));
+        key(desk, Qt::Key_C);
+        QVERIFY(idle(desk));
+        QVERIFY2(!desk.hubsDesk->failed(), qPrintable(desk.hubsDesk->status()));
+        QVERIFY(!hub->working);
+        QTRY_COMPARE(text(desk, "hubWork"), QString("No background work under way."));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     // A library the hub's isn't paired with, as another computer's library is
     // (#214), is refused at Sync Now and at its preview, the panel saying how
     // to pair; neither side changes.

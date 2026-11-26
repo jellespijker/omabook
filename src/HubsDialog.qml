@@ -110,6 +110,9 @@ AppPopup {
             else if (event.key === Qt.Key_N && plain && dialog.idle) dialog.show("link")
             else if (event.key === Qt.Key_R && plain && dialog.idle) hubsDesk.refresh()
             else if (event.key === Qt.Key_A && plain && dialog.idle && dialog.unpaired) dialog.pairing = true
+            else if (event.key === Qt.Key_C && plain && dialog.idle && dialog.picked && dialog.picked.work
+                     && dialog.picked.work.running)
+                hubsDesk.cancelWork(dialog.picked.host)
             else if ((event.key === Qt.Key_S || event.key === Qt.Key_P) && plain && dialog.idle && dialog.picked
                      && dialog.picked.state === "reachable")
                 hubsDesk.syncNow(dialog.picked.host, event.key === Qt.Key_P)

@@ -67,6 +67,7 @@ rm -rf "$XDG_CONFIG_HOME/omabook/plugins/shelver"
 expect "what is new" 0 "A hub that is always on" "$omabook" help new
 expect "a help page on the hub and the snapshots" 0 "A second disk, and one away from home" "$omabook" help hub
 expect "the hub's page says how a library is paired" 0 "One library, paired once" "$omabook" help hub
+expect "the hub's page says what it does in the background" 0 "Work in the background" "$omabook" help hub
 expect "the page on other computers says a renamed one syncs on" 0 "Clocks, names and older Omabooks" "$omabook" help computers
 expect "a help page on sharing" 0 "What is never shared" "$omabook" help sharing
 expect "it says removing a member changes the key" 0 "changes its key" "$omabook" help sharing
