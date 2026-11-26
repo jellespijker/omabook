@@ -47,6 +47,8 @@ optdepends=(
   'voxtype-bin: write out recordings on this computer, with the speech to text Omarchy ships (from the omarchy repository)'
   'tailscale: the address for phones and e-readers by the name of this computer on the tailnet'
   'rclone: keep snapshots in a place rclone reaches (an rclone: destination)'
+  'upower: let automatic sync with a hub wait while this computer is on battery'
+  'networkmanager: let automatic sync with a hub wait on a metered connection'
 )
 makedepends=('cmake' 'gcc' 'make' 'pkgconf')
 # The window tests measure text, so they need a font; the CLI tests make zips;
