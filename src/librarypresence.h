@@ -10,12 +10,14 @@
 // left with two libraries of one name, one of them hidden under a mount.
 //
 // One is expected where config.json names it (the one in use, or one of the
-// list), and where this program opened one before.
+// list), and where this program opened one before. While config.json can't be
+// read, which it names isn't known, so one is expected in any folder: the
+// usual one would otherwise take the place of the person's own.
 namespace LibraryPresence {
 
 // Whether the folder holds a library now.
 [[nodiscard]] bool there(const QString &folder);
-// Whether config.json names the folder.
+// Whether config.json names the folder, or may: it can't be read.
 [[nodiscard]] bool configured(const QString &folder);
 // Not there, though one is expected.
 [[nodiscard]] bool missing(const QString &folder);

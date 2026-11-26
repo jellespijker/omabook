@@ -1,15 +1,14 @@
 #include "librarypresence.h"
 
 #include <QDir>
-#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
 #include <algorithm>
 #include <mutex>
 
+#include "jsonfile.h"
 #include "library.h"
 #include "settings.h"
 
@@ -37,12 +36,12 @@ bool LibraryPresence::there(const QString &folder) { return !folder.isEmpty() &&
 // As the file stands, not as Settings fills it in: the usual folder and a
 // library named for one run (--library) are not written in it.
 bool LibraryPresence::configured(const QString &folder) {
-    QFile file(Settings::defaultFile());
-    if (!file.open(QIODevice::ReadOnly))
-        return false;
-    const QJsonObject values = QJsonDocument::fromJson(file.readAll()).object();
-    QJsonArray named = values.value("libraries"_L1).toArray();
-    named.append(values.value("library"_L1));
+    const auto values = JsonFile::object(Settings::defaultFile());
+    // One that can't be read (#222) may name any folder, so none is made.
+    if (!values)
+        return true;
+    QJsonArray named = values->value("libraries"_L1).toArray();
+    named.append(values->value("library"_L1));
     const QString asked = spelled(folder);
     return std::ranges::any_of(named,
                                [&asked](const QJsonValue &one) { return !one.toString().isEmpty() && spelled(one.toString()) == asked; });

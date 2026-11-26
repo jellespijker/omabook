@@ -5,6 +5,7 @@
 
 #include <QDir>
 #include <QFileInfo>
+#include <QScopeGuard>
 #include <QtTest>
 
 #include "desk.h"
@@ -151,6 +152,62 @@ private slots:
         QTRY_VERIFY(!desk.backend->property("libraryMissing").toBool());
         QVERIFY(QFileInfo::exists(root + "/omabook.db"));
         QCOMPARE(desk.warnings, QStringList());
+    }
+
+    // The settings that name the person's library can't be read (#222): the
+    // usual folder is not made in its place.
+    void anUnreadableConfigMakesNoLibrary() {
+        const McpHarness::Machine machine;
+        const QString books = machine.dir.filePath("home/Books"), library = machine.dir.filePath("share/Library");
+        const QString config = machine.dir.filePath("home/.config/omabook/config.json");
+        QVERIFY(Fixtures::write(config, QByteArray("{\"ai_provider\": \"off\", \"library\": \"") + library.toUtf8() + "\",}"));
+        const QString book = machine.dir.filePath("book.fb2");
+        QVERIFY(Fixtures::write(book, Fixtures::fb2()));
+
+        for (const QStringList &arguments : {QStringList{"list"}, QStringList{"add", book}, QStringList{"libraries"}}) {
+            const auto ran = machine.omabook(arguments);
+            QVERIFY2(ran.errors.contains(config), qPrintable(ran.errors));
+            QVERIFY(!QFileInfo::exists(books));
+        }
+        QCOMPARE(machine.omabook({"list"}).code, 1);
+        McpHarness::Server server(machine);
+        server.request("initialize", {{"protocolVersion", "2025-06-18"}});
+        QVERIFY(!server.failure("books_search").isEmpty());
+        QVERIFY(!QFileInfo::exists(machine.library));
+        QVERIFY(!QFileInfo::exists(books));
+    }
+
+    // A library that is there opens as before, and nothing is said unsaved.
+    void anUnreadableConfigLeavesTheUsualLibraryUsable() {
+        const McpHarness::Machine machine;
+        QCOMPARE(machine.omabook({"list"}).code, 0);
+        QVERIFY(Fixtures::write(machine.dir.filePath("home/.config/omabook/config.json"), "{\"ai_provider\": \"off\",}"));
+        const auto ran = machine.omabook({"list"});
+        QVERIFY2(ran.code == 0, qPrintable(ran.errors));
+    }
+
+    void theWindowMakesNoLibraryWhileTheConfigCantBeRead() {
+        QTemporaryDir home;
+        const QByteArray usual = qgetenv("HOME"), settingsAt = qgetenv("XDG_CONFIG_HOME");
+        qputenv("HOME", home.path().toUtf8());
+        qputenv("XDG_CONFIG_HOME", home.filePath(".config").toUtf8());
+        const auto restored = qScopeGuard([&usual, &settingsAt] {
+            qputenv("HOME", usual);
+            qputenv("XDG_CONFIG_HOME", settingsAt);
+        });
+        QVERIFY(QDir().mkpath(QFileInfo(Settings::defaultFile()).absolutePath()));
+        QVERIFY(Fixtures::write(Settings::defaultFile(), "{\"ai_provider\": \"off\",}"));
+        Settings settings;
+        QCOMPARE(settings.libraryPath(), home.filePath("Books"));
+        NoPicker picker;
+        Backend backend(
+            &settings, &picker, nullptr, [](QString *) -> std::unique_ptr<AiProvider> { return nullptr; },
+            [](QObject *) { return QList<MetadataSource *>(); }, home.filePath("plugins"), "-");
+        QVERIFY(backend.property("libraryMissing").toBool());
+        QVERIFY(!QFileInfo::exists(home.filePath("Books")));
+        // Only asking for one there makes one.
+        QVERIFY(QMetaObject::invokeMethod(&backend, "createLibrary"));
+        QVERIFY(QFileInfo::exists(home.filePath("Books/omabook.db")));
     }
 
     void theWindowMakesALibraryOnlyWhereOneIsAskedFor() {
