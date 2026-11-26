@@ -86,7 +86,7 @@ MetaDiff whatItBrings(const BookMeta &book, bool bookHasCover, const MetaCandida
     compare("tags", book.tags.join(", "), found.tags.join(", "));
     if (candidate.coverUrl.isValid()) {
         if (bookHasCover)
-            diff.changes.append({"cover", {}, {}});
+            diff.changes.append(MetaDiff::Change{.field = "cover", .from = {}, .to = {}});
         else
             diff.adds << "cover";
     }
