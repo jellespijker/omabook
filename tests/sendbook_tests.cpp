@@ -82,9 +82,8 @@ private:
     const QString made = folder + "/made." + format;
     if (!Fixtures::write(made, "converted to " + format.toUtf8()))
         return std::unexpected(Failure::said(u"unwritten"_s));
-    QString error;
-    if (!library.addFormat(book, made, &error))
-        return std::unexpected(Failure::said(error));
+    if (const auto added = library.addFormat(book, made); !added)
+        return std::unexpected(added.error());
     return library.formatPath(book, format);
 }
 

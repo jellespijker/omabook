@@ -99,9 +99,9 @@ bool applyCandidate(Library &library, qint64 id, const MetaCandidate &candidate,
 // Nothing for a book without an EPUB.
 [[nodiscard]] std::expected<void, Failure> writeDetailsWhenAsked(Library &library, qint64 id, bool asked);
 
-// Converts a book with Calibre's ebook-convert and adds the result to it.
-// Empty `from` is the format the reader prefers. Returns the new file, or an
-// empty string and `error`.
+// Converts a book with Calibre's ebook-convert and adds the result to it; a
+// file of that format the book had goes to the trash. Empty `from` is the
+// format the reader prefers. Returns the new file, or an empty string and `error`.
 QString convert(Library &library, qint64 id, const QString &to, const QString &from, QString *error);
 
 // What would tidy a library, found by comparing (and, with `series`, the

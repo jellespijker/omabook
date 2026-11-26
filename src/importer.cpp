@@ -252,8 +252,12 @@ private:
 // identifiers and paper copy aren't touched.
 [[nodiscard]] bool join(Library &library, qint64 id, const QString &file, const BookMeta &incoming, QString *error) {
     const auto entry = library.book(id);
-    if (!entry || !library.addFormat(id, file, error))
+    if (!entry)
         return false;
+    if (const auto added = library.addFormat(id, file); !added) {
+        *error = added.error().text();
+        return false;
+    }
     BookMeta details = entry->meta;
     details.fillFrom(incoming);
     details.cover = entry->hasCover ? QImage() : incoming.cover;
@@ -434,10 +438,10 @@ ImportSummary importBooks(Library &library, const QStringList &paths, const std:
                 // copied in again.
                 if (library.bookWithHash(hashes.contains(file) ? hashes.value(file) : Library::hashFile(file)) != 0)
                     continue;
-                if (QString error; library.addFormat(added.id, file, &error))
+                if (const auto taken = library.addFormat(added.id, file); taken)
                     have << format;
                 else
-                    summary.problems << error;
+                    summary.problems << taken.error().text();
             }
             if (book.calibre && !taken.contains(added.id)) {
                 taken.insert(added.id);

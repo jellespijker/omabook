@@ -1,3 +1,5 @@
+#include <QFileInfo>
+
 #include "mcp.h"
 
 // The tools of a book's file: each names the command (bookfilecommands),
@@ -10,6 +12,21 @@ using namespace Qt::StringLiterals;
 
 // NOLINTNEXTLINE(bugprone-throwing-static-initialization): the tool registry is filled at start-up (mcp.h), as mcpcommands.cpp fills it.
 const bool registered = [] {
+    registerTool({"book_add_format", "Add a format to a book",
+                  "Adds a file to a book already in the library as another format of it (say a PDF beside the EPUB). Where the "
+                  "book has another file of that format, it is refused and nothing changes, unless replace is true: then the "
+                  "book's file goes to the trash. Ask the user before replacing.",
+                  schema({{"id", integer("The book's number.", 1)},
+                          {"path", string("The file to add, as an absolute path.")},
+                          {"replace", boolean("Replace the book's file of the same format, which goes to the trash. False when not given.")}},
+                         {"id", "path"}),
+                  Destructive, [](const QJsonObject &arguments) {
+                      QStringList asked{u"add"_s, u"--to"_s, QString::number(arguments.value("id").toInteger()),
+                                        QFileInfo(arguments.value("path").toString()).absoluteFilePath()};
+                      if (arguments.value("replace").toBool())
+                          asked << u"--replace"_s;
+                      return command(asked);
+                  }});
     registerTool({"book_export", "Copy a book out",
                   "Copies one of a book's files out of the library into a folder. It never overwrites a file there.",
                   schema({{"id", integer("The book's number.", 1)},

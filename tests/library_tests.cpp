@@ -114,14 +114,14 @@ private slots:
         QVERIFY(library.open());
         const qint64 id = library.add(dir.filePath("a.azw3")).id;
         QCOMPARE(library.book(id)->meta.title, QString("Kindle Fixture"));
-        QString error;
-        QVERIFY2(library.addFormat(id, dir.filePath("a.epub"), &error), qPrintable(error));
+        const auto joined = library.addFormat(id, dir.filePath("a.epub"));
+        QVERIFY2(joined, qPrintable(Fixtures::whyNot(joined)));
         // The format Omabook reads itself is preferred.
         QCOMPARE(library.book(id)->formats, (QStringList{"epub", "azw3"}));
         QVERIFY(library.formatPath(id).endsWith(".epub"));
         QVERIFY(library.formatPath(id, "azw3").endsWith(".azw3"));
         QVERIFY(library.formatPath(id, "pdf").isEmpty());
-        QVERIFY(!library.addFormat(99, dir.filePath("a.epub"), &error));
+        QVERIFY(!library.addFormat(99, dir.filePath("a.epub")));
     }
 
     void changingDetailsRenamesTheFolder() {

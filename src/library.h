@@ -259,8 +259,9 @@ public:
     // Adds a book that has no file: one on a real shelf (`paper`), or one
     // that is only known of. It can be given files later with addFormat.
     Added addEntry(const BookMeta &meta, bool paper);
-    // Adds another format of a book already here, replacing one of the same kind.
-    bool addFormat(qint64 id, const QString &file, QString *error = nullptr);
+    // Adds a format to a book here. Another file of that format means a refusal, or that one trashed or (a plugin's own) written over.
+    enum class SameFormat : std::uint8_t { Refuse, Trash, Overwrite };
+    [[nodiscard]] std::expected<void, Failure> addFormat(qint64 id, const QString &file, SameFormat same = SameFormat::Refuse);
     // Moves the book's folder to the trash and forgets it. Its files are
     // remembered as removed (wasRemoved), now or `at` (when it was removed on
     // another computer), but for one another book here still holds, as the

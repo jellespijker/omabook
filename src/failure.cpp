@@ -54,6 +54,13 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::SourceNeedsToken, tr("%1 needs your token to be asked: connect it under Reading Sites.")},
     {Failure::Code::NoReadableFile, tr("There is no readable file at %1")},
     {Failure::Code::NotABookFormat, tr("%1 is not a book format Omabook knows.")},
+    {Failure::Code::EmptyBookFile, tr("%1 is empty, so it is no file for a book.")},
+    {Failure::Code::BookHasFormat,
+     tr("Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an "
+        "agent): the one there goes to the trash.")},
+    {Failure::Code::ReplacedFileNotTrashed, tr("%1 can't be moved to the trash, so it was not replaced.")},
+    {Failure::Code::BookFileNotCopied, tr("%1 can't be copied into the library, to %2")},
+    {Failure::Code::LibraryNotWritten, tr("The library can't be written.")},
     {Failure::Code::LibraryUnwritable, tr("The library can't be written: %1")},
     {Failure::Code::BookNeedsTitle, tr("A book needs a title.")},
     {Failure::Code::NotOneBook, tr("%1 couldn't be made into one book.")},

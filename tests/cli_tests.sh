@@ -124,6 +124,21 @@ expect "export does not overwrite" 1 "already a file" "$omabook" export 2 "$work
 
 expect "another format joins a book" 0 '"formats"' "$omabook" add --library "$library" --to 2 "$work/Sea Story - Ann Sailor.txt" --json
 expect "the book now has both formats" 0 "epub, txt" "$omabook" show 2 --library "$library"
+# A file of a format the book has is refused, and takes its place only when asked, the old one to the trash (#220).
+mkdir -p "$XDG_DATA_HOME" "$work/second"
+printf 'A different story.\n' > "$work/second/different.txt"
+: > "$work/second/empty.txt"
+held="$(find "$library" -name 'Renamed*.txt' -o -name 'Command Book*.txt')"
+before="$(sha256sum "$held" | cut -d' ' -f1)"
+expect "add --to refuses a format the book has" 1 "--replace" "$omabook" add --library "$library" --to 2 "$work/second/different.txt"
+expect "add --to refuses an empty file" 1 "is empty" "$omabook" add --library "$library" --to 2 "$work/second/empty.txt" --replace
+[ "$(sha256sum "$held" | cut -d' ' -f1)" = "$before" ] || fail "a refused file changed the book's"
+expect "--replace wants --to" 1 "--replace goes with --to" "$omabook" add --library "$library" "$work/second/different.txt" --replace
+expect "add --to --replace says what it did" 0 "in the trash" "$omabook" add --library "$library" --to 2 "$work/second/different.txt" --replace
+held="$(find "$library" -name '*.txt' -path '*(2)*')"
+grep -q "A different story." "$held" || fail "--replace did not put the new file in place"
+find "$work" -path '*Trash*/files/*' -type f -exec sha256sum {} + | grep -q "^$before" || fail "the replaced file is not in the trash"
+"$omabook" add --library "$library" --to 2 "$work/Sea Story - Ann Sailor.txt" --replace > /dev/null 2>&1 || fail "the book's text could not be put back"
 expect "progress is set" 0 '"section": 3' "$omabook" progress 2 --library "$library" --section 3 --fraction 0.5 --percent 40 --updated 1700001234 --json
 expect "progress is kept, with its time" 0 '"updated": 1700001234' "$omabook" progress 2 --library "$library" --json
 expect "the manifest lists files by hash" 0 '"hash"' "$omabook" manifest --library "$library"

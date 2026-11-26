@@ -343,6 +343,7 @@ int add(const QStringList &arguments) {
                            "books; a Calibre library is taken with Calibre's own details, covers and every format.");
     command.parser.addPositionalArgument("files", "Book files, folders, or a Calibre library.", "<file|folder>...");
     command.parser.addOption({"to", "Add the file to this book as another format, instead of as a new book.", "id"});
+    command.parser.addOption({"replace", "With --to: put the file in place of the book's file of that format, which goes to the trash."});
     command.parser.addOption({"meta", "Take the book's details from this JSON file (as omabook show --json prints them).", "file"});
     command.parser.addOption({"cover", "Use this picture as the cover.", "file"});
     command.parser.addOption({"paper", "Add a book that is on a real shelf and has no file. Describe it with --title and "
@@ -359,6 +360,8 @@ int add(const QStringList &arguments) {
     if (!library)
         return fail(error);
     const QStringList paths = command.parser.positionalArguments();
+    if (command.parser.isSet("replace") && !command.parser.isSet("to"))
+        return fail("--replace goes with --to.");
 
     if (fileless) {
         if (!paths.isEmpty())
@@ -390,15 +393,8 @@ int add(const QStringList &arguments) {
         return 0;
     }
 
-    if (command.parser.isSet("to")) {
-        const qint64 id = command.parser.value("to").toLongLong();
-        for (const QString &file : paths)
-            if (!library->addFormat(id, file, &error))
-                return fail(error);
-        if (command.json())
-            printJson(library->book(id)->toJson());
-        return 0;
-    }
+    if (command.parser.isSet("to"))
+        return runAddFormats(*library, command.parser.value("to").toLongLong(), paths, command.parser.isSet("replace"), command.json());
 
     ImportSummary summary;
     if (command.parser.isSet("meta") || command.parser.isSet("cover")) {

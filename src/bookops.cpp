@@ -354,8 +354,13 @@ QString BookOps::convert(Library &library, qint64 id, const QString &to, const Q
     });
     QMetaObject::invokeMethod(&converter, [&converter, &source, &output] { converter.convert(source, output); }, Qt::QueuedConnection);
     loop.exec();
-    if (!error->isEmpty() || !library.addFormat(id, output, error))
+    if (!error->isEmpty())
         return {};
+    // A file of that format the book has already is kept, in the trash.
+    if (const auto added = library.addFormat(id, output, Library::SameFormat::Trash); !added) {
+        *error = added.error().text();
+        return {};
+    }
     return library.formatPath(id, format);
 }
 

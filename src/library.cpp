@@ -1,6 +1,5 @@
 #include "library.h"
 
-#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
@@ -16,7 +15,6 @@
 #include <algorithm>
 #include <array>
 #include <functional>
-#include <atomic>
 #include <optional>
 #include <ranges>
 
@@ -29,6 +27,7 @@
 #include "librarymigrations.h"
 #include "log.h"
 #include "readingformat.h"
+#include "safename.h"
 #include "spaces.h"
 #include "statements.h"
 
@@ -36,24 +35,8 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-// A name that is safe as one path component on any filesystem a library
-// might be synced to.
-[[nodiscard]] QString fileName(QString text, const QString &fallback) {
-    static constexpr QStringView unsafe = u"/\\:*?\"<>|";
-    for (QChar &c : text)
-        if (c.unicode() < 32 || unsafe.contains(c))
-            c = ' ';
-    text = text.simplified();
-    while (text.startsWith('.'))
-        text.remove(0, 1);
-    text = text.left(80).trimmed();
-    while (text.endsWith('.'))
-        text.chop(1);
-    return text.isEmpty() ? fallback : text;
-}
-
 [[nodiscard]] QString folderFor(const BookMeta &meta, qint64 id) {
-    return fileName(meta.authors.value(0), "Unknown") + "/" + fileName(meta.title, "Untitled")
+    return SafeName::component(meta.authors.value(0), "Unknown") + "/" + SafeName::component(meta.title, "Untitled")
            + QString(" (%1)").arg(id);
 }
 
@@ -104,6 +87,14 @@ bool failed(QString *error, const QString &why) {
     if (error)
         *error = why;
     return false;
+}
+
+// A merge takes this file of the other book into the one kept when it is a format
+// that one lacks. An empty file is nothing to keep; it goes to the trash with its folder.
+[[nodiscard]] std::expected<void, Failure> taken(Library &library, const Book &kept, const FormatFile &file) {
+    if (kept.formats.contains(file.format) || file.size == 0)
+        return {};
+    return library.addFormat(kept.id, file.path);
 }
 
 } // namespace
@@ -260,66 +251,15 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
     exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
     guard.reset();
 
-    if (QString error; !addFormat(*id, file, &error)) {
+    if (const auto put = addFormat(*id, file); !put) {
         const ChangeLog::Scope cleanupGuard;
         exec("DELETE FROM books WHERE id = ?", {*id});
         QDir(m_root + "/" + folder).removeRecursively();
-        return {.error = error};
+        return {.error = put.error().text()};
     }
     if (!meta.cover.isNull())
         setCover(*id, meta.cover);
     return {.id = *id, .duplicate = false, .error = {}};
-}
-
-bool Library::addFormat(qint64 id, const QString &file, QString *error) {
-    const auto fail = [error](const QString &why) { return failed(error, why); };
-    const auto book = this->book(id);
-    if (!book)
-        return fail(QString("There is no book %1.").arg(id));
-    const QString format = Formats::extension(file);
-    if (!Formats::isBook(file))
-        return fail(QFileInfo(file).fileName() + " is not a book format Omabook knows.");
-    const QString folder = m_root + "/" + book->path;
-    if (!QDir().mkpath(folder))
-        return fail("The book's folder can't be created: " + folder);
-
-    const QString name = fileName(book->meta.title, "Untitled")
-                         + (book->meta.authors.isEmpty() ? QString() : " - " + fileName(book->meta.authors.first(), "Unknown"))
-                         + "." + format;
-    const QString target = folder + "/" + name;
-    const QString hash = hashFile(file);
-    // The very file is this book's already: there is nothing to copy.
-    const QList<FormatFile> held = formatFiles(id);
-    if (std::ranges::any_of(held, [&](const FormatFile &one) { return one.format == format && one.hash == hash; }))
-        return true;
-    // Copied beside its place and renamed, so a copy cut short never looks
-    // like a book. The name is this copy's own, so two imports into one
-    // library at once (the window and a command, say) don't trip over each
-    // other's.
-    static std::atomic<int> copies = 0;
-    const QString partial = QString("%1.%2-%3.part").arg(target).arg(QCoreApplication::applicationPid()).arg(++copies);
-    const auto copied = [&] {
-        QFile::remove(partial);
-        if (QFile::copy(file, partial) && QFileInfo(partial).size() == QFileInfo(file).size()) {
-            const QString old = formatPath(id, format);
-            if (!old.isEmpty() && old != target)
-                QFile::remove(old);
-            QFile::remove(target);
-            if (QFile::rename(partial, target))
-                return true;
-        }
-        QFile::remove(partial);
-        // Another import put the very same file there in the meantime.
-        return QFileInfo::exists(target) && hashFile(target) == hash;
-    };
-    if (!copied())
-        return fail(QString("%1 can't be copied into the library, to %2").arg(file, target));
-    QFile::setPermissions(target, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
-    if (!exec("INSERT OR REPLACE INTO formats (book_id, format, file, size, hash) VALUES (?, ?, ?, ?, ?)",
-              {id, format, name, QFileInfo(target).size(), hash}))
-        return fail("The library can't be written.");
-    Spaces::ensureBookId(*this, id);
-    return true;
 }
 
 Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
@@ -605,8 +545,8 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
     if (!kept || !folded || keep == other)
         return failed(error, "There are no two such books to merge.");
     for (const FormatFile &file : formatFiles(other))
-        if (!kept->formats.contains(file.format) && !addFormat(keep, file.path, error))
-            return false;
+        if (const auto put = taken(*this, *kept, file); !put)
+            return failed(error, put.error().text());
     if (!kept->hasCover && folded->hasCover)
         setCover(keep, QImage(coverPath(other)));
     {

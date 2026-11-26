@@ -324,7 +324,7 @@ public:
         Library *library = this->library(true);
         const auto book = own(library, id, "rewritten");
         const QString file = book ? dataFile(name) : QString();
-        if (file.isEmpty())
+        if (!book || file.isEmpty())
             return "null";
         // A new version of the file the book has, not another format beside it.
         if (!book->formats.contains(Formats::extension(file))) {
@@ -332,9 +332,8 @@ public:
                                        .arg(book->id).arg(Formats::extension(file), book->formats.join(", ")));
             return "null";
         }
-        QString error;
-        if (!library->addFormat(book->id, file, &error)) {
-            p->m_engine.throwError(error);
+        if (const auto put = library->addFormat(book->id, file, Library::SameFormat::Overwrite); !put) {
+            p->m_engine.throwError(put.error().text());
             return "null";
         }
         emit p->touchedLibrary();

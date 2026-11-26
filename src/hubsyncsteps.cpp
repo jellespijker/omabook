@@ -96,10 +96,9 @@ namespace {
 
 // More formats of a book there is already.
 [[nodiscard]] std::expected<QJsonValue, Failure> addFormats(Library &library, qint64 id, const QStringList &files) {
-    QString error;
     for (const QString &file : files)
-        if (!library.addFormat(id, file, &error))
-            return std::unexpected(Failure::said(error));
+        if (const auto added = library.addFormat(id, file); !added)
+            return std::unexpected(added.error());
     const auto book = library.book(id);
     return book ? book->toJson() : QJsonObject();
 }

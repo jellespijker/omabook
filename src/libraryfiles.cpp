@@ -23,6 +23,7 @@
 #include "formats.h"
 #include "hlc.h"
 #include "library.h"
+#include "safename.h"
 #include "spaces.h"
 
 // A book's files and its cover as the library keeps them, and its details
@@ -124,7 +125,91 @@ void clearPartials(const QString &file) {
     return lock;
 }
 
+// Why `file` mustn't become a file of a book that has `held`: nothing of the
+// user's gives way to an empty file, nor to another unless that was asked for.
+[[nodiscard]] std::optional<Failure> refusal(qint64 id, const QString &file, const QList<FormatFile> &held, bool replacing) {
+    const QFileInfo given(file);
+    if (!held.isEmpty() && given.isFile() && given.size() == 0)
+        return Failure(Failure::Code::EmptyBookFile, {given.fileName()});
+    const QString format = Formats::extension(file);
+    const auto other = std::ranges::find(held, format, &FormatFile::format);
+    if (!replacing && other != held.end() && QFileInfo::exists(other->path))
+        return Failure(Failure::Code::BookHasFormat, {QString::number(id), Formats::name(format)});
+    return std::nullopt;
+}
+
+// The book's file and, for an EPUB with details written into it, the copy as
+// it came in, both to the trash; the file itself last, so it stays if either can't.
+[[nodiscard]] std::expected<void, Failure> trashed(const QString &file) {
+    QStringList gone{file};
+    if (Formats::extension(file) == epub)
+        gone.prepend(keptOriginal(file));
+    for (const QString &one : std::as_const(gone))
+        if (QFileInfo::exists(one) && !QFile::moveToTrash(one))
+            return std::unexpected(Failure(Failure::Code::ReplacedFileNotTrashed, {one}));
+    return {};
+}
+
+// `file`, of hash `hash`, copied to `target` in place of `old`, the book's
+// file of that format if it has one: trashed first when `keep`, else written over.
+[[nodiscard]] std::expected<void, Failure> putInPlace(const QString &file, const QString &hash, const QString &target,
+                                                      const QString &old, bool keep) {
+    // Copied beside its place and renamed, so a copy cut short never looks
+    // like a book. The name is this copy's own, so two imports into one
+    // library at once (the window and a command, say) don't trip over each
+    // other's.
+    static std::atomic<int> copies = 0;
+    const QString partial = u"%1.%2-%3.part"_s.arg(target).arg(QCoreApplication::applicationPid()).arg(++copies);
+    QFile::remove(partial);
+    const auto leftOver = qScopeGuard([&partial] { QFile::remove(partial); });
+    if (QFile::copy(file, partial) && QFileInfo(partial).size() == QFileInfo(file).size()) {
+        if (keep)
+            if (const auto put = trashed(old); !put)
+                return put;
+        if (!old.isEmpty() && old != target)
+            QFile::remove(old);
+        QFile::remove(target);
+        if (QFile::rename(partial, target))
+            return {};
+    }
+    // Another import put the very same file there in the meantime.
+    if (QFileInfo::exists(target) && Library::hashFile(target) == hash)
+        return {};
+    return std::unexpected(Failure(Failure::Code::BookFileNotCopied, {file, target}));
+}
+
 } // namespace
+
+std::expected<void, Failure> Library::addFormat(qint64 id, const QString &file, SameFormat same) {
+    const auto book = this->book(id);
+    if (!book)
+        return std::unexpected(Failure(Failure::Code::NoSuchBook, {QString::number(id)}));
+    const QString format = Formats::extension(file);
+    if (!Formats::isBook(file))
+        return std::unexpected(Failure(Failure::Code::NotABookFormat, {QFileInfo(file).fileName()}));
+    const QString hash = hashFile(file);
+    // The very file is this book's already: there is nothing to copy.
+    const QList<FormatFile> held = formatFiles(id);
+    if (std::ranges::any_of(held, [&](const FormatFile &one) { return one.format == format && one.hash == hash; }))
+        return {};
+    if (const auto why = refusal(id, file, held, same != SameFormat::Refuse))
+        return std::unexpected(*why);
+    const QString folder = m_root + "/" + book->path;
+    if (!QDir().mkpath(folder))
+        return std::unexpected(Failure(Failure::Code::FolderUnmade, {folder}));
+    const QString name = SafeName::component(book->meta.title, "Untitled")
+                         + (book->meta.authors.isEmpty() ? QString() : " - " + SafeName::component(book->meta.authors.first(), "Unknown"))
+                         + "." + format;
+    const QString target = folder + "/" + name;
+    if (const auto put = putInPlace(file, hash, target, formatPath(id, format), same == SameFormat::Trash); !put)
+        return put;
+    QFile::setPermissions(target, QFile::ReadOwner | QFile::WriteOwner | QFile::ReadGroup | QFile::ReadOther);
+    if (!exec("INSERT OR REPLACE INTO formats (book_id, format, file, size, hash) VALUES (?, ?, ?, ?, ?)",
+              {id, format, name, QFileInfo(target).size(), hash}))
+        return std::unexpected(Failure(Failure::Code::LibraryNotWritten));
+    Spaces::ensureBookId(*this, id);
+    return {};
+}
 
 QString Library::hashFile(const QString &path) {
     QFile file(path);

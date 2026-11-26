@@ -281,7 +281,7 @@ private slots:
         QCOMPARE(*AnnotationAnchors::anchor(library, id), AnnotationAnchors::Summary{});
 
         // The new edition replaces the file.
-        QVERIFY(library.addFormat(id, second));
+        QVERIFY(library.addFormat(id, second, Library::SameFormat::Overwrite));
         const std::optional<FormatFile> edition = AnnotationAnchors::readableFile(library, id);
         QVERIFY(edition && edition->hash != file->hash);
         const auto summary = AnnotationAnchors::anchor(library, id);

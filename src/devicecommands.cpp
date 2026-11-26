@@ -352,7 +352,7 @@ int runConvertCli(const QStringList &arguments) {
     parser.addPositionalArgument("id", "The book's number.");
     parser.addOption({"to", "The format to make; epub when not given.", "format", "epub"});
     parser.addOption({"from", "Which of the book's formats to convert; the one the reader prefers when not given.", "format"});
-    if (!parsed(parser, arguments, u"Convert a book to another format with Calibre's ebook-convert and add the result to the book."_s, 1,
+    if (!parsed(parser, arguments, u"Convert a book to another format with Calibre's ebook-convert and add the result to the book; a file of that format the book had goes to the trash."_s, 1,
                 1))
         return 1;
     const auto library = openLibrary(parser);

@@ -179,7 +179,7 @@ private slots:
         QList<Fixtures::Chapter> edition = story;
         edition[1].body = "<p>They swam across the lake at dawn and dried by a fire of driftwood.</p>";
         QVERIFY(Fixtures::chapteredEpub(shelf.dir.filePath("Ferry 2.epub"), "The Ferry", edition));
-        QVERIFY(shelf.library.addFormat(shelf.book, shelf.dir.filePath("Ferry 2.epub")));
+        QVERIFY(shelf.library.addFormat(shelf.book, shelf.dir.filePath("Ferry 2.epub"), Library::SameFormat::Overwrite));
         QCOMPARE(MeaningSearch::freshness(shelf.library, shelf.book, route.model), MeaningSearch::Freshness::Stale);
         // Asked for once, it is due again; another model is out of date too.
         QCOMPARE(MeaningSearch::due(shelf.library, shelf.settings, route.model), QList<qint64>{shelf.book});

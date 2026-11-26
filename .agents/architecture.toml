@@ -22,6 +22,7 @@ modules = [
   "deviceoptions", "qrcode", "portholder", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",
   "hubplace",
   "sshkey", "hubcomputers",
+  "safename",
 ]
 
 [layers.formats]

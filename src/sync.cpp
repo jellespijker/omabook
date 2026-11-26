@@ -377,9 +377,9 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             if (dryRun || have.contains(file.toObject().value("format").toString()))
                 continue;
             const QString local = fetched(file.toObject());
-            QString error;
-            if (!local.isEmpty() && !library.addFormat(mine, local, &error))
-                summary.problems << error;
+            if (!local.isEmpty())
+                if (const auto added = library.addFormat(mine, local); !added)
+                    summary.problems << added.error().text();
             QFile::remove(local);
         }
     }

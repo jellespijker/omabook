@@ -665,6 +665,7 @@ omabook collections [list|add|rule|rename|move|include|exclude|follow|remove|sho
 omabook collections share|import|unsubscribe  Publish a collection, or subscribe to one someone shared; see Sharing
 omabook show <id>                       Show one book's details and files
 omabook add <file|folder>...            Copy books into the library; a Calibre library comes with its details
+omabook add <file> --to <id> [--replace]  Another format of a book; --replace puts the file it has of that format in the trash
 omabook remove <id>                     Move a book to the trash
 omabook set <id> [--title ...]          Change a book's details or cover
 omabook info [file]                     Show what a file says about itself, or what Omabook is set up with
@@ -685,7 +686,7 @@ omabook calibre libraries|plugins|import  What was found of Calibre here; import
 omabook catalog [search] [--format f]   Write the library as csv or bibtex
 omabook customize [view]                Show where the interface's files live; copy a view there to edit
 omabook theme [list|use <name>|show]    Which theme the colors come from: Omarchy's, Aether's, or a built-in one
-omabook convert <id> [--to format]      Convert a book and add the result to it
+omabook convert <id> [--to format]      Convert a book and add the result to it (one it had of that format goes to the trash)
 omabook export <id> <folder>            Copy a book's file out of the library
 omabook embed <id>...|--all [--restore] Write books' details into their EPUBs, or put the files back as they came
 omabook ask <book|all> <question>       Ask the AI about a book, or about the whole library
@@ -735,7 +736,7 @@ omabook mcp --library ~/Other  # serve one library, whatever the window has open
 | `omabook_info`, `library_list`, `library_switch` | What Omabook is set up with; its libraries, and which is in use |
 | `books_search`, `book_get` | Find books with the search language (`author:`, `status:`, `is:paper`, `rating:`, ...), a page at a time; one book in full |
 | `books_find` | Search as the window does, by what the user met in the books too (never past their page), saying what found each; with `ai`, a question for the quick model, answered with books and a reason each |
-| `book_add`, `book_add_format`, `book_add_entry` | Add files, folders or a Calibre library; another format of a book; a paper or wishlist book with no file |
+| `book_add`, `book_add_format`, `book_add_entry` | Add files, folders or a Calibre library; another format of a book (replacing a file only when asked, which then goes to the trash); a paper or wishlist book with no file |
 | `book_set_details`, `book_set_reading`, `book_remove` | Change details or the cover; status, stars, the day finished; remove (to the trash) |
 | `book_contents`, `book_text`, `book_find` | Read: the table of contents, a section's text in pieces, where words occur |
 | `progress_get`, `progress_set`, `bookmarks_list`, `bookmark_add`, `bookmark_remove`, `notes_get` | The reading place, bookmarks, and the companion's recap and who-is-who notes |

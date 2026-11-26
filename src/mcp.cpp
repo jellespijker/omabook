@@ -453,21 +453,6 @@ QList<Tool> coreTools() {
                       return Result::ok({{"added", items}, {"problems", QJsonArray::fromStringList(summary.problems)}});
                   }};
 
-    tools << Tool{"book_add_format", "Add a format to a book",
-                  "Adds a file to a book already in the library as another format of it (say a PDF beside the EPUB), "
-                  "replacing a file of the same format.",
-                  schema({{"id", integer("The book's number.", 1)}, {"path", string("The file to add, as an absolute path.")}},
-                         {"id", "path"}),
-                  Destructive, [](const QJsonObject &arguments) {
-                      const Shelf at = shelf(arguments);
-                      if (!at)
-                          return Result::fail(at.error);
-                      QString error;
-                      if (!at.library->addFormat(at.id, arguments.value("path").toString(), &error))
-                          return Result::fail(error);
-                      return Result::ok(brief(*at.library->book(at.id)));
-                  }};
-
     tools << Tool{"book_add_entry", "Add a paper or wishlist book",
                   "Adds a book that has no file: one on a real shelf (paper: true), or one that is only known of, "
                   "such as a book to read some day (paper: false, usually with status \"to-read\"). It can be given "
@@ -584,9 +569,9 @@ QList<Tool> coreTools() {
                   }};
 
     tools << Tool{"book_convert", "Convert a book",
-                  "Converts a book to another format with Calibre's ebook-convert and adds the result to the book, "
-                  "beside the original. Kindle, Word and other formats Omabook doesn't read itself need this before "
-                  "book_text works on them. It can take a minute.",
+                  "Converts a book with Calibre's ebook-convert and adds the result beside the original; a file the book had "
+                  "of the format made goes to the trash. Kindle, Word and other formats Omabook doesn't read itself need "
+                  "this before book_text works on them. It can take a minute.",
                   schema({{"id", integer("The book's number.", 1)},
                           {"to", string("The format to make, as an extension; epub when not given.")},
                           {"from", string("Which of the book's formats to convert; the one the reader prefers when not given.")}},

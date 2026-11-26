@@ -3112,5 +3112,10 @@
   "Changed elsewhere meanwhile: %1. Save again to keep what you entered.": "Modifié ailleurs entre-temps : %1. Enregistrez à nouveau pour garder votre saisie.",
   "Shelf": "Étagère",
   "Take the Other Changes": "Reprendre les autres modifications",
-  "This book was removed from the library meanwhile, so its details can't be saved.": "Ce livre a été retiré de la bibliothèque entre-temps : ses informations ne peuvent pas être enregistrées."
+  "This book was removed from the library meanwhile, so its details can't be saved.": "Ce livre a été retiré de la bibliothèque entre-temps : ses informations ne peuvent pas être enregistrées.",
+  "%1 can't be copied into the library, to %2": "Impossible de copier %1 dans la bibliothèque, vers %2",
+  "%1 can't be moved to the trash, so it was not replaced.": "Impossible de mettre %1 à la corbeille : il n’a pas été remplacé.",
+  "%1 is empty, so it is no file for a book.": "%1 est vide : ce n’est pas un fichier pour un livre.",
+  "Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an agent): the one there goes to the trash.": "Le livre %1 a déjà un autre fichier %2, qui est resté tel quel. Pour le remplacer, ajoutez le fichier avec --replace (\"replace\": true pour un agent) : celui qui s’y trouve va à la corbeille.",
+  "The library can't be written.": "Impossible d’écrire dans la bibliothèque."
 }

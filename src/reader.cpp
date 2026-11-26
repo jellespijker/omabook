@@ -72,11 +72,11 @@ Reader::Reader(Backend *backend, const QString &converter, QObject *parent)
     connect(&m_converter, &Converter::finished, this, [this](const QString &output, const QString &error) {
         if (m_pendingId == 0)
             return;
-        // The EPUB joins the book's formats, so the next opening is instant
-        // and the original stays as it was.
+        // The EPUB joins the book's formats, so the next opening is instant;
+        // one the book was given meanwhile stays, and is what opens.
         QString problem = error;
-        if (problem.isEmpty() && m_backend->library())
-            m_backend->library()->addFormat(m_pendingId, output, &problem);
+        if (problem.isEmpty() && m_backend->library() && m_backend->library()->formatPath(m_pendingId, "epub").isEmpty())
+            problem = m_backend->library()->addFormat(m_pendingId, output).transform_error(&Failure::text).error_or(QString());
         QFile::remove(output);
         if (!problem.isEmpty())
             fail(problem);

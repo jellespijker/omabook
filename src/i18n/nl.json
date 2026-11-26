@@ -2995,5 +2995,10 @@
   "Changed elsewhere meanwhile: %1. Save again to keep what you entered.": "Intussen elders gewijzigd: %1. Sla nogmaals op om te houden wat je hebt ingevuld.",
   "Shelf": "Plank",
   "Take the Other Changes": "De andere wijzigingen overnemen",
-  "This book was removed from the library meanwhile, so its details can't be saved.": "Dit boek is intussen uit de bibliotheek verwijderd, dus de gegevens kunnen niet worden opgeslagen."
+  "This book was removed from the library meanwhile, so its details can't be saved.": "Dit boek is intussen uit de bibliotheek verwijderd, dus de gegevens kunnen niet worden opgeslagen.",
+  "%1 can't be copied into the library, to %2": "%1 kan niet naar de bibliotheek worden gekopieerd, naar %2",
+  "%1 can't be moved to the trash, so it was not replaced.": "%1 kan niet naar de prullenbak worden verplaatst en is daarom niet vervangen.",
+  "%1 is empty, so it is no file for a book.": "%1 is leeg en dus geen bestand voor een boek.",
+  "Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an agent): the one there goes to the trash.": "Boek %1 heeft al een ander %2-bestand, en dat is gelaten zoals het was. Voeg het bestand toe met --replace (\"replace\": true voor een agent) om het te vervangen: het bestaande gaat naar de prullenbak.",
+  "The library can't be written.": "Er kan niet naar de bibliotheek worden geschreven."
 }

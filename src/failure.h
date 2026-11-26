@@ -52,6 +52,12 @@ public:
         // Adding books to the library (library).
         NoReadableFile,    // {path}
         NotABookFormat,    // {file name}
+        EmptyBookFile,     // {file name}
+        BookHasFormat,     // {book's number, format name}
+        // The file to be replaced stays, as it can't be kept: {path}.
+        ReplacedFileNotTrashed,
+        BookFileNotCopied, // {the file, where to in the library}
+        LibraryNotWritten, // {}
         LibraryUnwritable, // {the database's reason}
         BookNeedsTitle,    // {}
         NotOneBook,        // {folder or archive name}

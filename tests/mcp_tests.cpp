@@ -5,6 +5,7 @@
 #include <QJsonObject>
 #include <QProcess>
 #include <QRegularExpression>
+#include <QScopeGuard>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QtTest>
@@ -253,6 +254,31 @@ private slots:
         // Taken, the listing is done with.
         QVERIFY(!server.failure("lookup_apply", {{"id", id}, {"candidate_id", beta}}).isEmpty());
         QVERIFY2(server.noise().isEmpty(), qPrintable(server.noise().join('\n')));
+    }
+
+    // Another file of a format the book has takes its place only when asked (#220).
+    void anAgentReplacesABooksFileOnlyWhenAsked() {
+        const Machine machine;
+        // A trash of this run's own, beside its files.
+        const QByteArray data = qgetenv("XDG_DATA_HOME");
+        const auto restore = qScopeGuard([&data] { qputenv("XDG_DATA_HOME", data); });
+        QVERIFY(QDir().mkpath(machine.dir.filePath("data")));
+        qputenv("XDG_DATA_HOME", QFile::encodeName(machine.dir.filePath("data")));
+        QVERIFY(Fixtures::write(machine.dir.filePath("first.txt"), "The first words.\n"));
+        QVERIFY(Fixtures::write(machine.dir.filePath("second.txt"), "Another book.\n"));
+        Server server(machine);
+        const qint64 id = server.data("book_add", {{"paths", QJsonArray{machine.dir.filePath("first.txt")}}})
+                              .value("added").toArray().first().toObject().value("id").toInteger();
+        const QJsonObject second{{"id", id}, {"path", machine.dir.filePath("second.txt")}};
+        QVERIFY(server.failure("book_add_format", second).contains("replace"));
+        QVERIFY(server.data("book_text", {{"id", id}, {"section", 0}}).value("text").toString().contains("The first words."));
+        QJsonObject asked = second;
+        asked.insert("replace", true);
+        const QJsonObject replaced = server.data("book_add_format", asked);
+        QCOMPARE(replaced.value("formats").toArray(), QJsonArray{"txt"});
+        QVERIFY2(replaced.value("notes").toString().contains("trash"), qPrintable(replaced.value("notes").toString()));
+        QCOMPARE(QDir(machine.dir.filePath("data/Trash/files")).entryList(QDir::Files).size(), 1);
+        QVERIFY(server.data("book_text", {{"id", id}, {"section", 0}}).value("text").toString().contains("Another book."));
     }
 
     void anAgentWorksTheLibrary() {

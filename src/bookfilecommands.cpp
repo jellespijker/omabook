@@ -13,6 +13,7 @@
 #include <print>
 #include <tuple>
 
+#include "formats.h"
 #include "library.h"
 #include "settings.h"
 
@@ -112,6 +113,22 @@ void common(QCommandLineParser &parser, const QString &description) {
 }
 
 } // namespace
+
+int runAddFormats(Library &library, qint64 id, const QStringList &files, bool replace, bool json) {
+    const auto same = replace ? Library::SameFormat::Trash : Library::SameFormat::Refuse;
+    for (const QString &file : files) {
+        const QString format = Formats::extension(file);
+        const QString before = Library::hashFile(library.formatPath(id, format));
+        if (const auto added = library.addFormat(id, file, same); !added)
+            return failLine(added.error().text());
+        // Said beside the answer, which an agent is handed too.
+        if (!before.isEmpty() && Library::hashFile(library.formatPath(id, format)) != before)
+            printLine(stderr, u"Replaced the %1 file of book %2; the one it had is in the trash."_s.arg(Formats::name(format)).arg(id));
+    }
+    if (const auto book = library.book(id); book && json)
+        printJson(book->toJson());
+    return 0;
+}
 
 int runExportCli(const QStringList &arguments) {
     QCommandLineParser parser;

@@ -198,8 +198,8 @@ constexpr auto byFile = "file"_L1;
     } else {
         return std::unexpected(beside.error());
     }
-    if (QString error; !library.addFormat(book, path, &error))
-        return std::unexpected(error);
+    if (const auto added = library.addFormat(book, path); !added)
+        return std::unexpected(added.error().text());
     // What was given to the book is what was checked, or the library has it no longer.
     const QList<FormatFile> held = library.formatFiles(book);
     if (std::ranges::none_of(held, [&file](const FormatFile &one) { return one.hash == file.hash; }))
