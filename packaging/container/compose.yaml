@@ -1,0 +1,40 @@
+# Omabook's hub on a NAS, a Raspberry Pi (64-bit) or any computer that is
+# always on (#195). Put your public key below, then
+#
+#   docker compose up -d                      (or podman compose up -d)
+#   docker compose exec hub omabook snapshot setup --hub      (write down the recovery key it shows)
+#   docker compose exec hub omabook snapshot destination add disk /destinations/omabook --hub
+#   docker compose restart hub                                (its daemon takes them as it starts)
+#
+# and on each of your computers, with an ssh Host entry for it (port 2222, user omabook):
+#
+#   omabook hub add <that host>
+#   omabook hub sync
+#
+# The folders below are bound in as they are; the hub runs as 1000:1000, so
+# make them that user's first (sudo chown -R 1000:1000 ./omabook-hub), or use
+# named volumes instead.
+services:
+  hub:
+    image: ghcr.io/jellespijker/omabook-hub:latest
+    restart: unless-stopped
+    # The name its snapshots are made under.
+    hostname: omabook-hub
+    ports:
+      # ssh, for your computers' keys: the hub's session and nothing else.
+      - "2222:2222"
+    environment:
+      # Your own public keys, a line each (cat ~/.ssh/id_ed25519.pub): they may
+      # link your computers to the hub, and do nothing else. Or put .pub files in
+      # ./omabook-hub/keys.
+      OMABOOK_HUB_KEYS: |
+        ssh-ed25519 AAAA... you@laptop
+      TZ: Europe/Amsterdam # the nightly snapshot is taken at night, here
+    volumes:
+      - ./omabook-hub/libraries:/libraries
+      # Its state: settings, linked computers, secrets (the snapshots' password),
+      # the ssh host key. Keep it: without it the computers must be linked again.
+      - ./omabook-hub/state:/var/lib/omabook-hub
+      # A second disk for the snapshots, as a destination (omabook snapshot destination add).
+      - ./omabook-hub/destinations:/destinations
+      - ./omabook-hub/keys:/keys:ro

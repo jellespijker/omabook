@@ -771,6 +771,27 @@ sudo pacman -U omabook-0.1.5.1-1-x86_64.pkg.tar.zst
 
 The package is downloaded first because pacman asks for a signature file next to a package it fetches from a link, and these packages are not signed; the release page lists each file's SHA-256 to check it against (`sha256sum omabook-*.pkg.tar.zst`). Pick the newest release on the [releases page](https://github.com/jellespijker/omabook/releases); installed this way, a newer version is installed the same way. Omabook then appears in the app launcher (`Super + Space`).
 
+### The hub in a container (a NAS, a Raspberry Pi)
+
+The hub (`omabook help hub`) also comes as a container image, for x86_64 and aarch64 (a 64-bit Raspberry Pi OS, a NAS with Docker or Podman): `ghcr.io/jellespijker/omabook-hub`, one tag per release and `latest`. It holds the hub's daemon, restic for the snapshots, and an sshd on port 2222 that runs nothing but the hub's commands, all as the user `omabook` (1000:1000), never root: no password, no shell, no forwarding.
+
+[`packaging/container/compose.yaml`](packaging/container/compose.yaml) is a Compose file to start from:
+
+```bash
+docker compose up -d
+docker compose exec hub omabook snapshot setup --hub     # write down the recovery key it shows
+docker compose restart hub                               # its daemon takes them as it starts
+```
+
+Your own public key (`OMABOOK_HUB_KEYS`, or a `.pub` file in its `/keys`) only lets `omabook hub add` link your computers; each computer then gets a key of its own that opens the hub's session alone. On each computer, with the hub in `~/.ssh/config` (`Port 2222`, `User omabook`):
+
+```bash
+omabook hub add nas      # once
+omabook hub sync         # then as often as you like, or --auto on
+```
+
+Its folders: `/libraries` (the libraries it keeps: at the first start it makes `Books` there, for your computers' `~/Books` to sync with; another is made with `docker compose exec hub omabook list --library /libraries/<name>` and kept from the next start), `/var/lib/omabook-hub` (its state: the linked computers, the snapshots and their password, its ssh host key; keep it) and `/destinations` (a second disk for the snapshots: `omabook snapshot destination add disk /destinations/omabook --hub`). Folders bound in from the host must belong to 1000:1000. `omabook hub status` is its healthcheck, and `docker compose logs hub` what it says. On a tailnet, reach it by the host's name; the hub opens no port but ssh.
+
 ## Build
 
 Omabook needs what every Omarchy app needs (CMake, a C++ compiler, Qt 6 base, declarative, SVG and Wayland) plus `libarchive`, `poppler-qt6`, `libsodium`, `qt6-multimedia` with `opus` for plugins' recordings (`qt6-multimedia-ffmpeg` is the backend that reaches PipeWire), and `qt6-websockets` for OpenAI's voices over its Realtime API. Calibre is optional, for the formats that are converted. The `hyphen-*` dictionaries are optional too, for justified text broken by its language; the tests of it need `hyphen-en`, `hyphen-de` and `hyphen-nl` (or a folder of `hyph_*.dic` files in `OMABOOK_HYPHENATION_PATH`) and are skipped without them.
@@ -893,7 +914,7 @@ between releases in [CHANGELOG.md](CHANGELOG.md).
 ### Releases
 
 The package's recipe is `packaging/omarchy-pkgs/PKGBUILD` (with `.omarchy/package.json`
-beside it), the one proposed to omarchy-pkgs. Three workflows hold a release to it:
+beside it), the one proposed to omarchy-pkgs. Three workflows hold a release to it, and a fourth makes the hub's image:
 
 - **Release check** (`release-check.yml`, on every push to main) builds every suite as the
   package is built: a Release build with the flags of Arch's `makepkg.conf`
@@ -909,6 +930,11 @@ beside it), the one proposed to omarchy-pkgs. Three workflows hold a release to 
   `omarchy-package.json`, `check-summary.txt` and `package-size.txt` to the release, which is
   what the omarchy-pkgs pull request needs. It proves the recipe builds and passes `check()`
   as submitted.
+- **Hub image** (`hub-image.yml`, on the same tag, and on a change to `packaging/container/`)
+  builds the hub's container image on an x86_64 and an aarch64 runner, tests the x86_64 one
+  whole (`packaging/container/test-hub.sh`: a computer in another container links to it over
+  ssh and syncs, a snapshot is taken and a book restored from it) and starts the aarch64 one,
+  then, at a tag, publishes both as `ghcr.io/jellespijker/omabook-hub:<version>` and `:latest`.
 
 Running the Release workflow by hand (`workflow_dispatch`, from any branch) is a dry run of
 both its jobs that publishes nothing; the recipe job then builds the newest tag, or the one given.

@@ -1,0 +1,39 @@
+# The hub's sshd (#195, ADR 0012). It runs as the user omabook, not root, so
+# it can log in no one else; every key it takes runs a forced command:
+#
+# - a linked computer's key, in ~/.ssh/authorized_keys as the hub writes it
+#   (`omabook hub allow`): restrict,command="omabook hub session --key ...";
+# - the person's own keys, given to the container (OMABOOK_HUB_KEYS or
+#   /keys), written by the entrypoint to ~/ssh/admit_keys at each start, with
+#   restrict,command="/usr/lib/omabook-hub/admit": only what `omabook hub add`
+#   runs there, to link a computer.
+#
+# The account's shell (/usr/lib/omabook-hub/login) runs those two and nothing
+# else, should a line without a command ever reach authorized_keys.
+Port 2222
+HostKey /var/lib/omabook-hub/ssh/ssh_host_ed25519_key
+PidFile none
+AuthorizedKeysFile .ssh/authorized_keys ssh/admit_keys
+
+AllowUsers omabook
+PermitRootLogin no
+PubkeyAuthentication yes
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+UsePAM no
+PermitEmptyPasswords no
+AuthenticationMethods publickey
+
+AllowAgentForwarding no
+AllowTcpForwarding no
+AllowStreamLocalForwarding no
+GatewayPorts no
+X11Forwarding no
+PermitTunnel no
+PermitTTY no
+PermitUserRC no
+PermitUserEnvironment no
+DisableForwarding yes
+# No sftp or other subsystem: nothing reaches the files but the hub's session.
+
+LogLevel INFO

@@ -1,0 +1,23 @@
+#!/bin/bash
+# The shell of the hub's user (#195, ADR 0012): sshd runs every forced command
+# through it, as `login -c '<command>'`, and it runs only the hub's two:
+#
+# - a linked computer's session, as `omabook hub allow` writes its key's line:
+#   '/usr/bin/omabook' hub session --key 'SHA256:...'
+# - the person's own keys' gate, /usr/lib/omabook-hub/admit.
+#
+# Anything else, a terminal or a line in authorized_keys without a command
+# among them, is refused: no key opens a shell on this hub.
+set -uo pipefail
+
+session="^'/usr/bin/omabook' hub session --key '(SHA256:[A-Za-z0-9+/]+)'$"
+if [[ $# -eq 2 && $1 == -c ]]; then
+    if [[ $2 == /usr/lib/omabook-hub/admit ]]; then
+        exec /usr/lib/omabook-hub/admit
+    fi
+    if [[ $2 =~ $session ]]; then
+        exec /usr/bin/omabook hub session --key "${BASH_REMATCH[1]}"
+    fi
+fi
+echo "This hub runs Omabook's hub session and nothing else." >&2
+exit 1

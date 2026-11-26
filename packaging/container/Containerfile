@@ -1,0 +1,81 @@
+# The hub as a container (#195): Omabook's hub daemon (`omabook hub run`),
+# restic for its snapshots, and an sshd that runs nothing but the hub's own
+# forced commands (ADR 0012), all as the user omabook, never root.
+#
+#   docker build -f packaging/container/Containerfile -t omabook-hub .
+#
+# from the repository's root. Arch Linux for x86_64, Arch Linux ARM for
+# aarch64: the same Qt and compiler the package is built and tested with.
+# The hub has no window, so it runs on Qt's offscreen platform, and of Qt
+# Multimedia's backends (ffmpeg, GStreamer) it needs neither.
+#
+# Volumes: /libraries (the libraries it keeps), /var/lib/omabook-hub (its
+# state: choices, linked computers, secrets, ssh host keys, the snapshots
+# unless told otherwise) and /destinations (a second disk for the snapshots).
+# See the README, "The hub in a container", and compose.yaml beside this file.
+
+ARG ARCH_X86_64=archlinux:latest
+ARG ARCH_AARCH64=menci/archlinuxarm:latest
+# buildx sets TARGETARCH; a plain `docker build` without BuildKit takes it as an argument.
+ARG TARGETARCH=amd64
+
+FROM ${ARCH_X86_64} AS base-amd64
+FROM ${ARCH_AARCH64} AS base-arm64
+
+# What omabook links at run time: the recipe's depends less the desktop's
+# (qt6-wayland, xdg-desktop-portal, ffmpeg, the icon theme), and sshd. Qt
+# Multimedia asks for a backend it never loads here, as the hub plays and
+# records nothing; libva it links itself (since Qt 6.12.1), which the ffmpeg
+# backend would otherwise have brought.
+FROM base-${TARGETARCH} AS base
+RUN pacman -Syu --noconfirm --needed --assume-installed qt6-multimedia-backend \
+      qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-websockets poppler-qt6 libarchive libsodium opus libva restic openssh \
+    && rm -rf /var/cache/pacman/pkg/* \
+    && rm -rf /var/lib/pacman/sync/* /usr/share/man/* /usr/share/doc/*
+
+FROM base AS build
+RUN pacman -Sy --noconfirm --needed cmake gcc make pkgconf \
+    && rm -rf /var/cache/pacman/pkg/*
+# What the build reads, and no more: a change to the container's own files
+# below then builds no C++ again.
+COPY CMakeLists.txt LICENSE /src/
+COPY bin /src/bin
+COPY src /src/src
+COPY share /src/share
+COPY tests /src/tests
+# The program alone: the suites are run by the release and its checks.
+RUN cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release >/dev/null \
+    && cmake --build /build --target omabook -j"$(/src/bin/jobs)" \
+    && DESTDIR=/staged cmake --install /build --prefix /usr \
+    && rm -rf /staged/usr/share/applications /staged/usr/share/icons /staged/usr/share/mime /staged/usr/share/folio /staged/usr/lib/systemd
+
+FROM base
+COPY --from=build /staged/ /
+COPY packaging/container/sshd_config /etc/omabook-hub/sshd_config
+COPY packaging/container/entrypoint packaging/container/login packaging/container/admit /usr/lib/omabook-hub/
+# The hub's user, as the system unit's (share/systemd/system): its home is its
+# state. Its shell is the gate that runs only the hub's forced commands, and
+# its password is no password ('*': none can log in with one, yet sshd doesn't
+# take the account for locked). 1000:1000, so that a folder of a NAS's or a
+# Raspberry Pi's first user can be bound in as a volume as it is.
+RUN chmod 0755 /usr/lib/omabook-hub/entrypoint /usr/lib/omabook-hub/login /usr/lib/omabook-hub/admit \
+    && groupadd --gid 1000 omabook \
+    && useradd --uid 1000 --gid omabook --no-create-home --home-dir /var/lib/omabook-hub --shell /usr/lib/omabook-hub/login omabook \
+    && usermod --password '*' omabook \
+    && install -d -o omabook -g omabook -m 0700 /var/lib/omabook-hub /run/omabook-hub \
+    && install -d -o omabook -g omabook -m 0750 /libraries /destinations
+
+USER omabook
+ENV HOME=/var/lib/omabook-hub \
+    QT_QPA_PLATFORM=offscreen \
+    LANG=C.UTF-8
+WORKDIR /var/lib/omabook-hub
+VOLUME ["/libraries", "/var/lib/omabook-hub", "/destinations"]
+EXPOSE 2222
+HEALTHCHECK --interval=1m --timeout=20s --start-period=30s --retries=3 CMD ["omabook", "hub", "status"]
+ENTRYPOINT ["/usr/lib/omabook-hub/entrypoint"]
+
+LABEL org.opencontainers.image.title="Omabook hub" \
+      org.opencontainers.image.description="Omabook's hub: your libraries kept without a window, synced with your computers over ssh, with restic snapshots" \
+      org.opencontainers.image.source="https://github.com/jellespijker/omabook" \
+      org.opencontainers.image.licenses="MIT AND GPL-3.0-or-later"

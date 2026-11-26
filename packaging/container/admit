@@ -1,0 +1,19 @@
+#!/bin/bash
+# The forced command of the person's own keys (#195), those given to the
+# container in OMABOOK_HUB_KEYS or /keys: what `omabook hub add <host>` runs
+# on a hub over the person's ssh to link a computer, and nothing else. That is
+# `omabook hub allow`, with the computer's name, the person's identity and
+# their signature of the link, the computer's key on its input; the hub checks
+# the signature and that the person is its owner (HubComputers::link).
+set -uo pipefail
+
+refuse() {
+    echo "This key links a computer to the hub (omabook hub add) and does nothing else." >&2
+    exit 1
+}
+
+# Remote::omabook's words, each in single quotes; a word is a name or Base64url.
+word="'([A-Za-z0-9._=-]+)'"
+asked="^(PATH=\"\\\$HOME/.local/bin:\\\$PATH\" )?omabook 'hub' 'allow' '--name' $word '--identity' $word '--signature' $word$"
+[[ ${SSH_ORIGINAL_COMMAND:-} =~ $asked ]] || refuse
+exec /usr/bin/omabook hub allow --name "${BASH_REMATCH[2]}" --identity "${BASH_REMATCH[3]}" --signature "${BASH_REMATCH[4]}"

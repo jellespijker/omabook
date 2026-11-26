@@ -1,0 +1,8 @@
+# What the image's build needs is the source: never a build tree, git or a worktree's caches.
+.git
+build
+build-*
+.ccache
+site
+docs
+**/__pycache__

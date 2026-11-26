@@ -1,0 +1,79 @@
+#!/bin/bash
+# The hub's container (#195): its ssh host key made once and kept in its state,
+# the person's own keys taken in again at each start, then sshd and the hub
+# daemon side by side; when either stops, the other is stopped and the
+# container ends, for its restart policy to start it again.
+#
+#   OMABOOK_HUB_KEYS       the person's public keys, a line each: they may link
+#                          their computers (omabook hub add), and do nothing else
+#   /keys/*.pub, /keys/authorized_keys   the same, from a volume
+#   OMABOOK_HUB_LIBRARIES  the folder of the libraries (/libraries)
+#   OMABOOK_HUB_LIBRARY    the library made there when it has none (Books), for
+#                          the computers' libraries of that name to sync with
+set -euo pipefail
+
+state=/var/lib/omabook-hub
+libraries=${OMABOOK_HUB_LIBRARIES:-/libraries}
+admit=$state/ssh/admit_keys
+
+say() { echo "omabook-hub: $*" >&2; }
+
+if [[ ! -w $state ]]; then
+    say "$state isn't writable by the user omabook ($(id -u):$(id -g)); give it its state volume, or chown the folder."
+    exit 78
+fi
+umask 0077
+mkdir -p "$state/ssh" "$state/.ssh"
+if [[ ! -f $state/ssh/ssh_host_ed25519_key ]]; then
+    ssh-keygen -q -t ed25519 -N '' -C 'omabook hub' -f "$state/ssh/ssh_host_ed25519_key"
+fi
+say "ssh host key $(ssh-keygen -l -f "$state/ssh/ssh_host_ed25519_key.pub" | cut -d' ' -f2)"
+
+# The person's keys, each with the gate as its forced command; written anew,
+# so a key taken out of the container's settings no longer links anything.
+given() {
+    printf '%s\n' "${OMABOOK_HUB_KEYS:-}"
+    local file
+    for file in /keys/*.pub /keys/authorized_keys; do
+        [[ -f $file ]] && cat -- "$file"
+    done
+    return 0
+}
+keys=0
+: > "$admit.new"
+while IFS= read -r line; do
+    [[ -z ${line// /} || $line == \#* ]] && continue
+    if [[ $line =~ ^(ssh-ed25519|ssh-rsa|ecdsa-sha2-nistp(256|384|521)|sk-ssh-ed25519@openssh\.com|sk-ecdsa-sha2-nistp256@openssh\.com)\ [A-Za-z0-9+/=]+(\ .*)?$ ]]; then
+        printf 'restrict,command="/usr/lib/omabook-hub/admit" %s\n' "$line" >> "$admit.new"
+        keys=$((keys + 1))
+    else
+        say "left out a line that is no public key (options aren't taken): ${line:0:40}..."
+    fi
+done < <(given)
+mv -f "$admit.new" "$admit"
+linked=$(grep -c ' hub session --key ' "$state/.ssh/authorized_keys" 2>/dev/null || true)
+say "$keys of the person's keys may link computers; ${linked:-0} computers are linked."
+if (( keys == 0 )) && (( ${linked:-0} == 0 )); then
+    say "no key can link a computer yet: give your public key in OMABOOK_HUB_KEYS or /keys, then run omabook hub add <this hub> on the computer."
+fi
+
+# The hub keeps the libraries it finds as it starts; with none, it would keep
+# nothing to sync with. One is made (a library is a folder with omabook.db).
+if ! compgen -G "$libraries/*/omabook.db" >/dev/null; then
+    first="$libraries/${OMABOOK_HUB_LIBRARY:-Books}"
+    say "no library in $libraries yet: making $first"
+    /usr/bin/omabook list --library "$first" >/dev/null
+fi
+
+/usr/bin/sshd -D -e -f /etc/omabook-hub/sshd_config &
+sshd=$!
+/usr/bin/omabook hub run --libraries "$libraries" &
+hub=$!
+
+stop() { kill -TERM "$sshd" "$hub" 2>/dev/null || true; }
+trap stop TERM INT
+code=0
+wait -n "$sshd" "$hub" || code=$?
+stop
+wait "$sshd" "$hub" 2>/dev/null || true
+exit "$code"
