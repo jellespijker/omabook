@@ -12,6 +12,43 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.2] - 2026-11-27
+
+The hub serves your phones and e-readers itself, set up in the Hubs panel, and comes as a container image for a NAS or a Raspberry Pi. A computer can sync with more than one hub, a book's graph is built once among them, and one hub can keep another's snapshots. A library on a drive that isn't there, or a `config.json` with a mistake in it, is no longer replaced, and adding a book or a file no longer writes over or repeats what is there.
+
+### Added
+
+- The hub serves your phones and e-readers itself (#193): the OPDS catalog and KOReader's progress sync of one of its libraries, always on, so the books are there with no computer awake. Set it up from a computer in the Hubs panel (Phones…): where it may be reached (off until chosen; the hub only, your tailnet, or your home network), its port, the library, and KOReader's name and password; the panel then shows the hub's address, the catalog's password and the QR codes to scan. What KOReader sends is written by the hub's one writer and reaches your computers by the normal sync. The choices are the hub's own (its `config.json`, its secrets), served again whenever the hub starts, and a reach it can't take yet, such as the tailnet before Tailscale is up, is tried again every minute.
+- The hub comes as a container image for x86_64 and aarch64 (`ghcr.io/jellespijker/omabook-hub`), for a NAS or a Raspberry Pi: the hub's daemon, restic and an sshd that runs nothing but the hub's commands, as a user of its own, with a Compose file to start from (#195).
+- More than one hub: a computer linked to several syncs with each through the sync guard, and the hubs don't fight. The same library on two hubs ends the same, what automatic sync brings from one hub goes on to the others (and never back), a hub out of reach holds up none of the others, and each is tried again as the network comes back (#196).
+- A book's graph is built once with several hubs: the first hub to take a book up claims it in the library, and another hub that learns of the claim leaves the book to it and gets the graph by the sync (#196).
+- Another of your hubs as a destination of the snapshots: `omabook snapshot destination add <name> hub:<host>`, reached over the session with that hub, never a shell. It keeps them encrypted and can't read them, the checks reach it, and it counts as the copy away from home (#196).
+- A computer knows when your hub has built a book's knowledge graph, or is building it, and doesn't build it again with its own AI as you read; the graph's count says "built on" the hub. Asking for the graph by hand still builds it, and a hub that hasn't got on with a book for half a day is waited for no longer (#219).
+
+### Fixed
+
+- Adding a file to a book no longer silently writes over the file the book has of that format (#220): `omabook add <file> --to <book>` and the MCP tool `book_add_format` refuse and change nothing. To replace it, add `--replace` (`"replace": true`): the old file goes to the trash. An empty file is refused for a book that has a file. `omabook convert` puts a file of the format it makes in the trash before the new one takes its place.
+- A library that isn't there (a drive not connected, a share not mounted, a folder moved away, also while the window is open) is no longer replaced by a new, empty one (#221). The window says so and offers to try again, choose another or start an empty library there; commands and the MCP server say so and fail. While `config.json` can't be read, which library is yours isn't known, so none is made anywhere unless you ask. A new library is still made on the first start, in a folder `--library` names that Omabook has not known, in a folder you choose, and with `omabook libraries --use <folder> --create`.
+- A `config.json` that can't be read (a trailing comma after a hand edit) is no longer silently replaced by the defaults at the next change, which lost every setting (#222). The file is left exactly as it is, and the window, the command line, `omabook logs` and `config.error` beside it say why, with the line of the mistake. Until it is fixed, a window that is open keeps the settings it had; anything started meanwhile uses the defaults with AI off, so nothing goes to a hosted model by default, and updates no plugin by itself. A command or MCP tool that would change a setting fails and says it wasn't saved. The same now holds for the plugins' `sources.json` and a plugin's own `settings.json`.
+- Saving a book's details in the window writes only what you changed there: what the command line, an agent or a sync changed while the dialog was open stays. A field changed on both sides is named first and saved over only when you save again, or you take the other change; a book removed meanwhile is said instead of dropping your edits without a word (#223).
+- A collection, a thing in the knowledge graph and a margin note likewise keep what was changed elsewhere while you had them open and didn't change it yourself (#223).
+- Importing a Calibre library no longer passes anything over in silence. A book Omabook can't take (no file in Calibre, files that are gone or can't be read, or only formats it doesn't take) is counted and named with the reason, by the window, the command line (`skipped` and `left_out` with `--json`; the exit code is 1) and the log (`omabook logs`). So are a format or cover that didn't come with a book, and a library that can't be read to its end (#224).
+- Adding a folder with symbolic links that lead back into it no longer repeats every book, or goes on without end (#225): links to folders and files are still followed, and each real folder is looked into once and each book added once.
+- Adding the same book several times at once (from a file manager, the window, commands, an agent or a watched folder) makes one book, and the others say it is in the library already, instead of one entry each (#228).
+- An empty library folder (`--library "$UNSET"`, `libraries --use ""`) is refused, rather than taken to be the folder omabook runs in (#234).
+- With several hubs, a book's shelf, stars, finished day or paper copy that one computer passes on from one hub to another keeps the time it was changed at, so it no longer wins over a newer change made elsewhere meanwhile, and the reading place read furthest holds (#243).
+- Asking your hub how its snapshots stand no longer writes over what it last found in them, so `omabook hub status` and the Hubs panel don't go back to an older listing (#245).
+- A hub run by `systemctl --user` is found over ssh on a computer whose ssh sessions have no `XDG_RUNTIME_DIR`, so `omabook hub status` there and the computers linked to it reach it, instead of saying no hub is running (#251).
+
+## [0.5.1.1] - 2026-11-26
+
+0.5.1 as it was meant to be: its package was never built, because Qt 6.12.1, new on Arch that day, refused one line of it.
+
+### Fixed
+
+- In a narrow Hubs panel a hub's buttons wrap onto more lines instead of pushing its name and details past the edge, as they did in German (#242).
+- Omabook builds again with Qt 6.12.1 (#244).
+
 ## [0.5.1] - 2026-11-26
 
 Omabook syncs with its hub by itself, once switched on for it, and the hub builds a new book's knowledge graph in the background, for your computers to get by the next sync. The plugins' files, Notebooks' recordings among them, go through the hub too, to your own computers only, and a hub's library syncs only with the one it is paired with, paired from the Hubs panel. A sync no longer refuses a computer whose clock is behind, or one given a new name. The package suggests `upower` and `networkmanager`, for automatic sync to wait on battery and on a metered connection.
@@ -79,6 +116,12 @@ Omabook gets a hub: a computer that is always on keeps your libraries without a 
 - A book a computer got from a sync now goes on whole to a third computer (#210): one on paper no longer fails with "A book needs a title", and one with a file no longer arrives without its title and details. A later change to its details made where it came from now follows it there too.
 - Books a computer got by a sync with an earlier Omabook now pass on a change made there, and reach a third computer with all their details: the library is brought up to date once, writing what it took of them as its own, and nothing else changes (#213).
 - A book's shelf, stars or finished day changed on one computer now reaches the other, where before a sync only filled in what the other lacked (#213). A cleared one still comes back from a computer that has it, as a removed identifier does.
+
+## [0.4.1.1] - 2026-11-26
+
+### Fixed
+
+- Omabook builds again with Qt 6.12.1 (#244).
 
 ## [0.4.1] - 2026-11-22
 

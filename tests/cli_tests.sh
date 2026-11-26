@@ -64,7 +64,7 @@ expect "the keys of a panel" 0 "Remove the selected bookmark" "$omabook" help ke
 expect "a plugin switched off" 0 "off" "$omabook" plugins disable folder:shelver
 "$omabook" help keys | grep -q "Shelver" && fail "a plugin switched off still has its keys listed"
 rm -rf "$XDG_CONFIG_HOME/omabook/plugins/shelver"
-expect "what is new" 0 "Synced with the hub by itself" "$omabook" help new
+expect "what is new" 0 "Phones and e-readers from the hub" "$omabook" help new
 expect "a help page on the hub and the snapshots" 0 "A second disk, and one away from home" "$omabook" help hub
 expect "the hub's page says how a library is paired" 0 "One library, paired once" "$omabook" help hub
 expect "the hub's page says what it does in the background" 0 "Work in the background" "$omabook" help hub
