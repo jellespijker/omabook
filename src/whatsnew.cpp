@@ -313,10 +313,16 @@ QList<Manual::Step> hubRelease() {
     };
 }
 
-// The 0.5.1 release's entries: the plugins' files through a hub (#212), a hub's library paired once (#214, #217),
-// the graphs built on the hub (#192), and a sync that no longer refuses for a clock behind or a new name (#211, #215).
+// The 0.5.1 release's entries: automatic sync with the hub (#191), the plugins' files through a hub (#212), a
+// hub's library paired once (#214, #217), the graphs built on the hub (#192), and a sync that no longer refuses for
+// a clock behind or a new name (#211, #215).
 QList<Manual::Step> hubSyncRelease() {
     return {
+        {"hub-autosync", "0.5.1", Manual::tr("Synced with the hub by itself"),
+         Manual::tr("Turn on Sync by itself for a hub in {library.hubs}, and the library syncs with it a little after a "
+                    "change and every quarter of an hour, with the window closed too if you like. A refused sync stops it, "
+                    "in red, until you look."),
+         "", "library.hubs", "library", ""},
         {"hub-plugin-files", "0.5.1", Manual::tr("Notebooks through the hub too"),
          Manual::tr("A sync with the hub now carries the plugins' files as well, such as Notebooks' recordings and "
                     "Storyteller's stories, and gives them only to your own computers."),

@@ -6,9 +6,9 @@
 // helptopics.cpp, which has the other pages and no room for one this size; the
 // same rules hold ({commands} as keys, `backticks` typed).
 
-// The hub (#179), a computer linked to it (#180, #189) and synced with it (#188), its library paired (#214, #217),
-// the plugins' files (#212), its background work (#192); snapshots (#181, #185), their destinations (#182), what
-// changed and going back (#183, #209), and the warnings (#184).
+// The hub (#179), a computer linked to it (#180, #189) and synced with it (#188), by itself (#191), its library
+// paired (#214, #217), the plugins' files (#212), its background work (#192); snapshots (#181, #185), their
+// destinations (#182), what changed and going back (#183, #209), and the warnings (#184).
 Manual::Topic Manual::hubTopic() {
     return {"hub",
             Manual::tr("The hub and snapshots"),
@@ -31,6 +31,13 @@ Manual::Topic Manual::hubTopic() {
                             "first what it would do, changing nothing; so does {library.sync} with the hub named as the other "
                             "computer in the settings ({global.settings}), and `omabook hub sync` in a terminal. The hub takes a "
                             "moment snapshot before it writes. Computers still sync with each other directly too.")},
+                {Manual::tr("Syncing by itself"),
+                 Manual::tr("Sync by itself, a switch for each hub in {library.hubs}, or `omabook hub sync <hub> --auto on`, "
+                            "is off until you turn it on. Then the library syncs with the hub a little after a change, every "
+                            "quarter of an hour and once the hub is back in reach, but waits on battery or a metered "
+                            "connection. A sync the hub or the guard refuses stops it, in red with what to do, until a sync by "
+                            "hand goes through. The panel's switch below the hubs, or `omabook hub sync --background on`, "
+                            "keeps it going with the window closed.")},
                 {Manual::tr("One library, paired once"),
                  Manual::tr("A library on the hub syncs only with the library it is paired with; one new on the hub is paired "
                             "by its first sync. Another is refused before anything is read or written, and Pair in "
