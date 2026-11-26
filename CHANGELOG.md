@@ -12,6 +12,41 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.1] - 2026-11-26
+
+Omabook syncs with its hub by itself, once switched on for it, and the hub builds a new book's knowledge graph in the background, for your computers to get by the next sync. The plugins' files, Notebooks' recordings among them, go through the hub too, to your own computers only, and a hub's library syncs only with the one it is paired with, paired from the Hubs panel. A sync no longer refuses a computer whose clock is behind, or one given a new name. The package suggests `upower` and `networkmanager`, for automatic sync to wait on battery and on a metered connection.
+
+### Added
+
+- A computer can sync with its hub by itself, off until switched on for that hub in the Hubs panel ("Sync by itself", or O) or with `omabook hub sync <hub> --auto on|off` (#191). Once on, it syncs a little after a change once the window has been left alone for two minutes, every quarter of an hour, and as soon as the hub is back in reach; never while another sync runs, and it waits while this computer is on battery (as UPower says) or on a metered connection (as NetworkManager says). A sync the hub or the sync guard refuses isn't tried again: the panel shows it in red with what to do, the desktop is told once, and automatic sync with that hub stays stopped until a sync by hand goes through or it is switched off and on. With the window closed too, once allowed in the panel or with `omabook hub sync --background on`: a systemd user service of the person's own, `omabook-hubsync.service`.
+- The hub builds the knowledge graph of each new book in the background (#192), whole, on its schedule, one book at a time, with the quick model of its own settings (`config.json` in the hub's state folder, as a computer's is; it starts local, and nothing goes to someone else's computer unless hosted is allowed there for quick work). The graph reaches your computers by the normal sync, placed where each thing was learned, so nothing past your place shows. `omabook hub status` and the Hubs panel say which book it is working on and how far it got, and `omabook hub cancel` or the panel's Cancel Work (or C, #190) stops it, keeping nothing of that book's job. A job done is never done again; one that failed is tried again an hour on.
+- A sync with the hub carries the plugins' files too, as a sync between two computers does (#212): Notebooks' recordings, Storyteller's stories and the rest of each plugin's data folder go to the hub, which keeps every plugin's for its library (installed there or not) and gives them to your other computers. The hub writes them only through its daemon, after its moment snapshot, and gives them, as it takes them, only for a library of your own computers, so a private notebook stays yours. A sync never empties a plugin's file that has something in it: it keeps it and says so.
+- The Hubs panel pairs a library the hub's isn't paired with (#217): where a sync or its preview was refused for that, Pair (or A) asks first, naming the hub's library and this computer's, then syncs them paired, as `omabook hub sync <hub>:<library> --pair` does, or shows what that sync would do. The refusal is said in the window's language.
+
+### Changed
+
+- A library the hub's library isn't paired with syncs nothing with it, either way (#214): no books, details, change log or plugins' files go to it or come from it. The sync is refused as it begins, before anything is read or written, saying how to pair the two once they are one library: `omabook hub sync <hub>:<library> --pair`. The Hubs panel and `--json` say the same. A library new on the hub is paired by its first sync, as two computers are, and a paired library syncs as before.
+
+### Fixed
+
+- A reading place read later on a computer whose clock is behind the other's is no longer refused by the sync as going back to one read earlier: the sync guard orders reading places as the change log does, never by the computers' clocks (#211).
+- A sync with a computer whose Omabook is from before the sync guard says that its side was not checked, in what `omabook sync` prints (and `"unchecked_there"` in `--json`) and in the window. A hub syncs with no such computer, and a computer with no such hub: each refuses before anything is written, saying which Omabook to update (#211).
+- A computer renamed (`hostnamectl`) since it last synced is no longer refused by the others as a copy of itself, which only `omabook identity --new-device` could get past: each side now also says the machine it runs on, by its machine id hashed with the library's device id (never in clear), so the same machine under a new host name syncs on, and the sync says it is known by its new name from then on (`"computers_renamed"` in `--json`). A copy of a computer's library on another machine is refused even under the same host name. A computer without a machine id (a container) is known by its host name, as before (#215).
+
+## [0.5.0.2] - 2026-11-23
+
+0.5.0.1 as it was meant to be: its package was never built, because one of its tests failed now and then on a fast machine.
+
+### Fixed
+
+- A test of the repair 0.5.0.1 brings no longer fails when two of its changes fall in the same second; Omabook itself is unchanged (#218).
+
+## [0.5.0.1] - 2026-11-23
+
+### Fixed
+
+- A sync no longer plans to clear a detail both computers have, such as an ISBN, and refuses for it, nor lists a book as differing with no time to say which details are newer, after the upgrade to 0.5.0. A computer that joined another's library had its own changes of a book read in the wrong order, so it didn't write as its own what it took of the book; it does now, and the library is brought up to date once more to write what it missed (#216).
+
 ## [0.5.0] - 2026-11-23
 
 Omabook gets a hub: a computer that is always on keeps your libraries without a window, linked to your other computers over your own ssh by a key that opens nothing but Omabook, and synced with them from the Hubs panel. The library has snapshots to go back to, made with restic: every night on a hub and just before anything that changes much, copied to a second disk and to a place away from home, each showing what changed since, with a book, a notebook or the whole library put back; a backup that is old, failed or missing warns. This upgrade takes a moment snapshot first, where snapshots are set up, and then repairs, once, the books a computer got by a sync with an earlier Omabook, so a change made to them, and their details, reach your other computers again; a sync is now checked on both computers before it writes. The package now needs `restic`, suggests `rclone`, and brings the hub's systemd units.
