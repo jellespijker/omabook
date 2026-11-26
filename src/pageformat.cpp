@@ -19,6 +19,7 @@ PageFormat::PageFormat(Reader *reader, Settings *settings, QObject *parent)
     // The setting of pages isn't part of the format.
     connect(settings, &Settings::changed, this, &PageFormat::relayout);
     connect(reader, &Reader::bookChanged, this, &PageFormat::refresh);
+    connect(reader, &Reader::bookChanged, this, &PageFormat::pageDirectionChanged);
     connect(reader, &Reader::htmlChanged, this, &PageFormat::restyle);
     refresh();
 }
@@ -49,6 +50,11 @@ QString PageFormat::hyphenationLanguage() const {
         return {};
     const QString name = QLocale(QString(m_language).replace(u'-', u'_')).nativeLanguageName();
     return name.isEmpty() ? m_language : name;
+}
+
+Qt::LayoutDirection PageFormat::pageDirection() const {
+    const std::shared_ptr<const Document> document = m_reader->document();
+    return document ? document->pageDirection() : Qt::LayoutDirectionAuto;
 }
 
 void PageFormat::setPreferredCollection(qint64 id) {

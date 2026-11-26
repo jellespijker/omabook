@@ -24,6 +24,9 @@ ApplicationWindow {
     Material.foreground: theme.foreground
 
     readonly property bool rightToLeft: Qt.application.layoutDirection === Qt.RightToLeft
+    // Which way an open book's pages follow each other: as the book says, else as the window reads (#232).
+    readonly property bool pagesRightToLeft: reader.format.pageDirection === Qt.LayoutDirectionAuto ? rightToLeft
+                                             : reader.format.pageDirection === Qt.RightToLeft
 
     // How much room the window has, by name. A tiling desktop hands it every
     // shape there is, so what is shown is decided by these and not by a

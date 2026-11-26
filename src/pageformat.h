@@ -46,6 +46,9 @@ class PageFormat : public QObject {
     // ("English", "Deutsch"); empty when no dictionary for the open book's
     // language is installed, or no book is open.
     Q_PROPERTY(QString hyphenationLanguage READ hyphenationLanguage NOTIFY changed)
+    // Which way the open book's pages follow each other (Document::pageDirection);
+    // Qt::LayoutDirectionAuto when it says nothing, or no book is open.
+    Q_PROPERTY(Qt::LayoutDirection pageDirection READ pageDirection NOTIFY pageDirectionChanged)
 
     // How the text is laid out across the room it has (pagelayout.h). The
     // reading view says how wide its reading area is (`available`, the
@@ -100,6 +103,7 @@ public:
     QColor linkColor() const noexcept { return m_links; }
     void setLinkColor(const QColor &color);
     QString hyphenationLanguage() const;
+    Qt::LayoutDirection pageDirection() const;
 
     double available() const noexcept { return m_available; }
     void setAvailable(double width);
@@ -147,6 +151,7 @@ signals:
     void changed();
     void htmlChanged();
     void layoutChanged();
+    void pageDirectionChanged();
 
 private:
     void restyle();

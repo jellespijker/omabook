@@ -75,6 +75,12 @@ public:
     int count() const override { return m_spine.size(); }
     BookMeta meta() const override { return m_meta; }
     QList<TocEntry> toc() const override { return m_toc; }
+    // What the spine says of its page progression goes before the language.
+    Qt::LayoutDirection pageDirection() const override {
+        if (m_progression == u"rtl")
+            return Qt::RightToLeft;
+        return m_progression == u"ltr" ? Qt::LeftToRight : Document::pageDirection();
+    }
     QByteArray resource(const QString &name) const override { return m_archive.read(name); }
 
     QString html(int section, int width) const override {
@@ -122,6 +128,7 @@ private:
                                    attributes.value("properties").toString()});
             } else if (name == u"spine") {
                 tocId = attributes.value("toc").toString();
+                m_progression = attributes.value("page-progression-direction").toString();
             } else if (name == u"itemref") {
                 spineIds << attributes.value("idref").toString();
             } else if (inMetadata && name == u"meta") {
@@ -241,7 +248,7 @@ private:
 
     Archive m_archive;
     QSet<QString> m_files;
-    QString m_opf, m_nav, m_ncx;
+    QString m_opf, m_nav, m_ncx, m_progression;
     QHash<QString, ManifestItem> m_manifest;
     QStringList m_spine;
     QHash<QString, int> m_sectionOf;

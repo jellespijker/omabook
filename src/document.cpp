@@ -1,7 +1,12 @@
 #include "document.h"
 
+#include <QLocale>
+
 #include "htmlclean.h"
 
+Qt::LayoutDirection Document::pageDirection() const {
+    return kind() == Flow && QLocale(meta().language).textDirection() == Qt::RightToLeft ? Qt::RightToLeft : Qt::LayoutDirectionAuto;
+}
 QString Document::html(int, int) const { return {}; }
 QByteArray Document::resource(const QString &) const { return {}; }
 QImage Document::image(int, int) const { return {}; }

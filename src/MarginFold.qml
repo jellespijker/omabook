@@ -36,7 +36,7 @@ AbstractButton {
         Glyph {
             anchors.centerIn: parent
             // The column is at the end the lines end at: it goes that way, and comes back from it.
-            name: fold.folded !== win.rightToLeft ? "back" : "forward"
+            name: fold.folded !== win.pagesRightToLeft ? "back" : "forward"
             size: 16
             color: theme.foreground
         }

@@ -330,7 +330,7 @@ Flickable {
         y: flick.side + 8
         // With the margin column, the two are centred together, the column
         // at the end the lines end at.
-        x: Math.round((flick.width - width - flick.noteRoom) / 2) + (win.rightToLeft ? flick.noteRoom : 0)
+        x: Math.round((flick.width - width - flick.noteRoom) / 2) + (win.pagesRightToLeft ? flick.noteRoom : 0)
         width: Math.max(200, Math.min(reader.format.lineWidth, flick.width - 2 * flick.side - flick.noteRoom))
         readOnly: true
         selectByMouse: !flick.fingerDown
@@ -381,7 +381,7 @@ Flickable {
     MarginColumn {
         id: margin
         visible: flick.noteRoom > 0
-        x: win.rightToLeft ? page.x - flick.noteRoom : page.x + page.width + reader.format.gutter
+        x: win.pagesRightToLeft ? page.x - flick.noteRoom : page.x + page.width + reader.format.gutter
         width: reader.format.noteWidth
         height: flick.contentHeight
         reading: flick.notes
@@ -396,8 +396,8 @@ Flickable {
         parent: flick
         z: 2
         y: -flick.contentY
-        readonly property real room: win.rightToLeft ? page.x : flick.width - page.x - page.width
-        x: win.rightToLeft ? page.x - width : page.x + page.width
+        readonly property real room: win.pagesRightToLeft ? page.x : flick.width - page.x - page.width
+        x: win.pagesRightToLeft ? page.x - width : page.x + page.width
         width: Math.max(16, Math.min(40, room))
         height: flick.contentHeight
         reading: flick.notes
@@ -412,7 +412,7 @@ Flickable {
         y: 8
         x: {
             const gap = folded ? dots.width : reader.format.gutter
-            const end = win.rightToLeft ? page.x - (gap + width) / 2 : page.x + page.width + (gap - width) / 2
+            const end = win.pagesRightToLeft ? page.x - (gap + width) / 2 : page.x + page.width + (gap - width) / 2
             return Math.max(2, Math.min(flick.width - width - 2, end))
         }
     }

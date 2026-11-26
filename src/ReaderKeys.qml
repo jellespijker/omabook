@@ -19,10 +19,10 @@ Item {
         onActivated: voice.press()
     }
     Key { command: "reader.back"; when: win.inReader && !keys.host.mapping; onActivated: voice.busy ? voice.cancel() : keys.host.back() }
-    // Left and Right follow the reading direction: forward is leftwards in
-    // a right-to-left language, as a finger's swipe is.
-    Key { command: "reader.page_down"; mirrored: win.rightToLeft; when: keys.host.paging; onActivated: keys.host.content.pageDown() }
-    Key { command: "reader.page_up"; mirrored: win.rightToLeft; when: keys.host.paging; onActivated: keys.host.content.pageUp() }
+    // Left and Right follow the reading direction: forward is leftwards in a
+    // right-to-left book, as a finger's swipe is.
+    Key { command: "reader.page_down"; mirrored: win.pagesRightToLeft; when: keys.host.paging; onActivated: keys.host.content.pageDown() }
+    Key { command: "reader.page_up"; mirrored: win.pagesRightToLeft; when: keys.host.paging; onActivated: keys.host.content.pageUp() }
     Key { command: "reader.line_down"; when: keys.host.paging; onActivated: keys.host.content.lineDown() }
     Key { command: "reader.line_up"; when: keys.host.paging; onActivated: keys.host.content.lineUp() }
     Key { command: "reader.next"; when: keys.host.paging; onActivated: keys.host.content.next() }

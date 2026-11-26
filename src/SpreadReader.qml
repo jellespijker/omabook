@@ -369,14 +369,16 @@ Item {
     Row {
         id: sheetsRow
         anchors.horizontalCenter: parent.horizontalCenter
-        // With the margin column, the two are centred together; the
-        // window's mirroring turns the offset round in a right-to-left language.
-        anchors.horizontalCenterOffset: -spread.noteRoom / 2
+        // The window's mirroring (a right-to-left language) turns round both
+        // the offset and the order below, so where the book reads the other
+        // way from the window, each is turned back.
+        readonly property bool turned: win.pagesRightToLeft !== win.rightToLeft
+        // With the margin column, the two are centred together.
+        anchors.horizontalCenterOffset: (turned ? spread.noteRoom : -spread.noteRoom) / 2
         y: spread.above
         spacing: spread.gutter
-        // The spread reads in the direction of the language: the window's
-        // mirroring turns this round in a right-to-left one.
-        layoutDirection: Qt.LeftToRight
+        // The first page of a right-to-left book is the rightmost (#232).
+        layoutDirection: turned ? Qt.RightToLeft : Qt.LeftToRight
 
         SpreadPage { id: page0; objectName: "page0"; offset: 0; spread: spread }
         SpreadPage { id: page1; objectName: "page1"; offset: 1; spread: spread }
@@ -388,7 +390,7 @@ Item {
     MarginColumn {
         id: margin
         visible: spread.noteRoom > 0
-        x: win.rightToLeft ? sheetsRow.x - spread.noteRoom : sheetsRow.x + sheetsRow.width + spread.gutter
+        x: win.pagesRightToLeft ? sheetsRow.x - spread.noteRoom : sheetsRow.x + sheetsRow.width + spread.gutter
         y: spread.above
         width: reader.format.noteWidth
         height: spread.pageHeight
@@ -409,7 +411,7 @@ Item {
         y: Math.max(0, (spread.above - height) / 2)
         x: {
             const gap = folded ? Math.min(40, spread.gutter / 2) : spread.gutter
-            const end = win.rightToLeft ? sheetsRow.x - (gap + width) / 2 : sheetsRow.x + sheetsRow.width + (gap - width) / 2
+            const end = win.pagesRightToLeft ? sheetsRow.x - (gap + width) / 2 : sheetsRow.x + sheetsRow.width + (gap - width) / 2
             return Math.max(2, Math.min(spread.width - width - 2, end))
         }
     }

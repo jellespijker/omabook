@@ -92,7 +92,7 @@ Item {
     // Without a margin column (#167, #157), a dot beside each of its lines
     // with notes, in the half of the gutter at the end its lines end at.
     MarginDots {
-        x: win.rightToLeft ? -width : sheet.width
+        x: win.pagesRightToLeft ? -width : sheet.width
         width: Math.max(16, Math.min(40, spread.gutter / 2))
         height: shownPart.height
         on: sheet.there
@@ -107,7 +107,7 @@ Item {
     // The fold before the next page, halfway across the gutter.
     Rectangle {
         visible: sheet.offset + 1 < spread.columns
-        x: win.rightToLeft ? -spread.gutter / 2 : sheet.width + spread.gutter / 2
+        x: win.pagesRightToLeft ? -spread.gutter / 2 : sheet.width + spread.gutter / 2
         width: 1
         height: spread.pageHeight
         color: theme.colors.selection

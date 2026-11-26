@@ -22,8 +22,8 @@ Item {
         Keys.onPressed: (event) => {
             const view = keys.view
             const wide = (event.modifiers & Qt.ShiftModifier) !== 0
-            const back = win.rightToLeft ? Qt.Key_Right : Qt.Key_Left
-            const on = win.rightToLeft ? Qt.Key_Left : Qt.Key_Right
+            const back = win.pagesRightToLeft ? Qt.Key_Right : Qt.Key_Left
+            const on = win.pagesRightToLeft ? Qt.Key_Left : Qt.Key_Right
             if (event.key === back || event.key === Qt.Key_H) view.content.stepSelecting(-1, 0, wide)
             else if (event.key === on || event.key === Qt.Key_L) view.content.stepSelecting(1, 0, wide)
             else if (event.key === Qt.Key_Down || event.key === Qt.Key_J) view.content.stepSelecting(0, 1, wide)

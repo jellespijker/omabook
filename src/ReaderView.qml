@@ -59,9 +59,9 @@ Item {
     // Turning a page by hand: the page follows the finger sideways, and past
     // a point it slides away while the next one slides in from the other
     // side. Forward is leftwards, as in a book, and the other way round in a
-    // right-to-left language.
+    // right-to-left one.
     property real slide: 0
-    readonly property int forwardSign: win.rightToLeft ? 1 : -1
+    readonly property int forwardSign: win.pagesRightToLeft ? 1 : -1
     readonly property bool turningPage: turning.running || settleBack.running
     readonly property bool turningNow: turning.running
     function slideBack() { settleBack.restart() }

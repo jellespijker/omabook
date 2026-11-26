@@ -85,7 +85,7 @@ Item {
             if (content.notes && content.notes.closeCard()) return
             // What the page has to tap on itself: the line at a chapter's end.
             if (typeof content.activateAt === "function" && content.activateAt(on.x, on.y)) return
-            const x = win.rightToLeft ? area.width - point.position.x : point.position.x
+            const x = win.pagesRightToLeft ? area.width - point.position.x : point.position.x
             if (x < area.width * 0.25) area.host.turn(false)
             else if (x > area.width * 0.75) area.host.turn(true)
             else area.host.showBar = !area.host.showBar
