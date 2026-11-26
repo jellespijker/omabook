@@ -274,6 +274,33 @@ private slots:
         QCOMPARE(locked.first().repository, u"usb"_s);
     }
 
+    // The hub's status is only a look: it leaves the record as it was, so a listing kept by a job meanwhile
+    // isn't put back to what the status read (#245). A library new to it is kept by the next warnings.
+    void aStatusLeavesTheRecordAsItWas() {
+        Computer computer;
+        QVERIFY(computer.setUp());
+        const Snapshots snapshots = computer.snapshots();
+        QVERIFY(snapshots.take(computer.library, SnapshotReason::Asked));
+        const SnapshotHealth health(snapshots);
+        const QDateTime now = QDateTime::currentDateTime();
+        health.look(now);
+        const QString record = computer.state + u"/health.json"_s;
+        const auto contents = [&record] {
+            QFile file(record);
+            return file.open(QIODevice::ReadOnly) ? file.readAll() : QByteArray();
+        };
+        const QByteArray listed = contents();
+        QVERIFY(!listed.isEmpty());
+
+        auto libraries = computer.libraries();
+        libraries.append({u"another"_s, u"Another library"_s});
+        const auto standing = health.standing(libraries, now.addSecs(60), roomy());
+        QCOMPARE(contents(), listed);
+        QCOMPARE(kindsOf(standing), kindsOf(health.warnings(libraries, now.addSecs(60), roomy())));
+        QVERIFY(contents() != listed);
+        QVERIFY(contents().contains("another"));
+    }
+
     void eachWarningIsToldOnceThenAgainAWeekOn() {
         Computer computer;
         QVERIFY(computer.setUp());

@@ -231,6 +231,16 @@ QList<SnapshotWarnings::Repository> SnapshotHealth::repositories() const {
 
 QList<SnapshotWarnings::Warning> SnapshotHealth::warnings(const QList<std::pair<QString, QString>> &libraries, const QDateTime &now,
                                                           const SnapshotWarnings::Thresholds &thresholds) const {
+    return warningsOf(libraries, now, thresholds, Seen::Keep);
+}
+
+QList<SnapshotWarnings::Warning> SnapshotHealth::standing(const QList<std::pair<QString, QString>> &libraries, const QDateTime &now,
+                                                          const SnapshotWarnings::Thresholds &thresholds) const {
+    return warningsOf(libraries, now, thresholds, Seen::Only);
+}
+
+QList<SnapshotWarnings::Warning> SnapshotHealth::warningsOf(const QList<std::pair<QString, QString>> &libraries, const QDateTime &now,
+                                                            const SnapshotWarnings::Thresholds &thresholds, Seen seenHow) const {
     if (!chosen())
         return {};
     QJsonObject record = read();
@@ -241,7 +251,9 @@ QList<SnapshotWarnings::Warning> SnapshotHealth::warnings(const QList<std::pair<
             seen.insert(tag, timeText(now));
         known << SnapshotWarnings::Library{.tag = tag, .name = name, .seen = timeOf(seen.value(tag))};
     }
-    if (seen != record.value("libraries"_L1).toObject()) {
+    // Written only to keep a library first seen: a write of the whole record from a mere look at it
+    // would put back what it read over what a job kept in the meantime (#245).
+    if (seenHow == Seen::Keep && seen != record.value("libraries"_L1).toObject()) {
         record.insert(u"libraries"_s, seen);
         write(record);
     }

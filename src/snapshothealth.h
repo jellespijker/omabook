@@ -71,6 +71,10 @@ public:
     // The warnings at `now` for these libraries (tag and name), each first seen kept.
     [[nodiscard]] QList<SnapshotWarnings::Warning> warnings(const QList<std::pair<QString, QString>> &libraries, const QDateTime &now,
                                                             const SnapshotWarnings::Thresholds &thresholds = {}) const;
+    // The same warnings, the record only read: for a status asked of the hub, which writes nothing (#245).
+    // A library not seen before counts as seen at `now`, and is kept by the next `warnings`.
+    [[nodiscard]] QList<SnapshotWarnings::Warning> standing(const QList<std::pair<QString, QString>> &libraries, const QDateTime &now,
+                                                            const SnapshotWarnings::Thresholds &thresholds = {}) const;
     // Of `warnings`, the ones to tell the person now: new ones, and ones told
     // `remindAfter` ago that still stand; kept as told. One that went away is
     // forgotten, so it is told again should it come back. Never nags.
@@ -85,6 +89,9 @@ public:
     [[nodiscard]] static QString readDataOf(SnapshotWarnings::Medium medium, const QDateTime &now);
 
 private:
+    enum class Seen : std::uint8_t { Keep, Only };
+    [[nodiscard]] QList<SnapshotWarnings::Warning> warningsOf(const QList<std::pair<QString, QString>> &libraries, const QDateTime &now,
+                                                              const SnapshotWarnings::Thresholds &thresholds, Seen seenHow) const;
     [[nodiscard]] QJsonObject read() const;
     void write(const QJsonObject &record) const;
 

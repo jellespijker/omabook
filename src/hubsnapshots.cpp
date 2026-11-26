@@ -219,6 +219,6 @@ HubSchedule::Job HubSnapshots::warn(const SnapshotHealth &health) {
 
 HubRequests::Answer HubSnapshots::status(const SnapshotHealth &health) {
     return [&health]([[maybe_unused]] const QJsonObject &asked, HubKeeper &keeper) -> std::expected<QJsonObject, Failure> {
-        return health.json(health.warnings(librariesOf(keeper), QDateTime::currentDateTime()));
+        return health.json(health.standing(librariesOf(keeper), QDateTime::currentDateTime()));
     };
 }
