@@ -118,6 +118,8 @@ QString setChapter(const QString &source, const QJsonObject &options, const QCol
     QString styled = QString("<style>a { color: %1; text-decoration: none; } "
                              "p, li, blockquote, dd { line-height: %2%; } "
                              "p { margin-top: 0; margin-bottom: %3px;%4 } "
+                             // A listing's lines stay, and one too long for the column goes on below (#231).
+                             "pre { white-space: pre-wrap; } "
                              "h1, h2, h3 { margin-top: 24px; margin-bottom: 16px; }</style>")
                          .arg(links.name())
                          .arg(number("line_height"_L1))
