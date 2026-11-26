@@ -77,6 +77,9 @@ bool Library::open(QString *error) { // ast-grep-ignore: prefer-expected-over-er
             *error = why;
         return false;
     };
+    // No folder (a script's unset variable) is not the one it runs in (#234).
+    if (m_root.isEmpty())
+        return fail(Failure(Failure::Code::LibraryUnnamed).text());
     if (const auto holder = LibraryHold::heldElsewhere(m_root))
         return fail(Failure(Failure::Code::LibraryKeptByHub, {m_root, QString::number(*holder)}).text());
     // One expected here and gone (a drive unplugged) is not made anew (#221).

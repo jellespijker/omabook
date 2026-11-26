@@ -352,6 +352,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::LibraryMissing,
      tr("There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, "
         "or start a new library there with omabook libraries --use \"%1\" --create.")},
+    {Failure::Code::LibraryUnnamed, tr("No folder was given for the library.")},
     {Failure::Code::HubNotRunning, tr("No hub is running here: nothing answers at %1. Start it with systemctl, or with omabook hub run.")},
     {Failure::Code::HubRunning, tr("A hub is running here already, answering at %1.")},
     {Failure::Code::HubCantListen, tr("The hub can't take requests at %1: %2")},

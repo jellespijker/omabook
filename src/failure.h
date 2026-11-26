@@ -60,6 +60,7 @@ public:
         LibraryNotWritten, // {}
         LibraryUnwritable, // {the database's reason}
         LibraryMissing,    // {folder}: one is expected there and isn't (#221)
+        LibraryUnnamed,    // {}: no folder was given for it (#234)
         BookNeedsTitle,    // {}
         NotOneBook,        // {folder or archive name}
         NoBooksInside,     // {archive name}

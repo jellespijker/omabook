@@ -165,7 +165,7 @@ QJsonObject Book::toJson() const {
 }
 
 Library::Library(const QString &root)
-    : m_root(QDir(root).absolutePath()), m_connection("omabook-" + QUuid::createUuid().toString(QUuid::Id128)),
+    : m_root(root.isEmpty() ? QString() : QDir(root).absolutePath()), m_connection("omabook-" + QUuid::createUuid().toString(QUuid::Id128)),
       m_statements(std::make_unique<Statements>(m_connection)) {}
 
 Library::~Library() {

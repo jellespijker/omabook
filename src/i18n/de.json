@@ -3012,5 +3012,6 @@
   "There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, or start a new library there with omabook libraries --use \"%1\" --create.": "In %1 ist gerade keine Bibliothek: Ist ihr Laufwerk angeschlossen oder ihre Freigabe eingehängt? Dort wurde nichts angelegt. Versuche es dann erneut, oder beginne dort eine neue Bibliothek mit omabook libraries --use \"%1\" --create.",
   "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 ist nicht zu finden. Ist sein Laufwerk angeschlossen oder seine Freigabe eingehängt? An seiner Stelle wurde nichts angelegt.",
   "The library isn't there": "Die Bibliothek ist nicht da",
-  "The library can't be opened": "Die Bibliothek lässt sich nicht öffnen"
+  "The library can't be opened": "Die Bibliothek lässt sich nicht öffnen",
+  "No folder was given for the library.": "Für die Bibliothek wurde kein Ordner angegeben."
 }

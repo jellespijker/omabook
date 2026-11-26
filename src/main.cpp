@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <print>
+#include <span>
 #include <tuple>
 #include <utility>
 #include <QQmlComponent>
@@ -219,6 +220,20 @@ std::optional<QString> unknownWord(const QStringList &given) {
     return word;
 }
 
+// What is said, before anything is set up, of arguments that can't be meant;
+// nothing when they can. `--library "$UNSET"` is a mistake, not the folder
+// omabook runs in (#234). What isn't a command is the window's, whose one word
+// is a book: a word that is neither is said to be that, before any window,
+// rather than leaving the window to complain about an option a command would take.
+std::optional<QString> refusal(const QStringList &given, bool command) {
+    const auto unnamed = [](const QString &option, const QString &value) { return option == "--library" && value.isEmpty(); };
+    if (given.contains("--library=") || std::ranges::adjacent_find(given, unnamed) != given.end())
+        return "--library needs a folder.";
+    if (const auto word = command ? std::nullopt : unknownWord(given))
+        return "\"" + *word + "\" is not a command, a book file, a book's number or a link to one. Run omabook for the commands.";
+    return std::nullopt;
+}
+
 // What the window reads, by the names it reads them by.
 void expose(const QQmlEngine &engine, std::initializer_list<std::pair<const char *, QObject *>> objects) {
     for (const auto &[name, object] : objects)
@@ -264,6 +279,14 @@ bool drawsNoWindow(const QStringList &given, bool command) {
            });
 }
 
+// The arguments as the program was given them, before there is an application to ask.
+QStringList asGiven(std::span<char *const> arguments) {
+    QStringList given;
+    for (const char *argument : arguments)
+        given << QString::fromLocal8Bit(argument);
+    return given;
+}
+
 } // namespace
 
 int main(int argc, char *argv[]) {
@@ -276,20 +299,11 @@ int main(int argc, char *argv[]) {
     // help, as a command line tool should; the launcher says `omabook open`.
     // Options every command takes may come before the command's name too:
     // `omabook --library ~/Other list` is `omabook list --library ~/Other`.
-    QStringList given;
-    for (int i = 0; i < argc; ++i)
-        given << QString::fromLocal8Bit(argv[i]);
-    given = commandFirst(given);
+    const QStringList given = commandFirst(asGiven({argv, static_cast<std::size_t>(argc)}));
     const bool command = argc == 1 || isCliCommand(given.value(1));
     const bool windowless = drawsNoWindow(given, command);
-    // What isn't a command is the window's, whose one word is a book. A word
-    // that is neither is said to be that, before any window, rather than
-    // leaving the window to complain about an option a command would take.
-    if (const auto word = command ? std::nullopt : unknownWord(given)) {
-        std::println(stderr,
-                     "omabook: \"{}\" is not a command, a book file, a book's number or a link to one. "
-                     "Run omabook for the commands.",
-                     word->toStdString());
+    if (const auto why = refusal(given, command)) {
+        std::println(stderr, "omabook: {}", why->toStdString());
         return 1;
     }
     if (windowless)

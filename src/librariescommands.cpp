@@ -28,6 +28,17 @@ int failLine(const QString &why) {
     return 1;
 }
 
+// Why the arguments can't be meant; empty when they can. An empty folder
+// would be the current one (#234).
+[[nodiscard]] QString refusal(const QCommandLineParser &parser) {
+    if (!parser.positionalArguments().isEmpty())
+        return parser.helpText().trimmed();
+    for (const QString &option : {u"use"_s, u"forget"_s, u"trash"_s})
+        if (parser.isSet(option) && parser.value(option).isEmpty())
+            return u"--%1 needs a folder."_s.arg(option);
+    return {};
+}
+
 } // namespace
 
 int runLibrariesCli(const QStringList &arguments) {
@@ -43,8 +54,8 @@ int runLibrariesCli(const QStringList &arguments) {
     rest.removeAt(1);
     rest[0] = u"omabook libraries"_s;
     parser.process(rest);
-    if (!parser.positionalArguments().isEmpty())
-        return failLine(parser.helpText().trimmed());
+    if (const QString why = refusal(parser); !why.isEmpty())
+        return failLine(why);
     Settings settings;
     QString problem;
     if (parser.isSet(u"forget"_s) && !Libraries::forget(settings, parser.value(u"forget"_s), &problem))

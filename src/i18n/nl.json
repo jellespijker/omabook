@@ -3012,5 +3012,6 @@
   "There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, or start a new library there with omabook libraries --use \"%1\" --create.": "Er is nu geen bibliotheek in %1: is de schijf aangesloten, of de share aangekoppeld? Er is daar niets gemaakt. Probeer het daarna opnieuw, of begin daar een nieuwe bibliotheek met omabook libraries --use \"%1\" --create.",
   "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 is niet te vinden. Is de schijf aangesloten, of de share aangekoppeld? Er is niets voor in de plaats gemaakt.",
   "The library isn't there": "De bibliotheek is er niet",
-  "The library can't be opened": "De bibliotheek kan niet worden geopend"
+  "The library can't be opened": "De bibliotheek kan niet worden geopend",
+  "No folder was given for the library.": "Er is geen map opgegeven voor de bibliotheek."
 }
