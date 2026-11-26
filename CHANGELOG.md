@@ -12,6 +12,15 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.1.1] - 2026-11-26
+
+0.5.1 as it was meant to be: its package was never built, because Qt 6.12.1, new on Arch that day, refused one line of it.
+
+### Fixed
+
+- In a narrow Hubs panel a hub's buttons wrap onto more lines instead of pushing its name and details past the edge, as they did in German (#242).
+- Omabook builds again with Qt 6.12.1 (#244).
+
 ## [0.5.1] - 2026-11-26
 
 Omabook syncs with its hub by itself, once switched on for it, and the hub builds a new book's knowledge graph in the background, for your computers to get by the next sync. The plugins' files, Notebooks' recordings among them, go through the hub too, to your own computers only, and a hub's library syncs only with the one it is paired with, paired from the Hubs panel. A sync no longer refuses a computer whose clock is behind, or one given a new name. The package suggests `upower` and `networkmanager`, for automatic sync to wait on battery and on a metered connection.
