@@ -322,10 +322,8 @@ bool MarginNotes::change(qint64 id, const QString &words) {
     if (!note || !own)
         return false;
     // Its ink is the note written by hand: that stays without words.
-    if (words.trimmed().isEmpty() && !inked(id)) {
-        remove(id);
-        return true;
-    }
+    if (words.trimmed().isEmpty() && !inked(id))
+        return remove(id);
     Annotation changed = *note;
     changed.note = words.trimmed();
     const bool written = changed.note == note->note || own->storeAnnotation(m_reader->bookId(), changed).has_value();
@@ -333,10 +331,13 @@ bool MarginNotes::change(qint64 id, const QString &words) {
     return written;
 }
 
-void MarginNotes::remove(qint64 id) {
-    if (Library *own = library(); own && find(id))
+bool MarginNotes::remove(qint64 id) {
+    Library *own = m_reader && m_reader->stillThere() ? library() : nullptr;
+    const bool removed = own && find(id);
+    if (removed)
         own->removeAnnotation(id);
     read();
+    return removed;
 }
 
 bool MarginNotes::placeAgain(qint64 id, const QString &shown, qsizetype start, qsizetype end) {

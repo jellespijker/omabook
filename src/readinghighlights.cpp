@@ -259,7 +259,7 @@ QVariantMap ReadingHighlights::pen(const Shown &shown, const QVariantList &point
         return {{"kind", kindName(gesture.kind)}, {"id", make(shown, start, end, m_current)}};
     int removed = 0;
     for (const Span &span : placed(shown))
-        if (span.end > start && span.start < end && m_reader->library()) {
+        if (span.end > start && span.start < end && m_reader->stillThere()) {
             m_reader->library()->removeAnnotation(span.id);
             ++removed;
         }

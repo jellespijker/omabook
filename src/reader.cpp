@@ -46,6 +46,8 @@ Reader::Reader(Backend *backend, const QString &converter, QObject *parent)
     // or another library came with other books.
     connect(backend, &Backend::bookFormatsChanged, m_format, &PageFormat::refresh);
     connect(backend, &Backend::libraryChanged, m_format, &PageFormat::refresh);
+    // The open book may be removed under the reader, by anyone (#229).
+    connect(backend, &Backend::revisionChanged, this, &Reader::stillThere, Qt::QueuedConnection);
     // Where the reader is gets written a moment after they stop moving, not
     // on every pixel scrolled.
     m_saveSoon.setSingleShot(true);
@@ -223,8 +225,8 @@ void Reader::loaded() {
         }
         m_reloadFailures = 0;
     } else {
-        if (m_pendingId == 0)
-            return; // closed while it was opening
+        if (!stillThere())
+            return; // closed, or removed, while it was opening
         if (!document) {
             fail(error);
             return;
@@ -309,18 +311,22 @@ void Reader::close() {
         return;
     saveProgress();
     // The book's node in the knowledge graph says how far it has been read.
-    if (const Library *library = m_backend->library())
+    if (const Library *library = m_backend->library(); library && !gone(m_bookId))
         Graph(*library).bookNode(m_bookId);
     m_backend->reload();
     m_backend->scripts()->emitEvent("book.closed", whereabouts());
+    unload();
+    emit bookChanged();
+    emit htmlChanged();
+}
+
+void Reader::unload() {
     m_document.reset();
     if (m_provider)
         m_provider->setDocument(nullptr);
     m_bookId = 0;
     m_html.clear();
     m_toc.clear();
-    emit bookChanged();
-    emit htmlChanged();
 }
 
 namespace {
@@ -473,42 +479,6 @@ double Reader::pageAspect(int page) const {
     return size.width() > 0 ? size.height() / size.width() : 0;
 }
 
-void Reader::saveProgress() {
-    m_saveSoon.stop();
-    if (!m_document || !m_backend->library())
-        return;
-    m_backend->library()->setProgress(m_bookId, {m_section, m_fraction, percent()});
-    // The reading log: that the book went from there to here today, and the time it took.
-    m_session.save(*m_backend->library(), m_bookId, percent());
-}
-
-QVariantList Reader::bookmarks() const {
-    QVariantList list;
-    if (!m_document || !m_backend->library())
-        return list;
-    for (const Annotation &annotation : m_backend->library()->annotations(m_bookId, "bookmark"))
-        list << QVariantMap{{"id", annotation.id}, {"section", annotation.place.section}, {"fraction", annotation.place.fraction},
-                            {"text", annotation.text}};
-    return list;
-}
-
-void Reader::addBookmark(const QString &text) {
-    if (!m_document || !m_backend->library())
-        return;
-    Annotation bookmark;
-    bookmark.kind = "bookmark";
-    bookmark.place = {.section = m_section, .fraction = m_fraction};
-    bookmark.text = text.simplified().left(200);
-    m_backend->library()->addAnnotation(m_bookId, bookmark);
-    emit bookmarksChanged();
-}
-
-void Reader::removeBookmark(qint64 id) {
-    if (m_backend->library())
-        m_backend->library()->removeAnnotation(id);
-    emit bookmarksChanged();
-}
-
 QVariantList Reader::find(const QString &words) const {
     return m_document ? DocumentText::find(*m_document, words) : QVariantList();
 }
@@ -534,37 +504,4 @@ QList<GraphBuild::Passage> Reader::passagesSince(const std::optional<GraphPlace>
     return m_document ? GraphBuild::passages(*m_document, after, place()) : QList<GraphBuild::Passage>();
 }
 
-Library *Reader::library() const { return m_backend->library(); }
-
-Recap Reader::notes(const QString &kind) const {
-    return m_document && m_backend->library() ? m_backend->library()->notes(m_bookId, kind) : Recap();
-}
-
-QList<Book> Reader::unknownEarlierBooks() const {
-    QList<Book> unknown;
-    Library *library = m_document ? m_backend->library() : nullptr;
-    for (const Book &book : library ? library->earlierInSeries(m_bookId) : QList<Book>()) {
-        bool known = !book.meta.description.trimmed().isEmpty();
-        for (const QString &kind : {QString("recap"), QString("cast"), QString("blurb")})
-            known = known || !library->notes(book.id, kind).text.isEmpty();
-        if (!known)
-            unknown.append(book);
-    }
-    return unknown;
-}
-
-void Reader::setBlurb(qint64 bookId, const QString &text) {
-    if (m_backend->library())
-        m_backend->library()->setNotes(bookId, "blurb", {0, 0, text, 0});
-}
-
 QList<MetadataSource *> Reader::newSources(QObject *parent) const { return m_backend->newSources(parent); }
-
-QList<SeriesNotes> Reader::seriesNotes(const QString &kind) const {
-    return m_document && m_backend->library() ? m_backend->library()->seriesNotes(m_bookId, kind) : QList<SeriesNotes>();
-}
-
-void Reader::setNotes(const QString &kind, const QString &text) {
-    if (m_document && m_backend->library())
-        m_backend->library()->setNotes(m_bookId, kind, {m_section, m_fraction, text, 0});
-}

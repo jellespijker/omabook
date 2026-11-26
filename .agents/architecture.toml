@@ -117,7 +117,7 @@ uses = ["operations", "services", "library", "formats", "foundation"]
 modules = [
   "assistant", "backend", "backendimport", "backendcollections", "backendlibrary", "backendlookup", "backendpicker", "backendsync", "booklistmodel", "graphcanvas", "graphjobs", "graphmodel",
   "chronologycanvas", "chronologycard", "chronologyframe", "chronologymodel", "chronologyproposals", "graphtenants", "graphtypes",
-  "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
+  "interface", "librarian", "librarianfind", "libraryupgrade", "pageformat", "pluginmanager", "portalfilepicker", "reader", "readerlibrary", "readingmarks", "readingpassages", "marginnotes", "spacedesk",
   "inksurface", "inksurfacetouch", "inksurfacecover", "inknodes", "inkselection", "readinghighlights", "readingink", "readinglineink", "backendplugins", "annotationfinder", "readingselection",
   "readingstatsview", "annotationlayerview", "meaningfinder", "plugindesk", "devicedesk", "snapshotdesk", "qrview", "backenddetails",
   "readaloud", "linkinbox", "installterminal", "speechinstall", "dictationkeys", "transcriptdesk", "heldkeys",

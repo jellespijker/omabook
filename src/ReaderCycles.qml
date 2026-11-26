@@ -22,6 +22,7 @@ QtObject {
     }
     // Shift+L: pages, one scrolling column, automatic, and round again.
     function layout() {
+        if (!reader.stillThere()) return
         const next = reader.format.nextLayout()
         backend.say(next === "pages" ? qsTr("Pages that turn, each chapter starting on a page of its own")
                   : next === "scroll" ? qsTr("One column that scrolls on through the chapters")

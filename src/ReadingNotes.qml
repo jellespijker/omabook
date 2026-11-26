@@ -186,8 +186,7 @@ Item {
             }
         } else if (id && changed) {
             const removed = words.trim() === ""
-            model.change(id, words)
-            if (removed) backend.say(qsTr("Margin note removed"))
+            if (model.change(id, words) && removed) backend.say(qsTr("Margin note removed"))
         }
         editing = 0
         card.close()
@@ -200,10 +199,10 @@ Item {
             finish(0, "")
             return
         }
-        model.remove(id)
+        const removed = model.remove(id)
         editing = 0
         card.close()
-        backend.say(qsTr("Margin note removed"))
+        if (removed) backend.say(qsTr("Margin note removed"))
         back()
     }
     // The keyboard back where it was: on the notes, while going through them, else the page.

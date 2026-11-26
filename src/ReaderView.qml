@@ -267,9 +267,8 @@ Item {
     // The choices a key goes round (Shift+M, Shift+P, Shift+L).
     readonly property QtObject cycles: ReaderCycles {}
     function bookmark() {
-        if (!content) return
-        reader.addBookmark(content.placeText())
-        backend.say(qsTr("Bookmarked"))
+        if (content && reader.addBookmark(content.placeText()))
+            backend.say(qsTr("Bookmarked"))
     }
 
     // The reader's keys, each in the place it belongs to right now.

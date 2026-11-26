@@ -157,8 +157,13 @@ public:
     Q_INVOKABLE bool follow(const QString &link);
     // Height over width of a page, or 0 while it isn't known yet.
     Q_INVOKABLE double pageAspect(int page) const;
-    Q_INVOKABLE void addBookmark(const QString &text);
+    // Whether the book was kept in the library to be marked (see stillThere).
+    Q_INVOKABLE bool addBookmark(const QString &text);
     Q_INVOKABLE void removeBookmark(qint64 id);
+    // Whether the book open, or being opened, is still in the library. One that
+    // was removed is put away, and the page says so: asked before anything
+    // says it was done to the book (#229).
+    Q_INVOKABLE bool stillThere();
     // Every place the words occur: [{section, title, snippet}], at most 200.
     Q_INVOKABLE QVariantList find(const QString &words) const;
 
@@ -204,6 +209,10 @@ private:
     void fail(const QString &error);
     void refreshHtml();
     void saveProgress();
+    // Lets go of the book that was open.
+    void unload();
+    bool gone(qint64 id) const;
+    void putAwayRemoved();
     QJsonObject whereabouts() const;
     QString textFrom(int section, double fraction, bool withFirstPage) const;
     // The title of a section: the contents' entry for it, else the nearest before it.

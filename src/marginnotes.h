@@ -97,7 +97,8 @@ public:
     Q_INVOKABLE qint64 write(QQuickTextDocument *chapter, int start, int end, const QString &words);
     // Other words for a note; with none it is removed. Whether there is one of that number.
     Q_INVOKABLE bool change(qint64 id, const QString &words);
-    Q_INVOKABLE void remove(qint64 id);
+    // Whether there was one to remove, in a book that is still there (#229).
+    Q_INVOKABLE bool remove(qint64 id);
     // A lost note placed on that passage, where the reader selected it.
     Q_INVOKABLE bool placeAgain(qint64 id, QQuickTextDocument *chapter, int start, int end);
     // On the pages of a PDF or a comic (#115), which stand still: the notes of

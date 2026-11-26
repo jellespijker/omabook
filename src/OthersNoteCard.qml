@@ -27,7 +27,7 @@ FocusScope {
 
     function keep() {
         const thing = thingField.text.trim()
-        if (!annotationLayer || !note || thing === "") return
+        if (!annotationLayer || !note || thing === "" || !reader.stillThere()) return
         const why = annotationLayer.makeFact(note.id, thing, kindField.text.trim())
         if (why !== "") {
             backend.say(why)
