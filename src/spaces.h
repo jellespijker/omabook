@@ -88,6 +88,10 @@ public:
     // Looks up or records global ids in `global_ids`.
     [[nodiscard]] static QString globalId(const Library &library, const QString &entity, qint64 localId);
     [[nodiscard]] static qint64 localId(const Library &library, const QString &entity, const QString &globalId);
+    // A book just added from a file another computer has keeps the id it has there and the hash its first
+    // file came in with there (#74), so the log and the next computer know it as the one book (#255); an id
+    // another book here has stays that book's. Done inside the batch that added it, the log has it by that id.
+    static void keepBookAsThere(Library &library, qint64 id, const QString &globalId, const QString &original);
     static void setGlobalId(const Library &library, const QString &entity, qint64 localId, const QString &globalId);
 
     // Ensures a row has its global id in `global_ids` and answers it.

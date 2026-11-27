@@ -19,6 +19,7 @@
 #include "curation.h"
 #include "formatprovider.h"
 #include "formats.h"
+#include "spaces.h"
 #include "subscribedspace.h"
 
 using namespace Qt::StringLiterals;
@@ -478,5 +479,13 @@ ImportSummary importDescribed(Library &library, const QString &file, const BookM
     else if (*verdict && !added.duplicate)
         summary.unreadable << **verdict;
     summary.keepInLog();
+    return summary;
+}
+
+ImportSummary importAsThere(Library &library, const QString &file, const BookMeta &meta, const QString &globalId, const QString &original) {
+    const Library::Batch batch(library);
+    ImportSummary summary = importDescribed(library, file, meta);
+    if (summary.items.size() == 1 && summary.items.first().error.isEmpty() && !summary.items.first().duplicate)
+        Spaces::keepBookAsThere(library, summary.items.first().id, globalId, original);
     return summary;
 }

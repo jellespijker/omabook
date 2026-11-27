@@ -197,6 +197,8 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
         manifest.insert("log", 1);
         // `set` takes --reading-at: what a sync sends keeps its reading's time (#243).
         manifest.insert("reading_at", 1);
+        // `add` takes --global-id and --original: what a sync sends keeps its id and first hash (#255).
+        manifest.insert("keeps_id", 1);
         const QJsonObject introduction = SyncLog::introduction(library);
         for (auto it = introduction.begin(); it != introduction.end(); ++it)
             manifest.insert(it.key(), it.value());

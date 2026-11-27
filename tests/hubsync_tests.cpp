@@ -265,6 +265,49 @@ private slots:
         QCOMPARE(hub.held(), contents(middle.library));
     }
 
+    // A book whose details one computer wrote into its file reaches the hub with its id and the hash
+    // it came in with, so another computer that has the file as it came in meets it there as the one
+    // book, and neither computer nor the hub gets it twice (#255).
+    void aBookWithItsDetailsWrittenInIsOneBookOnTheHub() {
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        Computer desktop;
+        const qint64 mine = laptop.add(u"Alpha"_s);
+        QVERIFY(mine > 0 && desktop.add(u"Alpha"_s) > 0);
+        const QString came = laptop.library.formatFiles(mine).first().hash;
+        // The two have synced; then the laptop writes the book's details into its file.
+        const QString ssh = Fixtures::standInSsh(desktop.dir.path(), QString::fromLatin1(OMABOOK_BINARY));
+        QVERIFY(syncLibrary(laptop.library, Remote(u"desktop:"_s + desktop.dir.filePath(u"library"_s), {ssh})).problems.isEmpty());
+        BookMeta meta = laptop.library.book(mine)->meta;
+        meta.publisher = u"Quay Books"_s;
+        QVERIFY(laptop.library.setMeta(mine, meta));
+        QVERIFY2(laptop.library.writeDetails(mine), "the details weren't written into the file");
+        QVERIFY(laptop.library.formatFiles(mine).first().hash != came);
+        const QString gid = Spaces::bookId(laptop.library, mine);
+
+        const SyncSummary first = hub.syncWith(u"laptop"_s, laptop.library);
+        QVERIFY2(first.error.isEmpty() && first.problems.isEmpty(), qPrintable(problems(first)));
+        QCOMPARE(first.sent, 1);
+        std::ignore = hub.keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+            Library &held = *libraries.front();
+            [&] {
+                QCOMPARE(held.books().size(), 1);
+                const qint64 theirs = held.books().first().id;
+                QCOMPARE(Spaces::bookId(held, theirs), gid);
+                QCOMPARE(held.formatFiles(theirs).first().original, came);
+            }();
+            return {};
+        });
+        const SyncSummary second = hub.syncWith(u"desktop"_s, desktop.library, pairing());
+        QVERIFY2(second.error.isEmpty() && second.problems.isEmpty(), qPrintable(problems(second)));
+        QCOMPARE(second.received, 0);
+        QCOMPARE(second.sent, 0);
+        QCOMPARE(desktop.library.books().size(), 1);
+        QCOMPARE(hub.held().size(), 1);
+    }
+
     // The hub ends each order as a computer in its place does. A book that reaches a
     // computer through a third one, which was sent it, arrives there without its
     // details, hub or not: a bug of the sync itself, so the libraries are compared

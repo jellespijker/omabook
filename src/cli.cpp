@@ -344,9 +344,7 @@ int add(const QStringList &arguments) {
     command.parser.addOption({"paper", "Add a book that is on a real shelf and has no file. Describe it with --title and "
                                        "--authors, or with --meta."});
     command.parser.addOption({"wish", "Add a book you don't have, to read some day. Described like --paper."});
-    command.parser.addOption({"title", "The title of a --paper or --wish book.", "text"});
-    command.parser.addOption({"authors", "Its authors; separate several with \" & \".", "text"});
-    command.parser.addOption({"isbn", "Its ISBN.", "text"});
+    addDescribingOptions(command.parser);
     const bool fileless = arguments.contains("--paper") || arguments.contains("--wish");
     if (!command.parse(arguments, fileless ? 0 : 1))
         return 1;
@@ -410,7 +408,7 @@ int add(const QStringList &arguments) {
             cover.setAutoTransform(true);
             meta->cover = cover.read();
         }
-        summary = importDescribed(*library, paths.first(), *meta);
+        summary = importAsThere(*library, paths.first(), *meta, command.parser.value("global-id"), command.parser.value("original"));
     } else {
         // Whether a Calibre library is read as one is the Calibre plugin's to say.
         Settings settings;

@@ -189,3 +189,15 @@ int runEmbedCli(const QStringList &arguments) {
         printJson(QJsonObject{{"books", books}});
     return failed ? 1 : 0;
 }
+
+void addDescribingOptions(QCommandLineParser &parser) {
+    parser.addOption({"title", "The title of a --paper or --wish book.", "text"});
+    parser.addOption({"authors", "Its authors; separate several with \" & \".", "text"});
+    parser.addOption({"isbn", "Its ISBN.", "text"});
+    QCommandLineOption globalId("global-id", "With --meta: the book's id on the computer it comes from.", "id");
+    QCommandLineOption original("original", "With --meta: the hash its file came in with there.", "hash");
+    for (QCommandLineOption *option : {&globalId, &original}) {
+        option->setFlags(QCommandLineOption::HiddenFromHelp);
+        parser.addOption(*option);
+    }
+}

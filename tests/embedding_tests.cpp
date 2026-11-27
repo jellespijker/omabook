@@ -31,6 +31,7 @@
 #include "opfdetails.h"
 #include "remote.h"
 #include "settings.h"
+#include "spaces.h"
 #include "sync.h"
 #include "zipedit.h"
 
@@ -591,6 +592,50 @@ private slots:
         sync(c, u"B"_s);
         QCOMPARE(c.books().size(), 1);
         QCOMPARE(b.books().size(), 1);
+    }
+
+    // A book whose details were written into its file keeps its id and the hash it came in with
+    // where it goes, sent or fetched, so another computer of one's own that has the file as it
+    // came in meets it there as the one book, never as a second (#255).
+    void aBookKeepsItsIdAndOriginalWhereItGoes() {
+        QTemporaryDir dir;
+        const QString book = dir.filePath(u"Ferry.epub"_s);
+        QVERIFY(epubZip(book, epub3Entries(true)));
+        const QString came = Library::hashFile(book);
+        Library a(dir.filePath(u"A"_s)), other(dir.filePath(u"Other"_s)), sent(dir.filePath(u"Sent"_s)),
+            fetched(dir.filePath(u"Fetched"_s));
+        QVERIFY(a.open() && other.open() && sent.open() && fetched.open());
+        const qint64 mine = a.add(book).id;
+        QVERIFY(mine > 0 && other.add(book).id > 0);
+        const QString ssh = Fixtures::standInSsh(dir.path(), QStringLiteral(OMABOOK_BINARY));
+        const auto sync = [&](Library &here, const QString &there) {
+            const SyncSummary summary = syncLibrary(here, Remote(u"laptop:"_s + dir.filePath(there), {ssh}));
+            [&] {
+                QVERIFY2(summary.error.isEmpty() && summary.problems.isEmpty(), qPrintable(summary.error + summary.problems.join(u"; "_s)));
+            }();
+            return summary;
+        };
+        // The other computer has synced with A, then A writes the book's details into its file.
+        sync(other, u"A"_s);
+        QVERIFY(a.setMeta(mine, changedMeta(a.book(mine)->meta)));
+        QVERIFY(a.writeDetails(mine));
+        const QString gid = Spaces::bookId(a, mine);
+        QVERIFY(a.formatFiles(mine).first().hash != came && !gid.isEmpty());
+        // Sent: A gives its book to an empty library there. Fetched: an empty library here takes it from A.
+        sync(a, u"Sent"_s);
+        sync(fetched, u"A"_s);
+        for (Library *there : {&sent, &fetched}) {
+            QCOMPARE(there->books().size(), 1);
+            const qint64 theirs = there->books().first().id;
+            QCOMPARE(Spaces::bookId(*there, theirs), gid);
+            QCOMPARE(there->formatFiles(theirs).first().original, came);
+        }
+        for (const QString &there : {u"Sent"_s, u"Fetched"_s}) {
+            const SyncSummary summary = sync(other, there);
+            QVERIFY2(summary.received == 0 && summary.sent == 0,
+                     qPrintable(there + u": %1 received, %2 sent"_s.arg(summary.received).arg(summary.sent)));
+            QCOMPARE(other.books().size(), 1);
+        }
     }
 
     // `omabook embed`, and the setting that has `omabook set` write too.

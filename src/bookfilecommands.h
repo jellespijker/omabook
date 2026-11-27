@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QCommandLineParser>
 #include <QStringList>
 
 class Library;
@@ -10,5 +11,8 @@ class Library;
 // format of a book. With `replace`, a file of the same format gives way, to
 // the trash; without, it is refused.
 int runAddFormats(Library &library, qint64 id, const QStringList &files, bool replace, bool json);
+// `add`'s options that describe a book with no file, and the two a sync gives with a book it sends (#255):
+// the id the book has on the computer it comes from, and the hash its file came in with there (#74).
+void addDescribingOptions(QCommandLineParser &parser);
 int runExportCli(const QStringList &arguments);
 int runEmbedCli(const QStringList &arguments);

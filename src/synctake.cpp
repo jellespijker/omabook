@@ -436,3 +436,21 @@ SyncOptions::Details SyncTake::detailsFrom(const QString &name) {
         return SyncOptions::Details::Theirs;
     return SyncOptions::Details::Undecided;
 }
+
+Library::Added SyncTake::addAsThere(Library &library, const QString &file, const BookMeta &meta, const QJsonObject &theirs) {
+    const Library::Batch batch(library);
+    const Library::Added added = library.add(file, meta);
+    if (added.error.isEmpty() && !added.duplicate)
+        Spaces::keepBookAsThere(library, added.id, theirs.value("gid"_L1).toString(),
+                                theirs.value("files"_L1).toArray().first().toObject().value("original"_L1).toString());
+    return added;
+}
+
+QStringList SyncTake::keptIdArguments(const Library &library, qint64 id, const QList<FormatFile> &files, const QJsonObject &manifest) {
+    if (files.isEmpty() || manifest.value("keeps_id"_L1).toInt() < 1)
+        return {};
+    QStringList arguments{u"--global-id"_s, Spaces::bookId(library, id)};
+    if (!files.first().original.isEmpty())
+        arguments << u"--original"_s << files.first().original;
+    return arguments;
+}

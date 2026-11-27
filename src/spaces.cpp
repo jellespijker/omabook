@@ -248,6 +248,13 @@ void Spaces::setGlobalId(const Library &library, const QString &entity, qint64 l
     library.exec("INSERT OR REPLACE INTO global_ids (entity, local_id, global_id) VALUES (?, ?, ?)", {entity, localId, globalId});
 }
 
+void Spaces::keepBookAsThere(Library &library, qint64 id, const QString &globalId, const QString &original) {
+    if (const QList<FormatFile> files = library.formatFiles(id); !files.isEmpty())
+        library.knowOriginal(id, files.first().format, original);
+    if (!globalId.isEmpty() && localId(library, u"book"_s, globalId) == 0)
+        setGlobalId(library, u"book"_s, id, globalId);
+}
+
 void Spaces::ensureBookId(const Library &library, qint64 localId) {
     if (localId <= 0 || !globalId(library, u"book"_s, localId).isEmpty())
         return;

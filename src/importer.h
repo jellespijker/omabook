@@ -96,3 +96,6 @@ ImportSummary importBooks(Library &library, const QStringList &paths,
 // One book, described by whoever is adding it: the one file, looked at as an
 // import looks at it, and the details given.
 ImportSummary importDescribed(Library &library, const QString &file, const BookMeta &meta);
+// The same, for a book another computer's sync sends: it keeps the id it has there and the hash its file
+// came in with there, when given, in one batch with it (#255).
+ImportSummary importAsThere(Library &library, const QString &file, const BookMeta &meta, const QString &globalId, const QString &original);

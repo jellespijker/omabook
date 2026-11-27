@@ -14,6 +14,7 @@
 #include "library.h"
 #include "log.h"
 #include "pluginfilesync.h"
+#include "spaces.h"
 #include "sync.h"
 #include "syncidentity.h"
 #include "synclog.h"
@@ -110,7 +111,9 @@ namespace {
                        {u"cover"_s, {}, u"file"_s},
                        {u"paper"_s, {}},
                        {u"wish"_s, {}},
-                       {u"json"_s, {}}});
+                       {u"json"_s, {}},
+                       {u"global-id"_s, {}, u"id"_s},
+                       {u"original"_s, {}, u"hash"_s}});
     if (!parser.parse(QStringList{u"omabook add"_s} + arguments.mid(1)))
         return std::unexpected(refused(arguments));
     QStringList files;
@@ -130,9 +133,13 @@ namespace {
         return addFormats(library, parser.value(u"to"_s).toLongLong(), files);
     if (files.size() != 1 || fileless)
         return std::unexpected(refused(arguments));
+    // In one batch with what it was there, so the log has it by its id there from the start (#255).
+    const Library::Batch batch(library);
     const Library::Added added = library.add(files.first(), *meta);
     if (!added.error.isEmpty())
         return std::unexpected(Failure::said(added.error));
+    if (!added.duplicate)
+        Spaces::keepBookAsThere(library, added.id, parser.value(u"global-id"_s), parser.value(u"original"_s));
     return QJsonArray{QJsonObject{{"file", parser.positionalArguments().first()}, {"id", added.id}, {"duplicate", added.duplicate}}};
 }
 

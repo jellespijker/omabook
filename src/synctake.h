@@ -96,6 +96,13 @@ bool fillReading(Library &library, qint64 id, const QJsonObject &theirs, bool dr
 [[nodiscard]] QStringList readingArguments(qint64 id, const Book &book, std::optional<qint64> detailsAt, bool names = true,
                                            bool readingAt = false);
 
+// A book fetched from there, added here with the id it has there and the hash its first file came in with,
+// in one batch, so the log has it by that id from the start (#255).
+[[nodiscard]] Library::Added addAsThere(Library &library, const QString &file, const BookMeta &meta, const QJsonObject &theirs);
+// What `add` there is given to keep a book's id here and the hash its file came in with, for an Omabook that
+// keeps them ("keeps_id" in its manifest, #255).
+[[nodiscard]] QStringList keptIdArguments(const Library &library, qint64 id, const QList<FormatFile> &files, const QJsonObject &manifest);
+
 // Whose details settle the undecided ones, as the other side sees it.
 [[nodiscard]] QString otherSide(SyncOptions::Details details);
 [[nodiscard]] SyncOptions::Details detailsFrom(const QString &name);

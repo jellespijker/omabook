@@ -352,15 +352,13 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
             const QString cover = theirs.value("cover").toString();
             if (!cover.isEmpty() && remote.fetch(cover, scratch.filePath("cover.jpg")))
                 meta.cover = QImageReader(scratch.filePath("cover.jpg")).read();
-            const Library::Added added = library.add(first, meta);
+            const Library::Added added = SyncTake::addAsThere(library, first, meta, theirs);
             QFile::remove(first);
             if (!added.error.isEmpty()) {
                 summary.problems << added.error;
                 continue;
             }
             mine = added.id;
-            library.knowOriginal(mine, files.first().toObject().value("format").toString(),
-                                 files.first().toObject().value("original").toString());
             if (current)
                 library.setDetailsAt(mine, theirDetailsAt);
             note(summary.received, summary.titles.received, title);
@@ -443,7 +441,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
                 why = sent.error();
         // A book without a file is added as one, then given its reading.
         QStringList add = files.isEmpty() ? QStringList{"add", book.paper ? "--paper" : "--wish"} : QStringList{"add", sentFiles.value(0)};
-        add << "--meta" << folder + "/details.json" << "--json";
+        add << "--meta" << folder + "/details.json" << "--json" << SyncTake::keptIdArguments(library, book.id, files, manifest);
         if (const QString cover = library.coverPath(book.id); !cover.isEmpty() && remote.send(cover, folder + "/cover.jpg"))
             add << "--cover" << folder + "/cover.jpg";
         const Remote::Result added = why.isEmpty() ? remote.omabook(add) : Remote::Result();
