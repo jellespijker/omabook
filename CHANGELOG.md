@@ -12,6 +12,14 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.2.2] - 2026-11-27
+
+A hub's first sync with a computer no longer empties its collections. If a hub sync emptied yours, put the books back from a backup of the library taken before it, with `omabook collections include`, before you sync again.
+
+### Fixed
+
+- A computer's first sync with a hub no longer takes every book out of every collection. The hub is sent a library's collections before their books, and it logged each book it didn't have yet as taken out, which then emptied the collections on every computer that synced with it. Collections emptied this way can be filled again from a backup of the library, with `omabook collections include` (#280).
+
 ## [0.5.2.1] - 2026-11-27
 
 ### Fixed
