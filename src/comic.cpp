@@ -23,6 +23,37 @@ namespace {
     return std::ranges::contains(suffixes, QFileInfo(name).suffix().toLower()) && !name.startsWith("__MACOSX"_L1);
 }
 
+// What ComicRack's ComicInfo.xml says of the comic, over `meta`.
+void readInfo(const QByteArray &info, BookMeta &meta) {
+    QXmlStreamReader xml(info);
+    while (!xml.atEnd()) {
+        if (xml.readNext() != QXmlStreamReader::StartElement || xml.name() == u"ComicInfo")
+            continue;
+        const QString field = xml.name().toString();
+        const QString value = xml.readElementText(QXmlStreamReader::SkipChildElements).trimmed();
+        if (value.isEmpty())
+            continue;
+        if (field == "Title")
+            meta.title = value;
+        else if (field == "Series")
+            meta.series = value;
+        else if (field == "Number")
+            meta.seriesIndex = value.toDouble();
+        else if (field == "Writer")
+            meta.authors = BookMeta::splitTags(value);
+        else if (field == "Publisher")
+            meta.publisher = value;
+        else if (field == "Summary")
+            meta.description = value;
+        else if (field == "Genre")
+            meta.tags = BookMeta::splitTags(value);
+        else if (field == "LanguageISO")
+            meta.language = value;
+        else if (field == "Year")
+            meta.published = value;
+    }
+}
+
 // A comic is an archive of pictures, read in the order of their names.
 class ComicDocument : public Document {
 public:
@@ -37,29 +68,18 @@ public:
 
         m_meta.title = QFileInfo(path).completeBaseName();
         // ComicRack's ComicInfo.xml, where the archive carries one.
-        for (const QString &name : names) {
-            if (name.compare("ComicInfo.xml", Qt::CaseInsensitive) != 0)
-                continue;
-            QXmlStreamReader xml(m_archive.read(name));
-            while (!xml.atEnd()) {
-                if (xml.readNext() != QXmlStreamReader::StartElement || xml.name() == u"ComicInfo")
-                    continue;
-                const QString field = xml.name().toString();
-                const QString value = xml.readElementText(QXmlStreamReader::SkipChildElements).trimmed();
-                if (value.isEmpty()) continue;
-                if (field == "Title") m_meta.title = value;
-                else if (field == "Series") m_meta.series = value;
-                else if (field == "Number") m_meta.seriesIndex = value.toDouble();
-                else if (field == "Writer") m_meta.authors = BookMeta::splitTags(value);
-                else if (field == "Publisher") m_meta.publisher = value;
-                else if (field == "Summary") m_meta.description = value;
-                else if (field == "Genre") m_meta.tags = BookMeta::splitTags(value);
-                else if (field == "LanguageISO") m_meta.language = value;
-                else if (field == "Year") m_meta.published = value;
-            }
-        }
+        for (const QString &name : names)
+            if (name.compare("ComicInfo.xml", Qt::CaseInsensitive) == 0)
+                readInfo(m_archive.read(name), m_meta);
         m_meta.cover = image(0, 600);
+        // Pictures none of which can be drawn would show as blank pages (#264).
+        m_shown = !m_meta.cover.isNull()
+                  || std::ranges::any_of(std::views::iota(1, count()), [this](int page) { return !image(page, 600).isNull(); });
         return {};
+    }
+
+    std::optional<Failure> unreadable() const override {
+        return m_shown ? std::nullopt : std::optional(Failure(Failure::Code::ComicPicturesUnreadable));
     }
 
     Kind kind() const override { return Pages; }
@@ -97,6 +117,7 @@ private:
     mutable QMutex m_lock;
     mutable QHash<int, QSize> m_sizes;
     BookMeta m_meta;
+    bool m_shown = false;
 };
 
 } // namespace

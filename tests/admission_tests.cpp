@@ -57,12 +57,32 @@ namespace {
     return Fixtures::zip(path, entries);
 }
 
+// Bytes of no format at all, the same every time.
+[[nodiscard]] QByteArray noise() {
+    QByteArray bytes(20000, '\0');
+    quint32 state = 12345;
+    for (char &byte : bytes) {
+        state = state * 1103515245U + 12345U;
+        byte = static_cast<char>(state >> 16);
+    }
+    return bytes;
+}
+
 // The file of each kind that is no book, made in `dir`; its path.
 [[nodiscard]] QString broken(const QTemporaryDir &dir, const QString &name) {
     const QString path = dir.filePath(name);
     bool made = false;
     if (name.startsWith("empty"))
         made = Fixtures::write(path, {});
+    else if (name.startsWith("noise"))
+        made = Fixtures::write(path, noise());
+    else if (name == "zeros.txt")
+        made = Fixtures::write(path, QByteArray(4096, '\0'));
+    else if (name == "short.rtf")
+        made = Fixtures::write(
+            path, QByteArray(R"({\rtf1\ansi{\fonttbl{\f0 Serif;}}\f0 The lantern keeper walked down to the harbour.})").first(70));
+    else if (name == "half.docx" && Fixtures::zip(dir.filePath("whole.zip"), {{"word/document.xml", QByteArray("<w/>").repeated(500)}}))
+        made = Fixtures::write(path, bytesOf(dir.filePath("whole.zip")).first(QFileInfo(dir.filePath("whole.zip")).size() / 2));
     else if (name == "nopictures.cbz")
         made = Fixtures::zip(path, {{"notes.txt", "No pictures here."}});
     else if (name == "truncated.epub" && Fixtures::epub(dir.filePath("whole.epub")))
@@ -83,7 +103,10 @@ private slots:
     void aFileThatIsNoBookIsRefused_data() {
         QTest::addColumn<QString>("name");
         for (const char *name : {"empty.epub", "empty.txt", "empty.mobi", "garbage.epub", "truncated.epub", "half.epub", "fake.pdf",
-                                 "fake.cbz", "nopictures.cbz", "garbage.fb2"})
+                                 "fake.cbz", "nopictures.cbz", "garbage.fb2",
+                                 // And those of #264.
+                                 "noise.mobi", "noise.azw3", "noise.docx", "noise.odt", "noise.djvu", "noise.txt", "noise.rtf", "zeros.txt",
+                                 "half.docx", "short.rtf"})
             QTest::newRow(name) << QString::fromLatin1(name);
     }
 
@@ -111,6 +134,50 @@ private slots:
         const ImportSummary described = importDescribed(library, file, meta);
         QVERIFY(described.failed());
         QVERIFY(library.books().isEmpty());
+    }
+
+    // Pictures none of which can be shown (#264): kept, with a note, and never shown as blank pages.
+    void aComicWithoutAReadablePictureComesInWithANote() {
+        const QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const QString comic = dir.filePath("Broken.cbz");
+        QVERIFY(Fixtures::zip(comic, {{"1.jpg", "not an image"}, {"2.jpg", QByteArray()}}));
+
+        const ImportSummary summary = importBooks(library, {comic});
+        QCOMPARE(summary.added, 1);
+        QCOMPARE(summary.unreadable.size(), 1);
+        QVERIFY2(summary.unreadable.first().text().contains("pictures"), qPrintable(summary.unreadable.first().text()));
+        QString why;
+        QVERIFY(!Formats::open(library.formatPath(summary.lastId, "cbz"), &why));
+        QVERIFY2(why.contains("pictures"), qPrintable(why));
+    }
+
+    // What is what its name says, and text in an older encoding, comes in as before (#264).
+    void whatIsWhatItsNameSaysComesIn_data() {
+        QTest::addColumn<QString>("name");
+        QTest::addColumn<QByteArray>("content");
+        QByteArray topaz = "TPZ0";
+        topaz.resize(100, '\1');
+        QTest::newRow("a Kindle book") << "book.azw3" << Fixtures::mobi();
+        QTest::newRow("a Topaz book") << "book.azw" << topaz;
+        QTest::newRow("rich text") << "book.rtf" << QByteArray(R"({\rtf1\ansi A \{ brace.{\bin3 {{{}}\par})") + "\n\0"_ba;
+        QTest::newRow("a DjVu") << "book.djvu" << QByteArray("AT&TFORM\0\0\0\0DJVU", 16);
+        QTest::newRow("a Word document") << "book.docx" << QByteArray("PK\x05\x06", 4).prepend("PK\x03\x04") + QByteArray(18, '\0');
+        QTest::newRow("Western text") << "book.txt" << QByteArray("Caf\xe9 on the quay,\twith a form feed\f\r\nand an end mark\x1a");
+        QTest::newRow("UTF-16 text") << "wide.txt" << QByteArray("\xff\xfeH\0i\0\n\0", 8);
+    }
+
+    void whatIsWhatItsNameSaysComesIn() {
+        QFETCH(const QString, name);
+        QFETCH(const QByteArray, content);
+        const QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        QVERIFY(Fixtures::write(dir.filePath(name), content));
+        const ImportSummary summary = importBooks(library, {dir.filePath(name)});
+        QVERIFY2(summary.added == 1 && !summary.failed(), qPrintable(summary.problems.join('\n')));
+        QCOMPARE(summary.unreadable.size(), 0);
     }
 
     void aProtectedBookComesInWithANote() {

@@ -17,9 +17,10 @@ namespace BookAdmission {
 // may not come in.
 using Verdict = std::expected<std::optional<Failure>, Failure>;
 
-// The verdict on a file of hash `hash`. Only what Omabook reads itself is
-// opened; a file that is no book, or none to be read at all, is left for
-// Library::add and addFormat to refuse in their own words.
+// The verdict on a file of hash `hash`. What Omabook reads itself is opened,
+// what it converts is looked at (BookSignature); a file that is no book, or
+// none to be read at all, is left for Library::add and addFormat to refuse in
+// their own words.
 [[nodiscard]] Verdict examine(const Library &library, const QString &file, const QString &hash);
 
 // Library::add, for a file that may come in; the error says why one may not.

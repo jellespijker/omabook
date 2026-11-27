@@ -3093,5 +3093,9 @@
   "rating": "Bewertung",
   "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde nichts gelöscht und das Buch bleibt in der Bibliothek. Um es endgültig zu löschen, lösche den Ordner selbst und entferne dann das Buch erneut.",
   "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde der Ordner so gelassen. Nimm ihn stattdessen von der Liste, oder lösche den Ordner selbst.",
-  "The note's words were copied to the clipboard.": "Die Worte der Notiz wurden in die Zwischenablage kopiert."
+  "The note's words were copied to the clipboard.": "Die Worte der Notiz wurden in die Zwischenablage kopiert.",
+  "It is not what its name says it is: the file is damaged, or something else.": "Sie ist nicht das, was ihr Name sagt: Die Datei ist beschädigt oder etwas anderes.",
+  "It holds no text that can be read: the file is damaged, or no text file.": "Sie enthält keinen lesbaren Text: Die Datei ist beschädigt oder keine Textdatei.",
+  "It is protected by a password, or is an older Word document under a newer name, so it can't be converted.": "Sie ist mit einem Passwort geschützt oder ist ein älteres Word-Dokument unter neuerem Namen und kann deshalb nicht umgewandelt werden.",
+  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Keines ihrer Bilder kann gelesen werden: Sie sind beschädigt oder von einer Art, die dieser Computer nicht anzeigen kann."
 }

@@ -6,8 +6,10 @@
 #include <QSizeF>
 #include <QString>
 #include <memory>
+#include <optional>
 
 #include "bookmeta.h"
+#include "failure.h"
 
 struct TocEntry {
     QString title;
@@ -38,6 +40,10 @@ public:
     enum Kind { Flow, Pages };
 
     virtual ~Document() = default;
+
+    // Why the book that opened can't be shown, when it can't (#264): what it
+    // says of itself is still told.
+    virtual std::optional<Failure> unreadable() const { return std::nullopt; }
 
     virtual Kind kind() const = 0;
     // Chapters of a flowing book, pages of a paged one.

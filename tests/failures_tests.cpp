@@ -44,12 +44,12 @@ struct Speaking {
 
 // The sentences failure.cpp and its tables word failures in, as bin/i18n reads them.
 [[nodiscard]] QStringList sentences() {
-    QByteArray read;
-    for (const char *name : {"../src/failure.cpp", "../src/failuresnapshots.cpp"}) {
-        QFile file(QFINDTESTDATA(name));
+    QByteArray worded;
+    for (const char *source : {"../src/failure.cpp", "../src/failurewords.h", "../src/failuresnapshots.cpp"}) {
+        QFile file(QFINDTESTDATA(source));
         if (!file.open(QIODevice::ReadOnly))
             return {};
-        read += file.readAll();
+        worded += file.readAll() + '\n';
     }
     // A sentence may be split over several literals, which bin/i18n joins.
     static const QRegularExpression marked(R"re(\btr\(((?:\s*"(?:[^"\\]|\\.)*")+))re");
@@ -57,7 +57,7 @@ struct Speaking {
     QStringList found;
     // Comments are skipped, as bin/i18n skips them.
     static const QRegularExpression comment("//[^\n]*");
-    const QString code = QString::fromUtf8(read).remove(comment);
+    const QString code = QString::fromUtf8(worded).remove(comment);
     for (const QRegularExpressionMatch &match : marked.globalMatch(code)) {
         QString sentence;
         for (const QRegularExpressionMatch &part : literal.globalMatch(match.captured(1)))

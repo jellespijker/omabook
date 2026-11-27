@@ -1,11 +1,24 @@
 #include <QFile>
 #include <QRegularExpression>
 #include <QTextDocument>
+#include <algorithm>
 
 #include "formatreaders.h"
 #include "htmlclean.h"
 
 namespace {
+
+// Whether what was decoded is words rather than a file of something else:
+// text has hardly a control character beside its tabs and line ends (and the
+// escapes and end mark old text files have), and is more than empty bytes (#264).
+[[nodiscard]] bool isText(const QString &text) {
+    const auto odd = [](QChar letter) {
+        const char16_t code = letter.unicode();
+        return code > 0 && code < 0x20 && !letter.isSpace() && code != 0x1a && code != 0x1b;
+    };
+    const bool empty = !text.isEmpty() && std::ranges::all_of(text, [](QChar letter) { return letter.isNull(); });
+    return !empty && std::ranges::count_if(text, odd) * 20 <= text.size();
+}
 
 // Plain text, Markdown and single HTML files: books with no container. Each
 // is turned into HTML chapters once and cleaned when the reader asks.
@@ -16,6 +29,8 @@ public:
         if (!file.open(QIODevice::ReadOnly))
             return std::unexpected(Failure(Failure::Code::FileUnreadable, {file.errorString()}));
         const QString text = decodeText(file.readAll());
+        if (!isText(text))
+            return std::unexpected(Failure(Failure::Code::FileNotText));
         const QString lower = path.toLower();
         if (lower.endsWith(".md") || lower.endsWith(".markdown")) {
             QTextDocument markdown;

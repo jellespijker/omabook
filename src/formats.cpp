@@ -302,12 +302,13 @@ QStringList Formats::byPreference(QStringList extensions) {
 
 std::unique_ptr<Document> Formats::open(const QString &path, QString *error) {
     auto document = opened(path);
-    if (document)
+    const std::optional<Failure> why = document ? (*document)->unreadable() : document.error();
+    if (!why)
         return std::move(*document);
     // Worded here, for callers that show it as it is: in the window's
     // language there, in English on the command line.
     if (error)
-        *error = document.error().text();
+        *error = why->text();
     return nullptr;
 }
 
@@ -335,8 +336,8 @@ BookMeta Formats::readMeta(const QString &path) {
     BookMeta meta;
     const QString extension = Formats::extension(path);
     if (readable(extension)) {
-        if (const auto document = open(path))
-            meta = document->meta();
+        if (const auto document = opened(path))
+            meta = (*document)->meta();
     } else if (std::ranges::contains(kindle, extension)) {
         meta = readMobiMeta(path);
     }

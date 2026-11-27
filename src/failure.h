@@ -56,7 +56,12 @@ public:
         BookRefused,    // {file name, why it is no book} (#226)
         BookUnreadable, // {file name, why it can't be read here}: it was added
         FileCutShort,   // {}
-        BookHasFormat,  // {book's number, format name}
+        // What else makes a file no book, or one that can't be read here (#264).
+        FileNotItsFormat,        // {}
+        FileNotText,             // {}
+        DocumentLocked,          // {}
+        ComicPicturesUnreadable, // {}
+        BookHasFormat,           // {book's number, format name}
         // The file to be replaced stays, as it can't be kept: {path}.
         ReplacedFileNotTrashed,
         FolderNotTrashed,  // {a book's folder}: it can't go to the trash, so the book stays (#285)

@@ -7,9 +7,8 @@
 
 namespace {
 
-// As in failure.cpp: marks a sentence for the catalogs (bin/i18n).
-constexpr auto tr = [](const char *text, const char * = nullptr, bool = false) { return text; };
-constexpr bool counted = true;
+using FailureWords::counted;
+using FailureWords::tr;
 
 constexpr auto wordings = std::to_array<FailureWords::Wording>({
     {Failure::Code::SnapshotsNotSetUp,

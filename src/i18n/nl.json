@@ -3093,5 +3093,9 @@
   "rating": "waardering",
   "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 kan niet naar de prullenbak worden verplaatst (daar kan geen prullenbak worden gemaakt), dus er is niets verwijderd en het boek blijft in de bibliotheek. Wil je het definitief verwijderen, verwijder dan zelf die map en haal het boek daarna opnieuw weg.",
   "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 kan niet naar de prullenbak worden verplaatst (daar kan geen prullenbak worden gemaakt), dus het is zo gelaten. Haal de bibliotheek in plaats daarvan van de lijst, of verwijder de map zelf.",
-  "The note's words were copied to the clipboard.": "De woorden van de kanttekening zijn naar het klembord gekopieerd."
+  "The note's words were copied to the clipboard.": "De woorden van de kanttekening zijn naar het klembord gekopieerd.",
+  "It is not what its name says it is: the file is damaged, or something else.": "Het is niet wat de naam zegt: het bestand is beschadigd, of iets anders.",
+  "It holds no text that can be read: the file is damaged, or no text file.": "Er staat geen leesbare tekst in: het bestand is beschadigd, of geen tekstbestand.",
+  "It is protected by a password, or is an older Word document under a newer name, so it can't be converted.": "Het is met een wachtwoord beveiligd, of is een ouder Word-document onder een nieuwere naam, en kan daarom niet worden omgezet.",
+  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Geen van de afbeeldingen kan worden gelezen: ze zijn beschadigd, of van een soort die deze computer niet kan tonen."
 }

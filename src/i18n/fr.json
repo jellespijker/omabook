@@ -3215,5 +3215,9 @@
   "rating": "note",
   "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 ne peut pas être mis à la corbeille (aucune corbeille ne peut y être créée) ; rien n'a donc été supprimé et le livre reste dans la bibliothèque. Pour le supprimer définitivement, supprimez vous-même ce dossier, puis retirez de nouveau le livre.",
   "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 ne peut pas être mis à la corbeille (aucune corbeille ne peut y être créée) ; il a donc été laissé tel quel. Retirez-la plutôt de la liste, ou supprimez vous-même le dossier.",
-  "The note's words were copied to the clipboard.": "Le texte de la note a été copié dans le presse-papiers."
+  "The note's words were copied to the clipboard.": "Le texte de la note a été copié dans le presse-papiers.",
+  "It is not what its name says it is: the file is damaged, or something else.": "Ce n’est pas ce que son nom annonce : le fichier est endommagé, ou c’est autre chose.",
+  "It holds no text that can be read: the file is damaged, or no text file.": "Il ne contient aucun texte lisible : le fichier est endommagé, ou ce n’est pas un fichier texte.",
+  "It is protected by a password, or is an older Word document under a newer name, so it can't be converted.": "Il est protégé par un mot de passe, ou c’est un ancien document Word sous un nom récent : il ne peut donc pas être converti.",
+  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Aucune de ses images n’est lisible : elles sont endommagées, ou d’un type que cet ordinateur ne peut pas afficher."
 }

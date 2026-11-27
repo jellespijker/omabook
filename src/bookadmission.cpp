@@ -5,6 +5,8 @@
 #include <algorithm>
 #include <array>
 
+#include "booksignature.h"
+#include "document.h"
 #include "formats.h"
 
 using namespace Qt::StringLiterals;
@@ -13,10 +15,12 @@ namespace {
 
 // What opening a book says when the file is not the book its name makes it.
 constexpr std::array damaged{
-    Failure::Code::EpubNotAnArchive, Failure::Code::EpubWithoutPackage,     Failure::Code::EpubWithoutChapters,
-    Failure::Code::PdfUnreadable,    Failure::Code::PdfWithoutPages,        Failure::Code::ComicWithoutPictures,
-    Failure::Code::FictionBookEmpty, Failure::Code::FictionBookWithoutText, Failure::Code::FileWithoutText,
-    Failure::Code::NoChaptersFound,
+    Failure::Code::EpubNotAnArchive,    Failure::Code::EpubWithoutPackage,
+    Failure::Code::EpubWithoutChapters, Failure::Code::PdfUnreadable,
+    Failure::Code::PdfWithoutPages,     Failure::Code::ComicWithoutPictures,
+    Failure::Code::FictionBookEmpty,    Failure::Code::FictionBookWithoutText,
+    Failure::Code::FileWithoutText,     Failure::Code::NoChaptersFound,
+    Failure::Code::FileNotText,
 };
 
 // What it says when the book is there and locked.
@@ -37,6 +41,33 @@ constexpr std::array locked{Failure::Code::EpubProtected, Failure::Code::PdfLock
     return std::unexpected(Failure(Failure::Code::BookRefused, {name, why.text()}));
 }
 
+[[nodiscard]] Failure unreadable(const QString &name, const Failure &why) {
+    return Failure(Failure::Code::BookUnreadable, {name, why.text()});
+}
+
+// The verdict on a file Omabook reads itself, as opening it says.
+[[nodiscard]] BookAdmission::Verdict opening(const QString &file, const QString &name) {
+    const auto opened = Formats::opened(file);
+    if (opened) {
+        const std::optional<Failure> why = (*opened)->unreadable();
+        return why ? std::optional(unreadable(name, *why)) : std::nullopt;
+    }
+    if (std::ranges::contains(damaged, opened.error().code()))
+        return refused(name, opened.error());
+    if (std::ranges::contains(locked, opened.error().code()))
+        return unreadable(name, opened.error());
+    // Anything else, such as a recording not written out yet, is no fault of the file.
+    return std::nullopt;
+}
+
+// The verdict on a file that is read after converting it, as it looks (#264).
+[[nodiscard]] BookAdmission::Verdict looking(const QString &file, const QString &name, const QString &extension) {
+    const auto seen = BookSignature::look(file, extension);
+    if (!seen)
+        return refused(name, seen.error());
+    return *seen ? std::optional(unreadable(name, **seen)) : std::nullopt;
+}
+
 } // namespace
 
 BookAdmission::Verdict BookAdmission::examine(const Library &library, const QString &file, const QString &hash) {
@@ -47,19 +78,11 @@ BookAdmission::Verdict BookAdmission::examine(const Library &library, const QStr
     if (info.size() == 0)
         return std::unexpected(Failure(Failure::Code::EmptyBookFile, {info.fileName()}));
     const QString extension = Formats::extension(file);
-    if (!Formats::ownFormat(extension) || !Formats::readable(extension) || library.bookWithHash(hash) != 0)
+    if (!Formats::ownFormat(extension) || library.bookWithHash(hash) != 0)
         return std::nullopt;
     if (cutShortZip(file))
         return refused(info.fileName(), Failure(Failure::Code::FileCutShort));
-    const auto opened = Formats::opened(file);
-    if (opened)
-        return std::nullopt;
-    if (std::ranges::contains(damaged, opened.error().code()))
-        return refused(info.fileName(), opened.error());
-    if (std::ranges::contains(locked, opened.error().code()))
-        return Failure(Failure::Code::BookUnreadable, {info.fileName(), opened.error().text()});
-    // Anything else, such as a recording not written out yet, is no fault of the file.
-    return std::nullopt;
+    return Formats::readable(extension) ? opening(file, info.fileName()) : looking(file, info.fileName(), extension);
 }
 
 Library::Added BookAdmission::add(Library &library, const QString &file, const BookMeta &meta) {

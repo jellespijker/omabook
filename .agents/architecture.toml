@@ -31,7 +31,7 @@ modules = [
 summary = "Opening and reading book files: archives, EPUB, PDF, comics, FictionBook, text, conversion."
 uses = ["foundation"]
 modules = [
-  "bookarchive", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
+  "bookarchive", "booksignature", "bookplace", "booksource", "booktext", "passagematch", "comic", "converter", "describeddocument", "document", "epub", "fb2",
   "formatprovider", "formatreaders", "formats", "documenttext", "markdownbook", "mobi", "pdfdoc", "textdoc", "pagetext",
   "textstretches", "koreaderdocument", "zipedit", "opfdetails", "epubdetails", "sentences", "transcriptstore", "recordingbook",
 ]

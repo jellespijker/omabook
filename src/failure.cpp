@@ -13,15 +13,12 @@ using namespace Qt::StringLiterals;
 
 namespace {
 
-// Marks a sentence for the catalogs (bin/i18n reads what tr() is handed) and
-// gives it back as it is; text() translates it when it is shown. A counted
-// one is marked tr("...", "", counted), and its %n is the failure's count.
-constexpr auto tr = [](const char *text, const char * = nullptr, bool = false) { return text; };
-constexpr bool counted = true;
-
+using FailureWords::counted;
+using FailureWords::tr;
 using FailureWords::Wording;
 
-// Every code's sentence, by code. %1, %2... are its arguments, in order.
+// Every code's sentence, by code, but those of the hub (failurewords.h) and of the
+// snapshots (failuresnapshots.cpp). %1, %2... are its arguments, in order.
 constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::NoSuchFile, tr("There is no such file: %1")},
     {Failure::Code::FileUnreadable, tr("The file can't be read: %1")},
@@ -58,6 +55,12 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::BookRefused, tr("%1 was not added: %2")},
     {Failure::Code::BookUnreadable, tr("%1 was added, but it can't be read here: %2")},
     {Failure::Code::FileCutShort, tr("The file is cut short: part of it is missing.")},
+    {Failure::Code::FileNotItsFormat, tr("It is not what its name says it is: the file is damaged, or something else.")},
+    {Failure::Code::FileNotText, tr("It holds no text that can be read: the file is damaged, or no text file.")},
+    {Failure::Code::DocumentLocked,
+     tr("It is protected by a password, or is an older Word document under a newer name, so it can't be converted.")},
+    {Failure::Code::ComicPicturesUnreadable,
+     tr("None of its pictures can be read: they are damaged, or of a kind this computer can't show.")},
     {Failure::Code::BookHasFormat, tr("Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with "
                                       "--replace (\"replace\": true for an "
                                       "agent): the one there goes to the trash.")},
@@ -328,68 +331,6 @@ constexpr auto wordings = std::to_array<Wording>({
         "<folder>). To start a new library here and add the books again, first move %1 somewhere else, with the -wal and -shm files "
         "beside it, then run omabook libraries --use \"%3\" --create.")},
     {Failure::Code::LibraryUnnamed, tr("No folder was given for the library.")},
-    {Failure::Code::HubNotRunning, tr("No hub is running here: nothing answers at %1. Start it with systemctl, or with omabook hub run.")},
-    {Failure::Code::HubRunning, tr("A hub is running here already, answering at %1.")},
-    {Failure::Code::HubCantListen, tr("The hub can't take requests at %1: %2")},
-    {Failure::Code::HubNoLibraries, tr("The hub has no folder for its libraries yet. Choose one: omabook hub run --libraries <folder>")},
-    {Failure::Code::HubNoLibraryYet,
-     tr("The hub keeps no library yet, so there is nothing to sync with. Make one on the hub with omabook list --library "
-        "\"%1/Books\", then restart the hub.")},
-    {Failure::Code::HubNoSuchLibrary,
-     tr("The hub keeps no library called %1. A new one is made on the hub with omabook list --library <its libraries "
-        "folder>/%1, and kept once the hub is restarted.")},
-    {Failure::Code::HubLibraryUnnamed, tr("The hub keeps more than one library, so say which one.")},
-    {Failure::Code::HubUnknownRequest, tr("The hub takes no request called %1.")},
-    {Failure::Code::HubBadRequest, tr("The hub takes each request as one line of JSON: an object that names its request.")},
-    {Failure::Code::HubSecretOpen, tr("The secret %1 can be read by others; only the hub's own user may (chmod 600 it).")},
-    {Failure::Code::HubSecretUnreadable, tr("The hub can't read the secret %1: %2")},
-    {Failure::Code::HubProtocol, tr("The hub speaks protocol %1, and a session starts with its hello.")},
-    {Failure::Code::HubOnlySession, tr("This key opens only the hub's session, never %1.")},
-    {Failure::Code::HubNotAComputer, tr("This key no longer opens the hub. Link the computer again: omabook hub add")},
-    {Failure::Code::HubNotOwner, tr("The hub belongs to someone else: it takes only its owner's computers. If this computer is "
-                                    "yours, sync it with one of yours that is linked to the hub (omabook sync <computer>), "
-                                    "run omabook hub status <hub> on that one, and link this one again.")},
-    {Failure::Code::HubBadSignature, tr("The link isn't signed by the person it names.")},
-    {Failure::Code::HubBadKey, tr("That is no ed25519 public key, which is what the hub takes for a computer.")},
-    {Failure::Code::HubBadComputerName, tr("%1 can't name a computer: use letters, digits, dots, dashes and underscores.")},
-    {Failure::Code::HubNoSuchComputer, tr("No computer called %1 is linked to the hub.")},
-    {Failure::Code::HubKeysUnwritable, tr("The hub can't write its computers' keys to %1: %2")},
-    {Failure::Code::HubKeyUnmade, tr("This computer's key for its hubs can't be kept in %1: %2")},
-    {Failure::Code::HubUnreachable, tr("The hub at %1 can't be reached, or has no Omabook: %2")},
-    {Failure::Code::HubNotLinked, tr("This computer isn't linked to the hub at %1. Link it: omabook hub add %1")},
-    {Failure::Code::HubSessionEnded, tr("The session with the hub at %1 ended before it answered.")},
-    {Failure::Code::HubSyncHubOlder,
-     tr("The hub's library %1 is in an older format (%2) than this computer's (%3): update Omabook on the hub, then sync again.")},
-    {Failure::Code::HubSyncHubNewer,
-     tr("The hub's library %1 is in a newer format (%2) than this computer's (%3): update Omabook on this computer, then sync again.")},
-    {Failure::Code::HubSyncUnguarded,
-     tr("Omabook on this computer is older than the sync guard, which checks a sync before it writes anything: update Omabook "
-        "on this computer, then sync again.")},
-    {Failure::Code::HubSyncHubNoPlan,
-     tr("Omabook on the hub at %1 is older than the sync guard, and says nothing of what a sync would change there, so nothing "
-        "was changed, here or on the hub: update Omabook on the hub, then sync again.")},
-    {Failure::Code::HubSyncNotBegun, tr("No sync of this computer's is under way on the hub: begin it again.")},
-    {Failure::Code::HubSyncNoComputer, tr("Only a computer linked to the hub syncs with it.")},
-    {Failure::Code::HubSyncRefused, tr("In a sync, the hub takes no %1.")},
-    {Failure::Code::HubSyncNotGiven, tr("In a sync, the hub gives only its books, their covers and its plugins' files, never %1.")},
-    {Failure::Code::RemoteNoFolder, tr("No folder could be made on %1 for what is sent there: %2")},
-    {Failure::Code::HubSyncUnwritten, tr("The hub couldn't keep what it was sent: %1. See that its disk has room.")},
-    {Failure::Code::HubSyncNoPlace, tr("In a sync, the hub keeps what it is sent only in that sync's own folders, never at %1.")},
-    {Failure::Code::HubSyncDryRun, tr("A dry run changes nothing on the hub.")},
-    {Failure::Code::HubSyncNotYours,
-     tr("In a sync, the hub gives and takes plugins' files only for a library paired with its own: one of your own computers.")},
-    {Failure::Code::HubSyncNotPaired,
-     tr("The hub's library %1 isn't paired with this computer's library, so nothing was synced, either way: no books, details, change "
-        "log or plugins' files. If the two are one library, pair them once: omabook hub sync <hub>:%1 --pair")},
-    {Failure::Code::HubWorkCancelled, tr("Stopped before it was done, so nothing of it was kept.")},
-    {Failure::Code::HubWorkNoFolder, tr("The hub can't make the folder %1 to work in.")},
-    {Failure::Code::HubWorkUnfinished, tr("The graph of %1 wasn't built to its end, so nothing of it was kept.")},
-    {Failure::Code::HubDevicesChoice, tr("The hub can't serve phones and e-readers with %1 set to %2.")},
-    {Failure::Code::HubWorkChanged, tr("The graph of %1 changed while the hub worked on it, so nothing was kept; it is done again.")},
-    {Failure::Code::HubWorkClaimed,
-     tr("Another of your hubs took up the graph of %1 meanwhile, so nothing of this hub's was kept: the graph comes from that one.")},
-    {Failure::Code::HubStoreRefused, tr("The hub keeps only the files of snapshots it was sent, never %1.")},
-    {Failure::Code::HubStoreUnwritable, tr("The hub can't keep the snapshots' file %1: %2")},
     {Failure::Code::DetailsUnreadable, tr("The details can't be read: %1")},
     {Failure::Code::DetailsNotAnObject, tr("The details aren't a JSON object: %1")},
     {Failure::Code::PictureUnreadable, tr("That picture can't be read: %1")},
@@ -424,7 +365,8 @@ constexpr auto wordings = std::to_array<Wording>({
 
 // The sentence of a code, here or in a table of its own; null for one without.
 [[nodiscard]] const Wording *wordingOf(Failure::Code code) {
-    for (const std::span<const Wording> table : {std::span<const Wording>(wordings), FailureWords::snapshots()})
+    for (const std::span<const Wording> table :
+         {std::span<const Wording>(wordings), std::span<const Wording>(FailureWords::hub), FailureWords::snapshots()})
         if (const auto found = std::ranges::find(table, code, &Wording::code); found != table.end())
             return std::to_address(found);
     return nullptr;
