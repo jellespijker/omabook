@@ -150,6 +150,37 @@ void syncBookToLog(const Library &library, const Book &book, bool baseline, std:
     syncBookReading(ctx, book);
 }
 
+// The book of this global id has a row in this library.
+[[nodiscard]] bool bookIsHere(const Library &library, const QString &gid) {
+    const qint64 id = Spaces::localId(library, u"book"_s, gid);
+    if (id <= 0)
+        return false;
+    QSqlQuery row = ChangeLog::query(library, "SELECT 1 FROM books WHERE id = ?", {id});
+    return row.next();
+}
+
+// A collection's books by hand, each in or out, and the ones it no longer has.
+void syncCollectionBooks(EntityContext &ctx, const Collection &col, qint64 colHlc) {
+    const Library &library = *ctx.library;
+    QSet<QString> currentBooks;
+    for (const bool in : {true, false}) {
+        for (const qint64 bookId : in ? col.included : col.excluded) {
+            const QString field = u"book:"_s + Spaces::bookId(library, bookId);
+            currentBooks.insert(field);
+            ChangeLogFields::write(ctx, field, in ? u"in"_s : u"out"_s, colHlc);
+        }
+    }
+    // A book the log has in it that has no row here was taken out here only if
+    // the book is here: one whose file hasn't come yet (a hub is sent a
+    // library's collections before its books) can't have a row, and saying it
+    // left would take it out of the collection everywhere (#280).
+    for (auto it = ctx.existing.cbegin(); it != ctx.existing.cend(); ++it) {
+        if (it.key().startsWith("book:"_L1) && !it.value().value.isEmpty() && !currentBooks.contains(it.key())
+            && bookIsHere(library, it.key().mid(5)))
+            ChangeLogFields::write(ctx, it.key(), QString(), colHlc);
+    }
+}
+
 void syncCollectionToLog(const Library &library, const Collection &col, bool baseline, std::optional<qint64> explicitHlc = std::nullopt) {
     const QString gid = Spaces::collectionId(library, col.id);
     if (gid.isEmpty())
@@ -169,18 +200,7 @@ void syncCollectionToLog(const Library &library, const Collection &col, bool bas
     ChangeLogFields::write(ctx, u"shelf"_s, compactJson(col.shelf), colHlc);
     ChangeLogFields::write(ctx, u"format"_s, compactJson(col.format), colHlc);
 
-    QSet<QString> currentBooks;
-    for (const bool in : {true, false}) {
-        for (const qint64 bookId : in ? col.included : col.excluded) {
-            const QString field = u"book:"_s + Spaces::bookId(library, bookId);
-            currentBooks.insert(field);
-            ChangeLogFields::write(ctx, field, in ? u"in"_s : u"out"_s, colHlc);
-        }
-    }
-    for (auto it = ctx.existing.cbegin(); it != ctx.existing.cend(); ++it) {
-        if (it.key().startsWith("book:"_L1) && !it.value().value.isEmpty() && !currentBooks.contains(it.key()))
-            ChangeLogFields::write(ctx, it.key(), QString(), colHlc);
-    }
+    syncCollectionBooks(ctx, col, colHlc);
     if (explicitHlc && SpaceReplay::entityHlc(library, u"collection"_s, gid) < colHlc)
         ChangeLog::append(library, {ctx.space, u"collection"_s, gid, u"name"_s, col.name, colHlc});
 }

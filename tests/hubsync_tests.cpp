@@ -308,6 +308,50 @@ private slots:
         QCOMPARE(hub.held().size(), 1);
     }
 
+    // A hub that is sent a library's collections before their books keeps every book in them,
+    // and so does every computer after it: a book the hub has no row of yet was never taken out
+    // of a collection there, so the hub's log never says it was (#280).
+    void aCollectionKeepsItsBooksThroughTheHub() {
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        Computer desktop;
+        const qint64 alpha = laptop.add(u"Alpha"_s);
+        const qint64 beta = laptop.add(u"Beta"_s);
+        QVERIFY(alpha > 0 && beta > 0);
+        const auto made = laptop.library.addCollection(u"Fantasy"_s);
+        QVERIFY2(made.has_value(), qPrintable(whyNot(made)));
+        QVERIFY(laptop.library.putInCollection(*made, alpha, true) && laptop.library.putInCollection(*made, beta, true));
+        const auto members = [](const Library &library) {
+            QStringList titles;
+            if (const auto fantasy = library.collectionNamed(u"Fantasy"_s))
+                for (const qint64 id : fantasy->included)
+                    titles << library.book(id)->meta.title;
+            titles.sort();
+            return titles;
+        };
+        const QStringList both{u"Alpha"_s, u"Beta"_s};
+        QCOMPARE(members(laptop.library), both);
+
+        const SyncSummary first = hub.syncWith(u"laptop"_s, laptop.library);
+        QVERIFY2(first.error.isEmpty() && first.problems.isEmpty(), qPrintable(problems(first)));
+        QCOMPARE(members(laptop.library), both);
+        QVERIFY2(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty(), "laptop again");
+        QCOMPARE(members(laptop.library), both);
+        QStringList held;
+        std::ignore = hub.keeper.whole([&](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+            held = members(*libraries.front());
+            return {};
+        });
+        QCOMPARE(held, both);
+        const SyncSummary second = hub.syncWith(u"desktop"_s, desktop.library, pairing());
+        QVERIFY2(second.error.isEmpty() && second.problems.isEmpty(), qPrintable(problems(second)));
+        QCOMPARE(members(desktop.library), both);
+        QVERIFY2(hub.syncWith(u"laptop"_s, laptop.library).problems.isEmpty(), "laptop last");
+        QCOMPARE(members(laptop.library), both);
+    }
+
     // The hub ends each order as a computer in its place does. A book that reaches a
     // computer through a third one, which was sent it, arrives there without its
     // details, hub or not: a bug of the sync itself, so the libraries are compared
