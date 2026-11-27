@@ -46,6 +46,10 @@ struct ImportSummary {
     [[nodiscard]] bool foundNothing() const;
     // Something went wrong, or a book stayed behind.
     [[nodiscard]] bool failed() const;
+    // Something a person has to read: it failed, or part of a book was left
+    // behind, or one came in that can't be read here. The window keeps such a
+    // report until it is put away (#258).
+    [[nodiscard]] bool needsReading() const;
     // The problems, what was left out and what can't be read, as sentences to show.
     [[nodiscard]] QStringList reasons() const;
     [[nodiscard]] QJsonArray itemsJson() const;

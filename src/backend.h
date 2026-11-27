@@ -245,6 +245,10 @@ public:
     // What a sync did, a line each, as the window says it: with a hub too (#189).
     [[nodiscard]] static QStringList syncLines(const SyncSummary &summary);
     // What the window says when books have been added (backendimport.cpp).
+    // What went wrong with bringing in what the window was opened on, said
+    // until it is put away; nothing when all of it came in (#258). After the
+    // book is opened, as opening one puts away what waits.
+    void reportOpened(const ImportSummary &summary);
     [[nodiscard]] static QStringList importLines(const ImportSummary &summary, bool calibreLeftOut);
     Q_INVOKABLE void chooseLibrary();
     Q_INVOKABLE void useLibrary(const QString &path);

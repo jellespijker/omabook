@@ -377,7 +377,7 @@ void Backend::importFinished(const ImportSummary &summary, bool calibreLeftOut) 
             came << item.id;
     putInShownCollection(came);
     reload();
-    sayOutcome(importLines(summary, calibreLeftOut).join("\n"), !summary.problems.isEmpty());
+    sayOutcome(importLines(summary, calibreLeftOut).join("\n"), summary.needsReading());
     if (summary.lastId && summary.added + summary.joined + summary.duplicates == 1)
         emit bookAdded(summary.lastId);
     // A Calibre library that came in needs no offering any more.

@@ -15,6 +15,8 @@ bool ImportSummary::foundNothing() const { return items.isEmpty() && problems.is
 
 bool ImportSummary::failed() const { return !problems.isEmpty() || skipped > 0; }
 
+bool ImportSummary::needsReading() const { return failed() || !leftOut.isEmpty() || !unreadable.isEmpty(); }
+
 QStringList ImportSummary::reasons() const {
     QStringList reasons;
     for (const Failure &left : leftOut)

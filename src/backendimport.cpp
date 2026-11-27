@@ -5,6 +5,11 @@
 
 #include "importer.h"
 
+void Backend::reportOpened(const ImportSummary &summary) {
+    if (summary.needsReading())
+        sayOutcome(importLines(summary, false).join("\n"), true);
+}
+
 QStringList Backend::importLines(const ImportSummary &summary, bool calibreLeftOut) {
     // A file that joined a book here without one was added, to the window.
     const int added = summary.added + summary.joined;

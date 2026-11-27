@@ -256,20 +256,31 @@ void startUp(bool command) {
         qCInfo(lcApp).noquote() << "Omabook" << OMABOOK_VERSION << "started";
 }
 
-// The book named on the command line, to open: one the library has, by its
-// id or found by its file's content; else it joins the library first.
-qint64 bookToOpen(const QString &book, const std::optional<Folio::Found> &known, Backend &backend) {
+// The book named on the command line, to open, and what bringing it in said.
+struct ToOpen {
+    qint64 id = 0;
+    ImportSummary added;
+};
+
+// One the library has, by its id or found by its file's content; else it
+// joins the library first.
+ToOpen bookToOpen(const QString &book, const std::optional<Folio::Found> &known, Backend &backend) {
     bool isNumber = false;
     const qint64 id = known ? known->id : book.toLongLong(&isNumber);
     if (book.isEmpty() || isNumber || known || !backend.library())
-        return id;
+        return {.id = id, .added = {}};
     // Through the importer, so a folder that is one book (Markdown
     // chapters, say) opens like a file does.
-    const ImportSummary added = importBooks(*backend.library(), {QFileInfo(book).absoluteFilePath()});
-    if (!added.problems.isEmpty())
-        backend.say(added.problems.first());
+    ImportSummary added = importBooks(*backend.library(), {QFileInfo(book).absoluteFilePath()});
     backend.reload();
-    return added.lastId;
+    return {.id = added.lastId, .added = std::move(added)};
+}
+
+// The book is opened, and then said what bringing it in said.
+void openGiven(const ToOpen &given, Reader &reader, Backend &backend) {
+    if (given.id > 0)
+        reader.openBook(given.id);
+    backend.reportOpened(given.added);
 }
 
 // Whether what was asked draws no window: a command, or the help or the version.
@@ -407,7 +418,7 @@ int main(int argc, char *argv[]) {
     QObject::connect(backend.scripts(), &ScriptPlugins::changed, &custom, followPlugins);
     followPlugins();
 
-    const qint64 opening = bookToOpen(book, known, backend);
+    const ToOpen opening = bookToOpen(book, known, backend);
 
     QQmlEngine engine;
     QObject::connect(&engine, &QQmlEngine::quit, &app, &QCoreApplication::quit);
@@ -427,8 +438,7 @@ int main(int argc, char *argv[]) {
     Interface interface(&engine, &custom);
     if (!interface.load())
         return 1;
-    if (opening > 0)
-        reader.openBook(opening);
+    openGiven(opening, reader, backend);
     LinkInbox links;
     followLinks(links, link, backend, reader, interface);
     if (const qint64 id = arguments.value(lookUp).toLongLong(); id > 0 && interface.window())

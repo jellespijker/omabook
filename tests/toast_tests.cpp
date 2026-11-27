@@ -7,6 +7,7 @@
 
 #include "desk.h"
 #include "fixtures.h"
+#include "importer.h"
 #include "library.h"
 
 namespace {
@@ -99,6 +100,46 @@ private slots:
         QTRY_VERIFY(!desk.shows("toast"));
         QTest::qWait(500); // the page drawn, for the picture
         desk.shot("toast-book-opened");
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // A Calibre library some of whose books stayed behind, though none of
+    // them went wrong on the way (#258).
+    void whatACalibreLibraryLeftOutWaits() {
+        Desk desk("en", {}, false);
+        const QString shelf = desk.dir.filePath("Calibre Library");
+        QVERIFY(Fixtures::calibreShelf(shelf));
+        QVERIFY(desk.show());
+        desk.backend->addUrls({QUrl::fromLocalFile(shelf)});
+        QTRY_VERIFY2(desk.backend->message().contains("not imported"), qPrintable(desk.backend->message()));
+        QCOMPARE(desk.backend->messageLasts(), 0);
+        QTRY_VERIFY(desk.shows("toastClose"));
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
+    // What `omabook open` was given and didn't take in is said until it is put
+    // away, all of it; what came in whole says nothing (#258).
+    void whatTheWindowWasOpenedOnWaits() {
+        Desk desk("en", {}, false);
+        QVERIFY(Fixtures::write(desk.dir.filePath("fake.pdf"), "not a PDF"));
+        QVERIFY(Fixtures::write(desk.dir.filePath("empty.epub"), ""));
+        QVERIFY(Fixtures::epub(desk.dir.filePath("one.epub")));
+        QVERIFY(desk.show());
+        Library &library = *desk.backend->library();
+        desk.backend->reportOpened(importBooks(library, {desk.dir.filePath("one.epub")}));
+        QVERIFY(desk.backend->message().isEmpty());
+        desk.backend->reportOpened(importBooks(library, {desk.dir.filePath("fake.pdf"), desk.dir.filePath("empty.epub")}));
+        QVERIFY2(desk.backend->message().contains("fake.pdf") && desk.backend->message().contains("empty.epub"),
+                 qPrintable(desk.backend->message()));
+        QCOMPARE(desk.backend->messageLasts(), 0);
+        QTRY_VERIFY(desk.shows("toastClose"));
+        // A book that came in and can't be read here, and no other trouble.
+        ImportSummary unreadable;
+        unreadable.added = 1;
+        unreadable.unreadable << Failure::said("It was added, but it can't be read here.");
+        desk.backend->dismissMessage();
+        desk.backend->reportOpened(unreadable);
+        QCOMPARE(desk.backend->messageLasts(), 0);
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };

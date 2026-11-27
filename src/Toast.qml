@@ -5,7 +5,7 @@ import QtQuick.Layouts
 // What just happened, said once at the bottom. It goes by itself after the
 // time it takes to read (backend.messageLasts), held while the pointer rests
 // on it, and a click or a newer message ends it sooner. What went wrong with
-// work beside the window waits for the person instead, until it is clicked or
+// work beside the window, or with bringing books in (#258), waits for the person instead, until it is clicked or
 // a book is opened or closed (#233). A plugin's notice may carry a button that
 // acts on it (omabook.ui.notify, #135), which dismisses it too.
 Rectangle {
