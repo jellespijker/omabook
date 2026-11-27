@@ -352,15 +352,16 @@ void ChangeLog::syncCollectionAt(const Library &library, qint64 collectionId, qi
     ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'collection' AND local_id = ?", {collectionId});
 }
 
-void ChangeLog::setProgress(Library &library, qint64 bookId, const Progress &progress) {
+bool ChangeLog::setProgress(Library &library, qint64 bookId, const Progress &progress) {
     afterWrite(library);
     const Scope guard;
     const Library::Batch batch(library);
     const qint64 hlc = progress.updated > 0 ? Hlc::normalize(progress.updated) : Spaces::tickHlc(library);
     if (progress.updated > 0)
         Spaces::observeHlc(library, hlc);
-    ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
-                    {bookId, progress.place.section, progress.place.fraction, progress.percent, Hlc::seconds(hlc)});
+    const bool kept =
+        ChangeLog::exec(library, "INSERT OR REPLACE INTO progress (book_id, section, fraction, percent, updated) VALUES (?, ?, ?, ?, ?)",
+                        {bookId, progress.place.section, progress.place.fraction, progress.percent, Hlc::seconds(hlc)});
     const QString gid = Spaces::bookId(library, bookId);
     if (!gid.isEmpty()) {
         EntityContext ctx{&library, Spaces::personalSpace(library), u"book"_s, gid, ChangeLogFields::logged(library, u"book"_s, gid),
@@ -371,6 +372,7 @@ void ChangeLog::setProgress(Library &library, qint64 bookId, const Progress &pro
     }
     ChangeLog::exec(library, "DELETE FROM log_dirty WHERE entity = 'book' AND local_id = ?", {bookId});
     markLogged(library);
+    return kept;
 }
 
 bool ChangeLog::setDetailsAt(Library &library, qint64 bookId, qint64 at) {

@@ -5,6 +5,8 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <algorithm>
+#include <array>
 #include <condition_variable>
 #include <list>
 #include <map>
@@ -14,6 +16,9 @@
 #include "changelog.h"
 #include "library.h"
 #include "log.h"
+#include "trash.h"
+
+using namespace Qt::StringLiterals;
 
 // The writers of one database file in this program, in the order they asked:
 // the first one's turn it is.
@@ -47,10 +52,30 @@ namespace {
 
 } // namespace
 
-Failure whyNotWritten(const QString &file) {
-    if (QFileInfo::exists(file))
-        return Failure(Failure::Code::LibraryBusy);
-    return Failure(Failure::Code::LibraryMissing, {QFileInfo(file).absolutePath()});
+bool readOnly(const QString &file) {
+    const std::array paths{QFileInfo(file).absolutePath(), file, file + u"-wal"_s, file + u"-journal"_s};
+    return std::ranges::any_of(paths, [](const QString &path) {
+        const QFileInfo info(path);
+        return info.exists() && !info.isWritable();
+    });
+}
+
+std::optional<Failure> plainlyUnwritable(const QString &file) {
+    if (!QFileInfo::exists(file))
+        return Failure(Failure::Code::LibraryMissing, {QFileInfo(file).absolutePath()});
+    if (readOnly(file))
+        return Failure(Failure::Code::LibraryReadOnly, {QFileInfo(file).absolutePath()});
+    return std::nullopt;
+}
+
+Failure whyNotWritten(const QString &file) { return plainlyUnwritable(file).value_or(Failure(Failure::Code::LibraryBusy)); }
+
+Failure notWritten(const QString &file) { return plainlyUnwritable(file).value_or(Failure(Failure::Code::LibraryNotWritten)); }
+
+std::expected<void, Failure> trashRemoved(const QString &database, const QString &root, const QString &folder) {
+    if (const auto why = plainlyUnwritable(database))
+        return std::unexpected(*why);
+    return Trash::folder(root, folder);
 }
 
 bool makeBookFolder(const QString &database, const QString &folder) { return QFileInfo::exists(database) && QDir().mkpath(folder); }

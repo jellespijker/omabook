@@ -3214,5 +3214,6 @@
   "no file": "sin archivo",
   "rating": "calificación",
   "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 no se puede mover a la papelera (ahí no se puede crear una papelera), así que no se eliminó nada y el libro se queda en la biblioteca. Para eliminarlo definitivamente, borra tú esa carpeta y luego vuelve a quitar el libro.",
-  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 no se puede mover a la papelera (ahí no se puede crear una papelera), así que se dejó como está. Mejor quítala de la lista, o borra tú la carpeta."
+  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 no se puede mover a la papelera (ahí no se puede crear una papelera), así que se dejó como está. Mejor quítala de la lista, o borra tú la carpeta.",
+  "The note's words were copied to the clipboard.": "Las palabras de la nota se copiaron al portapapeles."
 }

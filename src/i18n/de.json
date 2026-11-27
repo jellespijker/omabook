@@ -3092,5 +3092,6 @@
   "no file": "keine Datei",
   "rating": "Bewertung",
   "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde nichts gelöscht und das Buch bleibt in der Bibliothek. Um es endgültig zu löschen, lösche den Ordner selbst und entferne dann das Buch erneut.",
-  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde der Ordner so gelassen. Nimm ihn stattdessen von der Liste, oder lösche den Ordner selbst."
+  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde der Ordner so gelassen. Nimm ihn stattdessen von der Liste, oder lösche den Ordner selbst.",
+  "The note's words were copied to the clipboard.": "Die Worte der Notiz wurden in die Zwischenablage kopiert."
 }

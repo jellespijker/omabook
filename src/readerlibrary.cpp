@@ -5,6 +5,7 @@
 #include "reader.h"
 
 #include "backend.h"
+#include "librarybatch.h"
 
 // A book that left the library: removed by this window, the command line, an
 // agent or a sync. A library that is away says nothing of its books.
@@ -70,6 +71,8 @@ bool Reader::addBookmark(const QString &text) {
     bookmark.place = {.section = m_section, .fraction = m_fraction};
     bookmark.text = text.simplified().left(200);
     const bool kept = m_backend->library()->addAnnotation(m_bookId, bookmark) > 0;
+    if (!kept)
+        m_backend->say(notWritten(m_backend->library()->databasePath()).text()); // never silently lost (#259)
     emit bookmarksChanged();
     return kept;
 }

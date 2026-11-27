@@ -353,7 +353,7 @@ public:
 
     Progress progress(qint64 id) const;
     // Stamped with now, unless the progress carries its own time.
-    void setProgress(qint64 id, const Progress &progress);
+    bool setProgress(qint64 id, const Progress &progress);
 
     // The AI's notes on a book, by kind: "recap" (the story so far) and
     // "cast" (who is who), each up to the place it was written at.

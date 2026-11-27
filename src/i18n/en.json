@@ -2510,6 +2510,7 @@
   },
   "The newest snapshot: %1.": "The newest snapshot: %1.",
   "The next card": "The next card",
+  "The note's words were copied to the clipboard.": "The note's words were copied to the clipboard.",
   "The other copy says something else, which would not be kept: %1. Tick it to fold it in all the same.": "The other copy says something else, which would not be kept: %1. Tick it to fold it in all the same.",
   "The page": "The page",
   "The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors they have there, always, unless you switch it off: {reader.marks} marks them only while the map is beside the page, or never, and the choice is kept. Point at one, or tap it, for what is known of it. Select words (drag, double-click, press and hold, or {reader.select} and the arrow keys) for a menu: ask about them, who or what they are, show them in the map, find them in the book, or a question worth asking.": "The people, places and things the map ({reader.graph}) knows so far are marked in the text in the colors they have there, always, unless you switch it off: {reader.marks} marks them only while the map is beside the page, or never, and the choice is kept. Point at one, or tap it, for what is known of it. Select words (drag, double-click, press and hold, or {reader.select} and the arrow keys) for a menu: ask about them, who or what they are, show them in the map, find them in the book, or a question worth asking.",

@@ -237,13 +237,13 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
     // The new row is seen by others only once its book is held, so none gives it another file meanwhile.
     std::optional<Batch> making(std::in_place, *this);
     if (!making->begun())
-        return {.error = Failure(Failure::Code::LibraryBusy).text()};
+        return {.error = whyNotWritten(databasePath()).text()};
     const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
                            "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                            {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language, meta.isbn,
                             meta.published, meta.description, meta.tags.join(", "), Spaces::wallSeconds(*this), Hlc::asImported});
     if (!id)
-        return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
+        return {.error = plainlyUnwritable(databasePath()).value_or(Failure(Failure::Code::LibraryUnwritable, {id.error()})).text()};
     const QString folder = BookFolder::forNew(m_root, meta, *id);
     exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
     // Nobody else can be waiting for a row not yet seen; without the hold the add still goes on.
@@ -272,7 +272,7 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
                             meta.isbn, meta.published, meta.description, meta.tags.join(", "),
                             Spaces::wallSeconds(*this), paper, Spaces::wallSeconds(*this)});
     if (!id)
-        return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
+        return {.error = plainlyUnwritable(databasePath()).value_or(Failure(Failure::Code::LibraryUnwritable, {id.error()})).text()};
     // The folder is made when there is something to put in it: a cover, or
     // a file the book is given later.
     exec("UPDATE books SET path = ? WHERE id = ?", {BookFolder::forNew(m_root, meta, *id), *id});
@@ -357,7 +357,7 @@ std::expected<void, QString> Library::remove(qint64 id, std::optional<qint64> at
     const Batch batch(*this);
     const QList<FormatFile> formats = formatFiles(id);
     // Where it can't go to the trash, the book stays and nothing says it went.
-    if (const auto gone = Trash::folder(m_root, folder); !gone)
+    if (const auto gone = trashRemoved(databasePath(), m_root, folder); !gone)
         return std::unexpected(gone.error().text());
     // A file another book holds too (the one a merge kept took it over)
     // is still in the library, so a sync mustn't take it for removed.
@@ -417,7 +417,7 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
         if (!exec("UPDATE books SET title = ?, authors = ?, series = ?, series_index = ?, publisher = ?, language = ?, "
                   "isbn = ?, published = ?, description = ?, tags = ?, details_at = ? WHERE id = ?",
                   values))
-            return failed(error, "The library can't be written.");
+            return failed(error, notWritten(databasePath()).text());
         // The folder is named after the author and title, so it follows them.
         // Where it can't be moved it keeps its old name, which still works.
         const QString folder = BookFolder::named(meta.title.isEmpty() ? before->meta : meta, id);
@@ -444,7 +444,7 @@ Progress Library::progress(qint64 id) const {
             .updated = found.value(3).toLongLong()};
 }
 
-void Library::setProgress(qint64 id, const Progress &progress) { ChangeLog::setProgress(*this, id, progress); }
+bool Library::setProgress(qint64 id, const Progress &progress) { return ChangeLog::setProgress(*this, id, progress); }
 
 Recap Library::notes(qint64 id, const QString &kind) const {
     QSqlQuery found = query("SELECT section, fraction, text, updated FROM notes WHERE book_id = ? AND kind = ?", {id, kind});

@@ -14,6 +14,7 @@
 #include "bookops.h"
 #include "graph.h"
 #include "library.h"
+#include "librarybatch.h"
 #include "numberoptions.h"
 #include "readinggoal.h"
 #include "readingstats.h"
@@ -215,7 +216,8 @@ int runProgressCli(const QStringList &arguments) {
             read.place.fraction = parser.value("fraction").toDouble();
         if (parser.isSet("percent"))
             read.percent = parser.value("percent").toDouble();
-        (*library)->setProgress(id, read);
+        if (!(*library)->setProgress(id, read))
+            return failLine(notWritten((*library)->databasePath()).text());
         // Reading set by hand counts as reading: it goes in the log too.
         if (read.percent > before)
             Graph(**library).logReading(id, before, read.percent);

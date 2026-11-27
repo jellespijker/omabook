@@ -172,6 +172,7 @@ private:
     [[nodiscard]] std::optional<Passage> passageOnPage(int page, int start, int end) const;
     // A new note kept, its number; 0 when it can't be.
     [[nodiscard]] qint64 add(const Annotation &note);
+    void sayNotKept(const Library &library, const QString &words) const;
     void read();
     void announce();
 

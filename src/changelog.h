@@ -66,7 +66,7 @@ public:
     // Single write path for rows that travel: each mutates the row and
     // records its operation(s) in the same transaction.
     static void syncCollectionAt(const Library &library, qint64 collectionId, qint64 hlc);
-    static void setProgress(Library &library, qint64 bookId, const Progress &progress);
+    static bool setProgress(Library &library, qint64 bookId, const Progress &progress);
     static bool setDetailsAt(Library &library, qint64 bookId, qint64 at);
     static void recordRemoval(const Library &library, const QString &key, qint64 removedAt, bool baseline = false);
 

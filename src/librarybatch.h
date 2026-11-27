@@ -2,15 +2,28 @@
 
 #include <QString>
 #include <chrono>
+#include <expected>
 #include <memory>
+#include <optional>
 
 #include "failure.h"
 
 struct WriteLine;
 
-// Why the library whose database is `file` wasn't written: it isn't there any
-// more (#221), or another has been writing it for too long.
+// Whether the library whose database is `file` can only be read: its folder,
+// the database or the log beside it may not be written (#259).
+[[nodiscard]] bool readOnly(const QString &file);
+// Why the library whose database is `file` can't be written, when that is
+// plain to see: it isn't there any more (#221), or it can only be read.
+[[nodiscard]] std::optional<Failure> plainlyUnwritable(const QString &file);
+// Why a write that waits its turn didn't happen: what is plain to see, else
+// another has been writing it for too long.
 [[nodiscard]] Failure whyNotWritten(const QString &file);
+// Why the database refused a write: what is plain to see, else only that.
+[[nodiscard]] Failure notWritten(const QString &file);
+// Moves a removed book's folder to the trash, only while the removal can be
+// recorded: otherwise the files stay where they are, and why is said.
+[[nodiscard]] std::expected<void, Failure> trashRemoved(const QString &database, const QString &root, const QString &folder);
 // Makes a folder for a book's files while that library is there; false when it
 // isn't, so nothing is made at the path it was at.
 [[nodiscard]] bool makeBookFolder(const QString &database, const QString &folder);

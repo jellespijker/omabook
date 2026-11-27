@@ -1,13 +1,17 @@
 #include "marginnotes.h"
 
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QTextDocument>
 #include <algorithm>
 
 #include "annotationanchors.h"
 #include "annotationink.h"
+#include "backend.h"
 #include "booktext.h"
 #include "inkcodec.h"
 #include "inksurface.h"
+#include "librarybatch.h"
 #include "noterecognition.h"
 #include "pagelayout.h"
 #include "pagetext.h"
@@ -216,11 +220,24 @@ std::optional<qint64> MarginNotes::write(const QString &shown, qsizetype start, 
     return id > 0 ? std::optional(id) : std::nullopt;
 }
 
+// A note the library didn't take is said not to be kept, and typed words are
+// put on the clipboard, never silently lost (#259).
+void MarginNotes::sayNotKept(const Library &library, const QString &words) const {
+    QString why = notWritten(library.databasePath()).text();
+    if (!words.isEmpty()) {
+        QGuiApplication::clipboard()->setText(words);
+        why += u' ' + tr("The note's words were copied to the clipboard.");
+    }
+    m_reader->backend()->say(why);
+}
+
 qint64 MarginNotes::add(const Annotation &note) {
     Library *own = library();
     if (!own)
         return 0;
     const qint64 id = own->addAnnotation(m_reader->bookId(), note);
+    if (id <= 0)
+        sayNotKept(*own, note.note);
     read();
     return id;
 }
@@ -327,6 +344,8 @@ bool MarginNotes::change(qint64 id, const QString &words) {
     Annotation changed = *note;
     changed.note = words.trimmed();
     const bool written = changed.note == note->note || own->storeAnnotation(m_reader->bookId(), changed).has_value();
+    if (!written)
+        sayNotKept(*own, changed.note);
     read();
     return written;
 }
@@ -380,8 +399,10 @@ std::optional<qint64> MarginNotes::writeInk(const QString &shown, qsizetype star
         return made;
     }();
     read();
-    if (id <= 0)
+    if (id <= 0) {
+        sayNotKept(*own, {});
         return std::nullopt;
+    }
     if (m_recognition)
         m_recognition->soon(m_reader->bookId(), id);
     return id;

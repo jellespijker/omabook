@@ -212,9 +212,7 @@ std::optional<Failure> LibraryMigrations::damage(const Library &library) {
 
 QString LibraryMigrations::whyNotSetUp(const Library &library) {
     const Said said = reading(library.m_connection, readTables);
-    const QFileInfo folder(library.m_root);
-    const QFileInfo database(library.databasePath());
-    if (said.code == sqliteReadOnly || !folder.isWritable() || (database.exists() && !database.isWritable()))
+    if (said.code == sqliteReadOnly || readOnly(library.databasePath()))
         return Failure(Failure::Code::LibraryReadOnly, {library.m_root}).text();
     if (said.code != 0 && said.code != sqliteBusy && said.code != sqliteLocked)
         return Failure(Failure::Code::LibraryUnopened, {library.databasePath(), said.words}).text();
@@ -274,10 +272,12 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
     // A damaged database is said to be that, whether or not it could be had.
     if (const auto damaged = damage(library))
         return std::unexpected(damaged->text());
-    // When it can't be had (a library that can only be read, or another
-    // program at it still after the wait), one that is ready opens as it is,
-    // and one that isn't is not changed.
-    if (!setUp.begun() && library.formatVersion() != currentFormat())
+    // A library that can only be read is not opened to be used, as nothing
+    // done in it would be kept (#259), only to be read as it is; SQLite may
+    // well begin a transaction on it. When the transaction can't be had
+    // (another program at it still after the wait), a library that is ready
+    // opens as it is, and one that isn't is not changed.
+    if ((!library.m_keepFormat && readOnly(library.databasePath())) || (!setUp.begun() && library.formatVersion() != currentFormat()))
         return std::unexpected(whyNotSetUp(library));
     if (auto migrated = migrate(library); !migrated)
         return migrated;
