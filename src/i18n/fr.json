@@ -3212,5 +3212,7 @@
   "Untick what you'd rather leave. A book folded into another goes to the trash; its formats, and the details only it has, move over.": "Décochez ce que vous préférez laisser. Un livre fusionné avec un autre va à la corbeille ; ses formats, et les informations que lui seul possède, sont repris.",
   "date finished": "date de fin de lecture",
   "no file": "aucun fichier",
-  "rating": "note"
+  "rating": "note",
+  "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 ne peut pas être mis à la corbeille (aucune corbeille ne peut y être créée) ; rien n'a donc été supprimé et le livre reste dans la bibliothèque. Pour le supprimer définitivement, supprimez vous-même ce dossier, puis retirez de nouveau le livre.",
+  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 ne peut pas être mis à la corbeille (aucune corbeille ne peut y être créée) ; il a donc été laissé tel quel. Retirez-la plutôt de la liste, ou supprimez vous-même le dossier."
 }

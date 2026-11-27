@@ -3090,5 +3090,7 @@
   "Untick what you'd rather leave. A book folded into another goes to the trash; its formats, and the details only it has, move over.": "Entferne die Haken bei dem, was du lieber lassen möchtest. Ein Buch, das mit einem anderen zusammengelegt wird, kommt in den Papierkorb; seine Formate und die Angaben, die nur es hat, ziehen mit um.",
   "date finished": "Datum des Auslesens",
   "no file": "keine Datei",
-  "rating": "Bewertung"
+  "rating": "Bewertung",
+  "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde nichts gelöscht und das Buch bleibt in der Bibliothek. Um es endgültig zu löschen, lösche den Ordner selbst und entferne dann das Buch erneut.",
+  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 kann nicht in den Papierkorb verschoben werden (dort lässt sich kein Papierkorb anlegen), deshalb wurde der Ordner so gelassen. Nimm ihn stattdessen von der Liste, oder lösche den Ordner selbst."
 }

@@ -27,6 +27,7 @@
 #include "librarybatch.h"
 #include "safename.h"
 #include "spaces.h"
+#include "trash.h"
 
 // A book's files and its cover as the library keeps them, and its details
 // written into its EPUB (#74). The file one added is never touched: the
@@ -147,7 +148,7 @@ void clearPartials(const QString &file) {
     if (Formats::extension(file) == epub)
         gone.prepend(keptOriginal(file));
     for (const QString &one : std::as_const(gone))
-        if (QFileInfo::exists(one) && !QFile::moveToTrash(one))
+        if (QFileInfo::exists(one) && !Trash::take(one))
             return std::unexpected(Failure(Failure::Code::ReplacedFileNotTrashed, {one}));
     return {};
 }

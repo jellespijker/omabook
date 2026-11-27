@@ -24,6 +24,7 @@ modules = [
   "sshkey", "hubowner", "hubcomputers",
   "safename",
   "numberoptions",
+  "trash",
 ]
 
 [layers.formats]

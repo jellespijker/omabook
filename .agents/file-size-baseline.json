@@ -19,7 +19,7 @@
     "src/cli.cpp": 1920,
     "src/curation.cpp": 719,
     "src/customization.cpp": 578,
-    "src/folio.cpp": 1444,
+    "src/folio.cpp": 1433,
     "src/goodreads.cpp": 745,
     "src/graph.cpp": 564,
     "src/graphbuilder.cpp": 602,

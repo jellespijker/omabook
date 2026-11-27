@@ -59,6 +59,8 @@ public:
         BookHasFormat,  // {book's number, format name}
         // The file to be replaced stays, as it can't be kept: {path}.
         ReplacedFileNotTrashed,
+        FolderNotTrashed,  // {a book's folder}: it can't go to the trash, so the book stays (#285)
+        LibraryNotTrashed, // {a library's folder}: it can't go to the trash, so it is left (#285)
         BookFileNotCopied, // {the file, where to in the library}
         LibraryNotWritten, // {}
         BookFileInTheWay,  // {a file in the library that is not the book's} (#281)

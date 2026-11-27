@@ -23,6 +23,7 @@
 #include "formats.h"
 #include "importer.h"
 #include "library.h"
+#include "trash.h"
 
 using namespace Qt::StringLiterals;
 
@@ -305,25 +306,13 @@ void restore(Library &library, qint64 id, const QJsonObject &kept) {
         library.addAnnotation(id, Annotation::fromJson(value.toObject()));
 }
 
-// The trash in the home folder, made when there is none yet, as the trash's
-// specification allows anyone to: Qt only moves something to a trash that
-// is there already.
-void makeHomeTrash() {
-    const QString trash = QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + "/Trash";
-    QDir().mkpath(QFileInfo(trash).absolutePath());
-    for (const QString &folder : {trash, trash + "/files", trash + "/info"})
-        if (!QFileInfo::exists(folder))
-            QDir().mkdir(folder, QFile::ReadOwner | QFile::WriteOwner | QFile::ExeOwner);
-}
-
 // Sends a book to the trash, the way removing it in Omabook does, but only
 // once its folder is safely in the trash: where there is no trash, the book
 // stays, since nobody was asked whether it may go for good.
 bool trashBook(Library &library, const Book &book, ViewState &state) {
     const QString folder = library.root() + "/" + book.path;
     QString trashed;
-    makeHomeTrash();
-    if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder, &trashed)) {
+    if (QFileInfo::exists(folder) && !Trash::take(folder, &trashed)) {
         qWarning().noquote() << "The entry of" << book.meta.title << "was deleted, but its folder can't go to the trash;"
                              << "the book stays in" << library.root();
         return false;

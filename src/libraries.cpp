@@ -5,6 +5,7 @@
 #include <QFileInfo>
 
 #include "library.h"
+#include "trash.h"
 
 using namespace Qt::StringLiterals;
 
@@ -30,16 +31,28 @@ bool Libraries::isCalibreOnly(const QString &folder) {
     return QFileInfo::exists(folder + "/metadata.db") && bookCount(folder) <= 0;
 }
 
+namespace {
+
+// Why the library in `path` can't be taken off the list; empty when it can.
+[[nodiscard]] QString whyKept(const Settings &settings, const QString &path) {
+    const QStringList known = settings.libraries();
+    if (!known.contains(path))
+        return path + " is not one of your libraries.";
+    if (path == settings.libraryPath() && known.size() < 2)
+        return u"This is the only library, so it can't be forgotten. Open another one first."_s;
+    return {};
+}
+
+} // namespace
+
 bool Libraries::forget(Settings &settings, const QString &folder, QString *error) {
     const QString path = QDir(folder).absolutePath();
-    QStringList known = settings.libraries();
-    if (!known.contains(path))
-        return fail(error, path + " is not one of your libraries.");
+    if (const QString why = whyKept(settings, path); !why.isEmpty())
+        return fail(error, why);
     if (path == settings.libraryPath()) {
-        known.removeAll(path);
-        if (known.isEmpty())
-            return fail(error, "This is the only library, so it can't be forgotten. Open another one first.");
-        settings.setLibraryPath(known.first());
+        QStringList others = settings.libraries();
+        others.removeAll(path);
+        settings.setLibraryPath(others.first());
     }
     settings.forgetLibrary(path);
     // An empty database of Omabook's own among someone else's files is litter.
@@ -53,11 +66,10 @@ bool Libraries::trash(Settings &settings, const QString &folder, QString *error)
     const QString path = QDir(folder).absolutePath();
     if (QFileInfo::exists(path + "/metadata.db"))
         return fail(error, path + " is also a Calibre library, so Omabook won't throw it away. Forget it instead.");
-    if (!forget(settings, path, error))
-        return false;
-    // To the trash, where a mistake can be undone; a filesystem with no trash
-    // gets the folder removed, since the user asked for it to go.
-    if (QFileInfo::exists(path) && !QFile::moveToTrash(path) && !QDir(path).removeRecursively())
-        return fail(error, "The folder couldn't be removed: " + path);
-    return true;
+    if (const QString why = whyKept(settings, path); !why.isEmpty())
+        return fail(error, why);
+    // To the trash before it leaves the list: where it can't go there, it stays as it was.
+    if (QFileInfo::exists(path) && !QDir().rmdir(path) && !Trash::take(path))
+        return fail(error, Failure(Failure::Code::LibraryNotTrashed, {path}).text());
+    return forget(settings, path, error);
 }

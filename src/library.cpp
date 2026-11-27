@@ -32,6 +32,7 @@
 #include "readingformat.h"
 #include "spaces.h"
 #include "statements.h"
+#include "trash.h"
 
 using namespace Qt::StringLiterals;
 
@@ -355,6 +356,9 @@ std::expected<void, QString> Library::remove(qint64 id, std::optional<qint64> at
         return std::unexpected(QString("There is no book %1.").arg(id));
     const Batch batch(*this);
     const QList<FormatFile> formats = formatFiles(id);
+    // Where it can't go to the trash, the book stays and nothing says it went.
+    if (const auto gone = Trash::folder(m_root, folder); !gone)
+        return std::unexpected(gone.error().text());
     // A file another book holds too (the one a merge kept took it over)
     // is still in the library, so a sync mustn't take it for removed.
     // So is the file one came in as, before details were written into it (#74).
@@ -366,10 +370,6 @@ std::expected<void, QString> Library::remove(qint64 id, std::optional<qint64> at
     if (const std::optional<Book> gone = formats.isEmpty() ? book(id) : std::nullopt)
         for (const QString &key : entryKeys(*gone))
             exec("INSERT OR REPLACE INTO removed (hash, removed_at) VALUES (?, ?)", {key, at.value_or(Spaces::wallSeconds(*this))});
-    // To the trash, where a mistake can be undone; a filesystem with no
-    // trash gets the folder removed, since the user asked for it to go.
-    if (QFileInfo::exists(folder) && !QFile::moveToTrash(folder) && !QDir(folder).removeRecursively())
-        return std::unexpected("The book's folder can't be removed: " + folder);
     QDir().rmdir(QFileInfo(folder).absolutePath()); // the author's folder, when it is now empty
     return insert("DELETE FROM books WHERE id = ?", {id}).transform([](qint64) {}); // what the database said, when it failed
 }

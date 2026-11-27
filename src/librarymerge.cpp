@@ -6,6 +6,8 @@
 #include <array>
 #include <utility>
 
+#include "trash.h"
+
 using namespace Qt::StringLiterals;
 
 namespace {
@@ -103,6 +105,11 @@ std::expected<void, QString> LibraryMerge::carry(Library &library, const Book &k
             return std::unexpected(put.error().text());
     if (!kept.hasCover && folded.hasCover)
         library.setCover(kept.id, QImage(library.coverPath(folded.id)));
+    // Where the folded book's folder can't go to the trash, the fold stops here:
+    // the book stays whole, and the kept one has only been given copies.
+    if (folded.path != kept.path)
+        if (const auto gone = Trash::folder(library.root(), library.root() + u'/' + folded.path); !gone)
+            return std::unexpected(gone.error().text());
     const BookMeta merged = details(kept.meta, folded.meta);
     if (QString why; merged.toJson() != kept.meta.toJson() && !library.setMeta(kept.id, merged, &why))
         return std::unexpected(why);

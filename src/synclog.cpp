@@ -420,6 +420,7 @@ void SyncLog::finish(Library &library, const Remote &remote, const QJsonObject &
     const bool carrying = SpaceCarry::worthCarrying(library, manifest);
     if (summary.received + summary.sent > 0 || carrying)
         std::ignore = replicate(library, remote, manifest, summary, options, carrying); // their books were taken in already
+    summary.problems.removeDuplicates(); // what both takes met, as a removal refused (#285), is said once
 }
 
 QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {

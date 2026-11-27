@@ -23,6 +23,8 @@
   "%1 branches off no timeline.": "%1 branches off no timeline.",
   "%1 can't be copied into the library, to %2": "%1 can't be copied into the library, to %2",
   "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.": "%1 can't be found. Is its drive connected, or its share mounted? Nothing was made in its place.",
+  "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.": "%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or delete the folder yourself.",
+  "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.": "%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. To delete it for good, delete that folder yourself, then remove the book again.",
   "%1 can't be moved to the trash, so it was not replaced.": "%1 can't be moved to the trash, so it was not replaced.",
   "%1 can't be reached": "%1 can't be reached",
   "%1 can't be reached now (%2).": "%1 can't be reached now (%2).",

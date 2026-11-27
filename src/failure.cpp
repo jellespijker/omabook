@@ -62,6 +62,12 @@ constexpr auto wordings = std::to_array<Wording>({
                                       "--replace (\"replace\": true for an "
                                       "agent): the one there goes to the trash.")},
     {Failure::Code::ReplacedFileNotTrashed, tr("%1 can't be moved to the trash, so it was not replaced.")},
+    {Failure::Code::FolderNotTrashed,
+     tr("%1 can't be moved to the trash (no trash folder can be made there), so nothing was deleted and the book stays in the library. "
+        "To delete it for good, delete that folder yourself, then remove the book again.")},
+    {Failure::Code::LibraryNotTrashed,
+     tr("%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or "
+        "delete the folder yourself.")},
     {Failure::Code::BookFileNotCopied, tr("%1 can't be copied into the library, to %2")},
     {Failure::Code::LibraryNotWritten, tr("The library can't be written.")},
     {Failure::Code::BookFileInTheWay,
