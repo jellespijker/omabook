@@ -5,8 +5,9 @@ import QtQuick.Controls
 // margin note), or a part of a comic's page (#115): the keys that move and
 // widen the selection, and a line
 // saying how, while it lasts. Enter is done: the menu of what to do with the
-// words, or the note on them; 1 to 5 highlight them in that colour (#81);
-// Escape (or V) stops.
+// words, or the note on them; the key of a margin note writes one on what is
+// selected, whatever it was selected for (#271); 1 to 5 highlight them in that
+// colour (#81); Escape (or V) stops.
 Item {
     id: keys
     // The reading view: its page (`content`), and what ends the selecting.
@@ -37,6 +38,16 @@ Item {
             event.accepted = true
         }
         onActiveFocusChanged: if (!activeFocus && keys.view.selecting) keys.view.stopSelecting(false)
+    }
+    // The margin note's own key, as keys.json has it: the page's keys are
+    // quiet while words are selected, so it is heard here.
+    Shortcut {
+        sequences: (custom.plainKeys["reader.note"] || []).concat(custom.chordKeys["reader.note"] || [])
+        enabled: !!keys.view && keys.view.selecting
+        onActivated: {
+            keys.purpose = "note"
+            keys.view.stopSelecting(true)
+        }
     }
     // Says how, while it lasts.
     Rectangle {
