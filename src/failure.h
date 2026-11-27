@@ -67,10 +67,12 @@ public:
         FolderNotTrashed,  // {a book's folder}: it can't go to the trash, so the book stays (#285)
         LibraryNotTrashed, // {a library's folder}: it can't go to the trash, so it is left (#285)
         BookFileNotCopied, // {the file, where to in the library}
+        BookFileNoRoom,    // {file name}: the library's disk has no room for it (#279)
         LibraryNotWritten, // {}
         BookFileInTheWay,  // {a file in the library that is not the book's} (#281)
         // A library that can't be opened, and what to do about it (#227).
         LibraryReadOnly,   // {folder}
+        LibraryDiskFull,   // {folder}: no room to write it, or to read it (#279)
         LibraryDamaged,    // {database, the database's reason, the folder of its copies}
         LibraryUnopened,   // {database, the database's reason}
         LibraryUnwritable, // {the database's reason}

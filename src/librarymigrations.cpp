@@ -214,6 +214,9 @@ QString LibraryMigrations::whyNotSetUp(const Library &library) {
     const Said said = reading(library.m_connection, readTables);
     if (said.code == sqliteReadOnly || readOnly(library.databasePath()))
         return Failure(Failure::Code::LibraryReadOnly, {library.m_root}).text();
+    // SQLite says only "disk I/O error" of a disk with no room (#279).
+    if (diskFull(library.databasePath()))
+        return Failure(Failure::Code::LibraryDiskFull, {library.m_root}).text();
     if (said.code != 0 && said.code != sqliteBusy && said.code != sqliteLocked)
         return Failure(Failure::Code::LibraryUnopened, {library.databasePath(), said.words}).text();
     return u"The library is being set up by another program; try again when it is done."_s;
@@ -279,8 +282,9 @@ std::expected<void, QString> LibraryMigrations::setUp(Library &library) {
     // opens as it is, and one that isn't is not changed.
     if ((!library.m_keepFormat && readOnly(library.databasePath())) || (!setUp.begun() && library.formatVersion() != currentFormat()))
         return std::unexpected(whyNotSetUp(library));
+    // On a full disk a step can't be taken, whatever SQLite says of it.
     if (auto migrated = migrate(library); !migrated)
-        return migrated;
+        return diskFull(library.databasePath()) ? std::unexpected(whyNotSetUp(library)) : migrated;
     if (!library.m_keepFormat) {
         ChangeLog::open(library);
         // What was kept until this Omabook knew its kind (#118), taken in

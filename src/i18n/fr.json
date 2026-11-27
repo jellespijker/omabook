@@ -3219,5 +3219,7 @@
   "It is not what its name says it is: the file is damaged, or something else.": "Ce n’est pas ce que son nom annonce : le fichier est endommagé, ou c’est autre chose.",
   "It holds no text that can be read: the file is damaged, or no text file.": "Il ne contient aucun texte lisible : le fichier est endommagé, ou ce n’est pas un fichier texte.",
   "It is protected by a password, or is an older Word document under a newer name, so it can't be converted.": "Il est protégé par un mot de passe, ou c’est un ancien document Word sous un nom récent : il ne peut donc pas être converti.",
-  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Aucune de ses images n’est lisible : elles sont endommagées, ou d’un type que cet ordinateur ne peut pas afficher."
+  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Aucune de ses images n’est lisible : elles sont endommagées, ou d’un type que cet ordinateur ne peut pas afficher.",
+  "The disk that holds the library in %1 is full, so Omabook can't use it. Free up space there, then try again.": "Le disque qui contient la bibliothèque dans %1 est plein, Omabook ne peut donc pas l’utiliser. Libérez de la place, puis réessayez.",
+  "There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.": "Il n’y a pas de place pour %1 sur le disque de la bibliothèque, qui est plein. Libérez de la place, puis ajoutez-le de nouveau."
 }

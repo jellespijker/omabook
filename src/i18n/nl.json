@@ -3097,5 +3097,7 @@
   "It is not what its name says it is: the file is damaged, or something else.": "Het is niet wat de naam zegt: het bestand is beschadigd, of iets anders.",
   "It holds no text that can be read: the file is damaged, or no text file.": "Er staat geen leesbare tekst in: het bestand is beschadigd, of geen tekstbestand.",
   "It is protected by a password, or is an older Word document under a newer name, so it can't be converted.": "Het is met een wachtwoord beveiligd, of is een ouder Word-document onder een nieuwere naam, en kan daarom niet worden omgezet.",
-  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Geen van de afbeeldingen kan worden gelezen: ze zijn beschadigd, of van een soort die deze computer niet kan tonen."
+  "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Geen van de afbeeldingen kan worden gelezen: ze zijn beschadigd, of van een soort die deze computer niet kan tonen.",
+  "The disk that holds the library in %1 is full, so Omabook can't use it. Free up space there, then try again.": "De schijf met de bibliotheek in %1 is vol, dus Omabook kan haar niet gebruiken. Maak daar ruimte vrij en probeer het opnieuw.",
+  "There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.": "Er is geen ruimte voor %1 op de volle schijf van de bibliotheek. Maak daar ruimte vrij en voeg het opnieuw toe."
 }

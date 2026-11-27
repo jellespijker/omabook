@@ -13,8 +13,12 @@ struct WriteLine;
 // Whether the library whose database is `file` can only be read: its folder,
 // the database or the log beside it may not be written (#259).
 [[nodiscard]] bool readOnly(const QString &file);
+// Whether the disk the library whose database is `file` lies on has no room
+// left for what SQLite writes beside it, even to read it (#279).
+[[nodiscard]] bool diskFull(const QString &file);
 // Why the library whose database is `file` can't be written, when that is
-// plain to see: it isn't there any more (#221), or it can only be read.
+// plain to see: it isn't there any more (#221), it can only be read, or its
+// disk is full.
 [[nodiscard]] std::optional<Failure> plainlyUnwritable(const QString &file);
 // Why a write that waits its turn didn't happen: what is plain to see, else
 // another has been writing it for too long.

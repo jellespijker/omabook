@@ -5,6 +5,7 @@
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QStorageInfo>
 #include <algorithm>
 #include <array>
 #include <condition_variable>
@@ -60,11 +61,20 @@ bool readOnly(const QString &file) {
     });
 }
 
+bool diskFull(const QString &file) {
+    // Less than the log's index and a few pages beside the database take.
+    constexpr qint64 least = 64LL * 1024;
+    const QStorageInfo disk(QFileInfo(file).absolutePath());
+    return disk.isValid() && disk.bytesAvailable() >= 0 && disk.bytesAvailable() < least;
+}
+
 std::optional<Failure> plainlyUnwritable(const QString &file) {
     if (!QFileInfo::exists(file))
         return Failure(Failure::Code::LibraryMissing, {QFileInfo(file).absolutePath()});
     if (readOnly(file))
         return Failure(Failure::Code::LibraryReadOnly, {QFileInfo(file).absolutePath()});
+    if (diskFull(file))
+        return Failure(Failure::Code::LibraryDiskFull, {QFileInfo(file).absolutePath()});
     return std::nullopt;
 }
 

@@ -10,6 +10,7 @@
 #include <QLockFile>
 #include <QScopeGuard>
 #include <QSqlQuery>
+#include <QStorageInfo>
 #include <QTimeZone>
 #include <QVariant>
 #include <algorithm>
@@ -153,6 +154,14 @@ void clearPartials(const QString &file) {
     return {};
 }
 
+// Why `file` wasn't copied to `target`: a disk with no room for it is said to be that (#279).
+[[nodiscard]] Failure notCopied(const QString &file, const QString &target) {
+    const QStorageInfo disk(QFileInfo(target).absolutePath());
+    if (disk.isValid() && disk.bytesAvailable() < QFileInfo(file).size())
+        return Failure(Failure::Code::BookFileNoRoom, {QFileInfo(file).fileName()});
+    return Failure(Failure::Code::BookFileNotCopied, {file, target});
+}
+
 // `file`, of hash `hash`, copied to `target` in place of `old`, the book's
 // file of that format if it has one: trashed first when `keep`, else written over.
 [[nodiscard]] std::expected<void, Failure> putInPlace(const QString &file, const QString &hash, const QString &target,
@@ -182,7 +191,8 @@ void clearPartials(const QString &file) {
     // Another import put the very same file there in the meantime.
     if (QFileInfo::exists(target) && Library::hashFile(target) == hash)
         return {};
-    return std::unexpected(Failure(Failure::Code::BookFileNotCopied, {file, target}));
+    QFile::remove(partial); // what was copied of it takes room too
+    return std::unexpected(notCopied(file, target));
 }
 
 } // namespace

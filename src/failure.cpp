@@ -72,12 +72,16 @@ constexpr auto wordings = std::to_array<Wording>({
      tr("%1 can't be moved to the trash (no trash folder can be made there), so it was left as it is. Take it off the list instead, or "
         "delete the folder yourself.")},
     {Failure::Code::BookFileNotCopied, tr("%1 can't be copied into the library, to %2")},
+    {Failure::Code::BookFileNoRoom,
+     tr("There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.")},
     {Failure::Code::LibraryNotWritten, tr("The library can't be written.")},
     {Failure::Code::BookFileInTheWay,
      tr("%1 is there already and isn't this book's file, so nothing was written over it. Move it somewhere else, then try again.")},
     {Failure::Code::LibraryReadOnly,
      tr("The library in %1 is read-only, and Omabook needs to write to it. Give yourself write permission to the folder and the files in "
         "it (chmod -R u+w), or check that its drive isn't mounted read-only.")},
+    {Failure::Code::LibraryDiskFull,
+     tr("The disk that holds the library in %1 is full, so Omabook can't use it. Free up space there, then try again.")},
     {Failure::Code::LibraryDamaged,
      tr("The library's database %1 is damaged (%2). Restore the library from a snapshot (omabook snapshot list, then omabook snapshot "
         "restore <id> --to <folder>), or put back a copy of the database from %3, where one is kept before an update changes the "
