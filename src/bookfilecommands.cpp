@@ -16,6 +16,7 @@
 #include "bookadmission.h"
 #include "formats.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "settings.h"
 
 using namespace Qt::StringLiterals;
@@ -146,6 +147,8 @@ int runExportCli(const QStringList &arguments) {
     if (!library)
         return failLine(library.error());
     const QStringList given = parser.positionalArguments();
+    if (const auto why = Numbers::notNumbers(given.first(1)))
+        return failLine(*why);
     const QString source = (*library)->formatPath(given.at(0).toLongLong(), parser.value("format"));
     if (source.isEmpty())
         return failLine(u"There is no such book or format in the library."_s);
@@ -173,6 +176,8 @@ int runEmbedCli(const QStringList &arguments) {
         return 1;
     if (!parser.isSet("all") && parser.positionalArguments().isEmpty())
         return failLine(u"Name the books by their numbers, or give --all."_s);
+    if (const auto why = Numbers::notNumbers(parser.positionalArguments()))
+        return failLine(*why);
     const auto library = openLibrary(parser);
     if (!library)
         return failLine(library.error());

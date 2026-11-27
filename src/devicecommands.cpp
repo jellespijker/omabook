@@ -325,6 +325,8 @@ int runSendCli(const QStringList &arguments) {
             u"Send a book to an e-reader: copied onto the one mounted over USB, or mailed to a Kindle. Converted with Calibre when the device needs another format."_s,
             1, 1))
         return 1;
+    if (const auto why = Numbers::notNumbers(parser.positionalArguments().first(1)))
+        return failLine(*why);
     const auto library = openLibrary(parser);
     if (!library)
         return failLine(library.error());
@@ -362,6 +364,8 @@ int runConvertCli(const QStringList &arguments) {
     if (!parsed(parser, arguments, u"Convert a book to another format with Calibre's ebook-convert and add the result to the book; a file of that format the book had goes to the trash."_s, 1,
                 1))
         return 1;
+    if (const auto why = Numbers::notNumbers(parser.positionalArguments().first(1)))
+        return failLine(*why);
     const auto library = openLibrary(parser);
     if (!library)
         return failLine(library.error());

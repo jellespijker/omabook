@@ -34,6 +34,8 @@ struct Option {
 // A place in a book, as every command takes one.
 [[nodiscard]] Option section(const QString &name = QStringLiteral("section"));
 [[nodiscard]] Option fraction();
+// The command's first word, a book's number (#263): the option with no name.
+[[nodiscard]] Option book();
 
 // Why one of these options, among those given, isn't the number it takes; none
 // when all of them are.

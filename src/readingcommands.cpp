@@ -153,6 +153,8 @@ int goal(const Library &library, const QStringList &words, int year, bool json) 
 
 // `stats --book <id>`: one book's reading, of all time.
 int showBook(const Library &library, const QString &number, bool json) {
+    if (const auto why = Numbers::notNumbers({number}))
+        return failLine(*why);
     const auto book = ReadingStats::ofBook(library, number.toLongLong());
     if (!book)
         return failLine(u"There is no book %1 in the library."_s.arg(number));
@@ -201,6 +203,8 @@ int runProgressCli(const QStringList &arguments) {
     if (!library)
         return failLine(library.error());
     const QString number = parser.positionalArguments().first();
+    if (const auto why = Numbers::notNumbers({number}))
+        return failLine(*why);
     const qint64 id = number.toLongLong();
     if (!(*library)->book(id))
         return failLine("There is no book " + number + " in the library.");

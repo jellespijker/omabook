@@ -226,6 +226,8 @@ int fact(const Library &library, const QCommandLineParser &parser) {
 // What --add, --change or --remove asks of one of the book's annotations, said as it is then.
 int edit(Library &library, qint64 book, const QCommandLineParser &parser) {
     const QVariantMap names = Settings().highlightNames();
+    if (const auto why = Numbers::problem(parser, {{.name = "remove"}, {.name = "change"}}))
+        return failLine(*why);
     if (parser.isSet("remove")) {
         const qint64 id = parser.value("remove").toLongLong();
         if (const auto removed = AnnotationEdits::remove(library, book, id); !removed)
@@ -272,6 +274,17 @@ int edit(Library &library, qint64 book, const QCommandLineParser &parser) {
     return 0;
 }
 
+// The book the word names, 0 for "all"; why there is none, when it names none.
+[[nodiscard]] std::expected<qint64, QString> bookAsked(const Library &library, const QString &asked) {
+    if (asked == "all")
+        return 0;
+    if (const auto why = Numbers::notNumbers({asked}))
+        return std::unexpected(*why);
+    if (!library.book(asked.toLongLong()))
+        return std::unexpected("There is no book " + asked + " in the library.");
+    return asked.toLongLong();
+}
+
 } // namespace
 
 int runAnnotationsCli(const QStringList &arguments) {
@@ -290,9 +303,10 @@ int runAnnotationsCli(const QStringList &arguments) {
         return failLine(library.error());
     const QString asked = parser.positionalArguments().first();
     const bool all = asked == "all";
-    const qint64 id = asked.toLongLong();
-    if (!all && !(*library)->book(id))
-        return failLine("There is no book " + asked + " in the library.");
+    const auto named = bookAsked(**library, asked);
+    if (!named)
+        return failLine(named.error());
+    const qint64 id = *named;
     if (parser.isSet("fact"))
         return fact(**library, parser);
     const bool editing = parser.isSet("add") || parser.isSet("change") || parser.isSet("remove");

@@ -34,6 +34,8 @@ Numbers::Option Numbers::section(const QString &name) { return {.name = name}; }
 
 Numbers::Option Numbers::fraction() { return {.name = u"fraction"_s, .least = 0, .most = 1, .isWhole = false}; }
 
+Numbers::Option Numbers::book() { return {.name = {}}; }
+
 namespace {
 
 // "a whole number, 0 or more", "a number from 0 to 100".
@@ -54,9 +56,14 @@ namespace {
 } // namespace
 
 std::optional<QString> Numbers::problem(const QCommandLineParser &parser, std::initializer_list<Option> options) {
-    for (const Option &option : options)
-        if (parser.isSet(option.name) && !fits(option, parser.value(option.name)))
+    for (const Option &option : options) {
+        if (option.name.isEmpty()) {
+            if (auto why = notNumbers(parser.positionalArguments().mid(0, 1)))
+                return why;
+        } else if (parser.isSet(option.name) && !fits(option, parser.value(option.name))) {
             return u"--%1 takes %2, not \"%3\"."_s.arg(option.name, wanted(option), parser.value(option.name));
+        }
+    }
     return std::nullopt;
 }
 

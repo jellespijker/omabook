@@ -79,6 +79,27 @@ private slots:
         QTest::addColumn<QString>("refused");
         const QList<std::pair<QStringList, QString>> commands{
             {{"set", "1", "--series-index", "three"}, "three"},
+            // A book's or an annotation's number that is none is not 0 (#263).
+            {{"remove", "abc"}, "\"abc\" is not a number"},
+            {{"remove", "1.5"}, "\"1.5\" is not a number"},
+            {{"set", "abc", "--title", "Renamed"}, "\"abc\" is not a number"},
+            {{"show", "abc"}, "\"abc\" is not a number"},
+            {{"lookup", "abc"}, "\"abc\" is not a number"},
+            {{"notes", "abc"}, "\"abc\" is not a number"},
+            {{"progress", "abc"}, "\"abc\" is not a number"},
+            {{"stats", "--book", "abc"}, "\"abc\" is not a number"},
+            {{"bookmarks", "abc"}, "\"abc\" is not a number"},
+            {{"bookmarks", "1", "--remove", "abc"}, "abc"},
+            {{"bookmarks", "1", "--rename", "abc", "--as", "x"}, "abc"},
+            {{"annotations", "abc"}, "\"abc\" is not a number"},
+            {{"annotations", "1", "--remove", "abc"}, "--remove takes a whole number"},
+            {{"annotations", "1", "--remove", "1.5"}, "1.5"},
+            {{"annotations", "1", "--change", "abc", "--note", "x"}, "--change takes a whole number"},
+            {{"export", "abc", "out"}, "\"abc\" is not a number"},
+            {{"embed", "abc"}, "\"abc\" is not a number"},
+            {{"send", "abc"}, "\"abc\" is not a number"},
+            {{"convert", "abc"}, "\"abc\" is not a number"},
+            {{"set", "1", "--series-index", "", "--title", "Renamed"}, "number in its series"},
             {{"set", "1", "--series-index", "nan"}, "nan"},
             {{"set", "1", "--series-index", "-2", "--title", "Renamed"}, "-2"},
             {{"set", "1", "--rating", "five"}, "five"},
@@ -131,7 +152,7 @@ private slots:
         auto ran = shelf.run({"set", "1", "--series-index", "2.5", "--rating", "0"});
         QVERIFY2(ran.code == 0, qPrintable(ran.errors));
         QCOMPARE(shelf.library.book(shelf.book)->meta.seriesIndex, 2.5);
-        ran = shelf.run({"set", "1", "--series-index", ""});
+        ran = shelf.run({"set", "1", "--series-index", "0"});
         QVERIFY2(ran.code == 0, qPrintable(ran.errors));
         QCOMPARE(shelf.library.book(shelf.book)->meta.seriesIndex, 0.0);
         ran = shelf.run({"progress", "1", "--section", "4", "--fraction", "1", "--percent", "100"});

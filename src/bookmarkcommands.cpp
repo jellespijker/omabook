@@ -58,10 +58,19 @@ int failLine(const QString &why) {
     return bookmark;
 }
 
+// The book the word names; why there is none, when it names none.
+[[nodiscard]] std::expected<qint64, QString> bookAsked(const Library &library, const QString &number) {
+    if (const auto why = Numbers::notNumbers({number}))
+        return std::unexpected(*why);
+    if (!library.book(number.toLongLong()))
+        return std::unexpected("There is no book " + number + " in the library.");
+    return number.toLongLong();
+}
+
 // What the options ask of the book's bookmarks; why not, when it can't be done.
 [[nodiscard]] std::expected<void, QString> change(Library &library, qint64 book, const QCommandLineParser &parser) {
     // Everything asked is checked before anything changes (#230).
-    if (const auto why = Numbers::problem(parser, {Numbers::section(), Numbers::fraction()}))
+    if (const auto why = Numbers::problem(parser, {Numbers::section(), Numbers::fraction(), {.name = "remove"}, {.name = "rename"}}))
         return std::unexpected(*why);
     if (parser.isSet("add") && parser.isSet("section"))
         if (const auto past = BookOps::checkSection(library, book, parser.value("section").toInt()); !past)
@@ -142,10 +151,10 @@ int runBookmarksCli(const QStringList &arguments) {
     const auto library = openLibrary(parser);
     if (!library)
         return failLine(library.error());
-    const QString number = parser.positionalArguments().first();
-    const qint64 id = number.toLongLong();
-    if (!(*library)->book(id))
-        return failLine("There is no book " + number + " in the library.");
+    const auto asked = bookAsked(**library, parser.positionalArguments().first());
+    if (!asked)
+        return failLine(asked.error());
+    const qint64 id = *asked;
     if (const auto changed = change(**library, id, parser); !changed)
         return failLine(changed.error());
     const auto color = parser.isSet("color") ? colorAsked(parser.value("color")) : std::expected<QString, QString>(QString());

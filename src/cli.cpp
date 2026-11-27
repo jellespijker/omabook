@@ -297,7 +297,7 @@ int search(const QStringList &arguments) {
 int show(const QStringList &arguments) {
     Command command("show", "Show everything the library knows about one book.");
     command.parser.addPositionalArgument("id", "The book's number, from omabook list.");
-    if (!command.parse(arguments, 1, 1))
+    if (!command.parse(arguments, 1, 1, {Numbers::book()}))
         return 1;
     QString error;
     const auto library = command.library(&error);
@@ -581,7 +581,7 @@ int format(const QStringList &arguments) {
 int remove(const QStringList &arguments) {
     Command command("remove", "Move a book's folder to the trash and take it out of the library.");
     command.parser.addPositionalArgument("id", "The book's number.");
-    if (!command.parse(arguments, 1, 1))
+    if (!command.parse(arguments, 1, 1, {Numbers::book()}))
         return 1;
     QString error;
     const auto library = command.library(&error);
@@ -596,7 +596,7 @@ int set(const QStringList &arguments) {
     Command command("set", "Change a book's details. Only the options given are changed.");
     command.parser.addPositionalArgument("id", "The book's number.");
     BookSetting::addOptions(command.parser);
-    if (!command.parse(arguments, 1, 1))
+    if (!command.parse(arguments, 1, 1, {Numbers::book()}))
         return 1;
     QString error;
     const auto library = command.library(&error);
@@ -721,7 +721,7 @@ int lookup(const QStringList &arguments) {
     command.parser.addOption({"ai", "Also ask the AI, which reads the book's opening pages and weighs the other results."});
     command.parser.addOption({"apply", "Take the details (and cover) of this candidate: its number in the last listing (made "
                                        "with the same --ai or not), or its id from that listing.", "number|id"});
-    if (!command.parse(arguments, 1, 1))
+    if (!command.parse(arguments, 1, 1, {Numbers::book()}))
         return 1;
     QString error;
     const auto library = command.library(&error);
@@ -958,7 +958,7 @@ int notes(const QStringList &arguments) {
                              "each as far as the book was read when it was written.");
     command.parser.addPositionalArgument("id", "The book's number.");
     command.parser.addOption({"kind", "Only this kind: recap or cast.", "kind"});
-    if (!command.parse(arguments, 1, 1))
+    if (!command.parse(arguments, 1, 1, {Numbers::book()}))
         return 1;
     QString error;
     const auto library = command.library(&error);

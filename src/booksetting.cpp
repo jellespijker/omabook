@@ -24,7 +24,7 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
     {"title", [](BookMeta &meta, const QString &text) { meta.title = text.simplified(); }},
     {"authors", [](BookMeta &meta, const QString &text) { meta.authors = BookMeta::splitAuthors(text); }},
     {"series", [](BookMeta &meta, const QString &text) { meta.series = text.simplified(); }},
-    // Checked before (numbersOf): empty takes the number away.
+    // Checked before (numbersOf).
     {"series-index", [](BookMeta &meta, const QString &text) { meta.seriesIndex = text.toDouble(); }},
     {"publisher", [](BookMeta &meta, const QString &text) { meta.publisher = text.simplified(); }},
     {"language", [](BookMeta &meta, const QString &text) { meta.language = text.simplified(); }},
@@ -94,8 +94,8 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
 
 // The numbers the options give, refused before anything is written (#230).
 [[nodiscard]] std::expected<void, Failure> numbersOf(const QCommandLineParser &options) {
-    const QString index = options.value("series-index").trimmed();
-    if (options.isSet("series-index") && !index.isEmpty() && !Numbers::decimal(index))
+    // Empty (an unset variable of a script) is no number either (#263); 0 takes the number away.
+    if (options.isSet("series-index") && !Numbers::decimal(options.value("series-index").trimmed()))
         return std::unexpected(Failure(Failure::Code::SeriesIndexNotANumber, {options.value("series-index")}));
     if (options.isSet("rating") && !Numbers::whole(options.value("rating"), 0, 5))
         return std::unexpected(Failure(Failure::Code::RatingNotStars, {options.value("rating")}));
