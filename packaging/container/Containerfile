@@ -16,8 +16,9 @@
 
 ARG ARCH_X86_64=archlinux:latest
 ARG ARCH_AARCH64=menci/archlinuxarm:latest
-# buildx sets TARGETARCH; a plain `docker build` without BuildKit takes it as an argument.
-ARG TARGETARCH=amd64
+# BuildKit sets TARGETARCH to the platform it builds for. No default here: a default would win over
+# it, and every build, aarch64's too, would start from the x86_64 base (#253).
+ARG TARGETARCH
 
 FROM ${ARCH_X86_64} AS base-amd64
 FROM ${ARCH_AARCH64} AS base-arm64
@@ -28,7 +29,10 @@ FROM ${ARCH_AARCH64} AS base-arm64
 # records nothing; libva it links itself (since Qt 6.12.1), which the ffmpeg
 # backend would otherwise have brought.
 FROM base-${TARGETARCH} AS base
-RUN pacman -Syu --noconfirm --needed --assume-installed qt6-multimedia-backend \
+# pacman's download sandbox (its alpm user, Landlock) can't be set up inside a build container; the
+# x86_64 image ships with it off, the Arch Linux ARM one doesn't (#253).
+RUN sed -i '/^DownloadUser/d' /etc/pacman.conf \
+    && pacman -Syu --noconfirm --needed --assume-installed qt6-multimedia-backend \
       qt6-base qt6-declarative qt6-multimedia qt6-svg qt6-websockets poppler-qt6 libarchive libsodium opus libva restic openssh \
     && rm -rf /var/cache/pacman/pkg/* \
     && rm -rf /var/lib/pacman/sync/* /usr/share/man/* /usr/share/doc/*
