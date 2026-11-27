@@ -253,34 +253,6 @@ AppPopup {
                 Material.roundedScale: theme.radius
             }
         }
-        Label {
-            objectName: "editNoNumber"
-            visible: dialog.noNumber !== ""
-            Layout.fillWidth: true
-            text: qsTr("Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.").arg(dialog.noNumber)
-            color: theme.colors.orange
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-        }
-        // What happened to the book while the dialog was open, when it
-        // stands in the way of saving.
-        Label {
-            objectName: "editChanged"
-            visible: dialog.gone || dialog.clashes.length > 0
-            Layout.fillWidth: true
-            text: dialog.gone ? qsTr("This book was removed from the library meanwhile, so its details can't be saved.")
-                  : qsTr("Changed elsewhere meanwhile: %1. Save again to keep what you entered.")
-                        .arg(dialog.clashes.map(key => dialog.fieldNames[key]).join(", "))
-            color: theme.colors.orange
-            textFormat: Text.PlainText
-            wrapMode: Text.Wrap
-        }
-        AppButton {
-            objectName: "editTakeTheirs"
-            visible: !dialog.gone && dialog.clashes.length > 0
-            text: qsTr("Take the Other Changes")
-            onClicked: dialog.takeTheirs()
-        }
         // The library's copy of the book, never the file it was added from;
         // the settings say whether this is ticked to begin with.
         RowLayout {
@@ -302,6 +274,39 @@ AppPopup {
                 }
             }
         }
+        // Why Save did not save: kept in sight with the buttons, however
+        // low the window is, so it isn't pressed again unread (#257).
+        noted: dialog.noNumber !== "" || dialog.gone || dialog.clashes.length > 0
+        notes: [
+            Label {
+                objectName: "editNoNumber"
+                visible: dialog.noNumber !== ""
+                Layout.fillWidth: true
+                text: qsTr("Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.").arg(dialog.noNumber)
+                color: theme.colors.orange
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+            },
+            // What happened to the book while the dialog was open, when it
+            // stands in the way of saving.
+            Label {
+                objectName: "editChanged"
+                visible: dialog.gone || dialog.clashes.length > 0
+                Layout.fillWidth: true
+                text: dialog.gone ? qsTr("This book was removed from the library meanwhile, so its details can't be saved.")
+                      : qsTr("Changed elsewhere meanwhile: %1. Save again to keep what you entered.")
+                            .arg(dialog.clashes.map(key => dialog.fieldNames[key]).join(", "))
+                color: theme.colors.orange
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+            },
+            AppButton {
+                objectName: "editTakeTheirs"
+                visible: !dialog.gone && dialog.clashes.length > 0
+                text: qsTr("Take the Other Changes")
+                onClicked: dialog.takeTheirs()
+            }
+        ]
         actions: [
             AppButton {
                 text: qsTr("Choose Cover")

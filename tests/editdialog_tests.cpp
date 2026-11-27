@@ -49,6 +49,18 @@ struct Bench {
     }
     void call(const QString &name, const char *method) const { QMetaObject::invokeMethod(desk.find(name), method); }
     [[nodiscard]] Book book() const { return *other->book(id); }
+    // Whether the item is on screen to be read: shown, inside the window, and
+    // cut off by nothing it stands in.
+    [[nodiscard]] bool inSight(const QString &name) const {
+        const QQuickItem *item = desk.item(name);
+        if (!item || !item->isVisible() || item->width() <= 0 || item->height() <= 0)
+            return false;
+        const QRectF at = item->mapRectToScene(item->boundingRect());
+        for (const QQuickItem *up = item->parentItem(); up; up = up->parentItem())
+            if (up->clip() && !up->mapRectToScene(up->boundingRect()).adjusted(-1, -1, 1, 1).contains(at))
+                return false;
+        return QRectF(QPointF(), QSizeF(desk.window->size())).contains(at);
+    }
     // As `omabook set` and an agent do it: some fields, on a connection of its own.
     [[nodiscard]] bool changeElsewhere(const QString &title = {}) {
         BookMeta meta = book().meta;
@@ -150,6 +162,36 @@ private slots:
         QCOMPARE(saved.meta.publisher, QString(theirs ? "Changed Elsewhere" : "My Press"));
         QCOMPARE(saved.meta.description, QString(theirs ? "written by another program" : "written here"));
         QCOMPARE(saved.rating, 2);
+        QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(bench.desk.warnings.join('\n')));
+    }
+
+    // In a low or a narrow window the dialog scrolls; why Save did not save
+    // is in sight all the same, or it is pressed again unread (#257).
+    void whySaveDidNotSaveIsInSight_data() {
+        QTest::addColumn<QSize>("size");
+        QTest::newRow("low") << QSize(1280, 720);
+        QTest::newRow("narrow") << QSize(420, 700);
+        QTest::newRow("smallest") << QSize(420, 360);
+    }
+
+    void whySaveDidNotSaveIsInSight() {
+        QFETCH(const QSize, size);
+        Bench bench;
+        QVERIFY(bench.open());
+        QVERIFY(bench.desk.resize(size));
+        QVERIFY(bench.edit());
+        bench.set("editNumber", "text", "abc");
+        bench.call("edit", "save");
+        QTRY_VERIFY(bench.inSight("editNoNumber"));
+        QVERIFY(bench.inSight("editSave"));
+        bench.set("editNumber", "text", "");
+        QVERIFY(bench.changeElsewhere("Theirs"));
+        bench.set("editTitle", "text", "The Salt Road mine");
+        bench.call("edit", "save");
+        QTRY_VERIFY(bench.inSight("editChanged"));
+        QTRY_VERIFY(bench.inSight("editTakeTheirs"));
+        QVERIFY(bench.inSight("editSave"));
+        bench.desk.shot(QString("edit-changed-%1x%2").arg(size.width()).arg(size.height()));
         QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(bench.desk.warnings.join('\n')));
     }
 

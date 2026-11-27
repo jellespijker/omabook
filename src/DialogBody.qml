@@ -12,16 +12,21 @@ import QtQuick.Layouts
 //         DialogBody {
 //             Label { ... }
 //             TextField { ... }
+//             notes: [ Label { ... } ]
 //             actions: [ AppButton { ... }, AppButton { ... } ]
 //         }
 //     }
 //
 // is never larger than the window, and nothing in it is out of reach. The
-// field that takes the keyboard is scrolled into view.
+// field that takes the keyboard is scrolled into view. What must be seen
+// before a button is pressed again (`notes`, shown while `noted`) stands with
+// the buttons, wherever the content is scrolled to (#257).
 ColumnLayout {
     id: body
     default property alias content: column.data
     property alias actions: buttons.content
+    property alias notes: said.data
+    property bool noted: false
     // The space between the things in the column.
     property alias gap: column.spacing
     readonly property alias scroller: flick
@@ -85,6 +90,12 @@ ColumnLayout {
             target: win
             function onActiveFocusItemChanged() { flick.reveal(win.activeFocusItem) }
         }
+    }
+    ColumnLayout {
+        id: said
+        visible: body.noted
+        Layout.fillWidth: true
+        spacing: 8
     }
     DialogActions { id: buttons }
 }
