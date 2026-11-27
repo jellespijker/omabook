@@ -215,11 +215,31 @@ AppPopup {
                 model: [qsTr("As far as read here"), qsTr("To read"), qsTr("Reading"), qsTr("Read")]
             }
             // Stars, one tap each; tapping the one that is set clears them.
+            // From the keyboard too, Tab reaching them (#272): Left and Right
+            // a star less or more, 0 to 5 that many.
             Row {
                 id: stars
                 objectName: "editStars"
                 property int value: 0
                 spacing: 2
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Slider
+                Accessible.name: dialog.fieldNames.rating + " " + value
+                Accessible.onIncreaseAction: give(value + 1)
+                Accessible.onDecreaseAction: give(value - 1)
+                function give(count) { value = Math.max(0, Math.min(5, count)) }
+                Keys.onPressed: (event) => {
+                    const less = win.rightToLeft ? Qt.Key_Right : Qt.Key_Left
+                    const more = win.rightToLeft ? Qt.Key_Left : Qt.Key_Right
+                    if (event.key === less || event.key === Qt.Key_Down || event.key === Qt.Key_Minus) give(value - 1)
+                    else if (event.key === more || event.key === Qt.Key_Up || event.key === Qt.Key_Plus) give(value + 1)
+                    else if (event.key >= Qt.Key_0 && event.key <= Qt.Key_5) give(event.key - Qt.Key_0)
+                    else if (event.key === Qt.Key_Home) give(0)
+                    else if (event.key === Qt.Key_End) give(5)
+                    else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) dialog.save()
+                    else return
+                    event.accepted = true
+                }
                 Repeater {
                     model: 5
                     delegate: Item {
@@ -228,6 +248,13 @@ AppPopup {
                         // As wide as a fingertip under fingers.
                         width: win.touch ? 38 : 26
                         height: win.touch ? 38 : 30
+                        // Where the keyboard is.
+                        Rectangle {
+                            anchors.fill: parent
+                            visible: stars.activeFocus
+                            radius: Math.min(4, theme.radius)
+                            color: theme.colors.selection
+                        }
                         Label {
                             anchors.centerIn: parent
                             text: star.index < stars.value ? "★" : "☆"

@@ -3106,5 +3106,7 @@
     "one": "%Ln Stelle angezeigt, und es gibt weitere",
     "other": "%Ln Stellen angezeigt, und es gibt weitere"
   },
-  "Show All": "Alle anzeigen"
+  "Show All": "Alle anzeigen",
+  "On the stars: one less or one more": "Auf den Sternen: einer weniger oder einer mehr",
+  "On the stars: that many; 0 takes them off": "Auf den Sternen: so viele; 0 nimmt sie weg"
 }

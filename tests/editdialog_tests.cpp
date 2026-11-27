@@ -195,6 +195,40 @@ private slots:
         QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(bench.desk.warnings.join('\n')));
     }
 
+    // Tab from the status reaches the stars, and the keys set them (#272).
+    void theStarsAreSetByTheKeyboard() {
+        Bench bench;
+        QVERIFY(bench.open());
+        QVERIFY(bench.edit());
+        QQuickItem *stars = bench.desk.item("editStars");
+        QVERIFY(stars);
+        bench.desk.item("editShelf")->forceActiveFocus(Qt::TabFocusReason);
+        QTest::keyClick(bench.desk.window, Qt::Key_Tab);
+        QTRY_VERIFY(stars->hasActiveFocus());
+        const auto value = [stars] { return stars->property("value").toInt(); };
+        QTest::keyClick(bench.desk.window, Qt::Key_4);
+        QCOMPARE(value(), 4);
+        QTest::keyClick(bench.desk.window, Qt::Key_Right);
+        QTest::keyClick(bench.desk.window, Qt::Key_Right);
+        QCOMPARE(value(), 5);
+        QTest::keyClick(bench.desk.window, Qt::Key_Left);
+        QCOMPARE(value(), 4);
+        QTest::keyClick(bench.desk.window, Qt::Key_0);
+        QTest::keyClick(bench.desk.window, Qt::Key_Left);
+        QCOMPARE(value(), 0);
+        QTest::keyClick(bench.desk.window, Qt::Key_3);
+        bench.desk.shot("edit-stars-focused");
+        // Tab goes on, and back.
+        QTest::keyClick(bench.desk.window, Qt::Key_Tab);
+        QTRY_VERIFY(bench.desk.item("editFinished")->hasActiveFocus());
+        QTest::keyClick(bench.desk.window, Qt::Key_Backtab, Qt::ShiftModifier);
+        QTRY_VERIFY(stars->hasActiveFocus());
+        QTest::keyClick(bench.desk.window, Qt::Key_Return);
+        QTRY_VERIFY(!bench.property("edit", "visible").toBool());
+        QCOMPARE(bench.book().rating, 3);
+        QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(bench.desk.warnings.join('\n')));
+    }
+
     void aChangeAfterTheWarningIsSaidAgain() {
         Bench bench;
         QVERIFY(bench.open());

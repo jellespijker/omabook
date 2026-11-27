@@ -3229,5 +3229,7 @@
     "one": "Se muestra %Ln coincidencia, y hay más",
     "other": "Se muestran %Ln coincidencias, y hay más"
   },
-  "Show All": "Mostrar todo"
+  "Show All": "Mostrar todo",
+  "On the stars: one less or one more": "En las estrellas: una menos o una más",
+  "On the stars: that many; 0 takes them off": "En las estrellas: esa cantidad; 0 las quita"
 }

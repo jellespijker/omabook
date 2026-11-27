@@ -3229,5 +3229,7 @@
     "one": "%Ln occurrence affichée, et il y en a d'autres",
     "other": "%Ln occurrences affichées, et il y en a d'autres"
   },
-  "Show All": "Tout afficher"
+  "Show All": "Tout afficher",
+  "On the stars: one less or one more": "Sur les étoiles : une de moins ou une de plus",
+  "On the stars: that many; 0 takes them off": "Sur les étoiles : ce nombre ; 0 les enlève"
 }

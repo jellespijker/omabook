@@ -3106,5 +3106,7 @@
     "one": "%Ln plaats getoond, en er zijn er meer",
     "other": "%Ln plaatsen getoond, en er zijn er meer"
   },
-  "Show All": "Alles tonen"
+  "Show All": "Alles tonen",
+  "On the stars: one less or one more": "Op de sterren: een minder of een meer",
+  "On the stars: that many; 0 takes them off": "Op de sterren: zoveel; 0 haalt ze weg"
 }
