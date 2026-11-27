@@ -253,10 +253,14 @@ int runFindCli(const QStringList &arguments) {
         return 1;
     // A book file is found without a library.
     const auto library = openLibrary(parser);
+    const QString book = parser.positionalArguments().first();
     QString error;
-    const auto document = BookOps::open(library ? library->get() : nullptr, parser.positionalArguments().first(), &error);
+    const auto document = BookOps::open(library ? library->get() : nullptr, book, &error);
+    // A number asks the library, so one that can't be opened says why (#260).
     if (!document)
-        return failLine(error);
+        return failLine(!library && Numbers::whole(book, std::numeric_limits<qint64>::min(), std::numeric_limits<qint64>::max())
+                            ? library.error()
+                            : error);
     const QJsonArray matches = BookOps::find(*document, parser.positionalArguments().mid(1).join(' '));
     if (parser.isSet("json"))
         printJson(QJsonDocument(matches));

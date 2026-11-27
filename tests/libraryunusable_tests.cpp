@@ -44,7 +44,8 @@ void setWritable(const QString &folder, bool writable) {
     return file.open(QIODevice::ReadWrite) && file.write(noise) == noise.size();
 }
 
-const QList<QStringList> asking{{"list"}, {"show", "1"}, {"text", "1"}, {"toc", "1"}};
+const QList<QStringList> asking{{"list"},     {"show", "1"},          {"text", "1"},
+                                {"toc", "1"}, {"find", "1", "night"}, {"find", "1", "night", "--json"}};
 
 } // namespace
 
@@ -85,6 +86,15 @@ private slots:
             QVERIFY2(ran.errors.contains(machine.library + "/.backups") && ran.errors.contains("snapshot restore"), qPrintable(ran.errors));
             QVERIFY2(!ran.errors.contains("another program") && !ran.errors.contains("no book"), qPrintable(ran.errors));
         }
+    }
+
+    // A book file is searched all the same: it needs no library (#260).
+    void aBookFileIsSearchedWithoutItsLibrary() {
+        const McpHarness::Machine machine;
+        QVERIFY(oneBook(machine));
+        QVERIFY(damage(Library::databaseIn(machine.library)));
+        const auto ran = machine.omabook({"find", machine.dir.filePath("story.txt"), "night", "--library", machine.library});
+        QVERIFY2(ran.code == 0 && ran.output.contains("dark night"), qPrintable(ran.errors));
     }
 
     // A book's number in a library that opens is still said to be no book of it.
