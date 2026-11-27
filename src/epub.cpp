@@ -76,10 +76,10 @@ public:
     BookMeta meta() const override { return m_meta; }
     QList<TocEntry> toc() const override { return m_toc; }
     // What the spine says of its page progression goes before the language.
-    Qt::LayoutDirection pageDirection() const override {
+    Qt::LayoutDirection pageDirection(const QString &language) const override {
         if (m_progression == u"rtl")
             return Qt::RightToLeft;
-        return m_progression == u"ltr" ? Qt::LeftToRight : Document::pageDirection();
+        return m_progression == u"ltr" ? Qt::LeftToRight : Document::pageDirection(language);
     }
     QByteArray resource(const QString &name) const override { return m_archive.read(name); }
 

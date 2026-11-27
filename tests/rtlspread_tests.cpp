@@ -3,12 +3,14 @@
 // is written in such a language, has its first page on the right, goes forward
 // leftwards by the keys and a finger, and keeps its margin notes at the left.
 
+#include <QBuffer>
 #include <QPointingDevice>
 #include <QQuickStyle>
 #include <QtTest>
 
 #include "desk.h"
 #include "fixtures.h"
+#include "formats.h"
 #include "library.h"
 
 namespace {
@@ -50,6 +52,77 @@ class RtlSpreadTests : public QObject {
 
 private slots:
     void initTestCase() { QQuickStyle::setStyle("Material"); }
+
+    // The language the library says goes before the file's (#265): a text
+    // file, which says none, and an EPUB tagged English, both set to Arabic.
+    void theLibrarysLanguageTurnsTheSpread_data() {
+        QTest::addColumn<QString>("name");
+        QTest::newRow("a text file") << "spread.txt";
+        QTest::newRow("an EPUB tagged English") << "spread.epub";
+    }
+    void theLibrarysLanguageTurnsTheSpread() {
+        QFETCH(const QString, name);
+        Desk desk("en", {}, false);
+        const QString file = desk.dir.filePath(name);
+        if (name.endsWith(".epub")) {
+            QVERIFY(book(file, "en", {}));
+        } else {
+            const QString line = QString::fromUtf8("كان يا ما كان في قديم الزمان ملك عظيم يحكم بلادا واسعة.\n\n");
+            QVERIFY(Fixtures::write(file, line.repeated(150).toUtf8()));
+        }
+        const qint64 id = desk.backend->library()->add(file).id;
+        QVERIFY(id > 0);
+        desk.backend->reload();
+        QVERIFY(desk.show());
+        QVERIFY(desk.resize(QSize(1800, 900)));
+        desk.settings->setOption("layout", "pages");
+        desk.settings->setPages(2);
+        desk.reader->openBook(id);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QTRY_VERIFY(desk.find("spreadReader"));
+        QQuickItem *spread = desk.item("spreadReader");
+        QTRY_VERIFY(spread->property("pages").toInt() > 2);
+        QTRY_COMPARE(spread->property("columns").toInt(), 2);
+        const auto leftwards = [&desk] { return across(desk.item("page0")) > across(desk.item("page1")); };
+        QTRY_VERIFY(!leftwards());
+
+        // Corrected while the book is open.
+        BookMeta meta = desk.backend->library()->book(id)->meta;
+        meta.language = "ar";
+        QVERIFY(desk.backend->library()->setMeta(id, meta));
+        desk.backend->reload();
+        QTRY_VERIFY(leftwards());
+        // And when it is opened anew.
+        desk.reader->close();
+        desk.reader->openBook(id);
+        QTRY_VERIFY(desk.reader->isOpen() && desk.find("spreadReader"));
+        QTRY_VERIFY(desk.item("page1") && leftwards());
+        QCOMPARE(desk.warnings, QStringList());
+    }
+
+    // A manga says it is read right to left (#265): its pages stand and turn that way.
+    void aMangaReadsRightToLeft_data() {
+        QTest::addColumn<QByteArray>("manga");
+        QTest::addColumn<bool>("leftwards");
+        QTest::newRow("right to left") << QByteArray("YesAndRightToLeft") << true;
+        QTest::newRow("not said") << QByteArray("Yes") << false;
+    }
+    void aMangaReadsRightToLeft() {
+        QFETCH(const QByteArray, manga);
+        QFETCH(const bool, leftwards);
+        const QTemporaryDir dir;
+        QImage page(60, 90, QImage::Format_RGB32);
+        page.fill(Qt::white);
+        QByteArray png;
+        QBuffer buffer(&png);
+        QVERIFY(buffer.open(QIODevice::WriteOnly) && page.save(&buffer, "PNG"));
+        const QString file = dir.filePath("manga.cbz");
+        QVERIFY(Fixtures::zip(file,
+                              {{"1.png", png}, {"2.png", png}, {"ComicInfo.xml", "<ComicInfo><Manga>" + manga + "</Manga></ComicInfo>"}}));
+        const auto document = Formats::opened(file);
+        QVERIFY(document);
+        QCOMPARE((*document)->pageDirection() == Qt::RightToLeft, leftwards);
+    }
 
     void theSpreadReadsAsTheBookDoes_data() {
         QTest::addColumn<QByteArray>("window");

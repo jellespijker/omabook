@@ -50,10 +50,12 @@ public:
     virtual int count() const = 0;
     virtual BookMeta meta() const = 0;
     virtual QList<TocEntry> toc() const { return {}; }
-    // Flow: which way the pages follow each other, when the book says so;
-    // by default from its language, when that is written right to left.
-    // Qt::LayoutDirectionAuto leaves it to whoever shows the book (#232).
-    virtual Qt::LayoutDirection pageDirection() const;
+    // Which way the pages follow each other, when the book says so; a flowing
+    // book by default from its language, when that is written right to left:
+    // `language` where whoever asks knows it better than the file, as the
+    // library does (#265). Qt::LayoutDirectionAuto leaves it to whoever shows
+    // the book (#232).
+    virtual Qt::LayoutDirection pageDirection(const QString &language = {}) const;
 
     // Flow: one chapter as the rich text subset Qt lays out, with pictures no
     // wider than `width` pixels. Links to other chapters read

@@ -4,8 +4,11 @@
 
 #include "htmlclean.h"
 
-Qt::LayoutDirection Document::pageDirection() const {
-    return kind() == Flow && QLocale(meta().language).textDirection() == Qt::RightToLeft ? Qt::RightToLeft : Qt::LayoutDirectionAuto;
+Qt::LayoutDirection Document::pageDirection(const QString &language) const {
+    if (kind() != Flow)
+        return Qt::LayoutDirectionAuto;
+    const QLocale written(language.isEmpty() ? meta().language : language);
+    return written.textDirection() == Qt::RightToLeft ? Qt::RightToLeft : Qt::LayoutDirectionAuto;
 }
 QString Document::html(int, int) const { return {}; }
 QByteArray Document::resource(const QString &) const { return {}; }

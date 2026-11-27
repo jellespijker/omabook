@@ -328,7 +328,8 @@ ListView {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: view.turnsPages ? parent.verticalCenter : undefined
             spacing: view.gap
-            layoutDirection: win.rightToLeft ? Qt.RightToLeft : Qt.LeftToRight
+            // As the book reads, where it says so (a manga), else as the window does.
+            layoutDirection: win.pagesRightToLeft ? Qt.RightToLeft : Qt.LeftToRight
 
             Repeater {
                 model: view.sizeOf(sheets.index)

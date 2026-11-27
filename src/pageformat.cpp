@@ -7,6 +7,7 @@
 
 using namespace Qt::StringLiterals;
 
+#include "backend.h"
 #include "hyphenation.h"
 #include "library.h"
 #include "reader.h"
@@ -20,6 +21,8 @@ PageFormat::PageFormat(Reader *reader, Settings *settings, QObject *parent)
     connect(settings, &Settings::changed, this, &PageFormat::relayout);
     connect(reader, &Reader::bookChanged, this, &PageFormat::refresh);
     connect(reader, &Reader::bookChanged, this, &PageFormat::pageDirectionChanged);
+    // Its details changed while it is open, its language among them.
+    connect(reader->backend(), &Backend::revisionChanged, this, &PageFormat::pageDirectionChanged);
     connect(reader, &Reader::htmlChanged, this, &PageFormat::restyle);
     refresh();
 }
@@ -54,7 +57,9 @@ QString PageFormat::hyphenationLanguage() const {
 
 Qt::LayoutDirection PageFormat::pageDirection() const {
     const std::shared_ptr<const Document> document = m_reader->document();
-    return document ? document->pageDirection() : Qt::LayoutDirectionAuto;
+    // The language the library says, which a person may have corrected, before the file's (#265).
+    const auto book = hasBook() ? m_reader->library()->book(m_reader->bookId()) : std::nullopt;
+    return document ? document->pageDirection(book ? book->meta.language : QString()) : Qt::LayoutDirectionAuto;
 }
 
 void PageFormat::setPreferredCollection(qint64 id) {

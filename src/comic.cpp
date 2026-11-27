@@ -23,8 +23,10 @@ namespace {
     return std::ranges::contains(suffixes, QFileInfo(name).suffix().toLower()) && !name.startsWith("__MACOSX"_L1);
 }
 
-// What ComicRack's ComicInfo.xml says of the comic, over `meta`.
-void readInfo(const QByteArray &info, BookMeta &meta) {
+// What ComicRack's ComicInfo.xml says of the comic, over `meta`; whether it
+// says the comic is read right to left, as manga are (#265).
+[[nodiscard]] bool readInfo(const QByteArray &info, BookMeta &meta) {
+    bool rightToLeft = false;
     QXmlStreamReader xml(info);
     while (!xml.atEnd()) {
         if (xml.readNext() != QXmlStreamReader::StartElement || xml.name() == u"ComicInfo")
@@ -51,7 +53,10 @@ void readInfo(const QByteArray &info, BookMeta &meta) {
             meta.language = value;
         else if (field == "Year")
             meta.published = value;
+        else if (field == "Manga")
+            rightToLeft = value.compare(u"YesAndRightToLeft", Qt::CaseInsensitive) == 0;
     }
+    return rightToLeft;
 }
 
 // A comic is an archive of pictures, read in the order of their names.
@@ -70,7 +75,7 @@ public:
         // ComicRack's ComicInfo.xml, where the archive carries one.
         for (const QString &name : names)
             if (name.compare("ComicInfo.xml", Qt::CaseInsensitive) == 0)
-                readInfo(m_archive.read(name), m_meta);
+                m_rightToLeft = readInfo(m_archive.read(name), m_meta);
         m_meta.cover = image(0, 600);
         // Pictures none of which can be drawn would show as blank pages (#264).
         m_shown = !m_meta.cover.isNull()
@@ -80,6 +85,10 @@ public:
 
     std::optional<Failure> unreadable() const override {
         return m_shown ? std::nullopt : std::optional(Failure(Failure::Code::ComicPicturesUnreadable));
+    }
+
+    Qt::LayoutDirection pageDirection(const QString & /*language*/) const override {
+        return m_rightToLeft ? Qt::RightToLeft : Qt::LayoutDirectionAuto;
     }
 
     Kind kind() const override { return Pages; }
@@ -118,6 +127,7 @@ private:
     mutable QHash<int, QSize> m_sizes;
     BookMeta m_meta;
     bool m_shown = false;
+    bool m_rightToLeft = false;
 };
 
 } // namespace
