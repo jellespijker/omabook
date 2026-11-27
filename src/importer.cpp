@@ -371,7 +371,9 @@ void takeCalibre(Library &library, const Calibre::Book &calibre, const Library::
     QList<Incoming> incoming;
     int unpacked = 0;
     QSet<QString> seen; // the folders and files the walks have come to
-    for (const QString &path : paths) {
+    for (const QString &given : paths) {
+        // A folder's name, also when it was given with a slash at its end (#267).
+        const QString path = QDir::cleanPath(given);
         const bool calibre = options.calibre && QFileInfo(path).isDir() && Calibre::isLibrary(path);
         const auto provider = !calibre && (isArchive(path) || QFileInfo(path).isDir()) ? Formats::providerFor(path) : std::nullopt;
         if (provider) {

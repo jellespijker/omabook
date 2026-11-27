@@ -22,7 +22,11 @@ namespace {
 
 } // namespace
 
-BookSource::BookSource(const QString &path) : m_path(path), m_kind(kindOf(path)) {}
+// Kept whole and without a slash at its end: a folder walked by a relative path
+// would name its files from here rather than from the folder, and one named
+// with the slash would have no name (#267).
+BookSource::BookSource(const QString &path)
+    : m_path(path.isEmpty() ? path : QDir::cleanPath(QFileInfo(path).absoluteFilePath())), m_kind(kindOf(m_path)) {}
 
 BookSource::Kind BookSource::kindOf(const QString &path) {
     const QFileInfo info(path);

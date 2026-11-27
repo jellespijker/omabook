@@ -8,10 +8,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QScopeGuard>
 #include <QTemporaryDir>
 #include <QtTest>
 
 #include "fixtures.h"
+#include "formats.h"
 #include "importer.h"
 #include "library.h"
 #include "mcpharness.h"
@@ -178,6 +180,35 @@ private slots:
         const ImportSummary summary = importBooks(library, {dir.filePath(name)});
         QVERIFY2(summary.added == 1 && !summary.failed(), qPrintable(summary.problems.join('\n')));
         QCOMPARE(summary.unreadable.size(), 0);
+    }
+
+    // A folder that is one book comes in by whatever path names it (#267).
+    void aFolderComesInByARelativePath_data() {
+        QTest::addColumn<QString>("path");
+        for (const char *path : {"mybook", "./mybook", "mybook/", "./mybook/", "shelf/../mybook"})
+            QTest::newRow(path) << QString::fromLatin1(path);
+    }
+
+    void aFolderComesInByARelativePath() {
+        QFETCH(const QString, path);
+        const QTemporaryDir dir;
+        QVERIFY(QDir(dir.path()).mkpath("mybook") && QDir(dir.path()).mkpath("shelf"));
+        QVERIFY(Fixtures::write(dir.filePath("mybook/01.md"), "# One\n\nalpha\n")
+                && Fixtures::write(dir.filePath("mybook/02.md"), "# Two\n\nbeta\n"));
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const QString before = QDir::currentPath();
+        QVERIFY(QDir::setCurrent(dir.path()));
+        const auto back = qScopeGuard([&before] { QDir::setCurrent(before); });
+
+        const ImportSummary summary = importBooks(library, {path});
+        QVERIFY2(summary.added == 1 && !summary.failed(), qPrintable(summary.problems.join('\n')));
+        QString why;
+        const auto document = Formats::open(library.formatPath(summary.lastId, "mdz"), &why);
+        QVERIFY2(document && document->count() == 2, qPrintable(why));
+        // Reading the folder where it lies, as `omabook toc` does.
+        const auto lying = Formats::open(path, &why);
+        QVERIFY2(lying && lying->count() == 2, qPrintable(why));
     }
 
     void aProtectedBookComesInWithANote() {
