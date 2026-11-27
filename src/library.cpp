@@ -290,6 +290,9 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
     if (!meta.cover.isNull())
         setCover(*id, meta.cover);
     Spaces::ensureBookId(*this, *id);
+    if (const auto made = book(*id)) // added on purpose, as a file is: no longer thrown away (#290)
+        for (const QString &key : entryKeys(*made))
+            exec("DELETE FROM removed WHERE hash = ?", {key});
     return {.id = *id, .duplicate = false, .error = {}};
 }
 
@@ -444,25 +447,6 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
     return true;
 }
 
-std::optional<qint64> Library::removedAt(const QString &hash) const {
-    QSqlQuery found = query("SELECT removed_at FROM removed WHERE hash = ?", {hash});
-    return found.next() ? std::optional<qint64>(found.value(0).toLongLong()) : std::nullopt;
-}
-
-QList<Library::Removal> Library::removals() const {
-    QList<Removal> removals;
-    for (QSqlQuery found = query("SELECT hash, removed_at FROM removed ORDER BY hash"); found.next();)
-        removals.append({.key = found.value(0).toString(), .at = found.value(1).toLongLong()});
-    return removals;
-}
-
-QStringList Library::removedHashes() const {
-    QStringList hashes;
-    for (QSqlQuery found = query("SELECT hash FROM removed"); found.next();)
-        hashes << found.value(0).toString();
-    return hashes;
-}
-
 Progress Library::progress(qint64 id) const {
     QSqlQuery found = query("SELECT section, fraction, percent, updated FROM progress WHERE book_id = ?", {id});
     if (!found.next())
@@ -473,8 +457,6 @@ Progress Library::progress(qint64 id) const {
 }
 
 void Library::setProgress(qint64 id, const Progress &progress) { ChangeLog::setProgress(*this, id, progress); }
-
-bool Library::wasRemoved(const QString &hash) const { return query("SELECT 1 FROM removed WHERE hash = ?", {hash}).next(); }
 
 Recap Library::notes(qint64 id, const QString &kind) const {
     QSqlQuery found = query("SELECT section, fraction, text, updated FROM notes WHERE book_id = ? AND kind = ?", {id, kind});

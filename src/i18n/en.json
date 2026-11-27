@@ -239,6 +239,14 @@
     "one": "%Ln book added",
     "other": "%Ln books added"
   },
+  "%Ln books are only here: removed on the other computer, but changed or added here since": {
+    "one": "%Ln book is only here: removed on the other computer, but changed or added here since",
+    "other": "%Ln books are only here: removed on the other computer, but changed or added here since"
+  },
+  "%Ln books are only on the other computer: removed here, but changed or added there since": {
+    "one": "%Ln book is only on the other computer: removed here, but changed or added there since",
+    "other": "%Ln books are only on the other computer: removed here, but changed or added there since"
+  },
   "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.": {
     "one": "%Ln book has other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them.",
     "other": "%Ln books have other details on the other computer, and neither side knows which are newer. omabook sync --details mine or --details theirs settles them."
@@ -537,7 +545,7 @@
   "A book format: %1 (%2)": "A book format: %1 (%2)",
   "A book is removed from the library, on the shelf.": "A book is removed from the library, on the shelf.",
   "A book needs a title.": "A book needs a title.",
-  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.": "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.",
+  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since; the sync then names it as kept on one side. A book removed and added again, where you removed it or where the removal reached, goes to every computer again. A file a merge gave to the book it kept stays, and so does that book.": "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since; the sync then names it as kept on one side. A book removed and added again, where you removed it or where the removal reached, goes to every computer again. A file a merge gave to the book it kept stays, and so does that book.",
   "A book removed since comes back with the whole library, restored into a new folder.": "A book removed since comes back with the whole library, restored into a new folder.",
   "A book without a file": "A book without a file",
   "A book's details, by hand": "A book's details, by hand",

@@ -174,7 +174,6 @@
   "A book format: %1": "Een boekformaat: %1",
   "A book format: %1 (%2)": "Een boekformaat: %1 (%2)",
   "A book needs a title.": "Een boek heeft een titel nodig.",
-  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.": "Een boek dat op de ene computer is verwijderd, wordt bij de volgende synchronisatie ook op de andere verwijderd, naar de prullenbak, tenzij het daar sindsdien is gelezen of gewijzigd. Een bestand dat een samenvoeging aan het behouden boek gaf, blijft, en dat boek ook.",
   "A book without a file": "Een boek zonder bestand",
   "A catalog format: %1": "Een catalogusformaat: %1",
   "A click or a tap on an event shows what is known of it. {chronology.page} goes back to the page it was revealed on, and {chronology.graph} shows it in the graph.": "Een klik of een tik op een gebeurtenis toont wat ervan bekend is. {chronology.page} gaat terug naar de pagina waar het bekend werd, en {chronology.graph} toont het in de graaf.",
@@ -3058,5 +3057,14 @@
   "Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.": "Bij Nummer hoort een getal, zoals 3 of 2,5, niet “%1”. Er is niets opgeslagen.",
   "A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.": "Een poort is een heel getal van 1 tot en met 65535, niet “%1”. De vorige poort blijft staan.",
   "A book's number in its series is a number from 0, such as 3 or 2.5, not \"%1\".": "Het nummer van een boek in zijn serie is een getal vanaf 0, zoals 3 of 2,5, niet “%1”.",
-  "A rating is a whole number of stars from 0 to 5, not \"%1\".": "Een beoordeling is een heel aantal sterren van 0 tot en met 5, niet “%1”."
+  "A rating is a whole number of stars from 0 to 5, not \"%1\".": "Een beoordeling is een heel aantal sterren van 0 tot en met 5, niet “%1”.",
+  "%Ln books are only here: removed on the other computer, but changed or added here since": {
+    "one": "%Ln boek staat alleen hier: op de andere computer verwijderd, maar hier sindsdien gewijzigd of toegevoegd",
+    "other": "%Ln boeken staan alleen hier: op de andere computer verwijderd, maar hier sindsdien gewijzigd of toegevoegd"
+  },
+  "%Ln books are only on the other computer: removed here, but changed or added there since": {
+    "one": "%Ln boek staat alleen op de andere computer: hier verwijderd, maar daar sindsdien gewijzigd of toegevoegd",
+    "other": "%Ln boeken staan alleen op de andere computer: hier verwijderd, maar daar sindsdien gewijzigd of toegevoegd"
+  },
+  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since; the sync then names it as kept on one side. A book removed and added again, where you removed it or where the removal reached, goes to every computer again. A file a merge gave to the book it kept stays, and so does that book.": "Een boek dat op de ene computer is verwijderd, wordt bij de volgende synchronisatie ook op de andere verwijderd, naar de prullenbak, tenzij het daar sindsdien is gelezen of gewijzigd; de synchronisatie noemt het dan als aan één kant behouden. Een boek dat is verwijderd en opnieuw toegevoegd, waar je het verwijderde of waar de verwijdering was aangekomen, gaat weer naar elke computer. Een bestand dat een samenvoeging aan het behouden boek gaf, blijft, en dat boek ook."
 }

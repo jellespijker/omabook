@@ -174,7 +174,6 @@
   "A book format: %1": "Ein Buchformat: %1",
   "A book format: %1 (%2)": "Ein Buchformat: %1 (%2)",
   "A book needs a title.": "Ein Buch braucht einen Titel.",
-  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since. A file a merge gave to the book it kept stays, and so does that book.": "Ein Buch, das auf einem Computer entfernt wurde, wird beim nächsten Abgleich auch auf dem anderen entfernt, in den Papierkorb, außer es wurde dort seitdem gelesen oder geändert. Eine Datei, die eine Zusammenführung dem behaltenen Buch gab, bleibt, und dieses Buch auch.",
   "A book without a file": "Ein Buch ohne Datei",
   "A catalog format: %1": "Ein Katalogformat: %1",
   "A click or a tap on an event shows what is known of it. {chronology.page} goes back to the page it was revealed on, and {chronology.graph} shows it in the graph.": "Ein Klick oder Tippen auf ein Ereignis zeigt, was davon bekannt ist. {chronology.page} geht zurück zu der Seite, auf der es sich zeigte, und {chronology.graph} zeigt es im Graphen.",
@@ -3058,5 +3057,14 @@
   "Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.": "„Nummer“ braucht eine Zahl, etwa 3 oder 2,5, nicht „%1“. Nichts wurde gespeichert.",
   "A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.": "Ein Port ist eine ganze Zahl von 1 bis 65535, nicht „%1“. Der bisherige bleibt erhalten.",
   "A book's number in its series is a number from 0, such as 3 or 2.5, not \"%1\".": "Die Nummer eines Buchs in seiner Reihe ist eine Zahl ab 0, etwa 3 oder 2,5, nicht „%1“.",
-  "A rating is a whole number of stars from 0 to 5, not \"%1\".": "Eine Bewertung ist eine ganze Zahl von Sternen von 0 bis 5, nicht „%1“."
+  "A rating is a whole number of stars from 0 to 5, not \"%1\".": "Eine Bewertung ist eine ganze Zahl von Sternen von 0 bis 5, nicht „%1“.",
+  "%Ln books are only here: removed on the other computer, but changed or added here since": {
+    "one": "%Ln Buch ist nur hier: auf dem anderen Computer entfernt, aber hier seither geändert oder hinzugefügt",
+    "other": "%Ln Bücher sind nur hier: auf dem anderen Computer entfernt, aber hier seither geändert oder hinzugefügt"
+  },
+  "%Ln books are only on the other computer: removed here, but changed or added there since": {
+    "one": "%Ln Buch ist nur auf dem anderen Computer: hier entfernt, aber dort seither geändert oder hinzugefügt",
+    "other": "%Ln Bücher sind nur auf dem anderen Computer: hier entfernt, aber dort seither geändert oder hinzugefügt"
+  },
+  "A book removed on one computer is removed on the other at the next sync too, to its trash, unless it was read or changed there since; the sync then names it as kept on one side. A book removed and added again, where you removed it or where the removal reached, goes to every computer again. A file a merge gave to the book it kept stays, and so does that book.": "Ein Buch, das auf einem Computer entfernt wurde, wird beim nächsten Abgleich auch auf dem anderen entfernt, in den Papierkorb, außer es wurde dort seitdem gelesen oder geändert; der Abgleich nennt es dann als nur auf einer Seite behalten. Ein Buch, das entfernt und wieder hinzugefügt wird, wo du es entfernt hast oder wohin das Entfernen gelangt ist, geht wieder auf jeden Computer. Eine Datei, die eine Zusammenführung dem behaltenen Buch gab, bleibt, und dieses Buch auch."
 }

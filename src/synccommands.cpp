@@ -94,6 +94,12 @@ void printSection(const QString &what, const QStringList &titles) {
         printLine(stdout, "  " + title);
 }
 
+// The books the two stay different by: removed on one side, and kept on the other for what happened to them there (#290).
+void printKept(const SyncSummary &summary, const QString &host) {
+    printSection("Kept here only: removed on " + host + ", but changed or added here since", summary.titles.keptHere);
+    printSection("Kept on " + host + " only: removed here, but changed or added there since", summary.titles.keptThere);
+}
+
 void printDryRun(const SyncSummary &summary, const QString &host) {
     printLine(stdout, QString("A dry run: nothing was changed, here or on %1. A sync would do this:").arg(host));
     const SyncSummary::Titles &titles = summary.titles;
@@ -107,12 +113,13 @@ void printDryRun(const SyncSummary &summary, const QString &host) {
     printSection("Shelf, stars or finished day given to " + host, titles.readingSent);
     printSection("Removed here, to the trash", titles.removedHere);
     printSection("Removed on " + host + ", to the trash", titles.removedThere);
+    printKept(summary, host);
     printSection("Details that differ, with no time to say which are newer", titles.detailsUndecided);
     printSection("Renamed here", titles.renamedHere);
     printSection("Renamed on " + host, titles.renamedThere);
     const int total = summary.received + summary.sent + summary.detailsTaken + summary.detailsSent + summary.placesTaken
                       + summary.placesSent + summary.readingTaken + summary.readingSent + summary.removedHere + summary.removedThere
-                      + summary.detailsUndecided + summary.renamedHere + summary.renamedThere;
+                      + summary.detailsUndecided + summary.renamedHere + summary.renamedThere + summary.keptHere + summary.keptThere;
     if (total == 0)
         printLine(stdout, "Nothing: both libraries are in step.");
 }
@@ -214,6 +221,8 @@ int printSyncResult(const SyncSummary &summary, const QString &computer, bool js
                           "--details theirs (take %2's); add --dry-run to see first.")
                       .arg(summary.detailsUndecided == 1 ? QString("1 book has") : QString("%1 books have").arg(summary.detailsUndecided))
                       .arg(host, computer));
+    if (!json && !summary.dryRun)
+        printKept(summary, host);
     if (!json)
         printKeptApart(summary, host, computer);
     if (!json) {

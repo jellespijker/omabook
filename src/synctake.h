@@ -54,16 +54,17 @@ struct Taken {
     // it holds of it (its details and reading), as a manifest would have said.
     QJsonArray books;
     // The books here the other side removed: removed here too (but on a dry
-    // run), or kept because they changed here since; never given back.
+    // run), or kept because they changed here since, which the summary names;
+    // never given back.
     QSet<qint64> gone;
 };
 
 // Takes in what the log says of the books both sides hold, `incoming` being
 // the operations just come from the other side (already stored, but on a dry
 // run): removes the ones the other side removed, all of each, and that
-// didn't change here since (as the manifest sync decided it), then takes
-// their newer details and reading, the collections, the bookmarks and
-// highlights (synctakeannotations.h) and what the general knowledge graph
+// didn't change here since (as the manifest sync decided it) nor were added
+// again here (#290), then takes their newer details and reading, the
+// collections, the bookmarks and highlights (synctakeannotations.h) and what the general knowledge graph
 // lacks (synctakegraph.h). Counts what changed here in
 // `summary`.
 [[nodiscard]] Taken take(Library &library, std::span<const SpaceOperation> incoming, const Peer &peer, SyncSummary &summary);

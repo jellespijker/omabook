@@ -36,8 +36,10 @@
 // and gives both copies here what it settles on (SyncCopies, #154).
 // Of a book both have, the newer details win (Book::detailsAt).
 // A book removed on one computer is not fetched back to it, and is removed
-// on the other too, to the trash, unless it changed there since. The
-// collections and the knowledge graph (graphsync.h) travel too.
+// on the other too, to the trash, unless it changed there since, which the
+// sync says. One added again where it was removed, on either, is no longer
+// removed: it travels as any book (#290). The collections and the knowledge
+// graph (graphsync.h) travel too.
 
 // The shape of the manifest two computers exchange. It goes up when a change
 // would make an older Omabook misread a newer one's; an older Omabook then
@@ -96,6 +98,8 @@ struct SyncSummary {
     int readingSent = 0;        // books given there what is said of them here
     int removedHere = 0;        // books removed here, as they were there
     int removedThere = 0;       // books removed there, as they were here
+    int keptHere = 0;           // books removed there but kept here, changed or added since: the two stay different (#290)
+    int keptThere = 0;          // the same, removed here and kept there
     int detailsUndecided = 0;   // books whose details differ with no time to say which are newer
     int renamedHere = 0;        // books here the other side would rename (#158): renamed with consent, else left
     int renamedThere = 0;       // the same there, as this side would rename them
@@ -118,7 +122,7 @@ struct SyncSummary {
     // The titles each count is of, for showing on a terminal (never logged).
     struct Titles {
         QStringList received, sent, placesTaken, placesSent, detailsTaken, detailsSent, readingTaken, readingSent, removedHere,
-            removedThere, detailsUndecided, renamedHere, renamedThere;
+            removedThere, detailsUndecided, renamedHere, renamedThere, keptHere, keptThere;
         // Books kept apart: they share an identifier but not a title, or an
         // older Omabook linked them as one when they are not (#158).
         QStringList apart;
@@ -152,6 +156,12 @@ struct SyncSummary {
     // The computers that went by another name at the last sync, on the same
     // machine: known by the name they have now, each said in a line (#215).
     QStringList computersRenamed;
+
+    // Before a take: each finds every book still undecided, and every book the
+    // two stay different by, one's removed and the other's kept (#290), so the
+    // last one of a sync says which they are: run again at its end
+    // (SyncLog::finish), the same books are not counted twice (#59).
+    void startTake();
 
     // The counts as `omabook sync --json` and the MCP server give them, with
     // the titles of a dry run, and of the books whose details are undecided.

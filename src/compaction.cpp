@@ -47,7 +47,10 @@ Compaction::Result Compaction::compact(const Library &library) {
     // whether a later one stands for it is for one that knows it to say.
     ChangeLog::exec(library, QString("INSERT INTO snapshot_ops SELECT * FROM temp.compacting AS c WHERE %1 OR c.space IN (SELECT id "
                                      "FROM log_ids WHERE name >= 'shared:' AND name < 'shared;') OR EXISTS (SELECT 1 FROM kept_ops "
-                                     "AS k WHERE k.space = c.space AND k.device = c.device AND k.seq = c.seq) OR NOT EXISTS ("
+                                     "AS k WHERE k.space = c.space AND k.device = c.device AND k.seq = c.seq) "
+                                     // That a computer removed a book stays said after it holds it again: by that it
+                                     // knows one added again from one it never removed (#290).
+                                     "OR (c.entity = 'book' AND c.field = 'removed' AND c.value NOT IN ('', '0')) OR NOT EXISTS ("
                                      "SELECT 1 FROM temp.compacting AS later WHERE later.device = c.device AND later.entity = c.entity "
                                      "AND later.id = c.id AND later.field = c.field AND later.hlc > c.hlc)")
                                  .arg(QString::fromLatin1(growing).replace("field", "c.field")));

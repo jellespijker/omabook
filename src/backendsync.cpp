@@ -22,6 +22,18 @@ QStringList uncheckedThere(const SyncSummary &summary) {
                         "checked: update Omabook there.")};
 }
 
+// The books removed on one side and kept on the other, for what happened to them there (#290).
+QStringList keptOnOneSide(const SyncSummary &summary) {
+    QStringList lines;
+    if (summary.keptHere > 0)
+        lines << Backend::tr("%Ln books are only here: removed on the other computer, but changed or added here since", "",
+                             summary.keptHere);
+    if (summary.keptThere > 0)
+        lines << Backend::tr("%Ln books are only on the other computer: removed here, but changed or added there since", "",
+                             summary.keptThere);
+    return lines;
+}
+
 } // namespace
 
 QStringList Backend::syncLines(const SyncSummary &summary) {
@@ -40,6 +52,7 @@ QStringList Backend::syncLines(const SyncSummary &summary) {
         lines << tr("%Ln books removed here, to the trash", "", summary.removedHere);
     if (summary.removedThere > 0)
         lines << tr("%Ln books removed on the other computer, to the trash", "", summary.removedThere);
+    lines << keptOnOneSide(summary);
     if (summary.graphTaken > 0)
         lines << tr("%Ln graph changes taken", "", summary.graphTaken);
     if (summary.graphSent > 0)

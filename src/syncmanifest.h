@@ -2,6 +2,7 @@
 
 #include <QHash>
 #include <QJsonObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QtTypes>
@@ -26,6 +27,13 @@ struct MergedBookDetails {
 };
 
 void observeManifest(const Library &library, const QJsonObject &manifest);
+
+// The names, as removals are logged (Spaces::removalGlobalId), that this
+// computer's own log says it removed at some time, by hand or by a sync: of a
+// book it holds and added since another removed it, that makes it one added
+// again on purpose (#290), where one it never removed is only one it added
+// not knowing.
+[[nodiscard]] QSet<QString> removedByThisComputer(const Library &library);
 
 [[nodiscard]] qint64 theirDetailsHlc(const QJsonObject &theirs);
 [[nodiscard]] qint64 myDetailsHlc(const Library &library, const Book &book);

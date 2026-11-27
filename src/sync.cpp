@@ -82,11 +82,11 @@ void syncCollectionsAndGraph(Library &library, const Remote &remote, const QJson
 }
 
 void logSyncSummary(const SyncSummary &summary, const QString &host) {
-    qCInfo(lcSync).noquote() << (summary.dryRun ? "dry run with" : "with") << host << ":" << summary.received << "received,"
-                             << summary.sent << "sent," << summary.placesTaken + summary.placesSent << "reading places,"
-                             << summary.detailsTaken << "details taken," << summary.detailsSent << "details sent,"
-                             << summary.detailsUndecided << "details undecided," << summary.removedHere << "removed here,"
-                             << summary.removedThere << "removed there," << summary.graphTaken << "graph taken,"
+    qCInfo(lcSync).noquote() << (summary.dryRun ? "dry run with" : "with") << host << ":" << summary.received << "received," << summary.sent
+                             << "sent," << summary.placesTaken + summary.placesSent << "reading places," << summary.detailsTaken
+                             << "details taken," << summary.detailsSent << "details sent," << summary.detailsUndecided
+                             << "details undecided," << summary.removedHere << "removed here," << summary.removedThere << "removed there,"
+                             << summary.keptHere + summary.keptThere << "kept on one side only," << summary.graphTaken << "graph taken,"
                              << summary.graphSent << "graph sent," << summary.problems.size() << "problems";
 }
 
@@ -147,8 +147,16 @@ std::optional<QJsonObject> theirManifest(const Library &library, const Remote &r
     return manifest;
 }
 
+// Whether what is named `key` was removed here, and not added again there since:
+// `again`, when a book of theirs that removed it was added (its "added_again",
+// #290), 0 when it never did.
+[[nodiscard]] bool thrownAway(const Library &library, const QString &key, qint64 again) {
+    const std::optional<qint64> at = library.removedAt(key);
+    return at && again < *at;
+}
+
 // What their files of a book name here: the book that has one of them,
-// whether one of them was removed here, and their hashes, each also added to
+// whether one of them was thrown away here, and their hashes, each also added to
 // `theirHashes`. A file they wrote details into (#74) is still known by the
 // hash it came in with.
 struct Named {
@@ -157,13 +165,14 @@ struct Named {
     QStringList hashes;
 };
 
-[[nodiscard]] Named namedHere(const Library &library, const QJsonArray &files, QSet<QString> &theirHashes) {
+[[nodiscard]] Named namedHere(const Library &library, const QJsonObject &theirs, QSet<QString> &theirHashes) {
     Named named;
-    for (const auto &value : files) {
+    const qint64 again = theirs.value("added_again").toInteger();
+    for (const auto &value : theirs.value("files").toArray()) {
         const QJsonObject file = value.toObject();
         const QString hash = file.value("hash").toString();
         named.hashes << hash;
-        named.removedHere = named.removedHere || library.wasRemoved(hash);
+        named.removedHere = named.removedHere || thrownAway(library, hash, again);
         for (const QString &known : {hash, file.value("original").toString()}) {
             if (known.isEmpty())
                 continue;
@@ -285,7 +294,7 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         const QJsonObject theirs = value.toObject();
         const QString title = theirs.value("title").toString();
         const QJsonArray files = theirs.value("files").toArray();
-        auto [mine, removedHere, hashes] = namedHere(library, files, theirHashes);
+        auto [mine, removedHere, hashes] = namedHere(library, theirs, theirHashes);
         const QStringList keys = entryKeysOf(theirs);
         for (const QString &key : keys)
             theirKeys << key;
@@ -293,12 +302,12 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (files.isEmpty()) {
             for (const QString &key : keys) {
                 mine = mine ? mine : myKeys.value(key);
-                removedHere = removedHere || library.wasRemoved(key);
+                removedHere = removedHere || thrownAway(library, key, theirs.value("added_again").toInteger());
             }
         }
         // Removed here, so never fetched back. Between two that speak the log
         // the other side removed it too, as the log said, unless it changed
-        // there since; an older one is asked to.
+        // there since, which the summary says; an older one is asked to.
         if (!mine && removedHere) {
             if (!peerHasLog)
                 OlderPeer::removeThere(olderPeer, theirs, hashes, keys);

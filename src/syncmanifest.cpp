@@ -2,6 +2,7 @@
 
 #include <QJsonArray>
 #include <QSet>
+#include <QSqlQuery>
 #include <algorithm>
 #include <initializer_list>
 
@@ -108,6 +109,16 @@ void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qin
         out.sendCover = true;
 }
 
+// Whether a book is named by one of `names`, as removals are logged: by a file's
+// hash, now or as it came in, and without a file by an entry key.
+[[nodiscard]] bool namedBy(const QSet<QString> &names, const QJsonArray &files, const QStringList &keys) {
+    QStringList own = files.isEmpty() ? keys : QStringList();
+    for (const auto &file : files)
+        own << file.toObject().value("hash").toString() << file.toObject().value("original").toString();
+    return std::ranges::any_of(own,
+                               [&names](const QString &name) { return !name.isEmpty() && names.contains(Spaces::removalGlobalId(name)); });
+}
+
 // A book as an Omabook that speaks the log needs it: what names it (its global
 // id, its entry keys), its files and cover to fetch. Its details, its reading,
 // its place and its removal are the log's. The keys are a book's with a file
@@ -116,16 +127,24 @@ void mergeCoverField(SyncManifest::MergedBookDetails &out, qint64 myCoverAt, qin
 // What pairs it with a book there it never met (BookPairing, #158) is its
 // title ("pair_title": its details are the log's) and its strong keys no
 // other book here has.
-QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files, const QStringList &pairKeys) {
+// Of a book named by what this computer removed at some time (`removed`) it says
+// when it was added too ("added_again"): a computer that removed it before then
+// takes it as added again, and fetches it (#290).
+QJsonObject logPeerBook(const Library &library, const Book &book, const QJsonArray &files, const QStringList &pairKeys,
+                        const QSet<QString> &removed) {
     const QString cover = library.coverPath(book.id);
-    return {{"id", book.id},
-            {"gid", Spaces::bookId(library, book.id)},
-            {"files", files},
-            {"keys", QJsonArray::fromStringList(Library::entryKeys(book))},
-            {"pair_keys", QJsonArray::fromStringList(pairKeys)},
-            {"pair_title", book.meta.title},
-            {"cover", cover},
-            {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)}};
+    const QStringList keys = Library::entryKeys(book);
+    QJsonObject listed{{"id", book.id},
+                       {"gid", Spaces::bookId(library, book.id)},
+                       {"files", files},
+                       {"keys", QJsonArray::fromStringList(keys)},
+                       {"pair_keys", QJsonArray::fromStringList(pairKeys)},
+                       {"pair_title", book.meta.title},
+                       {"cover", cover},
+                       {"cover_hash", cover.isEmpty() ? QString() : Library::hashFile(cover)}};
+    if (namedBy(removed, files, keys))
+        listed.insert("added_again", book.added);
+    return listed;
 }
 
 // A book as an Omabook from before the log needs it: everything of it.
@@ -173,6 +192,7 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
     ChangeLog::reconcile(library);
     QJsonArray books;
     const QHash<qint64, QStringList> pairKeys = log ? BookPairing::keysAlone(library) : QHash<qint64, QStringList>();
+    const QSet<QString> removed = log ? SyncManifest::removedByThisComputer(library) : QSet<QString>();
     for (const Book &book : library.books()) {
         QJsonArray files;
         for (const FormatFile &file : library.formatFiles(book.id)) {
@@ -182,7 +202,7 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
                 listed.insert("original", file.original);
             files << listed;
         }
-        books << (log ? logPeerBook(library, book, files, pairKeys.value(book.id)) : olderPeerBook(library, book, files));
+        books << (log ? logPeerBook(library, book, files, pairKeys.value(book.id), removed) : olderPeerBook(library, book, files));
     }
     QJsonObject manifest{
         {"version", manifestVersion}, {"hlc", Spaces::lastHlc(library)}, {"omabook", QStringLiteral(OMABOOK_VERSION)}, {"books", books}};
@@ -206,6 +226,13 @@ QJsonObject libraryManifest(const Library &library, ManifestFor peer) {
     return manifest;
 }
 
+void SyncSummary::startTake() {
+    detailsUndecided = keptHere = keptThere = 0;
+    titles.detailsUndecided.clear();
+    titles.keptHere.clear();
+    titles.keptThere.clear();
+}
+
 QJsonObject SyncSummary::toJson() const {
     const auto list = [](const QStringList &titles) { return QJsonArray::fromStringList(titles); };
     QJsonObject result{{"received", received},
@@ -218,6 +245,8 @@ QJsonObject SyncSummary::toJson() const {
                        {"reading_sent", readingSent},
                        {"removed_here", removedHere},
                        {"removed_there", removedThere},
+                       {"kept_here", keptHere},
+                       {"kept_there", keptThere},
                        {"details_undecided", detailsUndecided},
                        {"collections_taken", collectionsTaken},
                        {"collections_sent", collectionsSent},
@@ -240,6 +269,8 @@ QJsonObject SyncSummary::toJson() const {
                        {"computers_renamed", list(computersRenamed)}};
     // The renames and the books kept apart are named whatever the run (#158).
     QJsonObject named{{"details_undecided", list(titles.detailsUndecided)},
+                      {"kept_here", list(titles.keptHere)},
+                      {"kept_there", list(titles.keptThere)},
                       {"renamed_here", list(titles.renamedHere)},
                       {"renamed_there", list(titles.renamedThere)},
                       {"apart", list(titles.apart)},
@@ -257,6 +288,8 @@ QJsonObject SyncSummary::toJson() const {
                             {"reading_sent", list(titles.readingSent)},
                             {"removed_here", list(titles.removedHere)},
                             {"removed_there", list(titles.removedThere)},
+                            {"kept_here", list(titles.keptHere)},
+                            {"kept_there", list(titles.keptThere)},
                             {"details_undecided", list(titles.detailsUndecided)},
                             {"renamed_here", list(titles.renamedHere)},
                             {"renamed_there", list(titles.renamedThere)},
@@ -269,6 +302,18 @@ QJsonObject SyncSummary::toJson() const {
 }
 
 namespace SyncManifest {
+
+QSet<QString> removedByThisComputer(const Library &library) {
+    QSet<QString> names;
+    QSqlQuery query = ChangeLog::query(library,
+                                       "SELECT DISTINCT i.name FROM live_ops AS o JOIN log_ids AS i ON i.id = o.id "
+                                       "JOIN log_ids AS d ON d.id = o.device WHERE o.entity = 'book' AND o.field = 'removed' "
+                                       "AND o.value NOT IN ('', '0') AND d.name = ?",
+                                       {Spaces::deviceId(library)});
+    while (query.next())
+        names.insert(query.value(0).toString());
+    return names;
+}
 
 void observeManifest(const Library &library, const QJsonObject &manifest) {
     ChangeLog::reconcile(library);

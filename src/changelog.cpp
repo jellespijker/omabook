@@ -14,6 +14,7 @@
 #include "changelogcollections.h"
 #include "changelogfields.h"
 #include "changeloggraph.h"
+#include "changelogremovals.h"
 #include "graph.h"
 #include "hlc.h"
 #include "library.h"
@@ -131,7 +132,9 @@ void syncBookReading(EntityContext &ctx, const Book &book) {
     const Progress prog = ctx.library->progress(book.id);
     if (hasProgressFields(prog))
         writeProgress(ctx, prog, false);
-    if (ctx.existing.contains(u"removed"_s) && ctx.existing.value(u"removed"_s).value != "0"_L1)
+    // Held here: said by this device while it, or whoever spoke last, says it was removed (#290).
+    const auto removed = ctx.existing.constFind(u"removed"_s);
+    if (removed != ctx.existing.cend() && (removed->value != "0"_L1 || removed->own.value_or(u"0"_s) != "0"_L1))
         ChangeLog::append(*ctx.library, {ctx.space, u"book"_s, ctx.gid, u"removed"_s, u"0"_s, Spaces::tickHlc(*ctx.library)});
 }
 
@@ -153,43 +156,6 @@ void syncBookToLog(const Library &library, const Book &book, bool baseline, std:
     syncBookReading(ctx, book);
 }
 
-// A book that is gone: its tombstone, unless it already has one.
-void logGoneBook(const Library &library, const QString &gid) {
-    if (gid.isEmpty())
-        return;
-    const FieldMap existing = ChangeLogFields::logged(library, u"book"_s, gid);
-    if (!existing.isEmpty() && (!existing.contains(u"removed"_s) || existing.value(u"removed"_s).value == "0"_L1))
-        ChangeLog::append(library, {Spaces::personalSpace(library), u"book"_s, gid, u"removed"_s, gid.mid(2), Spaces::tickHlc(library)});
-}
-
-// A book this computer had rows of and has no more, found on opening: its
-// tombstone, unless this computer already said it removed it (a word since
-// that it is back is another computer's, and the next sync brings it here).
-void logLostBook(const Library &library, const QString &gid) {
-    const FieldMap existing = ChangeLogFields::logged(library, u"book"_s, gid);
-    const auto removed = existing.constFind(u"removed"_s);
-    const bool saidHere = removed != existing.cend() && removed->own && !removed->own->isEmpty() && *removed->own != "0"_L1;
-    if (!saidHere)
-        logGoneBook(library, gid);
-}
-
-void detectDeletedBooks(const Library &library) {
-    for (const Library::Removal &removal : library.removals())
-        ChangeLog::recordRemoval(library, removal.key, removal.at, false);
-    // Only the books whose rows this computer had (it gave them their ids,
-    // which stay when a row goes), never every book the log knows: one the
-    // log knows only from another computer (its file never came, or it came
-    // after the copy of this library that was put back) was never removed
-    // here, and the next sync brings it (#61).
-    QStringList lost;
-    for (QSqlQuery query =
-             ChangeLog::query(library, "SELECT global_id FROM global_ids WHERE entity = 'book' AND local_id NOT IN (SELECT id FROM books)");
-         query.next();)
-        lost << query.value(0).toString();
-    for (const QString &gid : std::as_const(lost))
-        logLostBook(library, gid);
-}
-
 // Takes the rows a write touched into the log, each as reconcile would.
 void logRows(const Library &library, const QHash<QString, QList<qint64>> &dirty) {
     if (dirty.contains(u"removal"_s))
@@ -199,7 +165,7 @@ void logRows(const Library &library, const QHash<QString, QList<qint64>> &dirty)
         if (const std::optional<Book> book = library.book(id))
             syncBookToLog(library, *book, false);
         else
-            logGoneBook(library, Spaces::bookId(library, id));
+            ChangeLogRemovals::gone(library, Spaces::bookId(library, id));
     }
     if (const QList<qint64> touched = dirty.value(u"collection"_s); !touched.isEmpty())
         for (const Collection &collection : library.collections(true))
@@ -276,7 +242,7 @@ void ChangeLog::reconcile(const Library &library) {
     for (const Collection &collection : library.collections(true))
         ChangeLogCollections::syncToLog(library, collection, false);
     ChangeLogGraph::syncToLog(library, false);
-    detectDeletedBooks(library);
+    ChangeLogRemovals::detect(library);
     ChangeLogGraph::detectDeletedEntity(library, u"node"_s, u"graph_nodes"_s);
     ChangeLogGraph::detectDeletedEntity(library, u"edge"_s, u"graph_edges"_s);
     ChangeLogGraph::detectDeletedEntity(library, u"fact"_s, u"graph_facts"_s);

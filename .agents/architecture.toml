@@ -40,7 +40,7 @@ summary = "The library and the knowledge graph: storage, books, their sides and 
 uses = ["formats", "foundation"]
 modules = [
   "annotationanchors", "annotationschema", "booksides", "catalog", "changelog", "changelogannotations", "changelogcollections", "chronology", "eventtime", "changelogbaseline",
-  "compaction", "changelogfields", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers",
+  "compaction", "changelogfields", "changelogremovals", "changeloggraph", "graph", "graphcontext", "graphcut", "graphlayers",
   "graphmatch", "graphsync", "graphwalk", "keyrotation", "knowledgesearch", "libraries", "library",
   "libraryannotations", "librarybatch", "librarymigrations", "libraryschema", "publishedlog", "publishedsnapshot", "publishedspace", "replication",
   "sharedspace", "signedops", "spacediff", "booklinks", "bookidentity", "bookpairing", "strayidentifiers", "spacelinks", "spacereducer", "spacereplay", "spaces", "calendars",
@@ -53,7 +53,7 @@ modules = [
   "spaceparts", "spaceannotations", "heldspaces", "annotationlayers", "annotationfacts", "membernames",
   "privatebooks", "koreaderbooks", "bookspaces",
   "fileschema",
-  "libraryfiles", "booklink",
+  "libraryfiles", "libraryremovals", "booklink",
   "bookadmission",
   "libraryhold", "syncidentity", "pluginrestore",
   "libraryrepairs", "librarypresence",

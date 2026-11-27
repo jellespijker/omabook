@@ -210,19 +210,30 @@ bool takeDetails(Taking &taking, const QList<Book> &copies, const QJsonObject &t
 
 // The books here that the other side removed, all of each, as the manifest
 // sync decides it: removed here too, at the time they were removed there,
-// unless they changed here since; and either way never given back to them.
+// unless they changed here since, which is said, as the two then stay
+// different; and either way never given back to them. One added again here
+// since, this computer having removed it too, is none of these: it goes to
+// them (#290).
 void takeRemovals(Taking &taking, const QList<Book> &books) {
+    const QSet<QString> thrownOut = SyncManifest::removedByThisComputer(taking.library);
     for (const Book &here : books) {
         QStringList hashes;
         for (const FormatFile &file : taking.library.formatFiles(here.id))
             hashes << file.hash;
-        const std::optional<qint64> when = SyncManifest::removedWhen(hashes, hashes.isEmpty() ? Library::entryKeys(here) : QStringList(),
-                                                                     [&](const QString &name) { return removedThere(taking, name); });
+        // Added again here since they removed it, this computer having removed it too: theirs no longer counts.
+        const auto removedSince = [&](const QString &name) {
+            const std::optional<qint64> at = removedThere(taking, name);
+            return at && thrownOut.contains(Spaces::removalGlobalId(name)) && here.added >= Hlc::seconds(*at) ? std::nullopt : at;
+        };
+        const std::optional<qint64> when =
+            SyncManifest::removedWhen(hashes, hashes.isEmpty() ? Library::entryKeys(here) : QStringList(), removedSince);
         if (!when)
             continue;
         taking.gone.insert(here.id);
-        if (!std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(taking.library, here), *when)))
+        if (!std::is_lteq(Hlc::compare(SyncManifest::lastChangeHlc(taking.library, here), *when))) {
+            note(taking.summary.keptHere, taking.summary.titles.keptHere, here.meta.title);
             continue;
+        }
         taking.summary.plans.here.removal(taking.library, here);
         const auto removed = taking.peer.dryRun ? std::expected<void, QString>() : taking.library.remove(here.id, Hlc::seconds(*when));
         if (removed)

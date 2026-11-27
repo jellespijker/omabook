@@ -271,6 +271,7 @@ void countThere(SyncSummary &summary, const QJsonObject &there) {
     add(summary.detailsSent, summary.titles.detailsSent, "details_taken");
     add(summary.readingSent, summary.titles.readingSent, "reading_taken");
     add(summary.removedThere, summary.titles.removedThere, "removed_here");
+    add(summary.keptThere, summary.titles.keptThere, "kept_here");
     add(summary.renamedThere, summary.titles.renamedThere, "renamed_here");
     summary.renamesHeld += there.value("renames_held").toInt();
     for (const auto &title : titles.value("apart").toArray())
@@ -379,11 +380,7 @@ SyncLog::Replicated SyncLog::replicate(Library &library, const Remote &remote, c
     summary.placesSent += answer->value("changed").toInt();
     for (const auto &title : answer->value("titles").toArray())
         summary.titles.placesSent << title.toString();
-    // Each take finds every book still undecided, so the last one of a sync
-    // says which they are: run again at its end (finish()), the same books
-    // are not counted twice (#59).
-    summary.detailsUndecided = 0;
-    summary.titles.detailsUndecided.clear();
+    summary.startTake();
     if (dryRun)
         incoming << wouldLink(library, paired, answer->value("would_link").toArray(), incoming);
     keepApart(library, incoming, dryRun, summary);
@@ -485,6 +482,7 @@ QJsonObject SyncLog::answer(Library &library, const QJsonObject &request) {
          {"named", QJsonObject{{"details_taken", QJsonArray::fromStringList(taken.titles.detailsTaken)},
                                {"reading_taken", QJsonArray::fromStringList(taken.titles.readingTaken)},
                                {"removed_here", QJsonArray::fromStringList(taken.titles.removedHere)},
+                               {"kept_here", QJsonArray::fromStringList(taken.titles.keptHere)},
                                {"renamed_here", QJsonArray::fromStringList(taken.titles.renamedHere)},
                                {"apart", QJsonArray::fromStringList(taken.titles.apart)},
                                {"identifiers_removed", QJsonArray::fromStringList(taken.titles.identifiersRemoved)},

@@ -24,8 +24,9 @@ Manual::Topic computersTopic() {
                             "same from a terminal.")},
                 {Manual::tr("Removed books"),
                  Manual::tr("A book removed on one computer is removed on the other at the next sync too, to its trash, "
-                            "unless it was read or changed there since. A file a merge gave to the book it kept stays, and so "
-                            "does that book.")},
+                            "unless it was read or changed there since; the sync then names it as kept on one side. A book "
+                            "removed and added again, where you removed it or where the removal reached, goes to every "
+                            "computer again. A file a merge gave to the book it kept stays, and so does that book.")},
                 {Manual::tr("Before the first sync"),
                  Manual::tr("`omabook sync laptop --dry-run` lists what a sync would bring, send, update and remove on each "
                             "side, and changes nothing. Books from before Omabook kept when their details changed can't say "
