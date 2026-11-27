@@ -779,6 +779,74 @@ private slots:
         QVERIFY2(hub.logged(u"laptop began a sync of home"_s) && hub.logged(u"laptop began a dry run of a sync of home"_s),
                  qPrintable(hub.logLines()));
     }
+
+    // An agent holding another key the hub knows, such as the key that links (its forced command says
+    // only that it links): ssh tries an agent's keys before -i, so the computer's own key must be the
+    // one offered, or every request is answered by that other key (#254).
+    void aComputerAsksWithItsOwnKeyWhenAnAgentHoldsAnother() {
+        RealHub hub;
+        const QString add = QStandardPaths::findExecutable(u"ssh-add"_s);
+        if (!hub.found() || add.isEmpty())
+            QSKIP("No sshd, ssh, ssh-agent and ssh-add on this computer to start a hub's sshd of the test's own.");
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        const QString agentStarted = hub.startAgent();
+        QVERIFY2(agentStarted.isEmpty(), qPrintable(agentStarted));
+        const auto other = SshKey::generate(hub.dir.filePath(u"link"_s), u"link"_s);
+        QVERIFY2(other, qPrintable(whyNot(other)));
+        QFile authorized(hub.home + u"/.ssh/authorized_keys"_s);
+        QVERIFY(authorized.open(QIODevice::Append));
+        authorized.write("restrict,command=\"echo This key links and does nothing else\" " + SshKey::line(*other).toUtf8() + "\n");
+        authorized.close();
+        QProcess adding;
+        QProcessEnvironment withAgent = hub.environment();
+        withAgent.insert(u"SSH_AUTH_SOCK"_s, hub.agentSocket());
+        adding.setProcessEnvironment(withAgent);
+        adding.setProcessChannelMode(QProcess::MergedChannels);
+        adding.start(add, {hub.dir.filePath(u"link"_s)});
+        QVERIFY2(adding.waitForFinished(20000) && adding.exitCode() == 0, qPrintable(QString::fromUtf8(adding.readAll())));
+        QProcess daemon;
+        const QString running = startDaemon(daemon, hub.home);
+        QVERIFY2(running.isEmpty(), qPrintable(running));
+        const auto stopping = qScopeGuard([&daemon] { stop(daemon); });
+        const QString links = hub.dir.filePath(u"laptop-hubs"_s);
+        const QString host = u"hubtest@127.0.0.1"_s;
+        QVERIFY(QDir().mkpath(links) && QFile::copy(hub.dir.filePath(u"laptop"_s), links + u"/key"_s));
+        QVERIFY(QFile::setPermissions(links + u"/key"_s, QFile::ReadOwner | QFile::WriteOwner));
+        QVERIFY(Fixtures::write(links + u"/hubs.json"_s, QJsonDocument(QJsonArray{QJsonObject{{"host", host},
+                                                                                              {"computer", "laptop"},
+                                                                                              {"fingerprint", hub.fingerprint(u"laptop"_s)},
+                                                                                              {"linked", "2026-11-23T00:00:00Z"}}})
+                                                             .toJson()));
+        // The agent is there for ssh, as a desktop's is, and the other key is named for the hub in an ssh config,
+        // as the person's names the link key (ssh offers an agent's key under IdentitiesOnly only when it is):
+        // no IdentityAgent=none of the test's own.
+        const QString config = hub.dir.filePath(u"ssh_config"_s);
+        QVERIFY(Fixtures::write(config, (u"Host *\n    IdentityFile "_s + hub.dir.filePath(u"link"_s) + u"\n"_s).toUtf8()));
+        const HubLinks linked(links, {hub.env,
+                                      u"LD_PRELOAD="_s + QString::fromLatin1(HUBLINK_PASSWD),
+                                      u"HUBLINK_PASSWD_NAME=hubtest"_s,
+                                      u"HUBLINK_PASSWD_HOME="_s + hub.home,
+                                      u"SSH_AUTH_SOCK="_s + hub.agentSocket(),
+                                      hub.ssh,
+                                      u"-F"_s,
+                                      config,
+                                      u"-p"_s,
+                                      QString::number(hub.port),
+                                      u"-o"_s,
+                                      u"BatchMode=yes"_s,
+                                      u"-o"_s,
+                                      u"StrictHostKeyChecking=no"_s,
+                                      u"-o"_s,
+                                      u"UserKnownHostsFile=/dev/null"_s,
+                                      u"-o"_s,
+                                      u"GlobalKnownHostsFile=/dev/null"_s,
+                                      u"-o"_s,
+                                      u"LogLevel=ERROR"_s});
+        const auto status = linked.ask(host, {{"request", "status"}});
+        QVERIFY2(status, qPrintable(whyNot(status) + hub.sshdLog().right(1500)));
+        QVERIFY(status->contains(u"libraries"_s));
+    }
 };
 
 QTEST_GUILESS_MAIN(HubLinkTests)
