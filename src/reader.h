@@ -212,7 +212,7 @@ private:
     // Lets go of the book that was open.
     void unload();
     bool gone(qint64 id) const;
-    void putAwayRemoved();
+    void putAway(const QString &why);
     QJsonObject whereabouts() const;
     QString textFrom(int section, double fraction, bool withFirstPage) const;
     // The title of a section: the contents' entry for it, else the nearest before it.

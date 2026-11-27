@@ -1,6 +1,6 @@
 // What the open book has in the library (Reader): the place it is read to, its
-// bookmarks and the notes on it, and what happens when the book leaves the
-// library while it is open (#229).
+// bookmarks and the notes on it, and what happens when the book (#229), or the
+// whole library (#261), goes away while it is open.
 
 #include "reader.h"
 
@@ -18,17 +18,19 @@ bool Reader::stillThere() {
     const qint64 id = m_bookId > 0 ? m_bookId : m_pendingId;
     if (id <= 0)
         return false;
-    if (!gone(id))
+    // Its files went with the library's drive: the next chapter would be blank.
+    if (m_backend->libraryMissing())
+        putAway(m_backend->libraryError());
+    else if (gone(id))
+        putAway(tr("“%1” was removed from the library. Its files were moved to the trash, where you can get them back.").arg(m_title));
+    else
         return true;
-    putAwayRemoved();
     return false;
 }
 
-// Nothing more is read from the book or written about it: the page says where
-// it went, with the way back to the library.
-void Reader::putAwayRemoved() {
-    const QString why =
-        tr("“%1” was removed from the library. Its files were moved to the trash, where you can get them back.").arg(m_title);
+// Nothing more is read from the book or written about it: the page says why,
+// with the way back to the library.
+void Reader::putAway(const QString &why) {
     const bool wasOpen = m_document != nullptr;
     const QJsonObject where = whereabouts();
     m_saveSoon.stop();

@@ -155,6 +155,41 @@ private slots:
         QCOMPARE(desk.warnings, QStringList());
     }
 
+    // A book being read when the library goes away (#261): the page says so,
+    // with the way back, rather than showing the next chapter blank.
+    void theReaderSaysSoWhenTheLibraryGoesAwayUnderABook() {
+        Desk desk("en", {}, false);
+        const QString root = desk.settings->libraryPath(), away = root + ".away";
+        const QString file = desk.dir.filePath("book.epub");
+        QVERIFY(Fixtures::epub(file));
+        const qint64 id = desk.backend->library()->add(file).id;
+        QVERIFY(id > 0);
+        desk.backend->reload();
+        QVERIFY(desk.show());
+        desk.reader->openBook(id);
+        QTRY_VERIFY(desk.reader->isOpen() && desk.shows("flowText"));
+        QVERIFY(desk.reader->count() > 1);
+        QVERIFY(QDir().rename(root, away));
+        desk.reader->setSection(1);
+        QTRY_VERIFY(!desk.reader->isOpen());
+        const QString said = desk.reader->property("error").toString();
+        QVERIFY2(said.contains(root) && said.contains("drive"), qPrintable(said));
+        QTRY_VERIFY(desk.shows("readerError"));
+        // Still said after the message at the bottom has gone.
+        desk.backend->dismissMessage();
+        QVERIFY(desk.shows("readerError"));
+        QVERIFY(!QFileInfo::exists(root));
+        QVERIFY(click(*desk.window, desk.item("backToLibrary")));
+        QTRY_VERIFY(desk.shows("libraryMissing"));
+        // Back again, the book opens as before.
+        QVERIFY(QDir().rename(away, root));
+        QVERIFY(click(*desk.window, desk.item("libraryRetry")));
+        QTRY_VERIFY(!desk.backend->property("libraryMissing").toBool());
+        desk.reader->openBook(id);
+        QTRY_VERIFY(desk.reader->isOpen());
+        QCOMPARE(desk.warnings, QStringList());
+    }
+
     // The settings that name the person's library can't be read (#222): the
     // usual folder is not made in its place.
     void anUnreadableConfigMakesNoLibrary() {
