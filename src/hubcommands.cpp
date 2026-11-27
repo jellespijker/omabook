@@ -331,6 +331,7 @@ int runHubCli(const QStringList &arguments) {
         {u"key"_s, u"With session: the fingerprint of the computer's key it runs for (the hub writes it)."_s, u"fingerprint"_s});
     parser.addOption({u"identity"_s, u"With allow: the person whose computer it is."_s, u"id"_s});
     parser.addOption({u"signature"_s, u"With allow: the person's signature of the link."_s, u"signature"_s});
+    parser.addOption({u"former"_s, u"With allow: the word of who the person was before, when they paired since."_s, u"vouches"_s});
     QStringList rest = arguments;
     rest.removeAt(1);
     rest[0] = u"omabook hub"_s;

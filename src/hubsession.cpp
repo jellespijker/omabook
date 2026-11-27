@@ -82,7 +82,7 @@ QJsonObject HubSession::greet(const QJsonObject &asked) {
         return ending(HubRequests::refusal(Failure(Failure::Code::HubProtocol, {QString::number(protocol)})));
     }
     const auto computer = m_computers.byFingerprint(m_fingerprint);
-    if (!computer || computer->identity != m_computers.owner()) {
+    if (!computer || !m_computers.isOwner(computer->identity)) {
         qCWarning(lcHub).noquote() << "A session for the key" << m_fingerprint
                                    << (computer ? "of a computer not the hub owner's" : "that isn't linked to this hub")
                                    << "said hello: refused.";
@@ -92,6 +92,7 @@ QJsonObject HubSession::greet(const QJsonObject &asked) {
     }
     m_computer = computer;
     noteClaim(asked, computer->name);
+    noteOwner(asked, *computer);
     qCInfo(lcHub).noquote() << "A session began for" << computer->name << u"("_s + m_fingerprint + u")."_s;
     QStringList requests = ownRequests() + relayed();
     if (!m_stores.isEmpty())
@@ -165,6 +166,20 @@ QJsonObject HubSession::forget(const QString &named, const HubComputers::Compute
     // Its own key gone, nothing more is answered: as unlink.
     const QJsonObject answer = succeeded({{"computer", gone->name}});
     return gone->fingerprint == m_fingerprint ? ending(answer) : answer;
+}
+
+// An owner's computer that gave up a person says who it is now (#283), at its
+// hello and again once a sync of this session made it someone else: its next
+// link, or another of the person's computers', is taken under that id.
+void HubSession::noteOwner(const QJsonObject &asked, const HubComputers::Computer &computer) {
+    if (!asked.contains("former"_L1))
+        return;
+    const auto recognized = m_computers.recognize({.fingerprint = m_fingerprint,
+                                                   .identity = asked.value("identity"_L1).toString(),
+                                                   .signature = asked.value("signature"_L1).toString(),
+                                                   .former = asked.value("former"_L1).toString()});
+    if (!recognized)
+        qCWarning(lcHub).noquote() << computer.name << u"said who it is now, and the hub did not take it:"_s << recognized.error().text();
 }
 
 void HubSession::noteClaim(const QJsonObject &asked, const QString &name) const {

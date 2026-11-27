@@ -23,8 +23,10 @@ QList<Manual::Section> hubSections() {
          Manual::tr("{library.hubs}, or `omabook hub add <host>`, signs in to the hub once over your own ssh and puts "
                     "a key of this computer's own there, which opens Omabook's hub session and nothing else: no shell, "
                     "no terminal, no forwarded port. No password is ever asked for or sent. The first computer linked "
-                    "names the hub's owner, and only that person's computers are taken. Unlink, or `omabook hub remove "
-                    "<host>`, takes the key off again.")},
+                    "names the hub's owner, and only that person's computers are taken. Computers are one person once "
+                    "they have synced with each other, so sync a new one with a linked one first (`omabook sync "
+                    "<computer>`), then run `omabook hub status <host>` on the linked one, and link it. Unlink, or "
+                    "`omabook hub remove <host>`, takes the key off again.")},
         {Manual::tr("Syncing with the hub"),
          Manual::tr("Sync Now in {library.hubs} syncs the library with the hub, as two computers do, and Preview shows "
                     "first what it would do, changing nothing; so does {library.sync} with the hub named as the other "

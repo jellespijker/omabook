@@ -10,6 +10,7 @@
 #include "remote.h"
 #include "sync.h"
 
+class HubLinks;
 class QJsonObject;
 
 // A hub, as the other side of a sync (#188, ADR 0011): the sync two computers
@@ -54,6 +55,10 @@ public:
     // A whole sync with the hub through `ask`: begun, synced as with any computer, and ended.
     [[nodiscard]] static SyncSummary sync(Library &library, const QString &target, const Ask &ask, const Progress &progress = {},
                                           const SyncOptions &options = {});
+    // A sync with the hub `target`, one `links` linked this computer to, over a session opened for it. A sync
+    // that paired this computer, making it another person, is followed by saying so to the hub (#283).
+    [[nodiscard]] static SyncSummary syncLinked(Library &library, const HubLinks &links, const QString &target,
+                                                const Progress &progress = {}, const SyncOptions &options = {});
     // A sync with `target`: through the session when it is a hub this computer is linked to (HubLinks),
     // else with the computer over ssh (`ssh`, as Remote takes it), as ever.
     [[nodiscard]] static SyncSummary syncWith(Library &library, const QString &target, const Progress &progress = {},

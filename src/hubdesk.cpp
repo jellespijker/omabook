@@ -46,14 +46,7 @@ public:
         Library library(m_root());
         if (!library.open(&summary.error))
             return summary;
-        const auto session = links().open(host);
-        if (!session) {
-            summary.error = session.error().text();
-            // A hub that took the key away is for the person to see to; one out of reach is tried again.
-            summary.unreached = session.error().code() != Failure::Code::HubNotLinked;
-            return summary;
-        }
-        return HubRemote::sync(library, host, [&session](const QByteArray &line) { return (*session)->ask(line); }, {}, options);
+        return HubRemote::syncLinked(library, links(), host, {}, options);
     }
 
 private:

@@ -33,6 +33,16 @@ its own over HTTPS.
   `{"request": "hello", "protocol": 1}`, then only its requests; anything else ends it. The requests the daemon
   answers are handed on with the computer's name in them, the ground the sync with the hub (#188) builds on.
 
+- **The owner under another id (#283).** Pairing gives the computers of one person one id (the smaller wins, ADR
+  0001), so an owner's id changes after the first computer was linked. The hub keeps every id its owner has gone by
+  (`owner_ids` in `computers.json`, beside `owner`). It adds one only when told by a computer that signs with the new
+  key and with a key the hub already knows as its owner's (a computer keeps the keys it gave up), in a message naming
+  the new id and that computer's key for the hub (`HubOwner`): with `hub allow --former` at a link the hub would
+  refuse, or in the hello of a linked computer, said again after a sync that paired it. A computer with none of the
+  owner's keys is someone else, as before: nobody is taken for the owner because they could reach `hub allow`, and a
+  computer that never paired with one of the owner's is paired first. Old hubs and old computers go on as before;
+  neither side sends the other what it can't read except a second `hub allow`, whose refusal changes nothing.
+
 ## Alternatives considered
 
 - **An HTTPS API signed with the identity key**: workable, but it doubles the transport and the attack

@@ -11,6 +11,10 @@
 #   omabook hub add <that host>
 #   omabook hub sync
 #
+# The hub takes only the computers of the person who linked the first one. Sync
+# another computer with a linked one first (omabook sync <computer>), then run
+# omabook hub status <that host> on the linked one, and link it.
+#
 # The folders below are bound in as they are; the hub runs as 1000:1000, so
 # make them that user's first (sudo chown -R 1000:1000 ./omabook-hub), or use
 # named volumes instead.

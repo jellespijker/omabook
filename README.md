@@ -783,7 +783,7 @@ docker compose exec hub omabook snapshot setup --hub     # write down the recove
 docker compose restart hub                               # its daemon takes them as it starts
 ```
 
-Your own public key (`OMABOOK_HUB_KEYS`, or a `.pub` file in its `/keys`) only lets `omabook hub add` link your computers; each computer then gets a key of its own that opens the hub's session alone. On each computer, with the hub in `~/.ssh/config` (`Port 2222`, `User omabook`):
+Your own public key (`OMABOOK_HUB_KEYS`, or a `.pub` file in its `/keys`) only lets `omabook hub add` link your computers; each computer then gets a key of its own that opens the hub's session alone. The hub belongs to the person of the first computer linked, and takes only theirs. Computers are one person once they have synced with each other: before linking another, sync it with a linked one (`omabook sync <computer>`, over ssh between the two), then run `omabook hub status nas` on the linked one. On each computer, with the hub in `~/.ssh/config` (`Port 2222`, `User omabook`):
 
 ```bash
 omabook hub add nas      # once

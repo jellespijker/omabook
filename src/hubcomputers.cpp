@@ -7,16 +7,15 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QLockFile>
 #include <QRegularExpression>
 #include <QSaveFile>
 #include <algorithm>
 #include <cerrno>
-#include <span>
 #include <utility>
 
-#include "crypto.h"
+#include "hubowner.h"
 #include "hubplace.h"
-#include "person.h"
 #include "sshkey.h"
 
 using namespace Qt::StringLiterals;
@@ -50,17 +49,6 @@ namespace {
             .linked = QDateTime::fromString(object.value("linked"_L1).toString(), Qt::ISODate)};
 }
 
-[[nodiscard]] bool signedBy(const QString &identity, const QByteArray &message, const QString &signature) {
-    const auto key = Person::publicKeyFrom(identity);
-    const auto decoded = QByteArray::fromBase64Encoding(signature.toLatin1(), QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals
-                                                                                  | QByteArray::AbortOnBase64DecodingErrors);
-    Person::Signature given{};
-    if (!key || !decoded || std::cmp_not_equal(decoded.decoded.size(), given.size()))
-        return false;
-    std::ranges::copy(Crypto::bytes(decoded.decoded), given.begin());
-    return Person::verify(*key, Crypto::bytes(message), given);
-}
-
 } // namespace
 
 HubComputers HubComputers::usual(const HubPlace &place) {
@@ -87,11 +75,18 @@ std::expected<HubComputers::Computer, Failure> HubComputers::link(const Asked &a
                       .key = SshKey::line(*key),
                       .identity = asked.identity,
                       .linked = QDateTime::currentDateTimeUtc()};
-    if (!signedBy(asked.identity, linkMessage(computer.name, computer.key), asked.signature))
+    if (!HubOwner::signedBy(asked.identity, linkMessage(computer.name, computer.key), asked.signature))
         return std::unexpected(Failure(Failure::Code::HubBadSignature));
+    const auto held = hold();
     Kept now = kept();
-    if (!now.owner.isEmpty() && now.owner != asked.identity)
-        return std::unexpected(Failure(Failure::Code::HubNotOwner));
+    if (!now.owner.isEmpty() && !now.isOwner(asked.identity)) {
+        // Not an id the hub knows: the owner's only when one it knows says so.
+        QStringList owners = now.since;
+        owners << now.owner;
+        if (!HubOwner::vouched(owners, asked.identity, computer.key, asked.former))
+            return std::unexpected(Failure(Failure::Code::HubNotOwner));
+        now.since << asked.identity;
+    }
     // Linked again, it replaces what was there under its name or with its key.
     const auto replaced = [&computer](const Computer &other) {
         return other.name == computer.name || other.fingerprint == computer.fingerprint;
@@ -114,7 +109,26 @@ std::expected<HubComputers::Computer, Failure> HubComputers::link(const Asked &a
     return computer;
 }
 
+std::expected<void, Failure> HubComputers::recognize(const Claimed &claimed) {
+    const auto held = hold();
+    Kept now = kept();
+    const auto asking = std::ranges::find(now.computers, claimed.fingerprint, &Computer::fingerprint);
+    if (claimed.fingerprint.isEmpty() || asking == now.computers.end() || !now.isOwner(asking->identity))
+        return std::unexpected(Failure(Failure::Code::HubNotOwner));
+    if (now.isOwner(claimed.identity))
+        return {};
+    if (!HubOwner::signedBy(claimed.identity, HubOwner::message(claimed.identity, asking->key), claimed.signature))
+        return std::unexpected(Failure(Failure::Code::HubBadSignature));
+    QStringList owners = now.since;
+    owners << now.owner;
+    if (!HubOwner::vouched(owners, claimed.identity, asking->key, claimed.former))
+        return std::unexpected(Failure(Failure::Code::HubNotOwner));
+    now.since << claimed.identity;
+    return keep(now);
+}
+
 std::expected<HubComputers::Computer, Failure> HubComputers::unlink(const QString &nameOrFingerprint) {
+    const auto held = hold();
     Kept now = kept();
     const auto named = [&nameOrFingerprint](const Computer &computer) {
         return computer.name == nameOrFingerprint || computer.fingerprint == nameOrFingerprint;
@@ -143,12 +157,24 @@ std::optional<HubComputers::Computer> HubComputers::byFingerprint(const QString 
 
 QString HubComputers::owner() const { return kept().owner; }
 
+bool HubComputers::isOwner(const QString &identity) const { return !identity.isEmpty() && kept().isOwner(identity); }
+
+std::unique_ptr<QLockFile> HubComputers::hold() const {
+    QDir().mkpath(m_state);
+    auto lock = std::make_unique<QLockFile>(QDir(m_state).filePath(u"computers.lock"_s));
+    // Held for the moment of a write. Where it can't be had, what follows writes as before there was one.
+    lock->tryLock(10000);
+    return lock;
+}
+
 HubComputers::Kept HubComputers::kept() const {
     QFile file(QDir(m_state).filePath(u"computers.json"_s));
     if (!file.open(QIODevice::ReadOnly))
         return {};
     const QJsonObject object = QJsonDocument::fromJson(file.readAll()).object();
-    Kept kept{.owner = object.value("owner"_L1).toString(), .computers = {}};
+    Kept kept{.owner = object.value("owner"_L1).toString(), .since = {}, .computers = {}};
+    for (const auto &id : object.value("owner_ids"_L1).toArray())
+        kept.since << id.toString();
     for (const auto &computer : object.value("computers"_L1).toArray())
         kept.computers << fromJson(computer.toObject());
     return kept;
@@ -158,9 +184,11 @@ std::expected<void, Failure> HubComputers::keep(const Kept &kept) const {
     QJsonArray computers;
     for (const Computer &computer : kept.computers)
         computers.append(toJson(computer));
+    QJsonObject written{{"owner", kept.owner}, {"computers", computers}};
+    if (!kept.since.isEmpty())
+        written.insert("owner_ids"_L1, QJsonArray::fromStringList(kept.since));
     QSaveFile file(QDir(m_state).filePath(u"computers.json"_s));
-    if (!QDir().mkpath(m_state) || !file.open(QIODevice::WriteOnly)
-        || file.write(QJsonDocument(QJsonObject{{"owner", kept.owner}, {"computers", computers}}).toJson()) < 0 || !file.commit())
+    if (!QDir().mkpath(m_state) || !file.open(QIODevice::WriteOnly) || file.write(QJsonDocument(written).toJson()) < 0 || !file.commit())
         return std::unexpected(Failure(Failure::Code::HubKeysUnwritable, {file.fileName(), file.errorString()}));
     return {};
 }

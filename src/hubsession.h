@@ -74,6 +74,7 @@ private:
     // Takes the key of the computer `named` away, as `asking` asks.
     [[nodiscard]] QJsonObject forget(const QString &named, const HubComputers::Computer &asking);
     // Logs a request that names a computer other than the key's own.
+    void noteOwner(const QJsonObject &asked, const HubComputers::Computer &computer);
     void noteClaim(const QJsonObject &asked, const QString &name) const;
 
     HubComputers m_computers;

@@ -99,7 +99,8 @@ int allow(const QCommandLineParser &parser) {
     const HubComputers::Asked asked{.name = parser.value(u"name"_s),
                                     .key = QString::fromUtf8(input.read(longestKey)).trimmed(),
                                     .identity = parser.value(u"identity"_s),
-                                    .signature = parser.value(u"signature"_s)};
+                                    .signature = parser.value(u"signature"_s),
+                                    .former = parser.value(u"former"_s)};
     HubComputers computers = HubComputers::usual(HubPlace::usual());
     const auto linked = computers.link(asked);
     const QJsonObject answer = linked ? QJsonObject{{"ok", true}, {"computer", linked->name}, {"fingerprint", linked->fingerprint}}

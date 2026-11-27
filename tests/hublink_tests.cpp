@@ -26,7 +26,9 @@
 #include <QTemporaryDir>
 #include <QtTest>
 #include <algorithm>
+#include <optional>
 #include <tuple>
+#include <utility>
 
 #include "crypto.h"
 #include "fixtures.h"
@@ -120,6 +122,9 @@ struct Computers {
         return QString::fromUtf8(file.readAll()).split('\n', Qt::SkipEmptyParts);
     }
 
+    // The key file of the person at home `name`, where its omabook keeps it.
+    [[nodiscard]] QString personFile(const QString &name) const { return home(name) + u"/data/omabook/person.key"_s; }
+
     // Runs `program` with `arguments` at home `name`; its exit code, and what it printed.
     [[nodiscard]] std::pair<int, QString> run(const QString &name, const QString &program, const QStringList &arguments,
                                               const QByteArray &input = {}) const {
@@ -211,6 +216,17 @@ void stop(QProcess &daemon) {
     Library library(folder);
     return library.open() && Fixtures::epub(folder + u"/../"_s + title + u".epub"_s, title)
            && library.add(folder + u"/../"_s + title + u".epub"_s).id > 0;
+}
+
+// Two new persons, the one whose id sorts first (and so wins a pairing) first.
+[[nodiscard]] std::optional<std::pair<Person, Person>> twoPersons() {
+    auto one = Person::generate();
+    auto other = Person::generate();
+    if (!one || !other)
+        return std::nullopt;
+    if (other->id() < one->id())
+        std::swap(one, other);
+    return std::pair{std::move(*one), std::move(*other)};
 }
 
 // A port nothing listens at now.
@@ -439,6 +455,84 @@ private slots:
         QVERIFY(computers.keyLines().at(0).endsWith(u" omabook-hub:laptop"_s));
         const auto [code, turnedAway] = computers.withKey(u"elsewhere"_s, u"omabook hub session"_s, hello);
         QVERIFY2(code != 0 && turnedAway.contains(u"Permission denied"_s), qPrintable(turnedAway));
+    }
+
+    // The ticket's steps (#283): the hub's person wins the pairing of a first sync, so the computer is someone
+    // else from then on, and is still the hub's owner, as is another computer paired with it.
+    void theOwnersComputersAreTakenAfterPairing() {
+        const Computers computers;
+        auto persons = twoPersons();
+        QVERIFY(persons);
+        auto &[hubs, mine] = *persons;
+        QVERIFY(hubs.keepIn(computers.personFile(u"there"_s)) && mine.keepIn(computers.personFile(u"here"_s)));
+        const QStringList add{u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"laptop"_s};
+        const auto [added, said] = computers.omabook(u"here"_s, add);
+        QVERIFY2(added == 0, qPrintable(said));
+        QProcess daemon;
+        const QString started = startDaemon(daemon, computers.hubHome());
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        const auto stopping = qScopeGuard([&daemon] { stop(daemon); });
+        const QString library = computers.home(u"here"_s) + u"/library"_s;
+        QVERIFY(libraryWith(library, u"Alpha"_s));
+        const auto [synced, sync] = computers.omabook(u"here"_s, {u"hub"_s, u"sync"_s, u"--library"_s, library});
+        QVERIFY2(synced == 0, qPrintable(sync));
+        const auto now = Person::load(computers.personFile(u"here"_s));
+        QVERIFY2(now, qPrintable(whyNot(now)));
+        QCOMPARE(now->id(), hubs.id());
+        // Another computer of theirs, paired with it: the sync said at once who the first one is now.
+        QVERIFY(now->keepIn(computers.personFile(u"second"_s)));
+        const auto [second, secondSaid] = computers.omabook(u"second"_s, {u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"desktop"_s});
+        QVERIFY2(second == 0, qPrintable(secondSaid));
+        // The first, unlinked and linked again.
+        QCOMPARE(computers.omabook(u"here"_s, {u"hub"_s, u"remove"_s, u"hub"_s}).first, 0);
+        const auto [again, relinked] = computers.omabook(u"here"_s, add);
+        QVERIFY2(again == 0, qPrintable(relinked));
+        QCOMPARE(computers.keyLines().size(), 2);
+        // Someone who never had a key of the owner's is still refused, one who gave up a person of their own too.
+        auto others = twoPersons();
+        QVERIFY(others);
+        PersonFile intruder(computers.personFile(u"elsewhere"_s));
+        QVERIFY(others->second.keepIn(intruder.file()) && intruder.adopt(std::move(others->first)));
+        const auto [refused, why] = computers.omabook(u"elsewhere"_s, {u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"intruder"_s});
+        QVERIFY2(refused != 0 && why.contains(u"belongs to someone else"_s) && why.contains(u"omabook sync"_s), qPrintable(why));
+        QCOMPARE(computers.keyLines().size(), 2);
+    }
+
+    // A hub linked before #283 knows the owner's first id alone, and its computers have paired since: a relink
+    // says who the person was, and the next question a linked computer asks does too.
+    void aHubLinkedBeforePairingLearnsWhoItsOwnerIsNow() {
+        const Computers computers;
+        auto persons = twoPersons();
+        QVERIFY(persons);
+        auto &[later, first] = *persons;
+        const QString laterId = later.id();
+        PersonFile here(computers.personFile(u"here"_s));
+        QVERIFY(first.keepIn(here.file()));
+        const QStringList add{u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"laptop"_s};
+        QCOMPARE(computers.omabook(u"here"_s, add).first, 0);
+        QVERIFY(here.adopt(std::move(later)));
+        // Another computer of the new person, before the linked one has said anything: nothing tells the hub yet.
+        QVERIFY(here.get()->keepIn(computers.personFile(u"second"_s)));
+        const QStringList addSecond{u"hub"_s, u"add"_s, u"hub"_s, u"--name"_s, u"desktop"_s};
+        QVERIFY(computers.omabook(u"second"_s, addSecond).first != 0);
+        // Any question through the linked computer's key (no daemon runs here to answer it).
+        std::ignore = computers.omabook(u"here"_s, {u"hub"_s, u"computers"_s, u"hub"_s});
+        const auto [second, said] = computers.omabook(u"second"_s, addSecond);
+        QVERIFY2(second == 0, qPrintable(said));
+        HubComputers there(computers.hubHome() + u"/state/omabook-hub"_s, computers.authorizedKeys(), {});
+        QVERIFY(there.isOwner(first.id()) && there.isOwner(laterId));
+        QCOMPARE(there.owner(), first.id());
+        // And the relink of a computer unlinked meanwhile, from a hub that never heard of the new id.
+        const Computers unheard;
+        auto others = twoPersons();
+        QVERIFY(others);
+        PersonFile alone(unheard.personFile(u"here"_s));
+        QVERIFY(others->second.keepIn(alone.file()));
+        QCOMPARE(unheard.omabook(u"here"_s, add).first, 0);
+        QCOMPARE(unheard.omabook(u"there"_s, {u"hub"_s, u"forget"_s, u"laptop"_s}).first, 0);
+        QVERIFY(alone.adopt(std::move(others->first)));
+        const auto [relinked, why] = unheard.omabook(u"here"_s, add);
+        QVERIFY2(relinked == 0, qPrintable(why));
     }
 
     void removingTheComputerTakesItsKeyAway() {

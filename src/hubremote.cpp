@@ -11,6 +11,8 @@
 #include "hublinks.h"
 #include "hubsync.h"
 #include "library.h"
+#include "log.h"
+#include "person.h"
 #include "spaces.h"
 
 using namespace Qt::StringLiterals;
@@ -140,19 +142,34 @@ SyncSummary HubRemote::sync(Library &library, const QString &target, const Ask &
     return summary;
 }
 
-SyncSummary HubRemote::syncWith(Library &library, const QString &target, const Progress &progress, const SyncOptions &options,
-                                const QStringList &ssh) {
-    const HubLinks links;
+SyncSummary HubRemote::syncLinked(Library &library, const HubLinks &links, const QString &target, const Progress &progress,
+                                  const SyncOptions &options) {
     const QString host = Remote(target).host();
-    if (!links.isLinked(host))
-        return syncLibrary(library, Remote(target, ssh), progress, options);
     auto session = links.open(host);
     if (!session) {
         SyncSummary unreached;
         unreached.dryRun = options.dryRun;
         unreached.error = session.error().text();
+        // A hub that took the key away is for the person to see to; one out of reach is tried again.
         unreached.unreached = session.error().code() != Failure::Code::HubNotLinked;
         return unreached;
     }
-    return sync(library, target, [&session](const QByteArray &line) { return (*session)->ask(line); }, progress, options);
+    const auto person = [&library] { return library.person() == nullptr ? QString() : library.person()->id(); };
+    const QString was = person();
+    const SyncSummary summary =
+        sync(library, target, [&session](const QByteArray &line) { return (*session)->ask(line); }, progress, options);
+    // Paired with the hub just now: said at a hello of its own, so the person's other computers can link by it
+    // without waiting for this one to ask the hub something again. Should it not get through, the next one says it.
+    if (person() != was)
+        if (const auto said = links.open(host); !said)
+            qCWarning(lcSync).noquote() << "the hub was not told who this computer is now:" << said.error().text();
+    return summary;
+}
+
+SyncSummary HubRemote::syncWith(Library &library, const QString &target, const Progress &progress, const SyncOptions &options,
+                                const QStringList &ssh) {
+    const HubLinks links;
+    if (!links.isLinked(Remote(target).host()))
+        return syncLibrary(library, Remote(target, ssh), progress, options);
+    return syncLinked(library, links, target, progress, options);
 }

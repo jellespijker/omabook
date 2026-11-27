@@ -15,8 +15,8 @@
 #include <cerrno>
 #include <utility>
 
-#include "crypto.h"
 #include "hubcomputers.h"
+#include "hubowner.h"
 #include "hubsession.h"
 #include "person.h"
 #include "remote.h"
@@ -49,7 +49,9 @@ namespace {
 
 } // namespace
 
-HubLinks::HubLinks(QString folder, QStringList ssh) : m_folder(std::move(folder)), m_ssh(ssh.isEmpty() ? usualSsh() : std::move(ssh)) {}
+HubLinks::HubLinks(QString folder, QStringList ssh, const QString &person)
+    : m_folder(std::move(folder)), m_ssh(ssh.isEmpty() ? usualSsh() : std::move(ssh)),
+      m_person(person.isEmpty() ? Person::userKeyFile() : person) {}
 
 QString HubLinks::usualFolder() { return QStandardPaths::writableLocation(QStandardPaths::GenericDataLocation) + u"/omabook/hubs"_s; }
 
@@ -123,20 +125,29 @@ std::expected<HubLinks::Hub, Failure> HubLinks::add(const QString &host, const Q
     if (!key)
         return std::unexpected(key.error());
     const QString line = SshKey::line(*key);
-    const Person::Signature signature = person.sign(Crypto::bytes(HubComputers::linkMessage(computer, line)));
     const QTemporaryDir here;
     QFile given(here.filePath(u"key.pub"_s));
     if (!here.isValid() || !given.open(QIODevice::WriteOnly) || given.write(line.toUtf8() + '\n') < 0)
         return std::unexpected(Failure(Failure::Code::HubKeyUnmade, {given.fileName(), given.errorString()}));
     given.close();
     // Over the person's own ssh, once: the hub installs the key for its session.
-    const Remote::Result allowed =
-        Remote(host, m_ssh)
-            .omabook({u"hub"_s, u"allow"_s, u"--name"_s, computer, u"--identity"_s, person.id(), u"--signature"_s,
-                      QString::fromLatin1(
-                          Crypto::toByteArray(signature).toBase64(QByteArray::Base64UrlEncoding | QByteArray::OmitTrailingEquals))},
-                     given.fileName());
-    const QJsonObject answer = QJsonDocument::fromJson(allowed.output).object();
+    const QStringList allow{
+        u"hub"_s,        u"allow"_s,  u"--name"_s,      computer,
+        u"--identity"_s, person.id(), u"--signature"_s, HubOwner::signature(person, HubComputers::linkMessage(computer, line))};
+    const Remote hubShell(host, m_ssh);
+    const Remote::Result allowed = hubShell.omabook(allow, given.fileName());
+    QJsonObject answer = QJsonDocument::fromJson(allowed.output).object();
+    // Refused, and this computer was someone else before (it paired, #283): asked again with the word of who it
+    // was, which a hub that knew it so takes. Only then, since a hub from before takes no such word.
+    if (!answer.value("ok"_L1).toBool() && answer.contains("error"_L1)) {
+        PersonFile kept(m_person);
+        if (const HubOwner::Claim claim = HubOwner::claim(kept, line); claim.identity == person.id()) {
+            const Remote::Result again = hubShell.omabook(allow + QStringList{u"--former"_s, claim.former}, given.fileName());
+            const QJsonObject taken = QJsonDocument::fromJson(again.output).object();
+            if (taken.value("ok"_L1).toBool())
+                answer = taken;
+        }
+    }
     if (!answer.value("ok"_L1).toBool())
         return std::unexpected(answer.contains("error"_L1) ? Failure::said(answer.value("error"_L1).toString())
                                                            : Failure(Failure::Code::HubUnreachable, {host, lastSaid(allowed)}));
@@ -197,7 +208,17 @@ std::expected<std::unique_ptr<HubLinks::Session>, Failure> HubLinks::open(const 
     if (!ssh->waitForStarted(5000))
         return std::unexpected(Failure(Failure::Code::HubSessionEnded, {host}));
     auto session = std::make_unique<Session>(std::move(ssh));
-    const QByteArray answered = session->ask(compact(HubSession::hello()));
+    QJsonObject hello = HubSession::hello();
+    // Who this computer is now, when it was someone else before (#283); a hub from before reads past it.
+    PersonFile kept(m_person);
+    if (const auto key = SshKey::publicOf(keyFile())) {
+        if (const HubOwner::Claim claim = HubOwner::claim(kept, SshKey::line(*key)); !claim.former.isEmpty()) {
+            hello.insert("identity"_L1, claim.identity);
+            hello.insert("signature"_L1, claim.signature);
+            hello.insert("former"_L1, claim.former);
+        }
+    }
+    const QByteArray answered = session->ask(compact(hello));
     const QJsonObject greeting = QJsonDocument::fromJson(answered).object();
     if (greeting.isEmpty()) {
         const QString said = session->said();

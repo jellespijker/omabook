@@ -21,7 +21,7 @@ modules = [
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
   "deviceoptions", "qrcode", "portholder", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",
   "hubplace",
-  "sshkey", "hubcomputers",
+  "sshkey", "hubowner", "hubcomputers",
   "safename",
   "numberoptions",
 ]

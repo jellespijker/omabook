@@ -388,7 +388,9 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubProtocol, tr("The hub speaks protocol %1, and a session starts with its hello.")},
     {Failure::Code::HubOnlySession, tr("This key opens only the hub's session, never %1.")},
     {Failure::Code::HubNotAComputer, tr("This key no longer opens the hub. Link the computer again: omabook hub add")},
-    {Failure::Code::HubNotOwner, tr("The hub belongs to someone else: it takes only its owner's computers.")},
+    {Failure::Code::HubNotOwner, tr("The hub belongs to someone else: it takes only its owner's computers. If this computer is "
+                                    "yours, sync it with one of yours that is linked to the hub (omabook sync <computer>), "
+                                    "run omabook hub status <hub> on that one, and link this one again.")},
     {Failure::Code::HubBadSignature, tr("The link isn't signed by the person it names.")},
     {Failure::Code::HubBadKey, tr("That is no ed25519 public key, which is what the hub takes for a computer.")},
     {Failure::Code::HubBadComputerName, tr("%1 can't name a computer: use letters, digits, dots, dashes and underscores.")},

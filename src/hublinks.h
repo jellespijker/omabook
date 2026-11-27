@@ -54,8 +54,10 @@ public:
     };
 
     // `folder` holds the key and the list of hubs; `ssh` is the program and
-    // its first arguments (a test's stand-in, or options of its own).
-    explicit HubLinks(QString folder = usualFolder(), QStringList ssh = {});
+    // its first arguments (a test's stand-in, or options of its own);
+    // `person` is the person's key file (the user's when empty), whose former
+    // persons say who gave way to whom (HubOwner, #283).
+    explicit HubLinks(QString folder = usualFolder(), QStringList ssh = {}, const QString &person = {});
 
     // <data>/omabook/hubs: the person's own, beside their identity.
     [[nodiscard]] static QString usualFolder();
@@ -92,4 +94,5 @@ private:
 
     QString m_folder;
     QStringList m_ssh;
+    QString m_person;
 };
