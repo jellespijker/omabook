@@ -1,6 +1,7 @@
 #include <QJsonArray>
 #include <algorithm>
 
+#include "bookops.h"
 #include "library.h"
 #include "mcp.h"
 
@@ -72,6 +73,8 @@ void registerBookmarks() {
                       const Shelf at = shelf(arguments);
                       if (!at)
                           return Result::fail(at.error);
+                      if (const auto past = BookOps::checkSection(*at.library, at.id, arguments.value("section").toInteger()); !past)
+                          return Result::fail(past.error().text());
                       Annotation mark;
                       mark.kind = "bookmark";
                       mark.place = BookPlace::fromJson(arguments);

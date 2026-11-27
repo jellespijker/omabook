@@ -26,6 +26,15 @@
 #include "scriptplugins.h"
 #include "settings.h"
 
+std::expected<void, Failure> BookOps::checkSection(const Library &library, qint64 id, qint64 section) {
+    const auto book = library.book(id);
+    const QString format = book ? Formats::openedAs(book->formats) : QString();
+    const auto document = format.isEmpty() ? nullptr : Formats::open(library.formatPath(id, format));
+    if (document && section >= document->count())
+        return std::unexpected(Failure(Failure::Code::SectionPastEnd, {QString::number(document->count() - 1), QString::number(section)}));
+    return {};
+}
+
 QString BookOps::readableFile(const Library &library, qint64 id, QString *error) {
     const auto book = library.book(id);
     if (!book) {

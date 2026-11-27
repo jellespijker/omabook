@@ -13,6 +13,7 @@
 #include <tuple>
 
 #include "log.h"
+#include "numberoptions.h"
 
 namespace {
 
@@ -77,6 +78,8 @@ int runLogsCli(const QStringList &arguments) {
             printLine(stdout, Log::path());
         return 0;
     }
+    if (const auto why = Numbers::problem(parser, {{.name = QStringLiteral("lines")}}))
+        return failLine(*why);
     Log::Filter filter;
     filter.lines = parser.value("lines").toInt();
     filter.least = parser.value("level").toLower();

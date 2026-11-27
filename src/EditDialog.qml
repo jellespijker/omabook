@@ -26,6 +26,8 @@ AppPopup {
     // The fields changed both here and elsewhere, and whether the book went.
     property var clashes: []
     property bool gone: false
+    // What was typed for the number in the series when it is no number (#230).
+    property string noNumber: ""
     readonly property var texts: ({
         title: title, authors: authors, series: series, seriesIndex: number, tags: tags, publisher: publisher,
         published: published, language: language, isbn: isbn, description: description, finished: finished
@@ -75,6 +77,7 @@ AppPopup {
         bookId = id
         clashes = []
         gone = false
+        noNumber = ""
         put(values)
         before = values
         shown = typed()
@@ -89,6 +92,8 @@ AppPopup {
         file = ({})
         clashes = []
         gone = false
+        noNumber = ""
+        shown = ({})
         for (const field of [title, authors, series, number, tags, publisher, published, language, isbn, description, finished])
             field.text = ""
         shelf.currentIndex = 0
@@ -99,6 +104,12 @@ AppPopup {
     }
     function save() {
         const mine = typed()
+        const index = mine.seriesIndex.trim().replace(",", ".")
+        noNumber = mine.seriesIndex !== shown.seriesIndex && !/^(\d+(\.\d*)?|\.\d+)?$/.test(index) ? mine.seriesIndex : ""
+        if (noNumber !== "") {
+            number.forceActiveFocus()
+            return
+        }
         let details = mine
         if (bookId > 0) {
             const now = stored(bookId)
@@ -125,7 +136,7 @@ AppPopup {
             return
         }
         if (details.seriesIndex !== undefined)
-            details.seriesIndex = Number(details.seriesIndex.replace(",", ".")) || 0
+            details.seriesIndex = Number(index)
         details.writeToFile = intoFile.visible && intoFile.checked
         if (bookId > 0)
             backend.saveDetails(bookId, details)
@@ -177,7 +188,7 @@ AppPopup {
             columnSpacing: 12
             rowSpacing: 12
             TextField { id: series; Layout.fillWidth: true; placeholderText: qsTr("Series"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
-            TextField { id: number; Layout.fillWidth: win.compact; Layout.preferredWidth: 140; placeholderText: qsTr("Number"); inputMethodHints: Qt.ImhFormattedNumbersOnly; Material.roundedScale: theme.radius; onAccepted: dialog.save() }
+            TextField { id: number; objectName: "editNumber"; Layout.fillWidth: win.compact; Layout.preferredWidth: 140; placeholderText: qsTr("Number"); inputMethodHints: Qt.ImhFormattedNumbersOnly; Material.roundedScale: theme.radius; onAccepted: dialog.save() }
         }
         TextField { id: tags; objectName: "editTags"; Layout.fillWidth: true; placeholderText: qsTr("Tags, separated by commas"); Material.roundedScale: theme.radius; onAccepted: dialog.save() }
         GridLayout {
@@ -241,6 +252,15 @@ AppPopup {
                 selectByMouse: true
                 Material.roundedScale: theme.radius
             }
+        }
+        Label {
+            objectName: "editNoNumber"
+            visible: dialog.noNumber !== ""
+            Layout.fillWidth: true
+            text: qsTr("Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.").arg(dialog.noNumber)
+            color: theme.colors.orange
+            textFormat: Text.PlainText
+            wrapMode: Text.Wrap
         }
         // What happened to the book while the dialog was open, when it
         // stands in the way of saving.

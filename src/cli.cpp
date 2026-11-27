@@ -20,8 +20,8 @@
 #include <termios.h>
 #include <unistd.h>
 
-#include "airegistry.h"
 #include "aicommands.h"
+#include "airegistry.h"
 #include "aisearch.h"
 #include "annotationcommands.h"
 #include "bookfilecommands.h"
@@ -31,15 +31,13 @@
 #include "calibreplugin.h"
 #include "catalog.h"
 #include "chronologycommands.h"
+#include "clioutput.h"
 #include "collections.h"
 #include "curation.h"
 #include "customization.h"
 #include "devicecommands.h"
 #include "findcommands.h"
 #include "folio.h"
-#include "librariescommands.h"
-#include "logcommands.h"
-#include "readingcommands.h"
 #include "formats.h"
 #include "goodreads.h"
 #include "graph.h"
@@ -50,12 +48,16 @@
 #include "importer.h"
 #include "interfacechange.h"
 #include "knowledgesearch.h"
+#include "librariescommands.h"
 #include "library.h"
+#include "logcommands.h"
 #include "manual.h"
 #include "mcp.h"
 #include "metadatasource.h"
+#include "numberoptions.h"
 #include "plugins.h"
 #include "prompts.h"
+#include "readingcommands.h"
 #include "readingformat.h"
 #include "readingsite.h"
 #include "scriptapi.h"
@@ -73,21 +75,9 @@
 namespace {
 
 using namespace Qt::StringLiterals;
-
-void print(FILE *stream, const QString &text) {
-    fprintf(stream, "%s\n", qPrintable(text));
-    fflush(stream);
-}
-
-int fail(const QString &why) {
-    print(stderr, why);
-    return 1;
-}
-
-void printJson(const QJsonValue &value) {
-    const QJsonDocument document = value.isArray() ? QJsonDocument(value.toArray()) : QJsonDocument(value.toObject());
-    print(stdout, QString::fromUtf8(document.toJson(QJsonDocument::Indented)).trimmed());
-}
+using CliOutput::fail;
+using CliOutput::print;
+using CliOutput::printJson;
 
 // One command's options, with the two every command takes.
 struct Command {
@@ -100,8 +90,9 @@ struct Command {
         this->name = name;
     }
 
-    // False when the arguments were wrong, with the reason already printed.
-    bool parse(const QStringList &arguments, int atLeast, int atMost = -1) {
+    // False when the arguments were wrong, with the reason already printed; so
+    // is an option among `numbers` that isn't the number it takes (#230).
+    bool parse(const QStringList &arguments, int atLeast, int atMost = -1, std::initializer_list<Numbers::Option> numbers = {}) {
         QStringList rest = arguments;
         rest.removeAt(1);
         rest[0] = "omabook " + name;
@@ -109,6 +100,10 @@ struct Command {
         const int given = parser.positionalArguments().size();
         if (given < atLeast || (atMost >= 0 && given > atMost)) {
             print(stderr, parser.helpText().trimmed());
+            return false;
+        }
+        if (const auto why = Numbers::problem(parser, numbers)) {
+            print(stderr, *why);
             return false;
         }
         return true;
@@ -703,9 +698,10 @@ int text(const QStringList &arguments) {
         return fail(error);
     int from = 0, to = document->count() - 1;
     if (command.parser.isSet("section")) {
-        from = to = command.parser.value("section").toInt();
-        if (from < 0 || from >= document->count())
+        const auto section = Numbers::whole(command.parser.value("section"), 0, document->count() - 1);
+        if (!section)
             return fail(QString("This book has sections 0 to %1.").arg(document->count() - 1));
+        from = to = static_cast<int>(*section);
     }
     QJsonArray sections;
     for (int section = from; section <= to; ++section) {
@@ -998,9 +994,9 @@ int tidy(const QStringList &arguments) {
     command.parser.addOption({"pick", "Make only these changes, by their numbers in the list: 1,3,4.", "numbers"});
     if (!command.parse(arguments, 0, 0))
         return 1;
-    QList<int> picked;
-    for (const QString &number : command.parser.value("pick").split(',', Qt::SkipEmptyParts))
-        picked << number.trimmed().toInt();
+    const auto picked = Numbers::list(command.parser.value("pick"));
+    if (!picked)
+        return fail("--pick takes the numbers in the list, such as 1,3, not \"" + command.parser.value("pick") + "\".");
     QString error;
     const auto library = command.library(&error);
     if (!library)
@@ -1041,7 +1037,7 @@ int tidy(const QStringList &arguments) {
             ++unsure;
             continue;
         }
-        if (command.parser.isSet("pick") ? picked.contains(number) : command.parser.isSet("apply")) {
+        if (command.parser.isSet("pick") ? picked->contains(number) : command.parser.isSet("apply")) {
             if (Curation::apply(*library, proposal, &error))
                 ++applied;
             else
@@ -1611,7 +1607,7 @@ int ask(const QStringList &arguments) {
     command.parser.addPositionalArgument("question", "What to ask.", "<question...>");
     command.parser.addOption({"upto", "Send the text only up to and including this section, so later ones stay unread.", "number"});
     command.parser.addOption({"collection", "With all: ask only about the books of this collection, with the graph of its top-level collection.", "name"});
-    if (!command.parse(arguments, 2))
+    if (!command.parse(arguments, 2, -1, {Numbers::section("upto")}))
         return 1;
     QString error;
     if (command.argument(0) == "all") {
@@ -1654,7 +1650,7 @@ int ask(const QStringList &arguments) {
     const qint64 id = command.argument(0).toLongLong(&inLibrary);
     const bool graph = inLibrary && library && library->book(id) && Settings().graph() != "off";
     const QString question = command.parser.positionalArguments().mid(1).join(' ');
-    const int upTo = command.parser.isSet("upto") ? qMax(0, command.parser.value("upto").toInt()) : -1;
+    const int upTo = command.parser.isSet("upto") ? command.parser.value("upto").toInt() : -1;
     const GraphPlace asked{id, upTo < 0 ? document->count() - 1 : upTo, 1.0};
     bool trimmed = false;
     const AiRequest request = BookOps::bookQuestion(*document, question, upTo, &trimmed,

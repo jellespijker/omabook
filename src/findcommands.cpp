@@ -17,6 +17,7 @@
 #include "embeddings.h"
 #include "library.h"
 #include "meaningsearch.h"
+#include "numberoptions.h"
 #include "settings.h"
 #include "tenancy.h"
 
@@ -186,8 +187,10 @@ int search(const Library &library, const QCommandLineParser &parser, const QStri
     if (!route)
         return failLine(route.error().text());
     MeaningSearch::Question question{.words = words.mid(1).join(u' '), .books = {}, .whole = parser.isSet("whole"), .limit = 10};
+    if (const auto why = Numbers::problem(parser, {{.name = u"limit"_s, .least = 1}}))
+        return failLine(*why);
     if (parser.isSet("limit"))
-        question.limit = std::max(1, parser.value("limit").toInt());
+        question.limit = parser.value("limit").toInt();
     if (words.first() == "all"_L1) {
         const auto tenant = Tenancy::chosen(library, parser.value("collection"));
         if (!tenant)

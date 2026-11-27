@@ -28,8 +28,9 @@ void applyDetails(BookMeta &meta, const QVariantMap &details) {
     line("published", meta.published);
     if (details.contains("authors"))
         meta.authors = BookMeta::splitAuthors(details.value("authors").toString());
-    if (details.contains("seriesIndex"))
-        meta.seriesIndex = details.value("seriesIndex").toDouble();
+    bool number = false;
+    if (const double index = details.value("seriesIndex").toDouble(&number); number)
+        meta.seriesIndex = index;
     if (details.contains("description"))
         meta.description = details.value("description").toString().trimmed();
     if (details.contains("tags"))

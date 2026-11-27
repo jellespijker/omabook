@@ -7,6 +7,9 @@
 // How `omabook graph` shows its answers on a terminal, when not asked for JSON.
 namespace GraphPrint {
 
+// What `omabook graph` says of itself.
+extern const char *const usage;
+
 // A line, flushed at once so a long command shows its progress.
 void print(FILE *stream, const QString &text);
 // A thing as one line: its number, kind, name and what is said of it.

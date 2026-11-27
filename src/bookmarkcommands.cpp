@@ -12,9 +12,11 @@
 #include <tuple>
 
 #include "annotationanchors.h"
+#include "bookops.h"
 #include "highlightcolors.h"
 #include "highlights.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "settings.h"
 
 namespace {
@@ -48,16 +50,22 @@ int failLine(const QString &why) {
     // The start of a section given without a fraction; where it was read to when neither is given.
     Annotation bookmark;
     bookmark.kind = "bookmark";
-    bookmark.place = parser.isSet("section") ? BookPlace{.section = qMax(0, parser.value("section").toInt()), .fraction = 0}
-                                             : library.progress(book).place;
+    bookmark.place =
+        parser.isSet("section") ? BookPlace{.section = parser.value("section").toInt(), .fraction = 0} : library.progress(book).place;
     if (parser.isSet("fraction"))
-        bookmark.place.fraction = qBound(0.0, parser.value("fraction").toDouble(), 1.0);
+        bookmark.place.fraction = parser.value("fraction").toDouble();
     bookmark.text = parser.value("add").simplified();
     return bookmark;
 }
 
 // What the options ask of the book's bookmarks; why not, when it can't be done.
 [[nodiscard]] std::expected<void, QString> change(Library &library, qint64 book, const QCommandLineParser &parser) {
+    // Everything asked is checked before anything changes (#230).
+    if (const auto why = Numbers::problem(parser, {Numbers::section(), Numbers::fraction()}))
+        return std::unexpected(*why);
+    if (parser.isSet("add") && parser.isSet("section"))
+        if (const auto past = BookOps::checkSection(library, book, parser.value("section").toInt()); !past)
+            return std::unexpected(past.error().text());
     if (parser.isSet("remove")) {
         const qint64 bookmark = parser.value("remove").toLongLong();
         if (!hasBookmark(library, book, bookmark))

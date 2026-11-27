@@ -23,6 +23,7 @@ modules = [
   "hubplace",
   "sshkey", "hubcomputers",
   "safename",
+  "numberoptions",
 ]
 
 [layers.formats]
@@ -90,7 +91,7 @@ modules = [
 summary = "What the command line, the MCP server and the window all do, each written once: book operations, collections, sync, graph and plugin tools."
 uses = ["services", "library", "formats", "foundation"]
 modules = [
-  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "scriptsession", "pluginpackage", "plugintools",
+  "bookmatch", "bookops", "chronologyexport", "chronologyops", "collectionimport", "collections", "collectionshare", "following", "graphbatch", "graphbyhand", "graphchoice", "graphcommands", "graphprint", "graphreading", "graphtools", "keptproposals", "olderpeer", "pairing", "pluginargument", "pluginfilesync", "scriptsession", "pluginpackage", "plugintools",
   "scripttools", "sharedcollection", "sharedkeys", "sharedspaces", "spacecarry", "spacefiles", "subscriptions", "sync", "synclog", "syncmanifest", "synccopies", "syncrenames", "synctake", "synctakeannotations", "synctakecollections", "synctakegraph", "syncplan", "syncguard",
   "noterecognition", "annotationedits", "annotationexport", "pdfannotations", "spaceswitch", "meaningsearch",
   "kosyncroutes", "opdsroutes", "deviceserver", "deviceserving", "serveservice", "koreadersync", "sendbook",
@@ -109,7 +110,7 @@ modules = [
 [layers.commands]
 summary = "The command line and the MCP server."
 uses = ["operations", "services", "library", "formats", "foundation"]
-modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clisummary", "identitycommands", "logcommands", "mcp", "readingcommands", "readingtools", "mcpcommands", "mcpcalls", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands", "snapshotrestorecommands", "destinationcommands", "snapshothealthcommands", "mcpbulk", "tidytools", "hubautocommands"]
+modules = ["aicommands", "annotationcommands", "annotationtools", "bookmarkcommands", "chronologycommands", "chronologyprint", "chronologytools", "cli", "clioutput", "clisummary", "identitycommands", "logcommands", "mcp", "mcparguments", "readingcommands", "readingtools", "mcpcommands", "mcpcalls", "spacecommands", "spacetools", "synccommands", "findcommands", "meaningtools", "bookfilecommands", "bookfiletools", "devicecommands", "hubcommands", "librariescommands", "snapshotcommands", "hublinkcommands", "snapshotrestorecommands", "destinationcommands", "snapshothealthcommands", "mcpbulk", "tidytools", "hubautocommands"]
 
 [layers.window]
 summary = "The window: QML-facing models, the reader, the assistant and the dialogs' back ends."

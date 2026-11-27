@@ -3172,5 +3172,10 @@
   "The library in %1 is read-only, and Omabook needs to write to it. Give yourself write permission to the folder and the files in it (chmod -R u+w), or check that its drive isn't mounted read-only.": "La biblioteca en %1 es de solo lectura y Omabook necesita escribir en ella. Date permiso de escritura en la carpeta y sus archivos (chmod -R u+w), o revisa que su unidad no esté montada como de solo lectura.",
   "The library's database %1 can't be opened: %2": "No se puede abrir la base de datos de la biblioteca %1: %2",
   "The library's database %1 is damaged (%2). Restore the library from a snapshot (omabook snapshot list, then omabook snapshot restore <id> --to <folder>), or put back a copy of the database from %3, where one is kept before an update changes the library's format.": "La base de datos de la biblioteca %1 está dañada (%2). Restaura la biblioteca desde una instantánea (omabook snapshot list y luego omabook snapshot restore <id> --to <folder>), o recupera una copia de la base de datos de %3, donde se guarda una antes de que una actualización cambie el formato de la biblioteca.",
-  "“%1” was removed from the library. Its files were moved to the trash, where you can get them back.": "“%1” se quitó de la biblioteca. Sus archivos se movieron a la papelera, de donde puedes recuperarlos."
+  "“%1” was removed from the library. Its files were moved to the trash, where you can get them back.": "“%1” se quitó de la biblioteca. Sus archivos se movieron a la papelera, de donde puedes recuperarlos.",
+  "This book has sections 0 to %1; there is no section %2.": "Este libro tiene las secciones 0 a %1; no existe la sección %2.",
+  "Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.": "Número requiere un número, como 3 o 2.5, no “%1”. No se guardó nada.",
+  "A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.": "Un puerto es un número entero de 1 a 65535, no “%1”. Se conserva el que había.",
+  "A book's number in its series is a number from 0, such as 3 or 2.5, not \"%1\".": "El número de un libro en su serie es un número a partir de 0, como 3 o 2.5, no “%1”.",
+  "A rating is a whole number of stars from 0 to 5, not \"%1\".": "Una calificación es un número entero de estrellas de 0 a 5, no “%1”."
 }

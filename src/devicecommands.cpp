@@ -30,6 +30,7 @@
 #include "koreadersync.h"
 #include "kosyncclient.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "opdscatalog.h"
 #include "secretstore.h"
 #include "sendbook.h"
@@ -133,6 +134,8 @@ int koreaderSync(const QStringList &words, const QCommandLineParser &parser, con
     const auto library = openLibrary(parser);
     if (!library)
         return failLine(library.error());
+    if (const auto why = Numbers::notNumbers(words.mid(1)))
+        return failLine(*why);
     QList<qint64> books;
     for (const QString &word : words.mid(1))
         books << word.toLongLong();
@@ -259,6 +262,8 @@ int runServeCli(const QStringList &arguments) {
     }
     if (options.reach == DeviceOptions::Reach::Off)
         return failLine(u"Serving is off: pass --reach localhost, tailnet or network, or choose where in the settings."_s);
+    if (const auto why = Numbers::problem(parser, {{.name = u"port"_s, .least = 1, .most = 65535}}))
+        return failLine(*why);
     if (parser.isSet("port"))
         options.port = static_cast<quint16>(parser.value("port").toUInt());
     if (parser.isSet("collection"))

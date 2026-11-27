@@ -119,6 +119,22 @@
     function need(value, type, what) {
         if (typeof value !== type)
             throw new TypeError(what + " should be a " + type + ".");
+        // The numbers an object may name, each [key, least, most, whole]: one
+        // that is given is finite and in range, never a 0 in place of anything
+        // else (#230).
+        var numbers = {
+            "The details": [["series_index", 0, Number.MAX_VALUE, false]],
+            "The reading": [["rating", 0, 5, true]],
+            "The place": [["section", 0, 2147483647, true], ["fraction", 0, 1, false]],
+            "The section": [["section", -1, 2147483647, true]]
+        };
+        (numbers[what] || []).forEach(function (rule) {
+            var given = value[rule[0]];
+            if (given !== undefined && !(typeof given === "number" && isFinite(given) && given >= rule[1] && given <= rule[2]
+                                         && (!rule[3] || Math.floor(given) === given)))
+                throw new RangeError(rule[0] + " should be a " + (rule[3] ? "whole " : "") + "number from " + rule[1]
+                                     + (rule[2] === Number.MAX_VALUE ? "" : " to " + rule[2]) + ", not \"" + given + "\".");
+        });
     }
     function oneOf(value, values, what) {
         if (values.indexOf(value) < 0)
@@ -350,7 +366,11 @@
             progress: function (id) { return parse(host.libraryProgress(Number(id) || 0)); },
             annotations: function (id) { return parse(host.libraryAnnotations(Number(id) || 0)); },
             toc: function (id) { return parse(host.libraryToc(Number(id) || 0)); },
-            text: function (id, section) { return host.libraryText(Number(id) || 0, section === undefined ? -1 : Number(section)); },
+            text: function (id, section) {
+                var asked = { section: section === undefined ? -1 : section };
+                need(asked, "object", "The section");
+                return host.libraryText(Number(id) || 0, asked.section);
+            },
             remove: function (id) { return host.libraryRemove(Number(id) || 0); },
             setProgress: function (id, place) {
                 need(place, "object", "The place");

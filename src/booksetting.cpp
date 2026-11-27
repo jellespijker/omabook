@@ -13,6 +13,7 @@
 
 #include "bookops.h"
 #include "graph.h"
+#include "numberoptions.h"
 #include "settings.h"
 
 namespace {
@@ -23,6 +24,7 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
     {"title", [](BookMeta &meta, const QString &text) { meta.title = text.simplified(); }},
     {"authors", [](BookMeta &meta, const QString &text) { meta.authors = BookMeta::splitAuthors(text); }},
     {"series", [](BookMeta &meta, const QString &text) { meta.series = text.simplified(); }},
+    // Checked before (numbersOf): empty takes the number away.
     {"series-index", [](BookMeta &meta, const QString &text) { meta.seriesIndex = text.toDouble(); }},
     {"publisher", [](BookMeta &meta, const QString &text) { meta.publisher = text.simplified(); }},
     {"language", [](BookMeta &meta, const QString &text) { meta.language = text.simplified(); }},
@@ -41,6 +43,9 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
         const QJsonDocument read = QJsonDocument::fromJson(details.readAll());
         if (!read.isObject())
             return std::unexpected(Failure(Failure::Code::DetailsNotAnObject, {options.value("meta")}));
+        // Anything but a number from 0 reads as -1.
+        if (const QJsonValue index = read.object().value("series_index"); !index.isUndefined() && index.toDouble(-1) < 0)
+            return std::unexpected(Failure(Failure::Code::SeriesIndexNotANumber, {index.toVariant().toString()}));
         meta.applyJson(read.object());
     }
     for (const auto &[field, setter] : setters)
@@ -85,6 +90,16 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
     if (!number || at < 0)
         return std::unexpected(Failure(Failure::Code::DetailsAtNotATime));
     return at;
+}
+
+// The numbers the options give, refused before anything is written (#230).
+[[nodiscard]] std::expected<void, Failure> numbersOf(const QCommandLineParser &options) {
+    const QString index = options.value("series-index").trimmed();
+    if (options.isSet("series-index") && !index.isEmpty() && !Numbers::decimal(index))
+        return std::unexpected(Failure(Failure::Code::SeriesIndexNotANumber, {options.value("series-index")}));
+    if (options.isSet("rating") && !Numbers::whole(options.value("rating"), 0, 5))
+        return std::unexpected(Failure(Failure::Code::RatingNotStars, {options.value("rating")}));
+    return {};
 }
 
 [[nodiscard]] std::expected<QList<QPair<QString, QString>>, Failure> identifiersOf(const QCommandLineParser &options) {
@@ -149,6 +164,8 @@ std::expected<Book, Failure> BookSetting::apply(Library &library, qint64 id, con
     const auto readingAt = detailsAtOf(options, QStringLiteral("reading-at"));
     if (!readingAt)
         return std::unexpected(readingAt.error());
+    if (const auto numbers = numbersOf(options); !numbers)
+        return std::unexpected(numbers.error());
     const auto identifiers = identifiersOf(options);
     if (!identifiers)
         return std::unexpected(identifiers.error());

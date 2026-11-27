@@ -14,6 +14,7 @@
 #include "koreadersync.h"
 #include "kosyncclient.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "secretstore.h"
 #include "sendbook.h"
 #include "settings.h"
@@ -84,6 +85,13 @@ bool DeviceDesk::canMail() const {
 }
 
 void DeviceDesk::set(const QString &key, const QVariant &value) {
+    // A port that can't be one leaves the one there is, and says so (#230).
+    const QString typed = value.toString().trimmed();
+    if (key.endsWith(QLatin1StringView("port")) && !typed.isEmpty() && !Numbers::whole(typed, 1, 65535)) {
+        m_status = tr("A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.").arg(typed);
+        emit changed();
+        return;
+    }
     QJsonObject devices = current().toJson();
     devices.insert(key, QJsonValue::fromVariant(value));
     m_settings->setDevices(DeviceOptions::fromJson(devices).toJson());

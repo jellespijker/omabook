@@ -18,6 +18,7 @@
 #include "graph.h"
 #include "graphtools.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "settings.h"
 #include "tenancy.h"
 
@@ -118,6 +119,8 @@ void addOptions(QCommandLineParser &parser) {
     ask.to = parser.value("to");
     ask.calendar = parser.value("calendar");
     ask.whole = parser.isSet("whole");
+    if (const auto why = Numbers::problem(parser, {Numbers::section(u"upto"_s), Numbers::fraction()}))
+        return std::unexpected(*why);
     if (parser.isSet("upto")) {
         ask.upTo = GraphOps::place(ask.book, parser.value("upto"), parser.value("fraction"));
         if (!ask.upTo)

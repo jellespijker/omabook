@@ -16,9 +16,11 @@
 #include "annotationexport.h"
 #include "annotationfacts.h"
 #include "annotationlayers.h"
+#include "bookops.h"
 #include "highlightcolors.h"
 #include "highlights.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "pdfannotations.h"
 #include "settings.h"
 
@@ -241,10 +243,15 @@ int edit(Library &library, qint64 book, const QCommandLineParser &parser) {
                                       names);
     } else {
         // The start of a section given without a fraction; where the book was read to when neither is given.
-        BookPlace place = parser.isSet("section") ? BookPlace{.section = qMax(0, parser.value("section").toInt()), .fraction = 0}
-                                                  : library.progress(book).place;
+        if (const auto why = Numbers::problem(parser, {Numbers::section(), Numbers::fraction()}))
+            return failLine(*why);
+        if (parser.isSet("section"))
+            if (const auto past = BookOps::checkSection(library, book, parser.value("section").toInt()); !past)
+                return failLine(past.error().text());
+        BookPlace place =
+            parser.isSet("section") ? BookPlace{.section = parser.value("section").toInt(), .fraction = 0} : library.progress(book).place;
         if (parser.isSet("fraction"))
-            place.fraction = qBound(0.0, parser.value("fraction").toDouble(), 1.0);
+            place.fraction = parser.value("fraction").toDouble();
         const auto added = AnnotationEdits::add(library, book,
                                                 {.kind = parser.value("add"),
                                                  .place = place,

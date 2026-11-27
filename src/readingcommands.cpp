@@ -7,11 +7,14 @@
 #include <cstdio>
 #include <expected>
 #include <memory>
+#include <optional>
 #include <print>
 #include <tuple>
 
+#include "bookops.h"
 #include "graph.h"
 #include "library.h"
+#include "numberoptions.h"
 #include "readinggoal.h"
 #include "readingstats.h"
 #include "settings.h"
@@ -162,6 +165,20 @@ int showBook(const Library &library, const QString &number, bool json) {
     return 0;
 }
 
+// Why the place the options give can't be kept; none when it can (#230).
+std::optional<QString> placeRefused(const Library &library, qint64 id, const QCommandLineParser &parser) {
+    if (const auto why = Numbers::problem(parser, {Numbers::section(),
+                                                   Numbers::fraction(),
+                                                   {.name = u"percent"_s, .most = 100, .isWhole = false},
+                                                   {.name = u"updated"_s, .most = static_cast<double>(Numbers::anyTime)}}))
+        return why;
+    // A place carried over from another computer (--updated) is kept as it was there.
+    if (!parser.isSet("section") || parser.isSet("updated"))
+        return std::nullopt;
+    const auto fits = BookOps::checkSection(library, id, parser.value("section").toInt());
+    return fits ? std::nullopt : std::optional(fits.error().text());
+}
+
 } // namespace
 
 QString hoursAndMinutes(qint64 seconds) {
@@ -186,16 +203,18 @@ int runProgressCli(const QStringList &arguments) {
     const qint64 id = number.toLongLong();
     if (!(*library)->book(id))
         return failLine("There is no book " + number + " in the library.");
+    if (const auto why = placeRefused(**library, id, parser))
+        return failLine(*why);
     if (parser.isSet("section") || parser.isSet("fraction") || parser.isSet("percent")) {
         Progress read = (*library)->progress(id);
         const double before = read.percent;
         read.updated = parser.value("updated").toLongLong();
         if (parser.isSet("section"))
-            read.place.section = qMax(0, parser.value("section").toInt());
+            read.place.section = parser.value("section").toInt();
         if (parser.isSet("fraction"))
-            read.place.fraction = qBound(0.0, parser.value("fraction").toDouble(), 1.0);
+            read.place.fraction = parser.value("fraction").toDouble();
         if (parser.isSet("percent"))
-            read.percent = qBound(0.0, parser.value("percent").toDouble(), 100.0);
+            read.percent = parser.value("percent").toDouble();
         (*library)->setProgress(id, read);
         // Reading set by hand counts as reading: it goes in the log too.
         if (read.percent > before)

@@ -344,7 +344,7 @@ QList<Proposal> Curation::seriesFrom(const QString &answer, const QList<Book> &b
         if (!byId.contains(id) || series.isEmpty())
             continue;
         BookMeta meta = byId.value(id).meta;
-        const double index = object.value("series_index").toDouble();
+        const double index = object.value("series_index").toDouble(meta.seriesIndex); // not a number: kept (#230)
         if (meta.series == series && qFuzzyCompare(meta.seriesIndex + 1, index + 1))
             continue;
         meta.series = series;

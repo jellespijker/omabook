@@ -1,12 +1,23 @@
 #include "scriptsession.h"
 
+#include <QCommandLineParser>
 #include <QFileInfo>
 #include <algorithm>
+#include <cstdio>
+#include <print>
 #include <utility>
 
 #include "airegistry.h"
+#include "numberoptions.h"
 #include "pluginfilesync.h"
 #include "scriptplugins.h"
+#include "testaudio.h"
+
+namespace {
+
+void say(const QString &why) { std::println(stderr, "{}", qPrintable(why)); }
+
+} // namespace
 
 ScriptSession::ScriptSession(ScriptTools::Context context) : m_context(std::move(context)) {
     if (!m_context.settings) {
@@ -57,4 +68,38 @@ bool ScriptSession::scratch(const Settings &settings, const QString &folder) {
         return false;
     const QStringList own = settings.libraries();
     return std::ranges::none_of(own, [&](const QString &library) { return same(folder, library); });
+}
+
+bool ScriptSession::asAsked(const QCommandLineParser &parser, ScriptTools::Context &context, std::unique_ptr<Library> &library,
+                            std::optional<AudioDevices> &room) {
+    if (const auto why = Numbers::problem(parser, {{.name = QStringLiteral("wait"), .isWhole = false}})) {
+        say(*why);
+        return false;
+    }
+    if (parser.isSet("library")) {
+        library = std::make_unique<Library>(parser.value("library"));
+        QString error;
+        if (!library->open(&error)) {
+            say(error);
+            return false;
+        }
+        context.library = [&library] { return library.get(); };
+    }
+    const bool testing = parser.isSet("test-microphone");
+    if (!testing && !parser.isSet("allow-microphone"))
+        return true;
+    if (!parser.isSet("library") || !ScriptSession::scratch(Settings(), parser.value("library"))) {
+        say("--test-microphone and --allow-microphone are for a scratch library: name one with --library that is "
+            "none of your own libraries, such as a new folder.");
+        return false;
+    }
+    const auto hears = testing ? TestAudio::microphone(parser.value("test-microphone")) : std::nullopt;
+    if (testing && !hears) {
+        say("--test-microphone hears tone, silence, or a WAV file of mono 16-bit samples at 48 kHz.");
+        return false;
+    }
+    if (hears)
+        context.audio = &room.emplace(*hears, [] { return TestAudio::speakers(); });
+    context.microphoneGranted = parser.isSet("allow-microphone");
+    return true;
 }

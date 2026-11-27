@@ -2,7 +2,9 @@
 
 #include <QCommandLineParser>
 #include <QString>
+#include <QStringList>
 #include <expected>
+#include <optional>
 
 #include "graph.h"
 #include "library.h"
@@ -20,5 +22,8 @@ struct Chosen {
 };
 
 [[nodiscard]] std::expected<Chosen, QString> of(const Library &library, const QCommandLineParser &parser, const QString &sub, qint64 first);
+// Why a number a graph command was given isn't one (#230): the books, nodes and
+// relations it names, and its options.
+[[nodiscard]] std::optional<QString> notNumbers(const QCommandLineParser &parser, const QStringList &words);
 
 } // namespace GraphChoice

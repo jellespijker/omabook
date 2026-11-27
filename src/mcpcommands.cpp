@@ -314,7 +314,7 @@ const bool registered = [] {
                           asked << "--reset";
                       const QJsonObject options = arguments.value("options").toObject();
                       for (auto it = options.begin(); it != options.end(); ++it)
-                          asked << "--set" << it.key() + "=" + (it->isDouble() ? QString::number(it->toInteger()) : it->toString());
+                          asked << "--set" << it.key() + "=" + (it->isDouble() ? QString::number(it->toDouble(), 'g', 15) : it->toString());
                       return command(asked);
                   }});
 

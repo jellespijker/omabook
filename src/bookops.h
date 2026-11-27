@@ -25,6 +25,9 @@ namespace BookOps {
 // The file of a book that Omabook reads itself; empty, with `error`, for a
 // book with no such format (one to convert first, or one that isn't a file).
 QString readableFile(const Library &library, qint64 id, QString *error);
+// Whether a place in `section` can be kept for a book: the file the reader opens
+// has that section (#230). Any section does for a book with no such file here.
+[[nodiscard]] std::expected<void, Failure> checkSection(const Library &library, qint64 id, qint64 section);
 // Opens a book in the library by its number, or any book file by its path.
 std::unique_ptr<Document> open(const Library *library, const QString &numberOrFile, QString *error);
 

@@ -3,6 +3,7 @@
 #include <QStringList>
 #include <optional>
 
+#include "numberoptions.h"
 #include "tenancy.h"
 
 namespace {
@@ -56,4 +57,31 @@ std::expected<GraphChoice::Chosen, QString> GraphChoice::of(const Library &libra
     if (const auto why = refused(tenant, sub))
         return std::unexpected(*why);
     return Chosen{Graph::forTenant(library, tenant.value_or(Tenant::unfiled())), false};
+}
+
+namespace {
+
+// How many of the words after a command are numbers.
+qsizetype numbersNamed(const QStringList &words) {
+    static const QStringList one{"show", "export", "log", "node", "unlink", "remove", "connect"};
+    const QString sub = words.value(0);
+    if (sub == "build")
+        return words.size();
+    if (sub == "link" || sub == "merge")
+        return 2;
+    return one.contains(sub) ? 1 : 0;
+}
+
+} // namespace
+
+std::optional<QString> GraphChoice::notNumbers(const QCommandLineParser &parser, const QStringList &words) {
+    const qsizetype named = numbersNamed(words);
+    if (const auto why = Numbers::notNumbers(words.mid(1, named)))
+        return why;
+    return Numbers::problem(parser, {Numbers::section("upto"),
+                                     Numbers::section(),
+                                     Numbers::fraction(),
+                                     {.name = "book", .least = 1},
+                                     {.name = "depth"},
+                                     {.name = "limit", .least = 1}});
 }

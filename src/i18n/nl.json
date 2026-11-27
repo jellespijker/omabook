@@ -3053,5 +3053,10 @@
   "The library in %1 is read-only, and Omabook needs to write to it. Give yourself write permission to the folder and the files in it (chmod -R u+w), or check that its drive isn't mounted read-only.": "De bibliotheek in %1 is alleen-lezen, en Omabook moet erin kunnen schrijven. Geef jezelf schrijfrechten voor de map en de bestanden erin (chmod -R u+w), of controleer of de schijf niet alleen-lezen is aangekoppeld.",
   "The library's database %1 can't be opened: %2": "De database van de bibliotheek %1 kan niet worden geopend: %2",
   "The library's database %1 is damaged (%2). Restore the library from a snapshot (omabook snapshot list, then omabook snapshot restore <id> --to <folder>), or put back a copy of the database from %3, where one is kept before an update changes the library's format.": "De database van de bibliotheek %1 is beschadigd (%2). Zet de bibliotheek terug uit een momentopname (omabook snapshot list, daarna omabook snapshot restore <id> --to <folder>), of zet een kopie van de database terug uit %3, waar er een wordt bewaard voordat een update het formaat van de bibliotheek wijzigt.",
-  "“%1” was removed from the library. Its files were moved to the trash, where you can get them back.": "“%1” is uit de bibliotheek verwijderd. De bestanden zijn naar de prullenbak verplaatst, waar je ze kunt terughalen."
+  "“%1” was removed from the library. Its files were moved to the trash, where you can get them back.": "“%1” is uit de bibliotheek verwijderd. De bestanden zijn naar de prullenbak verplaatst, waar je ze kunt terughalen.",
+  "This book has sections 0 to %1; there is no section %2.": "Dit boek heeft secties 0 tot en met %1; sectie %2 bestaat niet.",
+  "Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.": "Bij Nummer hoort een getal, zoals 3 of 2,5, niet “%1”. Er is niets opgeslagen.",
+  "A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.": "Een poort is een heel getal van 1 tot en met 65535, niet “%1”. De vorige poort blijft staan.",
+  "A book's number in its series is a number from 0, such as 3 or 2.5, not \"%1\".": "Het nummer van een boek in zijn serie is een getal vanaf 0, zoals 3 of 2,5, niet “%1”.",
+  "A rating is a whole number of stars from 0 to 5, not \"%1\".": "Een beoordeling is een heel aantal sterren van 0 tot en met 5, niet “%1”."
 }

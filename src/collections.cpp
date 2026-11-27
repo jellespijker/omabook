@@ -13,6 +13,7 @@
 #include "collectionshare.h"
 #include "curation.h"
 #include "keptproposals.h"
+#include "numberoptions.h"
 #include "readingformat.h"
 #include "settings.h"
 
@@ -133,6 +134,19 @@ void printList(const QJsonArray &collections, bool json) {
                               .arg(collection.value("count").toInt()).arg(collection.value("rule").toString()));
         }
     }
+}
+
+// "1,3=Some/Path": the numbers picked, and another path for some; none when one
+// of them is no number (#230).
+std::optional<QHash<int, QString>> pickedOf(const QString &given) {
+    QHash<int, QString> picked;
+    for (const QString &item : given.split(',', Qt::SkipEmptyParts)) {
+        const auto number = Numbers::whole(item.section('=', 0, 0).trimmed(), 1);
+        if (!number)
+            return std::nullopt;
+        picked.insert(static_cast<int>(*number), item.section('=', 1).trimmed());
+    }
+    return picked;
 }
 
 } // namespace
@@ -273,9 +287,9 @@ int Collections::run(const QStringList &arguments) {
         if (!saved)
             KeptProposals::keep(library, proposals);
         // "1,3=Some/Path": the numbers picked, and another path for some.
-        QHash<int, QString> picked;
-        for (const QString &item : parser.value("pick").split(',', Qt::SkipEmptyParts))
-            picked.insert(item.section('=', 0, 0).trimmed().toInt(), item.section('=', 1).trimmed());
+        const auto picked = pickedOf(parser.value("pick"));
+        if (!picked)
+            return fail("--pick takes the numbers in the list, such as 1,3, not \"" + parser.value("pick") + "\".");
         QJsonArray array, undecided;
         int applied = 0, number = 0;
         QStringList problems;
@@ -293,10 +307,10 @@ int Collections::run(const QStringList &arguments) {
             if (!json)
                 print(stdout, QString("%1\t%2\t%3\t-> %4%5\t%6").arg(number).arg(proposal.bookId)
                                   .arg(proposal.meta.title, proposal.collection, fresh ? " (new)" : "", proposal.why));
-            if (parser.isSet("pick") ? !picked.contains(number) : !parser.isSet("apply"))
+            if (parser.isSet("pick") ? !picked->contains(number) : !parser.isSet("apply"))
                 continue;
-            if (!picked.value(number).isEmpty()) {
-                proposal.collection = picked.value(number);
+            if (!picked->value(number).isEmpty()) {
+                proposal.collection = picked->value(number);
                 proposal.collectionId = 0;
             }
             if (Curation::apply(library, proposal, &error))

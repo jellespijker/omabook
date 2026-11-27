@@ -14,6 +14,7 @@
 #include <functional>
 
 #include "bookops.h"
+#include "graphbyhand.h"
 #include "graphchoice.h"
 #include "graphcommands.h"
 #include "graphcontext.h"
@@ -22,6 +23,7 @@
 #include "graphprint.h"
 #include "graphwalk.h"
 #include "mcp.h"
+#include "numberoptions.h"
 #include "settings.h"
 #include "tenancy.h"
 
@@ -37,12 +39,27 @@ QJsonObject placeJson(const GraphPlace &place) {
 
 bool GraphOps::failed(const QJsonObject &answer) { return answer.contains("error"); }
 
+namespace {
+
+// Whether the place a thing to add names is one, when it names one: what is none
+// is refused, never taken for the start of the book (#230). A plugin may name a
+// section its book has yet to grow.
+bool namesAPlace(const QJsonObject &thing) {
+    const QJsonValue section = thing.value("section");
+    const QJsonValue fraction = thing.value("fraction");
+    const bool sectionFits = section.isUndefined() || section.toInteger(-1) >= 0;
+    const bool fractionFits = fraction.isUndefined() || (fraction.toDouble(-1) >= 0 && fraction.toDouble(-1) <= 1);
+    return sectionFits && fractionFits;
+}
+
+} // namespace
+
 std::optional<GraphPlace> GraphOps::place(qint64 bookId, const QString &section, const QString &fraction) {
-    bool number = false;
-    const int at = section.toInt(&number);
-    if (!number || at < 0)
+    const auto at = Numbers::whole(section);
+    const auto into = fraction.isEmpty() ? std::optional(1.0) : Numbers::decimal(fraction, 0, 1);
+    if (!at || !into)
         return std::nullopt;
-    return GraphPlace{bookId, at, fraction.isEmpty() ? 1.0 : qBound(0.0, fraction.toDouble(), 1.0)};
+    return GraphPlace{bookId, static_cast<int>(*at), *into};
 }
 
 QJsonObject GraphOps::add(Graph graph, const QJsonObject &thing) {
@@ -56,6 +73,8 @@ QJsonObject GraphOps::add(Graph graph, const QJsonObject &thing) {
     QJsonObject data = thing.value("data").toObject();
     if (thing.value("aliases").isArray())
         data.insert("aliases", thing.value("aliases"));
+    if (!namesAPlace(thing))
+        return problem("A place is a section, counted from 0, and a fraction from 0 to 1.");
     std::optional<GraphPlace> seen;
     if (bookId > 0) {
         // Met where it is said to be, or where the book was read to.
@@ -194,34 +213,6 @@ QJsonObject GraphOps::sync(Library &library) {
 
 namespace {
 
-constexpr auto usage =
-    "Usage: omabook graph <command> [options]\n\n"
-    "The knowledge graph: the people, places, ideas, plot threads and themes of the books being read, the real-world\n"
-    "topics they touch, the questions asked, and what was read when. It is never ahead of a book's reader.\n\n"
-    "  show [book] [--upto section] [--scope s]   A book's graph (up to a place), or a whole scope\n"
-    "  find <words> [--kind k] [--scope s|--everywhere]  Search names, other names and summaries\n"
-    "  node <id> [--depth n] [--timeline] [--book b [--upto section]]\n"
-    "                                             One thing, where it was met, and what is around it; with\n"
-    "                                             --timeline, when each thing known of it was revealed\n"
-    "  add --kind k --name n [--summary s] [--alias a] [--book id [--section n]] [--scope s] [--data json]\n"
-    "  link <a> <b> <relation> [--note text]      Relate two nodes: a \"mentor of\" b\n"
-    "  unlink <edge>                              Remove a relation\n"
-    "  merge <keep> <other>                       Fold one node into another\n"
-    "  remove <id>                                Remove a node and its relations\n"
-    "  build <book> [--upto section|--all] [--again]  Grow a book's graph with the AI, as far as it was read\n"
-    "  connect <book>|--read [--estimate] [--again]  Have the AI link a book's themes and ideas to the other books read\n"
-    "  export [book] --format json|graphml|dot|cypher [--output file] [--scope s] [--upto section]\n"
-    "  scopes                                     The graphs there are: the general one (\"\") and made-up worlds\n"
-    "  copy-scope <from> <to>, remove-scope <s>   Fork a graph under a new name; throw one away\n"
-    "  log [book]                                 The reading log: what was read on which day\n"
-    "  sync                                       Bring the books' own nodes in step with the library\n"
-    "  take <file>                                Merge in another computer's graph (what omabook sync sends)\n\n"
-    "Kinds: character, place, group, concept, item, event, thread, theme, topic, question, book, author, series, tag.\n"
-    "chronology [book]: the events in the order they happen (omabook chronology). Every command takes --json and --library <folder>.\n\n"
-    "The graph of a library kept apart by its top-level collections is read, and added to by hand, in one of them at a time:\n"
-    "--collection names it (or \"unfiled\"). Without it, that of the book or the thing named, or the library's only one;\n"
-    "a scope of its own (--scope) is read whole, and `scopes` lists those of every one.";
-
 // `connect`: one book, or every book read, each compared with the others once.
 GraphCommands::Kept connectBooks(Library &library, const QCommandLineParser &parser, const QStringList &words) {
     using GraphPrint::print;
@@ -311,6 +302,11 @@ int runGraphCli(const QStringList &arguments) {
         return 0;
     }
 
+    if (const auto why = GraphChoice::notNumbers(parser, words)) {
+        print(stderr, *why);
+        return 1;
+    }
+
     Library library(parser.isSet("library") ? parser.value("library") : Settings().libraryPath());
     QString error;
     if (!library.open(&error)) {
@@ -380,35 +376,10 @@ int runGraphCli(const QStringList &arguments) {
             }
         };
     } else if (sub == "add") {
-        QJsonObject thing{
-            {"kind", parser.value("kind")}, {"name", parser.value("name")}, {"summary", parser.value("summary")}, {"scope", scope}};
-        if (parser.isSet("alias"))
-            thing.insert("aliases", QJsonArray::fromStringList(parser.values("alias")));
-        if (parser.isSet("data")) {
-            const QJsonDocument data = QJsonDocument::fromJson(parser.value("data").toUtf8());
-            if (!data.isObject()) {
-                print(stderr, "--data takes a JSON object, such as '{\"url\": \"...\"}'.");
-                return 1;
-            }
-            thing.insert("data", data.object());
-        }
-        if (parser.isSet("book"))
-            thing.insert("book", parser.value("book").toLongLong());
-        if (parser.isSet("section")) {
-            thing.insert("section", parser.value("section").toInt());
-            thing.insert("fraction", parser.value("fraction").toDouble());
-        }
-        answer = GraphOps::add(graph, thing);
+        answer = GraphByHand::add(graph, parser);
         plain = [&] { print(stdout, nodeLine(answer.value("node").toObject())); };
     } else if (sub == "link" && words.size() >= 4) {
-        // Learned in a book: at the section named, or where it was read to.
-        const qint64 bookId = parser.value("book").toLongLong();
-        const Progress read = library.progress(bookId);
-        std::optional<GraphPlace> learned;
-        if (bookId > 0 && library.book(bookId))
-            learned = parser.isSet("section") ? GraphOps::place(bookId, parser.value("section"), parser.value("fraction"))
-                                              : std::optional(GraphPlace{bookId, read.place});
-        answer = GraphOps::link(graph, first, second, words.mid(3).join(' '), parser.value("note"), learned);
+        answer = GraphByHand::link(graph, parser, words);
         plain = [&] { print(stdout, QString("Relation %1 is in the graph.").arg(answer.value("edge").toInteger())); };
     } else if (sub == "unlink" && words.size() == 2) {
         answer = GraphOps::unlink(graph, first);

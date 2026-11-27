@@ -30,6 +30,7 @@
 #include "interfacechange.h"
 #include "library.h"
 #include "log.h"
+#include "mcparguments.h"
 #include "plugins.h"
 #include "settings.h"
 
@@ -99,64 +100,6 @@ QByteArray errorLine(const QJsonValue &id, int code, const QString &message, con
 // what is read is the user's library, which changes under it.
 enum class Cache { NotCached, Fixed, Live };
 using enum Cache;
-
-// ---------------------------------------------------------------------------
-// Checking arguments against a tool's schema: the part of JSON Schema the
-// schema builders in mcp.h produce. What is wrong is said in words an agent
-// can act on, since it goes back to it as the tool's result.
-
-QString typeOf(const QJsonValue &value) {
-    switch (value.type()) {
-    case QJsonValue::Bool: return "boolean";
-    case QJsonValue::Double: return "number";
-    case QJsonValue::String: return "string";
-    case QJsonValue::Array: return "array";
-    case QJsonValue::Object: return "object";
-    default: return "null";
-    }
-}
-
-QString check(const QJsonObject &schema, const QJsonValue &value, const QString &name) {
-    const QString type = schema.value("type").toString();
-    const bool whole = value.isDouble() && value.toDouble() == double(value.toInteger());
-    const bool fits = type.isEmpty() || (type == "integer" ? whole : typeOf(value) == type);
-    if (!fits)
-        return QString("\"%1\" must be %2, not %3.").arg(name, type == "integer" ? "a whole number" : "of type " + type, typeOf(value));
-    if (schema.contains("enum") && !schema.value("enum").toArray().contains(value)) {
-        QStringList allowed;
-        for (const QJsonValue &option : schema.value("enum").toArray())
-            allowed << "\"" + option.toString() + "\"";
-        return QString("\"%1\" must be one of %2.").arg(name, allowed.join(", "));
-    }
-    if (value.isDouble() && schema.contains("minimum") && value.toDouble() < schema.value("minimum").toDouble())
-        return QString("\"%1\" must be at least %2.").arg(name).arg(schema.value("minimum").toDouble());
-    if (value.isDouble() && schema.contains("maximum") && value.toDouble() > schema.value("maximum").toDouble())
-        return QString("\"%1\" must be at most %2.").arg(name).arg(schema.value("maximum").toDouble());
-    if (value.isArray() && schema.contains("items")) {
-        const QJsonArray items = value.toArray();
-        for (qsizetype i = 0; i < items.size(); ++i)
-            if (const QString problem = check(schema.value("items").toObject(), items.at(i), QString("%1[%2]").arg(name).arg(i));
-                !problem.isEmpty())
-                return problem;
-    }
-    if (value.isObject() && schema.contains("properties")) {
-        const QJsonObject object = value.toObject(), properties = schema.value("properties").toObject();
-        for (const QJsonValue &required : schema.value("required").toArray())
-            if (!object.contains(required.toString()))
-                return QString("\"%1\" is required.").arg(name.isEmpty() ? required.toString() : name + "." + required.toString());
-        for (auto member = object.begin(); member != object.end(); ++member) {
-            const QString path = name.isEmpty() ? member.key() : name + "." + member.key();
-            if (!properties.contains(member.key())) {
-                if (schema.value("additionalProperties").toBool(true))
-                    continue;
-                return QString("There is no argument \"%1\"; the arguments are: %2.").arg(path, properties.keys().join(", "));
-            }
-            if (const QString problem = check(properties.value(member.key()).toObject(), member.value(), path); !problem.isEmpty())
-                return problem;
-        }
-    }
-    return {};
-}
 
 // ---------------------------------------------------------------------------
 // The tools Omabook itself brings. Each is a thin layer over the library and
@@ -327,6 +270,16 @@ QJsonObject customState(const Customization &custom, const Settings &settings) {
             {"views", QJsonArray::fromStringList(Customization::builtInViews())}};
 }
 
+// Why the place an agent gives can't be the book's; empty when it can.
+QString placeRefused(const Library &library, qint64 id, const QJsonObject &arguments) {
+    if (!arguments.contains("section") && !arguments.contains("fraction") && !arguments.contains("percent"))
+        return "Give at least one of section, fraction and percent.";
+    if (!arguments.contains("section"))
+        return {};
+    const auto fits = BookOps::checkSection(library, id, arguments.value("section").toInteger());
+    return fits ? QString() : fits.error().text();
+}
+
 QList<Tool> coreTools() {
     using namespace Mcp;
     QList<Tool> tools;
@@ -457,7 +410,7 @@ QList<Tool> coreTools() {
                   "files later with book_add_format.",
                   detailSchema({{"paper", boolean("Whether there is a copy on a real shelf.")},
                                 {"status", choice("Where it stands: to-read, reading or read.", {"to-read", "reading", "read"})},
-                                {"rating", integer("Stars, 1 to 5; 0 for none.", 0)}},
+                                {"rating", McpArguments::atMost(integer("Stars, 1 to 5; 0 for none.", 0), 5)}},
                                {"title", "paper"}),
                   Changes, [](const QJsonObject &arguments) {
                       const Shelf at = shelf(arguments, false);
@@ -469,8 +422,7 @@ QList<Tool> coreTools() {
                       if (!added.error.isEmpty())
                           return Result::fail(added.error);
                       if (arguments.contains("status") || arguments.contains("rating"))
-                          at.library->setReading(added.id, arguments.value("status").toString(),
-                                                 qMin(arguments.value("rating").toInt(), 5), {});
+                          at.library->setReading(added.id, arguments.value("status").toString(), arguments.value("rating").toInt(), {});
                       return Result::ok(brief(*at.library->book(added.id)));
                   }};
 
@@ -667,8 +619,8 @@ QList<Tool> coreTools() {
                       const Shelf at = shelf(arguments);
                       if (!at)
                           return Result::fail(at.error);
-                      if (!arguments.contains("section") && !arguments.contains("fraction") && !arguments.contains("percent"))
-                          return Result::fail("Give at least one of section, fraction and percent.");
+                      if (const QString why = placeRefused(*at.library, at.id, arguments); !why.isEmpty())
+                          return Result::fail(why);
                       Progress place = at.library->progress(at.id);
                       place.updated = 0; // stamped with now
                       place.place = BookPlace::fromJson(arguments, place.place);
@@ -1090,7 +1042,7 @@ QJsonObject toolJson(const Tool &tool) {
 
 QJsonObject callTool(const Tool &tool, const QJsonObject &arguments) {
     Result result;
-    if (const QString problem = check(tool.inputSchema, arguments, {}); !problem.isEmpty()) {
+    if (const QString problem = McpArguments::check(tool.inputSchema, arguments, {}); !problem.isEmpty()) {
         result = Result::fail(problem);
     } else {
         try {
@@ -1176,8 +1128,9 @@ QJsonObject resourceTemplates() {
     const auto document = BookOps::open(library.get(), match.captured(1), &error);
     if (!document)
         return error.isEmpty() ? notFound : std::unexpected(error);
-    const int section = match.captured(2).toInt();
-    if (section >= document->count())
+    bool whole = false;
+    const int section = match.captured(2).toInt(&whole);
+    if (!whole || section >= document->count())
         return notFound;
     return contents("text/plain", document->text(section));
 }

@@ -76,3 +76,31 @@ void GraphPrint::printView(const QJsonObject &view) {
         printView(layer);
     }
 }
+
+const char *const GraphPrint::usage =
+    "Usage: omabook graph <command> [options]\n\n"
+    "The knowledge graph: the people, places, ideas, plot threads and themes of the books being read, the real-world\n"
+    "topics they touch, the questions asked, and what was read when. It is never ahead of a book's reader.\n\n"
+    "  show [book] [--upto section] [--scope s]   A book's graph (up to a place), or a whole scope\n"
+    "  find <words> [--kind k] [--scope s|--everywhere]  Search names, other names and summaries\n"
+    "  node <id> [--depth n] [--timeline] [--book b [--upto section]]\n"
+    "                                             One thing, where it was met, and what is around it; with\n"
+    "                                             --timeline, when each thing known of it was revealed\n"
+    "  add --kind k --name n [--summary s] [--alias a] [--book id [--section n]] [--scope s] [--data json]\n"
+    "  link <a> <b> <relation> [--note text]      Relate two nodes: a \"mentor of\" b\n"
+    "  unlink <edge>                              Remove a relation\n"
+    "  merge <keep> <other>                       Fold one node into another\n"
+    "  remove <id>                                Remove a node and its relations\n"
+    "  build <book> [--upto section|--all] [--again]  Grow a book's graph with the AI, as far as it was read\n"
+    "  connect <book>|--read [--estimate] [--again]  Have the AI link a book's themes and ideas to the other books read\n"
+    "  export [book] --format json|graphml|dot|cypher [--output file] [--scope s] [--upto section]\n"
+    "  scopes                                     The graphs there are: the general one (\"\") and made-up worlds\n"
+    "  copy-scope <from> <to>, remove-scope <s>   Fork a graph under a new name; throw one away\n"
+    "  log [book]                                 The reading log: what was read on which day\n"
+    "  sync                                       Bring the books' own nodes in step with the library\n"
+    "  take <file>                                Merge in another computer's graph (what omabook sync sends)\n\n"
+    "Kinds: character, place, group, concept, item, event, thread, theme, topic, question, book, author, series, tag.\n"
+    "chronology [book]: the events in the order they happen (omabook chronology). Every command takes --json and --library <folder>.\n\n"
+    "The graph of a library kept apart by its top-level collections is read, and added to by hand, in one of them at a time:\n"
+    "--collection names it (or \"unfiled\"). Without it, that of the book or the thing named, or the library's only one;\n"
+    "a scope of its own (--scope) is read whole, and `scopes` lists those of every one.";

@@ -250,6 +250,12 @@ public:
         StatusUnknown,      // {}
         DetailsAtNotATime,  // {}
         IdentifierUnformed, // {what was given}
+
+        // A number that isn't one, or is out of range, changes nothing (#230).
+        SeriesIndexNotANumber, // {what was given}
+        RatingNotStars,        // {what was given}
+        SectionPastEnd,        // {the last section, what was given}
+
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.
         // Whether another model is tried decides by these (AiProvider::modelToRetry), never by the words.
         AiOff,                   // {}: set to Off in the settings, so nothing is asked of any model or server (#133)

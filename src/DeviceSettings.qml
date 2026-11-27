@@ -20,7 +20,11 @@ ColumnLayout {
         text: devices.options[key] !== undefined ? String(devices.options[key]) : ""
         selectByMouse: true
         Material.roundedScale: theme.radius
-        onEditingFinished: devices.set(key, text.trim())
+        onEditingFinished: {
+            devices.set(key, text.trim())
+            // What was kept, which a port that can't be one doesn't change.
+            text = Qt.binding(() => devices.options[key] !== undefined ? String(devices.options[key]) : "")
+        }
     }
     component Note: Label {
         Layout.fillWidth: true
