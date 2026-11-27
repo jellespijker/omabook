@@ -134,6 +134,8 @@ signals:
     void changeChanged();
     void foundChanged();
     void aiChanged();
+    // The chosen changes were made.
+    void applied();
 
 private:
     struct Entry {
@@ -142,6 +144,8 @@ private:
     };
     void setBusy(bool busy, const QString &status = {});
     void add(const QList<Proposal> &proposals);
+    void apply(const QList<Proposal> &proposals);
+    void refuseUnsnapshot(const Failure &why);
     void askSeries();
     void askCollections();
     // The books asking and suggesting go by: the shown collection's, or all.
@@ -158,6 +162,8 @@ private:
     Colors m_colors;
     QList<Entry> m_entries;
     bool m_busy = false;
+    // Which asking to apply the changes is the latest, while its snapshot is taken.
+    int m_applyAsked = 0;
     bool m_lookUps = false;
     QString m_status;
     std::unique_ptr<AiCall> m_tidyCall;

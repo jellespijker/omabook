@@ -280,7 +280,7 @@ QList<Proposal> Curation::duplicates(const QList<Book> &books) {
             proposals << proposal;
         }
     }
-    return proposals;
+    return withDropped(std::move(proposals), books);
 }
 
 QList<Proposal> Curation::authorSpellings(const QList<Book> &books) {

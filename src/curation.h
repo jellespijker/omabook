@@ -30,6 +30,12 @@ struct Proposal {
     // path; with no number, a new one, made at that path when applied.
     qint64 collectionId = 0;
     QString collection{};
+    // duplicate: what the folded book says that would not be kept, by the
+    // names of LibraryMerge::dropped.
+    // NOLINTNEXTLINE(readability-redundant-member-init): without it, each initialisation by position warns of a missing member
+    QStringList dropped{};
+    // Whether it waits for the person's own choice: unsure, or losing something.
+    [[nodiscard]] bool waits() const { return unsure || !dropped.isEmpty(); }
 };
 
 namespace Curation {
@@ -61,6 +67,10 @@ QString titleKey(const QString &title);
 // their own. The copy with the most to it is kept
 // and the others fold into it.
 QList<Proposal> duplicates(const QList<Book> &books);
+// The duplicates among `proposals`, each marked with what its fold would not keep.
+QList<Proposal> withDropped(QList<Proposal> proposals, const QList<Book> &books);
+// Why a proposal is the person's to judge, in a sentence or two.
+QString doubt(const Proposal &proposal);
 // Authors written "Last, First", or one author spelled several ways.
 QList<Proposal> authorSpellings(const QList<Book> &books);
 

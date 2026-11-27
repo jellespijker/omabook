@@ -15,7 +15,7 @@ AppPopup {
     readonly property var fieldNames: ({
         title: qsTr("title"), authors: qsTr("authors"), series: qsTr("series"), publisher: qsTr("publisher"),
         published: qsTr("date"), language: qsTr("language"), isbn: qsTr("ISBN"), description: qsTr("description"),
-        tags: qsTr("tags"), cover: qsTr("cover")
+        tags: qsTr("tags"), cover: qsTr("cover"), rating: qsTr("rating"), finished: qsTr("date finished")
     })
     readonly property var kinds: ({
         duplicate: qsTr("The same book twice"), author: qsTr("Author's name"), series: qsTr("Series"),
@@ -46,6 +46,13 @@ AppPopup {
         list.forceActiveFocus()
     }
     onClosed: librarian.stop()
+
+    // Open until the changes are made: a moment snapshot may come first, and
+    // when none can be taken the changes stay here, unmade.
+    Connections {
+        target: librarian
+        function onApplied() { dialog.close() }
+    }
 
     ColumnLayout {
         anchors.fill: parent
@@ -80,7 +87,7 @@ AppPopup {
                   : list.count === 0 ? qsTr("Nothing to tidy: no duplicates, and every author is spelled one way.")
                   : dialog.pass === "collections"
                     ? qsTr("Untick what you'd rather leave. Nothing changes until you make the changes; a new collection is made then.")
-                  : qsTr("Untick what you'd rather leave. A book folded into another goes to the trash; its formats move over.")
+                  : qsTr("Untick what you'd rather leave. A book folded into another goes to the trash; its formats, and the details only it has, move over.")
         }
         ListView {
             id: list
@@ -145,11 +152,22 @@ AppPopup {
                             font.pixelSize: 12
                             color: theme.colors.orange
                             text: row.modelData.kind === "duplicate"
-                                  ? qsTr("Another copy (%1) folds into this one (%2).").arg(row.modelData.otherFormats).arg(row.modelData.formats)
+                                  ? qsTr("Another copy (%1) folds into this one (%2).").arg(row.modelData.otherFormats || qsTr("no file")).arg(row.modelData.formats || qsTr("no file"))
                                   : row.modelData.kind === "collection" && row.modelData.isNew ? qsTr("Put in %1, a new collection").arg(row.modelData.collection)
                                   : row.modelData.kind === "collection" ? qsTr("Put in %1").arg(row.modelData.collection)
                                   : row.modelData.kind === "undecided" ? qsTr("Not clear where it belongs; put it in a collection yourself with %1.").arg((custom.keyText["library.collection_book"] || "").split("  ")[0])
                                   : dialog.changed(row.modelData)
+                        }
+                        Label {
+                            objectName: "tidyDropped"
+                            Layout.fillWidth: true
+                            visible: row.modelData.dropped.length > 0
+                            textFormat: Text.PlainText
+                            wrapMode: Text.Wrap
+                            font.pixelSize: 12
+                            color: theme.colors.orange
+                            text: qsTr("The other copy says something else, which would not be kept: %1. Tick it to fold it in all the same.")
+                                      .arg(row.modelData.dropped.map(field => dialog.fieldNames[field] || field).join(", "))
                         }
                         Label {
                             Layout.fillWidth: true
@@ -190,10 +208,7 @@ AppPopup {
                 primary: true
                 enabled: !librarian.busy && librarian.chosen > 0
                 text: qsTr("Make %1 changes").arg(librarian.chosen)
-                onClicked: {
-                    librarian.applyChosen()
-                    dialog.close()
-                }
+                onClicked: librarian.applyChosen()
             }
         }
     }

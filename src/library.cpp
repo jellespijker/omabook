@@ -26,6 +26,7 @@
 #include "graph.h"
 #include "hlc.h"
 #include "librarybatch.h"
+#include "librarymerge.h"
 #include "librarymigrations.h"
 #include "log.h"
 #include "readingformat.h"
@@ -83,14 +84,6 @@ bool failed(QString *error, const QString &why) {
     if (error)
         *error = why;
     return false;
-}
-
-// A merge takes this file of the other book into the one kept when it is a format
-// that one lacks. An empty file is nothing to keep; it goes to the trash with its folder.
-[[nodiscard]] std::expected<void, Failure> taken(Library &library, const Book &kept, const FormatFile &file) {
-    if (kept.formats.contains(file.format) || file.size == 0)
-        return {};
-    return library.addFormat(kept.id, file.path);
 }
 
 } // namespace
@@ -507,11 +500,8 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
     const auto kept = book(keep), folded = book(other);
     if (!kept || !folded || keep == other)
         return failed(error, "There are no two such books to merge.");
-    for (const FormatFile &file : formatFiles(other))
-        if (const auto put = taken(*this, *kept, file); !put)
-            return failed(error, put.error().text());
-    if (!kept->hasCover && folded->hasCover)
-        setCover(keep, QImage(coverPath(other)));
+    if (const auto carried = LibraryMerge::carry(*this, *kept, *folded); !carried)
+        return failed(error, carried.error());
     {
         const Batch batch(*this);
         // What the book is called elsewhere: both books' names, the kept
@@ -537,7 +527,7 @@ bool Library::merge(qint64 keep, qint64 other, QString *error) {
         if (!exec("UPDATE books SET identifiers = ?, paper = ?, shelf = ?, rating = ?, finished = ?, details_at = ?, reading_at = ? "
                   "WHERE id = ?",
                   {compact(identifiers), paper, shelf, rating, finished,
-                   identifiers != kept->identifiers ? now : kept->detailsAt, readingChanged ? now : kept->readingAt, keep}))
+                   identifiers != kept->identifiers ? now : book(keep).value_or(*kept).detailsAt, readingChanged ? now : kept->readingAt, keep}))
             return failed(error, "The library can't be written.");
 
         // The reading place that is further along is the one that was read,

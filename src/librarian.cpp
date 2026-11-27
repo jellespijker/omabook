@@ -74,6 +74,7 @@ QVariantList Librarian::proposals() const {
             {"adds", adds},
             {"changes", changes},
             {"why", proposal.why},
+            {"dropped", proposal.dropped},
             {"collection", proposal.collection},
             {"isNew", proposal.kind == "collection" && proposal.collectionId == 0},
             {"chosen", entry.chosen},
@@ -90,13 +91,6 @@ void Librarian::setBusy(bool busy, const QString &status) {
     m_busy = busy;
     m_status = status;
     emit busyChanged();
-}
-
-void Librarian::add(const QList<Proposal> &proposals) {
-    // A book left undecided is shown, for the person; there is nothing to apply.
-    for (const Proposal &proposal : proposals)
-        m_entries.append({proposal, proposal.kind != "undecided"});
-    emit proposalsChanged();
 }
 
 int Librarian::incomplete() const {
@@ -295,42 +289,8 @@ void Librarian::lookUpNext() {
     }
 }
 
-void Librarian::setChosen(int index, bool chosen) {
-    if (index < 0 || index >= m_entries.size())
-        return;
-    m_entries[index].chosen = chosen && m_entries.at(index).proposal.kind != "undecided";
-    emit proposalsChanged();
-}
-
-void Librarian::applyChosen() {
-    Library *library = m_backend->library();
-    if (!library || m_busy)
-        return;
-    int applied = 0;
-    QStringList problems;
-    // Details and spellings first, then the merges, which take books away.
-    for (const bool merges : {false, true}) {
-        for (const Entry &entry : std::as_const(m_entries)) {
-            const Proposal &proposal = entry.proposal;
-            if (!entry.chosen || (proposal.kind == "duplicate") != merges)
-                continue;
-            QString error;
-            if (Curation::apply(*library, proposal, &error)) {
-                ++applied;
-                if (proposal.coverUrl.isValid())
-                    m_backend->fetchCoverFor(proposal.bookId, proposal.coverUrl);
-            } else {
-                problems << error;
-            }
-        }
-    }
-    m_entries.clear();
-    emit proposalsChanged();
-    m_backend->reload();
-    m_backend->sayOutcome((QStringList{tr("%Ln changes made", "", applied)} + problems.mid(0, 3)).join("\n"), !problems.isEmpty());
-}
-
 void Librarian::stop() {
+    ++m_applyAsked; // a snapshot still being taken is no longer followed by the changes
     if (m_tidyCall)
         m_tidyCall->cancel();
     m_tidyCall.reset();

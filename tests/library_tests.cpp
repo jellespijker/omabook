@@ -2091,7 +2091,7 @@ private slots:
                                        "booklistmodel.h", "booklistmodel.cpp", "main.cpp", "theme.h", "theme.cpp",
                                        "graphcanvas.h", "graphcanvas.cpp", "graphmodel.h", "graphmodel.cpp", "graphjobs.h", "graphjobs.cpp", "graphtenants.h", "graphtenants.cpp", "graphtypes.cpp",
                                        "readingmarks.h", "readingmarks.cpp", "readingpassages.cpp", "marginnotes.h", "marginnotes.cpp", "annotationlayerview.h", "annotationlayerview.cpp", "readinghighlights.h", "readinghighlights.cpp", "readingink.h", "readingink.cpp", "readinglineink.h", "readinglineink.cpp", "annotationfinder.cpp", "meaningfinder.cpp", "pageformat.h", "pageformat.cpp", "spacedesk.h", "spacedesk.cpp",
-                                       "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianfind.cpp",
+                                       "customization.h", "customization.cpp", "interface.h", "interface.cpp", "librarian.h", "librarian.cpp", "librarianapply.cpp", "librarianfind.cpp",
                                        "translator.h", "translator.cpp", "filepicker.h", "portalfilepicker.h", "inksurface.h", "inksurface.cpp", "inksurfacecover.cpp", "inkselection.cpp",
                                        "portalfilepicker.cpp", "chronologycanvas.h", "chronologycanvas.cpp", "chronologymodel.h", "chronologymodel.cpp", "readingstatsview.h", "readingstatsview.cpp", "readaloud.h", "readaloud.cpp", "readingselection.h", "readingselection.cpp", "dictationkeys.h", "dictationkeys.cpp", "qrview.h", "qrview.cpp", "hubdesk.cpp"};
         const QString sources = QFileInfo(QFINDTESTDATA("../src/main.cpp")).absolutePath();

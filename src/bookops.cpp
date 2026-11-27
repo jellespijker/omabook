@@ -385,16 +385,18 @@ QJsonObject BookOps::proposalJson(const Book &book, const Proposal &proposal) {
     QJsonObject object{{"kind", proposal.kind}, {"id", proposal.bookId}, {"title", book.meta.title}};
     if (proposal.kind == "duplicate") {
         object.insert("folds_in", proposal.otherId);
-        // Unsure: the titles only agree once a subtitle is left off.
-        object.insert("confidence", proposal.unsure ? "low" : "high");
+        // Low: the titles only agree once a subtitle is left off, or something would be lost ("drops").
+        object.insert("confidence", proposal.waits() ? "low" : "high");
+        if (!proposal.dropped.isEmpty())
+            object.insert("drops", QJsonArray::fromStringList(proposal.dropped));
     } else if (proposal.kind == "author") {
         object.insert("authors", QJsonArray::fromStringList(proposal.meta.authors));
     } else {
         object.insert("series", proposal.meta.series);
         object.insert("series_index", proposal.meta.seriesIndex);
     }
-    if (!proposal.why.isEmpty())
-        object.insert("why", proposal.why);
+    if (const QString why = Curation::doubt(proposal); !why.isEmpty())
+        object.insert("why", why);
     return object;
 }
 

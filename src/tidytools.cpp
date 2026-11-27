@@ -64,7 +64,7 @@ const bool registered =
     registerTool({"tidy_apply", "Apply chosen tidy-ups",
                   "Makes the changes of the proposals given, which are objects as tidy_propose returned them. A "
                   "\"duplicate\" folds one book into another and moves what is left of it to the trash, so ask the "
-                  "user first. A change to many books takes a moment snapshot first, and says it as \"undo\".",
+                  "user first, naming what its \"drops\" says would not be kept. A change to many books takes a moment snapshot first, and says it as \"undo\".",
                   schema({{"proposals", list("The proposals to apply.", object("One proposal from tidy_propose."))}}, {"proposals"}),
                   Destructive, McpBulk::snapshotFirst(booksProposed, apply)});
 

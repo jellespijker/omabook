@@ -1020,7 +1020,7 @@ int tidy(const QStringList &arguments) {
         QString line = QString("%1\t%2\t%3\t%4\t").arg(number).arg(proposal.kind).arg(proposal.bookId).arg(book->meta.title);
         if (proposal.kind == "duplicate")
             line += QString("book %1 folds into it").arg(proposal.otherId)
-                    + (proposal.unsure ? "\tunsure: " + proposal.why : QString());
+                    + (proposal.waits() ? "\tunsure: " + Curation::doubt(proposal) : QString());
         else if (proposal.kind == "author")
             line += book->meta.authorText() + " -> " + proposal.meta.authorText();
         else
@@ -1031,7 +1031,7 @@ int tidy(const QStringList &arguments) {
         if (!command.json())
             print(stdout, line);
         // An unsure duplicate is only merged when it is picked by its number.
-        if (!command.parser.isSet("pick") && command.parser.isSet("apply") && proposal.unsure) {
+        if (!command.parser.isSet("pick") && command.parser.isSet("apply") && proposal.waits()) {
             ++unsure;
             continue;
         }
