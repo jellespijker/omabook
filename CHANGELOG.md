@@ -12,6 +12,24 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.2.1] - 2026-11-27
+
+### Fixed
+
+- A file that is no book is no longer added (#226): an empty one, one that is damaged or cut short, a text file named `.pdf` or `.cbz`, or a comic without pictures is refused with the reason, whether it is added in the window, opened from the file manager, added with `omabook add`, by an agent or by a plugin. A book protected by DRM or a password is added with a note that it can't be read here.
+- A library that is read-only or whose database is damaged now says so, with what to do (the permissions, or restoring from a snapshot or a copy in `.backups`), instead of saying another program is setting it up (#227). Commands that read a book, such as `omabook text`, give that reason instead of saying there is no such book, and `omabook snapshot list` lists the snapshots of a library that can't be opened.
+- A book removed while you read it, by the command line, an agent, a sync or the window itself, now says that it was removed and that its files went to the trash, with the way back to the library, instead of turning blank (#229).
+- Bookmarking it, removing a margin note in it or changing its layout no longer says it was done when the book is gone (#229).
+- A number that is none no longer becomes 0: a series number, rating or reading place typed or given as `three` or `abc` is refused and nothing changes, at the command line, in the book's edit window, over MCP and from a plugin (#230).
+- A reading place, bookmark or annotation can no longer be put past a book's last section (#230).
+- Options such as `--limit`, `--pick`, `--upto`, `--port` and `-n`, and a mail or serving port typed into the settings, say so when they are given something that is no number, instead of acting on 0 or a default (#230).
+- A line of preformatted text too long for the page, such as a long line of code, wraps onto the next in both layouts instead of being cut off; the listing's own lines and indents stay as they are (#231).
+- A right-to-left book (by its pages' direction, else its language) reads right to left whatever language the window is in: the first page of a spread is on the right, Left, a swipe or a tap on the left edge goes forward, and the margin notes stand at the left (#232).
+- The message at the bottom of the window goes by itself after the time it takes to read it, and no longer stays over the page or the shelf (it is held while the pointer rests on it). What went wrong while adding books, syncing or tidying stays, with a button to close it, until you open or close a book (#233).
+- The hub's container image is published again, for x86_64 and aarch64: the aarch64 build started from the x86_64 Arch Linux image, which failed and kept 0.5.2's image from being published (#253).
+- A computer whose ssh agent holds the key that links it to a hub (gnome-keyring's agent takes in every key in `~/.ssh`) reaches the hub again after `omabook hub add`, instead of every request being answered by that key with "This key links a computer to the hub and does nothing else": Omabook's own key for the hub is offered without the agent (#254).
+- A book whose details were written into its EPUB keeps its id and the file it came in as when a sync sends it to another computer or a hub, or fetches it from one. Before, the hub took it as a book of its own, and your next computer to sync with the hub would have got it twice (#255).
+
 ## [0.5.2] - 2026-11-27
 
 The hub serves your phones and e-readers itself, set up in the Hubs panel, and comes as a container image for a NAS or a Raspberry Pi. A computer can sync with more than one hub, a book's graph is built once among them, and one hub can keep another's snapshots. A library on a drive that isn't there, or a `config.json` with a mistake in it, is no longer replaced, and adding a book or a file no longer writes over or repeats what is there.
