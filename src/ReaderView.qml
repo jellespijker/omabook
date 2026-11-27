@@ -472,20 +472,14 @@ Item {
                 HoverHandler { id: moreHover }
             }
 
-            AppButton {
+            ReaderMenuButton {
                 objectName: "menuButton"
+                host: view
                 visible: win.touch && reader.open
                 z: 3
                 anchors.right: parent.right
                 anchors.bottom: progress.top
                 anchors.margins: 16
-                width: 52
-                height: 52
-                focusPolicy: Qt.NoFocus
-                opacity: view.showBar ? 1 : 0.75
-                text: view.showBar ? "✕" : "☰"
-                font.pixelSize: 20
-                onClicked: view.showBar = !view.showBar
             }
 
             ReadAloudBar {

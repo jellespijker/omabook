@@ -58,6 +58,7 @@
         <file alias="LibraryMissing.qml">LibraryMissing.qml</file>
         <file alias="ModSlot.qml">ModSlot.qml</file>
         <file alias="LibraryEmpty.qml">LibraryEmpty.qml</file>
+        <file alias="ReaderMenuButton.qml">ReaderMenuButton.qml</file>
         <file alias="LibraryTouchBar.qml">LibraryTouchBar.qml</file>
         <file alias="LibraryView.qml">LibraryView.qml</file>
         <file alias="BookTaps.qml">BookTaps.qml</file>

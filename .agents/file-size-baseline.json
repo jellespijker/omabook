@@ -11,7 +11,7 @@
     "src/LibraryView.qml": 721,
     "src/PluginDetail.qml": 597,
     "src/PluginsDialog.qml": 686,
-    "src/ReaderView.qml": 743,
+    "src/ReaderView.qml": 737,
     "src/ReadingSitesDialog.qml": 503,
     "src/ai.cpp": 537,
     "src/booklistmodel.cpp": 798,

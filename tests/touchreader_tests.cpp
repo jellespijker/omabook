@@ -463,6 +463,26 @@ private slots:
         QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(warned(bench.desk)));
     }
 
+    // The button over the page stands on a ground of its own, edged in the
+    // text's colour: told from a white page under a dark theme, and nothing of
+    // the page shows through it (#269).
+    void theMenuButtonStandsOutFromAnyPage() {
+        Bench bench("pdf", "en", "scroll", QSize(700, 700));
+        QVERIFY(bench.desk.pictured());
+        const QQuickItem *button = bench.desk.item("menuButton");
+        QVERIFY(button && button->isVisible());
+        const QRect at = button->mapRectToScene(button->boundingRect()).toRect();
+        const QColor ground = bench.desk.look->property("background").value<QColor>();
+        const QColor ink = bench.desk.look->property("foreground").value<QColor>();
+        const auto seen = [&bench](QPoint point) { return bench.desk.window->grabWindow().pixelColor(point); };
+        // The page beside it is paper, as it is under it.
+        QTRY_COMPARE(seen(at.topLeft() + QPoint(-6, 8)), QColor(Qt::white));
+        bench.desk.shot("touch-menu-button-pdf");
+        QCOMPARE(seen(at.topLeft() + QPoint(8, 8)), ground);
+        QCOMPARE(seen(QPoint(at.center().x(), at.top())), ink);
+        QVERIFY2(bench.desk.warnings.isEmpty(), qPrintable(warned(bench.desk)));
+    }
+
     // The contents (#122) under a finger: opened from the bar, a chapter
     // tapped goes there; in a narrow window it lies over the page, and a tap
     // on the page beside it puts it away.
