@@ -479,8 +479,8 @@ double Reader::pageAspect(int page) const {
     return size.width() > 0 ? size.height() / size.width() : 0;
 }
 
-QVariantList Reader::find(const QString &words) const {
-    return m_document ? DocumentText::find(*m_document, words) : QVariantList();
+QVariantList Reader::find(const QString &words, int most) const {
+    return m_document ? DocumentText::find(*m_document, words, most) : QVariantList();
 }
 
 BookMeta Reader::meta() const {

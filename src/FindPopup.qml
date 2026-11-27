@@ -17,6 +17,11 @@ AppPopup {
     tallest: 600
     property var results: []
     property bool searched: false
+    // How many places in the text are listed before the rest are asked for,
+    // whether there are more than are listed (#270), and the words looked for.
+    readonly property int atFirst: 200
+    property bool more: false
+    property string sought
 
     // Opens on these words, found at once: words selected on the page.
     property string pending: ""
@@ -71,9 +76,26 @@ AppPopup {
             if (words.length === 0 && results.length > 0) list.currentIndex = 0
         }
     }
-    function search(text) {
+    // What was written that holds the words, and their places in the text:
+    // the first of them (one more is asked for, to know whether there are
+    // more), or all.
+    function search(text, all) {
+        sought = text
+        more = false
         const only = noted.onlyNotes(text)
-        return only !== "" ? noted.find(only) : noted.find(text).concat(reader.find(text))
+        if (only !== "") return noted.find(only)
+        const places = reader.find(text, all ? 0 : atFirst + 1)
+        more = !all && places.length > atFirst
+        return noted.find(text).concat(more ? places.slice(0, atFirst) : places)
+    }
+    // The rest of the places too, the keyboard on the first of those.
+    function showAll() {
+        const meantOnes = results.filter(result => result.meant)
+        const listed = results.length - meantOnes.length
+        results = search(sought, true).concat(meantOnes)
+        list.currentIndex = Math.min(listed, list.count - 1)
+        list.positionViewAtIndex(list.currentIndex, ListView.Beginning)
+        list.forceActiveFocus()
     }
 
     onOpened: {
@@ -110,12 +132,25 @@ AppPopup {
             }
             Keys.onDownPressed: if (list.count > 0) list.forceActiveFocus()
         }
-        Label {
-            objectName: "findCount"
+        RowLayout {
+            Layout.fillWidth: true
             visible: popup.searched
-            text: popup.results.length === 0 ? qsTr("Not found in this book.")
-                                             : qsTr("%Ln places", "", popup.results.length)
-            color: theme.colors.muted
+            spacing: 8
+            Label {
+                objectName: "findCount"
+                Layout.fillWidth: true
+                wrapMode: Text.Wrap
+                text: popup.results.length === 0 ? qsTr("Not found in this book.")
+                      : popup.more ? qsTr("%Ln places shown, and there are more", "", popup.results.length)
+                      : qsTr("%Ln places", "", popup.results.length)
+                color: theme.colors.muted
+            }
+            AppButton {
+                objectName: "findAll"
+                visible: popup.more
+                text: qsTr("Show All")
+                onClicked: popup.showAll()
+            }
         }
         // Finding by meaning: offered for a book not indexed yet, saying first
         // where its text goes; under way, with a way to stop; and once it is

@@ -10,9 +10,10 @@ namespace DocumentText {
 
 // Words found in it (the reader's find): where each is, by its section,
 // how far into it and the chapter it is in, with the words around it, as
-// {section, title, fraction, snippet}; at most 200, in the order of the
-// book. Nothing for fewer than two letters.
-[[nodiscard]] QVariantList find(const Document &document, const QString &words);
+// {section, title, fraction, snippet}; at most `most` of them (all of them
+// when it is 0), in the order of the book. Nothing for fewer than two letters.
+inline constexpr int shownAtFirst = 200;
+[[nodiscard]] QVariantList find(const Document &document, const QString &words, int most = shownAtFirst);
 
 // Its text from one place to another (`to`, where the reader is). A
 // flowing book's place is partway down a chapter; a paged one's is its

@@ -3101,5 +3101,10 @@
   "The disk that holds the library in %1 is full, so Omabook can't use it. Free up space there, then try again.": "De schijf met de bibliotheek in %1 is vol, dus Omabook kan haar niet gebruiken. Maak daar ruimte vrij en probeer het opnieuw.",
   "There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.": "Er is geen ruimte voor %1 op de volle schijf van de bibliotheek. Maak daar ruimte vrij en voeg het opnieuw toe.",
   "A message that waits to be closed": "Een melding die wacht tot ze wordt gesloten",
-  "Close it": "De melding sluiten"
+  "Close it": "De melding sluiten",
+  "%Ln places shown, and there are more": {
+    "one": "%Ln plaats getoond, en er zijn er meer",
+    "other": "%Ln plaatsen getoond, en er zijn er meer"
+  },
+  "Show All": "Alles tonen"
 }

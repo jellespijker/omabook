@@ -4,19 +4,20 @@
 
 #include "document.h"
 
-QVariantList DocumentText::find(const Document &document, const QString &words) {
+QVariantList DocumentText::find(const Document &document, const QString &words, int most) {
     QVariantList results;
+    const auto room = [&results, most] { return most <= 0 || results.size() < most; };
     const QString needle = words.simplified();
     if (needle.size() < 2)
         return results;
     const QList<TocEntry> toc = document.toc();
-    for (int section = 0; section < document.count() && results.size() < 200; ++section) {
+    for (int section = 0; section < document.count() && room(); ++section) {
         const QString text = document.text(section).simplified();
         QString title;
         for (const TocEntry &entry : toc)
             if (entry.section <= section)
                 title = entry.title;
-        for (qsizetype at = text.indexOf(needle, 0, Qt::CaseInsensitive); at >= 0 && results.size() < 200;
+        for (qsizetype at = text.indexOf(needle, 0, Qt::CaseInsensitive); at >= 0 && room();
              at = text.indexOf(needle, at + needle.size(), Qt::CaseInsensitive)) {
             const qsizetype from = qMax<qsizetype>(0, at - 40);
             results << QVariantMap{{"section", section},

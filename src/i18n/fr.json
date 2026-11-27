@@ -3223,5 +3223,11 @@
   "The disk that holds the library in %1 is full, so Omabook can't use it. Free up space there, then try again.": "Le disque qui contient la bibliothèque dans %1 est plein, Omabook ne peut donc pas l’utiliser. Libérez de la place, puis réessayez.",
   "There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.": "Il n’y a pas de place pour %1 sur le disque de la bibliothèque, qui est plein. Libérez de la place, puis ajoutez-le de nouveau.",
   "A message that waits to be closed": "Un message qui attend d'être fermé",
-  "Close it": "Fermer le message"
+  "Close it": "Fermer le message",
+  "%Ln places shown, and there are more": {
+    "many": "%Ln occurrences affichées, et il y en a d'autres",
+    "one": "%Ln occurrence affichée, et il y en a d'autres",
+    "other": "%Ln occurrences affichées, et il y en a d'autres"
+  },
+  "Show All": "Tout afficher"
 }

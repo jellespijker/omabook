@@ -430,6 +430,10 @@
     "one": "%Ln place",
     "other": "%Ln places"
   },
+  "%Ln places shown, and there are more": {
+    "one": "%Ln place shown, and there are more",
+    "other": "%Ln places shown, and there are more"
+  },
   "%Ln plugins need attention": {
     "one": "%Ln plugin needs attention",
     "other": "%Ln plugins need attention"
@@ -2097,6 +2101,7 @@
   "Sharing": "Sharing",
   "Shelf": "Shelf",
   "Show": "Show",
+  "Show All": "Show All",
   "Show Everything Known": "Show Everything Known",
   "Show Me": "Show Me",
   "Show More Connections": "Show More Connections",

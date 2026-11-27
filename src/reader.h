@@ -12,6 +12,7 @@
 
 #include "converter.h"
 #include "document.h"
+#include "documenttext.h"
 #include "graphbuilder.h"
 #include "library.h"
 #include "metadatasource.h"
@@ -164,8 +165,8 @@ public:
     // was removed is put away, and the page says so: asked before anything
     // says it was done to the book (#229).
     Q_INVOKABLE bool stillThere();
-    // Every place the words occur: [{section, title, snippet}], at most 200.
-    Q_INVOKABLE QVariantList find(const QString &words) const;
+    // The places the words occur: [{section, title, snippet}], at most `most`, all of them when it is 0.
+    Q_INVOKABLE QVariantList find(const QString &words, int most = DocumentText::shownAtFirst) const;
 
     // For the assistant: the chapter in front of the reader, and everything
     // up to where they are in it.
