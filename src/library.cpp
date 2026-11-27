@@ -251,9 +251,8 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
         return {.error = Failure(Failure::Code::LibraryBusy).text()};
     const auto id = insert("INSERT INTO books (title, authors, series, series_index, publisher, language, isbn, published, "
                            "description, tags, added, details_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language,
-                            meta.isbn, meta.published, meta.description, meta.tags.join(", "),
-                            Spaces::wallSeconds(*this), Spaces::wallSeconds(*this)});
+                           {meta.title, meta.authorText(), meta.series, meta.seriesIndex, meta.publisher, meta.language, meta.isbn,
+                            meta.published, meta.description, meta.tags.join(", "), Spaces::wallSeconds(*this), Hlc::asImported});
     if (!id)
         return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
     const QString folder = folderFor(meta, *id);
@@ -270,7 +269,7 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
         return {.error = put.error().text()};
     }
     if (!meta.cover.isNull())
-        setCover(*id, meta.cover);
+        setCover(*id, meta.cover, Hlc::asImported);
     return {.id = *id, .duplicate = false, .error = {}};
 }
 

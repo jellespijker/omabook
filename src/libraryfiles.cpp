@@ -101,7 +101,7 @@ void clearPartials(const QString &file) {
     const QImage theirs = ours.isEmpty() ? QImage() : Formats::readMeta(epubFile).cover;
     return {.meta = book.meta,
             .identifiers = book.identifiers,
-            .modified = QDateTime::fromSecsSinceEpoch(book.detailsAt > 0 ? book.detailsAt : book.added, QTimeZone::UTC),
+            .modified = QDateTime::fromSecsSinceEpoch(std::max(book.detailsAt, book.added), QTimeZone::UTC),
             .cover = !theirs.isNull() && Library::coverJpeg(theirs) == ours ? QByteArray() : ours};
 }
 

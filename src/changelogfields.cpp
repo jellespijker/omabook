@@ -43,6 +43,7 @@ ChangeLogFields::Map ChangeLogFields::logged(const Library &library, const QStri
             if (const auto before = ownAt.constFind(field); before == ownAt.cend() || SpaceReducer::writtenAfter(at, *before)) {
                 ownAt.insert(field, at);
                 latest.own = value;
+                latest.ownHlc = hlc;
             }
         });
     return map;
@@ -54,6 +55,11 @@ namespace {
 // a write just now or no later than what the log has of the field, which takes
 // a new tick.
 [[nodiscard]] qint64 newStamp(const ChangeLogFields::Context &context, const ChangeLogFields::Logged *logged, qint64 rowHlc) {
+    // What an import read stays as old as that, whatever another computer said of the field (#284): each such
+    // value of this device's a tick after its last. Unless this device said something newer of it before (a
+    // book changed, removed and added again), which what it holds now has to come after.
+    if (rowHlc > 0 && Hlc::seconds(rowHlc) == Hlc::asImported && (!logged || Hlc::seconds(logged->ownHlc) <= Hlc::asImported))
+        return !logged || logged->ownHlc < rowHlc ? rowHlc : logged->ownHlc + 1;
     const bool isRecentWall = !context.baseline && rowHlc > 0 && Hlc::counter(rowHlc) == 0
                               && std::abs(Spaces::wallSeconds(*context.library) - Hlc::seconds(rowHlc)) <= 5;
     return isRecentWall || (logged && rowHlc <= logged->hlc) ? Spaces::tickHlc(*context.library) : rowHlc;
@@ -61,7 +67,7 @@ namespace {
 
 void writeOwn(ChangeLogFields::Context &context, const QString &field, const QString &value, qint64 hlc) {
     ChangeLog::append(*context.library, {context.space, context.entity, context.gid, field, value, hlc});
-    context.existing.insert(field, {hlc, Spaces::deviceId(*context.library), value, value});
+    context.existing.insert(field, {hlc, Spaces::deviceId(*context.library), value, value, hlc});
 }
 
 [[nodiscard]] QString compactJson(const QJsonObject &object) {

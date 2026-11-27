@@ -23,6 +23,11 @@ public:
     // Plain Unix seconds fit below 2^32 until 2106; any packed clock after
     // 1970-01-02 lies at or above 2^32.
     static constexpr qint64 packedFloor = static_cast<qint64>(quint64{1} << 32U);
+    // The second the details an import read from a file are stamped with (#284):
+    // before any change a person makes, so a file imported again elsewhere
+    // never replaces what they typed, and not 0, which is "no time known". The
+    // first whole day a packed clock holds.
+    static constexpr qint64 asImported = 86400;
 
     explicit Hlc(qint64 last = 0, WallClock clock = {});
 

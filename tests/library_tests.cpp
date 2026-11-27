@@ -932,7 +932,7 @@ private slots:
         QVERIFY(library.open());
         const qint64 id = library.add(dir.filePath("a.epub")).id;
         const qint64 now = QDateTime::currentSecsSinceEpoch();
-        QVERIFY(library.book(id)->detailsAt >= now - 5);
+        QCOMPARE(library.book(id)->detailsAt, qint64(86400)); // what an import read is older than any change (#284)
         QCOMPARE(library.book(id)->readingAt, qint64(0));
         QCOMPARE(library.book(id)->toJson().value("details_at").toInteger(), library.book(id)->detailsAt);
 

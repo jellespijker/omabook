@@ -144,8 +144,11 @@ void syncBookToLog(const Library &library, const Book &book, bool baseline, std:
     for (const auto &[field, value] : ChangeLogFields::bookDetails(library, book))
         ChangeLogFields::write(ctx, field, value, detailsHlc);
     const qint64 loggedDetailsHlc = SpaceReducer::detailsHlc(reducedFrom(ctx.existing));
+    // A row as an import read it (#284) stamps no field back to that: one another computer's word is newer
+    // than, and the log's merged times with it, stays so.
     const bool detailsMismatch =
-        explicitDetailsHlc ? (loggedDetailsHlc != detailsHlc) : (Hlc::seconds(loggedDetailsHlc) != Hlc::seconds(book.detailsAt));
+        explicitDetailsHlc ? (loggedDetailsHlc != detailsHlc)
+                           : (book.detailsAt != Hlc::asImported && Hlc::seconds(loggedDetailsHlc) != Hlc::seconds(book.detailsAt));
     stampAtIfNeeded(ctx, u"details_at"_s, detailsHlc, detailsMismatch);
     syncBookReading(ctx, book);
 }

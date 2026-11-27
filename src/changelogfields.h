@@ -20,6 +20,7 @@ struct Logged {
     QString device;
     QString value;
     std::optional<QString> own;
+    qint64 ownHlc = -1; // and the stamp it wrote it with
 };
 
 using Map = QHash<QString, Logged>;
