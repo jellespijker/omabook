@@ -252,7 +252,48 @@ private slots:
         desk.devices->set("mail_port", "2525");
         desk.devices->set("mail_port", "smtp");
         QCOMPARE(desk.devices->options().value("mail_port").toInt(), 2525);
-        QVERIFY2(desk.devices->status().contains("smtp"), qPrintable(desk.devices->status()));
+        QVERIFY2(desk.devices->refused().contains("smtp"), qPrintable(desk.devices->refused()));
+        desk.devices->set("mail_port", "465");
+        QVERIFY(desk.devices->refused().isEmpty());
+    }
+
+    // Why a port wasn't taken is said in the dialog it was typed in, not
+    // under every book, and goes when a valid one is typed (#262).
+    void whyAPortWasNotTakenStaysInTheDialog() {
+        Desk desk{"en", {}, false};
+        BookMeta meta;
+        meta.title = "The Salt Road";
+        QVERIFY(desk.backend->library()->addEntry(meta, true).id > 0);
+        desk.backend->reload();
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.quicken();
+        QVERIFY(desk.run("library.devices"));
+        QTRY_VERIFY(desk.find("phones")->property("opened").toBool());
+        QQuickItem *port = desk.item("mailPort");
+        QVERIFY(port);
+        const auto type = [&desk, port](const char *words) {
+            port->forceActiveFocus();
+            QMetaObject::invokeMethod(port, "selectAll");
+            for (const char *at = words; *at != '\0'; ++at)
+                QTest::keyClick(desk.window, *at);
+        };
+        const auto refused = [&desk] { return desk.find("devicesRefused")->property("text").toString(); };
+        type("99999");
+        QTest::keyClick(desk.window, Qt::Key_Return);
+        QTRY_VERIFY(refused().contains("99999"));
+        QTest::keyClick(desk.window, Qt::Key_Tab);
+        desk.settle();
+        QVERIFY2(refused().contains("99999"), qPrintable(refused()));
+        QMetaObject::invokeMethod(desk.find("phones"), "close");
+        QTRY_VERIFY(desk.popups().isEmpty());
+        QVERIFY(!desk.shows("sendStatus"));
+        QVERIFY(desk.run("library.devices"));
+        QTRY_VERIFY(desk.find("phones")->property("opened").toBool());
+        type("465");
+        QTest::keyClick(desk.window, Qt::Key_Tab);
+        QTRY_VERIFY(refused().isEmpty());
+        QCOMPARE(desk.devices->options().value("mail_port").toInt(), 465);
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 };
 

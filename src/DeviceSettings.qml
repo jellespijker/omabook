@@ -20,7 +20,13 @@ ColumnLayout {
         text: devices.options[key] !== undefined ? String(devices.options[key]) : ""
         selectByMouse: true
         Material.roundedScale: theme.radius
+        // Whether the person typed here since it was last kept: leaving the
+        // field as it is says nothing, so a refusal stays read (#262).
+        property bool typed: false
+        onTextEdited: typed = true
         onEditingFinished: {
+            if (!typed) return
+            typed = false
             devices.set(key, text.trim())
             // What was kept, which a port that can't be one doesn't change.
             text = Qt.binding(() => devices.options[key] !== undefined ? String(devices.options[key]) : "")
@@ -61,8 +67,9 @@ ColumnLayout {
         Layout.fillWidth: true
         spacing: 8
         Field { key: "mail_host"; placeholderText: qsTr("Your mail server, such as smtp.fastmail.com") }
-        Field { key: "mail_port"; Layout.fillWidth: false; Layout.preferredWidth: 80; inputMethodHints: Qt.ImhDigitsOnly }
+        Field { objectName: "mailPort"; key: "mail_port"; Layout.fillWidth: false; Layout.preferredWidth: 80; inputMethodHints: Qt.ImhDigitsOnly }
     }
+    Note { objectName: "devicesRefused"; visible: text !== ""; text: devices.refused; color: theme.colors.orange }
     RowLayout {
         Layout.fillWidth: true
         spacing: 8

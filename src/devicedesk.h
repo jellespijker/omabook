@@ -43,6 +43,8 @@ class DeviceDesk : public QObject {
     Q_PROPERTY(QString problem READ problem NOTIFY changed)
     // How the last sync or send went.
     Q_PROPERTY(QString status READ status NOTIFY changed)
+    // Why the port typed last wasn't taken; empty once a valid one is (#262).
+    Q_PROPERTY(QString refused READ refused NOTIFY changed)
     Q_PROPERTY(bool busy READ busy NOTIFY changed)
     // The kind of e-reader at the device folder ("Kobo", "Kindle", "PocketBook",
     // "" for another), and whether one is there at all.
@@ -75,6 +77,7 @@ public:
     [[nodiscard]] QString token() const { return m_token; }
     [[nodiscard]] QString problem() const { return m_problem; }
     [[nodiscard]] QString status() const { return m_status; }
+    [[nodiscard]] QString refused() const { return m_refused; }
     [[nodiscard]] bool busy() const noexcept { return m_busy; }
     [[nodiscard]] QString deviceKind() const;
     [[nodiscard]] bool deviceThere() const;
@@ -131,5 +134,6 @@ private:
     int m_devicesLately = 0;
     QString m_problem;
     QString m_status;
+    QString m_refused;
     bool m_busy = false;
 };

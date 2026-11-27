@@ -85,12 +85,16 @@ bool DeviceDesk::canMail() const {
 }
 
 void DeviceDesk::set(const QString &key, const QVariant &value) {
-    // A port that can't be one leaves the one there is, and says so (#230).
-    const QString typed = value.toString().trimmed();
-    if (key.endsWith(QLatin1StringView("port")) && !typed.isEmpty() && !Numbers::whole(typed, 1, 65535)) {
-        m_status = tr("A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.").arg(typed);
-        emit changed();
-        return;
+    // A port that can't be one leaves the one there is, and says so (#230),
+    // where it was typed: not as what came of a sync or a send (#262).
+    if (key.endsWith(QLatin1StringView("port"))) {
+        const QString typed = value.toString().trimmed();
+        if (!typed.isEmpty() && !Numbers::whole(typed, 1, 65535)) {
+            m_refused = tr("A port is a whole number from 1 to 65535, not \"%1\". The one there was is kept.").arg(typed);
+            emit changed();
+            return;
+        }
+        m_refused.clear();
     }
     QJsonObject devices = current().toJson();
     devices.insert(key, QJsonValue::fromVariant(value));
