@@ -19,6 +19,7 @@
 #include <ranges>
 
 #include "addinghold.h"
+#include "bookfolder.h"
 #include "booksides.h"
 #include "changelog.h"
 #include "formats.h"
@@ -28,18 +29,12 @@
 #include "librarymigrations.h"
 #include "log.h"
 #include "readingformat.h"
-#include "safename.h"
 #include "spaces.h"
 #include "statements.h"
 
 using namespace Qt::StringLiterals;
 
 namespace {
-
-[[nodiscard]] QString folderFor(const BookMeta &meta, qint64 id) {
-    return SafeName::component(meta.authors.value(0), "Unknown") + "/" + SafeName::component(meta.title, "Untitled")
-           + QString(" (%1)").arg(id);
-}
 
 [[nodiscard]] Book bookFrom(const QSqlQuery &query) {
     Book book;
@@ -255,7 +250,7 @@ Library::Added Library::add(const QString &file, const std::optional<BookMeta> &
                             meta.published, meta.description, meta.tags.join(", "), Spaces::wallSeconds(*this), Hlc::asImported});
     if (!id)
         return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
-    const QString folder = folderFor(meta, *id);
+    const QString folder = BookFolder::forNew(m_root, meta, *id);
     exec("UPDATE books SET path = ? WHERE id = ?", {folder, *id});
     // Nobody else can be waiting for a row not yet seen; without the hold the add still goes on.
     const auto filling = AddingHold::book(m_root, *id, std::chrono::seconds(5));
@@ -286,7 +281,7 @@ Library::Added Library::addEntry(const BookMeta &meta, bool paper) {
         return {.error = Failure(Failure::Code::LibraryUnwritable, {id.error()}).text()};
     // The folder is made when there is something to put in it: a cover, or
     // a file the book is given later.
-    exec("UPDATE books SET path = ? WHERE id = ?", {folderFor(meta, *id), *id});
+    exec("UPDATE books SET path = ? WHERE id = ?", {BookFolder::forNew(m_root, meta, *id), *id});
     if (!meta.cover.isNull())
         setCover(*id, meta.cover);
     Spaces::ensureBookId(*this, *id);
@@ -432,7 +427,7 @@ bool Library::setMeta(qint64 id, const BookMeta &meta, QString *error, std::opti
             return failed(error, "The library can't be written.");
         // The folder is named after the author and title, so it follows them.
         // Where it can't be moved it keeps its old name, which still works.
-        const QString folder = folderFor(meta.title.isEmpty() ? before->meta : meta, id);
+        const QString folder = BookFolder::named(meta.title.isEmpty() ? before->meta : meta, id);
         if (folder != before->path && QFileInfo::exists(m_root + "/" + before->path)
             && QDir().mkpath(QFileInfo(m_root + "/" + folder).absolutePath())
             && QDir().rename(m_root + "/" + before->path, m_root + "/" + folder)) {

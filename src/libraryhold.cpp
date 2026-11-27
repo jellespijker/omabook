@@ -10,6 +10,7 @@
 #include <csignal>
 #include <tuple>
 
+#include "bookfolder.h"
 #include "library.h"
 #include "librarybatch.h"
 #include "librarymigrations.h"
@@ -24,6 +25,14 @@ namespace {
 
 // Whether a process of this computer is running still; one of another user's is.
 [[nodiscard]] bool running(qint64 pid) { return ::kill(static_cast<pid_t>(pid), 0) == 0 || errno == EPERM; }
+
+// Whether the database is an empty file, as a copy cut short leaves, where
+// there was a library: books beside it, or changes still in its log, which
+// SQLite would throw away on reading the empty file (#281).
+[[nodiscard]] bool emptied(const QString &database, const QString &root) {
+    const QFileInfo file(database);
+    return file.exists() && file.size() == 0 && (QFileInfo(database + u"-wal"_s).size() > 0 || BookFolder::anyIn(root));
+}
 
 } // namespace
 
@@ -85,6 +94,9 @@ bool Library::open(QString *error) { // ast-grep-ignore: prefer-expected-over-er
     // One expected here and gone (a drive unplugged) is not made anew (#221).
     if (!m_mayCreate && LibraryPresence::missing(m_root))
         return fail(Failure(Failure::Code::LibraryMissing, {m_root}).text());
+    // Not even asked for: a library started over it would hide the books.
+    if (emptied(databasePath(), m_root))
+        return fail(Failure(Failure::Code::LibraryEmpty, {databasePath(), backupFolder(), m_root}).text());
     if (!QDir().mkpath(m_root))
         return fail("The library folder can't be created: " + m_root);
     QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", m_connection);

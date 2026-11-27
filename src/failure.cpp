@@ -64,6 +64,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::ReplacedFileNotTrashed, tr("%1 can't be moved to the trash, so it was not replaced.")},
     {Failure::Code::BookFileNotCopied, tr("%1 can't be copied into the library, to %2")},
     {Failure::Code::LibraryNotWritten, tr("The library can't be written.")},
+    {Failure::Code::BookFileInTheWay,
+     tr("%1 is there already and isn't this book's file, so nothing was written over it. Move it somewhere else, then try again.")},
     {Failure::Code::LibraryReadOnly,
      tr("The library in %1 is read-only, and Omabook needs to write to it. Give yourself write permission to the folder and the files in "
         "it (chmod -R u+w), or check that its drive isn't mounted read-only.")},
@@ -314,6 +316,11 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::LibraryMissing,
      tr("There is no library in %1 now: is its drive connected, or its share mounted? Nothing was made there. Try again once it is, "
         "or start a new library there with omabook libraries --use \"%1\" --create.")},
+    {Failure::Code::LibraryEmpty,
+     tr("The library's database %1 is empty, but there was a library here, so no new one was started over it. Put back a copy of the "
+        "database from %2, or restore the library from a snapshot (omabook snapshot list, then omabook snapshot restore <id> --to "
+        "<folder>). To start a new library here and add the books again, first move %1 somewhere else, with the -wal and -shm files "
+        "beside it, then run omabook libraries --use \"%3\" --create.")},
     {Failure::Code::LibraryUnnamed, tr("No folder was given for the library.")},
     {Failure::Code::HubNotRunning, tr("No hub is running here: nothing answers at %1. Start it with systemctl, or with omabook hub run.")},
     {Failure::Code::HubRunning, tr("A hub is running here already, answering at %1.")},

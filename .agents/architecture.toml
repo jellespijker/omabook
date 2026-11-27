@@ -59,6 +59,7 @@ modules = [
   "libraryrepairs", "librarypresence",
   "graphbuilt",
   "addinghold",
+  "bookfolder",
 ]
 
 [layers.services]

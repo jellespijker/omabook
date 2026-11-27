@@ -156,6 +156,10 @@ void clearPartials(const QString &file) {
 // file of that format if it has one: trashed first when `keep`, else written over.
 [[nodiscard]] std::expected<void, Failure> putInPlace(const QString &file, const QString &hash, const QString &target,
                                                       const QString &old, bool keep) {
+    // A file where this one goes that isn't the book's of that format is not
+    // the library's to write over: an older library's, say (#281).
+    if (const QFileInfo there(target); target != old && (there.exists() || there.isSymLink()) && Library::hashFile(target) != hash)
+        return std::unexpected(Failure(Failure::Code::BookFileInTheWay, {target}));
     // Copied beside its place and renamed, so a copy cut short never looks
     // like a book. The name is this copy's own, so two imports into one
     // library at once (the window and a command, say) don't trip over each
