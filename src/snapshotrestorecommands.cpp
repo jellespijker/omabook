@@ -118,6 +118,50 @@ void printDiff(const SnapshotRestore::Compared &compared) {
     return std::unexpected(Failure(Failure::Code::SnapshotBookNotFound, {given}));
 }
 
+// The book of that global id, when `library` has it.
+[[nodiscard]] std::optional<Book> bookIn(const Library &library, const QString &globalId) {
+    const qint64 id = Spaces::localId(library, u"book"_s, globalId);
+    return id > 0 ? library.book(id) : std::nullopt;
+}
+
+// The snapshot's books called `title`, by their global ids, each as it is held
+// and whether it left the library since: a copy a tidy folded away has the
+// same title as the one kept, and is to be told apart from it (#282).
+void printCalled(const Library &copy, const Library &live, const QString &title) {
+    for (const Book &book : copy.books()) {
+        if (book.meta.title.compare(title, Qt::CaseInsensitive) != 0)
+            continue;
+        const QString id = Spaces::bookId(copy, book.id);
+        printLine(stderr, u"  %1\t%2%3"_s.arg(id, book.held(), bookIn(live, id) ? QString() : u", no longer in the library"_s));
+    }
+}
+
+// Why the book can't be put back, when the snapshot has it and the library no
+// longer does (removed, or folded into another copy): never that there is
+// nothing to put back (#282).
+[[nodiscard]] std::optional<Failure> goneSince(const Library &copy, const Library &live, const QString &globalId) {
+    const std::optional<Book> then = bookIn(copy, globalId);
+    if (!then || bookIn(live, globalId))
+        return std::nullopt;
+    return Failure(Failure::Code::RestoreBookGone, {then->meta.title});
+}
+
+// The global id of the book `given` names, when it can be put back; else none, and why is said.
+[[nodiscard]] std::optional<QString> bookToRestore(const Library &copy, const Library &live, const QString &given) {
+    const auto book = bookNamed(copy, live, given);
+    if (!book) {
+        fail(book.error());
+        if (book.error().code() == Failure::Code::SnapshotBookAmbiguous)
+            printCalled(copy, live, given);
+        return std::nullopt;
+    }
+    if (const auto gone = goneSince(copy, live, *book)) {
+        fail(*gone);
+        return std::nullopt;
+    }
+    return *book;
+}
+
 // What putting the book back changes, from how it is now to how the snapshot has it; whether anything does.
 [[nodiscard]] bool printPutBack(FILE *stream, const LibraryDiff::BookChange &change, BookRestore::Parts parts,
                                 const Restic::Snapshot &snapshot) {
@@ -190,9 +234,9 @@ int restoreBook(const QCommandLineParser &parser, const Snapshots &snapshots, Li
     const auto copy = SnapshotRestore::Copy::open(snapshots, *snapshot);
     if (!copy)
         return fail(copy.error());
-    const auto book = bookNamed(copy->library(), library, parser.value(u"book"_s));
+    const std::optional<QString> book = bookToRestore(copy->library(), library, parser.value(u"book"_s));
     if (!book)
-        return fail(book.error());
+        return 1;
     const bool only = parser.isSet(u"details"_s) || parser.isSet(u"annotations"_s);
     const BookRestore::Parts parts{.details = !only || parser.isSet(u"details"_s), .annotations = !only || parser.isSet(u"annotations"_s)};
     const auto change = LibraryDiff::book(library, copy->library(), *book);

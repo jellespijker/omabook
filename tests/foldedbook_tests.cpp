@@ -199,6 +199,45 @@ private slots:
         const QString said = desk.backend->message();
         QVERIFY2(said.contains(u"Nothing was changed"_s) && said.contains(u"password isn't in"_s), qPrintable(said));
     }
+
+    // A copy folded away is gone from the library: a restore of it says so, by
+    // its title too, rather than that the title is ambiguous and no more, or
+    // that there is nothing to put back (#282).
+    void aFoldedBookIsSaidToHaveLeftTheLibrary() {
+        QVERIFY(!QStandardPaths::findExecutable(u"restic"_s).isEmpty());
+        const McpHarness::Machine machine;
+        {
+            Library library(machine.library);
+            QVERIFY(library.open());
+            const QString file = machine.dir.filePath("Gull Manual.md");
+            QVERIFY(Fixtures::write(file, "# Gulls\n"));
+            QCOMPARE(library.add(file, BookMeta{.title = u"Gull Manual"_s, .authors = {u"Pia Pdf"_s}}).id, 1);
+            QCOMPARE(library.addEntry({.title = u"Gull Manual"_s, .authors = {u"Pia Pdf"_s}, .description = u"Typed."_s}, true).id, 2);
+        }
+        const auto run = [&machine](const QStringList &arguments) {
+            return machine.omabook(arguments + QStringList{u"--library"_s, machine.library});
+        };
+        QCOMPARE(run({u"snapshot"_s, u"setup"_s, u"--repository"_s, machine.dir.filePath("repository")}).code, 0);
+        QCOMPARE(run({u"tidy"_s, u"--apply"_s}).code, 0);
+        const auto listed = run({u"snapshot"_s, u"list"_s, u"--json"_s});
+        const QString id =
+            QJsonDocument::fromJson(listed.output.toUtf8()).object().value("snapshots").toArray().last().toObject().value("id").toString();
+        QVERIFY2(!id.isEmpty(), qPrintable(listed.output + listed.errors));
+
+        const auto called = run({u"snapshot"_s, u"restore"_s, id, u"--book"_s, u"Gull Manual"_s, u"--yes"_s});
+        QCOMPARE(called.code, 1);
+        QString folded;
+        for (const QString &line : called.errors.split(u'\n'))
+            if (line.contains(u"no longer in the library"_s))
+                folded = line.trimmed().section(u'\t', 0, 0);
+        QVERIFY2(!folded.isEmpty(), qPrintable(called.errors));
+
+        const auto restored = run({u"snapshot"_s, u"restore"_s, id, u"--book"_s, folded, u"--yes"_s});
+        QCOMPARE(restored.code, 1);
+        QVERIFY2(restored.errors.contains(u"no longer in this library"_s) && restored.errors.contains(u"new folder"_s),
+                 qPrintable(restored.output + restored.errors));
+        QVERIFY2(!restored.output.contains(u"Nothing to put back"_s), qPrintable(restored.output));
+    }
 };
 
 QTEST_MAIN(FoldedBookTests)
