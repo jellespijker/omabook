@@ -177,12 +177,13 @@ Item {
         // before it were not enough, and takes them back the same way:
         //
         //   1. the count of books goes (the shelf itself says as much);
-        //   2. under fingers, the row of buttons goes (the ⋯ beside it lists
-        //      them, with everything else);
+        //   2. under fingers, the row of buttons gives way one at a time:
+        //      "Filter" and "Settings" to their drawings, then the others
+        //      (the ⋯ beside them lists them, with everything else);
         //   3. "Filter" and the order become drawings;
         //   4. the ways to show the shelf fold into the one in use, which lists them;
         //   5. the search field becomes a drawing that opens over the header;
-        //   last, the library's name elides.
+        //   last, the library's name elides, and the gaps narrow.
         //
         // Nothing is lost on the way: what folds lists itself when clicked
         // or tapped, and every one of them has its key. Which step it is
@@ -197,25 +198,27 @@ Item {
             Layout.minimumWidth: 0
             Layout.margins: 16
             Layout.bottomMargin: 8
-            spacing: 12
+            spacing: need(5, 0, 12) > width ? 6 : 12
 
-            // What the header needs at a step, with the name at its own
-            // width (up to a point: a very long name elides sooner).
-            function need(at) {
+            // What the header needs at a step, with so many of the touch
+            // buttons kept past the first, and the name at its own width (up
+            // to a point: a very long name elides sooner).
+            function need(at, buttons, gap) {
                 let parts = [Math.min(Math.ceil(title.implicitWidth), 200)]
                 if (at < 1) parts.push(count.implicitWidth)
                 if (backend.busy) parts.push(28)
                 if (backend.busy && at < 1) parts.push(Math.min(Math.ceil(status.implicitWidth), 200))
-                if (win.touch && at < 2) parts.push(touchBar.implicitWidth)
+                if (win.touch && (at < 2 || buttons > 0)) parts.push(at < 2 ? touchBar.wholeWidth : touchBar.keptWidth(buttons))
                 parts.push(libraryMore.drawnWidth)
                 parts.push(at < 4 ? switcher.implicitWidth : viewChoice.drawnWidth)
-                if (!win.touch) parts.push(at < 3 ? filterChoice.wordsWidth : filterChoice.drawnWidth)
+                // The row of touch buttons has these two in words; else they stand by themselves.
+                if (!win.touch || at >= 2) parts.push(!win.touch && at < 3 ? filterChoice.wordsWidth : filterChoice.drawnWidth, settingsChoice.drawnWidth)
                 parts.push(at < 3 ? sortChoice.wordsWidth : sortChoice.drawnWidth)
                 parts.push(at < 5 ? search.narrowest : searchChoice.drawnWidth)
                 // A gap between each and the next, and one more for the
                 // empty stretch that pushes the rest to the far side.
                 // Each part rounded up, as the row rounds what it gives them.
-                return parts.reduce((sum, part) => sum + Math.ceil(part), 0) + parts.length * spacing
+                return parts.reduce((sum, part) => sum + Math.ceil(part), 0) + parts.length * (gap || spacing)
             }
             readonly property int step: {
                 for (let at = 0; at < 5; ++at)
@@ -223,6 +226,7 @@ Item {
                         return at
                 return 5
             }
+            readonly property int touchButtons: step === 2 ? [3, 2, 1].find(count => need(2, count) <= width) || 0 : 0
             // The search field, opened over the rest of a header that has
             // no room to keep it out.
             property bool searchOpen: false
@@ -272,16 +276,13 @@ Item {
                 elide: Text.ElideRight
             }
             // What the keys do, as buttons, where fingers are the keyboard.
-            Row {
+            LibraryTouchBar {
                 id: touchBar
                 objectName: "touchBar"
-                visible: win.touch && header.step < 2 && !header.searching
-                spacing: 8
-                AppButton { objectName: "touchAdd"; runs: "library.add"; text: qsTr("Add"); focusPolicy: Qt.NoFocus; onClicked: backend.addBooks() }
-                AppButton { objectName: "touchFilter"; runs: "library.filter library.filter_clear"; text: qsTr("Filter"); focusPolicy: Qt.NoFocus; onClicked: chooser.show("filter") }
-                AppButton { objectName: "touchSuggest"; runs: "library.suggest"; text: qsTr("Suggest"); focusPolicy: Qt.NoFocus; onClicked: win.showSuggestions() }
-                AppButton { runs: "library.libraries"; text: qsTr("Libraries"); focusPolicy: Qt.NoFocus; onClicked: win.showLibraries() }
-                AppButton { runs: "global.settings"; text: qsTr("Settings"); focusPolicy: Qt.NoFocus; onClicked: win.showSettings() }
+                all: header.step < 2
+                kept: header.touchButtons
+                visible: win.touch && (all || kept > 0) && !header.searching
+                onFilterWanted: chooser.show("filter")
             }
             // Everything else the shelf can do, for a mouse and a finger:
             // what has no button of its own (sync, tidy, plugins, help...),
@@ -316,8 +317,8 @@ Item {
             HeaderChoice {
                 id: filterChoice
                 objectName: "filterLabel"
-                visible: !win.touch && !header.searching
-                worded: header.step < 3
+                visible: (!win.touch || header.step >= 2) && !header.searching
+                worded: !win.touch && header.step < 3
                 glyph: "filter"
                 lit: !worded && view.filterKinds.length > 0
                 text: qsTr("Filter")
@@ -366,7 +367,7 @@ Item {
                 // what is over once everything else has its width; the
                 // name gives way only after the field is at its narrowest.
                 Layout.fillWidth: header.searching
-                Layout.preferredWidth: Math.max(narrowest, Math.min(260, narrowest + header.width - header.need(header.step)))
+                Layout.preferredWidth: Math.max(narrowest, Math.min(260, narrowest + header.width - header.need(header.step, header.touchButtons)))
                 Layout.minimumWidth: narrowest
                 placeholderText: qsTr("Search")
                 text: backend.books.query
@@ -418,6 +419,18 @@ Item {
                     ToolTip.delay: 600
                     ToolTip.text: qsTr("Ask the AI to find books") + "  " + view.keyOf("library.search_ai")
                 }
+            }
+            // The settings, a click or a tap away at every width (#268).
+            HeaderChoice {
+                id: settingsChoice
+                objectName: "settingsChoice"
+                visible: (!win.touch || header.step >= 2) && !header.searching
+                worded: false
+                glyph: "settings"
+                text: qsTr("Settings")
+                keys: view.keyOf("global.settings")
+                runs: "global.settings"
+                onTapped: win.showSettings()
             }
         }
 
@@ -657,121 +670,7 @@ Item {
                 }
 
                 LibraryMissing { anchors.fill: parent } // one that can't be opened, or isn't there
-                // An empty shelf says how to fill it; an empty search says so.
-                // In the middle of the shelf's place, and scrolling where a
-                // low window has less room than the words and buttons take.
-                Flickable {
-                    id: emptyScroller
-                    anchors.fill: parent
-                    visible: backend.books.count === 0 && backend.libraryError === ""
-                    contentHeight: emptyState.height + 32
-                    clip: true
-                    boundsBehavior: Flickable.StopAtBounds
-                    interactive: contentHeight > height
-                    ScrollBar.vertical: ScrollBar {}
-
-                    ColumnLayout {
-                        id: emptyState
-                        objectName: "emptyState"
-                        x: (emptyScroller.width - width) / 2
-                        y: Math.max(16, (emptyScroller.height - height) / 2)
-                        width: Math.min(emptyScroller.width - 32, 460)
-                        spacing: 12
-
-                        Label {
-                            Layout.fillWidth: true
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.Wrap
-                            font.pixelSize: 22
-                            text: view.emptyCollection ? qsTr("Nothing is in %1 yet").arg(backend.collectionName)
-                                  : backend.books.total === 0 ? qsTr("No books yet")
-                                  : qsTr("No book matches")
-                        }
-                        // A collection that holds nothing says how it is filled.
-                        Label {
-                            objectName: "emptyCollection"
-                            Layout.fillWidth: true
-                            visible: view.emptyCollection
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.Wrap
-                            color: theme.colors.muted
-                            text: qsTr("Its rule finds no book. Change the rule, put a book in with %1, or have the AI sort the books that are in no collection.")
-                                  .arg(view.keyOf("library.collection_book"))
-                        }
-                        Flow {
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.maximumWidth: parent.width
-                            visible: view.emptyCollection
-                            spacing: 8
-                            AppButton { objectName: "emptyCollectionEdit"; primary: true; focusPolicy: Qt.NoFocus; text: qsTr("Change the collection"); onClicked: win.editCollection(backend.collection) }
-                            AppButton {
-                                objectName: "emptyCollectionSort"
-                                visible: librarian.hasAi
-                                focusPolicy: Qt.NoFocus
-                                text: qsTr("Sort with AI")
-                                onClicked: win.showCollectionSort()
-                            }
-                            AppButton { objectName: "emptyCollectionAll"; focusPolicy: Qt.NoFocus; text: qsTr("Show all books"); onClicked: backend.collection = 0 }
-                        }
-                        Label {
-                            Layout.fillWidth: true
-                            visible: backend.libraryError === "" && backend.books.total === 0 && !view.emptyCollection
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.Wrap
-                            color: theme.colors.muted
-                            // The keys are named as they are bound now.
-                            text: qsTr("Press %1 to add books or %2 for a folder of them, or drop them on the window. They are copied to %3; your own files are not touched.")
-                                  .arg(view.keyOf("library.add")).arg(view.keyOf("library.add_folder")).arg(backend.libraryPath)
-                        }
-                        Label {
-                            Layout.fillWidth: true
-                            visible: backend.libraryError === "" && backend.books.total === 0 && !view.emptyCollection
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.Wrap
-                            color: theme.colors.muted
-                            text: qsTr("%1 adds a book you own on paper, or one you want to read. A Calibre library comes across whole, with what you have read. %2 shows every key.")
-                                  .arg(view.keyOf("library.new")).arg(view.keyOf("global.help"))
-                        }
-                        // Every way in, for a mouse or a finger too.
-                        Flow {
-                            objectName: "emptyActions"
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.maximumWidth: parent.width
-                            Layout.topMargin: 4
-                            visible: backend.libraryError === "" && backend.books.total === 0 && !view.emptyCollection
-                            spacing: 8
-                            AppButton { objectName: "emptyAdd"; primary: true; focusPolicy: Qt.NoFocus; text: qsTr("Add Books"); onClicked: backend.addBooks() }
-                            AppButton { objectName: "emptyFolder"; focusPolicy: Qt.NoFocus; text: qsTr("Add a Folder"); onClicked: backend.addFolder() }
-                            AppButton {
-                                objectName: "emptyCalibre"
-                                // Only where a Calibre library was found to import.
-                                visible: backend.calibreLibraries.length > 0
-                                focusPolicy: Qt.NoFocus
-                                text: qsTr("Import from Calibre")
-                                onClicked: win.showLibraries()
-                            }
-                            AppButton { objectName: "emptyPaper"; focusPolicy: Qt.NoFocus; text: qsTr("Add a Paper Book"); onClicked: win.newBook() }
-                        }
-                        // Words the search finds nothing for may be a question.
-                        AppButton {
-                            objectName: "emptyAskAi"
-                            Layout.alignment: Qt.AlignHCenter
-                            Layout.maximumWidth: parent.width
-                            visible: backend.books.total > 0 && backend.books.query.trim() !== "" && librarian.hasAi
-                            focusPolicy: Qt.NoFocus
-                            text: qsTr("Ask the AI to find it")
-                            onClicked: win.showAiSearch(backend.books.query)
-                        }
-                        AppButton {
-                            objectName: "clearFilters"
-                            Layout.alignment: Qt.AlignHCenter
-                            visible: backend.books.total > 0 && view.filterKinds.length > 0
-                            focusPolicy: Qt.NoFocus
-                            text: qsTr("Clear the filters")
-                            onClicked: backend.books.clearFilters()
-                        }
-                    }
-                }
+                LibraryEmpty { anchors.fill: parent; shelfView: view } // an empty shelf, or an empty search
             }
 
             ModSlot {
