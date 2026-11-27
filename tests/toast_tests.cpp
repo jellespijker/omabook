@@ -103,6 +103,38 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // The keyboard closes a message that waits, and Escape does nothing
+    // else meanwhile (#266): the next one is the page's again.
+    void escapeClosesAMessageThatWaits() {
+        Desk desk("en", {}, false);
+        QVERIFY(Fixtures::epub(desk.dir.filePath("one.epub")));
+        QVERIFY(desk.show());
+        desk.backend->sayOutcome("Something went wrong", true);
+        QTRY_VERIFY(desk.shows("toast"));
+        QTest::keyClick(desk.window, Qt::Key_Escape);
+        QTRY_VERIFY(!desk.shows("toast"));
+        // Over a book too, which stays open.
+        desk.backend->addUrls({QUrl::fromLocalFile(desk.dir.filePath("one.epub"))});
+        QTRY_COMPARE(desk.backend->library()->books().size(), 1);
+        desk.reader->openBook(desk.backend->library()->books().constFirst().id);
+        QTRY_VERIFY(desk.reader->isOpen() && desk.shows("flowText"));
+        desk.backend->sayOutcome("Something went wrong", true);
+        QTRY_VERIFY(desk.shows("toast"));
+        QTest::keyClick(desk.window, Qt::Key_Escape);
+        QTRY_VERIFY(!desk.shows("toast"));
+        QVERIFY(desk.reader->isOpen());
+        QTest::keyClick(desk.window, Qt::Key_Escape);
+        QTRY_VERIFY(!desk.reader->isOpen());
+        // A message that goes by itself leaves Escape be.
+        desk.backend->say("Bookmarked");
+        desk.reader->openBook(desk.backend->library()->books().constFirst().id);
+        QTRY_VERIFY(desk.reader->isOpen() && desk.shows("flowText"));
+        desk.backend->say("Bookmarked");
+        QTest::keyClick(desk.window, Qt::Key_Escape);
+        QTRY_VERIFY(!desk.reader->isOpen());
+        QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
+    }
+
     // A Calibre library some of whose books stayed behind, though none of
     // them went wrong on the way (#258).
     void whatACalibreLibraryLeftOutWaits() {

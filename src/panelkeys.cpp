@@ -128,6 +128,7 @@ QList<Manual::Panel> Manual::libraryPanels() {
           {"C", tr("Stop the selected hub's background work, keeping nothing of the book it was on")},
           {"D  Delete", tr("Unlink the selected hub, or forget the selected computer (asks first)")},
           {"Escape", tr("Back a step, then close")}}},
+        {"message", tr("A message that waits to be closed"), {{"Escape", tr("Close it")}}},
         {"edit", tr("A book's details, by hand"),
          {{"Ctrl+S  Ctrl+Return", tr("Save")}}},
         {"lookup", tr("Looking a book's details up"),

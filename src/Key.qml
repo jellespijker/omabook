@@ -17,8 +17,11 @@ Item {
         return keys.map(k => k.replace(/\b(Left|Right)\b/g, (side) => side === "Left" ? "Right" : "Left"))
     }
 
+    // A message that waits to be closed has Escape first (Toast.qml, #266).
+    function spared(keys) { return win.messageTakesEscape ? keys.filter(k => k !== "Escape" && k !== "Esc") : keys }
+
     Shortcut {
-        sequences: key.turned(custom.plainKeys[key.command])
+        sequences: key.spared(key.turned(custom.plainKeys[key.command]))
         enabled: key.when && win.keys
         onActivated: key.activated()
     }

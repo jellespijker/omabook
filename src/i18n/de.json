@@ -3099,5 +3099,7 @@
   "It is protected by a password, or is an older Word document under a newer name, so it can't be converted.": "Sie ist mit einem Passwort geschützt oder ist ein älteres Word-Dokument unter neuerem Namen und kann deshalb nicht umgewandelt werden.",
   "None of its pictures can be read: they are damaged, or of a kind this computer can't show.": "Keines ihrer Bilder kann gelesen werden: Sie sind beschädigt oder von einer Art, die dieser Computer nicht anzeigen kann.",
   "The disk that holds the library in %1 is full, so Omabook can't use it. Free up space there, then try again.": "Der Datenträger mit der Bibliothek in %1 ist voll, deshalb kann Omabook sie nicht verwenden. Schaffe dort Platz und versuche es dann erneut.",
-  "There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.": "Für %1 ist auf dem vollen Datenträger der Bibliothek kein Platz. Schaffe dort Platz und füge die Datei dann erneut hinzu."
+  "There is no room for %1 on the library's disk, which is full. Free up space there, then add it again.": "Für %1 ist auf dem vollen Datenträger der Bibliothek kein Platz. Schaffe dort Platz und füge die Datei dann erneut hinzu.",
+  "A message that waits to be closed": "Eine Meldung, die auf das Schließen wartet",
+  "Close it": "Die Meldung schließen"
 }

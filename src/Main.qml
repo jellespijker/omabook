@@ -82,6 +82,8 @@ ApplicationWindow {
                                        || (!!graphLoader.item && graphLoader.item.popupOpen)
                                        || aiSearch.opened || chronologyLayer.popupOpen
     readonly property bool keys: !typing && !dialogOpen
+    // Escape closes a message that waits for it, before it does anything else (Toast.qml).
+    readonly property bool messageTakesEscape: toast.stays && keys
 
     // Whether anything is being worked on anywhere: the AI, a catalog, an
     // import, the graph.
