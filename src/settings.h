@@ -73,6 +73,9 @@ public:
     // every Settings of this process: a command that raised it did not do what
     // it was asked.
     [[nodiscard]] static int unsaved();
+    // What such a command says last, with "omabook: " before it, by which the
+    // MCP server knows that a command it ran saved nothing (#275).
+    [[nodiscard]] static QString unsavedNote();
 
     // The library in use, and every library that has been. Setting it makes
     // it the one in use from now on, for the window, the command line and

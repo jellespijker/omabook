@@ -50,6 +50,8 @@ void keepError(const QString &settingsFile, const std::optional<Failure> &mistak
 
 int Settings::unsaved() { return unsavedChanges(); }
 
+QString Settings::unsavedNote() { return tr("The change was not saved."); }
+
 QString Settings::problem() const {
     if (!m_mistake)
         return {};

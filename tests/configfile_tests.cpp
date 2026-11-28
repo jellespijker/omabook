@@ -188,6 +188,8 @@ private slots:
 
     void aToolThatWouldChangeItFails() {
         const McpHarness::Machine machine;
+        // A library to work on, there before the settings go wrong.
+        QCOMPARE(machine.omabook({"list", "--library", machine.library}).code, 0);
         const QString file = machine.dir.filePath("home/.config/omabook/config.json");
         QVERIFY(Fixtures::write(file, broken));
         McpHarness::Server server(machine);
@@ -200,6 +202,14 @@ private slots:
         // Nothing of a change that can't be made whole is made.
         QVERIFY(!QFile::exists(machine.dir.filePath("home/.config/omabook/style.json")));
         QCOMPARE(contents(file), broken);
+        // A tool that is one of Omabook's commands fails as the command does (#275).
+        const QString formatted = server.failure("reading_format_set", {{"font_size", 30}});
+        QVERIFY2(formatted.contains("not saved") && formatted.contains("line 7"), qPrintable(formatted));
+        const QString left = server.failure("reading_site_disconnect", {{"site", "openlibrary"}});
+        QVERIFY2(left.contains("not saved") && left.contains("line 7"), qPrintable(left));
+        QCOMPARE(contents(file), broken);
+        // One that changes no setting still answers.
+        QVERIFY(server.failure("reading_format_get").isEmpty());
     }
 
     void theWindowSaysSo() {

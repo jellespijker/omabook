@@ -163,7 +163,7 @@ int runCommand(QStringList words) {
     const int result = runCli(words);
     if (Settings::unsaved() == unsaved)
         return result;
-    std::println(stderr, "omabook: {}", Settings::tr("The change was not saved.").toStdString());
+    std::println(stderr, "omabook: {}", Settings::unsavedNote().toStdString());
     return result == 0 ? 1 : result;
 }
 

@@ -1318,37 +1318,6 @@ int serve() {
 
 } // namespace
 
-Mcp::Result Mcp::command(const QStringList &arguments, bool json) {
-    QString error;
-    const auto library = Mcp::library(&error);
-    if (!library)
-        return Result::fail(error);
-    QProcess process;
-    QStringList asked = arguments;
-    asked << "--library" << library->root();
-    if (json)
-        asked << "--json";
-    process.start(QCoreApplication::applicationFilePath(), asked);
-    // A sync or an import of a large library takes minutes, not seconds.
-    if (!process.waitForStarted() || !process.waitForFinished(15 * 60 * 1000)) {
-        process.kill();
-        process.waitForFinished(2000);
-        return Result::fail("omabook " + arguments.value(0) + " didn't finish.");
-    }
-    const QByteArray output = process.readAllStandardOutput();
-    const QString said = QString::fromUtf8(process.readAllStandardError()).trimmed();
-    if (process.exitStatus() != QProcess::NormalExit || (process.exitCode() != 0 && output.trimmed().isEmpty()))
-        return Result::fail(said.isEmpty() ? "omabook " + arguments.value(0) + " failed." : said);
-    if (!json)
-        return Result::ok({{"output", QString::fromUtf8(output)}});
-    const QJsonDocument document = QJsonDocument::fromJson(output);
-    QJsonObject data = document.isObject() ? document.object() : QJsonObject{{"result", document.array()}};
-    // What the command complained of while still answering is passed on.
-    if (!said.isEmpty())
-        data.insert("notes", said);
-    return Result::ok(data);
-}
-
 bool Mcp::registerTool(const Tool &tool) {
     static const QRegularExpression name("^[A-Za-z0-9_.-]{1,128}$");
     QString problem;
