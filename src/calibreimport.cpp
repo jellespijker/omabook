@@ -9,6 +9,7 @@
 #include <algorithm>
 #include <optional>
 
+#include "document.h"
 #include "formats.h"
 
 namespace {
@@ -136,6 +137,25 @@ namespace {
     return changed;
 }
 
+// Calibre's places, as far as the book goes here: one past its last section,
+// as after its file was replaced by one with fewer parts, is at the last
+// (#276). The book is only opened when a place about to be taken is past its start.
+[[nodiscard]] Calibre::Reading withinBook(const Library &library, const Book &book, Calibre::Reading said, const QJsonArray &taken) {
+    const bool placed = said.section > 0 && said.readAt > library.progress(book.id).updated;
+    const auto further = [&taken](const Calibre::Note &note) { return note.section > 0 && !taken.contains(note.id); };
+    if (!placed && !std::ranges::any_of(said.notes, further))
+        return said;
+    const QString format = Formats::openedAs(book.formats);
+    const auto document = format.isEmpty() ? nullptr : Formats::open(library.formatPath(book.id, format));
+    if (!document || document->count() <= 0)
+        return said;
+    const int last = document->count() - 1;
+    said.section = std::min(said.section, last);
+    for (Calibre::Note &note : said.notes)
+        note.section = std::min(note.section, last);
+    return said;
+}
+
 // The file's books, and over them what the journal says was remembered since.
 // A line cut short, by an import that was killed as it wrote it, says nothing.
 [[nodiscard]] QJsonObject remembered(const QString &file, const QString &journal) {
@@ -209,7 +229,7 @@ bool CalibreImport::takeReading(Library &library, qint64 id, const Calibre::Book
     if (!now)
         return false;
     const QJsonObject before = memory.of(id);
-    const Calibre::Reading &said = calibre.reading;
+    const Calibre::Reading said = withinBook(library, *now, calibre.reading, before.value("notes").toArray());
     bool changed = false;
 
     const QString shelf = now->shelf == before.value("shelf").toString() ? said.shelf : now->shelf;

@@ -6,12 +6,14 @@
 #include "annotationanchors.h"
 #include "calibre.h"
 #include "calibreimport.h"
+#include "document.h"
 #include "fixtures.h"
+#include "formats.h"
 #include "importer.h"
 #include "library.h"
 
 // What an import of a Calibre library leaves behind when it doesn't go as
-// meant: cut off part way (#273). Every library here is made up, in a
+// meant: cut off part way (#273), or with places the book here doesn't reach (#276). Every library here is made up, in a
 // temporary folder.
 
 namespace {
@@ -86,6 +88,32 @@ private slots:
         // An import that ends folds the journal into the file.
         QVERIFY(!journal.exists());
         QVERIFY(!CalibreImport::Memory(world.library.root()).of(added.id).isEmpty());
+    }
+
+    // Calibre keeps places of a file since replaced by one with fewer parts:
+    // none goes past the book's last section (#276).
+    void noPlaceGoesPastTheBooksLastSection() {
+        World world;
+        QVERIFY(world.ok);
+        QVERIFY(Fixtures::calibreChange(
+            world.shelf,
+            {"UPDATE last_read_positions SET cfi = 'epubcfi(/400/2)' WHERE book = 3",
+             "UPDATE annotations SET annot_data = '{\"type\": \"bookmark\", \"title\": \"far\", \"pos\": \"epubcfi(/200/2)\"}' "
+             "WHERE id = 2",
+             "UPDATE annotations SET annot_data = '{\"type\": \"highlight\", \"highlighted_text\": \"Half Way.\", "
+             "\"spine_index\": 77}' WHERE id = 1"}));
+        QVERIFY(importBooks(world.library, {world.shelf}).problems.isEmpty());
+        const qint64 half = world.book("Half Way");
+        const Book book = *world.library.book(half);
+        const auto document = Formats::open(world.library.formatPath(half, "txt"));
+        QVERIFY(document);
+        const int last = document->count() - 1;
+        QCOMPARE(world.library.progress(half).place.section, last);
+        QCOMPARE(book.percent, 40.0);
+        const QList<Annotation> notes = world.library.annotations(half);
+        QCOMPARE(notes.size(), 2);
+        for (const Annotation &note : notes)
+            QCOMPARE(note.place.section, last);
     }
 };
 

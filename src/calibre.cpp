@@ -166,7 +166,7 @@ void readNotes(const Connection &calibre, QHash<qint64, Calibre::Reading> &readi
         }
         const Calibre::Note highlight{.id = "highlight:" + id,
                                       .kind = kind,
-                                      .section = data.value("spine_index").toInt(),
+                                      .section = std::max(0, data.value("spine_index").toInt()),
                                       .text = data.value("highlighted_text").toString(),
                                       .note = {},
                                       .created = created,
