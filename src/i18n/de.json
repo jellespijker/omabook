@@ -122,6 +122,10 @@
     "one": "%Ln Änderung vorgenommen",
     "other": "%Ln Änderungen vorgenommen"
   },
+  "%Ln collections updated": {
+    "one": "%Ln Sammlung aktualisiert",
+    "other": "%Ln Sammlungen aktualisiert"
+  },
   "%Ln contradictions": {
     "one": "%Ln Widerspruch",
     "other": "%Ln Widersprüche"

@@ -63,6 +63,8 @@ QStringList Backend::syncLines(const SyncSummary &summary) {
     if (summary.removedThere > 0)
         lines << tr("%Ln books removed on the other computer, to the trash", "", summary.removedThere);
     lines << keptOnOneSide(summary);
+    if (summary.collectionsTaken + summary.collectionsSent > 0)
+        lines << tr("%Ln collections updated", "", summary.collectionsTaken + summary.collectionsSent);
     if (summary.graphTaken > 0)
         lines << tr("%Ln graph changes taken", "", summary.graphTaken);
     if (summary.graphSent > 0)

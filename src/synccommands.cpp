@@ -100,6 +100,16 @@ void printKept(const SyncSummary &summary, const QString &host) {
     printSection("Kept on " + host + " only: removed here, but changed or added there since", summary.titles.keptThere);
 }
 
+// What a dry run counts and names no book of: bookmarks and highlights, and collections (#293).
+void printCounted(const SyncSummary &summary, const QString &host) {
+    for (const auto &[what, count] : {std::pair{QString("Bookmarks and highlights updated here"), summary.annotationsTaken},
+                                      std::pair{"Bookmarks and highlights updated on " + host, summary.annotationsSent},
+                                      std::pair{QString("Collections updated here"), summary.collectionsTaken},
+                                      std::pair{"Collections updated on " + host, summary.collectionsSent}})
+        if (count > 0)
+            printLine(stdout, QString("%1: %2").arg(what).arg(count));
+}
+
 void printDryRun(const SyncSummary &summary, const QString &host) {
     printLine(stdout, QString("A dry run: nothing was changed, here or on %1. A sync would do this:").arg(host));
     const SyncSummary::Titles &titles = summary.titles;
@@ -117,9 +127,11 @@ void printDryRun(const SyncSummary &summary, const QString &host) {
     printSection("Details that differ, with no time to say which are newer", titles.detailsUndecided);
     printSection("Renamed here", titles.renamedHere);
     printSection("Renamed on " + host, titles.renamedThere);
+    printCounted(summary, host);
     const int total = summary.received + summary.sent + summary.detailsTaken + summary.detailsSent + summary.placesTaken
                       + summary.placesSent + summary.readingTaken + summary.readingSent + summary.removedHere + summary.removedThere
-                      + summary.detailsUndecided + summary.renamedHere + summary.renamedThere + summary.keptHere + summary.keptThere;
+                      + summary.detailsUndecided + summary.renamedHere + summary.renamedThere + summary.keptHere + summary.keptThere
+                      + summary.annotationsTaken + summary.annotationsSent + summary.collectionsTaken + summary.collectionsSent;
     if (total == 0)
         printLine(stdout, "Nothing: both libraries are in step.");
 }
@@ -137,6 +149,8 @@ void printPlainSummary(const SyncSummary &summary, const QString &host) {
                           .arg(summary.graphTaken)
                           .arg(summary.graphSent)
                           .arg(summary.annotationsTaken + summary.annotationsSent));
+    if (summary.collectionsTaken + summary.collectionsSent > 0)
+        printLine(stdout, QString("%1 collections updated").arg(summary.collectionsTaken + summary.collectionsSent));
     if (summary.pluginFilesTaken + summary.pluginFilesSent > 0)
         printLine(stdout, QString("%1 files of plugins received, %2 sent").arg(summary.pluginFilesTaken).arg(summary.pluginFilesSent));
     if (summary.pluginFilesHeld > 0)

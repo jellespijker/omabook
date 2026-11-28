@@ -139,6 +139,11 @@
     "one": "%Ln cambio realizado",
     "other": "%Ln cambios realizados"
   },
+  "%Ln collections updated": {
+    "many": "%Ln colecciones actualizadas",
+    "one": "%Ln colección actualizada",
+    "other": "%Ln colecciones actualizadas"
+  },
   "%Ln contradictions": {
     "one": "%Ln contradicción",
     "many": "%Ln contradicciones",

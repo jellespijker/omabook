@@ -327,6 +327,10 @@
     "one": "%Ln change would go to %1. Look it over, then send it.",
     "other": "%Ln changes would go to %1. Look them over, then send them."
   },
+  "%Ln collections updated": {
+    "one": "%Ln collection updated",
+    "other": "%Ln collections updated"
+  },
   "%Ln collections, with their names, rules and how their shelves show": {
     "one": "%Ln collection, with its name, rule and how its shelf shows",
     "other": "%Ln collections, with their names, rules and how their shelves show"

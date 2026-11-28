@@ -122,6 +122,10 @@
     "one": "%Ln wijziging doorgevoerd",
     "other": "%Ln wijzigingen doorgevoerd"
   },
+  "%Ln collections updated": {
+    "one": "%Ln collectie bijgewerkt",
+    "other": "%Ln collecties bijgewerkt"
+  },
   "%Ln contradictions": {
     "one": "%Ln tegenstrijdigheid",
     "other": "%Ln tegenstrijdigheden"
