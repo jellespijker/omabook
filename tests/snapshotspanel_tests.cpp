@@ -215,11 +215,17 @@ private slots:
         QCOMPARE(desk.snapshotDesk->snapshots().size(), 2);
         QCOMPARE(desk.snapshotDesk->snapshots().first().toMap().value("reason").toString(), QString("restore"));
         QVERIFY(shown(desk, "snapshotUndo"));
+        // The comparison is made again: the book differs no more, nor is it offered to put back (#297).
+        QCOMPARE(desk.snapshotDesk->diff().value("books").toMap().value("changed").toList().size(), 0);
+        QTRY_VERIFY(!shown(desk, "snapshotBookChanged") && !shown(desk, "snapshotPutBack"));
+        QVERIFY(shown(desk, "snapshotBookAdded"));
 
         press(desk, "snapshotUndo");
         QVERIFY(idle(desk));
         QVERIFY2(!desk.snapshotDesk->failed(), qPrintable(desk.snapshotDesk->status()));
         QCOMPARE(titleOf(library, moss), QString("Moss, Renamed"));
+        QCOMPARE(desk.snapshotDesk->diff().value("books").toMap().value("changed").toList().size(), 1);
+        QTRY_VERIFY(shown(desk, "snapshotPutBack"));
 
         // The list again, filtered: the moment snapshots before a restore, and no nightly one.
         press(desk, "snapshotsBack");

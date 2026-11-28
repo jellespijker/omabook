@@ -200,7 +200,10 @@ void SnapshotDesk::preview(const QString &snapshot, const QString &book) {
 
 void SnapshotDesk::restoreBook(const QString &snapshot, const QString &book, bool details, bool annotations) {
     const QString title = m_putBack.value(u"book"_s).toMap().value(u"title"_s, m_restored.value(u"title"_s)).toString();
-    work(u"restore"_s, [this, root = m_root(), snapshots = made(), snapshot, book, details, annotations, title] {
+    // The comparison shown is made again once the book is back (#297).
+    const QString from = m_diff.value(u"from"_s).toMap().value(u"id"_s).toString();
+    const QString to = m_diff.value(u"to"_s).toMap().value(u"id"_s).toString();
+    work(u"restore"_s, [this, root = m_root(), snapshots = made(), snapshot, book, details, annotations, title, from, to] {
         const auto library = opened(root);
         if (!library)
             return Outcome{.said = library.error().text(), .failed = true, .keep = {}};
@@ -217,11 +220,17 @@ void SnapshotDesk::restoreBook(const QString &snapshot, const QString &book, boo
         restored.insert(
             {{u"snapshot"_s, found->id}, {u"book"_s, book}, {u"title"_s, title}, {u"details"_s, details}, {u"annotations"_s, annotations}});
         const Listing listed = listing(snapshots, library->get());
+        // One that can't be made again is shown no more, rather than as it was.
+        QVariantMap diff;
+        if (!from.isEmpty())
+            if (const auto compared = SnapshotRestore::compare(snapshots, **library, from, to))
+                diff = compared->toJson().toVariantMap();
         return Outcome{.said = tr("%1 is put back as snapshot %2 has it. A moment snapshot was taken first: %3, to undo it with.")
                                    .arg(title, found->shortId(), done->undo.left(8)),
                        .failed = false,
-                       .keep = [listed, restored](SnapshotDesk &desk) {
+                       .keep = [listed, restored, diff](SnapshotDesk &desk) {
                            desk.keep(listed);
+                           desk.m_diff = diff;
                            desk.m_restored = restored;
                            desk.m_putBack.clear();
                            emit desk.booksChanged();
