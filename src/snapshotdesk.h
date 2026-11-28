@@ -24,6 +24,8 @@ class SnapshotDesk : public QObject {
     // Whether snapshots are set up on this computer, and where they are kept.
     Q_PROPERTY(bool ready READ ready NOTIFY changed)
     Q_PROPERTY(QString repository READ repository NOTIFY changed)
+    // That they were set up and their password is gone, with what to do; empty otherwise (#296).
+    Q_PROPERTY(QString passwordMissing READ passwordMissing NOTIFY changed)
     // The library's snapshots, newest first: each {"id", "time", "kind" ("nightly" or "moment"), "reason"}.
     Q_PROPERTY(QVariantList snapshots READ snapshots NOTIFY changed)
     // Whether they have been listed since the panel opened; false while they never were.
@@ -72,6 +74,7 @@ public:
 
     [[nodiscard]] bool ready() const;
     [[nodiscard]] QString repository() const;
+    [[nodiscard]] QString passwordMissing() const;
     [[nodiscard]] QVariantList snapshots() const { return m_snapshots; }
     [[nodiscard]] bool listed() const noexcept { return m_listed; }
     [[nodiscard]] QStringList otherLibraries() const { return m_otherLibraries; }

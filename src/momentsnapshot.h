@@ -24,7 +24,8 @@ inline constexpr qsizetype bulkBooks = 10;
 [[nodiscard]] constexpr bool isBulk(qsizetype books) noexcept { return books > bulkBooks; }
 
 // Before `library` is brought up to date: a moment snapshot, when snapshots
-// are set up, and refused when it can't be taken, as on a hub. Without them
+// are set up, and refused when it can't be taken, their password gone among the
+// reasons, as on a hub. Without them
 // it goes on with a warning: the copy of the database in .backups is all
 // there is then. The line to say, or why not (LibraryMigrations::BeforeUpgrade).
 // A copy of the snapshots' own (a restore's, in their state folder) is none

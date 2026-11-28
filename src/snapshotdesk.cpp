@@ -54,6 +54,11 @@ SnapshotDesk::Warnings SnapshotDesk::health() {
 
 bool SnapshotDesk::ready() const { return made().ready(); }
 
+QString SnapshotDesk::passwordMissing() const {
+    const Snapshots snapshots = made();
+    return snapshots.chosen() && !snapshots.ready() ? snapshots.unready().text() : QString();
+}
+
 QString SnapshotDesk::repository() const { return ready() ? made().place().repository.location : SnapshotPlace::defaultRepository(); }
 
 void SnapshotDesk::work(const QString &doing, std::function<Outcome()> job) {

@@ -269,7 +269,7 @@ int takeOrList(const QStringList &arguments) {
     if (what == "setup"_L1)
         return setUp(parser, snapshots);
     if (!snapshots.ready())
-        return fail(Failure(Failure::Code::SnapshotsNotSetUp));
+        return fail(snapshots.unready());
     Library library(parser.isSet(u"library"_s) ? parser.value(u"library"_s) : Settings().libraryPath());
     // Its folder finds a library's snapshots, so they are listed also when it
     // can't be opened, which is when one is to be restored (#227).
@@ -326,7 +326,7 @@ void snapshotBeforeRisky(const QStringList &arguments) {
     if (!moment)
         return;
     const Snapshots snapshots(SnapshotPlace::here());
-    if (!snapshots.ready())
+    if (!snapshots.chosen())
         return;
     const QString root = libraryOf(arguments);
     if (!QFileInfo::exists(Library::databaseIn(root)))

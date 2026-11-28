@@ -55,8 +55,9 @@ ColumnLayout {
     // Not set up yet: where to keep them, and the recovery key.
     Note {
         visible: !snapshotDesk.ready
-        color: theme.foreground
-        text: qsTr("Snapshots aren't set up on this computer yet. Each keeps the library as it was at one moment, encrypted and read-only, to go back to; each stores only what changed since the last.")
+        objectName: "snapshotUnready"
+        color: snapshotDesk.passwordMissing !== "" ? theme.colors.red : theme.foreground
+        text: snapshotDesk.passwordMissing !== "" ? snapshotDesk.passwordMissing : qsTr("Snapshots aren't set up on this computer yet. Each keeps the library as it was at one moment, encrypted and read-only, to go back to; each stores only what changed since the last.")
     }
     TextField {
         id: repository

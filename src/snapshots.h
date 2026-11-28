@@ -68,6 +68,10 @@ public:
 
     // Whether snapshots are set up here: a repository chosen, with its password.
     [[nodiscard]] bool ready() const;
+    // Whether a repository was chosen: set up once, though its password may be gone since.
+    [[nodiscard]] bool chosen() const { return !m_place.repository.location.isEmpty(); }
+    // Why they aren't ready: never set up, or their password gone (#296).
+    [[nodiscard]] Failure unready() const;
     // Makes the repository at `repository` (the default one when empty) and
     // its password, and gives the password back as the recovery key: to show
     // once, for the person to keep, since nothing is restored without it.
@@ -105,7 +109,8 @@ public:
     // something changed since the library's last one; a nightly one always.
     [[nodiscard]] std::expected<Taken, Failure> take(const Library &library, SnapshotReason reason) const;
     // A moment snapshot just before something risky, when snapshots are set
-    // up here; nothing (no Taken) when they aren't.
+    // up here; nothing (no Taken) when they never were, and why not when
+    // their password is gone.
     [[nodiscard]] std::expected<std::optional<Taken>, Failure> before(const Library &library, SnapshotReason moment) const;
     // The nightly snapshot when one is due at `now`, and then the thinning;
     // nothing when none is due or snapshots aren't set up.

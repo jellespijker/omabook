@@ -266,6 +266,12 @@ bool Snapshots::ready() const {
            && (!m_place.repository.password.isEmpty() || QFileInfo::exists(m_place.repository.passwordFile));
 }
 
+Failure Snapshots::unready() const {
+    if (!chosen())
+        return Failure(Failure::Code::SnapshotsNotSetUp);
+    return Failure(Failure::Code::SnapshotPasswordMissing, {m_place.repository.location, passwordPlace(m_place)});
+}
+
 std::expected<QString, Failure> Snapshots::setUp(const QString &repository, const QString &recoveryKey) {
     if (ready())
         return std::unexpected(Failure(Failure::Code::SnapshotsSetUpAlready, {m_place.repository.location}));
@@ -343,7 +349,7 @@ std::expected<void, Failure> Snapshots::chose(const ResticRepository &made, cons
 
 std::expected<QList<Snapshots::Elsewhere>, Failure> Snapshots::elsewhere(const Library &library) const {
     if (!ready())
-        return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+        return std::unexpected(unready());
     const auto all = Restic::snapshots(m_place.repository, {u"omabook"_s});
     if (!all)
         return std::unexpected(all.error());
@@ -365,7 +371,7 @@ std::expected<QList<Snapshots::Elsewhere>, Failure> Snapshots::elsewhere(const L
 
 std::expected<Snapshots::Staged, Failure> Snapshots::stage(const Library &library) const {
     if (!ready())
-        return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+        return std::unexpected(unready());
     const QString staging = m_place.state + u"/staging/"_s + libraryTag(library).section(u':', 1);
     QDir(staging).removeRecursively();
     auto cleanUp = qScopeGuard([&staging] { QDir(staging).removeRecursively(); });
@@ -413,13 +419,13 @@ std::expected<Snapshots::Taken, Failure> Snapshots::take(const Library &library,
 }
 
 std::expected<std::optional<Snapshots::Taken>, Failure> Snapshots::before(const Library &library, SnapshotReason moment) const {
-    if (!ready())
+    if (!chosen())
         return std::nullopt;
     return take(library, moment).transform([](const Taken &taken) { return std::optional(taken); });
 }
 
 std::expected<std::optional<Snapshots::Taken>, Failure> Snapshots::nightly(const Library &library, const QDateTime &now) const {
-    if (!ready())
+    if (!chosen())
         return std::nullopt;
     const auto earlier = list(library);
     if (!earlier)
@@ -442,7 +448,7 @@ std::expected<QList<Restic::Snapshot>, Failure> Snapshots::list(const Library &l
 
 std::expected<QList<Restic::Snapshot>, Failure> Snapshots::listOf(const QString &tag) const {
     if (!ready())
-        return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+        return std::unexpected(unready());
     return Restic::snapshots(m_place.repository, {u"omabook"_s, tag});
 }
 

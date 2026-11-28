@@ -49,8 +49,9 @@ constexpr auto wordings = std::to_array<FailureWords::Wording>({
     {Failure::Code::DestinationCredentialMissing, tr("No value was given for %1.")},
     {Failure::Code::DestinationsNotCopied, tr("The snapshots couldn't be copied to %1.")},
     {Failure::Code::SnapshotPasswordMissing,
-     tr("The snapshots in %1 can't be opened: their password isn't in %2. Put the recovery key back there, readable by you alone "
-        "(chmod 600), or no snapshot is taken there.")},
+     tr("The snapshots in %1 can't be opened: their password isn't in %2. Give their recovery key back (omabook snapshot setup "
+        "--recovery-key, or the Snapshots panel; on a hub add --hub), or put it in that file, readable by you alone (chmod 600). "
+        "Until then no snapshot is taken there.")},
     {Failure::Code::SnapshotDiskAbsent,
      tr("The disk of %1 isn't there (%2), so no snapshot is copied to it. Plug it in or mount it: the next copy brings it up to date.")},
     {Failure::Code::SnapshotsUnreadable,

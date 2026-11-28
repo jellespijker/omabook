@@ -161,7 +161,7 @@ QList<SnapshotHealth::Target> SnapshotHealth::targets() const {
     const QString passwordAt = place.hub ? place.hub->state() + hubSecret : place.repository.passwordFile;
     std::expected<ResticRepository, Failure> repository = place.repository;
     if (!m_snapshots.ready())
-        repository = std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+        repository = std::unexpected(m_snapshots.unready());
     QList<Target> targets{{.name = {},
                            .medium = Medium::Own,
                            .location = place.repository.location,

@@ -28,7 +28,8 @@ using namespace Qt::StringLiterals;
 std::expected<QString, Failure> MomentSnapshot::beforeUpgrade(const Snapshots &snapshots, const Library &library) {
     if (theirOwn(snapshots, library))
         return QString();
-    if (!snapshots.ready()) {
+    // Set up, and their password gone: none can be taken, so the library is left as it is (#296).
+    if (!snapshots.chosen()) {
         qCWarning(lcLibrary).noquote() << "no moment snapshot before bringing" << library.root()
                                        << "up to date: snapshots aren't set up here";
         return u"No moment snapshot was taken first, as snapshots aren't set up here (omabook snapshot setup); "
@@ -48,7 +49,7 @@ std::expected<QString, Failure> MomentSnapshot::beforeUpgradeHere(const Library 
 }
 
 std::expected<MomentSnapshot::Bulk, Failure> MomentSnapshot::beforeBulk(const Snapshots &snapshots, const Library &library) {
-    if (!snapshots.ready())
+    if (!snapshots.chosen())
         return Bulk{};
     const auto first = snapshots.take(library, SnapshotReason::BulkChange);
     if (first)

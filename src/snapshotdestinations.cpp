@@ -215,8 +215,8 @@ std::expected<SnapshotDestination, Failure> SnapshotDestinations::checked(Snapsh
         return std::unexpected(Failure(Failure::Code::DestinationNameInvalid, {destination.name}));
     if (find(destination.name))
         return std::unexpected(Failure(Failure::Code::DestinationNameTaken, {destination.name}));
-    if (!Snapshots(m_place, {}).ready())
-        return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+    if (const Snapshots own(m_place, {}); !own.ready())
+        return std::unexpected(own.unready());
     if (holdsPassword(destination.location))
         return std::unexpected(Failure(Failure::Code::DestinationPasswordInPlace, {destination.location}));
     const QString repository = m_place.repository.location;
@@ -346,8 +346,8 @@ std::expected<DestinationState, Failure> SnapshotDestinations::copy(const QStrin
     const auto destination = find(name);
     if (!destination)
         return std::unexpected(Failure(Failure::Code::DestinationUnknown, {name}));
-    if (!Snapshots(m_place, {}).ready())
-        return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+    if (const Snapshots own(m_place, {}); !own.ready())
+        return std::unexpected(own.unready());
     DestinationState state = stateOf(name).value_or(DestinationState{});
     state.tried = now;
     const auto failed = [&](const Failure &failure) -> std::expected<DestinationState, Failure> {

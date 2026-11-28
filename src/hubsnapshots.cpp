@@ -133,7 +133,7 @@ HubKeeper::Before HubSnapshots::before(const Snapshots &snapshots) {
 
 HubSchedule::Job HubSnapshots::nightly(const Snapshots &snapshots) {
     return [&snapshots](HubKeeper &keeper) -> std::expected<void, Failure> {
-        if (!snapshots.ready()) {
+        if (!snapshots.chosen()) {
             qCInfo(lcLibrary) << "No nightly snapshot: snapshots aren't set up on this hub (omabook snapshot setup --hub).";
             return {};
         }

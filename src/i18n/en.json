@@ -2546,7 +2546,7 @@
   "The snapshots couldn't be copied to %1.": "The snapshots couldn't be copied to %1.",
   "The snapshots in %1 are opened.": "The snapshots in %1 are opened.",
   "The snapshots in %1 can't be opened with that recovery key: %2": "The snapshots in %1 can't be opened with that recovery key: %2",
-  "The snapshots in %1 can't be opened: their password isn't in %2. Put the recovery key back there, readable by you alone (chmod 600), or no snapshot is taken there.": "The snapshots in %1 can't be opened: their password isn't in %2. Put the recovery key back there, readable by you alone (chmod 600), or no snapshot is taken there.",
+  "The snapshots in %1 can't be opened: their password isn't in %2. Give their recovery key back (omabook snapshot setup --recovery-key, or the Snapshots panel; on a hub add --hub), or put it in that file, readable by you alone (chmod 600). Until then no snapshot is taken there.": "The snapshots in %1 can't be opened: their password isn't in %2. Give their recovery key back (omabook snapshot setup --recovery-key, or the Snapshots panel; on a hub add --hub), or put it in that file, readable by you alone (chmod 600). Until then no snapshot is taken there.",
   "The snapshots in %1 can't be read: %2. See that they can be reached, then look again: omabook snapshot status": "The snapshots in %1 can't be read: %2. See that they can be reached, then look again: omabook snapshot status",
   "The snapshots in %1 haven't been checked for %n days. Check them: omabook snapshot check": {
     "one": "The snapshots in %1 haven't been checked for %n day. Check them: omabook snapshot check",

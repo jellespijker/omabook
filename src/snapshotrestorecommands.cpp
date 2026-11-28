@@ -328,7 +328,7 @@ int runSnapshotRestoreCli(const QStringList &arguments) {
     }
     const Snapshots snapshots(SnapshotPlace::here());
     if (!snapshots.ready())
-        return fail(Failure(Failure::Code::SnapshotsNotSetUp));
+        return fail(snapshots.unready());
     Library library(parser.isSet(u"library"_s) ? parser.value(u"library"_s) : Settings().libraryPath());
     // A library lost, or never here: its snapshots are found by its folder, and restored into a new one.
     if (restoring && parser.isSet(u"to"_s))
