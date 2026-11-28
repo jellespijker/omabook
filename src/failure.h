@@ -202,6 +202,7 @@ public:
         HubRunning,          // {socket}
         HubCantListen,       // {socket, the system's reason}
         HubNoLibraries,      // {}: no folder chosen for its libraries yet
+        HubNoLibraryYet,     // {the hub's folder of libraries}
         HubNoSuchLibrary,    // {name}
         HubLibraryUnnamed,   // {}: it keeps more than one, and the request named none
         HubUnknownRequest,   // {request}

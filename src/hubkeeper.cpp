@@ -109,9 +109,10 @@ QStringList HubKeeper::names() const {
 std::expected<Library *, Failure> HubKeeper::find(const QString &name) const {
     if (name.isEmpty() && m_kept.size() == 1)
         return m_kept.front()->library.get();
+    if (m_kept.empty())
+        return std::unexpected(Failure(Failure::Code::HubNoLibraryYet, {m_folder}));
     if (name.isEmpty())
-        return std::unexpected(m_kept.empty() ? Failure(Failure::Code::HubNoSuchLibrary, {QString()})
-                                              : Failure(Failure::Code::HubLibraryUnnamed));
+        return std::unexpected(Failure(Failure::Code::HubLibraryUnnamed));
     const auto found = std::ranges::find(m_kept, name, [](const auto &kept) { return kept->name; });
     if (found == m_kept.end())
         return std::unexpected(Failure(Failure::Code::HubNoSuchLibrary, {name}));

@@ -332,6 +332,21 @@ private slots:
         QCOMPARE(keeper.write(u"elsewhere"_s, HubKeeper::Moment::None, write).error().code(), Failure::Code::HubNoSuchLibrary);
     }
 
+    // A hub with no library yet says so, and how to make one, whatever library is asked for (#294).
+    void aHubWithNoLibrarySaysHowToMakeOne() {
+        QTemporaryDir dir;
+        HubKeeper keeper(dir.path());
+        QVERIFY(keeper.open());
+        for (const QString &name : {QString(), u"Books"_s}) {
+            const auto asked =
+                keeper.write(name, HubKeeper::Moment::None, [](Library &) -> std::expected<QJsonObject, Failure> { return QJsonObject{}; });
+            QVERIFY(!asked);
+            const QString said = asked.error().text();
+            QVERIFY2(said.contains(u"keeps no library yet"_s) && said.contains(u"omabook list --library \"%1/Books\""_s.arg(dir.path())),
+                     qPrintable(said));
+        }
+    }
+
     void anotherHubCantHoldTheSameLibraries() {
         QTemporaryDir dir;
         QVERIFY(hubFolder(dir.path()));

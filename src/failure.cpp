@@ -58,9 +58,9 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::BookRefused, tr("%1 was not added: %2")},
     {Failure::Code::BookUnreadable, tr("%1 was added, but it can't be read here: %2")},
     {Failure::Code::FileCutShort, tr("The file is cut short: part of it is missing.")},
-    {Failure::Code::BookHasFormat,
-     tr("Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with --replace (\"replace\": true for an "
-        "agent): the one there goes to the trash.")},
+    {Failure::Code::BookHasFormat, tr("Book %1 already has another %2 file, and it was left as it is. To replace it, add the file with "
+                                      "--replace (\"replace\": true for an "
+                                      "agent): the one there goes to the trash.")},
     {Failure::Code::ReplacedFileNotTrashed, tr("%1 can't be moved to the trash, so it was not replaced.")},
     {Failure::Code::BookFileNotCopied, tr("%1 can't be copied into the library, to %2")},
     {Failure::Code::LibraryNotWritten, tr("The library can't be written.")},
@@ -319,7 +319,12 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubRunning, tr("A hub is running here already, answering at %1.")},
     {Failure::Code::HubCantListen, tr("The hub can't take requests at %1: %2")},
     {Failure::Code::HubNoLibraries, tr("The hub has no folder for its libraries yet. Choose one: omabook hub run --libraries <folder>")},
-    {Failure::Code::HubNoSuchLibrary, tr("The hub keeps no library called %1.")},
+    {Failure::Code::HubNoLibraryYet,
+     tr("The hub keeps no library yet, so there is nothing to sync with. Make one on the hub with omabook list --library "
+        "\"%1/Books\", then restart the hub.")},
+    {Failure::Code::HubNoSuchLibrary,
+     tr("The hub keeps no library called %1. A new one is made on the hub with omabook list --library <its libraries "
+        "folder>/%1, and kept once the hub is restarted.")},
     {Failure::Code::HubLibraryUnnamed, tr("The hub keeps more than one library, so say which one.")},
     {Failure::Code::HubUnknownRequest, tr("The hub takes no request called %1.")},
     {Failure::Code::HubBadRequest, tr("The hub takes each request as one line of JSON: an object that names its request.")},

@@ -241,6 +241,17 @@ void printWork(const QJsonObject &work) {
             printLine(stdout, u"  - The graph of %1 failed: %2"_s.arg(done["title"_L1].toString(), done["said"_L1].toString()));
 }
 
+// What the hub keeps, as its status says, and how to make the first library when it keeps none (#294).
+void printLibraries(const QJsonObject &answer) {
+    printLine(stdout, u"Omabook %1, keeping the libraries in %2:"_s.arg(answer.value("version"_L1).toString(),
+                                                                        answer.value("folder"_L1).toString()));
+    for (const auto &library : answer.value("libraries"_L1).toArray())
+        printLine(stdout, u"  %1  %2 books"_s.arg(library["name"_L1].toString(), QString::number(library["books"_L1].toInt())));
+    if (answer.value("libraries"_L1).toArray().isEmpty())
+        printLine(stdout, u"  none yet, so there is nothing to sync with. Make one on the hub with omabook list --library "
+                          "\"%1/Books\", then restart the hub."_s.arg(answer.value("folder"_L1).toString()));
+}
+
 int status(const QCommandLineParser &parser, const QStringList &words) {
     QJsonObject answer;
     if (!words.isEmpty()) {
@@ -271,10 +282,7 @@ int status(const QCommandLineParser &parser, const QStringList &words) {
         return failLine(answer.value("error"_L1).toString());
     if (parser.isSet(u"json"_s))
         return 0;
-    printLine(stdout, u"Omabook %1, keeping the libraries in %2:"_s.arg(answer.value("version"_L1).toString(),
-                                                                        answer.value("folder"_L1).toString()));
-    for (const auto &library : answer.value("libraries"_L1).toArray())
-        printLine(stdout, u"  %1  %2 books"_s.arg(library["name"_L1].toString(), QString::number(library["books"_L1].toInt())));
+    printLibraries(answer);
     printSnapshots(answer.value("snapshots"_L1).toObject());
     printWork(answer.value("work"_L1).toObject());
     return 0;

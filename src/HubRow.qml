@@ -90,7 +90,7 @@ Rectangle {
                 objectName: "hubLibraries"
                 visible: row.hub.state === "reachable"
                 textFormat: Text.PlainText
-                text: row.libraries.length === 0 ? qsTr("It keeps no library yet.")
+                text: row.libraries.length === 0 ? qsTr("It keeps no library yet. Make one on the hub with omabook list --library <its libraries folder>/Books, then restart the hub.")
                     : row.libraries.map(library => qsTr("%1: %Ln books", "", library.books).arg(library.name)).join(" · ")
             }
             Detail {

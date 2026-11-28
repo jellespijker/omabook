@@ -18,7 +18,8 @@ QList<Manual::Section> hubSections() {
                     "without a window, as their one writer. On it, `omabook hub run --libraries <folder>` chooses the "
                     "folder once; then `systemctl --user enable --now omabook-hub` runs it from then on, and `loginctl "
                     "enable-linger` keeps it running with no one logged in. A unit for a user of its own comes with the "
-                    "package too. `omabook hub status` says what it keeps.")},
+                    "package too. `omabook hub status` says what it keeps. A library is made on it with `omabook list --library "
+                    "<folder>/Books`, and kept once the hub is restarted.")},
         {Manual::tr("Linking a computer to it"),
          Manual::tr("{library.hubs}, or `omabook hub add <host>`, signs in to the hub once over your own ssh and puts "
                     "a key of this computer's own there, which opens Omabook's hub session and nothing else: no shell, "

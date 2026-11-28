@@ -407,6 +407,9 @@ private slots:
         QCOMPARE(linked.value("fingerprint").toString(), SshKey::fingerprint(*key));
         const auto [asked, here] = computers.omabook(u"here"_s, {u"hub"_s, u"computers"_s, u"hub"_s});
         QVERIFY2(asked == 0 && here.contains(u"laptop"_s) && here.contains(u"(this computer)"_s), qPrintable(here));
+        // With no hub named, a computer that keeps no hub of its own means the one it is linked to (#294).
+        const auto [unnamed, same] = computers.omabook(u"here"_s, {u"hub"_s, u"computers"_s});
+        QVERIFY2(unnamed == 0 && same == here, qPrintable(same));
         // The hub's own requests reach its daemon, which isn't running here.
         const auto [status, notRunning] = computers.omabook(u"here"_s, {u"hub"_s, u"status"_s, u"hub"_s});
         QVERIFY2(status != 0 && notRunning.contains(u"No hub is running"_s), qPrintable(notRunning));

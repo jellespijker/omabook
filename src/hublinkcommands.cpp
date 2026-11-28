@@ -74,12 +74,21 @@ void printComputers(const QJsonArray &computers) {
 
 int computers(const QStringList &words, const QCommandLineParser &parser) {
     QJsonArray listed;
-    if (words.isEmpty()) {
+    QString host = words.value(0);
+    // On a computer that is no hub, the hub it is linked to is meant, as by `hub sync` (#294).
+    if (host.isEmpty() && HubPlace::usual().libraries().isEmpty()) {
+        const QList<HubLinks::Hub> linked = HubLinks().hubs();
+        if (linked.size() > 1)
+            return failLine(u"This computer is linked to more than one hub: name one, omabook hub computers <host>."_s);
+        if (!linked.isEmpty())
+            host = linked.first().host;
+    }
+    if (host.isEmpty()) {
         for (const HubComputers::Computer &computer : HubComputers::usual(HubPlace::usual()).computers())
             listed.append(QJsonObject{
                 {"name", computer.name}, {"fingerprint", computer.fingerprint}, {"linked", computer.linked.toString(Qt::ISODate)}});
     } else {
-        const auto answer = HubLinks().ask(words.first(), {{"request", "computers"}});
+        const auto answer = HubLinks().ask(host, {{"request", "computers"}});
         if (!answer)
             return failLine(answer.error().text());
         listed = answer->value("computers"_L1).toArray();
