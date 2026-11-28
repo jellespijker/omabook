@@ -167,6 +167,32 @@ private slots:
         QVERIFY2(desk.warnings.isEmpty(), qPrintable(desk.warnings.join('\n')));
     }
 
+    // Every choice of the list's filter shows whole beside it, in every language (#298).
+    void theFiltersChoicesShowWhole() {
+        for (const char *language : {"en", "de", "nl", "fr", "es-MX"}) {
+            Desk desk(language, {}, false);
+            QVERIFY(entry(*desk.backend->library(), "Moss") > 0);
+            QVERIFY(setUpWithOne(desk));
+            QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+            QVERIFY(desk.resize({1600, 1000}));
+            QVERIFY(open(desk));
+            QTRY_VERIFY(shown(desk, "snapshotKinds"));
+            QObject *kinds = desk.find("snapshotKinds");
+            for (int choice = 0; choice < 3; ++choice) {
+                QVERIFY(kinds->setProperty("currentIndex", choice));
+                desk.settle();
+                const auto *said = kinds->property("contentItem").value<QQuickItem *>();
+                QVERIFY(said);
+                const auto room = [said] {
+                    return said->width() - said->property("leftPadding").toReal() - said->property("rightPadding").toReal()
+                           - said->property("contentWidth").toReal();
+                };
+                QVERIFY2(QTest::qWaitFor([&room] { return room() >= -0.5; }, 2000),
+                         qPrintable(QString("%1: %2 is cut by %3").arg(language, said->property("text").toString()).arg(-room())));
+            }
+        }
+    }
+
     // The diff against now, a book put back after asking, and undone from the moment snapshot taken first.
     void aBookPutBackFromTheDiffAndUndone() {
         Desk desk("en", {}, false);

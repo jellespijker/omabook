@@ -149,6 +149,8 @@ ColumnLayout {
         ComboBox {
             objectName: "snapshotKinds"
             Layout.fillWidth: win.compact
+            // As wide as its widest choice, in every language (#298).
+            implicitContentWidthPolicy: ComboBox.WidestText
             model: [qsTr("All snapshots"), qsTr("Nightly ones"), qsTr("Moment snapshots")]
             Material.roundedScale: theme.radius
             onActivated: (index) => overview.kindShown = ["", "nightly", "moment"][index]
