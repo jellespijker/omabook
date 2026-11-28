@@ -95,9 +95,20 @@ void printJson(const QJsonObject &object) {
 
 void keepOptions(Settings &settings, const DeviceOptions &options) { settings.setDevices(options.toJson()); }
 
+// Said before a password is asked for: one that is gone when this command
+// ends is no use to the next one (#274).
+[[nodiscard]] std::optional<QString> passwordWouldBeLost() {
+    QString why;
+    if (Secrets::shared().lasting(&why))
+        return std::nullopt;
+    return why + u" Nothing was kept."_s;
+}
+
 int koreaderLogin(const QStringList &words, Settings &settings) {
     if (words.size() != 3)
         return failLine(u"Say the server and your name: omabook koreader login https://sync.koreader.rocks reader"_s);
+    if (const auto why = passwordWouldBeLost())
+        return failLine(*why);
     const QString key = KosyncClient::keyOf(passwordFromInput());
     QNetworkAccessManager network;
     KosyncClient client(network, QUrl(words.at(1)), words.at(2), key);
@@ -116,6 +127,8 @@ int koreaderLogin(const QStringList &words, Settings &settings) {
 int koreaderServeAs(const QStringList &words, Settings &settings) {
     if (words.size() != 2)
         return failLine(u"Say the name KOReader logs in with: omabook koreader serve-as reader"_s);
+    if (const auto why = passwordWouldBeLost())
+        return failLine(*why);
     if (!Secrets::shared().put(QString::fromLatin1(DeviceSecrets::koreaderServeKey), KosyncClient::keyOf(passwordFromInput())))
         return failLine(u"The keyring wouldn't keep the password."_s);
     DeviceOptions options = DeviceOptions::fromJson(settings.devices());
@@ -216,8 +229,20 @@ void printServed(const DeviceServer::Setup &setup, const QString &address, const
     if (served.opds)
         printLine(stdout,
                   u"OPDS catalog: %1/opds (any name, and the token %2 as the password), or %1/t/%2/opds"_s.arg(address, setup.opdsToken));
-    if (served.koreader)
-        printLine(stdout, u"KOReader sync: %1, logging in as %2"_s.arg(address, setup.options.koreaderServeUser));
+    if (!served.koreader)
+        return;
+    const QString &user = setup.options.koreaderServeUser;
+    printLine(stdout, u"KOReader sync: "_s + address + (user.isEmpty() ? QString() : u", logging in as "_s + user));
+}
+
+// KOReader's sync served here with no name or no password lets nobody in (#274).
+void sayWhoCannotLogIn(const DeviceServer::Setup &setup) {
+    if (!setup.options.koreaderServe || (!setup.options.koreaderServeUser.isEmpty() && !setup.koreaderKey.isEmpty()))
+        return;
+    QString why;
+    const QString lost = Secrets::shared().lasting(&why) ? QString() : u" "_s + why;
+    printLine(stderr,
+              u"KOReader's sync has no password, so KOReader can't log in: set one with omabook koreader serve-as <name>."_s + lost);
 }
 
 // When an Omabook serves where this one would already: what it serves, and
@@ -287,6 +312,7 @@ int runServeCli(const QStringList &arguments) {
     if (address->isEmpty())
         return failLine(u"Nothing to serve: the catalog is off and so is KOReader's sync."_s);
     printServed(setup, *address, {.opds = options.opds, .koreader = options.koreaderServe});
+    sayWhoCannotLogIn(setup);
     return QCoreApplication::exec();
 }
 
