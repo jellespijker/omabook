@@ -6,6 +6,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QSaveFile>
+#include <algorithm>
 #include <optional>
 
 #include "formats.h"
@@ -83,19 +84,73 @@ namespace {
     return true;
 }
 
+// The words an annotation of Calibre's is known by.
+[[nodiscard]] QString wordsOf(const Annotation &annotation) {
+    if (annotation.kind == "bookmark")
+        return annotation.text;
+    return annotation.kind == "margin-note" ? annotation.note : annotation.quote.simplified();
+}
+
+// Takes from `here` the annotation that is `made`, brought in before: of its
+// kind and moment, with its words (`sameWords`), or, a highlight whose words
+// were put as the book has them when it was found by them, of its moment
+// alone. False when there is none.
+[[nodiscard]] bool claim(QList<Annotation> &here, const Annotation &made, bool timed, bool sameWords) {
+    if (!sameWords && (!timed || made.kind != "highlight"))
+        return false;
+    const auto same = std::ranges::find_if(here, [&](const Annotation &other) {
+        return other.kind == made.kind && (!timed || other.created == made.created) && (!sameWords || wordsOf(other) == wordsOf(made));
+    });
+    if (same == here.end())
+        return false;
+    here.erase(same);
+    return true;
+}
+
 // Each highlight, note and bookmark comes across once, so one removed
-// here doesn't return with the next import.
+// here doesn't return with the next import. One the book has already, from
+// an import that was cut off before it could write down what it took, is
+// noted as taken rather than brought a second time (#273).
 [[nodiscard]] bool takeNotes(Library &library, qint64 id, const QList<Calibre::Note> &said, QJsonArray &taken) {
-    bool changed = false;
+    QList<Annotation> here = library.annotations(id);
+    QList<Calibre::Note> others;
+    // Those with their words first, so none of them is claimed by its moment alone.
     for (const Calibre::Note &note : said) {
         if (taken.contains(note.id))
             continue;
-        if (library.storeAnnotation(id, annotationOf(note)).value_or(0) > 0) {
+        if (claim(here, annotationOf(note), note.created > 0, true))
+            taken << note.id;
+        else
+            others << note;
+    }
+    bool changed = false;
+    for (const Calibre::Note &note : std::as_const(others)) {
+        const Annotation made = annotationOf(note);
+        if (claim(here, made, note.created > 0, false)) {
+            taken << note.id;
+        } else if (library.storeAnnotation(id, made).value_or(0) > 0) {
             taken << note.id;
             changed = true;
         }
     }
     return changed;
+}
+
+// The file's books, and over them what the journal says was remembered since.
+// A line cut short, by an import that was killed as it wrote it, says nothing.
+[[nodiscard]] QJsonObject remembered(const QString &file, const QString &journal) {
+    QJsonObject books;
+    if (QFile kept(file); kept.open(QIODevice::ReadOnly))
+        books = QJsonDocument::fromJson(kept.readAll()).object();
+    QFile since(journal);
+    if (!since.open(QIODevice::ReadOnly))
+        return books;
+    while (!since.atEnd()) {
+        const QJsonObject line = QJsonDocument::fromJson(since.readLine()).object();
+        for (auto book = line.begin(); book != line.end(); ++book)
+            books.insert(book.key(), book.value());
+    }
+    return books;
 }
 
 } // namespace
@@ -115,29 +170,38 @@ CalibreImport::Sifted CalibreImport::sift(const Calibre::Book &book) {
     return sifted;
 }
 
-CalibreImport::Memory::Memory(const QString &libraryRoot) : m_file(libraryRoot + "/calibre-import.json") {
-    QFile file(m_file);
-    if (file.open(QIODevice::ReadOnly))
-        m_books = QJsonDocument::fromJson(file.readAll()).object();
-}
+CalibreImport::Memory::Memory(const QString &libraryRoot)
+    : m_file(libraryRoot + "/calibre-import.json"), m_journal(libraryRoot + "/calibre-import.journal"),
+      m_books(remembered(m_file, m_journal)) {}
 
 QJsonObject CalibreImport::Memory::of(qint64 id) const { return m_books.value(QString::number(id)).toObject(); }
 
 void CalibreImport::Memory::remember(qint64 id, const QJsonObject &said) {
     if (of(id) == said)
         return;
-    m_books.insert(QString::number(id), said);
-    m_changed = true;
+    const QString key = QString::number(id);
+    m_books.insert(key, said);
+    m_said.insert(key, said);
+    // At once: whatever ends the import, what is in the library is written down.
+    // A line of its own, also after one that was cut short.
+    const QByteArray line = '\n' + QJsonDocument(QJsonObject{{key, said}}).toJson(QJsonDocument::Compact) + '\n';
+    if (QFile journal(m_journal); journal.open(QIODevice::WriteOnly | QIODevice::Append))
+        journal.write(line); // Should it not be written, save() still has it.
 }
 
 void CalibreImport::Memory::save() {
-    if (!m_changed)
+    if (m_said.isEmpty())
         return;
+    // Read again: another import may have remembered books of its own meanwhile.
+    QJsonObject books = remembered(m_file, m_journal);
+    for (auto book = m_said.begin(); book != m_said.end(); ++book)
+        books.insert(book.key(), book.value());
     QSaveFile file(m_file);
     file.setDirectWriteFallback(false);
-    if (file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(m_books).toJson(QJsonDocument::Compact)) > 0)
-        file.commit();
-    m_changed = false;
+    const QByteArray bytes = QJsonDocument(books).toJson(QJsonDocument::Compact);
+    if (file.open(QIODevice::WriteOnly) && file.write(bytes) == bytes.size() && file.commit())
+        QFile::remove(m_journal);
+    m_said = {};
 }
 
 bool CalibreImport::takeReading(Library &library, qint64 id, const Calibre::Book &calibre, Memory &memory) {
