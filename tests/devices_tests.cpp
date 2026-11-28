@@ -159,6 +159,42 @@ private slots:
         QCOMPARE(FakeDevice::ask("GET", at + "/opds", {{"Authorization", "Bearer token"}}).status, 404);
     }
 
+    // A place that doesn't say how far into the book it is, as a number from 0
+    // to 1, is refused and moves nothing (#287).
+    void aPlaceWithoutAPercentageIsRefused_data() {
+        QTest::addColumn<QJsonValue>("percentage");
+        QTest::newRow("none") << QJsonValue(QJsonValue::Undefined);
+        QTest::newRow("words") << QJsonValue("abc");
+        QTest::newRow("digits as text") << QJsonValue("0.5");
+        QTest::newRow("of a hundred") << QJsonValue(45);
+        QTest::newRow("below the start") << QJsonValue(-0.1);
+        QTest::newRow("null") << QJsonValue(QJsonValue::Null);
+    }
+    void aPlaceWithoutAPercentageIsRefused() {
+        QFETCH(const QJsonValue, percentage);
+        QTemporaryDir dir;
+        Library library(dir.filePath("Library"));
+        QVERIFY(library.open());
+        const qint64 id = threeChapters(library, dir.path());
+        QVERIFY(id > 0);
+        library.setProgress(id, {.place = {2, 0.5}, .percent = 45, .updated = 1000});
+        DeviceServer server(library.root());
+        const auto address = server.start(serving(true));
+        QVERIFY2(address, qPrintable(whyNot(address)));
+        QJsonObject progress{{"document", KoreaderDocument::hash(library.formatPath(id, "epub"))},
+                             {"progress", "/body/DocFragment[1]/body"},
+                             {"device", "Kobo"},
+                             {"device_id", "KOBO1"}};
+        if (!percentage.isUndefined())
+            progress.insert("percentage", percentage);
+        const FakeDevice::Answer answer =
+            FakeDevice::ask("PUT", *address + "/syncs/progress", FakeDevice::koreader("reader", key), body(progress));
+        QCOMPARE(answer.status, 403);
+        QCOMPARE(answer.json().value("message").toString(), QString("Invalid request"));
+        QCOMPARE(library.progress(id).place.section, 2);
+        QCOMPARE(library.progress(id).percent, 45.0);
+    }
+
     void omabookSyncsWithAKoreaderSyncServer() {
         // The stand-in sync server: Omabook's own, serving an empty library.
         QTemporaryDir dir;

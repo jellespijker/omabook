@@ -21,6 +21,15 @@ namespace {
 
 [[nodiscard]] HttpResponse unauthorized() { return said(401, 2001, "Unauthorized"); }
 
+[[nodiscard]] HttpResponse invalid() { return said(403, 2003, "Invalid request"); }
+
+// How far into its book a place is: a number from 0 to 1. Without one, or with
+// another, the place would be taken as the book's start or end (#287).
+[[nodiscard]] bool saysHowFar(const QJsonObject &record) {
+    const QJsonValue percentage = record.value("percentage");
+    return percentage.isDouble() && percentage.toDouble() >= 0 && percentage.toDouble() <= 1;
+}
+
 } // namespace
 
 KosyncRoutes::KosyncRoutes(Library &library, KoreaderBooks &books, QString user, QString key, std::function<void(qint64)> taken)
@@ -63,9 +72,10 @@ HttpResponse KosyncRoutes::create(const HttpRequest &request) const {
 }
 
 HttpResponse KosyncRoutes::put(const HttpRequest &request) {
-    auto record = KoreaderRecord::fromJson(QJsonDocument::fromJson(request.body).object());
-    if (!record)
-        return said(403, 2003, "Invalid request");
+    const QJsonObject asked = QJsonDocument::fromJson(request.body).object();
+    auto record = KoreaderRecord::fromJson(asked);
+    if (!record || !saysHowFar(asked))
+        return invalid();
     record->document = record->document.toLower();
     record->timestamp = QDateTime::currentSecsSinceEpoch();
     KoreaderRecords::hear(*m_library, *record);
