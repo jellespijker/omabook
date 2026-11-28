@@ -85,6 +85,8 @@ struct Sides {
 // breaks a rule of a book not in `options.accept` or is a dry run, runs it and
 // compares both sides with what was announced: the summary says the breaches
 // (`breaches`, and `error` when it was refused) and what differs (`unannounced`).
+// Just before it runs, and however it was started, this computer's library gets its
+// moment snapshot (`momentSnapshot`, `noSnapshot`), when snapshots are set up (#291).
 // An Omabook there from before the guard makes no plan: its side goes unchecked,
 // and the summary says so (`uncheckedThere`); a hub that makes none is refused,
 // saying to update it (#211).

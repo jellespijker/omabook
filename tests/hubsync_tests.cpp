@@ -22,6 +22,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QMap>
+#include <QScopeGuard>
 #include <QSqlDatabase>
 #include <QSqlQuery>
 #include <QSqlRecord>
@@ -43,6 +44,7 @@
 #include "library.h"
 #include "person.h"
 #include "remote.h"
+#include "snapshots.h"
 #include "spaces.h"
 #include "sshkey.h"
 #include "sync.h"
@@ -263,6 +265,30 @@ private slots:
         QCOMPARE(contents(laptop.library), contents(here.library));
         QCOMPARE(contents(desktop.library), contents(there.library));
         QCOMPARE(hub.held(), contents(middle.library));
+    }
+
+    // A sync with a hub, by hand, from the window or by itself, takes a moment
+    // snapshot of the computer's library before it writes to it (#291).
+    void aSyncWithTheHubSnapshotsTheComputerFirst() {
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        QVERIFY(laptop.add(u"Alpha"_s) > 0);
+        const QString state = laptop.dir.filePath(u"snapshot-state"_s);
+        const auto restore = qScopeGuard([before = qgetenv("XDG_STATE_HOME")] { qputenv("XDG_STATE_HOME", before); });
+        qputenv("XDG_STATE_HOME", state.toUtf8());
+        Snapshots snapshots(SnapshotPlace::here());
+        QVERIFY(snapshots.setUp(laptop.dir.filePath(u"repository"_s)));
+        SyncOptions dry;
+        dry.dryRun = true;
+        QVERIFY(hub.syncWith(u"laptop"_s, laptop.library, dry).momentSnapshot.isEmpty());
+        const SyncSummary synced = hub.syncWith(u"laptop"_s, laptop.library);
+        QVERIFY2(synced.error.isEmpty() && synced.problems.isEmpty(), qPrintable(problems(synced)));
+        QVERIFY(!synced.momentSnapshot.isEmpty());
+        const auto listed = snapshots.list(laptop.library);
+        QVERIFY(listed && listed->size() == 1);
+        QCOMPARE(listed->first().tagged(u"reason:"_s), u"sync"_s);
     }
 
     // A book whose details one computer wrote into its file reaches the hub with its id and the hash

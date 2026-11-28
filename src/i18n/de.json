@@ -195,6 +195,7 @@
   "A say in every book that is added": "Ein Mitspracherecht bei jedem hinzugefügten Buch",
   "A server (OpenAI-compatible)": "Ein Server (OpenAI-kompatibel)",
   "A short walk through the window": "Ein kurzer Rundgang durch das Fenster",
+  "A snapshot of the library was taken first: %1.": "Zuerst wurde ein Snapshot der Bibliothek gemacht: %1.",
   "A source of book details, asked in every look-up": "Eine Quelle für Buchangaben, bei jeder Suche befragt",
   "A source of book details: %1": "Eine Quelle für Buchangaben: %1",
   "A title to look up": "Ein Titel zum Nachschlagen",
@@ -535,6 +536,7 @@
   "No plugin goes by that. Clear the filter to see them all.": "Kein Plugin heißt so. Leere den Filter, um alle zu sehen.",
   "No reading site knows this book": "Keine Leseseite kennt dieses Buch",
   "No series": "Keine Reihe",
+  "No snapshot could be taken first, so the sync went on without one: %1": "Es konnte zuerst kein Snapshot gemacht werden, daher wurde ohne ihn synchronisiert: %1",
   "No tags": "Keine Schlagwörter",
   "No time or order known: %Ln": {
     "one": "Keine Zeit oder Reihenfolge bekannt: %Ln",

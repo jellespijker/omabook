@@ -34,6 +34,16 @@ QStringList keptOnOneSide(const SyncSummary &summary) {
     return lines;
 }
 
+// The moment snapshot taken before the sync wrote here, or why there is none (#291).
+QStringList momentLines(const SyncSummary &summary) {
+    QStringList lines;
+    if (!summary.momentSnapshot.isEmpty())
+        lines << Backend::tr("A snapshot of the library was taken first: %1.").arg(summary.momentSnapshot);
+    if (!summary.noSnapshot.isEmpty())
+        lines << Backend::tr("No snapshot could be taken first, so the sync went on without one: %1").arg(summary.noSnapshot);
+    return lines;
+}
+
 } // namespace
 
 QStringList Backend::syncLines(const SyncSummary &summary) {
@@ -65,6 +75,7 @@ QStringList Backend::syncLines(const SyncSummary &summary) {
                              "", summary.detailsUndecided);
     if (lines.isEmpty() && summary.problems.isEmpty())
         lines << tr("Both libraries were already in step.");
+    lines << momentLines(summary);
     lines << uncheckedThere(summary);
     lines << summary.computersRenamed;
     lines << summary.problems.mid(0, 3);

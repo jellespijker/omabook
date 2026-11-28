@@ -274,6 +274,12 @@ std::optional<SnapshotReason> riskyMoment(const QStringList &arguments) {
 }
 
 void snapshotBeforeRisky(const QStringList &arguments) {
+    // A sync run from here takes its own, just before it writes, however it was started
+    // (SyncGuard::guarded, #291); what another computer's sync asks of this one is snapshot here.
+    constexpr std::array asked{"--replicate"_L1, "--identity"_L1, "--plugin-files"_L1, "--take-plugin-files"_L1};
+    if (arguments.value(1) == "sync"_L1
+        && std::ranges::none_of(asked, [&arguments](QLatin1StringView option) { return given(arguments, option); }))
+        return;
     const auto moment = riskyMoment(arguments);
     if (!moment)
         return;

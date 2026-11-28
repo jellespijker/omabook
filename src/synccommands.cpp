@@ -299,6 +299,14 @@ void addAskedOptions(QCommandLineParser &parser) {
                       "What omabook sync asks of this computer: take in the files of plugins' data/ folders this file names.", "file"});
 }
 
+// The moment snapshot taken before the sync wrote here, or why there is none (#291).
+void printMoment(const SyncSummary &summary) {
+    if (!summary.momentSnapshot.isEmpty())
+        printLine(stderr, QString("A moment snapshot of the library was taken first: %1.").arg(summary.momentSnapshot));
+    if (!summary.noSnapshot.isEmpty())
+        printLine(stderr, "No moment snapshot could be taken first, so this goes on without one: " + summary.noSnapshot);
+}
+
 // Why a sync didn't begin, and with --json as JSON too (#214).
 int failSync(const QString &why, bool json) {
     if (json)
@@ -391,6 +399,7 @@ int runSyncCli(const QStringList &arguments) {
                 printLine(stderr, title);
         },
         *options);
+    printMoment(summary);
     if (!summary.error.isEmpty())
         return failSync(summary.error, json);
     const QStringList nothing = unlinkedNothing(*options, summary);

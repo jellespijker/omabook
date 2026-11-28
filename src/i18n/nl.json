@@ -195,6 +195,7 @@
   "A say in every book that is added": "Inspraak bij elk boek dat wordt toegevoegd",
   "A server (OpenAI-compatible)": "Een server (OpenAI-compatibel)",
   "A short walk through the window": "Een korte rondleiding door het venster",
+  "A snapshot of the library was taken first: %1.": "Eerst is een snapshot van de bibliotheek gemaakt: %1.",
   "A source of book details, asked in every look-up": "Een bron van boekgegevens, geraadpleegd bij elke zoekactie",
   "A source of book details: %1": "Een bron van boekgegevens: %1",
   "A title to look up": "Een titel om op te zoeken",
@@ -535,6 +536,7 @@
   "No plugin goes by that. Clear the filter to see them all.": "Geen plug-in heet zo. Wis het filter om ze allemaal te zien.",
   "No reading site knows this book": "Geen leessite kent dit boek",
   "No series": "Geen reeks",
+  "No snapshot could be taken first, so the sync went on without one: %1": "Er kon eerst geen snapshot worden gemaakt, dus is er zonder gesynchroniseerd: %1",
   "No tags": "Geen labels",
   "No time or order known: %Ln": {
     "one": "Geen tijd of volgorde bekend: %Ln",

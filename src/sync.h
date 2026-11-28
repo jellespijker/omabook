@@ -156,6 +156,11 @@ struct SyncSummary {
     // The computers that went by another name at the last sync, on the same
     // machine: known by the name they have now, each said in a line (#215).
     QStringList computersRenamed;
+    // The moment snapshot of the library here taken before the sync wrote to
+    // it (#181, #291): its short id, empty when none was taken (snapshots
+    // aren't set up, or the last one holds the library as it is); and why none
+    // could be taken, when the sync went on without one.
+    QString momentSnapshot, noSnapshot;
 
     // Before a take: each finds every book still undecided, and every book the
     // two stay different by, one's removed and the other's kept (#290), so the

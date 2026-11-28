@@ -10,6 +10,7 @@
 #include "failure.h"
 #include "hlc.h"
 #include "log.h"
+#include "snapshots.h"
 
 using namespace Qt::StringLiterals;
 
@@ -278,6 +279,20 @@ QString SyncGuard::worded(const Breach &breach, const QString &where) {
     return QString("%1 (%2): %3").arg(breach.title, where, what);
 }
 
+namespace {
+
+// What came of the moment snapshot taken before a sync wrote (#291).
+void noteMoment(SyncSummary &summary, const std::expected<std::optional<Snapshots::Taken>, Failure> &moment) {
+    if (!moment) {
+        qCWarning(lcSync).noquote() << "no moment snapshot before a sync:" << moment.error().english();
+        summary.noSnapshot = moment.error().text();
+    } else if (*moment && !(*moment)->unchanged) {
+        summary.momentSnapshot = (*moment)->id.left(8);
+    }
+}
+
+} // namespace
+
 SyncSummary SyncGuard::guarded(const Library &library, const Sides &sides, const SyncOptions &options) {
     const SyncPlan::States hereBefore = SyncPlan::states(library);
     const std::optional<SyncPlan::States> thereBefore = sides.theirStates();
@@ -298,7 +313,9 @@ SyncSummary SyncGuard::guarded(const Library &library, const Sides &sides, const
         qCWarning(lcSync).noquote() << "a sync with" << sides.host << "refused:" << found.refusing.size() << "breaches of the guard";
         return refused(std::move(planned), refusal(sides.host, found.refusing), false);
     }
+    const auto moment = Snapshots(SnapshotPlace::here()).before(library, SnapshotReason::Sync);
     SyncSummary done = sides.run(options);
+    noteMoment(done, moment);
     done.breaches = found.said;
     done.uncheckedThere = planned.uncheckedThere;
     if (!done.error.isEmpty())
