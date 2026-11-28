@@ -3,7 +3,6 @@
 #include <QHash>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSet>
 #include <QSqlQuery>
 #include <QStringList>
 #include <QVariant>
@@ -12,6 +11,7 @@
 
 #include "changelogannotations.h"
 #include "changelogbaseline.h"
+#include "changelogcollections.h"
 #include "changelogfields.h"
 #include "changeloggraph.h"
 #include "graph.h"
@@ -150,61 +150,6 @@ void syncBookToLog(const Library &library, const Book &book, bool baseline, std:
     syncBookReading(ctx, book);
 }
 
-// The book of this global id has a row in this library.
-[[nodiscard]] bool bookIsHere(const Library &library, const QString &gid) {
-    const qint64 id = Spaces::localId(library, u"book"_s, gid);
-    if (id <= 0)
-        return false;
-    QSqlQuery row = ChangeLog::query(library, "SELECT 1 FROM books WHERE id = ?", {id});
-    return row.next();
-}
-
-// A collection's books by hand, each in or out, and the ones it no longer has.
-void syncCollectionBooks(EntityContext &ctx, const Collection &col, qint64 colHlc) {
-    const Library &library = *ctx.library;
-    QSet<QString> currentBooks;
-    for (const bool in : {true, false}) {
-        for (const qint64 bookId : in ? col.included : col.excluded) {
-            const QString field = u"book:"_s + Spaces::bookId(library, bookId);
-            currentBooks.insert(field);
-            ChangeLogFields::write(ctx, field, in ? u"in"_s : u"out"_s, colHlc);
-        }
-    }
-    // A book the log has in it that has no row here was taken out here only if
-    // the book is here: one whose file hasn't come yet (a hub is sent a
-    // library's collections before its books) can't have a row, and saying it
-    // left would take it out of the collection everywhere (#280).
-    for (auto it = ctx.existing.cbegin(); it != ctx.existing.cend(); ++it) {
-        if (it.key().startsWith("book:"_L1) && !it.value().value.isEmpty() && !currentBooks.contains(it.key())
-            && bookIsHere(library, it.key().mid(5)))
-            ChangeLogFields::write(ctx, it.key(), QString(), colHlc);
-    }
-}
-
-void syncCollectionToLog(const Library &library, const Collection &col, bool baseline, std::optional<qint64> explicitHlc = std::nullopt) {
-    const QString gid = Spaces::collectionId(library, col.id);
-    if (gid.isEmpty())
-        return;
-    EntityContext ctx{
-        &library, Spaces::personalSpace(library), u"collection"_s, gid, ChangeLogFields::logged(library, u"collection"_s, gid), baseline};
-    const qint64 colHlc = explicitHlc ? Hlc::normalize(*explicitHlc) : Hlc::normalize(col.updated);
-    const QString parentGid = col.parent > 0 ? Spaces::collectionId(library, col.parent) : QString();
-    ChangeLogFields::write(ctx, u"name"_s, col.name, colHlc);
-    ChangeLogFields::write(ctx, u"parent"_s, parentGid, colHlc);
-    if (col.removed) {
-        ChangeLogFields::write(ctx, u"removed"_s, u"1"_s, colHlc);
-        return;
-    }
-    ChangeLogFields::write(ctx, u"removed"_s, u"0"_s, colHlc);
-    ChangeLogFields::write(ctx, u"rule"_s, col.rule, colHlc);
-    ChangeLogFields::write(ctx, u"shelf"_s, compactJson(col.shelf), colHlc);
-    ChangeLogFields::write(ctx, u"format"_s, compactJson(col.format), colHlc);
-
-    syncCollectionBooks(ctx, col, colHlc);
-    if (explicitHlc && SpaceReplay::entityHlc(library, u"collection"_s, gid) < colHlc)
-        ChangeLog::append(library, {ctx.space, u"collection"_s, gid, u"name"_s, col.name, colHlc});
-}
-
 // A book that is gone: its tombstone, unless it already has one.
 void logGoneBook(const Library &library, const QString &gid) {
     if (gid.isEmpty())
@@ -256,7 +201,7 @@ void logRows(const Library &library, const QHash<QString, QList<qint64>> &dirty)
     if (const QList<qint64> touched = dirty.value(u"collection"_s); !touched.isEmpty())
         for (const Collection &collection : library.collections(true))
             if (touched.contains(collection.id))
-                syncCollectionToLog(library, collection, false);
+                ChangeLogCollections::syncToLog(library, collection, false);
     ChangeLogGraph::syncRowsToLog(library, {.nodes = dirty.value(u"node"_s),
                                             .facts = dirty.value(u"fact"_s),
                                             .edges = dirty.value(u"edge"_s),
@@ -289,10 +234,12 @@ void ChangeLog::open(const Library &library) {
     QSqlQuery logged = ChangeLog::query(library, "SELECT value FROM library_state WHERE key = 'logged_books'");
     const bool neverLogged = !logged.next() || logged.value(0).toLongLong() < 0;
     logged.finish();
-    if (emptyOps && neverLogged)
+    if (emptyOps && neverLogged) {
         writeBaseline(library);
-    else
+    } else {
         reconcile(library);
+        ChangeLogCollections::relogPutBack(library);
+    }
 }
 
 void ChangeLog::writeBaseline(const Library &library) {
@@ -306,12 +253,13 @@ void ChangeLog::writeBaseline(const Library &library) {
     for (const Library::Removal &removal : library.removals())
         recordRemoval(library, removal.key, removal.at, true);
     for (const Collection &collection : library.collections(true))
-        syncCollectionToLog(library, collection, true);
+        ChangeLogCollections::syncToLog(library, collection, true);
     ChangeLogGraph::syncToLog(library, true);
     ChangeLogAnnotations::syncToLog(library, true);
     baseline.finish();
     ChangeLog::exec(library, "DELETE FROM log_dirty"); // all of it is in the log now
     markLogged(library);
+    ChangeLogCollections::markPutBackLogged(library);
 }
 
 void ChangeLog::reconcile(const Library &library) {
@@ -323,7 +271,7 @@ void ChangeLog::reconcile(const Library &library) {
     for (const Book &book : library.books())
         syncBookToLog(library, book, false);
     for (const Collection &collection : library.collections(true))
-        syncCollectionToLog(library, collection, false);
+        ChangeLogCollections::syncToLog(library, collection, false);
     ChangeLogGraph::syncToLog(library, false);
     detectDeletedBooks(library);
     ChangeLogGraph::detectDeletedEntity(library, u"node"_s, u"graph_nodes"_s);
@@ -428,7 +376,7 @@ void ChangeLog::syncCollectionAt(const Library &library, qint64 collectionId, qi
         Spaces::observeHlc(library, normalized);
     for (const Collection &collection : library.collections(true)) {
         if (collection.id == collectionId) {
-            syncCollectionToLog(library, collection, true, normalized);
+            ChangeLogCollections::syncToLog(library, collection, true, normalized);
             break;
         }
     }
