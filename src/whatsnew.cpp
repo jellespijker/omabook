@@ -371,6 +371,36 @@ QList<Manual::Step> hubsRelease() {
     };
 }
 
+// The 0.5.3 release's entries: nothing deleted where there is no trash (#285), a tidy that keeps what only the
+// folded copy had (#282), a sync that keeps typed details and books added again (#284, #290), a hub that takes
+// its owner's computers after pairing (#283), and snapshots opened with their recovery key (#292).
+QList<Manual::Step> safetyRelease() {
+    return {
+        {"trash-or-nothing", "0.5.3", Manual::tr("Nothing deleted without a trash"),
+         Manual::tr("On a disk or share where no trash folder can be made, Omabook no longer deletes files while saying "
+                    "they went to the trash. It says why, and leaves everything where it was."),
+         "", "", "", ""},
+        {"tidy-kept", "0.5.3", Manual::tr("A tidy keeps every detail"),
+         Manual::tr("When {library.tidy} folds two copies of a book, what only one had, such as its description or tags, "
+                    "moves to the one kept. Where the two differ, it names what would be lost and leaves the pair "
+                    "unticked."),
+         "", "library.tidy", "library", ""},
+        {"sync-kept", "0.5.3", Manual::tr("A sync keeps your changes"),
+         Manual::tr("Adding a file on another computer no longer replaces details you changed, and a book you removed and "
+                    "added again syncs again. Update your computers and your hubs."),
+         "", "library.sync", "library", ""},
+        {"hub-owner", "0.5.3", Manual::tr("Your hub knows your computers"),
+         Manual::tr("A hub no longer refuses your computer as someone else's after a pairing. Update the hub and your "
+                    "computers, then run `omabook hub status <hub>` once on a computer still linked, before linking "
+                    "others."),
+         "", "library.hubs", "library", ""},
+        {"recovery-open", "0.5.3", Manual::tr("Snapshots open on a new computer"),
+         Manual::tr("The recovery key now opens snapshots on a second disk or elsewhere from a new computer, in "
+                    "{library.snapshots}. Nothing that was there then is thinned from that computer."),
+         "", "library.snapshots", "library", ""},
+    };
+}
+
 } // namespace
 
 QList<Manual::Step> Manual::features() {
@@ -450,5 +480,6 @@ QList<Manual::Step> Manual::features() {
             "dates it gives, as far as you have read. A tap on an event goes back to the page that told it."),
          "", "library.chronology_book", "library", ""},
     } + collectionsRelease() + annotationsRelease() + inkRelease() + listeningRelease() + providersRelease()
-           + speechRelease() + branchesRelease() + hubRelease() + hubSyncRelease() + hubsRelease();
+           + speechRelease() + branchesRelease() + hubRelease() + hubSyncRelease() + hubsRelease()
+           + safetyRelease();
 }

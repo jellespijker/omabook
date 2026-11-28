@@ -12,6 +12,60 @@ moves those lines under the release's version.
 
 ## [Unreleased]
 
+## [0.5.3] - 2026-11-28
+
+Mostly fixes, many of them keeping your books safe: nothing is deleted where no trash folder can be made, a tidy keeps what only the folded copy had, a library that can't be written to, is on a full disk or was started over an older one's folders loses nothing in silence, and a sync keeps the details you changed and carries a book you added again. A hub takes your computers again after they were paired, and snapshots open on a new computer with their recovery key. Install it on every computer, and the hub, before you sync. If you use a hub, then run `omabook hub status <hub>` once on a computer that is still linked, before you link another.
+
+### Fixed
+
+- In a low or narrow window the edit dialog now keeps why Save did not save in sight, beside its buttons: that the book was changed elsewhere meanwhile, with Take the Other Changes, or that the number in the series is no number. Before, they were below the part of the dialog in view, and pressing Save again wrote over the other change unseen (#257).
+- Reports of books that did not come in wait until you close them: a file refused when Omabook was opened on it, books of a Calibre library that were left out, and a book that was added but can't be read here. `omabook open` on a folder says all that went wrong, not only the first thing (#258).
+- A library whose database can only be read is said to be read-only, as a read-only folder is, instead of opening and quietly keeping no bookmarks, notes or reading places. A bookmark or margin note the library does not take is said not to be kept, and the note's words go to the clipboard. A book is not moved to the trash while its removal cannot be recorded (#259).
+- `omabook find` says why a read-only or damaged library can't be opened, instead of saying that the library has no such book (#260).
+- When the library's drive goes away while a book is being read, the reader says that the library can't be found, with the way back, instead of showing blank chapters (#261).
+- A mail port that can't be one is said in the Phones and e-readers panel only, no longer under every book's details, and goes once a valid port is entered (#262).
+- A book's or annotation's number that is no number, such as `abc` or `1.5`, is said to be no number instead of being taken for 0 (#263).
+- `omabook set --series-index ""` (an unset variable of a script) is refused like an empty rating; `--series-index 0` takes the number away (#263).
+- Damaged Kindle, Word, OpenDocument, DjVu, rich text and plain text files are refused with the reason instead of being added without a word. A comic none of whose pictures can be shown is added with a note, and opening it says so instead of showing blank pages; so is a Word file protected by a password (#264).
+- A book's spreads follow the language the library says it is in, so a text file or a mistagged EPUB set to Arabic has its first page on the right. A comic marked as a right-to-left manga reads that way (#265).
+- A message that waits to be closed can be closed with Escape (#266).
+- A folder of Markdown files can be added as a book by a relative path, with or without a slash at its end (#267).
+- Settings and Filter stay one click or tap away at every width: where the header has no room for them in words, they stand there as drawings, on a touchscreen too. With a mouse, which had no Settings button at any width, a gear at the end of the header opens them. On a touchscreen the other buttons now give way one at a time as the window narrows (#268).
+- On a touchscreen the reader's button at the bottom right has a ground and an edge of its own: it is easy to see over a white PDF page or a comic, and the words of a narrow page no longer show through it (#269).
+- Find in book no longer says "200 places" as if that were all of them: where the text has more, it says so, and Show All lists every one (#270).
+- Shift+N writes a margin note on words already selected with the keyboard (V), instead of doing nothing (#271).
+- A book's stars can be set from the keyboard in the edit dialog: Tab reaches them, Left and Right take one off or add one, and 0 to 5 set that many (#272).
+- Importing a Calibre library again after an import that was cut off no longer brings the highlights, notes and bookmarks of the books already imported a second time (#273).
+- On a computer without a keyring, `omabook koreader serve-as` and `login` say the password can't be kept and fail, instead of saying KOReader can log in; `omabook serve --koreader` says when KOReader's sync has no password (#274).
+- With a `config.json` that can't be read, the MCP tools that run a command, such as `reading_format_set` and `reading_site_disconnect`, fail and say the change wasn't saved, instead of reporting success (#275).
+- A reading place, bookmark or highlight from Calibre that is past the book's last section comes in at the last section (#276).
+- A Calibre import names each part of `metadata.db` that can't be read, such as its authors or highlights, instead of bringing the books without them in silence; books imported before keep their shelf, stars, finished day and place (#277).
+- `omabook add --json` on a Calibre library lists the books that weren't imported, each with why, and `calibre import --json` names each of them once under `not_imported` (#278).
+- A library on a full disk is said to be on a full disk, with what to do, instead of "disk I/O error", and so is a book there is no room to add. A book is not removed while its removal cannot be recorded (#279).
+- A library started in a folder that holds an older library's books no longer writes over their files: a new book gets a folder of its own, and a file in the way of one is left as it is (#281).
+- An empty `omabook.db` where there was a library is said to be that, with how to restore it, instead of becoming a new library with no books (#281).
+- `omabook snapshot restore <id> --book` for a copy a tidy folded away says that it is no longer in the library and how to have it back, instead of "Nothing to put back"; a title two books of the snapshot have is followed by their ids and which of them left the library (#282).
+- Tidy no longer drops what only the folded copy of a book had: its description, tags, publisher, ISBN, series and other details move to the copy that is kept. Where the two copies say different things, tidy names what would not be kept, leaves the pair unticked, and `tidy --apply` leaves it for you to pick by its number (#282).
+- The window's Tidy takes a moment snapshot first where snapshots are set up, and changes nothing when none can be taken. A copy with no file is no longer listed as "()" (#282).
+- A hub takes its owner's computers again after pairing changed who they are (#283): a computer unlinked and linked again, or another computer synced with one of yours, was refused as someone else's. Update the hub and the computers, then run `omabook hub status <hub>` on a computer that is still linked, once, before linking the others. A computer that never synced with one of yours is still refused: sync it with a linked one first (`omabook sync <computer>`), which the refusal now says.
+- Adding a file on a second computer no longer replaces the details you changed for that book on another (#284): what an import reads from a file now counts as older than anything typed, so the next sync gives the new copy your details. Where two imports of one file differ and nobody typed anything, the sync leaves both and lists the book as undecided. Update the computer you add files on; books it imported before the update keep the time they were imported at.
+- Where no trash folder can be made, on a disk or share whose top folder you can't write, Omabook no longer deletes files while saying they went to the trash. Removing a book, folding a duplicate in a tidy, a removal arriving by sync and moving a library to the trash are refused there, say why, and leave everything where it was. To delete a book there for good, delete its folder yourself, then remove it (#285).
+- `omabook add` refuses a cover or a `--meta` file it can't read, a number in the series that is none and a `--to` that is no book's number, instead of adding the book without them or naming book 0 (#286).
+- The day a book was finished has to be a date, such as 2026-03-01: the command line, the MCP tool and the edit dialog refuse anything else (#286).
+- KOReader's progress sync, served by Omabook or a hub, refuses a place without a percentage from 0 to 1 instead of setting the book back to its start (#287).
+- The BibTeX catalog writes `&`, `%`, `$`, `#`, `_`, `~`, `^` and backslashes as LaTeX takes them, and a book whose title and author are in another script gets a key such as `book9` instead of `-9` (#288).
+- A script plugin that can't load, such as one whose script doesn't parse, is not installed or switched on: `omabook plugin install` and `enable`, `omabook plugins enable` and the MCP tools say why and fail. A plugin whose name is written as a path is not installed (#289).
+- A book you removed and added again syncs again (#290): where it was removed and added again, on the computer that removed it or on one the removal had reached, the next syncs carry it to the hub and your other computers, also for books already stuck that way, unless the library has tidied its change log since. Update the hub and your computers.
+- A sync no longer says both libraries are in step when a book was removed on one side and kept on the other because it was changed or added there since (#290): `omabook sync`, its dry run and the window name or count those books (`kept_here`, `kept_there` in `--json`).
+- A sync with a hub now takes a moment snapshot of your library first, once snapshots are set up, whether you start it with `omabook hub sync`, with Sync Now in the window or automatic sync does (#291), as `omabook sync` did; a sync that can't take one says so and goes on.
+- Snapshots kept on a second disk, or anywhere else, open on a new computer with their recovery key (#292): `omabook snapshot setup --repository <where> --recovery-key`, or the recovery key field in the Snapshots panel. `omabook snapshot list` names the libraries whose snapshots are there, and nothing that was there when you opened them is thinned from this computer. A destination has a recovery key of its own.
+- A dry run of a sync says how many bookmarks and highlights, and collections, it would update on each side, instead of saying both libraries are in step (#293).
+- A hub with no library yet says so, and how to make one, instead of "The hub keeps no library called ." (#294); `omabook hub status` and the Hubs panel say it too. On a linked computer, `omabook hub computers` lists its hub's computers. Update the hub.
+- A sync cut off because the hub stopped now says the session with the hub ended, instead of that there is no room on it, and a hub that starts again clears the half-sent files such a sync left (#295). Update the hub and your computers.
+- With the snapshots' password missing, Omabook says so and how to give it back, instead of that snapshots were never set up, and a sync that goes on without a snapshot says why (#296). Until the password is back, a hub takes no sync and a library in an older format is left as it is, as whenever a snapshot can't be taken.
+- After a book is put back from a snapshot, or that is undone, "What changed" is compared again, instead of showing the old differences and offering to put the book back once more (#297).
+- The Snapshots panel's filter shows its choices whole: "All snapshots" is no longer cut off (#298).
+
 ## [0.5.2.3] - 2026-11-28
 
 0.5.2.2 kept a hub from emptying collections, but a book you put back in one afterwards was taken out again at the next sync. This version keeps it in, and puts right the collections you refilled the first time it opens your library. Install it on every computer, and the hub, before you sync.
