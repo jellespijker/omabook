@@ -3,6 +3,8 @@
 #include <QRegularExpression>
 #include <QSet>
 
+using namespace Qt::StringLiterals;
+
 namespace {
 
 // A CSV field: quoted when it holds a comma, a quote or a line break.
@@ -13,9 +15,35 @@ namespace {
     return "\"" + field.replace("\"", "\"\"") + "\"";
 }
 
-// BibTeX reads braces and backslashes as its own.
-[[nodiscard]] QString bib(QString value) {
-    return value.replace("\\", "\\textbackslash{}").replace("{", "\\{").replace("}", "\\}");
+// A value as LaTeX prints it: the characters it reads as its own, each written
+// out once, so what stands for one isn't escaped again (#288).
+[[nodiscard]] QString bib(const QString &value) {
+    QString written;
+    for (const QChar c : value) {
+        switch (c.unicode()) {
+        case u'\\':
+            written += u"\\textbackslash{}"_s;
+            break;
+        case u'~':
+            written += u"\\textasciitilde{}"_s;
+            break;
+        case u'^':
+            written += u"\\textasciicircum{}"_s;
+            break;
+        case u'{':
+        case u'}':
+        case u'&':
+        case u'%':
+        case u'$':
+        case u'#':
+        case u'_':
+            written += u'\\';
+            [[fallthrough]];
+        default:
+            written += c;
+        }
+    }
+    return written;
 }
 
 [[nodiscard]] QByteArray makeCsv(const QList<Book> &books) {
@@ -40,7 +68,10 @@ namespace {
         static const QRegularExpression notWord("[^a-z0-9]");
         const QString year = meta.published.left(4);
         QString key = (meta.authors.value(0).section(' ', -1) + year + meta.title.section(' ', 0, 0)).toLower().remove(notWord);
-        if (key.isEmpty() || keys.contains(key))
+        // A title and author in another script leave nothing to make a key of.
+        if (key.isEmpty())
+            key = u"book%1"_s.arg(book.id);
+        else if (keys.contains(key))
             key += QString("-%1").arg(book.id);
         keys << key;
         QStringList fields{"  title = {" + bib(meta.title) + "}"};
