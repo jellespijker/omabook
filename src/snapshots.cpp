@@ -7,7 +7,9 @@
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMap>
 #include <QRandomGenerator>
+#include <QRegularExpression>
 #include <QSaveFile>
 #include <QScopeGuard>
 #include <QStandardPaths>
@@ -87,6 +89,21 @@ struct Password {
     bool made = false;
 };
 
+// Where this place's password is kept, as a person is told.
+[[nodiscard]] QString passwordPlace(const SnapshotPlace &place) {
+    return place.hub ? place.hub->state() + u"/secrets/"_s + secretName : place.repository.passwordFile;
+}
+
+// The password just made for a repository that wasn't made after all.
+void forgetPassword(const SnapshotPlace &place, ResticRepository &made) {
+    if (!place.hub) {
+        QFile::remove(made.passwordFile);
+        return;
+    }
+    place.hub->forgetSecret(secretName);
+    made.password.clear();
+}
+
 [[nodiscard]] std::expected<Password, Failure> choosePassword(const SnapshotPlace &place, ResticRepository &made) {
     if (!made.password.isEmpty())
         return Password{.key = QString::fromUtf8(made.password), .made = false};
@@ -98,6 +115,32 @@ struct Password {
     if (const auto kept = keepPassword(place, key, made); !kept)
         return std::unexpected(kept.error());
     return Password{.key = key, .made = true};
+}
+
+// A recovery key as a person types it: letters in either case, the dashes and
+// spaces as they come. Anything else is a password of its own, taken as it is.
+[[nodiscard]] QString typedKey(const QString &typed) {
+    static const QRegularExpression between(u"[\\s-]"_s);
+    static const QRegularExpression key(u"^[A-HJ-NP-Z2-9]{32}$"_s);
+    const QString letters = typed.toUpper().remove(between);
+    if (!key.match(letters).hasMatch())
+        return typed.trimmed();
+    QStringList groups;
+    for (qsizetype i = 0; i < letters.size(); i += 4)
+        groups << letters.mid(i, 4);
+    return groups.join(u'-');
+}
+
+// Whether what is kept at `repository` opens with `key`; nothing is made or changed.
+[[nodiscard]] std::expected<void, Failure> opens(ResticRepository repository, const QString &key) {
+    repository.password = key.toUtf8();
+    return Restic::answers(repository, std::chrono::minutes(5));
+}
+
+// Whether restic refused to make a repository because there is one already.
+[[nodiscard]] bool thereAlready(const Failure &failure) {
+    const QString said = failure.arguments().value(0);
+    return failure.code() == Failure::Code::ResticFailed && (said.contains("already exists"_L1) || said.contains("already initialized"_L1));
 }
 
 [[nodiscard]] QString hashOf(QByteArrayView bytes, int length = 16) {
@@ -191,8 +234,11 @@ SnapshotPlace SnapshotPlace::here() {
 SnapshotPlace SnapshotPlace::in(const QString &state) {
     SnapshotPlace place{.state = state, .repository = {}};
     QFile config(configOf(state));
-    if (config.open(QIODevice::ReadOnly))
-        place.repository.location = QJsonDocument::fromJson(config.readAll()).object().value("repository"_L1).toString();
+    if (config.open(QIODevice::ReadOnly)) {
+        const QJsonObject choices = QJsonDocument::fromJson(config.readAll()).object();
+        place.repository.location = choices.value("repository"_L1).toString();
+        place.adopted = QDateTime::fromString(choices.value("adopted"_L1).toString(), Qt::ISODate);
+    }
     place.repository.passwordFile = passwordIn(state);
     return place;
 }
@@ -220,34 +266,101 @@ bool Snapshots::ready() const {
            && (!m_place.repository.password.isEmpty() || QFileInfo::exists(m_place.repository.passwordFile));
 }
 
-std::expected<QString, Failure> Snapshots::setUp(const QString &repository) {
+std::expected<QString, Failure> Snapshots::setUp(const QString &repository, const QString &recoveryKey) {
     if (ready())
         return std::unexpected(Failure(Failure::Code::SnapshotsSetUpAlready, {m_place.repository.location}));
+    const QString chosen = m_place.repository.location;
     QString location = repository.isEmpty() ? SnapshotPlace::defaultRepository() : repository;
     // A folder on this computer, unless restic is named a kind of place (sftp:, s3:, rclone:...).
     if (QDir::isAbsolutePath(location) || !location.contains(u':'))
         location = QDir(location).absolutePath();
+    if (repository.isEmpty() && !chosen.isEmpty())
+        location = chosen;
     if (!QDir().mkpath(m_place.state))
         return std::unexpected(Failure(Failure::Code::FolderUnmade, {m_place.state}));
     ResticRepository made = m_place.repository;
     made.location = location;
+    if (!recoveryKey.trimmed().isEmpty())
+        return openThere(made, typedKey(recoveryKey));
+    // Set up already, and only the password gone: nothing new is made over it (#296).
+    if (location == chosen)
+        return std::unexpected(Failure(Failure::Code::SnapshotPasswordMissing, {chosen, passwordPlace(m_place)}));
+    return makeThere(made);
+}
+
+std::expected<QString, Failure> Snapshots::makeThere(ResticRepository made) {
     const auto password = choosePassword(m_place, made);
     if (!password)
         return std::unexpected(password.error());
-    const bool ownPassword = password->made;
     QString key = password->key;
+    QDateTime adopted;
     if (const auto initialised = Restic::init(made); !initialised) {
-        if (ownPassword && !m_place.hub)
-            QFile::remove(made.passwordFile);
-        return std::unexpected(initialised.error());
+        if (password->made)
+            forgetPassword(m_place, made);
+        if (!thereAlready(initialised.error()))
+            return std::unexpected(initialised.error());
+        // Snapshots already: opened when the password kept here is theirs, and otherwise said.
+        if (password->made || !opens(made, key))
+            return std::unexpected(Failure(Failure::Code::SnapshotRepositoryExists, {made.location}));
+        adopted = QDateTime::currentDateTimeUtc();
     }
+    return chose(made, adopted).transform([&key] { return key; });
+}
+
+std::expected<QString, Failure> Snapshots::openThere(ResticRepository made, const QString &key) {
+    // A password kept here already may be all that opens other snapshots: never written over.
+    QByteArray kept = made.password;
+    if (kept.isEmpty() && QFileInfo::exists(made.passwordFile)) {
+        QFile file(made.passwordFile);
+        if (!file.open(QIODevice::ReadOnly))
+            return std::unexpected(Failure(Failure::Code::SnapshotPasswordUnkept, {made.passwordFile}));
+        kept = file.readAll().trimmed();
+    }
+    if (!kept.isEmpty() && QString::fromUtf8(kept) != key)
+        return std::unexpected(Failure(Failure::Code::SnapshotPasswordOther, {passwordPlace(m_place)}));
+    if (const auto opened = opens(made, key); !opened)
+        return std::unexpected(Failure(Failure::Code::SnapshotKeyRefused, {made.location, opened.error().text()}));
+    if (kept.isEmpty())
+        if (const auto done = keepPassword(m_place, key, made); !done)
+            return std::unexpected(done.error());
+    // This computer's own, their password put back, are thinned as before.
+    const QDateTime adopted = made.location == m_place.repository.location ? m_place.adopted : QDateTime::currentDateTimeUtc();
+    return chose(made, adopted).transform([&key] { return key; });
+}
+
+std::expected<void, Failure> Snapshots::chose(const ResticRepository &made, const QDateTime &adopted) {
+    QJsonObject choices{{u"repository"_s, made.location}};
+    if (adopted.isValid())
+        choices.insert(u"adopted"_s, adopted.toString(Qt::ISODate));
     QSaveFile config(configOf(m_place.state));
-    if (!config.open(QIODevice::WriteOnly) || config.write(QJsonDocument(QJsonObject{{u"repository"_s, location}}).toJson()) <= 0
-        || !config.commit())
+    if (!config.open(QIODevice::WriteOnly) || config.write(QJsonDocument(choices).toJson()) <= 0 || !config.commit())
         return std::unexpected(Failure(Failure::Code::FolderUnmade, {m_place.state}));
     m_place.repository = made;
-    qCInfo(lcLibrary).noquote() << "snapshots set up in" << location;
-    return key;
+    m_place.adopted = adopted;
+    qCInfo(lcLibrary).noquote() << "snapshots set up in" << made.location;
+    return {};
+}
+
+std::expected<QList<Snapshots::Elsewhere>, Failure> Snapshots::elsewhere(const Library &library) const {
+    if (!ready())
+        return std::unexpected(Failure(Failure::Code::SnapshotsNotSetUp));
+    const auto all = Restic::snapshots(m_place.repository, {u"omabook"_s});
+    if (!all)
+        return std::unexpected(all.error());
+    const QString own = libraryTag(library).section(u':', 1);
+    QMap<QString, Elsewhere> found; // by folder
+    for (const Restic::Snapshot &snapshot : *all) {
+        const QString tag = snapshot.tagged(u"library:"_s);
+        // The folder the tag was made of is one of the paths the snapshot holds.
+        const auto folder = std::ranges::find_if(snapshot.paths, [&tag](const QString &path) { return hashOf(path.toUtf8()) == tag; });
+        if (tag == own || folder == snapshot.paths.end())
+            continue;
+        Elsewhere &one = found[*folder];
+        one.library = *folder;
+        ++one.snapshots;
+        one.newest = std::max(one.newest, snapshot.time);
+    }
+    return found.values();
 }
 
 std::expected<Snapshots::Staged, Failure> Snapshots::stage(const Library &library) const {
@@ -343,7 +456,9 @@ std::expected<qsizetype, Failure> Snapshots::thin(const QString &tag, const QDat
         return std::unexpected(snapshots.error());
     QList<SnapshotRetention::Dated> dated;
     for (const Restic::Snapshot &snapshot : *snapshots)
-        dated << SnapshotRetention::Dated{.id = snapshot.id, .time = snapshot.time};
+        // What was there when this computer opened these snapshots stays (#292).
+        if (!m_place.adopted.isValid() || snapshot.time >= m_place.adopted)
+            dated << SnapshotRetention::Dated{.id = snapshot.id, .time = snapshot.time};
     const QStringList forgotten = SnapshotRetention::toForget(dated, now);
     if (const auto done = Restic::forget(m_place.repository, forgotten); !done)
         return std::unexpected(done.error());

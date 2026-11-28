@@ -71,13 +71,23 @@ ColumnLayout {
         visible: !snapshotDesk.ready
         text: qsTr("A folder, or anything restic takes (sftp:host:/path, s3:…, rclone:…); the folder shown when left empty. A recovery key is made and shown once: without it nothing can be restored.")
     }
+    TextField {
+        id: openKey
+        objectName: "snapshotOpenKey"
+        visible: !snapshotDesk.ready
+        Layout.fillWidth: true
+        placeholderText: qsTr("Recovery key, only to open snapshots already kept there")
+        echoMode: TextInput.Password
+        selectByMouse: true
+        Material.roundedScale: theme.radius
+    }
     AppButton {
         objectName: "snapshotSetUp"
         visible: !snapshotDesk.ready
         enabled: snapshotDesk.doing === ""
         primary: true
-        text: qsTr("Set Up Snapshots")
-        onClicked: snapshotDesk.setUp(repository.text)
+        text: openKey.text.trim() === "" ? qsTr("Set Up Snapshots") : qsTr("Open These Snapshots")
+        onClicked: snapshotDesk.setUp(repository.text, openKey.text)
     }
 
     // Where they are kept, and the newest in each place.
@@ -147,6 +157,12 @@ ColumnLayout {
         objectName: "snapshotsNone"
         visible: snapshotDesk.ready && snapshotDesk.listed && overview.shown.length === 0
         text: snapshotDesk.snapshots.length === 0 ? qsTr("No snapshots of this library yet.") : qsTr("No snapshot fits the filter.")
+    }
+    Note {
+        objectName: "snapshotsElsewhere"
+        visible: snapshotDesk.ready && snapshotDesk.snapshots.length === 0 && snapshotDesk.otherLibraries.length > 0
+        color: theme.foreground
+        text: qsTr("Snapshots of other libraries are kept there: %1. From a terminal, omabook snapshot list --library <that folder> lists them, and omabook snapshot restore restores one into a new folder.").arg(snapshotDesk.otherLibraries.join(", "))
     }
     ListView {
         id: list

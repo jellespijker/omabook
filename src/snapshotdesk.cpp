@@ -34,7 +34,7 @@ namespace {
 struct SnapshotDesk::Listing {
     QVariantList snapshots, destinations;
     bool backedUp = false;
-    QStringList warnings;
+    QStringList warnings, otherLibraries;
     QString failure; // why the snapshots couldn't be listed
 };
 
@@ -93,12 +93,17 @@ SnapshotDesk::Listing SnapshotDesk::listing(const Snapshots &snapshots, const Li
     }
     for (const Restic::Snapshot &snapshot : *listed | std::views::reverse)
         found.snapshots << SnapshotRestore::toJson(snapshot).toVariantMap();
+    if (listed->isEmpty())
+        if (const auto others = snapshots.elsewhere(*library))
+            for (const Snapshots::Elsewhere &one : *others)
+                found.otherLibraries << one.library;
     return found;
 }
 
 void SnapshotDesk::keep(const Listing &listing) {
     m_snapshots = listing.snapshots;
     m_destinations = listing.destinations;
+    m_otherLibraries = listing.otherLibraries;
     m_backedUp = listing.backedUp;
     m_warnings = listing.warnings;
     m_listed = listing.failure.isEmpty();
@@ -115,18 +120,23 @@ void SnapshotDesk::refresh() {
     });
 }
 
-void SnapshotDesk::setUp(const QString &repository) {
-    work(u"setup"_s, [this, root = m_root(), snapshots = made(), repository = repository.trimmed()] mutable {
-        const auto key = snapshots.setUp(repository);
+void SnapshotDesk::setUp(const QString &repository, const QString &recoveryKey) {
+    work(u"setup"_s, [this, root = m_root(), snapshots = made(), repository = repository.trimmed(), typed = recoveryKey.trimmed()] mutable {
+        const auto key = snapshots.setUp(repository, typed);
         if (!key)
             return Outcome{.said = key.error().text(), .failed = true, .keep = {}};
         const auto library = opened(root);
         const Listing found = listing(snapshots, library ? library->get() : nullptr);
-        return Outcome{.said = tr("Snapshots are set up in %1.").arg(snapshots.place().repository.location),
+        // Opened with the key they were made with, there is no new key to show (#292).
+        const bool opened = !typed.isEmpty() || snapshots.place().adopted.isValid();
+        const QString location = snapshots.place().repository.location;
+        return Outcome{.said =
+                           opened ? tr("The snapshots in %1 are opened.").arg(location) : tr("Snapshots are set up in %1.").arg(location),
                        .failed = false,
-                       .keep = [found, key = *key](SnapshotDesk &desk) {
+                       .keep = [found, opened, key = *key](SnapshotDesk &desk) {
                            desk.keep(found);
-                           desk.m_recoveryKey = {{u"for"_s, QString()}, {u"key"_s, key}};
+                           if (!opened)
+                               desk.m_recoveryKey = {{u"for"_s, QString()}, {u"key"_s, key}};
                        }};
     });
 }

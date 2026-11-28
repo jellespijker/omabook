@@ -16,7 +16,7 @@ uses = []
 modules = [
   "bookmeta", "commandtable", "crypto", "customization", "filepicker", "graphlayout", "hlc", "collation", "htmlclean", "log", "markupfilter", "pagelayout",
   "hyphenation", "person", "readingformat", "scriptapi", "scriptapigraph", "scriptapiui", "scriptform", "secretfile", "secretstore", "settings", "settingsfile", "settingsupgrade", "jsonfile", "spaceinvite", "spacekey", "spacekeys", "theme", "themechoice",
-  "translator", "failure", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
+  "translator", "failure", "failuresnapshots", "failurewords", "inkstroke", "inkcodec", "inksheet", "inkinput", "inkmesh", "inkwriting", "inkgesture", "inklasso", "highlightcolors", "textgeometry",
   "inkpicture", "scriptapiassist", "scriptapireading",
   "oggpages", "opuswriter", "opusreader", "scriptapireach", "scriptapiguide", "untrustedtext", "httpserver",
   "deviceoptions", "qrcode", "portholder", "threadclock", "pdfsketch", "aicapability", "inklines", "voicegrammar",

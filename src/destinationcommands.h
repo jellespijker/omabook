@@ -1,6 +1,12 @@
 #pragma once
 
+#include <QByteArray>
+#include <QString>
 #include <QStringList>
+
+// A line typed that nobody should see, asked for as `name`: the terminal stops
+// echoing for it. Read from standard input when that is no terminal.
+[[nodiscard]] QByteArray typedSecret(const QString &name);
 
 // `omabook snapshot destination add|list|test|copy|remove` (#182): where else
 // the snapshots are kept, a second disk or a place away from home, each its

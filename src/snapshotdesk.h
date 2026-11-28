@@ -28,6 +28,8 @@ class SnapshotDesk : public QObject {
     Q_PROPERTY(QVariantList snapshots READ snapshots NOTIFY changed)
     // Whether they have been listed since the panel opened; false while they never were.
     Q_PROPERTY(bool listed READ listed NOTIFY changed)
+    // The folders of other libraries whose snapshots are kept there, listed when this library has none (#292).
+    Q_PROPERTY(QStringList otherLibraries READ otherLibraries NOTIFY changed)
     // Each destination: {"name", "location", "kind" ("disk" or "away"), "credentials", "copied",
     // "last": {"tried", "copied", "absent", "said", "latest_id", "latest"}} (the last copy's, when there was one).
     Q_PROPERTY(QVariantList destinations READ destinations NOTIFY changed)
@@ -72,6 +74,7 @@ public:
     [[nodiscard]] QString repository() const;
     [[nodiscard]] QVariantList snapshots() const { return m_snapshots; }
     [[nodiscard]] bool listed() const noexcept { return m_listed; }
+    [[nodiscard]] QStringList otherLibraries() const { return m_otherLibraries; }
     [[nodiscard]] QVariantList destinations() const { return m_destinations; }
     [[nodiscard]] bool backedUp() const noexcept { return m_backedUp; }
     [[nodiscard]] QStringList warnings() const { return m_warnings; }
@@ -88,7 +91,8 @@ public:
     // The snapshots and destinations listed again, and the warnings.
     Q_INVOKABLE void refresh();
     // Sets snapshots up, in `repository` or the usual place when empty; the recovery key is shown once.
-    Q_INVOKABLE void setUp(const QString &repository);
+    // With `recoveryKey`, opens the snapshots already kept there instead (#292).
+    Q_INVOKABLE void setUp(const QString &repository, const QString &recoveryKey = {});
     // A snapshot of the library now, when something changed since the last.
     Q_INVOKABLE void takeNow();
     // The library diff from the snapshot `from` to `to`, or to now when `to` is empty.
@@ -137,7 +141,7 @@ private:
     Warnings m_warn;
     QVariantList m_snapshots, m_destinations;
     bool m_listed = false, m_backedUp = false, m_failed = false;
-    QStringList m_warnings;
+    QStringList m_warnings, m_otherLibraries;
     QVariantMap m_diff, m_putBack, m_restored, m_tested, m_recoveryKey;
     QString m_restoredInto, m_doing, m_status;
 };

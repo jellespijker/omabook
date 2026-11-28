@@ -42,18 +42,22 @@ struct Speaking {
     return file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll()).object() : QJsonObject();
 }
 
-// The sentences failure.cpp words failures in, as bin/i18n reads them.
+// The sentences failure.cpp and its tables word failures in, as bin/i18n reads them.
 [[nodiscard]] QStringList sentences() {
-    QFile file(QFINDTESTDATA("../src/failure.cpp"));
-    if (!file.open(QIODevice::ReadOnly))
-        return {};
+    QByteArray read;
+    for (const char *name : {"../src/failure.cpp", "../src/failuresnapshots.cpp"}) {
+        QFile file(QFINDTESTDATA(name));
+        if (!file.open(QIODevice::ReadOnly))
+            return {};
+        read += file.readAll();
+    }
     // A sentence may be split over several literals, which bin/i18n joins.
     static const QRegularExpression marked(R"re(\btr\(((?:\s*"(?:[^"\\]|\\.)*")+))re");
     static const QRegularExpression literal(R"re("((?:[^"\\]|\\.)*)")re");
     QStringList found;
     // Comments are skipped, as bin/i18n skips them.
     static const QRegularExpression comment("//[^\n]*");
-    const QString code = QString::fromUtf8(file.readAll()).remove(comment);
+    const QString code = QString::fromUtf8(read).remove(comment);
     for (const QRegularExpressionMatch &match : marked.globalMatch(code)) {
         QString sentence;
         for (const QRegularExpressionMatch &part : literal.globalMatch(match.captured(1)))

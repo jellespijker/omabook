@@ -38,26 +38,6 @@ void printJson(const QJsonObject &object) {
 
 [[nodiscard]] QString when(const QDateTime &time) { return time.toString(u"yyyy-MM-dd HH:mm"_s); }
 
-// A line typed that nobody should see: the terminal stops echoing for it.
-[[nodiscard]] QByteArray typedSecret(const QString &name) {
-    termios before{};
-    const bool terminal = isatty(STDIN_FILENO) != 0 && tcgetattr(STDIN_FILENO, &before) == 0;
-    if (terminal) {
-        std::print(stderr, "{}: ", qPrintable(name));
-        std::ignore = fflush(stderr);
-        termios quiet = before;
-        quiet.c_lflag &= ~static_cast<tcflag_t>(ECHO);
-        std::ignore = tcsetattr(STDIN_FILENO, TCSANOW, &quiet);
-    }
-    std::string line;
-    std::getline(std::cin, line);
-    if (terminal) {
-        std::ignore = tcsetattr(STDIN_FILENO, TCSANOW, &before);
-        std::println(stderr);
-    }
-    return QByteArray::fromStdString(line).trimmed();
-}
-
 // Each credential named: from this command's environment, else typed.
 [[nodiscard]] QList<std::pair<QString, QByteArray>> credentialsGiven(const QStringList &names) {
     QList<std::pair<QString, QByteArray>> given;
@@ -174,6 +154,26 @@ int copy(const SnapshotDestinations &destinations, const QString &name) {
 }
 
 } // namespace
+
+// A line typed that nobody should see: the terminal stops echoing for it.
+QByteArray typedSecret(const QString &name) {
+    termios before{};
+    const bool terminal = isatty(STDIN_FILENO) != 0 && tcgetattr(STDIN_FILENO, &before) == 0;
+    if (terminal) {
+        std::print(stderr, "{}: ", qPrintable(name));
+        std::ignore = fflush(stderr);
+        termios quiet = before;
+        quiet.c_lflag &= ~static_cast<tcflag_t>(ECHO);
+        std::ignore = tcsetattr(STDIN_FILENO, TCSANOW, &quiet);
+    }
+    std::string line;
+    std::getline(std::cin, line);
+    if (terminal) {
+        std::ignore = tcsetattr(STDIN_FILENO, TCSANOW, &before);
+        std::println(stderr);
+    }
+    return QByteArray::fromStdString(line).trimmed();
+}
 
 int runSnapshotDestinationCli(const QStringList &arguments) {
     QCommandLineParser parser;

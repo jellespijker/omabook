@@ -81,7 +81,9 @@ QList<Manual::Section> snapshotSections() {
          Manual::tr("{library.snapshots}, or `omabook snapshot setup`, sets up encrypted snapshots of the library, "
                     "made with restic: the books, their details and notes, the settings and the plugins' data, each "
                     "keeping only what changed. Its recovery key is shown once: write it down, as without it no one "
-                    "can open them. A moment snapshot is taken by itself before a sync, an import, a tidy, an upgrade "
+                    "can open them; with it, `omabook snapshot setup --repository <where> --recovery-key`, or the panel's "
+                    "recovery key field, opens snapshots kept there on another computer. A moment snapshot is taken by itself before a "
+                    "sync, an import, a tidy, an upgrade "
                     "or an agent's change to many books, when something changed since the last. On a hub, `omabook "
                     "snapshot setup --hub` sets them up, and its daemon takes them.")},
         {Manual::tr("Every night"),

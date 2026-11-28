@@ -50,21 +50,21 @@ public:
         NoDetailsFound,     // {source}
         SourceNeedsToken,   // {reading site}
         // Adding books to the library (library).
-        NoReadableFile,    // {path}
-        NotABookFormat,    // {file name}
-        EmptyBookFile,     // {file name}
-        BookRefused,       // {file name, why it is no book} (#226)
-        BookUnreadable,    // {file name, why it can't be read here}: it was added
-        FileCutShort,      // {}
-        BookHasFormat,     // {book's number, format name}
+        NoReadableFile, // {path}
+        NotABookFormat, // {file name}
+        EmptyBookFile,  // {file name}
+        BookRefused,    // {file name, why it is no book} (#226)
+        BookUnreadable, // {file name, why it can't be read here}: it was added
+        FileCutShort,   // {}
+        BookHasFormat,  // {book's number, format name}
         // The file to be replaced stays, as it can't be kept: {path}.
         ReplacedFileNotTrashed,
         BookFileNotCopied, // {the file, where to in the library}
         LibraryNotWritten, // {}
         // A library that can't be opened, and what to do about it (#227).
-        LibraryReadOnly, // {folder}
-        LibraryDamaged,  // {database, the database's reason, the folder of its copies}
-        LibraryUnopened, // {database, the database's reason}
+        LibraryReadOnly,   // {folder}
+        LibraryDamaged,    // {database, the database's reason, the folder of its copies}
+        LibraryUnopened,   // {database, the database's reason}
         LibraryUnwritable, // {the database's reason}
         LibraryMissing,    // {folder}: one is expected there and isn't (#221)
         LibraryUnnamed,    // {}: no folder was given for it (#234)
@@ -318,6 +318,10 @@ public:
         ResticMissing,          // {program}
         ResticFailed,           // {what restic said}
         ResticNoAnswer,         // {repository, seconds}
+        // Opening snapshots already kept (#292).
+        SnapshotRepositoryExists, // {repository}
+        SnapshotKeyRefused,       // {repository, why}
+        SnapshotPasswordOther,    // {where the password is kept}
         // Going back to a snapshot (#183).
         SnapshotNotFound,      // {id}
         SnapshotIdAmbiguous,   // {id}

@@ -27,6 +27,10 @@ struct SnapshotPlace {
     ResticRepository repository;
     // On a hub, where its password is one of the hub's secrets (snapshots).
     std::optional<HubPlace> hub;
+    // When this computer opened snapshots already kept there, with their
+    // recovery key (#292): those taken before are never thinned here, as they
+    // are what a lost computer left. Invalid when it made them itself.
+    QDateTime adopted{};
 
     // This computer's: $XDG_STATE_HOME/omabook/snapshots.
     [[nodiscard]] static SnapshotPlace here();
@@ -67,7 +71,18 @@ public:
     // Makes the repository at `repository` (the default one when empty) and
     // its password, and gives the password back as the recovery key: to show
     // once, for the person to keep, since nothing is restored without it.
-    [[nodiscard]] std::expected<QString, Failure> setUp(const QString &repository = {});
+    // With `recoveryKey`, it makes nothing: it opens the snapshots already
+    // kept at `repository` (or where this computer keeps them, their password
+    // gone) with it, and gives it back (#292).
+    [[nodiscard]] std::expected<QString, Failure> setUp(const QString &repository = {}, const QString &recoveryKey = {});
+
+    // The snapshots of another library kept here, as a lost computer's are.
+    struct Elsewhere {
+        QString library; // its folder, as it was where the snapshots were taken
+        qsizetype snapshots = 0;
+        QDateTime newest;
+    };
+    [[nodiscard]] std::expected<QList<Elsewhere>, Failure> elsewhere(const Library &library) const;
 
     struct Taken {
         QString id;             // the snapshot's, or the last one's when nothing changed
@@ -114,6 +129,12 @@ public:
 
 private:
     [[nodiscard]] std::expected<QList<Restic::Snapshot>, Failure> listOf(const QString &tag) const;
+    // Makes a new repository at `made`, or opens the one there with the password kept here.
+    [[nodiscard]] std::expected<QString, Failure> makeThere(ResticRepository made);
+    // Opens what is kept at `made` with `key`, and keeps both as this place's.
+    [[nodiscard]] std::expected<QString, Failure> openThere(ResticRepository made, const QString &key);
+    // Keeps where the snapshots are, and since when they are opened here.
+    [[nodiscard]] std::expected<void, Failure> chose(const ResticRepository &made, const QDateTime &adopted);
 
     SnapshotPlace m_place;
     SnapshotContents m_contents;

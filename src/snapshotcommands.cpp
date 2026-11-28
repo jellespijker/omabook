@@ -113,10 +113,24 @@ constexpr std::array valued{"--library"_L1, "--model"_L1,     "--user"_L1,
 }
 
 int setUp(const QCommandLineParser &parser, Snapshots &snapshots) {
-    const auto key = snapshots.setUp(parser.value(u"repository"_s));
+    const bool open = parser.isSet(u"recovery-key"_s);
+    const QString typed = open ? QString::fromUtf8(typedSecret(u"Recovery key"_s)) : QString();
+    if (open && typed.isEmpty()) {
+        printLine(stderr, u"No recovery key was given, so nothing was set up."_s);
+        return 1;
+    }
+    const auto key = snapshots.setUp(parser.value(u"repository"_s), typed);
     if (!key)
         return fail(key.error());
     const QString repository = snapshots.place().repository.location;
+    if (snapshots.place().adopted.isValid() || open) {
+        if (parser.isSet(u"json"_s))
+            printJson({{u"repository"_s, repository}, {u"opened"_s, true}});
+        else
+            printLine(stdout, u"The snapshots in %1 are opened. omabook snapshot list lists them; the ones there now are never "
+                              "thinned from this computer."_s.arg(repository));
+        return 0;
+    }
     if (parser.isSet(u"json"_s)) {
         printJson({{u"repository"_s, repository}, {u"recovery_key"_s, *key}});
         return 0;
@@ -127,19 +141,45 @@ int setUp(const QCommandLineParser &parser, Snapshots &snapshots) {
     return 0;
 }
 
+void printListJson(const Library &library, const QList<Restic::Snapshot> &found, const QList<Snapshots::Elsewhere> &others) {
+    QJsonArray array;
+    for (const Restic::Snapshot &snapshot : found)
+        array << SnapshotRestore::toJson(snapshot);
+    QJsonObject answer{{u"library"_s, library.root()}, {u"snapshots"_s, array}};
+    QJsonArray other;
+    for (const Snapshots::Elsewhere &one : others)
+        other << QJsonObject{{u"library"_s, one.library}, {u"snapshots"_s, one.snapshots}, {u"newest"_s, one.newest.toString(Qt::ISODate)}};
+    if (!other.isEmpty())
+        answer.insert(u"other_libraries"_s, other);
+    printJson(answer);
+}
+
+void printElsewhere(const QList<Snapshots::Elsewhere> &others) {
+    if (others.isEmpty())
+        return;
+    printLine(stdout, u"\nKept here too are snapshots of other libraries, from this computer or another:"_s);
+    for (const Snapshots::Elsewhere &one : others)
+        printLine(stdout,
+                  u"  %1  (%2, the newest of %3)"_s.arg(one.library).arg(one.snapshots).arg(one.newest.toString(u"yyyy-MM-dd HH:mm"_s)));
+    printLine(stdout, u"List one's: omabook snapshot list --library <that folder>. Restore one into a new folder: omabook "
+                      "snapshot restore <id> --library <that folder> --to <new folder>"_s);
+}
+
 int list(const QCommandLineParser &parser, const Snapshots &snapshots, const Library &library) {
     const auto found = snapshots.list(library);
     if (!found)
         return fail(found.error());
+    // None of this library's: another's kept there are named, as a lost computer's are (#292).
+    const auto others = found->isEmpty() ? snapshots.elsewhere(library) : QList<Snapshots::Elsewhere>();
+    if (!others)
+        return fail(others.error());
     if (parser.isSet(u"json"_s)) {
-        QJsonArray array;
-        for (const Restic::Snapshot &snapshot : *found)
-            array << SnapshotRestore::toJson(snapshot);
-        printJson({{u"library"_s, library.root()}, {u"snapshots"_s, array}});
+        printListJson(library, *found, *others);
         return 0;
     }
     if (found->isEmpty())
         printLine(stdout, u"No snapshots of this library yet."_s);
+    printElsewhere(*others);
     for (const Restic::Snapshot &snapshot : *found) {
         const QJsonObject json = SnapshotRestore::toJson(snapshot);
         printLine(stdout, u"%1  %2  %3 (%4)"_s.arg(snapshot.time.toString(u"yyyy-MM-dd HH:mm"_s), snapshot.shortId(),
@@ -208,6 +248,8 @@ int takeOrList(const QStringList &arguments) {
                       u"setup: where to keep the snapshots, a folder or anything restic takes (sftp:host:/path, "
                       "s3:..., rclone:...); a folder in your Omabook data when not given."_s,
                       u"where"_s});
+    parser.addOption({u"recovery-key"_s, u"setup: open the snapshots already kept at --repository, a lost computer's, with their "
+                                         "recovery key, typed when asked (or on standard input)."_s});
     parser.addOption({u"hub"_s, u"setup: set them up for the hub on this computer (omabook hub run), its password one of the hub's "
                                 "secrets; its daemon takes them from then on."_s});
     QStringList rest = arguments;
