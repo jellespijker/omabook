@@ -16,6 +16,7 @@
 #include "goodreads.h"
 #include "hardcover.h"
 #include "scriptapi.h"
+#include "scriptplugin.h"
 #include "settings.h"
 
 namespace {
@@ -282,6 +283,16 @@ bool Plugins::setEnabled(const QString &id, bool enabled) {
         }
     }
     return false;
+}
+
+std::expected<void, Failure> Plugins::switchIfLoads(const QString &id, bool enabled) {
+    for (const PluginInfo &plugin : known())
+        if (enabled && plugin.id == id && plugin.kind == "script")
+            if (const auto why = ScriptManifest::read(plugin.folder).whyNotLoaded())
+                return std::unexpected(Failure(Failure::Code::PluginNotSwitchedOn, {id, *why}));
+    if (!setEnabled(id, enabled))
+        return std::unexpected(Failure(Failure::Code::PluginNotSwitchable, {id}));
+    return {};
 }
 
 QList<MetadataSource *> Plugins::sources(const QList<PluginInfo> &plugins, QNetworkAccessManager *network, QObject *parent) const {

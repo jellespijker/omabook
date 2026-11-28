@@ -820,8 +820,8 @@ int plugins(const QStringList &arguments) {
             return fail(could.size() > 1 ? "\"" + command.argument(1) + "\" could be any of: " + could.join(", ") + "; give its id."
                         : "There is no plugin " + command.argument(1) + " that can be turned on or off."
                               + (could.isEmpty() ? QString() : " Did you mean " + could.join(", ") + "?"));
-        if (!registry.setEnabled(id, action == "enable"))
-            return fail("There is no plugin " + command.argument(1) + " that can be turned on or off.");
+        if (const auto switched = registry.switchIfLoads(id, action == "enable"); !switched)
+            return fail(switched.error().text());
     } else if (!action.isEmpty()) {
         return fail("Use omabook plugins, omabook plugins enable <id> or omabook plugins disable <id>.");
     }

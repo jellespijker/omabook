@@ -4,9 +4,12 @@
 #include <QDirIterator>
 #include <QFile>
 #include <QFileInfo>
+#include <algorithm>
 #include <archive.h>
 #include <archive_entry.h>
 #include <array>
+
+#include "scriptplugin.h"
 
 namespace PluginPackage {
 
@@ -103,6 +106,21 @@ QString entryName(archive_entry *entry) {
             parts << part;
     }
     return parts.join('/');
+}
+
+bool writtenAsPath(const QString &name) {
+    const bool control = std::ranges::any_of(name, [](QChar c) { return c.category() == QChar::Other_Control; });
+    const QStringList parts = name.split('/');
+    return control || name.contains('\\') || name.startsWith('/') || name.startsWith("~/") || parts.contains("..") || parts.contains(".");
+}
+
+std::optional<Failure> whyRefused(const QString &root, const QString &title, bool update) {
+    if (writtenAsPath(title))
+        return Failure(Failure::Code::PluginNameAPath, {title});
+    if (!update)
+        if (const auto why = ScriptManifest::read(root).whyNotLoaded())
+            return Failure(Failure::Code::PluginNotInstalled, {*why});
+    return std::nullopt;
 }
 
 // Copies a plugin's folder into `into`, by the same rules. What a

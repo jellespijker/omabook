@@ -5,6 +5,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QJSEngine>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -50,7 +51,34 @@ QList<PluginFormat> formatsOf(const QJsonValue &value, const ScriptManifest &man
     return formats;
 }
 
+// Where `script` doesn't parse; none when it does, or can't be read. The
+// engine reads it whole before its first statement, which throws, so nothing
+// of it is run; the bare engine gives it nothing to reach either.
+std::optional<QString> syntaxError(const QString &script, const QString &shownName) {
+    QFile file(script);
+    if (!file.open(QIODevice::ReadOnly))
+        return std::nullopt;
+    QString text = QString::fromUtf8(file.readAll());
+    // A "#!" line is only that at the very start, where the throw goes.
+    if (text.startsWith(u"#!"))
+        text.replace(0, 2, QStringLiteral("//"));
+    QJSEngine engine;
+    // On the script's first line, so that every line keeps its number.
+    const QJSValue read = engine.evaluate(QStringLiteral("throw 0;") + text, shownName);
+    if (!read.isError() || read.errorType() != QJSValue::SyntaxError)
+        return std::nullopt;
+    return shownName + ':' + QString::number(read.property(QStringLiteral("lineNumber")).toInt()) + ": " + read.toString();
+}
+
 } // namespace
+
+std::optional<QString> ScriptManifest::whyNotLoaded() const {
+    if (!isScript() || needsNewer)
+        return std::nullopt;
+    if (!problem.isEmpty())
+        return problem;
+    return syntaxError(folder + "/" + script, script);
+}
 
 ScriptManifest ScriptManifest::read(const QString &folder) {
     ScriptManifest manifest;

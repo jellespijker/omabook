@@ -7,6 +7,7 @@
 #include <memory>
 #include <optional>
 
+#include "failure.h"
 #include "plugintools.h"
 
 // A plugin's package (a folder, or an archive such as a .zip or a GitHub
@@ -20,6 +21,14 @@ namespace PluginPackage {
 // one that would land anywhere else: an absolute path, a step up, a
 // backslash (which another system reads as a separator).
 [[nodiscard]] std::optional<QString> landsInside(const QString &name);
+
+// Whether the name a plugin.json gives the plugin is written as a path, such
+// as "../../escape", which names no plugin (#289).
+[[nodiscard]] bool writtenAsPath(const QString &name);
+// Why a staged plugin is not to be installed, though it can be told apart:
+// its name is a path, or its script can't load (#289). The latter isn't asked
+// of an `update` being put in place, which is taken back out if it doesn't load.
+[[nodiscard]] std::optional<Failure> whyRefused(const QString &root, const QString &title, bool update);
 
 // Whether a step of unpacking went well, or why not.
 using Unpacked = std::expected<void, QString>;

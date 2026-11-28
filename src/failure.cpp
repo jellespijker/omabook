@@ -351,6 +351,10 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::SettingsFileNotObject,
      tr("%1 can't be read: it isn't a JSON object. It is left as it is, and nothing is written to it.")},
     {Failure::Code::SettingsFileUnopened, tr("%1 can't be read: %2. It is left as it is, and nothing is written to it.")},
+    {Failure::Code::PluginNotSwitchedOn, tr("%1 was not switched on, as it can't load: %2")},
+    {Failure::Code::PluginNotSwitchable, tr("There is no plugin %1 that can be turned on or off.")},
+    {Failure::Code::PluginNotInstalled, tr("It was not installed, as it can't load: %1")},
+    {Failure::Code::PluginNameAPath, tr("Its plugin.json names it \"%1\", which is written as a path, not as a name.")},
 });
 
 // The pattern with %1, %2... replaced by the arguments in one pass, so an

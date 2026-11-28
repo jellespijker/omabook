@@ -317,15 +317,6 @@ QJsonObject ScriptTools::run(const Context &context, const QString &name, const 
     return answer;
 }
 
-QJsonObject ScriptTools::enable(const Context &context, const QString &name, bool enabled) {
-    const ScriptSession session(context);
-    const ScriptManifest manifest = ScriptManifest::read(session.folder() + "/" + name);
-    if (!validName(name) || !QFileInfo(manifest.folder).isDir() || !manifest.isScript())
-        return problem("There is no script plugin " + name + " in " + session.folder() + ".");
-    session.settings()->setPluginEnabled("folder:" + name, enabled);
-    return {{"name", name}, {"id", "folder:" + name}, {"enabled", enabled}};
-}
-
 int runPluginCli(const QStringList &arguments) {
     QCommandLineParser parser;
     parser.setApplicationDescription(

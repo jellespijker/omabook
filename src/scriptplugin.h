@@ -78,6 +78,11 @@ struct ScriptManifest {
     QList<PluginFormat> formats;
 
     static ScriptManifest read(const QString &folder);
+    // Why this script plugin can't load, as far as that is said without
+    // running any of it (#289): what is wrong with its plugin.json, or where
+    // its script doesn't parse ("main.js:1: SyntaxError: ..."). None for one
+    // that waits for a newer Omabook, or is no script plugin.
+    [[nodiscard]] std::optional<QString> whyNotLoaded() const;
     bool isScript() const noexcept { return !script.isEmpty(); }
     QString dataFolder() const { return folder + "/data"; }
 };

@@ -3111,5 +3111,9 @@
   "On the stars: that many; 0 takes them off": "Auf den Sternen: so viele; 0 nimmt sie weg",
   "Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2": "Ein Teil der Calibre-Bibliothek kann nicht gelesen werden (ihre Tabelle %1), daher wurde nicht übernommen, was darin steht: %2",
   "The day a book was finished is a date such as 2026-03-01, not \"%1\".": "Der Tag, an dem ein Buch ausgelesen wurde, ist ein Datum wie 2026-03-01, nicht „%1“.",
-  "Finished on takes a date, such as 2026-03-01, not “%1”. Nothing was saved.": "„Beendet am“ erwartet ein Datum wie 2026-03-01, nicht „%1“. Nichts wurde gespeichert."
+  "Finished on takes a date, such as 2026-03-01, not “%1”. Nothing was saved.": "„Beendet am“ erwartet ein Datum wie 2026-03-01, nicht „%1“. Nichts wurde gespeichert.",
+  "%1 was not switched on, as it can't load: %2": "%1 wurde nicht eingeschaltet, weil es nicht geladen werden kann: %2",
+  "There is no plugin %1 that can be turned on or off.": "Es gibt kein Plugin %1, das ein- oder ausgeschaltet werden kann.",
+  "It was not installed, as it can't load: %1": "Es wurde nicht installiert, weil es nicht geladen werden kann: %1",
+  "Its plugin.json names it \"%1\", which is written as a path, not as a name.": "Seine plugin.json nennt es „%1“; das ist als Pfad geschrieben, nicht als Name."
 }

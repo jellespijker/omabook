@@ -398,6 +398,11 @@ public:
         SettingsFileMistaken,
         SettingsFileNotObject,
         SettingsFileUnopened,
+        // A script plugin that can't load is neither installed nor switched on (#289).
+        PluginNotSwitchedOn, // {the plugin, why it can't load}
+        PluginNotSwitchable, // {the plugin's id}
+        PluginNotInstalled,  // {why it can't load}
+        PluginNameAPath,     // {the name its plugin.json gives}
     };
 
     // An empty one says nothing; it is only there for Qt's containers and signals.

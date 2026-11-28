@@ -163,6 +163,8 @@ QJsonObject inspected(const Staged &staged, const QString &source, const QString
                            : "\"" + name + "\" can't be a plugin's name: lower-case letters, digits, - and _, such as \"reading-log\".");
     if (answer.value("title").toString().isEmpty())
         answer.insert("title", name);
+    if (const auto why = PluginPackage::whyRefused(staged.root, answer.value("title").toString(), options.keepState))
+        return problem(why->text());
     answer.insert("name", name);
     answer.insert("source", QFileInfo(source).absoluteFilePath());
     // A folder or an archive used to keep its own name ("omabook-storyteller").

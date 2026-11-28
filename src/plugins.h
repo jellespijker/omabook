@@ -5,8 +5,10 @@
 #include <QNetworkAccessManager>
 #include <QString>
 #include <QStringList>
+#include <expected>
 
 #include "calibreplugin.h"
+#include "failure.h"
 #include "metadatasource.h"
 
 class Settings;
@@ -70,6 +72,9 @@ public:
     // Without asking Calibre: what is known so far. For the GUI thread.
     QList<PluginInfo> known() const;
     bool setEnabled(const QString &id, bool enabled);
+    // As setEnabled, for the command line and MCP clients, which are told why
+    // not: a script plugin that can't load is not switched on (#289).
+    [[nodiscard]] std::expected<void, Failure> switchIfLoads(const QString &id, bool enabled);
     // The id a person or an agent means: the id itself, the part after its
     // origin ("storyteller" for "folder:storyteller"), or the plugin's name,
     // case aside. Empty when it means none or more than one; `candidates`
