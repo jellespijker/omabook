@@ -40,8 +40,18 @@ struct ImportSummary {
     // are named first, those that failed are among the problems.
     QList<Failure> leftOut;
     int skipped = 0;
+    // Each of those books once, with all that is said of why (#278), and those
+    // none of whose files could be taken as items too, which itemsJson() lists
+    // after the files that were looked at.
+    QStringList notImported;
+    QList<Item> unusable;
     // The files that came in and can't be read here, each with why (#226).
     QList<Failure> unreadable;
+
+    // A book of a Calibre library none of whose files can be taken: counted,
+    // named before what was left out of the books that came, and kept with its
+    // first file (none for a book without one) and why.
+    void skip(const QString &file, const Failure &why, const QList<Failure> &files);
 
     [[nodiscard]] bool foundNothing() const;
     // Something went wrong, or a book stayed behind.

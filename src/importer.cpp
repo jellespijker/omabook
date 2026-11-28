@@ -264,7 +264,7 @@ void take(const Calibre::Book &book, QList<Incoming> &incoming, ImportSummary &s
     const CalibreImport::Sifted sifted = CalibreImport::sift(book);
     if (sifted.files.isEmpty()) {
         const auto why = book.files.isEmpty() ? Failure::Code::CalibreBookEmpty : Failure::Code::CalibreBookUnusable;
-        summary.leftOut.insert(summary.skipped++, Failure(why, {CalibreImport::nameOf(book)}));
+        summary.skip(book.files.value(0), Failure(why, {CalibreImport::nameOf(book)}), sifted.leftOut);
     } else {
         incoming.append({.files = sifted.files, .meta = book.meta, .cover = book.cover, .calibre = book});
     }
@@ -280,6 +280,7 @@ void failed(const Incoming &book, const QString &why, ImportSummary &summary) {
     }
     ++summary.skipped;
     summary.problems << Failure(Failure::Code::CalibreBookFailed, {CalibreImport::nameOf(*book.calibre), why}).text();
+    summary.notImported << summary.problems.constLast();
 }
 
 // The files of a book that may come in (#226), and what is said of each that

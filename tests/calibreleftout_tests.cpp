@@ -123,6 +123,19 @@ private slots:
         const World::Ran added = world.omabook({"add", world.shelf});
         QCOMPARE(added.code, 1);
         QVERIFY2(added.errors.contains("Empty Paper - N. Obody was not imported"), qPrintable(added.errors));
+        // As JSON, adding it lists every book that didn't come, with why (#278).
+        const World::Ran listed = world.omabook({"add", world.shelf, "--json"});
+        QStringList notTaken;
+        for (const QJsonValue &item : QJsonDocument::fromJson(listed.output.toUtf8()).array())
+            if (!item.toObject().value("error").toString().isEmpty())
+                notTaken << item.toObject().value("error").toString();
+        QCOMPARE(notTaken.size(), 3);
+        const QString why = notTaken.join('\n');
+        QVERIFY2(why.contains("Empty Paper - N. Obody was not imported: Calibre has no file for it."), qPrintable(why));
+        QVERIFY2(why.contains("Long Done was not imported") && why.contains("there is no file at " + gone), qPrintable(why));
+        // And the import names each of them once, as many as it counts.
+        QCOMPARE(world.import().json().value("not_imported").toArray().size(), 3);
+
         const World::Ran words = world.omabook({"calibre", "import", world.shelf});
         QVERIFY2(words.output.contains("3 not imported"), qPrintable(words.output));
     }

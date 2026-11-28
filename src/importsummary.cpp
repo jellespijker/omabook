@@ -11,6 +11,15 @@ QJsonObject ImportSummary::Item::toJson() const {
     return {{"file", file}, {"id", id}, {"duplicate", duplicate}, {"joined", joined}, {"error", error}};
 }
 
+void ImportSummary::skip(const QString &file, const Failure &why, const QList<Failure> &files) {
+    leftOut.insert(skipped++, why);
+    QStringList said{why.text()};
+    for (const Failure &one : files)
+        said << one.text();
+    notImported << said.join(u' ');
+    unusable.append({.file = file, .error = notImported.constLast()});
+}
+
 bool ImportSummary::foundNothing() const { return items.isEmpty() && problems.isEmpty() && leftOut.isEmpty(); }
 
 bool ImportSummary::failed() const { return !problems.isEmpty() || skipped > 0; }
@@ -29,7 +38,7 @@ QStringList ImportSummary::reasons() const {
 
 QJsonArray ImportSummary::itemsJson() const {
     QJsonArray array;
-    for (const Item &item : items)
+    for (const Item &item : items + unusable)
         array << item.toJson();
     return array;
 }
@@ -46,6 +55,7 @@ QJsonObject ImportSummary::calibreJson() const {
             {"read", read},
             {"reading", reading},
             {"skipped", skipped},
+            {"not_imported", QJsonArray::fromStringList(notImported)},
             {"left_out", left},
             {"problems", QJsonArray::fromStringList(problems)}};
 }
