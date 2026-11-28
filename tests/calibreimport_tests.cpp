@@ -1,5 +1,7 @@
 #include <QDir>
 #include <QFile>
+#include <QSqlDatabase>
+#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <QtTest>
 
@@ -13,8 +15,9 @@
 #include "library.h"
 
 // What an import of a Calibre library leaves behind when it doesn't go as
-// meant: cut off part way (#273), or with places the book here doesn't reach (#276). Every library here is made up, in a
-// temporary folder.
+// meant: cut off part way (#273), with places the book here doesn't reach
+// (#276), or from a damaged metadata.db (#277). Every library here is made up,
+// in a temporary folder.
 
 namespace {
 
@@ -24,6 +27,27 @@ struct World {
     QString shelf = dir.filePath("Shelf");
     Library library{dir.filePath("Library")};
     bool ok = Fixtures::calibreShelf(shelf) && library.open();
+
+    // Overwrites the page a table of metadata.db starts on, as damage does.
+    [[nodiscard]] bool damage(const QString &table) const {
+        int page = 0, size = 0;
+        {
+            QSqlDatabase database = QSqlDatabase::addDatabase("QSQLITE", "calibre-damage");
+            database.setDatabaseName(shelf + "/metadata.db");
+            if (database.open()) {
+                QSqlQuery query(database);
+                if (query.exec("SELECT rootpage FROM sqlite_master WHERE name = '" + table + "'") && query.next())
+                    page = query.value(0).toInt();
+                if (query.exec("PRAGMA page_size") && query.next())
+                    size = query.value(0).toInt();
+            }
+            database.close();
+        }
+        QSqlDatabase::removeDatabase("calibre-damage");
+        QFile file(shelf + "/metadata.db");
+        return page > 1 && size > 0 && file.open(QIODevice::ReadWrite) && file.seek(qint64(page - 1) * size)
+               && file.write(QByteArray(size, '\x5a')) == size;
+    }
 
     [[nodiscard]] qint64 book(const QString &title) const {
         for (const Book &book : library.books())
@@ -114,6 +138,43 @@ private slots:
         QCOMPARE(notes.size(), 2);
         for (const Annotation &note : notes)
             QCOMPARE(note.place.section, last);
+    }
+
+    // A table that can't be read is said, never passed over (#277).
+    void aDamagedTableIsNamed_data() {
+        QTest::addColumn<QString>("table");
+        for (const char *table : {"authors", "annotations", "identifiers", "books_ratings_link", "custom_column_1"})
+            QTest::newRow(table) << QString(table);
+    }
+    void aDamagedTableIsNamed() {
+        QFETCH(QString, table);
+        World world;
+        QVERIFY(world.ok && world.damage(table));
+        const ImportSummary summary = importBooks(world.library, {world.shelf});
+        QCOMPARE(summary.added, 5);
+        const QString problems = summary.problems.join('\n');
+        const QString named = table == "books_ratings_link" ? QString("ratings") : table;
+        QVERIFY2(problems.contains("can't be read (its table " + named + ")"), qPrintable(problems));
+        QVERIFY(summary.failed());
+    }
+
+    // A re-import from a library that has since been damaged takes nothing away
+    // that the last one brought.
+    void aDamagedLibraryTakesNothingAway() {
+        World world;
+        QVERIFY(world.ok);
+        QVERIFY(importBooks(world.library, {world.shelf}).problems.isEmpty());
+        const qint64 done = world.book("Long Done"), half = world.book("Half Way");
+        const Book before = *world.library.book(done);
+        QCOMPARE(before.rating, 5);
+        QVERIFY(world.damage("books_custom_column_4_link"));
+        QVERIFY(!importBooks(world.library, {world.shelf}).problems.isEmpty());
+        const Book after = *world.library.book(done);
+        QCOMPARE(after.rating, before.rating);
+        QCOMPARE(after.shelf, before.shelf);
+        QCOMPARE(after.finished, before.finished);
+        QCOMPARE(after.identifiers, before.identifiers);
+        QCOMPARE(world.library.annotations(half).size(), 3);
     }
 };
 

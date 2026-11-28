@@ -3108,5 +3108,6 @@
   },
   "Show All": "Alle anzeigen",
   "On the stars: one less or one more": "Auf den Sternen: einer weniger oder einer mehr",
-  "On the stars: that many; 0 takes them off": "Auf den Sternen: so viele; 0 nimmt sie weg"
+  "On the stars: that many; 0 takes them off": "Auf den Sternen: so viele; 0 nimmt sie weg",
+  "Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2": "Ein Teil der Calibre-Bibliothek kann nicht gelesen werden (ihre Tabelle %1), daher wurde nicht übernommen, was darin steht: %2"
 }

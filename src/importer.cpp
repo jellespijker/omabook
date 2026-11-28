@@ -396,6 +396,7 @@ void takeCalibre(Library &library, const Calibre::Book &calibre, const Library::
             const Calibre::Books calibre = Calibre::read(path);
             if (!calibre.error.isEmpty())
                 problems << calibre.error;
+            problems += calibre.unread;
             for (const Calibre::Book &book : calibre.books)
                 take(book, incoming, summary);
         } else {

@@ -156,6 +156,18 @@ namespace {
     return said;
 }
 
+// A library not read whole says nothing by what it leaves out: of a book that
+// was imported before, the shelf, stars, finished day and place stay as the
+// last import knew them (#277).
+[[nodiscard]] Calibre::Reading asBefore(Calibre::Reading said, const QJsonObject &before) {
+    said.shelf = before.value("shelf").toString();
+    said.rating = before.value("rating").toInt();
+    said.finished = before.value("finished").toString();
+    said.percent = before.value("percent").toDouble();
+    said.readAt = 0;
+    return said;
+}
+
 // The file's books, and over them what the journal says was remembered since.
 // A line cut short, by an import that was killed as it wrote it, says nothing.
 [[nodiscard]] QJsonObject remembered(const QString &file, const QString &journal) {
@@ -229,7 +241,9 @@ bool CalibreImport::takeReading(Library &library, qint64 id, const Calibre::Book
     if (!now)
         return false;
     const QJsonObject before = memory.of(id);
-    const Calibre::Reading said = withinBook(library, *now, calibre.reading, before.value("notes").toArray());
+    const bool keep = calibre.partly && !before.isEmpty();
+    const Calibre::Reading said =
+        withinBook(library, *now, keep ? asBefore(calibre.reading, before) : calibre.reading, before.value("notes").toArray());
     bool changed = false;
 
     const QString shelf = now->shelf == before.value("shelf").toString() ? said.shelf : now->shelf;
@@ -239,7 +253,8 @@ bool CalibreImport::takeReading(Library &library, qint64 id, const Calibre::Book
         changed = library.setReading(id, shelf, rating, finished) || changed;
 
     bool identified = false;
-    const QJsonObject identifiersSaid = takeIdentifiers(library, *now, calibre, before.value("identifiers").toObject(), identified);
+    const QJsonObject identifiersBefore = before.value("identifiers").toObject();
+    const QJsonObject identifiersSaid = keep ? identifiersBefore : takeIdentifiers(library, *now, calibre, identifiersBefore, identified);
     qint64 placedAt = static_cast<qint64>(before.value("progress_at").toDouble());
     const bool placed = takePlace(library, id, said, before.value("percent").toDouble(), placedAt);
     QJsonArray notes = before.value("notes").toArray();

@@ -52,6 +52,8 @@ struct Book {
     // What other sites call it: {"goodreads": "4671", "isbn": "978..."}.
     QMap<QString, QString> identifiers;
     Reading reading;
+    // A part of the library couldn't be read, so what is said of this book may lack it (#277).
+    bool partly = false;
 };
 
 // Whether the folder is a Calibre library.
@@ -61,7 +63,8 @@ int bookCount(const QString &folder);
 
 struct Books {
     QList<Book> books;
-    QString error;        // why not; empty when the whole library was read
+    QString error;      // why not; empty when the books and their files were read to the end
+    QStringList unread; // the other tables that couldn't be read, each as a sentence
 };
 Books read(const QString &folder);
 

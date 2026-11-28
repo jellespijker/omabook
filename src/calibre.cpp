@@ -13,6 +13,7 @@
 #include <QUuid>
 #include <algorithm>
 #include <array>
+#include <functional>
 
 #include "failure.h"
 #include "htmlclean.h"
@@ -47,18 +48,31 @@ public:
         query.exec(sql);
         return query;
     }
+    // Hands each row `sql` finds to `row`. A `table` that can't be read to its
+    // end, as in a damaged database, is noted (#277); one that an older Calibre
+    // doesn't have, or lacks a column of, simply holds nothing.
+    void each(const QString &table, const QString &sql, const std::function<void(const QSqlQuery &)> &row) const {
+        QSqlQuery found = query(sql);
+        while (found.next())
+            row(found);
+        const QString why = found.lastError().databaseText();
+        if (found.lastError().isValid() && !why.startsWith("no such table"_L1) && !why.startsWith("no such column"_L1))
+            m_unread.insert(table, found.lastError().text());
+    }
+    // The tables that couldn't be read, each with the database's reason.
+    [[nodiscard]] const QMap<QString, QString> &unread() const noexcept { return m_unread; }
 
 private:
     QString m_name, m_error;
     bool m_open = false;
+    mutable QMap<QString, QString> m_unread;
 };
 
 // The values linked to each book through one of Calibre's link tables, in
 // the order Calibre keeps them.
-[[nodiscard]] QHash<qint64, QStringList> linked(const Connection &calibre, const QString &sql) {
+[[nodiscard]] QHash<qint64, QStringList> linked(const Connection &calibre, const QString &table, const QString &sql) {
     QHash<qint64, QStringList> values;
-    for (QSqlQuery query = calibre.query(sql); query.next();)
-        values[query.value(0).toLongLong()] << query.value(1).toString();
+    calibre.each(table, sql, [&values](const QSqlQuery &row) { values[row.value(0).toLongLong()] << row.value(1).toString(); });
     return values;
 }
 
@@ -99,101 +113,107 @@ private:
     return strength(a) >= strength(b) ? a : b;
 }
 
-// What the columns people add to Calibre say about each book's reading.
+// What one of the columns people add to Calibre says about each book's reading.
 // A column Calibre keeps "normalized" holds its values once, in a table of
 // their own, with a link table beside it; the others hold them per book.
-void readCustomColumns(const Connection &calibre, QHash<qint64, Calibre::Reading> &readings) {
-    QSqlQuery columns = calibre.query("SELECT id, label, name, datatype, normalized FROM custom_columns WHERE mark_for_delete = 0");
-    while (columns.next()) {
-        const QString role = Calibre::columnRole(columns.value(1).toString(), columns.value(2).toString(), columns.value(3).toString());
-        if (role.isEmpty())
-            continue;
-        const QString table = "custom_column_" + QString::number(columns.value(0).toLongLong());
-        const QString sql = columns.value(4).toBool()
-                                ? QString("SELECT l.book, c.value FROM books_%1_link l JOIN %1 c ON c.id = l.value").arg(table)
-                                : QString("SELECT book, value FROM %1").arg(table);
-        for (QSqlQuery values = calibre.query(sql); values.next();) {
-            Calibre::Reading &reading = readings[values.value(0).toLongLong()];
-            const QVariant value = values.value(1);
-            if (role == "shelf") {
-                reading.shelf = strongerShelf(reading.shelf, Calibre::shelfFor(value.toString()));
-            } else if (role == "read") {
-                if (value.toBool())
-                    reading.shelf = strongerShelf(reading.shelf, "read");
-            } else if (role == "finished") {
-                if (const QString day = dayOf(value.toString()); !day.isEmpty()) {
-                    reading.finished = day;
-                    reading.shelf = strongerShelf(reading.shelf, "read");
-                }
-            } else if (role == "progress") {
-                // A percentage kept by hand has no time: it only fills in
-                // where Calibre's viewer has no place of its own.
-                if (reading.readAt == 0)
-                    reading.percent = std::clamp(value.toDouble(), 0.0, 100.0);
-            } else if (role == "rating" && reading.rating == 0) {
-                // Calibre's own stars, read before these, come first.
-                reading.rating = columns.value(3).toString() == "rating" ? Calibre::starsFor(value.toInt())
-                                                                         : std::clamp(value.toInt(), 0, 5);
+void readColumn(const Connection &calibre, const QSqlQuery &column, QHash<qint64, Calibre::Reading> &readings) {
+    const QString type = column.value(3).toString();
+    const QString role = Calibre::columnRole(column.value(1).toString(), column.value(2).toString(), type);
+    if (role.isEmpty())
+        return;
+    const QString table = "custom_column_" + QString::number(column.value(0).toLongLong());
+    const QString sql = column.value(4).toBool()
+                            ? QString("SELECT l.book, c.value FROM books_%1_link l JOIN %1 c ON c.id = l.value").arg(table)
+                            : QString("SELECT book, value FROM %1").arg(table);
+    calibre.each(table, sql, [&](const QSqlQuery &row) {
+        Calibre::Reading &reading = readings[row.value(0).toLongLong()];
+        const QVariant value = row.value(1);
+        if (role == "shelf") {
+            reading.shelf = strongerShelf(reading.shelf, Calibre::shelfFor(value.toString()));
+        } else if (role == "read") {
+            if (value.toBool())
+                reading.shelf = strongerShelf(reading.shelf, "read");
+        } else if (role == "finished") {
+            if (const QString day = dayOf(value.toString()); !day.isEmpty()) {
+                reading.finished = day;
+                reading.shelf = strongerShelf(reading.shelf, "read");
             }
+        } else if (role == "progress") {
+            // A percentage kept by hand has no time: it only fills in
+            // where Calibre's viewer has no place of its own.
+            if (reading.readAt == 0)
+                reading.percent = std::clamp(value.toDouble(), 0.0, 100.0);
+        } else if (role == "rating" && reading.rating == 0) {
+            // Calibre's own stars, read before these, come first.
+            reading.rating = type == "rating" ? Calibre::starsFor(value.toInt()) : std::clamp(value.toInt(), 0, 5);
         }
-    }
+    });
+}
+
+void readCustomColumns(const Connection &calibre, QHash<qint64, Calibre::Reading> &readings) {
+    calibre.each("custom_columns", "SELECT id, label, name, datatype, normalized FROM custom_columns WHERE mark_for_delete = 0",
+                 [&](const QSqlQuery &column) { readColumn(calibre, column, readings); });
 }
 
 // Highlights, their notes and bookmarks from Calibre's viewer, each a small
 // JSON document. A highlight with a note is a highlight and a margin note on
 // the same words, as Omabook keeps them; each has a name of its own, so the
 // note of a highlight brought in before notes were comes along the next time.
-void readNotes(const Connection &calibre, QHash<qint64, Calibre::Reading> &readings) {
-    QSqlQuery notes = calibre.query("SELECT book, annot_id, annot_type, annot_data, timestamp FROM annotations ORDER BY timestamp");
-    while (notes.next()) {
-        const QJsonObject data = QJsonDocument::fromJson(notes.value(3).toString().toUtf8()).object();
-        const QString kind = notes.value(2).toString();
-        // A highlight taken away again stays in Calibre's table, marked.
-        if (data.value("removed").toBool() || (kind != "highlight" && kind != "bookmark"))
-            continue;
-        QList<Calibre::Note> &kept = readings[notes.value(0).toLongLong()].notes;
-        const QString id = notes.value(1).toString();
-        const auto created = static_cast<qint64>(notes.value(4).toDouble());
-        if (kind == "bookmark") {
-            kept.append({.id = "bookmark:" + id,
-                         .kind = kind,
-                         .section = sectionOfCfi(data.value("pos").toString()),
-                         .text = data.value("title").toString(),
-                         .note = {},
-                         .created = created,
-                         .color = {}});
-            continue;
-        }
-        const Calibre::Note highlight{.id = "highlight:" + id,
-                                      .kind = kind,
-                                      .section = std::max(0, data.value("spine_index").toInt()),
-                                      .text = data.value("highlighted_text").toString(),
-                                      .note = {},
-                                      .created = created,
-                                      .color = Calibre::colorOf(data.value("style").toObject())};
-        kept.append(highlight);
-        if (const QString note = data.value("notes").toString().trimmed(); !note.isEmpty())
-            kept.append({.id = "margin-note:" + id,
-                         .kind = "margin-note",
-                         .section = highlight.section,
-                         .text = highlight.text,
-                         .note = note,
-                         .created = created,
-                         .color = {}});
+void readNote(const QSqlQuery &notes, QHash<qint64, Calibre::Reading> &readings) {
+    const QJsonObject data = QJsonDocument::fromJson(notes.value(3).toString().toUtf8()).object();
+    const QString kind = notes.value(2).toString();
+    // A highlight taken away again stays in Calibre's table, marked.
+    if (data.value("removed").toBool() || (kind != "highlight" && kind != "bookmark"))
+        return;
+    QList<Calibre::Note> &kept = readings[notes.value(0).toLongLong()].notes;
+    const QString id = notes.value(1).toString();
+    const auto created = static_cast<qint64>(notes.value(4).toDouble());
+    if (kind == "bookmark") {
+        kept.append({.id = "bookmark:" + id,
+                     .kind = kind,
+                     .section = sectionOfCfi(data.value("pos").toString()),
+                     .text = data.value("title").toString(),
+                     .note = {},
+                     .created = created,
+                     .color = {}});
+        return;
     }
+    const Calibre::Note highlight{.id = "highlight:" + id,
+                                  .kind = kind,
+                                  .section = std::max(0, data.value("spine_index").toInt()),
+                                  .text = data.value("highlighted_text").toString(),
+                                  .note = {},
+                                  .created = created,
+                                  .color = Calibre::colorOf(data.value("style").toObject())};
+    kept.append(highlight);
+    if (const QString note = data.value("notes").toString().trimmed(); !note.isEmpty())
+        kept.append({.id = "margin-note:" + id,
+                     .kind = "margin-note",
+                     .section = highlight.section,
+                     .text = highlight.text,
+                     .note = note,
+                     .created = created,
+                     .color = {}});
+}
+
+void readNotes(const Connection &calibre, QHash<qint64, Calibre::Reading> &readings) {
+    calibre.each("annotations", "SELECT book, annot_id, annot_type, annot_data, timestamp FROM annotations ORDER BY timestamp",
+                 [&readings](const QSqlQuery &row) { readNote(row, readings); });
 }
 
 [[nodiscard]] QHash<qint64, Calibre::Reading> readReadings(const Connection &calibre) {
     QHash<qint64, Calibre::Reading> readings;
-    for (QSqlQuery stars = calibre.query("SELECT l.book, r.rating FROM books_ratings_link l JOIN ratings r ON r.id = l.rating"); stars.next();)
-        readings[stars.value(0).toLongLong()].rating = Calibre::starsFor(stars.value(1).toInt());
+    calibre.each(
+        "ratings", "SELECT l.book, r.rating FROM books_ratings_link l JOIN ratings r ON r.id = l.rating",
+        [&readings](const QSqlQuery &stars) { readings[stars.value(0).toLongLong()].rating = Calibre::starsFor(stars.value(1).toInt()); });
     // One place per reader and device; the one read last is where the book is.
-    for (QSqlQuery places = calibre.query("SELECT book, cfi, epoch, pos_frac FROM last_read_positions ORDER BY epoch"); places.next();) {
-        Calibre::Reading &reading = readings[places.value(0).toLongLong()];
-        reading.section = sectionOfCfi(places.value(1).toString());
-        reading.readAt = qint64(places.value(2).toDouble());
-        reading.percent = std::clamp(places.value(3).toDouble() * 100, 0.0, 100.0);
-    }
+    calibre.each("last_read_positions", "SELECT book, cfi, epoch, pos_frac FROM last_read_positions ORDER BY epoch",
+                 [&readings](const QSqlQuery &place) {
+                     Calibre::Reading &reading = readings[place.value(0).toLongLong()];
+                     reading.section = sectionOfCfi(place.value(1).toString());
+                     reading.readAt = static_cast<qint64>(place.value(2).toDouble());
+                     reading.percent = std::clamp(place.value(3).toDouble() * 100, 0.0, 100.0);
+                 });
     readCustomColumns(calibre, readings);
     readNotes(calibre, readings);
     for (Calibre::Reading &reading : readings) {
@@ -286,25 +306,30 @@ Calibre::Books Calibre::read(const QString &folder) {
     if (!calibre.isOpen())
         return {.books = {}, .error = "The Calibre library can't be read: " + calibre.error()};
     // Calibre writes a comma inside a name as a bar.
-    auto authors = linked(calibre, "SELECT l.book, a.name FROM books_authors_link l JOIN authors a ON a.id = l.author ORDER BY l.id");
+    auto authors =
+        linked(calibre, "authors", "SELECT l.book, a.name FROM books_authors_link l JOIN authors a ON a.id = l.author ORDER BY l.id");
     for (QStringList &names : authors)
         for (QString &name : names)
             name.replace('|', ',');
-    const auto series = linked(calibre, "SELECT l.book, s.name FROM books_series_link l JOIN series s ON s.id = l.series");
-    const auto tags = linked(calibre, "SELECT l.book, t.name FROM books_tags_link l JOIN tags t ON t.id = l.tag ORDER BY l.id");
-    const auto publishers = linked(calibre, "SELECT l.book, p.name FROM books_publishers_link l JOIN publishers p ON p.id = l.publisher");
-    const auto languages = linked(calibre, "SELECT l.book, g.lang_code FROM books_languages_link l JOIN languages g ON g.id = l.lang_code ORDER BY l.item_order");
-    const auto isbns = linked(calibre, "SELECT book, val FROM identifiers WHERE type = 'isbn'");
+    const auto series = linked(calibre, "series", "SELECT l.book, s.name FROM books_series_link l JOIN series s ON s.id = l.series");
+    const auto tags = linked(calibre, "tags", "SELECT l.book, t.name FROM books_tags_link l JOIN tags t ON t.id = l.tag ORDER BY l.id");
+    const auto publishers =
+        linked(calibre, "publishers", "SELECT l.book, p.name FROM books_publishers_link l JOIN publishers p ON p.id = l.publisher");
+    const auto languages =
+        linked(calibre, "languages",
+               "SELECT l.book, g.lang_code FROM books_languages_link l JOIN languages g ON g.id = l.lang_code ORDER BY l.item_order");
+    const auto isbns = linked(calibre, "identifiers", "SELECT book, val FROM identifiers WHERE type = 'isbn'");
     QHash<qint64, QMap<QString, QString>> identifiers;
-    for (QSqlQuery query = calibre.query("SELECT book, type, val FROM identifiers"); query.next();)
-        if (!query.value(1).toString().isEmpty() && !query.value(2).toString().isEmpty())
-            identifiers[query.value(0).toLongLong()].insert(query.value(1).toString().toLower(), query.value(2).toString());
+    calibre.each("identifiers", "SELECT book, type, val FROM identifiers", [&identifiers](const QSqlQuery &row) {
+        if (!row.value(1).toString().isEmpty() && !row.value(2).toString().isEmpty())
+            identifiers[row.value(0).toLongLong()].insert(row.value(1).toString().toLower(), row.value(2).toString());
+    });
     // Older libraries have no uuid; the query then simply finds nothing.
     QHash<qint64, QString> uuids;
-    for (QSqlQuery query = calibre.query("SELECT id, uuid FROM books"); query.next();)
-        uuids.insert(query.value(0).toLongLong(), query.value(1).toString());
+    calibre.each("books", "SELECT id, uuid FROM books",
+                 [&uuids](const QSqlQuery &row) { uuids.insert(row.value(0).toLongLong(), row.value(1).toString()); });
     const QHash<qint64, Reading> readings = readReadings(calibre);
-    const auto comments = linked(calibre, "SELECT book, text FROM comments");
+    const auto comments = linked(calibre, "comments", "SELECT book, text FROM comments");
     // "EPUB" and the file's name without its extension.
     QHash<qint64, QList<QPair<QString, QString>>> files;
     QSqlQuery data = calibre.query("SELECT book, format, name FROM data ORDER BY id");
@@ -317,6 +342,8 @@ Calibre::Books Calibre::read(const QString &folder) {
     QSqlQuery books = calibre.query("SELECT id, title, series_index, pubdate, path, has_cover FROM books ORDER BY id");
     if (books.lastError().isValid())
         return {.books = {}, .error = "This doesn't look like a Calibre library: " + books.lastError().text()};
+    for (const auto &[table, why] : calibre.unread().asKeyValueRange())
+        result.unread << Failure(Failure::Code::CalibreTableUnread, {table, why}).text();
     while (books.next()) {
         const qint64 id = books.value(0).toLongLong();
         const QString path = folder + "/" + books.value(4).toString();
@@ -325,6 +352,7 @@ Calibre::Books Calibre::read(const QString &folder) {
         book.uuid = uuids.value(id);
         book.identifiers = identifiers.value(id);
         book.reading = readings.value(id);
+        book.partly = !calibre.unread().isEmpty();
         book.meta.title = books.value(1).toString();
         book.meta.authors = authors.value(id);
         // Calibre's name for "nobody".

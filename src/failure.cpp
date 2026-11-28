@@ -259,6 +259,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::CalibreSameBook, tr("%1 has a file in common with %2, so they are one book here, with the reading of %2.")},
     {Failure::Code::CalibreFilesUnread, tr("The files of the Calibre library can't be read: %1")},
     {Failure::Code::CalibreReadPartly, tr("Not all of the Calibre library can be read: %1")},
+    {Failure::Code::CalibreTableUnread,
+     tr("Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2")},
     {Failure::Code::RestoreThingNotFound, tr("The snapshot holds no %1.")},
     {Failure::Code::RestoreThingAmbiguous, tr("More than one notebook is called %1: name it by its id.")},
     {Failure::Code::SyncDeviceOurs,

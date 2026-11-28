@@ -380,6 +380,7 @@ public:
         CalibreSameBook,        // {book, the one it is here as}
         CalibreFilesUnread,     // {the database's reason}: no list of the books' files
         CalibreReadPartly,      // {the database's reason}
+        CalibreTableUnread,     // {the table's name, the database's reason} (#277)
         // A plugin's thing put back from a snapshot, and a library's device id its own (#209).
         RestoreThingNotFound,  // {notebook or page}
         RestoreThingAmbiguous, // {title}
