@@ -59,6 +59,10 @@ public:
     HubSync(HubSync &&) = delete;
     HubSync &operator=(HubSync &&) = delete;
 
+    // Removes the folders a hub that stopped in the middle of a sync left in the scratch folder,
+    // never one a hub running still holds (#295). Once, as the daemon starts.
+    void clearLeftovers() const;
+
     // Adds the request `sync` to `requests`, answered by this, which outlives them.
     void addTo(HubRequests &requests);
 

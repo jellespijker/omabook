@@ -43,8 +43,9 @@ public:
     virtual bool fetch(const QString &remoteFile, const QString &localFile) const;
     // Copies a file there, or says why it could not.
     [[nodiscard]] virtual std::expected<void, QString> send(const QString &localFile, const QString &remoteFile) const;
-    // A new empty folder there, for what is sent to it; empty when there is no room.
-    [[nodiscard]] virtual QString makeFolder() const;
+    // A new empty folder there, for what is sent to it, or why none was made:
+    // as the other side said it, no room being only one reason (#295).
+    [[nodiscard]] virtual std::expected<QString, QString> makeFolder() const;
     // Removes such a folder, and what was sent to it.
     virtual void dropFolder(const QString &folder) const;
     // Hands the other side a document to take in: copies it into a scratch

@@ -1,4 +1,5 @@
 #include "remote.h"
+#include "failure.h"
 
 #include <QFile>
 #include <QFileInfo>
@@ -53,7 +54,12 @@ Remote::Result Remote::omabook(const QStringList &arguments, const QString &inpu
     return run(command, inputFile);
 }
 
-QString Remote::makeFolder() const { return QString::fromUtf8(run("mktemp -d").output).trimmed(); }
+std::expected<QString, QString> Remote::makeFolder() const {
+    const Result made = run("mktemp -d");
+    if (QString folder = QString::fromUtf8(made.output).trimmed(); made.ok() && !folder.isEmpty())
+        return folder;
+    return std::unexpected(Failure(Failure::Code::RemoteNoFolder, {m_host, made.error.trimmed().section('\n', -1)}).text());
+}
 
 void Remote::dropFolder(const QString &folder) const { run("rm -rf " + quote(folder)); }
 
@@ -81,13 +87,13 @@ std::expected<QJsonObject, QString> Remote::exchange(const QJsonDocument &docume
     if (!here.isValid() || !file.open(QIODevice::WriteOnly) || file.write(document.toJson(QJsonDocument::Compact)) <= 0)
         return std::unexpected(QString("it can't be written here"));
     file.close();
-    const QString folder = makeFolder();
-    if (folder.isEmpty())
-        return std::unexpected("there is no room for it on " + m_host);
-    const auto cleanup = qScopeGuard([&] { dropFolder(folder); });
-    if (const auto sent = send(file.fileName(), folder + "/given.json"); !sent)
+    const auto folder = makeFolder();
+    if (!folder)
+        return std::unexpected(folder.error());
+    const auto cleanup = qScopeGuard([&] { dropFolder(*folder); });
+    if (const auto sent = send(file.fileName(), *folder + "/given.json"); !sent)
         return std::unexpected(sent.error());
-    const Result taken = omabook(arguments + QStringList{folder + "/given.json"});
+    const Result taken = omabook(arguments + QStringList{*folder + "/given.json"});
     if (!taken.ok())
         return std::unexpected(taken.error.isEmpty() ? QString("it was not taken") : taken.error.section('\n', -1));
     return QJsonDocument::fromJson(taken.output).object();

@@ -108,9 +108,11 @@ std::expected<void, QString> HubRemote::send(const QString &localFile, const QSt
     return {};
 }
 
-QString HubRemote::makeFolder() const {
+std::expected<QString, QString> HubRemote::makeFolder() const {
     const auto made = step({{"step", "folder"}});
-    return made ? made->value("folder"_L1).toString() : QString();
+    if (!made)
+        return std::unexpected(made.error().text());
+    return made->value("folder"_L1).toString();
 }
 
 void HubRemote::dropFolder(const QString &folder) const {
@@ -139,6 +141,10 @@ SyncSummary HubRemote::sync(Library &library, const QString &target, const Ask &
     SyncSummary summary = syncLibrary(library, hub, progress, options);
     hub.end();
     summary.unreached = ended && !summary.error.isEmpty();
+    // What failed once the session was gone failed for that, whatever it seemed (#295): a plan the hub
+    // never gave is not a hub too old to make one.
+    if (summary.unreached)
+        summary.error = Failure(Failure::Code::HubSessionEnded, {hub.host()}).text();
     return summary;
 }
 

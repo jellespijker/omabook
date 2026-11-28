@@ -155,6 +155,16 @@ struct Hub {
         return HubRemote::sync(library, u"hub"_s, [&opened](const QByteArray &line) { return opened->answer(line); }, {}, options);
     }
 
+    // Its library's format.
+    [[nodiscard]] int format() {
+        int found = 0;
+        std::ignore = keeper.whole([&found](std::span<Library *const> libraries) -> std::expected<void, Failure> {
+            found = libraries.front()->formatVersion();
+            return {};
+        });
+        return found;
+    }
+
     // What the hub's library holds now.
     [[nodiscard]] QStringList held() {
         QStringList books;
@@ -265,6 +275,52 @@ private slots:
         QCOMPARE(contents(laptop.library), contents(here.library));
         QCOMPARE(contents(desktop.library), contents(there.library));
         QCOMPARE(hub.held(), contents(middle.library));
+    }
+
+    // A hub that stops in the middle of a sync is said to have stopped, not to be full, nor too old:
+    // whether it stops while the sync is planned (its first folder) or while it writes (its second) (#295).
+    void aSyncCutOffSaysTheHubStoppedAnswering_data() {
+        QTest::addColumn<int>("atFolder");
+        QTest::newRow("while it is planned") << 1;
+        QTest::newRow("while it writes") << 2;
+    }
+
+    void aSyncCutOffSaysTheHubStoppedAnswering() {
+        QFETCH(const int, atFolder);
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        Computer laptop;
+        QVERIFY(laptop.add(u"Alpha"_s) > 0);
+        const auto opened = hub.session(u"laptop"_s);
+        int folders = 0;
+        const SyncSummary cut = HubRemote::sync(laptop.library, u"hub"_s, [&opened, &folders, atFolder](const QByteArray &line) {
+            folders += QJsonDocument::fromJson(line).object().value("step"_L1).toString() == u"folder"_s ? 1 : 0;
+            return folders >= atFolder ? QByteArray() : opened->answer(line);
+        });
+        const QString said = problems(cut);
+        QVERIFY(folders >= atFolder);
+        QVERIFY2(said.contains(u"ended before it answered"_s) && !said.contains(u"no room"_s, Qt::CaseInsensitive)
+                     && !said.contains(u"older than"_s),
+                 qPrintable(said));
+    }
+
+    // What a hub that stopped left of a sync goes as the next one starts; a sync under way stays (#295).
+    void aLaterHubClearsWhatAStoppedOneLeft() {
+        QTemporaryDir scratch;
+        const QString left = scratch.filePath(u"omabook-hub-sync-Left01"_s);
+        const QString other = scratch.filePath(u"not-the-hubs"_s);
+        QVERIFY(QDir().mkpath(left + u"/f1"_s) && QDir().mkpath(other) && Fixtures::write(left + u"/f1/book.epub"_s, "half"));
+        Hub hub;
+        const QString started = hub.start();
+        QVERIFY2(started.isEmpty(), qPrintable(started));
+        HubSync running(scratch.path());
+        QVERIFY(running.answer({{"step", "begin"}, {"computer", "laptop"}, {"format", hub.format()}, {"dry_run", true}}, hub.keeper));
+        QCOMPARE(QDir(scratch.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size(), 3);
+        HubSync(scratch.path()).clearLeftovers();
+        QVERIFY(!QFileInfo::exists(left));
+        QVERIFY(QFileInfo::exists(other));
+        QCOMPARE(QDir(scratch.path()).entryList(QDir::Dirs | QDir::NoDotAndDotDot).size(), 2);
     }
 
     // A sync with a hub, by hand, from the window or by itself, takes a moment

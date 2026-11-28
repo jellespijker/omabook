@@ -49,7 +49,7 @@ public:
     Result run(const QString &command, const QString &inputFile = {}, const QString &outputFile = {}) const override;
     bool fetch(const QString &remoteFile, const QString &localFile) const override;
     [[nodiscard]] std::expected<void, QString> send(const QString &localFile, const QString &remoteFile) const override;
-    [[nodiscard]] QString makeFolder() const override;
+    [[nodiscard]] std::expected<QString, QString> makeFolder() const override;
     void dropFolder(const QString &folder) const override;
 
     // A whole sync with the hub through `ask`: begun, synced as with any computer, and ended.

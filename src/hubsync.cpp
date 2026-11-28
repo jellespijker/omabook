@@ -5,11 +5,13 @@
 #include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
+#include <QLockFile>
 #include <QSet>
 #include <QTemporaryDir>
 #include <QUuid>
 #include <algorithm>
 #include <optional>
+#include <unistd.h>
 #include <utility>
 
 #include "hubkeeper.h"
@@ -23,12 +25,29 @@
 
 using namespace Qt::StringLiterals;
 
+namespace {
+// How a visit's folder in the scratch folder is named.
+constexpr auto visitFolders = "omabook-hub-sync-"_L1;
+
+// The lock on a visit's folder, taken; null when a program running still has it.
+[[nodiscard]] std::unique_ptr<QLockFile> holdOf(const QString &folder) {
+    auto lock = std::make_unique<QLockFile>(folder + u"/hub.lock"_s);
+    lock->setStaleLockTime(std::chrono::milliseconds(0)); // never for its age: only once its program is gone
+    if (!lock->tryLock(std::chrono::milliseconds(0)))
+        return nullptr;
+    return lock;
+}
+} // namespace
+
 struct HubSync::Visit {
     QString computer;
     QString library; // its name, as the keeper knows it
     QString device;  // of the computer's library, as it said (#212)
     bool dryRun = false;
     QTemporaryDir scratch;
+    // Held while the visit lives, and no longer than its program: by this a later hub knows a left folder (#295).
+    // After the folder, so that it is let go before the folder goes.
+    std::unique_ptr<QLockFile> held;
     int folders = 0;
     bool snapshotted = false; // its moment snapshot taken, before its first write
     bool planned = false;     // asked for the books' state the sync guard compares (#187), as before its first write
@@ -36,7 +55,7 @@ struct HubSync::Visit {
     std::optional<QSet<QString>> books;
     std::chrono::steady_clock::time_point last = std::chrono::steady_clock::now();
 
-    explicit Visit(const QString &in) : scratch(QDir(in).filePath(u"omabook-hub-sync-XXXXXX"_s)) {}
+    explicit Visit(const QString &in) : scratch(QDir(in).filePath(QString(visitFolders) + u"XXXXXX"_s)) {}
 
     // Where `named`, a name in its folders, is; refused outside them.
     [[nodiscard]] std::expected<QString, Failure> resolve(const QString &named) const {
@@ -98,6 +117,18 @@ namespace {
 HubSync::HubSync(QString scratch) : m_scratch(scratch.isEmpty() ? QDir::tempPath() : std::move(scratch)) {}
 
 HubSync::~HubSync() = default;
+
+void HubSync::clearLeftovers() const {
+    const QDir scratch(m_scratch);
+    for (const QFileInfo &left :
+         scratch.entryInfoList({QString(visitFolders) + u'*'}, QDir::Dirs | QDir::NoDotAndDotDot | QDir::NoSymLinks)) {
+        if (left.ownerId() != ::geteuid())
+            continue;
+        const auto held = holdOf(left.filePath());
+        if (held && QDir(left.filePath()).removeRecursively())
+            qCInfo(lcHub).noquote() << "Cleared what a sync that never ended left in" << left.filePath();
+    }
+}
 
 void HubSync::addTo(HubRequests &requests) {
     requests.add(u"sync"_s, [this](const QJsonObject &asked, HubKeeper &keeper) { return answer(asked, keeper); });
@@ -163,7 +194,10 @@ std::expected<QJsonObject, Failure> HubSync::begin(const QJsonObject &asked, Hub
     if (!checked)
         return std::unexpected(checked.error());
     if (!visit->scratch.isValid())
-        return std::unexpected(Failure(Failure::Code::HubSyncNoPlace, {visit->scratch.path()}));
+        return std::unexpected(Failure(Failure::Code::HubSyncUnwritten, {visit->scratch.errorString()}));
+    visit->held = holdOf(visit->scratch.path());
+    if (!visit->held)
+        return std::unexpected(Failure(Failure::Code::HubSyncUnwritten, {visit->scratch.path()}));
     const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces);
     qCInfo(lcHub).noquote() << computer << (visit->dryRun ? "began a dry run of a sync of" : "began a sync of") << visit->library;
     const QString library = visit->library;
@@ -193,7 +227,7 @@ std::expected<QJsonObject, Failure> HubSync::step(Visit &visit, const QJsonObjec
 std::expected<QJsonObject, Failure> HubSync::Visit::folder() {
     const QString name = u"f"_s + QString::number(++folders);
     if (!QDir().mkpath(scratch.filePath(name)))
-        return std::unexpected(Failure(Failure::Code::HubSyncNoPlace, {name}));
+        return std::unexpected(Failure(Failure::Code::HubSyncUnwritten, {scratch.filePath(name)}));
     return QJsonObject{{"folder", name}};
 }
 
@@ -208,9 +242,12 @@ std::expected<QJsonObject, Failure> HubSync::Visit::put(const QJsonObject &asked
     const qint64 at = asked.value("at"_L1).toInteger();
     QFile written(*file);
     // A file comes in order, a piece after the other; its first piece begins it anew.
-    if ((at != 0 && at != written.size()) || data.size() > piece
-        || !written.open(at == 0 ? QIODevice::WriteOnly | QIODevice::Truncate : QIODevice::Append) || written.write(data) != data.size())
+    if ((at != 0 && at != written.size()) || data.size() > piece)
         return std::unexpected(Failure(Failure::Code::HubSyncNoPlace, {named.left(120)}));
+    // A place it may be written, and not written: the hub's disk, as the system says it (#295).
+    if (!written.open(at == 0 ? QIODevice::WriteOnly | QIODevice::Truncate : QIODevice::Append) || written.write(data) != data.size()
+        || !written.flush())
+        return std::unexpected(Failure(Failure::Code::HubSyncUnwritten, {written.errorString()}));
     return QJsonObject{{"size", written.size()}};
 }
 

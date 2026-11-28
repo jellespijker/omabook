@@ -30,7 +30,7 @@ void note(int &count, QStringList &titles, const QString &title) {
 
 QString remoteDir(const OlderPeer::Sync &sync) {
     if (sync.folderThere.isEmpty())
-        sync.folderThere = sync.remote.makeFolder();
+        sync.folderThere = sync.remote.makeFolder().value_or(QString());
     return sync.folderThere;
 }
 

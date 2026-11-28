@@ -163,9 +163,12 @@ void exchangeOf(Exchange &exchange, const QString &id) {
 void send(const Exchange &exchange) {
     const Remote &remote = *exchange.remote;
     SyncSummary &summary = *exchange.summary;
-    const QString folder = remote.makeFolder();
-    if (folder.isEmpty())
+    const auto made = remote.makeFolder();
+    if (!made) {
+        qCWarning(lcSync).noquote() << "plugins' files could not be sent to" << remote.host() << ":" << made.error();
         return;
+    }
+    const QString &folder = *made;
     const auto cleanup = qScopeGuard([&] { remote.dropFolder(folder); });
     QJsonArray files;
     for (const Sending &file : exchange.sending) {

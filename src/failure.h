@@ -232,6 +232,8 @@ public:
         HubSyncNoComputer,  // {}: asked by no computer's key
         HubSyncRefused,     // {what was asked}
         HubSyncNotGiven,    // {file}: not a file of the library's books, nor a plugin's file kept for it
+        RemoteNoFolder,     // {computer, what it said}
+        HubSyncUnwritten,   // {the system's reason}
         HubSyncNoPlace,     // {where}: not in the sync's own folders
         HubSyncDryRun,      // {}: a dry run writes nothing
         HubSyncNotYours,    // {}: plugins' files, for a library not one of the hub library's own computers (#212)

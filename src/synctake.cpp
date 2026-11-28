@@ -79,8 +79,8 @@ struct Taking {
 // This side's cover, given to them with the time the details settled at.
 void giveCover(const Taking &taking, const Book &mine, const QJsonObject &listed, qint64 settled) {
     const QString cover = taking.library.coverPath(mine.id);
-    const QString folder = taking.peer.remote->makeFolder();
-    if (cover.isEmpty() || folder.isEmpty())
+    const QString folder = cover.isEmpty() ? QString() : taking.peer.remote->makeFolder().value_or(QString());
+    if (folder.isEmpty())
         return;
     const QString there = folder + u"/cover.jpg"_s;
     if (!taking.peer.remote->send(cover, there)

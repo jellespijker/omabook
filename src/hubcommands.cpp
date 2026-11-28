@@ -124,6 +124,8 @@ int run(const QCommandLineParser &parser) {
     HubDaemon daemon(keeper, requests);
     if (const auto listening = daemon.listen(place.socket()); !listening)
         return failLine(listening.error().text());
+    // Only now that this is the one hub answering here.
+    syncs.clearLeftovers();
     schedule.start();
     devices.follow();
     qCInfo(lcHub).noquote() << "The hub keeps" << keeper.names().size() << "libraries in" << folder;

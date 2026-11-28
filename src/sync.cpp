@@ -425,18 +425,18 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (progress)
             progress(book.meta.title);
 
-        const QString folder = remote.makeFolder();
-        if (folder.isEmpty()) {
-            summary.problems << "No room to receive books on " + remote.host() + ".";
+        const auto folder = remote.makeFolder();
+        if (!folder) {
+            summary.problems << folder.error();
             break;
         }
         // Whatever happens next, the other computer's scratch folder goes.
-        const auto cleanup = qScopeGuard([&] { remote.dropFolder(folder); });
+        const auto cleanup = qScopeGuard([&] { remote.dropFolder(*folder); });
 
         QStringList sentFiles;
         QString why;
         for (const FormatFile &file : files) {
-            const QString target = folder + "/book." + file.format;
+            const QString target = *folder + "/book." + file.format;
             if (why.isEmpty())
                 if (const auto sent = remote.send(file.path, target); !sent)
                     why = file.format.toUpper() + ": " + sent.error();
@@ -446,13 +446,13 @@ SyncSummary syncLibrary(Library &library, const Remote &remote, const std::funct
         if (why.isEmpty() && details.isEmpty())
             why = "its details can't be written here";
         if (why.isEmpty())
-            if (const auto sent = remote.send(details, folder + "/details.json"); !sent)
+            if (const auto sent = remote.send(details, *folder + "/details.json"); !sent)
                 why = sent.error();
         // A book without a file is added as one, then given its reading.
         QStringList add = files.isEmpty() ? QStringList{"add", book.paper ? "--paper" : "--wish"} : QStringList{"add", sentFiles.value(0)};
-        add << "--meta" << folder + "/details.json" << "--json" << SyncTake::keptIdArguments(library, book.id, files, manifest);
-        if (const QString cover = library.coverPath(book.id); !cover.isEmpty() && remote.send(cover, folder + "/cover.jpg"))
-            add << "--cover" << folder + "/cover.jpg";
+        add << "--meta" << *folder + "/details.json" << "--json" << SyncTake::keptIdArguments(library, book.id, files, manifest);
+        if (const QString cover = library.coverPath(book.id); !cover.isEmpty() && remote.send(cover, *folder + "/cover.jpg"))
+            add << "--cover" << *folder + "/cover.jpg";
         const Remote::Result added = why.isEmpty() ? remote.omabook(add) : Remote::Result();
         // `add` of files answers with a list, `add --paper` with the book.
         const QJsonDocument answer = QJsonDocument::fromJson(added.output);

@@ -359,6 +359,8 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::HubSyncNoComputer, tr("Only a computer linked to the hub syncs with it.")},
     {Failure::Code::HubSyncRefused, tr("In a sync, the hub takes no %1.")},
     {Failure::Code::HubSyncNotGiven, tr("In a sync, the hub gives only its books, their covers and its plugins' files, never %1.")},
+    {Failure::Code::RemoteNoFolder, tr("No folder could be made on %1 for what is sent there: %2")},
+    {Failure::Code::HubSyncUnwritten, tr("The hub couldn't keep what it was sent: %1. See that its disk has room.")},
     {Failure::Code::HubSyncNoPlace, tr("In a sync, the hub keeps what it is sent only in that sync's own folders, never at %1.")},
     {Failure::Code::HubSyncDryRun, tr("A dry run changes nothing on the hub.")},
     {Failure::Code::HubSyncNotYours,
