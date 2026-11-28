@@ -28,6 +28,8 @@ AppPopup {
     property bool gone: false
     // What was typed for the number in the series when it is no number (#230).
     property string noNumber: ""
+    // What was typed for the day it was finished when it is none (#286).
+    property string noDay: ""
     readonly property var texts: ({
         title: title, authors: authors, series: series, seriesIndex: number, tags: tags, publisher: publisher,
         published: published, language: language, isbn: isbn, description: description, finished: finished
@@ -78,6 +80,7 @@ AppPopup {
         clashes = []
         gone = false
         noNumber = ""
+        noDay = ""
         put(values)
         before = values
         shown = typed()
@@ -93,6 +96,7 @@ AppPopup {
         clashes = []
         gone = false
         noNumber = ""
+        noDay = ""
         shown = ({})
         for (const field of [title, authors, series, number, tags, publisher, published, language, isbn, description, finished])
             field.text = ""
@@ -108,6 +112,12 @@ AppPopup {
         noNumber = mine.seriesIndex !== shown.seriesIndex && !/^(\d+(\.\d*)?|\.\d+)?$/.test(index) ? mine.seriesIndex : ""
         if (noNumber !== "") {
             number.forceActiveFocus()
+            return
+        }
+        const day = mine.finished.trim()
+        noDay = mine.finished !== shown.finished && day !== "" && !backend.isDay(day) ? mine.finished : ""
+        if (noDay !== "") {
+            finished.forceActiveFocus()
             return
         }
         let details = mine
@@ -303,13 +313,22 @@ AppPopup {
         }
         // Why Save did not save: kept in sight with the buttons, however
         // low the window is, so it isn't pressed again unread (#257).
-        noted: dialog.noNumber !== "" || dialog.gone || dialog.clashes.length > 0
+        noted: dialog.noNumber !== "" || dialog.noDay !== "" || dialog.gone || dialog.clashes.length > 0
         notes: [
             Label {
                 objectName: "editNoNumber"
                 visible: dialog.noNumber !== ""
                 Layout.fillWidth: true
                 text: qsTr("Number takes a number, such as 3 or 2.5, not “%1”. Nothing was saved.").arg(dialog.noNumber)
+                color: theme.colors.orange
+                textFormat: Text.PlainText
+                wrapMode: Text.Wrap
+            },
+            Label {
+                objectName: "editNoDay"
+                visible: dialog.noDay !== ""
+                Layout.fillWidth: true
+                text: qsTr("Finished on takes a date, such as 2026-03-01, not “%1”. Nothing was saved.").arg(dialog.noDay)
                 color: theme.colors.orange
                 textFormat: Text.PlainText
                 wrapMode: Text.Wrap

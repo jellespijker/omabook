@@ -3232,5 +3232,7 @@
   "Show All": "Mostrar todo",
   "On the stars: one less or one more": "En las estrellas: una menos o una más",
   "On the stars: that many; 0 takes them off": "En las estrellas: esa cantidad; 0 las quita",
-  "Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2": "No se puede leer parte de la biblioteca de Calibre (su tabla %1), así que lo que contiene no se importó: %2"
+  "Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2": "No se puede leer parte de la biblioteca de Calibre (su tabla %1), así que lo que contiene no se importó: %2",
+  "The day a book was finished is a date such as 2026-03-01, not \"%1\".": "El día en que se terminó un libro es una fecha como 2026-03-01, no \"%1\".",
+  "Finished on takes a date, such as 2026-03-01, not “%1”. Nothing was saved.": "“Terminado el” requiere una fecha como 2026-03-01, no “%1”. No se guardó nada."
 }

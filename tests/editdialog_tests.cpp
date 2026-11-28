@@ -185,6 +185,12 @@ private slots:
         QTRY_VERIFY(bench.inSight("editNoNumber"));
         QVERIFY(bench.inSight("editSave"));
         bench.set("editNumber", "text", "");
+        // A day that is none is said there too (#286).
+        bench.set("editFinished", "text", "someday");
+        bench.call("edit", "save");
+        QTRY_VERIFY(bench.inSight("editNoDay"));
+        QVERIFY(bench.inSight("editSave"));
+        bench.set("editFinished", "text", "");
         QVERIFY(bench.changeElsewhere("Theirs"));
         bench.set("editTitle", "text", "The Salt Road mine");
         bench.call("edit", "save");

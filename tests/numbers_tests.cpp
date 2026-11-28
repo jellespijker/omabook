@@ -247,6 +247,68 @@ private slots:
         QCOMPARE(desk.backend->library()->book(id)->meta.seriesIndex, 2.5);
     }
 
+    // A day that is none is refused wherever a person or an agent writes one,
+    // and so are the other values `add` and `set` can't take (#286).
+    void whatIsNoValueIsRefused_data() {
+        QTest::addColumn<QStringList>("command");
+        QTest::newRow("words") << QStringList{"set", "1", "--finished", "banana"};
+        QTest::newRow("no such day") << QStringList{"set", "1", "--finished", "2026-13-45"};
+        QTest::newRow("short month") << QStringList{"set", "1", "--finished", "2026-02-30"};
+        QTest::newRow("cover of a file") << QStringList{"add", "{book}", "--cover", "{nowhere}"};
+        QTest::newRow("cover of paper") << QStringList{"add", "--paper", "--title", "P", "--cover", "{nowhere}"};
+        QTest::newRow("details no JSON") << QStringList{"add", "{book}", "--meta", "{broken}"};
+        QTest::newRow("details of paper") << QStringList{"add", "--paper", "--meta", "{broken}"};
+        QTest::newRow("details missing") << QStringList{"add", "{book}", "--meta", "{nowhere}"};
+        QTest::newRow("number in series") << QStringList{"add", "--paper", "--meta", "{index}"};
+        QTest::newRow("to no number") << QStringList{"add", "{book}", "--to", "abc"};
+    }
+    void whatIsNoValueIsRefused() {
+        QFETCH(QStringList, command);
+        const McpHarness::Machine machine;
+        const QStringList at{"--library", machine.library};
+        QCOMPARE(machine.omabook(QStringList{"add", "--paper", "--title", "Here"} + at).code, 0);
+        const QString book = machine.dir.filePath("new.txt");
+        QVERIFY(Fixtures::write(book, "Words of a new book.\n"));
+        QVERIFY(Fixtures::write(machine.dir.filePath("broken.json"), "not json"));
+        QVERIFY(Fixtures::write(machine.dir.filePath("index.json"), R"({"title": "T", "series_index": "abc"})"));
+        command.replaceInStrings("{book}", book);
+        command.replaceInStrings("{nowhere}", machine.dir.filePath("nowhere.png"));
+        command.replaceInStrings("{broken}", machine.dir.filePath("broken.json"));
+        command.replaceInStrings("{index}", machine.dir.filePath("index.json"));
+        const auto list = [&] { return machine.omabook(QStringList{"list", "--json"} + at).output; };
+        const QString before = list();
+        const auto ran = machine.omabook(command + at);
+        QCOMPARE(ran.code, 1);
+        QVERIFY2(!ran.errors.trimmed().isEmpty() && !ran.errors.contains("no book 0"), qPrintable(ran.errors));
+        QCOMPARE(list(), before);
+    }
+
+    void theWindowTakesNoDayThatIsNone() {
+        Desk desk{"en", {}, false};
+        BookMeta meta;
+        meta.title = "The Salt Road";
+        const qint64 id = desk.backend->library()->addEntry(meta, true).id;
+        desk.backend->reload();
+        QVERIFY2(desk.show(), qPrintable(desk.warnings.join('\n')));
+        desk.quicken();
+        desk.call("editBook", id);
+        QTRY_VERIFY(desk.find("edit")->property("opened").toBool());
+        QObject *finished = desk.find("editFinished");
+        QVERIFY(finished);
+        finished->setProperty("text", "banana");
+        QMetaObject::invokeMethod(desk.find("edit"), "save");
+        QVERIFY(desk.find("edit")->property("opened").toBool());
+        QTRY_VERIFY(desk.shows("editNoDay"));
+        QCOMPARE(desk.backend->library()->book(id)->finished, QString());
+        // Neither does the window's side take one.
+        desk.backend->saveDetails(id, {{"finished", "2026-13-45"}});
+        QCOMPARE(desk.backend->library()->book(id)->finished, QString());
+        finished->setProperty("text", "2026-03-01");
+        QMetaObject::invokeMethod(desk.find("edit"), "save");
+        QTRY_VERIFY(!desk.find("edit")->property("opened").toBool());
+        QCOMPARE(desk.backend->library()->book(id)->finished, QString("2026-03-01"));
+    }
+
     void aPortThatIsNoneKeepsTheOneThereWas() {
         Desk desk{"en", {}, false};
         desk.devices->set("mail_port", "2525");

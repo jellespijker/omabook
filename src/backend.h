@@ -219,6 +219,8 @@ public:
     Q_INVOKABLE void remove(qint64 id);
     // With "writeToFile" (or else the setting) the details go into its EPUB too.
     Q_INVOKABLE void saveDetails(qint64 id, const QVariantMap &details);
+    // Whether the text is a day there is, written as 2026-03-01 (#286).
+    Q_INVOKABLE bool isDay(const QString &text) const;
     // A book's EPUB and the details in it (#74): {epub: whether it has one,
     // original: whether the file as it came in is kept, to put back}.
     Q_INVOKABLE QVariantMap fileDetails(qint64 id) const;

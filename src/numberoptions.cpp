@@ -1,6 +1,7 @@
 #include "numberoptions.h"
 
 #include <QCommandLineParser>
+#include <QDate>
 #include <QStringList>
 #include <algorithm>
 #include <cmath>
@@ -29,6 +30,8 @@ std::optional<QList<int>> Numbers::list(QStringView text) {
     }
     return numbers;
 }
+
+bool Numbers::day(const QString &text) { return text.size() == 10 && QDate::fromString(text, Qt::ISODate).isValid(); }
 
 Numbers::Option Numbers::section(const QString &name) { return {.name = name}; }
 

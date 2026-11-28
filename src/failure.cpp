@@ -345,6 +345,7 @@ constexpr auto wordings = std::to_array<Wording>({
     {Failure::Code::IdentifierUnformed, tr("An identifier is given as scheme=value, such as goodreads=4671, or scheme= to forget it: %1")},
     {Failure::Code::SeriesIndexNotANumber, tr("A book's number in its series is a number from 0, such as 3 or 2.5, not \"%1\".")},
     {Failure::Code::RatingNotStars, tr("A rating is a whole number of stars from 0 to 5, not \"%1\".")},
+    {Failure::Code::FinishedNotADay, tr("The day a book was finished is a date such as 2026-03-01, not \"%1\".")},
     {Failure::Code::SectionPastEnd, tr("This book has sections 0 to %1; there is no section %2.")},
     {Failure::Code::SettingsFileMistaken, tr("%1 can't be read: line %2, %3. It is left as it is, and nothing is written to it.")},
     {Failure::Code::SettingsFileNotObject,

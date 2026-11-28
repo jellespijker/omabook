@@ -5,7 +5,6 @@
 #include <QEventLoop>
 #include <QFile>
 #include <QFileInfo>
-#include <QImageReader>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -359,21 +358,13 @@ int add(const QStringList &arguments) {
     if (fileless) {
         if (!paths.isEmpty())
             return fail("--paper and --wish add a book with no file: name none.");
-        BookMeta meta;
-        if (command.parser.isSet("meta")) {
-            QFile details(command.parser.value("meta"));
-            if (!details.open(QIODevice::ReadOnly))
-                return fail("The details can't be read: " + command.parser.value("meta"));
-            meta = BookMeta::fromJson(QJsonDocument::fromJson(details.readAll()).object());
-        }
+        const auto given = BookSetting::ofNewBook({}, command.parser);
+        if (!given)
+            return fail(given.error().text());
+        BookMeta meta = *given;
         if (command.parser.isSet("title")) meta.title = command.parser.value("title").simplified();
         if (command.parser.isSet("authors")) meta.authors = BookMeta::splitAuthors(command.parser.value("authors"));
         if (command.parser.isSet("isbn")) meta.isbn = command.parser.value("isbn").simplified();
-        if (command.parser.isSet("cover")) {
-            QImageReader cover(command.parser.value("cover"));
-            cover.setAutoTransform(true);
-            meta.cover = cover.read();
-        }
         const Library::Added added = library->addEntry(meta, command.parser.isSet("paper"));
         if (!added.error.isEmpty())
             return fail(added.error);
@@ -386,6 +377,8 @@ int add(const QStringList &arguments) {
         return 0;
     }
 
+    if (const auto why = Numbers::notNumbers(command.parser.values("to")))
+        return fail(*why);
     if (command.parser.isSet("to"))
         return runAddFormats(*library, command.parser.value("to").toLongLong(), paths, command.parser.isSet("replace"), command.json());
 
@@ -394,20 +387,10 @@ int add(const QStringList &arguments) {
         // One book, described by whoever is adding it.
         if (paths.size() != 1)
             return fail("--meta and --cover describe one book: name one file.");
-        std::optional<BookMeta> meta;
-        if (command.parser.isSet("meta")) {
-            QFile details(command.parser.value("meta"));
-            if (!details.open(QIODevice::ReadOnly))
-                return fail("The details can't be read: " + command.parser.value("meta"));
-            meta = BookMeta::fromJson(QJsonDocument::fromJson(details.readAll()).object());
-        } else {
-            meta = Formats::readMeta(paths.first());
-        }
-        if (command.parser.isSet("cover")) {
-            QImageReader cover(command.parser.value("cover"));
-            cover.setAutoTransform(true);
-            meta->cover = cover.read();
-        }
+        const auto meta =
+            BookSetting::ofNewBook(command.parser.isSet("meta") ? BookMeta() : Formats::readMeta(paths.first()), command.parser);
+        if (!meta)
+            return fail(meta.error().text());
         summary = importAsThere(*library, paths.first(), *meta, command.parser.value("global-id"), command.parser.value("original"));
     } else {
         // Whether a Calibre library is read as one is the Calibre plugin's to say.

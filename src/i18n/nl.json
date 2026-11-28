@@ -3109,5 +3109,7 @@
   "Show All": "Alles tonen",
   "On the stars: one less or one more": "Op de sterren: een minder of een meer",
   "On the stars: that many; 0 takes them off": "Op de sterren: zoveel; 0 haalt ze weg",
-  "Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2": "Een deel van de Calibre-bibliotheek kan niet worden gelezen (de tabel %1), dus wat daarin staat is niet overgenomen: %2"
+  "Part of the Calibre library can't be read (its table %1), so what that holds didn't come across: %2": "Een deel van de Calibre-bibliotheek kan niet worden gelezen (de tabel %1), dus wat daarin staat is niet overgenomen: %2",
+  "The day a book was finished is a date such as 2026-03-01, not \"%1\".": "De dag waarop een boek is uitgelezen is een datum zoals 2026-03-01, niet ‘%1’.",
+  "Finished on takes a date, such as 2026-03-01, not “%1”. Nothing was saved.": "‘Uitgelezen op’ verwacht een datum zoals 2026-03-01, niet ‘%1’. Er is niets opgeslagen."
 }

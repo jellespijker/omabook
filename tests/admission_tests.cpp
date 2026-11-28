@@ -5,6 +5,7 @@
 
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -271,8 +272,13 @@ private slots:
         const QString text = machine.dir.filePath("story.txt");
         QVERIFY(Fixtures::write(text, "It was a dark night.\n"));
 
+        const QString picture = machine.dir.filePath("cover.png");
+        QImage blank(8, 8, QImage::Format_RGB32);
+        blank.fill(Qt::white);
+        QVERIFY(blank.save(picture));
+
         for (const QStringList &arguments :
-             {QStringList{"add", empty}, QStringList{"add", fake}, QStringList{"add", fake, "--cover", machine.dir.filePath("none.png")}}) {
+             {QStringList{"add", empty}, QStringList{"add", fake}, QStringList{"add", fake, "--cover", picture}}) {
             const auto ran = machine.omabook(arguments + at);
             QCOMPARE(ran.code, 1);
             QVERIFY2(ran.errors.contains(".epub is empty") || ran.errors.contains("fake.pdf was not added"), qPrintable(ran.errors));

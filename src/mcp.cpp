@@ -31,6 +31,7 @@
 #include "library.h"
 #include "log.h"
 #include "mcparguments.h"
+#include "numberoptions.h"
 #include "plugins.h"
 #include "settings.h"
 
@@ -492,8 +493,7 @@ QList<Tool> coreTools() {
                           return Result::fail("\"rating\" must be at most 5.");
                       const QString finished = arguments.contains("finished") ? arguments.value("finished").toString().trimmed()
                                                                              : book.finished;
-                      static const QRegularExpression isoDate("^\\d{4}-\\d{2}-\\d{2}$");
-                      if (arguments.contains("finished") && !finished.isEmpty() && !isoDate.match(finished).hasMatch())
+                      if (!finished.isEmpty() && finished != book.finished && !Numbers::day(finished))
                           return Result::fail("\"finished\" must be an ISO date such as 2026-03-01.");
                       if (!at.library->setReading(at.id, arguments.contains("status") ? arguments.value("status").toString() : book.shelf,
                                                   arguments.contains("rating") ? arguments.value("rating").toInt() : book.rating,

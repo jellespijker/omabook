@@ -10,6 +10,7 @@
 
 #include "graph.h"
 #include "librarybatch.h"
+#include "numberoptions.h"
 
 namespace {
 
@@ -39,6 +40,8 @@ void applyDetails(BookMeta &meta, const QVariantMap &details) {
 
 } // namespace
 
+bool Backend::isDay(const QString &text) const { return Numbers::day(text); }
+
 void Backend::saveDetails(qint64 id, const QVariantMap &details) {
     if (!m_library)
         return;
@@ -54,9 +57,16 @@ void Backend::saveDetails(qint64 id, const QVariantMap &details) {
         QString error;
         if (!m_library->setMeta(id, meta, &error))
             say(error);
-        if (details.contains("shelf") || details.contains("rating") || details.contains("finished"))
+        if (details.contains("shelf") || details.contains("rating") || details.contains("finished")) {
+            QString finished = details.contains("finished") ? details.value("finished").toString().simplified() : before->finished;
+            // What is no day changes no day; the rest is saved (#286).
+            if (!finished.isEmpty() && finished != before->finished && !isDay(finished)) {
+                say(Failure(Failure::Code::FinishedNotADay, {finished}).text());
+                finished = before->finished;
+            }
             m_library->setReading(id, details.value("shelf", before->shelf).toString(), details.value("rating", before->rating).toInt(),
-                                  details.contains("finished") ? details.value("finished").toString().simplified() : before->finished);
+                                  finished);
+        }
         if (details.contains("paper"))
             m_library->setPaper(id, details.value("paper").toBool());
     }

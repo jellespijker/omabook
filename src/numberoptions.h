@@ -37,6 +37,9 @@ struct Option {
 // The command's first word, a book's number (#263): the option with no name.
 [[nodiscard]] Option book();
 
+// Whether the text is a day there is, written as 2026-03-01 (#286).
+[[nodiscard]] bool day(const QString &text);
+
 // Why one of these options, among those given, isn't the number it takes; none
 // when all of them are.
 [[nodiscard]] std::optional<QString> problem(const QCommandLineParser &parser, std::initializer_list<Option> options);

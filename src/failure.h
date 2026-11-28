@@ -268,6 +268,7 @@ public:
         // A number that isn't one, or is out of range, changes nothing (#230).
         SeriesIndexNotANumber, // {what was given}
         RatingNotStars,        // {what was given}
+        FinishedNotADay,       // {what was given} (#286)
         SectionPastEnd,        // {the last section, what was given}
 
         // Asking the AI (services); "where" is a server's address, "name" a harness's or program's.

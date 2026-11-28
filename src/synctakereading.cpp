@@ -6,6 +6,7 @@
 #include <tuple>
 
 #include "hlc.h"
+#include "numberoptions.h"
 #include "strayidentifiers.h"
 #include "syncmanifest.h"
 #include "syncplan.h"
@@ -96,7 +97,8 @@ QStringList SyncTake::readingArguments(qint64 id, const Book &book, std::optiona
             arguments << "--identifier" << it.key() + "=" + value;
     if (detailsAt)
         arguments << "--details-at" << QString::number(*detailsAt);
-    if (readingAt && book.readingAt > 0)
+    // A finished day from before only days were taken (#286) goes with its time, and so is taken as it is.
+    if (readingAt && (book.readingAt > 0 || (!book.finished.isEmpty() && !Numbers::day(book.finished))))
         arguments << "--reading-at" << QString::number(book.readingAt);
     return arguments;
 }

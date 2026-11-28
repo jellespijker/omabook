@@ -34,23 +34,8 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
     {"tags", [](BookMeta &meta, const QString &text) { meta.tags = BookMeta::splitTags(text); }},
 }};
 
-// The fields of the details the options name, over `meta`.
-[[nodiscard]] std::expected<BookMeta, Failure> metaOf(BookMeta meta, const QCommandLineParser &options) {
-    if (options.isSet("meta")) {
-        QFile details(options.value("meta"));
-        if (!details.open(QIODevice::ReadOnly))
-            return std::unexpected(Failure(Failure::Code::DetailsUnreadable, {options.value("meta")}));
-        const QJsonDocument read = QJsonDocument::fromJson(details.readAll());
-        if (!read.isObject())
-            return std::unexpected(Failure(Failure::Code::DetailsNotAnObject, {options.value("meta")}));
-        // Anything but a number from 0 reads as -1.
-        if (const QJsonValue index = read.object().value("series_index"); !index.isUndefined() && index.toDouble(-1) < 0)
-            return std::unexpected(Failure(Failure::Code::SeriesIndexNotANumber, {index.toVariant().toString()}));
-        meta.applyJson(read.object());
-    }
-    for (const auto &[field, setter] : setters)
-        if (options.isSet(QString::fromLatin1(field)))
-            setter(meta, options.value(QString::fromLatin1(field)));
+// The picture --cover names, as the book's cover.
+[[nodiscard]] std::expected<BookMeta, Failure> covered(BookMeta meta, const QCommandLineParser &options) {
     if (options.isSet("cover")) {
         QImageReader reader(options.value("cover"));
         reader.setAutoTransform(true);
@@ -58,6 +43,24 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
         if (meta.cover.isNull())
             return std::unexpected(Failure(Failure::Code::PictureUnreadable, {options.value("cover")}));
     }
+    return meta;
+}
+
+// The fields of the details the options name, over `meta`.
+[[nodiscard]] std::expected<BookMeta, Failure> metaOf(BookMeta meta, const QCommandLineParser &options) {
+    if (options.isSet("meta")) {
+        const auto details = BookSetting::detailsIn(options.value("meta"));
+        if (!details)
+            return std::unexpected(details.error());
+        meta.applyJson(*details);
+    }
+    for (const auto &[field, setter] : setters)
+        if (options.isSet(QString::fromLatin1(field)))
+            setter(meta, options.value(QString::fromLatin1(field)));
+    const auto pictured = covered(std::move(meta), options);
+    if (!pictured)
+        return pictured;
+    meta = *pictured;
     if (meta.title.isEmpty())
         return std::unexpected(Failure(Failure::Code::BookNeedsTitle));
     return meta;
@@ -121,7 +124,41 @@ constexpr std::array<std::pair<const char *, Setter>, 10> setters{{
     return "Set the " + field + ".";
 }
 
+// A finished day a person gives is a day there is, or empty (#286). What a
+// sync carries, stamped with the time it had, is taken as it was there.
+[[nodiscard]] std::expected<void, Failure> finishedOf(const QCommandLineParser &options, const Book &book) {
+    if (!options.isSet("finished") || options.isSet("details-at") || options.isSet("reading-at"))
+        return {};
+    const QString given = options.value("finished").simplified();
+    if (given.isEmpty() || given == book.finished || Numbers::day(given))
+        return {};
+    return std::unexpected(Failure(Failure::Code::FinishedNotADay, {options.value("finished")}));
+}
+
 } // namespace
+
+std::expected<QJsonObject, Failure> BookSetting::detailsIn(const QString &file) {
+    QFile details(file);
+    if (!details.open(QIODevice::ReadOnly))
+        return std::unexpected(Failure(Failure::Code::DetailsUnreadable, {file}));
+    const QJsonDocument read = QJsonDocument::fromJson(details.readAll());
+    if (!read.isObject())
+        return std::unexpected(Failure(Failure::Code::DetailsNotAnObject, {file}));
+    // Anything but a number from 0 reads as -1.
+    if (const QJsonValue index = read.object().value("series_index"); !index.isUndefined() && index.toDouble(-1) < 0)
+        return std::unexpected(Failure(Failure::Code::SeriesIndexNotANumber, {index.toVariant().toString()}));
+    return read.object();
+}
+
+std::expected<BookMeta, Failure> BookSetting::ofNewBook(BookMeta meta, const QCommandLineParser &options) {
+    if (options.isSet("meta")) {
+        const auto details = detailsIn(options.value("meta"));
+        if (!details)
+            return std::unexpected(details.error());
+        meta = BookMeta::fromJson(*details);
+    }
+    return covered(std::move(meta), options);
+}
 
 void BookSetting::addOptions(QCommandLineParser &parser) {
     for (const auto &[name, setter] : setters) {
@@ -172,6 +209,8 @@ std::expected<Book, Failure> BookSetting::apply(Library &library, qint64 id, con
     const auto book = library.book(id);
     if (!book)
         return std::unexpected(Failure(Failure::Code::NoSuchBook, {QString::number(id)}));
+    if (const auto finished = finishedOf(options, *book); !finished)
+        return std::unexpected(finished.error());
     const auto meta = metaOf(book->meta, options);
     if (!meta)
         return std::unexpected(meta.error());
